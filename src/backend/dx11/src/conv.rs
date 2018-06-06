@@ -232,12 +232,12 @@ fn map_fill_mode(mode: PolygonMode) -> D3D11_FILL_MODE {
     }
 }
 
-fn map_cull_mode(mode: Option<Face>) -> D3D11_CULL_MODE {
+fn map_cull_mode(mode: Face) -> D3D11_CULL_MODE {
     match mode {
-        Some(cf) if cf == Face::FRONT => D3D11_CULL_FRONT,
-        Some(cf) if cf == Face::BACK => D3D11_CULL_BACK,
-        Some(_) => panic!("Culling both front and back faces is not supported"),
-        _ => D3D11_CULL_NONE,
+        Face::NONE => D3D11_CULL_NONE,
+        Face::FRONT => D3D11_CULL_FRONT,
+        Face::BACK => D3D11_CULL_BACK,
+        _ => panic!("Culling both front and back faces is not supported"),
     }
 }
 

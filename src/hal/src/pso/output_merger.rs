@@ -311,6 +311,8 @@ bitflags!(
     /// Face.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Face: u32 {
+        /// Empty face. TODO: remove when constexpr are stabilized to use empty()
+        const NONE = 0x0;
         /// Front face.
         const FRONT = 0x1;
         /// Back face.

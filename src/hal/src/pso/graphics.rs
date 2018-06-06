@@ -208,7 +208,7 @@ pub struct Rasterizer {
     /// How to rasterize this primitive.
     pub polygon_mode: PolygonMode,
     /// Which face should be culled.
-    pub cull_face: Option<Face>,
+    pub cull_face: Face,
     /// Which vertex winding is considered to be the front face for culling.
     pub front_face: FrontFace,
     /// Whether or not to enable depth clamping; when enabled, instead of
@@ -225,7 +225,7 @@ impl Rasterizer {
     /// Simple polygon-filling rasterizer state
     pub const FILL: Self = Rasterizer {
         polygon_mode: PolygonMode::Fill,
-        cull_face: None,
+        cull_face: Face::NONE,
         front_face: FrontFace::CounterClockwise,
         depth_clamping: false,
         depth_bias: None,

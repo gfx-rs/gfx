@@ -40,16 +40,17 @@ pub fn bind_rasterizer(gl: &gl::Gl, r: &pso::Rasterizer, is_embedded: bool) {
         })
     };
 
-    match r.cull_face {
-        Some(cf) if !cf.is_empty() => unsafe {
+    if !r.cull_face.is_empty() {
+        unsafe {
             gl.Enable(gl::CULL_FACE);
-            gl.CullFace(match cf {
+            gl.CullFace(match r.cull_face {
                 pso::Face::FRONT => gl::FRONT,
                 pso::Face::BACK => gl::BACK,
                 _ => gl::FRONT_AND_BACK,
             });
         }
-        _ => unsafe {
+    } else {
+        unsafe {
             gl.Disable(gl::CULL_FACE);
         }
     }

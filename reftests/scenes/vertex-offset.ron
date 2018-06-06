@@ -62,7 +62,7 @@
             ),
             rasterizer: (
                 polygon_mode: Fill,
-                cull_face: None,
+                cull_face: (bits: 0),
                 front_face: Clockwise,
                 depth_clamping: false,
                 depth_bias: None,
@@ -109,7 +109,7 @@
             ),
             rasterizer: (
                 polygon_mode: Fill,
-                cull_face: None,
+                cull_face: (bits: 0),
                 front_face: Clockwise,
                 depth_clamping: false,
                 depth_bias: None,
