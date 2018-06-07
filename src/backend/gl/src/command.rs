@@ -800,6 +800,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.cache.stencil_ref = Some((front, back));
     }
 
+    fn set_stencil_read_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
+        unimplemented!();
+    }
+
+    fn set_stencil_write_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
+        unimplemented!();
+    }
+
     fn set_blend_constants(&mut self, cv: pso::ColorValue) {
         if self.cache.blend_color != Some(cv) {
             self.cache.blend_color = Some(cv);
