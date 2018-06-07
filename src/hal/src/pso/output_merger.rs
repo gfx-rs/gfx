@@ -273,6 +273,20 @@ pub struct StencilFace {
     pub reference: State<StencilValue>,
 }
 
+impl Default for StencilFace {
+    fn default() -> StencilFace {
+        StencilFace {
+            fun: Comparison::Never,
+            mask_read: State::Static(!0),
+            mask_write: State::Static(!0),
+            op_fail: StencilOp::Keep,
+            op_depth_fail: StencilOp::Keep,
+            op_pass: StencilOp::Keep,
+            reference: State::Static(0),
+        }
+    }
+}
+
 /// Defines a stencil test. Stencil testing is an operation
 /// performed to cull fragments;
 /// the new fragment is tested against the value held in the

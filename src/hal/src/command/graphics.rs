@@ -235,6 +235,16 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
+    pub fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
+        self.raw.set_stencil_read_mask(faces, value);
+    }
+
+    /// Identical to the `RawCommandBuffer` method of the same name.
+    pub fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
+        self.raw.set_stencil_write_mask(faces, value);
+    }
+
+    /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn set_blend_constants(&mut self, cv: pso::ColorValue) {
         self.raw.set_blend_constants(cv)
     }
