@@ -698,7 +698,7 @@ impl hal::Device<Backend> for Device {
                                 pso::DescriptorType::UniformBufferDynamic |
                                 pso::DescriptorType::StorageBufferDynamic => {
                                     res.buffer_id = counters.buffers as _;
-                                    counters.buffers += 1;
+                                    counters.buffers += set_binding.count;
                                 }
                                 pso::DescriptorType::SampledImage |
                                 pso::DescriptorType::StorageImage |
@@ -706,20 +706,19 @@ impl hal::Device<Backend> for Device {
                                 pso::DescriptorType::StorageTexelBuffer |
                                 pso::DescriptorType::InputAttachment => {
                                     res.texture_id = counters.textures as _;
-                                    counters.textures += 1;
+                                    counters.textures += set_binding.count;
                                 }
                                 pso::DescriptorType::Sampler => {
                                     res.sampler_id = counters.samplers as _;
-                                    counters.samplers += 1;
+                                    counters.samplers += set_binding.count;
                                 }
                                 pso::DescriptorType::CombinedImageSampler => {
                                     res.texture_id = counters.textures as _;
                                     res.sampler_id = counters.samplers as _;
-                                    counters.textures += 1;
-                                    counters.samplers += 1;
+                                    counters.textures += set_binding.count;
+                                    counters.samplers += set_binding.count;
                                 }
                             };
-                            assert_eq!(set_binding.count, 1); //TODO
                             let location = msl::ResourceBindingLocation {
                                 stage,
                                 desc_set: set_index as _,
@@ -869,14 +868,18 @@ impl hal::Device<Backend> for Device {
                     return Err(pso::CreationError::Other);
                 }
             };
-            if format.is_depth() {
-                pipeline.set_depth_attachment_pixel_format(mtl_format);
-            } else {
-                let descriptor = pipeline
+            if format.is_color() {
+                pipeline
                     .color_attachments()
                     .object_at(i)
-                    .expect("too many color attachments");
-                descriptor.set_pixel_format(mtl_format);
+                    .expect("too many color attachments")
+                    .set_pixel_format(mtl_format);
+            }
+            if format.is_depth() {
+                pipeline.set_depth_attachment_pixel_format(mtl_format);
+            }
+            if format.is_stencil() {
+                pipeline.set_stencil_attachment_pixel_format(mtl_format);
             }
         }
 
@@ -967,7 +970,7 @@ impl hal::Device<Backend> for Device {
                 .expect("no associated vertex buffer found");
             // handle wrapping offsets
             let elem_size = element.format.surface_desc().bits as pso::ElemOffset / 8;
-            let (cut_offset, base_offset) = if element.offset + elem_size <= original.stride {
+            let (cut_offset, base_offset) = if original.stride == 0 || element.offset + elem_size <= original.stride {
                 (element.offset, 0)
             } else {
                 let remainder = element.offset % original.stride;
@@ -1018,12 +1021,18 @@ impl hal::Device<Backend> for Device {
                 error!("Stride ({}) must be a multiple of {}", vb.stride, STRIDE_GRANULARITY);
                 return Err(pso::CreationError::Other);
             }
-            mtl_buffer_desc.set_stride(vb.stride as u64);
-            if vb.rate == 0 {
-                mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
+            if vb.stride != 0 {
+                mtl_buffer_desc.set_stride(vb.stride as u64);
+                if vb.rate == 0 {
+                    mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
+                } else {
+                    mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerInstance);
+                    mtl_buffer_desc.set_step_rate(vb.rate as u64);
+                }
             } else {
+                mtl_buffer_desc.set_stride(256); // big enough to fit all the elements
                 mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerInstance);
-                mtl_buffer_desc.set_step_rate(vb.rate as u64);
+                mtl_buffer_desc.set_step_rate(!0);
             }
         }
         pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
@@ -1105,17 +1114,21 @@ impl hal::Device<Backend> for Device {
 
         let mut inner = n::FramebufferInner {
             extent,
+            aspects: format::Aspects::empty(),
             colors: Vec::new(),
             depth_stencil: None,
         };
 
         for (rat, attachment) in renderpass.attachments.iter().zip(attachments) {
             let at = attachment.borrow();
-            let (aspects, channel) = match rat.format {
-                Some(format) => (format.surface_desc().aspects, format.base_format().1.into()),
+            let format = match rat.format {
+                Some(format) => format,
                 None => continue,
             };
+            let aspects = format.surface_desc().aspects;
+            inner.aspects |= aspects;
             if aspects.contains(format::Aspects::COLOR) {
+                let channel = format.base_format().1.into();
                 descriptor
                     .color_attachments()
                     .object_at(inner.colors.len())
@@ -1124,6 +1137,7 @@ impl hal::Device<Backend> for Device {
                 inner.colors.push((at.mtl_format, channel));
             }
             if aspects.contains(format::Aspects::DEPTH) {
+                assert_eq!(inner.depth_stencil, None);
                 inner.depth_stencil = Some(at.mtl_format);
                 descriptor
                     .depth_attachment()
@@ -1131,8 +1145,8 @@ impl hal::Device<Backend> for Device {
                     .set_texture(Some(&at.raw));
             }
             if aspects.contains(format::Aspects::STENCIL) {
-                if let Some(mtl_format) = inner.depth_stencil {
-                    assert_eq!(mtl_format, at.mtl_format);
+                if let Some(old_format) = inner.depth_stencil {
+                    assert_eq!(old_format, at.mtl_format);
                 } else {
                     inner.depth_stencil = Some(at.mtl_format);
                 }
@@ -1902,7 +1916,7 @@ impl hal::Device<Backend> for Device {
 
         if swizzle != format::Swizzle::NO {
             error!("swizzling not supported");
-            return Err(image::ViewError::Unsupported);
+            //return Err(image::ViewError::Unsupported);
         }
 
         let raw = image.raw.new_texture_view_from_slice(

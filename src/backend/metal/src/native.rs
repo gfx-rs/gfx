@@ -7,6 +7,7 @@ use std::os::raw::{c_void, c_long};
 use std::sync::{Arc, Condvar, Mutex};
 
 use hal::{self, image, pso};
+use hal::format::{Aspects, FormatDesc};
 
 use cocoa::foundation::{NSUInteger};
 use metal;
@@ -38,9 +39,10 @@ pub struct RenderPass {
 unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct FramebufferInner {
     pub extent: image::Extent,
+    pub aspects: Aspects,
     pub colors: Vec<(metal::MTLPixelFormat, Channel)>,
     pub depth_stencil: Option<metal::MTLPixelFormat>,
 }
@@ -133,7 +135,7 @@ pub struct Image {
     pub(crate) raw: metal::Texture,
     pub(crate) extent: image::Extent,
     pub(crate) num_layers: Option<image::Layer>,
-    pub(crate) format_desc: hal::format::FormatDesc,
+    pub(crate) format_desc: FormatDesc,
     pub(crate) shader_channel: Channel,
     pub(crate) mtl_format: metal::MTLPixelFormat,
     pub(crate) mtl_type: metal::MTLTextureType,
@@ -141,7 +143,7 @@ pub struct Image {
 
 impl Image {
     pub(crate) fn pitches_impl(
-        extent: image::Extent, format_desc: hal::format::FormatDesc
+        extent: image::Extent, format_desc: FormatDesc
     ) -> [hal::buffer::Offset; 3] {
         let bytes_per_texel = format_desc.bits as image::Size >> 3;
         let row_pitch = extent.width * bytes_per_texel;
