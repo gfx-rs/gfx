@@ -1286,9 +1286,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         pass_cache.framebuffer.attachments[dsv_id.0]
                     };
 
-                    let mut dsv_pool = descriptors_cpu::HeapLinear::new(
+                    let mut dsv_pool = descriptors::HeapLinear::new(
                         &device,
                         d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV,
+                        false,
                         clear_rects.len()
                     );
 
@@ -1308,7 +1309,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 layers: clear_rect.layers.clone()
                             }
                         };
-                        let dsv = dsv_pool.alloc_handle();
+                        let dsv = dsv_pool.alloc_handle().cpu;
                         Device::view_image_as_depth_stencil_impl(
                             &mut device,
                             dsv,
