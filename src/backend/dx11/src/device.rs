@@ -4,7 +4,7 @@ use hal::range::RangeArg;
 use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query};
 
 use winapi::shared::dxgi::{IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD};
-use winapi::shared::minwindef::{FALSE, TRUE};
+use winapi::shared::minwindef::{TRUE};
 use winapi::shared::{dxgiformat, dxgitype, winerror};
 use winapi::um::{d3d11, d3dcommon};
 
@@ -15,7 +15,6 @@ use std::cell::RefCell;
 use std::mem;
 use std::ops::Range;
 use std::ptr;
-use std::sync::Arc;
 
 use {
     Backend, Buffer, BufferView, CommandPool, ComputePipeline, DescriptorPool, DescriptorSetLayout,
@@ -1122,7 +1121,6 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_shader_module(&self, shader_lib: ShaderModule) {
-
     }
 
     fn destroy_render_pass(&self, _rp: RenderPass) {
@@ -1134,7 +1132,6 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_graphics_pipeline(&self, pipeline: GraphicsPipeline) {
-        unimplemented!()
     }
 
     fn destroy_compute_pipeline(&self, pipeline: ComputePipeline) {
@@ -1146,7 +1143,6 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_buffer(&self, buffer: Buffer) {
-        unimplemented!()
     }
 
     fn destroy_buffer_view(&self, _view: BufferView) {
@@ -1162,7 +1158,6 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_sampler(&self, _sampler: Sampler) {
-        unimplemented!()
     }
 
     fn destroy_descriptor_pool(&self, pool: DescriptorPool) {
