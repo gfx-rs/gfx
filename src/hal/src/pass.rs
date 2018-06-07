@@ -67,7 +67,7 @@ impl AttachmentOps {
 /// An `Attachment` is a description of a resource provided to a render subpass.
 /// It includes things such as render targets, images that were produced from
 /// previous subpasses, etc.
-#[derive(Clone, Debug, Hash)]
+#[derive(Clone, Debug, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Attachment {
     /// Attachment format
