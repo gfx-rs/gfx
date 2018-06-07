@@ -14,29 +14,27 @@ extern crate winapi;
 extern crate winit;
 extern crate wio;
 
-use hal::{buffer, command, error, format, image, memory, mapping, query, pool, pso, pass, Features, Limits, QueueType};
+use hal::{buffer, command, error, format, image, memory, query, pso, Features, Limits, QueueType};
 use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::queue::{QueueFamilyId, Queues};
 use hal::backend::RawQueueGroup;
 use hal::range::RangeArg;
 
-use winapi::shared::{dxgiformat, dxgitype, winerror};
+use winapi::shared::{dxgiformat, winerror};
 
-use winapi::shared::dxgi::{DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD, IDXGIFactory, IDXGIAdapter, IDXGISwapChain};
-use winapi::shared::minwindef::{FALSE, TRUE};
+use winapi::shared::dxgi::{IDXGIFactory, IDXGIAdapter, IDXGISwapChain};
+use winapi::shared::minwindef::{FALSE, UINT};
 use winapi::shared::windef::{HWND, RECT};
 use winapi::um::winuser::{GetClientRect};
-use winapi::um::{d3d11, d3d11sdklayers, d3dcommon};
+use winapi::um::{d3d11, d3dcommon};
 
 use wio::com::ComPtr;
 
 use std::ptr;
 use std::mem;
 use std::ops::Range;
-use std::sync::Arc;
 use std::cell::RefCell;
 use std::borrow::{BorrowMut, Borrow};
-use std::collections::BTreeMap;
 
 use std::os::raw::c_void;
 
@@ -102,6 +100,118 @@ impl Instance {
     }
 }
 
+fn get_features(_device: ComPtr<d3d11::ID3D11Device>, _feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Features {
+    use hal::Features;
+
+    let mut features =
+        Features::ROBUST_BUFFER_ACCESS |
+        Features::FULL_DRAW_INDEX_U32 |
+        Features::FORMAT_BC;
+
+    features
+}
+
+fn get_format_properties(device: ComPtr<d3d11::ID3D11Device>) -> [format::Properties; format::NUM_FORMATS] {
+    let mut format_properties = [format::Properties::default(); format::NUM_FORMATS];
+    for (i, props) in &mut format_properties.iter_mut().enumerate().skip(1) {
+        let format: format::Format = unsafe { mem::transmute(i as u32) };
+
+        let dxgi_format = match conv::map_format(format) {
+            Some(format) => format,
+            None => continue,
+        };
+
+        let mut support = d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT {
+            InFormat: dxgi_format,
+            OutFormatSupport: 0,
+        };
+        let mut support_2 = d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT2 {
+            InFormat: dxgi_format,
+            OutFormatSupport2: 0,
+        };
+
+        let hr = unsafe {
+            device.CheckFeatureSupport(
+                d3d11::D3D11_FEATURE_FORMAT_SUPPORT,
+                &mut support as *mut _ as *mut _,
+                mem::size_of::<d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT>() as UINT
+            )
+        };
+
+        if hr == winerror::S_OK {
+            let can_buffer = 0 != support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_BUFFER;
+            let can_image = 0 != support.OutFormatSupport & (
+                d3d11::D3D11_FORMAT_SUPPORT_TEXTURE1D |
+                d3d11::D3D11_FORMAT_SUPPORT_TEXTURE2D |
+                d3d11::D3D11_FORMAT_SUPPORT_TEXTURE3D |
+                d3d11::D3D11_FORMAT_SUPPORT_TEXTURECUBE
+            );
+            let can_linear = can_image && !format.surface_desc().is_compressed();
+            if can_image {
+                props.optimal_tiling |= format::ImageFeature::SAMPLED | format::ImageFeature::BLIT_SRC;
+            }
+            if can_linear {
+                props.linear_tiling |= format::ImageFeature::SAMPLED | format::ImageFeature::BLIT_SRC;
+            }
+            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_IA_VERTEX_BUFFER != 0 {
+                props.buffer_features |= format::BufferFeature::VERTEX;
+            }
+            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_SHADER_SAMPLE != 0 {
+                props.optimal_tiling |= format::ImageFeature::SAMPLED_LINEAR;
+            }
+            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_RENDER_TARGET != 0 {
+                props.optimal_tiling |= format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::BLIT_DST;
+                if can_linear {
+                    props.linear_tiling |= format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::BLIT_DST;
+                }
+            }
+            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_BLENDABLE != 0 {
+                props.optimal_tiling |= format::ImageFeature::COLOR_ATTACHMENT_BLEND;
+            }
+            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_DEPTH_STENCIL != 0 {
+                props.optimal_tiling |= format::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
+            }
+            if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_SHADER_LOAD != 0 {
+                //TODO: check d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD ?
+                if can_buffer {
+                    props.buffer_features |= format::BufferFeature::UNIFORM_TEXEL;
+                }
+            }
+
+            let hr = unsafe {
+                device.CheckFeatureSupport(
+                    d3d11::D3D11_FEATURE_FORMAT_SUPPORT2,
+                    &mut support_2 as *mut _ as *mut _,
+                    mem::size_of::<d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT2>() as UINT
+                )
+            };
+            if hr == winerror::S_OK {
+                if support_2.OutFormatSupport2 & d3d11::D3D11_FORMAT_SUPPORT2_UAV_ATOMIC_ADD != 0 {
+                    //TODO: other atomic flags?
+                    if can_buffer {
+                        props.buffer_features |= format::BufferFeature::STORAGE_TEXEL_ATOMIC;
+                    }
+                    if can_image {
+                        props.optimal_tiling |= format::ImageFeature::STORAGE_ATOMIC;
+                    }
+                }
+                if support_2.OutFormatSupport2 & d3d11::D3D11_FORMAT_SUPPORT2_UAV_TYPED_STORE != 0 {
+                    if can_buffer {
+                        props.buffer_features |= format::BufferFeature::STORAGE_TEXEL;
+                    }
+                    if can_image {
+                        props.optimal_tiling |= format::ImageFeature::STORAGE;
+                    }
+                }
+            }
+        }
+
+        //TODO: blits, linear tiling
+    }
+
+    format_properties
+}
+
 impl hal::Instance for Instance {
     type Backend = Backend;
 
@@ -113,6 +223,33 @@ impl hal::Instance for Instance {
             idx += 1;
 
             use hal::memory::Properties;
+
+            // TODO: move into function?
+            let (device, feature_level) = {
+                let feature_level = get_feature_level(adapter.as_raw());
+
+                let mut device = ptr::null_mut();
+                let hr = unsafe {
+                    d3d11::D3D11CreateDevice(
+                        adapter.as_raw() as *mut _,
+                        d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
+                        ptr::null_mut(),
+                        d3d11::D3D11_CREATE_DEVICE_DEBUG,
+                        [feature_level].as_ptr(),
+                        1,
+                        d3d11::D3D11_SDK_VERSION,
+                        &mut device as *mut *mut _ as *mut *mut _,
+                        ptr::null_mut(),
+                        ptr::null_mut(),
+                    )
+                };
+
+                if !winerror::SUCCEEDED(hr) {
+                    continue;
+                }
+
+                (unsafe { ComPtr::<d3d11::ID3D11Device>::from_raw(device) }, feature_level)
+            };
 
             // TODO: we should improve the way memory is managed. we should
             //       give access to DEFAULT, DYNAMIC and STAGING;
@@ -160,28 +297,31 @@ impl hal::Instance for Instance {
                     1,
                     1
                 ], // TODO
-                max_vertex_input_attribute_offset: 0, // TODO
-                max_vertex_input_attributes: 0, // TODO
-                max_vertex_input_binding_stride: 0, // TODO
-                max_vertex_input_bindings: 0, // TODO
-                max_vertex_output_components: 0, // TODO
+                max_vertex_input_attribute_offset: 255, // TODO
+                max_vertex_input_attributes: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
+                max_vertex_input_binding_stride: d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
+                max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _, // TODO: verify same as attributes
+                max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _, // TODO
                 min_buffer_copy_offset_alignment: 1,    // TODO
                 min_buffer_copy_pitch_alignment: 1,     // TODO
                 min_texel_buffer_offset_alignment: 1,   // TODO
-                min_uniform_buffer_offset_alignment: 1, // TODO
+                min_uniform_buffer_offset_alignment: 16, // TODO: verify
                 min_storage_buffer_offset_alignment: 1, // TODO
-                framebuffer_color_samples_count: 0,     // TODO
-                framebuffer_depth_samples_count: 0,     // TODO
-                framebuffer_stencil_samples_count: 0,   // TODO
+                framebuffer_color_samples_count: 1,     // TODO
+                framebuffer_depth_samples_count: 1,     // TODO
+                framebuffer_stencil_samples_count: 1,   // TODO
                 non_coherent_atom_size: 0,              // TODO
             };
 
+            let features = get_features(device.clone(), feature_level);
+            let format_properties = get_format_properties(device.clone());
+
             let physical_device = PhysicalDevice {
                 adapter,
-                // TODO: check for features
-                features: hal::Features::empty(),
+                features,
                 limits,
-                memory_properties
+                memory_properties,
+                format_properties,
             };
 
             info!("{:#?}", info);
@@ -205,6 +345,8 @@ pub struct PhysicalDevice {
     features: hal::Features,
     limits: hal::Limits,
     memory_properties: hal::MemoryProperties,
+    #[derivative(Debug="ignore")]
+    format_properties: [format::Properties; format::NUM_FORMATS],
 }
 
 unsafe impl Send for PhysicalDevice { }
@@ -334,12 +476,97 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, fmt: Option<format::Format>) -> format::Properties {
-        unimplemented!()
+        let idx = fmt.map(|fmt| fmt as usize).unwrap_or(0);
+        self.format_properties[idx]
     }
 
+    fn image_format_properties(&self, format: format::Format, dimensions: u8, tiling: image::Tiling, usage: image::Usage, storage_flags: image::StorageFlags) -> Option<image::FormatProperties> {
+        conv::map_format(format)?; //filter out unknown formats
 
-    fn image_format_properties(&self, _format: format::Format, dimensions: u8, tiling: image::Tiling, usage: image::Usage, storage_flags: image::StorageFlags) -> Option<image::FormatProperties> {
-        unimplemented!()
+        let supported_usage = {
+            use hal::image::Usage as U;
+            let format_props = &self.format_properties[format as usize];
+            let props = match tiling {
+                image::Tiling::Optimal => format_props.optimal_tiling,
+                image::Tiling::Linear => format_props.linear_tiling,
+            };
+            let mut flags = U::empty();
+            // Note: these checks would have been nicer if we had explicit BLIT usage
+            if props.contains(format::ImageFeature::BLIT_SRC) {
+                flags |= U::TRANSFER_SRC;
+            }
+            if props.contains(format::ImageFeature::BLIT_DST) {
+                flags |= U::TRANSFER_DST;
+            }
+            if props.contains(format::ImageFeature::SAMPLED) {
+                flags |= U::SAMPLED;
+            }
+            if props.contains(format::ImageFeature::STORAGE) {
+                flags |= U::STORAGE;
+            }
+            if props.contains(format::ImageFeature::COLOR_ATTACHMENT) {
+                flags |= U::COLOR_ATTACHMENT;
+            }
+            if props.contains(format::ImageFeature::DEPTH_STENCIL_ATTACHMENT) {
+                flags |= U::DEPTH_STENCIL_ATTACHMENT;
+            }
+            flags
+        };
+        if !supported_usage.contains(usage) {
+            return None;
+        }
+
+        let max_resource_size = (d3d11::D3D11_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20;
+        Some(match tiling {
+            image::Tiling::Optimal => image::FormatProperties {
+                max_extent: match dimensions {
+                    1 => image::Extent {
+                        width: d3d11::D3D11_REQ_TEXTURE1D_U_DIMENSION,
+                        height: 1,
+                        depth: 1,
+                    },
+                    2 => image::Extent {
+                        width: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        height: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        depth: 1,
+                    },
+                    3 => image::Extent {
+                        width: d3d11::D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                        height: d3d11::D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                        depth: d3d11::D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                    },
+                    _ => return None,
+                },
+                max_levels: d3d11::D3D11_REQ_MIP_LEVELS as _,
+                max_layers: match dimensions {
+                    1 => d3d11::D3D11_REQ_TEXTURE1D_ARRAY_AXIS_DIMENSION as _,
+                    2 => d3d11::D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
+                    _ => return None,
+                },
+                sample_count_mask: if dimensions == 2 && !storage_flags.contains(image::StorageFlags::CUBE_VIEW) &&
+                    (usage.contains(image::Usage::COLOR_ATTACHMENT) | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
+                {
+                    0x3F //TODO: use D3D12_FEATURE_DATA_FORMAT_SUPPORT
+                } else {
+                    0x1
+                },
+                max_resource_size,
+            },
+            image::Tiling::Linear => image::FormatProperties {
+                max_extent: match dimensions {
+                    2 => image::Extent {
+                        width: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        height: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                        depth: 1,
+                    },
+                    _ => return None,
+                },
+                max_levels: 1,
+                max_layers: 1,
+                sample_count_mask: 0x1,
+                max_resource_size,
+            },
+        })
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
