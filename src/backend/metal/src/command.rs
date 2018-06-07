@@ -136,8 +136,8 @@ impl State {
 
     fn clamp_scissor(&self, sr: MTLScissorRect) -> MTLScissorRect {
         let ex = self.framebuffer_inner.extent;
-        let x = sr.x.min(ex.width as u64 - 1);
-        let y = sr.y.min(ex.height as u64 - 1);
+        let x = sr.x.min(ex.width.max(1) as u64 - 1);
+        let y = sr.y.min(ex.height.max(1) as u64 - 1);
         MTLScissorRect {
             x,
             y,
