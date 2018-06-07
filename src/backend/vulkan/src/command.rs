@@ -540,6 +540,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
+    fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
+        unsafe {
+            // Vulkan and HAL share same faces bit flags
+            self.device.0.cmd_set_stencil_compare_mask(self.raw, mem::transmute(faces), value);
+        }
+    }
+
+    fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
+        unsafe {
+            // Vulkan and HAL share same faces bit flags
+            self.device.0.cmd_set_stencil_write_mask(self.raw, mem::transmute(faces), value);
+        }
+    }
+
     fn set_blend_constants(&mut self, color: pso::ColorValue) {
         unsafe {
             self.device.0.cmd_set_blend_constants(self.raw, color);
