@@ -698,7 +698,7 @@ impl hal::Device<Backend> for Device {
                                 pso::DescriptorType::UniformBufferDynamic |
                                 pso::DescriptorType::StorageBufferDynamic => {
                                     res.buffer_id = counters.buffers as _;
-                                    counters.buffers += 1;
+                                    counters.buffers += set_binding.count;
                                 }
                                 pso::DescriptorType::SampledImage |
                                 pso::DescriptorType::StorageImage |
@@ -706,20 +706,19 @@ impl hal::Device<Backend> for Device {
                                 pso::DescriptorType::StorageTexelBuffer |
                                 pso::DescriptorType::InputAttachment => {
                                     res.texture_id = counters.textures as _;
-                                    counters.textures += 1;
+                                    counters.textures += set_binding.count;
                                 }
                                 pso::DescriptorType::Sampler => {
                                     res.sampler_id = counters.samplers as _;
-                                    counters.samplers += 1;
+                                    counters.samplers += set_binding.count;
                                 }
                                 pso::DescriptorType::CombinedImageSampler => {
                                     res.texture_id = counters.textures as _;
                                     res.sampler_id = counters.samplers as _;
-                                    counters.textures += 1;
-                                    counters.samplers += 1;
+                                    counters.textures += set_binding.count;
+                                    counters.samplers += set_binding.count;
                                 }
                             };
-                            assert_eq!(set_binding.count, 1); //TODO
                             let location = msl::ResourceBindingLocation {
                                 stage,
                                 desc_set: set_index as _,
@@ -971,11 +970,17 @@ impl hal::Device<Backend> for Device {
                 .expect("no associated vertex buffer found");
             // handle wrapping offsets
             let elem_size = element.format.surface_desc().bits as pso::ElemOffset / 8;
-            let (cut_offset, base_offset) = if element.offset + elem_size <= original.stride {
+            let stride = if original.stride != 0 {
+                original.stride
+            } else {
+                warn!("Zero sized vertex stride found!");
+                element.offset + elem_size
+            };
+            let (cut_offset, base_offset) = if element.offset + elem_size <= stride {
                 (element.offset, 0)
             } else {
-                let remainder = element.offset % original.stride;
-                if remainder + elem_size <= original.stride {
+                let remainder = element.offset % stride;
+                if remainder + elem_size <= stride {
                     (remainder, element.offset - remainder)
                 } else {
                     (0, element.offset)
@@ -990,7 +995,7 @@ impl hal::Device<Backend> for Device {
                 Entry::Vacant(e) => {
                     e.insert(pso::VertexBufferDesc {
                         binding: next_buffer_index,
-                        stride: original.stride,
+                        stride: stride,
                         rate: original.rate,
                     });
                     next_buffer_index += 1;
@@ -1910,7 +1915,7 @@ impl hal::Device<Backend> for Device {
 
         if swizzle != format::Swizzle::NO {
             error!("swizzling not supported");
-            return Err(image::ViewError::Unsupported);
+            //return Err(image::ViewError::Unsupported);
         }
 
         let raw = image.raw.new_texture_view_from_slice(
