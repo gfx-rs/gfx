@@ -2328,12 +2328,10 @@ impl d::Device<B> for Device {
             }
         }
 
-        let heap_srv_cbv_uav = {
-            let mut heap_srv_cbv_uav = self
-                .heap_srv_cbv_uav
-                .lock()
-                .unwrap();
-            let slice = heap_srv_cbv_uav
+        let heap_cbv_srv_uav = {
+            let slice = self
+                .shared
+                .heap_cbv_srv_uav
                 .allocate(num_srv_cbv_uav as _)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
@@ -2343,11 +2341,9 @@ impl d::Device<B> for Device {
         };
 
         let heap_sampler = {
-            let mut heap_sampler = self
+            let slice = self
+                .shared
                 .heap_sampler
-                .lock()
-                .unwrap();
-            let slice = heap_sampler
                 .allocate(num_samplers as _)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
@@ -2357,7 +2353,7 @@ impl d::Device<B> for Device {
         };
 
         n::DescriptorPool {
-            heap_srv_cbv_uav,
+            heap_cbv_srv_uav,
             heap_sampler,
             pools: descriptor_pools,
             max_size: max_sets as _,
@@ -2407,6 +2403,16 @@ impl d::Device<B> for Device {
                     bind_info = &write.set.binding_infos[target_binding];
                     offset = 0;
                 }
+
+                let dst_view = bind_info
+                    .view_range
+                    .as_ref()
+                    .map(|r| self.shared.heap_cbv_srv_uav.at((r.slice.start + offset) as _).cpu);
+                let dst_sampler = bind_info
+                    .sampler_range
+                    .as_ref()
+                    .map(|r| self.shared.heap_sampler.at((r.slice.start + offset) as _).cpu);
+
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
                         if update_pool_index == descriptor_update_pools.len() {
@@ -2461,7 +2467,7 @@ impl d::Device<B> for Device {
                         }
 
                         src_views.push(handle);
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                        dst_views.push(dst_view.unwrap());
                         num_views.push(1);
                     }
                     pso::Descriptor::Image(image, _layout) => {
@@ -2471,27 +2477,28 @@ impl d::Device<B> for Device {
                             image.handle_srv.unwrap()
                         };
                         src_views.push(handle);
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                        dst_views.push(dst_view.unwrap());
                         num_views.push(1);
                     }
                     pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
+                        let sampler_slot =
                         src_views.push(image.handle_srv.unwrap());
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                        dst_views.push(dst_view.unwrap());
                         num_views.push(1);
                         src_samplers.push(sampler.handle);
-                        dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
+                        dst_samplers.push(dst_sampler.unwrap());
                         num_samplers.push(1);
                     }
                     pso::Descriptor::Sampler(sampler) => {
                         src_samplers.push(sampler.handle);
-                        dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
+                        dst_samplers.push(dst_sampler.unwrap());
                         num_samplers.push(1);
                     }
                     pso::Descriptor::UniformTexelBuffer(buffer_view) => {
                         let handle = buffer_view.handle_srv;
                         if handle.ptr != 0 {
                             src_views.push(handle);
-                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                            dst_views.push(dst_view.unwrap());
                             num_views.push(1);
                         } else {
                             error!("SRV handle of the uniform texel buffer is zero (not supported by specified format).");
@@ -2501,7 +2508,7 @@ impl d::Device<B> for Device {
                         let handle = buffer_view.handle_uav;
                         if handle.ptr != 0 {
                             src_views.push(handle);
-                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                            dst_views.push(dst_view.unwrap());
                             num_views.push(1);
                         } else {
                             error!("UAV handle of the storage texel buffer is zero (not supported by specified format).");
@@ -2562,17 +2569,39 @@ impl d::Device<B> for Device {
             let src_info = &copy.src_set.binding_infos[copy.src_binding as usize];
             let dst_info = &copy.dst_set.binding_infos[copy.dst_binding as usize];
             if let (Some(src_range), Some(dst_range)) = (src_info.view_range.as_ref(), dst_info.view_range.as_ref()) {
-                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
-                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
-                src_views.push(src_range.at(copy.src_array_offset as _));
-                dst_views.push(dst_range.at(copy.dst_array_offset as _));
+                assert!(copy.src_array_offset + copy.count <= (src_range.slice.end - src_range.slice.start) as usize);
+                assert!(copy.dst_array_offset + copy.count <= (dst_range.slice.end - dst_range.slice.start) as usize);
+
+                src_views.push(
+                    self.shared
+                        .heap_cbv_srv_uav
+                        .at(src_range.slice.start as usize + copy.src_array_offset)
+                        .cpu
+                );
+                dst_views.push(
+                    self.shared
+                        .heap_cbv_srv_uav
+                        .at(dst_range.slice.start as usize + copy.dst_array_offset)
+                        .cpu
+                );
                 num_views.push(copy.count as u32);
             }
             if let (Some(src_range), Some(dst_range)) = (src_info.sampler_range.as_ref(), dst_info.sampler_range.as_ref()) {
-                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
-                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
-                src_samplers.push(src_range.at(copy.src_array_offset as _));
-                dst_samplers.push(dst_range.at(copy.dst_array_offset as _));
+                assert!(copy.src_array_offset + copy.count <= (src_range.slice.end - src_range.slice.start) as usize);
+                assert!(copy.dst_array_offset + copy.count <= (dst_range.slice.end - dst_range.slice.start) as usize);
+
+                src_samplers.push(
+                    self.shared
+                        .heap_sampler
+                        .at(src_range.slice.start as usize + copy.src_array_offset)
+                        .cpu
+                );
+                dst_samplers.push(
+                    self.shared
+                        .heap_sampler
+                        .at(dst_range.slice.start as usize + copy.dst_array_offset)
+                        .cpu
+                );
                 num_samplers.push(copy.count as u32);
             }
         }

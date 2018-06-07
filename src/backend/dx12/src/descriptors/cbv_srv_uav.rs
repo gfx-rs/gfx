@@ -2,6 +2,7 @@ use Device;
 use descriptors::DualHandle;
 use range_alloc::RangeAllocator;
 use std::ops::Range;
+use std::sync::Mutex;
 use winapi::um::d3d12;
 use wio::com::ComPtr;
 
@@ -9,7 +10,7 @@ use wio::com::ComPtr;
 pub struct CbvSrvUavGpuHeap {
     handle_size: usize,
     start: DualHandle,
-    free_list: RangeAllocator<u64>,
+    free_list: Mutex<RangeAllocator<u64>>,
     raw: ComPtr<d3d12::ID3D12DescriptorHeap>,
 }
 
@@ -26,21 +27,42 @@ impl CbvSrvUavGpuHeap {
         CbvSrvUavGpuHeap {
             handle_size,
             start,
-            free_list: RangeAllocator::new(0..size as _),
+            free_list: Mutex::new(RangeAllocator::new(0..size as _)),
             raw: heap,
         }
     }
 
-    pub fn allocate(&mut self, num: usize) -> Option<Range<u64>> {
-        self.free_list.allocate_range(num as _)
+    pub fn allocate(&self, num: usize) -> Option<Range<u64>> {
+        self.free_list
+            .lock()
+            .unwrap()
+            .allocate_range(num as _)
     }
 
-    pub fn free(&mut self, range: Range<u64>) {
-        self.free_list.free_range(range);
+    pub fn free(&self, range: Range<u64>) {
+        self.free_list
+            .lock()
+            .unwrap()
+            .free_range(range);
     }
 
     pub fn as_raw(&self) -> *mut d3d12::ID3D12DescriptorHeap {
         self.raw.as_raw()
+    }
+
+    pub fn at(&self, idx: usize) -> DualHandle {
+        DualHandle {
+            cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
+                ptr: self.start.cpu.ptr + self.handle_size * idx,
+            },
+            gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
+                ptr: self.start.gpu.ptr + (self.handle_size * idx) as u64,
+            },
+        }
+    }
+
+    pub fn handle_size(&self) -> usize {
+        self.handle_size
     }
 }
 

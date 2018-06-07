@@ -299,18 +299,8 @@ unsafe impl Sync for Memory {}
 
 #[derive(Debug)]
 pub struct DescriptorRange {
-    pub(crate) handle: DualHandle,
+    pub(crate) slice: Range<u64>,
     pub(crate) ty: pso::DescriptorType,
-    pub(crate) handle_size: u64,
-    pub(crate) count: u64,
-}
-
-impl DescriptorRange {
-    pub(crate) fn at(&self, index: u64) -> d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
-        assert!(index < self.count);
-        let ptr = self.handle.cpu.ptr + (self.handle_size * index) as usize;
-        d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr }
-    }
 }
 
 #[derive(Debug, Default)]
@@ -324,40 +314,9 @@ pub struct DescriptorBindingInfo {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct DescriptorSet {
-    // Required for binding at command buffer
-    #[derivative(Debug="ignore")]
-    pub(crate) heap_srv_cbv_uav: ComPtr<d3d12::ID3D12DescriptorHeap>,
-    #[derivative(Debug="ignore")]
-    pub(crate) heap_samplers: ComPtr<d3d12::ID3D12DescriptorHeap>,
-
+    pub(crate) range_cbv_srv_uav: Option<Range<u64>>,
+    pub(crate) range_sampler: Option<Range<u64>>,
     pub(crate) binding_infos: Vec<DescriptorBindingInfo>,
-
-    #[derivative(Debug="ignore")]
-    pub(crate) first_gpu_sampler: Option<d3d12::D3D12_GPU_DESCRIPTOR_HANDLE>,
-    #[derivative(Debug="ignore")]
-    pub(crate) first_gpu_view: Option<d3d12::D3D12_GPU_DESCRIPTOR_HANDLE>,
-}
-
-// TODO: is this really safe?
-unsafe impl Send for DescriptorSet {}
-unsafe impl Sync for DescriptorSet {}
-
-impl DescriptorSet {
-    pub fn srv_cbv_uav_gpu_start(&self) -> d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
-        unsafe {
-            self
-                .heap_srv_cbv_uav
-                .GetGPUDescriptorHandleForHeapStart()
-        }
-    }
-
-    pub fn sampler_gpu_start(&self) -> d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
-        unsafe {
-            self
-                .heap_samplers
-                .GetGPUDescriptorHandleForHeapStart()
-        }
-    }
 }
 
 #[derive(Copy, Clone, Derivative)]
@@ -409,7 +368,7 @@ impl DescriptorHeapSlice {
 
 #[derive(Debug)]
 pub struct DescriptorPool {
-    pub(crate) heap_srv_cbv_uav: DescriptorHeapSlice,
+    pub(crate) heap_cbv_srv_uav: DescriptorHeapSlice,
     pub(crate) heap_sampler: DescriptorHeapSlice,
     pub(crate) pools: Vec<pso::DescriptorRangeDesc>,
     pub(crate) max_size: u64,
@@ -419,10 +378,44 @@ unsafe impl Sync for DescriptorPool {}
 
 impl HalDescriptorPool<Backend> for DescriptorPool {
     fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
-        /*
         let mut binding_infos = Vec::new();
-        let mut first_gpu_sampler = None;
-        let mut first_gpu_view = None;
+
+        let mut num_cbv_srv_uav = 0;
+        let mut num_sampler = 0;
+
+        for binding in &layout.bindings {
+            let HeapProperties { has_view, has_sampler, is_uav } = HeapProperties::from(binding.ty);
+            if has_view {
+                num_cbv_srv_uav += binding.count;
+            }
+            if has_sampler {
+                num_sampler += binding.count;
+            }
+        }
+
+        let range_cbv_srv_uav = if num_cbv_srv_uav > 0 {
+            Some(
+                self.heap_cbv_srv_uav
+                    .free_list
+                    .allocate_range(num_cbv_srv_uav as _)
+                    .ok_or(pso::AllocationError::OutOfPoolMemory)?
+            )
+        } else {
+            None
+        };
+        let range_sampler = if num_sampler > 0 {
+            Some(
+                self.heap_sampler
+                    .free_list
+                    .allocate_range(num_sampler as _)
+                    .ok_or(pso::AllocationError::OutOfPoolMemory)?
+                )
+        } else {
+            None
+        };
+
+        let mut start_cbv_srv_uav = range_cbv_srv_uav.as_ref().map_or(0, |r| r.start);
+        let mut start_sampler = range_sampler.as_ref().map_or(0, |r| r.start);
 
         for binding in &layout.bindings {
             let HeapProperties { has_view, has_sampler, is_uav } = HeapProperties::from(binding.ty);
@@ -432,31 +425,21 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
             binding_infos[binding.binding as usize] = DescriptorBindingInfo {
                 count: binding.count as _,
                 view_range: if has_view {
-                    let handle = self.heap_srv_cbv_uav.allocate(binding.count as u64)
-                        .ok_or(pso::AllocationError::OutOfPoolMemory)?;
-                    if first_gpu_view.is_none() {
-                        first_gpu_view = Some(handle.gpu);
-                    }
+                    let slice = start_cbv_srv_uav .. start_cbv_srv_uav + binding.count as u64;
+                    start_cbv_srv_uav += binding.count as u64;
                     Some(DescriptorRange {
-                        handle,
+                        slice,
                         ty: binding.ty,
-                        count: binding.count as _,
-                        handle_size: self.heap_srv_cbv_uav.handle_size,
                     })
                 } else {
                     None
                 },
                 sampler_range: if has_sampler {
-                    let handle = self.heap_sampler.allocate(binding.count as u64)
-                        .ok_or(pso::AllocationError::OutOfPoolMemory)?;
-                    if first_gpu_sampler.is_none() {
-                        first_gpu_sampler = Some(handle.gpu);
-                    }
+                    let slice = start_sampler .. start_sampler + binding.count as u64;
+                    start_sampler += binding.count as u64;
                     Some(DescriptorRange {
-                        handle,
+                        slice,
                         ty: binding.ty,
-                        count: binding.count as _,
-                        handle_size: self.heap_sampler.handle_size,
                     })
                 } else {
                     None
@@ -466,39 +449,29 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         }
 
         Ok(DescriptorSet {
-            heap_srv_cbv_uav: self.heap_srv_cbv_uav.heap.clone(),
-            heap_samplers: self.heap_sampler.heap.clone(),
+            range_cbv_srv_uav,
+            range_sampler,
             binding_infos,
-            first_gpu_sampler,
-            first_gpu_view,
         })
-        */
-        unimplemented!()
     }
 
     fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
-        /*
-        for descriptor_set in descriptor_sets {
-            for binding_info in &descriptor_set.binding_infos {
-                if let Some(ref view_range) = binding_info.view_range {
-                    if HeapProperties::from(view_range.ty).has_view {
-                        self.heap_srv_cbv_uav.free_handles(view_range.handle);
-                    }
-
-                }
-                if let Some(ref sampler_range) = binding_info.sampler_range {
-                    if HeapProperties::from(sampler_range.ty).has_sampler {
-                        self.heap_sampler.free_handles(sampler_range.handle);
-                    }
-                }
+        for set in descriptor_sets {
+            if let Some(ref range) = set.range_cbv_srv_uav {
+                self.heap_cbv_srv_uav
+                    .free_list
+                    .free_range(range.clone());
+            }
+            if let Some(ref range) = set.range_sampler {
+                self.heap_sampler
+                    .free_list
+                    .free_range(range.clone());
             }
         }
-        */
-        unimplemented!()
     }
 
     fn reset(&mut self) {
-        self.heap_srv_cbv_uav.clear();
+        self.heap_cbv_srv_uav.clear();
         self.heap_sampler.clear();
     }
 }

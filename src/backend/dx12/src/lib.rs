@@ -513,6 +513,9 @@ struct CmdSignatures {
 struct Shared {
     pub signatures: CmdSignatures,
     pub service_pipes: internal::ServicePipes,
+    // Global CPU/GPU descriptor heaps
+    pub heap_cbv_srv_uav: descriptors::CbvSrvUavGpuHeap,
+    pub heap_sampler: descriptors::SamplerGpuHeap,
 }
 
 pub struct Device {
@@ -526,9 +529,6 @@ pub struct Device {
     srv_uav_pool: Mutex<DescriptorCpuPool>,
     sampler_pool: Mutex<DescriptorCpuPool>,
     descriptor_update_pools: Mutex<Vec<descriptors::HeapLinear>>,
-    // CPU/GPU descriptor heaps
-    heap_srv_cbv_uav: Mutex<descriptors::CbvSrvUavGpuHeap>,
-    heap_sampler: Mutex<descriptors::SamplerGpuHeap>,
     events: Mutex<Vec<winnt::HANDLE>>,
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
@@ -556,7 +556,7 @@ impl Device {
         let sampler_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
         let max_descriptors = 1_000_000; // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
-        let heap_srv_cbv_uav = descriptors::CbvSrvUavGpuHeap::new(
+        let heap_cbv_srv_uav = descriptors::CbvSrvUavGpuHeap::new(
             &mut device,
             max_descriptors
         );
@@ -589,6 +589,8 @@ impl Device {
         let shared = Shared {
             signatures,
             service_pipes,
+            heap_cbv_srv_uav,
+            heap_sampler,
         };
 
         Device {
@@ -601,8 +603,6 @@ impl Device {
             srv_uav_pool: Mutex::new(srv_uav_pool),
             sampler_pool: Mutex::new(sampler_pool),
             descriptor_update_pools: Mutex::new(Vec::new()),
-            heap_srv_cbv_uav: Mutex::new(heap_srv_cbv_uav),
-            heap_sampler: Mutex::new(heap_sampler),
             events: Mutex::new(Vec::new()),
             shared: Arc::new(shared),
             present_queue,

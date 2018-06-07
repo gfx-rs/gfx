@@ -148,10 +148,6 @@ struct PipelineCache {
     root_constants: Vec<RootConstant>,
     // Virtualized root signature user data of the shaders
     user_data: UserData,
-
-    // Descriptor heap gpu handle offsets
-    srv_cbv_uav_start: u64,
-    sampler_start: u64,
 }
 
 impl PipelineCache {
@@ -161,8 +157,6 @@ impl PipelineCache {
             num_parameter_slots: 0,
             root_constants: Vec::new(),
             user_data: UserData::new(),
-            srv_cbv_uav_start: 0,
-            sampler_start: 0,
         }
     }
 
@@ -172,7 +166,7 @@ impl PipelineCache {
         first_set: usize,
         sets: I,
         offsets: J,
-    ) -> [*mut d3d12::ID3D12DescriptorHeap; 2]
+    )
     where
         I: IntoIterator,
         I::Item: Borrow<n::DescriptorSet>,
@@ -182,20 +176,6 @@ impl PipelineCache {
         assert!(offsets.into_iter().next().is_none()); //TODO
 
         let mut sets = sets.into_iter().peekable();
-        let (
-            srv_cbv_uav_start, sampler_start,
-            heap_srv_cbv_uav, heap_sampler,
-        ) = if let Some(set_0) = sets.peek().map(Borrow::borrow) {
-            (
-                set_0.srv_cbv_uav_gpu_start().ptr, set_0.sampler_gpu_start().ptr,
-                set_0.heap_srv_cbv_uav.as_raw(), set_0.heap_samplers.as_raw(),
-            )
-        } else {
-            return [ptr::null_mut(); 2];
-        };
-
-        self.srv_cbv_uav_start = srv_cbv_uav_start;
-        self.sampler_start = sampler_start;
 
         let mut table_id = 0;
         for table in &layout.tables[..first_set] {
@@ -214,35 +194,33 @@ impl PipelineCache {
 
         for (set, table) in sets.zip(layout.tables[first_set..].iter()) {
             let set = set.borrow();
-            set.first_gpu_view.map(|gpu| {
+            set.range_cbv_srv_uav.as_ref().map(|r| {
                 assert!(table.contains(n::SRV_CBV_UAV));
 
                 let root_offset = table_id + table_base_offset;
                 // Cast is safe as offset **must** be in u32 range. Unable to
                 // create heaps with more descriptors.
-                let table_offset = (gpu.ptr - srv_cbv_uav_start) as u32;
-                self
-                    .user_data
+                let table_offset = r.start as u32;
+                self.user_data
                     .set_srv_cbv_uav_table(root_offset as _, table_offset);
 
                 table_id += 1;
             });
-            set.first_gpu_sampler.map(|gpu| {
+            set.range_sampler.as_ref().map(|r| {
                 assert!(table.contains(n::SAMPLERS));
 
                 let root_offset = table_id + table_base_offset;
                 // Cast is safe as offset **must** be in u32 range. Unable to
                 // create heaps with more descriptors.
-                let table_offset = (gpu.ptr - sampler_start) as u32;
-                self
-                    .user_data
+                // NOTE: we only copy the CPU descriptor start here, the final GPU location
+                //       will be determined when all descriptor sets are bound.
+                let table_offset = r.start as u32;
+                self.user_data
                     .set_sampler_table(root_offset as _, table_offset);
 
                 table_id += 1;
             });
         }
-
-        [heap_srv_cbv_uav, heap_sampler]
     }
 }
 
@@ -590,7 +568,6 @@ impl CommandBuffer {
         }
 
         self.active_bindpoint = BindPoint::Graphics { internal: false };
-        let cmd_buffer = &mut self.raw;
 
         // Bind vertex buffers
         // Use needs_bind array to determine which buffers still need to be bound
@@ -623,7 +600,7 @@ impl CommandBuffer {
                         let num_views = buffers.len();
 
                         unsafe {
-                            cmd_buffer.IASetVertexBuffers(
+                            self.raw.IASetVertexBuffers(
                                 start_slot as _,
                                 buffers.len() as _,
                                 buffers.as_ptr(),
@@ -639,20 +616,31 @@ impl CommandBuffer {
         self.vertex_bindings_remap = [None; MAX_VERTEX_BUFFERS];
 
         // Flush root signature data
-        Self::flush_user_data(
-            &mut self.gr_pipeline,
-            |slot, data| unsafe {
-                cmd_buffer.clone().SetGraphicsRoot32BitConstants(
-                    slot,
-                    data.len() as _,
-                    data.as_ptr() as *const _,
-                    0,
-                )
-            },
-            |slot, gpu| unsafe {
-                cmd_buffer.clone().SetGraphicsRootDescriptorTable(slot, gpu);
-            },
-        );
+        if self.gr_pipeline.user_data.dirty_mask != 0 {
+            // TODO: select sampler heap
+            self.active_descriptor_heaps = [
+                self.shared.heap_cbv_srv_uav.as_raw(),
+                ptr::null_mut(), // TODO
+            ];
+            self.bind_descriptor_heaps();
+
+            let cmd_buffer = &mut self.raw;
+            Self::flush_user_data(
+                &mut self.gr_pipeline,
+                &self.shared,
+                |slot, data| unsafe {
+                    cmd_buffer.clone().SetGraphicsRoot32BitConstants(
+                        slot,
+                        data.len() as _,
+                        data.as_ptr() as *const _,
+                        0,
+                    )
+                },
+                |slot, gpu| unsafe {
+                    cmd_buffer.clone().SetGraphicsRootDescriptorTable(slot, gpu);
+                },
+            );
+        }
     }
 
     fn set_compute_bind_point(&mut self) {
@@ -676,21 +664,31 @@ impl CommandBuffer {
             BindPoint::Compute => {} // Nothing to do
         }
 
-        let cmd_buffer = &mut self.raw;
-        Self::flush_user_data(
-            &mut self.comp_pipeline,
-            |slot, data| unsafe {
-                cmd_buffer.clone().SetComputeRoot32BitConstants(
-                    slot,
-                    data.len() as _,
-                    data.as_ptr() as *const _,
-                    0,
-                )
-            },
-            |slot, gpu| unsafe {
-                cmd_buffer.clone().SetComputeRootDescriptorTable(slot, gpu);
-            },
-        );
+        if self.comp_pipeline.user_data.dirty_mask != 0 {
+            // TODO: select sampler heap
+            self.active_descriptor_heaps = [
+                self.shared.heap_cbv_srv_uav.as_raw(),
+                ptr::null_mut(), // TODO
+            ];
+            self.bind_descriptor_heaps();
+
+            let cmd_buffer = &mut self.raw;
+            Self::flush_user_data(
+                &mut self.comp_pipeline,
+                &self.shared,
+                |slot, data| unsafe {
+                    cmd_buffer.clone().SetComputeRoot32BitConstants(
+                        slot,
+                        data.len() as _,
+                        data.as_ptr() as *const _,
+                        0,
+                    )
+                },
+                |slot, gpu| unsafe {
+                    cmd_buffer.clone().SetComputeRootDescriptorTable(slot, gpu);
+                },
+            );
+        }
     }
 
     fn push_constants(
@@ -714,6 +712,7 @@ impl CommandBuffer {
 
     fn flush_user_data<F, G>(
         pipeline: &mut PipelineCache,
+        shared: &Arc<Shared>,
         mut constants_update: F,
         mut table_update: G,
     ) where
@@ -721,10 +720,6 @@ impl CommandBuffer {
         G: FnMut(u32, d3d12::D3D12_GPU_DESCRIPTOR_HANDLE),
     {
         let user_data = &mut pipeline.user_data;
-        if user_data.dirty_mask == 0 {
-            return
-        }
-
         let num_root_constant = pipeline.root_constants.len();
         let mut cur_index = 0;
         // TODO: opt: Only set dirty root constants?
@@ -755,17 +750,18 @@ impl CommandBuffer {
         for i in num_root_constant..pipeline.num_parameter_slots {
             let table_index = i - num_root_constant + table_start;
             if ((user_data.dirty_mask >> table_index) & 1) == 1 {
-                let ptr = match user_data.data[table_index] {
+                let gpu = match user_data.data[table_index] {
                     RootElement::TableSrvCbvUav(offset) =>
-                        pipeline.srv_cbv_uav_start + offset as u64,
-                    RootElement::TableSampler(offset) =>
-                        pipeline.sampler_start + offset as u64,
+                        shared.heap_cbv_srv_uav.at(offset as _).gpu,
+                    RootElement::TableSampler(offset) => {
+                        unimplemented!()
+                        // pipeline.sampler_start + offset as u64,
+                    }
                     other => {
                         error!("Unexpected user data element in the root signature ({:?})", other);
                         continue
                     }
                 };
-                let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr };
                 table_update(i as _, gpu);
                 user_data.clear_dirty(table_index);
             }
@@ -1789,8 +1785,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        self.active_descriptor_heaps = self.gr_pipeline.bind_descriptor_sets(layout, first_set, sets, offsets);
-        self.bind_descriptor_heaps();
+        self.gr_pipeline.bind_descriptor_sets(layout, first_set, sets, offsets);
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
@@ -1826,8 +1821,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        self.active_descriptor_heaps = self.comp_pipeline.bind_descriptor_sets(layout, first_set, sets, offsets);
-        self.bind_descriptor_heaps();
+        self.comp_pipeline.bind_descriptor_sets(layout, first_set, sets, offsets);
     }
 
     fn dispatch(&mut self, count: WorkGroupCount) {
