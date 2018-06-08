@@ -1,5 +1,5 @@
 use command::{IndexBuffer};
-use native::{RasterizerState};
+use native::{ImageRoot, RasterizerState};
 
 use hal;
 use metal;

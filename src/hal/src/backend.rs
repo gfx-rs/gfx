@@ -2,7 +2,6 @@
 
 use Backend;
 use queue::{QueueFamily, QueueFamilyId, Queues};
-use window::Frame;
 
 use std::collections::HashMap;
 
@@ -33,13 +32,6 @@ impl<B: Backend> RawQueueGroup<B> {
     pub fn add_queue(&mut self, queue: B::CommandQueue) {
         assert!(self.queues.len() < self.family.max_queues());
         self.queues.push(queue);
-    }
-}
-
-impl Frame {
-    /// Create a new frame.
-    pub fn new(id: usize) -> Self {
-        Frame(id)
     }
 }
 

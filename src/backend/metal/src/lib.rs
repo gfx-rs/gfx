@@ -127,7 +127,8 @@ impl Instance {
             }
 
             msg_send![view, setWantsLayer: YES];
-            let render_layer: *mut Object = msg_send![Class::get("CALayer").unwrap(), new]; // Returns retained
+            let class = Class::get("CAMetalLayer").unwrap();
+            let render_layer: *mut Object = msg_send![class, new]; // Returns retained
             let view_size: CGRect = msg_send![view, bounds];
             msg_send![render_layer, setFrame: view_size];
             let view_layer: *mut Object = msg_send![view, layer];

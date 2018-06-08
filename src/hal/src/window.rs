@@ -89,7 +89,7 @@ pub struct SurfaceCapabilities {
     ///
     /// - `image_count.start` must be at least 1.
     /// - `image_count.end` must be larger of equal to `image_count.start`.
-    pub image_count: Range<u32>,
+    pub image_count: Range<FrameImage>,
 
     /// Current extent of the surface.
     ///
@@ -104,7 +104,7 @@ pub struct SurfaceCapabilities {
     /// Maximum number of layers supported for presentable images.
     ///
     /// Must be at least 1.
-    pub max_image_layers: u32,
+    pub max_image_layers: image::Layer,
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
@@ -132,31 +132,13 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
     fn capabilities_and_formats(&self, physical_device: &B::PhysicalDevice) -> (SurfaceCapabilities, Option<Vec<Format>>);
 }
 
-/// Handle to a backbuffer of the swapchain.
+/// Index of an image in the swapchain.
 ///
 /// The swapchain is a series of one or more images, usually
 /// with one being drawn on while the other is displayed by
 /// the GPU (aka double-buffering). A `Frame` refers to a
 /// particular image in the swapchain.
-#[derive(Clone, Debug)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Frame(pub(crate) usize);
-
-impl Frame {
-    /// Retrieve frame id.
-    ///
-    /// The can be used to access the currently used backbuffer image
-    /// in `Backbuffer::Images`.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
-    pub fn id(&self) -> usize {
-        self.0
-    }
-}
+pub type FrameImage = u32;
 
 /// Synchronization primitives which will be signalled once a frame got retrieved.
 ///
@@ -199,7 +181,7 @@ pub struct SwapchainConfig {
     /// Depth stencil format of the backbuffer images (optional).
     pub depth_stencil_format: Option<Format>,
     /// Number of images in the swapchain.
-    pub image_count: u32,
+    pub image_count: FrameImage,
     /// Image usage of the backbuffer images.
     pub image_usage: image::Usage,
 }
@@ -304,7 +286,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// ```no_run
     ///
     /// ```
-    fn acquire_frame(&mut self, sync: FrameSync<B>) -> Result<Frame, ()>;
+    fn acquire_frame(&mut self, sync: FrameSync<B>) -> Result<FrameImage, ()>;
 
     /// Present one acquired frame in FIFO order.
     ///
