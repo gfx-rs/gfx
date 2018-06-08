@@ -1109,11 +1109,11 @@ impl pool::RawCommandPool<Backend> for CommandPool {
     }
 }
 
-// Sets up the load/store operations. Returns `true` if the clear color needs to be set.
-fn set_operations(attachment: &metal::RenderPassAttachmentDescriptorRef, ops: AttachmentOps) -> bool {
+/// Sets up the load/store operations. Returns `true` if the clear color needs to be set.
+fn set_operations(attachment: &metal::RenderPassAttachmentDescriptorRef, ops: AttachmentOps) -> AttachmentLoadOp {
     attachment.set_load_action(conv::map_load_operation(ops.load));
     attachment.set_store_action(conv::map_store_operation(ops.store));
-    ops.load == AttachmentLoadOp::Clear
+    ops.load
 }
 
 impl CommandBuffer {
@@ -2140,7 +2140,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     .color_attachments()
                     .object_at(num_colors)
                     .unwrap();
-                if set_operations(color_desc, rat.ops) {
+                if set_operations(color_desc, rat.ops) == AttachmentLoadOp::Clear {
                     let mtl_color = channel
                         .interpret(unsafe { value.color });
                     color_desc.set_clear_color(mtl_color);
@@ -2149,14 +2149,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
             if aspects.contains(Aspects::DEPTH) {
                 let depth_desc = descriptor.depth_attachment().unwrap();
-                if set_operations(depth_desc, rat.ops) {
+                if set_operations(depth_desc, rat.ops) == AttachmentLoadOp::Clear {
                     let mtl_depth = unsafe { value.depth_stencil.depth as f64 };
                     depth_desc.set_clear_depth(mtl_depth);
                 }
             }
             if aspects.contains(Aspects::STENCIL) {
                 let stencil_desc = descriptor.stencil_attachment().unwrap();
-                if set_operations(stencil_desc, rat.stencil_ops) {
+                if set_operations(stencil_desc, rat.stencil_ops) == AttachmentLoadOp::Clear {
                     let mtl_stencil = unsafe { value.depth_stencil.stencil };
                     stencil_desc.set_clear_stencil(mtl_stencil);
                 }
