@@ -32,7 +32,6 @@ unsafe impl Sync for ShaderModule {}
 
 #[derive(Debug)]
 pub struct RenderPass {
-    pub(crate) desc: metal::RenderPassDescriptor,
     pub(crate) attachments: Vec<hal::pass::Attachment>,
 }
 

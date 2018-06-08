@@ -13,7 +13,7 @@ workspace = "../../.."
 
 [features]
 default = ["winit"]
-metal_default_capture_scope=[]
+auto-capture = []
 
 [lib]
 name = "gfx_backend_metal"

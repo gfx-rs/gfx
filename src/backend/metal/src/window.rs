@@ -16,7 +16,7 @@ use core_foundation::base::TCFType;
 use core_foundation::string::CFString;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
-use core_graphics::base::CGFloat;
+//use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
 use io_surface::{self, IOSurface};
@@ -50,10 +50,10 @@ unsafe impl Send for Swapchain {}
 unsafe impl Sync for Swapchain {}
 
 impl Swapchain {
-    pub(crate) fn present(&mut self) -> (&SurfaceInner, &mut IOSurface) {
+    pub(crate) fn present(&mut self) -> (&SurfaceInner, &mut IOSurface, usize) {
         let id = self.present_index;
         self.present_index = (id + 1) % self.io_surfaces.len();
-        (&*self.surface, &mut self.io_surfaces[id])
+        (&*self.surface, &mut self.io_surfaces[id], id)
     }
 }
 
@@ -120,7 +120,8 @@ impl Device {
             if view_window.is_null() {
                 panic!("surface is not attached to a window");
             }
-            let scale_factor: CGFloat = msg_send![view_window, backingScaleFactor];
+            //let scale_factor: CGFloat = msg_send![view_window, backingScaleFactor];
+            let scale_factor = 1.0; //TODO: verify
             msg_send![render_layer, setContentsScale: scale_factor];
 
             info!("view points size {:?} scale factor {:?}", view_points_size, scale_factor);

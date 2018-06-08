@@ -14,6 +14,7 @@ use hal::{buffer, command as com, error, memory, pool, pso};
 use hal::{DrawCount, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
 use hal::format::{Aspects, Format, FormatDesc};
 use hal::image::{Extent, Filter, Layout, SubresourceRange};
+use hal::pass::{AttachmentLoadOp, AttachmentOps};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
@@ -80,6 +81,7 @@ impl QueueInner {
         // note: we deliberately don't hold the Mutex lock while waiting,
         // since the completion handlers need to access it.
         let (cmd_buf, token) = queue.lock().unwrap().spawn();
+        cmd_buf.set_label("empty");
         cmd_buf.commit();
         cmd_buf.wait_until_completed();
         queue.lock().unwrap().release(token);
@@ -928,6 +930,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         };
 
         let queue = self.shared.queue.lock().unwrap();
+        let (mut num_immediate, mut num_deferred) = (0, 0);
 
         for buffer in submit.cmd_buffers {
             let mut inner = buffer.borrow().inner.borrow_mut();
@@ -938,7 +941,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
             } = *inner;
             let temp_cmd_buffer;
             let command_buffer: &metal::CommandBufferRef = match *sink {
-                Some(CommandSink::Immediate { ref cmd_buffer, .. }) => {
+                Some(CommandSink::Immediate { ref cmd_buffer, ref token, .. }) => {
+                    num_immediate += 1;
+                    trace!("\timmediate {:?}", token);
                     // schedule the retained buffers to release after the commands are done
                     if !retained_buffers.is_empty() || !retained_textures.is_empty() {
                         let free_buffers = mem::replace(retained_buffers, Vec::new());
@@ -953,6 +958,8 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     cmd_buffer
                 }
                 Some(CommandSink::Deferred { ref passes, .. }) => {
+                    num_deferred += 1;
+                    trace!("\tdeferred with {} passes", passes.len());
                     temp_cmd_buffer = queue.raw.new_command_buffer_with_unretained_references();
                     record_commands(&*temp_cmd_buffer, passes);
                     &*temp_cmd_buffer
@@ -964,6 +971,8 @@ impl RawCommandQueue<Backend> for CommandQueue {
             }
             command_buffer.commit();
         }
+
+        debug!("\t{} immediate, {} deferred command buffers", num_immediate, num_deferred);
 
         if let Some(ref fence) = fence {
             let command_buffer = queue.raw.new_command_buffer_with_unretained_references();
@@ -988,7 +997,8 @@ impl RawCommandQueue<Backend> for CommandQueue {
         for mut swapchain in swapchains {
             // TODO: wait for semaphores
             let swapchain = swapchain.borrow_mut();
-            let (surface, io_surface) = swapchain.present();
+            let (surface, io_surface, present_id) = swapchain.present();
+            debug!("presenting frame {}", present_id);
             unsafe {
                 let render_layer_borrow = surface.render_layer.lock().unwrap();
                 let render_layer = *render_layer_borrow;
@@ -996,7 +1006,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             }
         }
 
-        if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
+        if cfg!(feature = "auto-capture") {
             let shared_capture_manager = CaptureManager::shared();
             if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
                 default_capture_scope.end_scope();
@@ -1097,6 +1107,13 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             }
         }
     }
+}
+
+// Sets up the load/store operations. Returns `true` if the clear color needs to be set.
+fn set_operations(attachment: &metal::RenderPassAttachmentDescriptorRef, ops: AttachmentOps) -> bool {
+    attachment.set_load_action(conv::map_load_operation(ops.load));
+    attachment.set_store_action(conv::map_store_operation(ops.store));
+    ops.load == AttachmentLoadOp::Clear
 }
 
 impl CommandBuffer {
@@ -2105,6 +2122,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ClearValueRaw>,
     {
+        let _ap = AutoreleasePool::new();
         // FIXME: subpasses
         let descriptor: metal::RenderPassDescriptor = unsafe {
             msg_send![framebuffer.descriptor, copy]
@@ -2122,20 +2140,26 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     .color_attachments()
                     .object_at(num_colors)
                     .unwrap();
-                let mtl_color = channel
-                    .interpret(unsafe { value.color });
-                color_desc.set_clear_color(mtl_color);
+                if set_operations(color_desc, rat.ops) {
+                    let mtl_color = channel
+                        .interpret(unsafe { value.color });
+                    color_desc.set_clear_color(mtl_color);
+                }
                 num_colors += 1;
             }
             if aspects.contains(Aspects::DEPTH) {
                 let depth_desc = descriptor.depth_attachment().unwrap();
-                let mtl_depth = unsafe { value.depth_stencil.depth as f64 };
-                depth_desc.set_clear_depth(mtl_depth);
+                if set_operations(depth_desc, rat.ops) {
+                    let mtl_depth = unsafe { value.depth_stencil.depth as f64 };
+                    depth_desc.set_clear_depth(mtl_depth);
+                }
             }
             if aspects.contains(Aspects::STENCIL) {
-                let depth_desc = descriptor.stencil_attachment().unwrap();
-                let mtl_stencil = unsafe { value.depth_stencil.stencil };
-                depth_desc.set_clear_stencil(mtl_stencil);
+                let stencil_desc = descriptor.stencil_attachment().unwrap();
+                if set_operations(stencil_desc, rat.stencil_ops) {
+                    let mtl_stencil = unsafe { value.depth_stencil.stencil };
+                    stencil_desc.set_clear_stencil(mtl_stencil);
+                }
             }
         }
 
