@@ -1246,16 +1246,18 @@ impl hal::Device<Backend> for Device {
             unsafe { ComPtr::from_raw(swapchain) }
         };
 
-        let images = (0..config.image_count).map(|i| {
+        // TODO: for now we clamp to 1 buffer..
+        let images = (0..config.image_count.min(1)).map(|i| {
             let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
 
-            unsafe {
+            let hr = unsafe {
                 swapchain.GetBuffer(
                     i as _,
                     &d3d11::IID_ID3D11Resource,
                     &mut resource as *mut *mut _ as *mut *mut _
-                );
+                )
             };
+            assert_eq!(hr, winerror::S_OK);
 
             let mut desc: d3d11::D3D11_RENDER_TARGET_VIEW_DESC = unsafe { mem::zeroed() };
             desc.Format = format;
