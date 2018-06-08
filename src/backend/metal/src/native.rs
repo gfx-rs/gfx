@@ -80,18 +80,37 @@ impl Default for RasterizerState {
 }
 
 #[derive(Clone, Debug)]
+pub struct StencilState<T> {
+    pub(crate) front_reference: T,
+    pub(crate) back_reference: T,
+    pub(crate) front_read_mask: T,
+    pub(crate) back_read_mask: T,
+    pub(crate) front_write_mask: T,
+    pub(crate) back_write_mask: T,
+}
+
+#[derive(Clone, Debug)]
 pub struct DepthStencilState {
-    pub depth_stencil_desc: Option<metal::DepthStencilState>,
-    pub stencil_front_reference: pso::State<pso::StencilValue>,
-    pub stencil_back_reference: pso::State<pso::StencilValue>,
+    pub depth_stencil_desc: Option<pso::DepthStencilDesc>,
+    pub depth_stencil_desc_raw: Option<metal::DepthStencilDescriptor>,
+    pub depth_stencil_static: Option<metal::DepthStencilState>,
+    pub stencil: StencilState<pso::State<pso::StencilValue>>,
 }
 
 impl Default for DepthStencilState {
     fn default() -> Self {
         DepthStencilState {
             depth_stencil_desc: None,
-            stencil_front_reference: pso::State::Static(0),
-            stencil_back_reference: pso::State::Static(0),
+            depth_stencil_desc_raw: None,
+            depth_stencil_static: None,
+            stencil: StencilState::<pso::State<pso::StencilValue>> {
+                front_reference: pso::State::Static(0),
+                back_reference: pso::State::Static(0),
+                front_read_mask: pso::State::Static(!0),
+                back_read_mask: pso::State::Static(!0),
+                front_write_mask: pso::State::Static(!0),
+                back_write_mask: pso::State::Static(!0),
+            }
         }
     }
 }

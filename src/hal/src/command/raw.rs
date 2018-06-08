@@ -257,6 +257,12 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// store op is Reference.
     fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue);
 
+    /// Sets the stencil read mask.
+    fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue);
+
+    /// Sets the stencil write mask.
+    fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue);
+
     /// Set the blend constant values dynamically.
     fn set_blend_constants(&mut self, pso::ColorValue);
 

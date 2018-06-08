@@ -919,8 +919,16 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    fn set_stencil_reference(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
         unimplemented!()
+    }
+
+    fn set_stencil_read_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
+        unimplemented!();
+    }
+
+    fn set_stencil_write_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
+        unimplemented!();
     }
 
     fn set_depth_bounds(&mut self, bounds: Range<f32>) {

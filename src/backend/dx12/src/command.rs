@@ -1722,6 +1722,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe { self.raw.OMSetStencilRef(value as _); }
     }
 
+    fn set_stencil_read_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
+        unimplemented!();
+    }
+
+    fn set_stencil_write_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
+        unimplemented!();
+    }
+
     fn set_depth_bounds(&mut self, bounds: Range<f32>) {
         match self.raw.cast::<d3d12::ID3D12GraphicsCommandList1>() {
             Ok(cmd_list1) => unsafe { cmd_list1.OMSetDepthBounds(bounds.start, bounds.end) },

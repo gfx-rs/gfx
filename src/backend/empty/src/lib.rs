@@ -521,6 +521,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
+    fn set_stencil_read_mask(&mut self, _: pso::Face, _: pso::StencilValue) {
+        unimplemented!()
+    }
+
+    fn set_stencil_write_mask(&mut self, _: pso::Face, _: pso::StencilValue) {
+        unimplemented!()
+    }
+
     fn set_blend_constants(&mut self, _: pso::ColorValue) {
         unimplemented!()
     }
