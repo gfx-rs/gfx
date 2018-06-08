@@ -1310,6 +1310,7 @@ impl hal::Device<Backend> for Device {
         encoder.end_encoding();
         if num_syncs != 0 {
             debug!("\twaiting...");
+            cmd_buffer.set_label("invalidate_mapped_memory_ranges");
             cmd_buffer.commit();
             cmd_buffer.wait_until_completed();
         }

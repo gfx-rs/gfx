@@ -16,13 +16,16 @@ use core_foundation::base::TCFType;
 use core_foundation::string::CFString;
 use core_foundation::dictionary::CFDictionary;
 use core_foundation::number::CFNumber;
-//use core_graphics::base::CGFloat;
+use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
 use io_surface::{self, IOSurface};
 
 
-pub struct Surface(pub(crate) Arc<SurfaceInner>);
+pub struct Surface {
+    pub(crate) inner: Arc<SurfaceInner>,
+    pub(crate) apply_pixel_scale: bool,
+}
 
 pub(crate) struct SurfaceInner {
     pub(crate) nsview: *mut Object,
@@ -89,8 +92,8 @@ impl Surface {
     fn pixel_dimensions(&self) -> (image::Size, image::Size) {
         unsafe {
             // NSView bounds are measured in DIPs
-            let bounds: NSRect = msg_send![self.0.nsview, bounds];
-            let bounds_pixel: NSRect = msg_send![self.0.nsview, convertRectToBacking:bounds];
+            let bounds: NSRect = msg_send![self.inner.nsview, bounds];
+            let bounds_pixel: NSRect = msg_send![self.inner.nsview, convertRectToBacking:bounds];
             (bounds_pixel.size.width as _, bounds_pixel.size.height as _)
         }
     }
@@ -107,9 +110,9 @@ impl Device {
             _ => panic!("unsupported backbuffer format"), // TODO: more formats
         };
 
-        let render_layer_borrow = surface.0.render_layer.lock().unwrap();
+        let render_layer_borrow = surface.inner.render_layer.lock().unwrap();
         let render_layer = *render_layer_borrow;
-        let nsview = surface.0.nsview;
+        let nsview = surface.inner.nsview;
         let pixel_size = config.color_format.base_format().0.desc().bits as i32 / 8;
 
         unsafe {
@@ -120,8 +123,11 @@ impl Device {
             if view_window.is_null() {
                 panic!("surface is not attached to a window");
             }
-            //let scale_factor: CGFloat = msg_send![view_window, backingScaleFactor];
-            let scale_factor = 1.0; //TODO: verify
+            let scale_factor: CGFloat = if surface.apply_pixel_scale {
+                msg_send![view_window, backingScaleFactor]
+            } else {
+                1.0
+            };
             msg_send![render_layer, setContentsScale: scale_factor];
 
             info!("view points size {:?} scale factor {:?}", view_points_size, scale_factor);
@@ -171,7 +177,7 @@ impl Device {
             }).collect();
 
             let swapchain = Swapchain {
-                surface: surface.0.clone(),
+                surface: surface.inner.clone(),
                 _size_pixels: (pixel_width, pixel_height),
                 io_surfaces,
                 frame_index: 0,
