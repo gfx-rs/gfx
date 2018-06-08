@@ -239,3 +239,26 @@ pub enum State<T> {
     /// Dynamic state set through a command buffer.
     Dynamic,
 }
+
+impl<T> State<T> {
+    /// Returns the static value or a default.
+    pub fn static_or(self, default: T) -> T {
+        match self {
+            State::Static(v) => v,
+            State::Dynamic => default,
+        }
+    }
+
+    /// Whether the state is static.
+    pub fn is_static(self) -> bool {
+        match self {
+            State::Static(_) => true,
+            State::Dynamic => false,
+        }
+    }
+
+    /// Whether the state is dynamic.
+    pub fn is_dynamic(self) -> bool {
+        !self.is_static()
+    }
+}
