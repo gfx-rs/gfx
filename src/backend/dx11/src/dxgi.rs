@@ -105,15 +105,16 @@ fn create_dxgi_factory1(guid: &GUID) -> Result<ComPtr<dxgi::IDXGIFactory>, winer
 pub(crate) fn get_dxgi_factory() -> Result<(ComPtr<dxgi::IDXGIFactory>, DxgiVersion), winerror::HRESULT> {
     let mut factory: *mut IUnknown = ptr::null_mut();
 
-    if let Ok(factory) = create_dxgi_factory2(&dxgi1_5::IDXGIFactory5::uuidof()) {
+    // TODO: do we even need `create_dxgi_factory2`?
+    if let Ok(factory) = create_dxgi_factory1(&dxgi1_5::IDXGIFactory5::uuidof()) {
         return Ok((factory, DxgiVersion::Dxgi1_5));
     }
 
-    if let Ok(factory) = create_dxgi_factory2(&dxgi1_4::IDXGIFactory4::uuidof()) {
+    if let Ok(factory) = create_dxgi_factory1(&dxgi1_4::IDXGIFactory4::uuidof()) {
         return Ok((factory, DxgiVersion::Dxgi1_4));
     }
 
-    if let Ok(factory) = create_dxgi_factory2(&dxgi1_3::IDXGIFactory3::uuidof()) {
+    if let Ok(factory) = create_dxgi_factory1(&dxgi1_3::IDXGIFactory3::uuidof()) {
         return Ok((factory, DxgiVersion::Dxgi1_3));
     }
 
