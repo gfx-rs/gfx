@@ -73,9 +73,10 @@ impl Channel {
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ClearKey {
-    pub format: metal::MTLPixelFormat,
-    pub color: Option<(u8, Channel)>,
-    pub depth_stencil: bool,
+    pub framebuffer_aspects: Aspects,
+    pub color_formats: [metal::MTLPixelFormat; 1],
+    pub depth_stencil_format: metal::MTLPixelFormat,
+    pub target_index: Option<(u8, Channel)>,
 }
 pub type BlitKey = (metal::MTLTextureType, metal::MTLPixelFormat, Aspects, Channel);
 
@@ -159,17 +160,16 @@ impl ServicePipes {
     pub fn get_clear_image(
         &mut self,
         key: ClearKey,
-        aspects: Aspects,
         device: &Mutex<metal::Device>,
     ) -> &metal::RenderPipelineStateRef {
         let lib = &self.library;
         self.clears
             .entry(key)
-            .or_insert_with(|| Self::create_clear_image(key, aspects, lib, &*device.lock().unwrap()))
+            .or_insert_with(|| Self::create_clear_image(key, lib, &*device.lock().unwrap()))
     }
 
     fn create_clear_image(
-        key: ClearKey, aspects: Aspects, library: &metal::LibraryRef, device: &metal::DeviceRef,
+        key: ClearKey, library: &metal::LibraryRef, device: &metal::DeviceRef,
     ) -> metal::RenderPipelineState {
         let pipeline = metal::RenderPipelineDescriptor::new();
         pipeline.set_input_primitive_topology(metal::MTLPrimitiveTopologyClass::Triangle);
@@ -177,8 +177,24 @@ impl ServicePipes {
         let vs_clear = library.get_function("vs_clear", None).unwrap();
         pipeline.set_vertex_function(Some(&vs_clear));
 
-        if let Some((index, channel)) = key.color {
-            assert!(aspects.contains(Aspects::COLOR));
+        if key.framebuffer_aspects.contains(Aspects::COLOR) {
+            for (i, &format) in key.color_formats.iter().enumerate() {
+                pipeline
+                    .color_attachments()
+                    .object_at(i)
+                    .unwrap()
+                    .set_pixel_format(format);
+            }
+        }
+        if key.framebuffer_aspects.contains(Aspects::DEPTH) {
+            pipeline.set_depth_attachment_pixel_format(key.depth_stencil_format);
+        }
+        if key.framebuffer_aspects.contains(Aspects::STENCIL) {
+            pipeline.set_stencil_attachment_pixel_format(key.depth_stencil_format);
+        }
+
+        if let Some((index, channel)) = key.target_index {
+            assert!(key.framebuffer_aspects.contains(Aspects::COLOR));
             let s_channel = match channel {
                 Channel::Float => "float",
                 Channel::Int => "int",
@@ -187,21 +203,6 @@ impl ServicePipes {
             let ps_name = format!("ps_clear{}_{}", index, s_channel);
             let ps_blit = library.get_function(&ps_name, None).unwrap();
             pipeline.set_fragment_function(Some(&ps_blit));
-
-            pipeline
-                .color_attachments()
-                .object_at(index as _)
-                .unwrap()
-                .set_pixel_format(key.format);
-        }
-
-        if key.depth_stencil {
-            if aspects.contains(Aspects::DEPTH) {
-                pipeline.set_depth_attachment_pixel_format(key.format);
-            }
-            if aspects.contains(Aspects::STENCIL) {
-                pipeline.set_stencil_attachment_pixel_format(key.format);
-            }
         }
 
         // Vertex buffers

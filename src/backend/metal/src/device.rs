@@ -838,7 +838,7 @@ impl hal::Device<Backend> for Device {
             None => {
                 // TODO: This is a workaround for what appears to be a Metal validation bug
                 // A pixel format is required even though no attachments are provided
-                if pass_descriptor.main_pass.attachments.len() == 0 {
+                if pass_descriptor.main_pass.attachments.is_empty() {
                     pipeline.set_depth_attachment_pixel_format(metal::MTLPixelFormat::Depth32Float);
                 }
                 None
@@ -1035,7 +1035,9 @@ impl hal::Device<Backend> for Device {
                 mtl_buffer_desc.set_step_rate(!0);
             }
         }
-        pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
+        if !vertex_buffer_map.is_empty() {
+            pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
+        }
 
         if let pso::PolygonMode::Line(width) = pipeline_desc.rasterizer.polygon_mode {
             validate_line_width(width);
@@ -1049,6 +1051,10 @@ impl hal::Device<Backend> for Device {
             },
             depth_bias: pipeline_desc.rasterizer.depth_bias.unwrap_or_default(),
         });
+        let attachment_formats = pass_descriptor.main_pass.attachments
+            .iter()
+            .map(|at| at.format)
+            .collect();
 
         device.new_render_pipeline_state(&pipeline)
             .map(|raw|
@@ -1062,6 +1068,7 @@ impl hal::Device<Backend> for Device {
                     depth_stencil_state,
                     baked_states: pipeline_desc.baked_states.clone(),
                     vertex_buffer_map,
+                    attachment_formats,
                 })
             .map_err(|err| {
                 error!("PSO creation failed: {}", err);

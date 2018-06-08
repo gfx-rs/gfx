@@ -7,7 +7,7 @@ use std::os::raw::{c_void, c_long};
 use std::sync::{Arc, Condvar, Mutex};
 
 use hal::{self, image, pso};
-use hal::format::{Aspects, FormatDesc};
+use hal::format::{Aspects, Format, FormatDesc};
 
 use cocoa::foundation::{NSUInteger};
 use metal;
@@ -115,6 +115,8 @@ pub struct GraphicsPipeline {
     /// while Metal does not. Thus, we register extra vertex buffer bindings with
     /// adjusted offsets to cover this use case.
     pub(crate) vertex_buffer_map: VertexBufferMap,
+    /// Tracked attachment formats for figuring (roughly) renderpass compatibility.
+    pub(crate) attachment_formats: Vec<Option<Format>>,
 }
 
 unsafe impl Send for GraphicsPipeline {}

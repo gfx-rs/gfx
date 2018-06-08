@@ -12,7 +12,7 @@ use std::slice;
 
 use hal::{buffer, command as com, error, memory, pool, pso};
 use hal::{DrawCount, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
-use hal::format::{Aspects, FormatDesc};
+use hal::format::{Aspects, Format, FormatDesc};
 use hal::image::{Extent, Filter, Layout, SubresourceRange};
 use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
@@ -108,7 +108,10 @@ struct State {
     viewport: Option<MTLViewport>,
     scissors: Option<MTLScissorRect>,
     blend_color: Option<pso::ColorValue>,
-    render_pso: Option<(metal::RenderPipelineState, native::VertexBufferMap)>,
+    render_pso: Option<(metal::RenderPipelineState, native::VertexBufferMap, Vec<Option<Format>>)>,
+    /// A flag to handle edge cases of Vulkan binding inheritance:
+    /// we don't want to consider the current PSO bound for a new pass if it's not compatible.
+    render_pso_is_compatible: bool,
     compute_pso: Option<metal::ComputePipelineState>,
     work_group_size: MTLSize,
     primitive_type: MTLPrimitiveType,
@@ -136,13 +139,15 @@ impl State {
 
     fn clamp_scissor(&self, sr: MTLScissorRect) -> MTLScissorRect {
         let ex = self.framebuffer_inner.extent;
+        // sometimes there is not even an active render pass at this point
         let x = sr.x.min(ex.width.max(1) as u64 - 1);
         let y = sr.y.min(ex.height.max(1) as u64 - 1);
+        //TODO: handle the zero scissor size sensibly
         MTLScissorRect {
             x,
             y,
-            width: (sr.x + sr.width).min(ex.width as u64) - x,
-            height: (sr.y + sr.height).min(ex.height as u64) - y,
+            width: ((sr.x + sr.width).min(ex.width as u64) - x).max(1),
+            height: ((sr.y + sr.height).min(ex.height as u64) - y).max(1),
         }
     }
 
@@ -159,10 +164,12 @@ impl State {
         commands.push(soft::RenderCommand::SetDepthBias(
             self.rasterizer_state.clone().map(|r| r.depth_bias).unwrap_or_default()
         ));
-        let rasterizer = self.rasterizer_state.clone();
-        commands.extend(self.render_pso.as_ref().map(|&(ref pipeline, _)| {
-            soft::RenderCommand::BindPipeline(pipeline.clone(), rasterizer)
-        }));
+        if self.render_pso_is_compatible {
+            let rast = self.rasterizer_state.clone();
+            commands.extend(self.render_pso.as_ref().map(|&(ref pso, _, _)| {
+                soft::RenderCommand::BindPipeline(pso.clone(), rast)
+            }));
+        }
 
         let stages = [pso::Stage::Vertex, pso::Stage::Fragment];
         for (&stage, resources) in stages.iter().zip(&[&self.resources_vs, &self.resources_fs]) {
@@ -1033,6 +1040,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 scissors: None,
                 blend_color: None,
                 render_pso: None,
+                render_pso_is_compatible: false,
                 compute_pso: None,
                 work_group_size: MTLSize { width: 0, height: 0, depth: 0 },
                 primitive_type: MTLPrimitiveType::Point,
@@ -1176,7 +1184,7 @@ impl CommandBuffer {
 
     fn set_vertex_buffers(&mut self, commands: &mut Vec<soft::RenderCommand>) {
         let map = match self.state.render_pso {
-            Some((_, ref map)) => map,
+            Some((_, ref map, _)) => map,
             None => return
         };
 
@@ -1549,9 +1557,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .unwrap();
 
         for clear in clears {
-            let (aspects, key) = match *clear.borrow() {
+            let mut key = ClearKey {
+                framebuffer_aspects: self.state.framebuffer_inner.aspects,
+                color_formats: [metal::MTLPixelFormat::Invalid; 1],
+                depth_stencil_format: self.state.framebuffer_inner.depth_stencil
+                    .unwrap_or(metal::MTLPixelFormat::Invalid),
+                target_index: None,
+            };
+            for (out, &(fm, _)) in key.color_formats.iter_mut().zip(&self.state.framebuffer_inner.colors) {
+                *out = fm;
+            }
+
+            let aspects = match *clear.borrow() {
                 com::AttachmentClear::Color { index, value } => {
-                    let (format, channel) = self.state.framebuffer_inner.colors[index];
+                    let (_, channel) = self.state.framebuffer_inner.colors[index];
                     //Note: technically we should be able to derive the Channel from the
                     // `value` variant, but this is blocked by the portability that is
                     // always passing the attachment clears as `ClearColor::Float` atm.
@@ -1563,14 +1582,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             slice::from_raw_parts(raw_value.float32.as_ptr() as *const u8, 16)
                         }.to_owned(),
                     });
-                    (Aspects::COLOR, ClearKey {
-                        format,
-                        color: Some((index as u8, channel)),
-                        depth_stencil: false,
-                    })
+                    key.target_index = Some((index as u8, channel));
+                    Aspects::COLOR
                 }
                 com::AttachmentClear::DepthStencil { depth, stencil } => {
-                    let format = self.state.framebuffer_inner.depth_stencil.unwrap();
                     let mut aspects = Aspects::empty();
                     if let Some(value) = depth {
                         for v in &mut vertices {
@@ -1583,11 +1598,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         //TODO: soft::RenderCommand::SetStencilReference
                         aspects |= Aspects::STENCIL;
                     }
-                    (aspects, ClearKey {
-                        format,
-                        color: None,
-                        depth_stencil: true,
-                    })
+                    aspects
                 }
             };
 
@@ -1606,7 +1617,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
             let pso = pipes.get_clear_image(
                 key,
-                self.state.framebuffer_inner.aspects,
                 &self.shared.device
             ).to_owned();
             commands.push(soft::RenderCommand::BindPipeline(pso, None));
@@ -1625,11 +1635,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         // reset all the affected states
-        if let Some((ref pso, _)) = self.state.render_pso {
-            commands.push(soft::RenderCommand::BindPipeline(
-                pso.clone(),
-                None,
-            ));
+        if let Some((ref pso, _, _)) = self.state.render_pso {
+            if self.state.render_pso_is_compatible {
+                commands.push(soft::RenderCommand::BindPipeline(
+                    pso.clone(),
+                    None,
+                ));
+            } else {
+                warn!("Not restoring the current PSO after clear_attachments because it's not compatible");
+            }
         }
 
         if let Some(ref ds) = self.state.depth_stencil_desc {
@@ -2026,6 +2040,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
+        self.state.render_pso_is_compatible = match self.state.render_pso {
+            Some((_, _, ref formats)) => formats.len() == render_pass.attachments.len() &&
+                formats.iter().zip(&render_pass.attachments).all(|(f, at)| *f == at.format),
+            _ => false
+        };
+
         self.state.framebuffer_inner = framebuffer.inner.clone();
         let init_commands = self.state.make_render_commands();
         self.inner
@@ -2047,7 +2067,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
         let pipeline_state = pipeline.raw.to_owned();
-        self.state.render_pso = Some((pipeline_state.clone(), pipeline.vertex_buffer_map.clone()));
+        self.state.render_pso_is_compatible = true; //assume good intent :)
+        self.state.render_pso = Some((
+            pipeline_state.clone(),
+            pipeline.vertex_buffer_map.clone(),
+            pipeline.attachment_formats.clone(),
+        ));
         self.state.rasterizer_state = pipeline.rasterizer_state.clone();
         self.state.primitive_type = pipeline.primitive_type;
 
