@@ -119,7 +119,7 @@ impl Instance {
         }
     }
 
-    pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
+    fn create_from_nsview(&self, nsview: *mut c_void) -> window::SurfaceInner {
         unsafe {
             let view: cocoa::base::id = mem::transmute(nsview);
             if view.is_null() {
@@ -132,19 +132,29 @@ impl Instance {
             msg_send![render_layer, setFrame: view_size];
             let view_layer: *mut Object = msg_send![view, layer];
             msg_send![view_layer, addSublayer: render_layer];
-
             msg_send![view, retain];
-            window::Surface(Arc::new(window::SurfaceInner {
+
+            window::SurfaceInner {
                 nsview: view,
                 render_layer: Mutex::new(render_layer),
-            }))
+            }
+        }
+    }
+
+    pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
+        window::Surface {
+            inner: Arc::new(self.create_from_nsview(nsview)),
+            apply_pixel_scale: false,
         }
     }
 
     #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
         use winit::os::macos::WindowExt;
-        self.create_surface_from_nsview(window.get_nsview())
+        window::Surface {
+            inner: Arc::new(self.create_from_nsview(window.get_nsview())),
+            apply_pixel_scale: true,
+        }
     }
 }
 

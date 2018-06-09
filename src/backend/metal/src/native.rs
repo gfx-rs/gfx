@@ -32,7 +32,6 @@ unsafe impl Sync for ShaderModule {}
 
 #[derive(Debug)]
 pub struct RenderPass {
-    pub(crate) desc: metal::RenderPassDescriptor,
     pub(crate) attachments: Vec<hal::pass::Attachment>,
 }
 
@@ -81,12 +80,12 @@ impl Default for RasterizerState {
 
 #[derive(Clone, Debug)]
 pub struct StencilState<T> {
-    pub(crate) front_reference: T,
-    pub(crate) back_reference: T,
-    pub(crate) front_read_mask: T,
-    pub(crate) back_read_mask: T,
-    pub(crate) front_write_mask: T,
-    pub(crate) back_write_mask: T,
+    pub front_reference: T,
+    pub back_reference: T,
+    pub front_read_mask: T,
+    pub back_read_mask: T,
+    pub front_write_mask: T,
+    pub back_write_mask: T,
 }
 
 #[derive(Clone, Debug)]

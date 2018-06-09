@@ -206,7 +206,7 @@ unsafe impl Sync for Device {}
 
 impl Drop for Device {
     fn drop(&mut self) {
-        if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
+        if cfg!(feature = "auto-capture") {
             let shared_capture_manager = CaptureManager::shared();
             if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
                 default_capture_scope.end_scope();
@@ -312,7 +312,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let family = *families[0].0;
         let id = family.id();
 
-        if cfg!(debug_assertions) || cfg!(feature = "metal_default_capture_scope") {
+        if cfg!(feature = "auto-capture") {
             let device = self.shared.device.lock().unwrap();
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&*device);
@@ -688,50 +688,10 @@ impl hal::Device<Backend> for Device {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
     {
-        let _ap = AutoreleasePool::new(); // for RP descriptor and attachments
-        //TODO: subpasses, dependencies
-        let pass = metal::RenderPassDescriptor::new().to_owned();
-
-        let attachments = attachments.into_iter()
-            .map(|attachment| attachment.borrow().clone())
-            .collect::<Vec<_>>();
-        let mut num_colors = 0;
-
-        for attachment in &attachments {
-            let aspects = match attachment.format {
-                Some(f) => f.surface_desc().aspects,
-                None => continue,
-            };
-
-            let mtl_attachment: &metal::RenderPassAttachmentDescriptorRef = if aspects.contains(format::Aspects::COLOR) {
-                num_colors += 1;
-                pass
-                    .color_attachments()
-                    .object_at(num_colors - 1)
-                    .expect("too many color attachments")
-            } else {
-                if aspects.contains(format::Aspects::STENCIL) {
-                    let stencil = pass
-                        .stencil_attachment()
-                        .expect("no stencil attachment");
-                    stencil.set_load_action(conv::map_load_operation(attachment.stencil_ops.load));
-                    stencil.set_store_action(conv::map_store_operation(attachment.stencil_ops.store));
-                }
-                if !aspects.contains(format::Aspects::DEPTH) {
-                    continue
-                }
-                pass
-                    .depth_attachment()
-                    .expect("no depth attachement")
-            };
-
-            mtl_attachment.set_load_action(conv::map_load_operation(attachment.ops.load));
-            mtl_attachment.set_store_action(conv::map_store_operation(attachment.ops.store));
-        }
-
         n::RenderPass {
-            desc: pass,
-            attachments,
+            attachments: attachments.into_iter()
+                .map(|at| at.borrow().clone())
+                .collect(),
         }
     }
 
@@ -879,6 +839,7 @@ impl hal::Device<Backend> for Device {
         &self,
         pipeline_desc: &pso::GraphicsPipelineDesc<'a, Backend>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
+        debug!("create_graphics_pipeline {:?}", pipeline_desc);
         let pipeline = metal::RenderPipelineDescriptor::new();
         let pipeline_layout = &pipeline_desc.layout;
         let pass_descriptor = &pipeline_desc.subpass;
@@ -995,7 +956,7 @@ impl hal::Device<Backend> for Device {
         let vertex_descriptor = metal::VertexDescriptor::new();
         let mut vertex_buffer_map = n::VertexBufferMap::new();
         let mut next_buffer_index = pipeline_layout.attribute_buffer_index;
-        debug!("Vertex attribute remapping started");
+        trace!("Vertex attribute remapping started");
 
         for (i, &pso::AttributeDesc { binding, element, ..}) in pipeline_desc.attributes.iter().enumerate() {
             let original = pipeline_desc.vertex_buffers
@@ -1031,7 +992,7 @@ impl hal::Device<Backend> for Device {
                 }
                 Entry::Occupied(e) => e.get().binding,
             };
-            debug!("\tAttribute[{}] is mapped to vertex buffer[{}] with binding {} and offsets {} + {}",
+            trace!("\tAttribute[{}] is mapped to vertex buffer[{}] with binding {} and offsets {} + {}",
                 i, binding, mtl_buffer_index, base_offset, cut_offset);
             // pass the refined data to Metal
             let mtl_attribute_desc = vertex_descriptor
@@ -1114,6 +1075,7 @@ impl hal::Device<Backend> for Device {
         &self,
         pipeline_desc: &pso::ComputePipelineDesc<'a, Backend>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
+        debug!("create_compute_pipeline {:?}", pipeline_desc);
         let pipeline = metal::ComputePipelineDescriptor::new();
 
         let (cs_lib, cs_function, work_group_size) = self.load_shader(
@@ -1148,9 +1110,7 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<n::ImageView>
     {
         let _ap = AutoreleasePool::new(); // for attachments
-        let descriptor: metal::RenderPassDescriptor = unsafe {
-            msg_send![renderpass.desc, copy]
-        };
+        let descriptor = metal::RenderPassDescriptor::new().to_owned();
         descriptor.set_render_target_array_length(extent.depth as NSUInteger);
 
         let mut inner = n::FramebufferInner {
@@ -1276,7 +1236,7 @@ impl hal::Device<Backend> for Device {
         &self, memory: &n::Memory, generic_range: R
     ) -> Result<*mut u8, mapping::Error> {
         let range = memory.resolve(&generic_range);
-        debug!("mapping memory {:?} at {:?}", memory, range);
+        debug!("map_memory of size {} at {:?}", memory.size, range);
 
         let base_ptr = match memory.heap {
             n::MemoryHeap::Public(_, ref cpu_buffer) => cpu_buffer.contents() as *mut u8,
@@ -1287,7 +1247,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn unmap_memory(&self, memory: &n::Memory) {
-        debug!("unmapping memory {:?}", memory);
+        debug!("unmap_memory of size {}", memory.size);
     }
 
     fn flush_mapped_memory_ranges<'a, I, R>(&self, iter: I)
@@ -1350,6 +1310,7 @@ impl hal::Device<Backend> for Device {
         encoder.end_encoding();
         if num_syncs != 0 {
             debug!("\twaiting...");
+            cmd_buffer.set_label("invalidate_mapped_memory_ranges");
             cmd_buffer.commit();
             cmd_buffer.wait_until_completed();
         }
@@ -1590,6 +1551,7 @@ impl hal::Device<Backend> for Device {
     fn create_buffer(
         &self, size: u64, usage: buffer::Usage
     ) -> Result<n::UnboundBuffer, buffer::CreationError> {
+        debug!("create_buffer of size {} and usage {:?}", size, usage);
         Ok(n::UnboundBuffer {
             size,
             usage,
@@ -1729,6 +1691,9 @@ impl hal::Device<Backend> for Device {
         usage: image::Usage,
         flags: image::StorageFlags,
     ) -> Result<n::UnboundImage, image::CreationError> {
+        debug!("create_image {:?} with {} mips of {:?} {:?} and usage {:?}",
+            kind, mip_levels, format, tiling, usage);
+
         let is_cube = flags.contains(image::StorageFlags::CUBE_VIEW);
         let mtl_format = self.private_caps
             .map_format(format)
@@ -1947,18 +1912,13 @@ impl hal::Device<Backend> for Device {
         swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
-        let mtl_format = match self.private_caps.map_format(format) {
+        let mtl_format = match self.private_caps.map_format_with_swizzle(format, swizzle) {
             Some(f) => f,
             None => {
-                error!("failed to find corresponding Metal format for {:?}", format);
+                error!("failed to swizzle format {:?} with {:?}", format, swizzle);
                 return Err(image::ViewError::BadFormat);
             },
         };
-
-        if swizzle != format::Swizzle::NO {
-            error!("swizzling not supported");
-            //return Err(image::ViewError::Unsupported);
-        }
 
         let raw = image.raw.new_texture_view_from_slice(
             mtl_format,
