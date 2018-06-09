@@ -66,12 +66,12 @@ If you are looking for information about the released crates (`gfx_core`, `gfx`,
 
 [license]: #license
 
-This repository is currently in the process of being licensed under either of
+This repository is licensed under either of
 
 * Apache License, Version 2.0, ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
 * MIT license ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
 
-at your option. Some parts of the repository are already licensed according to those terms. See the [tracking issue](https://github.com/gfx-rs/gfx/issues/847).
+at your option.
 
 ## Contributions
 
