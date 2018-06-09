@@ -10,23 +10,22 @@ use super::State;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Comparison {
     /// `false`
-    Never,
+    Never = 0,
     /// `x < y`
-    Less,
-    /// `x <= y`
-    LessEqual,
+    Less = 1,
     /// `x == y`
-    Equal,
-    /// `x >= y`
-    GreaterEqual,
+    Equal = 2,
+    /// `x <= y`
+    LessEqual = 3,
     /// `x > y`
-    Greater,
+    Greater = 4,
     /// `x != y`
-    NotEqual,
+    NotEqual = 5,
+    /// `x >= y`
+    GreaterEqual = 6,
     /// `true`
-    Always,
+    Always = 7,
 }
-
 
 bitflags!(
     /// Target output color mask.
@@ -62,25 +61,25 @@ impl Default for ColorMask {
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Factor {
-    Zero,
-    One,
-    SrcColor,
-    OneMinusSrcColor,
-    DstColor,
-    OneMinusDstColor,
-    SrcAlpha,
-    OneMinusSrcAlpha,
-    DstAlpha,
-    OneMinusDstAlpha,
-    ConstColor,
-    OneMinusConstColor,
-    ConstAlpha,
-    OneMinusConstAlpha,
-    SrcAlphaSaturate,
-    Src1Color,
-    OneMinusSrc1Color,
-    Src1Alpha,
-    OneMinusSrc1Alpha,
+    Zero = 0,
+    One = 1,
+    SrcColor = 2,
+    OneMinusSrcColor = 3,
+    DstColor = 4,
+    OneMinusDstColor = 5,
+    SrcAlpha = 6,
+    OneMinusSrcAlpha = 7,
+    DstAlpha = 8,
+    OneMinusDstAlpha = 9,
+    ConstColor = 10,
+    OneMinusConstColor = 11,
+    ConstAlpha = 12,
+    OneMinusConstAlpha = 13,
+    SrcAlphaSaturate = 14,
+    Src1Color = 15,
+    OneMinusSrc1Color = 16,
+    Src1Alpha = 17,
+    OneMinusSrc1Alpha = 18,
 }
 
 /// Blending operations.
@@ -235,21 +234,21 @@ impl DepthTest {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StencilOp {
     /// Keep the current value in the stencil buffer (no change).
-    Keep,
+    Keep = 0,
     /// Set the value in the stencil buffer to zero.
-    Zero,
+    Zero = 1,
     /// Set the stencil buffer value to `reference` from `StencilFace`.
-    Replace,
+    Replace = 2,
     /// Increment the stencil buffer value, clamping to its maximum value.
-    IncrementClamp,
-    /// Increment the stencil buffer value, wrapping around to 0 on overflow.
-    IncrementWrap,
+    IncrementClamp = 3,
     /// Decrement the stencil buffer value, clamping to its minimum value.
-    DecrementClamp,
-    /// Decrement the stencil buffer value, wrapping around to the maximum value on overflow.
-    DecrementWrap,
+    DecrementClamp = 4,
     /// Bitwise invert the current value in the stencil buffer.
-    Invert,
+    Invert = 5,
+    /// Increment the stencil buffer value, wrapping around to 0 on overflow.
+    IncrementWrap = 6,
+    /// Decrement the stencil buffer value, wrapping around to the maximum value on overflow.
+    DecrementWrap = 7,
 }
 
 /// Complete stencil state for a given side of a face.
