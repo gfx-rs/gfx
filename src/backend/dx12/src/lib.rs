@@ -16,7 +16,7 @@ extern crate wio;
 mod range_alloc;
 mod command;
 mod conv;
-mod descriptors_cpu;
+mod descriptors;
 mod device;
 mod internal;
 mod native;
@@ -26,7 +26,7 @@ mod window;
 
 use hal::{error, format as f, image, memory, Features, Limits, QueueType};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
-use descriptors_cpu::DescriptorCpuPool;
+use descriptors::DescriptorCpuPool;
 
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::shared::minwindef::{FALSE, TRUE};
@@ -513,6 +513,9 @@ struct CmdSignatures {
 struct Shared {
     pub signatures: CmdSignatures,
     pub service_pipes: internal::ServicePipes,
+    // Global CPU/GPU descriptor heaps
+    pub heap_cbv_srv_uav: descriptors::CbvSrvUavGpuHeap,
+    pub heap_sampler: descriptors::SamplerGpuHeap,
 }
 
 pub struct Device {
@@ -525,10 +528,7 @@ pub struct Device {
     dsv_pool: Mutex<DescriptorCpuPool>,
     srv_uav_pool: Mutex<DescriptorCpuPool>,
     sampler_pool: Mutex<DescriptorCpuPool>,
-    descriptor_update_pools: Mutex<Vec<descriptors_cpu::HeapLinear>>,
-    // CPU/GPU descriptor heaps
-    heap_srv_cbv_uav: Mutex<native::DescriptorHeap>,
-    heap_sampler: Mutex<native::DescriptorHeap>,
+    descriptor_update_pools: Mutex<Vec<descriptors::HeapLinear>>,
     events: Mutex<Vec<winnt::HANDLE>>,
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
@@ -555,18 +555,14 @@ impl Device {
         let srv_uav_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
         let sampler_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
-        let heap_srv_cbv_uav = Self::create_descriptor_heap_impl(
+        let max_descriptors = 1_000_000; // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
+        let heap_cbv_srv_uav = descriptors::CbvSrvUavGpuHeap::new(
             &mut device,
-            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-            true,
-            1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
+            max_descriptors
         );
-
-        let heap_sampler = Self::create_descriptor_heap_impl(
+        let heap_sampler = descriptors::SamplerGpuHeap::new(
             &mut device,
-            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-            true,
-            2_048,
+            max_descriptors,
         );
 
         let draw_signature = Self::create_command_signature(
@@ -593,6 +589,8 @@ impl Device {
         let shared = Shared {
             signatures,
             service_pipes,
+            heap_cbv_srv_uav,
+            heap_sampler,
         };
 
         Device {
@@ -605,8 +603,6 @@ impl Device {
             srv_uav_pool: Mutex::new(srv_uav_pool),
             sampler_pool: Mutex::new(sampler_pool),
             descriptor_update_pools: Mutex::new(Vec::new()),
-            heap_srv_cbv_uav: Mutex::new(heap_srv_cbv_uav),
-            heap_sampler: Mutex::new(heap_sampler),
             events: Mutex::new(Vec::new()),
             shared: Arc::new(shared),
             present_queue,

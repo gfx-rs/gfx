@@ -19,7 +19,7 @@ use hal::queue::{RawCommandQueue, QueueFamilyId};
 use hal::range::RangeArg;
 
 use {
-    conv, descriptors_cpu, native as n, root_constants, window as w,
+    conv, descriptors, native as n, root_constants, window as w,
     Backend as B, Device, MemoryGroup, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
 };
 use pool::RawCommandPool;
@@ -511,12 +511,12 @@ impl Device {
         unsafe { ComPtr::from_raw(signature) }
     }
 
-    pub(crate) fn create_descriptor_heap_impl(
-        device: &mut ComPtr<d3d12::ID3D12Device>,
+    pub(crate) fn create_descriptor_heap(
+        device: &ComPtr<d3d12::ID3D12Device>,
         heap_type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE,
         shader_visible: bool,
         capacity: usize,
-    ) -> n::DescriptorHeap {
+    ) -> ComPtr<d3d12::ID3D12DescriptorHeap> {
         assert_ne!(capacity, 0);
 
         let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
@@ -531,31 +531,13 @@ impl Device {
         };
 
         let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
-
-        let descriptor_size = unsafe {
+        unsafe {
             device.CreateDescriptorHeap(
                 &desc,
-                &d3d12::IID_ID3D12DescriptorHeap,
+                &d3d12::ID3D12DescriptorHeap::uuidof(),
                 &mut heap as *mut *mut _ as *mut *mut _,
             );
-            device.GetDescriptorHandleIncrementSize(heap_type) as usize
-        };
-
-        let cpu_handle = unsafe { (*heap).GetCPUDescriptorHandleForHeapStart() };
-        let gpu_handle = unsafe { (*heap).GetGPUDescriptorHandleForHeapStart() };
-
-        let range_allocator = RangeAllocator::new(0..(capacity as u64));
-
-        n::DescriptorHeap {
-            raw: unsafe { ComPtr::from_raw(heap) },
-            handle_size: descriptor_size as _,
-            total_handles: capacity as _,
-            start: n::DualHandle {
-                cpu: cpu_handle,
-                gpu: gpu_handle,
-                size: 0,
-            },
-            range_allocator,
+            ComPtr::from_raw(heap)
         }
     }
 
@@ -2326,9 +2308,11 @@ impl d::Device<B> for Device {
         let mut num_srv_cbv_uav = 0;
         let mut num_samplers = 0;
 
-        let descriptor_pools = descriptor_pools.into_iter()
-                                               .map(|desc| *desc.borrow())
-                                               .collect::<Vec<_>>();
+        let descriptor_pools = descriptor_pools
+            .into_iter()
+            .map(|desc| *desc.borrow())
+            .collect::<Vec<_>>();
+
         for desc in &descriptor_pools {
             match desc.ty {
                 pso::DescriptorType::Sampler => {
@@ -2344,44 +2328,32 @@ impl d::Device<B> for Device {
             }
         }
 
-        let heap_srv_cbv_uav = {
-            let mut heap_srv_cbv_uav = self
-                .heap_srv_cbv_uav
-                .lock()
-                .unwrap();
-
-            let range = heap_srv_cbv_uav
-                .range_allocator
-                .allocate_range(num_srv_cbv_uav as _)
+        let heap_cbv_srv_uav = {
+            let slice = self
+                .shared
+                .heap_cbv_srv_uav
+                .allocate(num_srv_cbv_uav as _)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
-                heap: heap_srv_cbv_uav.raw.clone(),
-                handle_size: heap_srv_cbv_uav.handle_size as _,
-                range_allocator: RangeAllocator::new(range),
-                start: heap_srv_cbv_uav.start,
+                slice: slice.clone(),
+                free_list: RangeAllocator::new(slice),
             }
         };
 
         let heap_sampler = {
-            let mut heap_sampler = self
+            let slice = self
+                .shared
                 .heap_sampler
-                .lock()
-                .unwrap();
-
-            let range = heap_sampler
-                .range_allocator
-                .allocate_range(num_samplers as _)
+                .allocate(num_samplers as _)
                 .unwrap(); // TODO: error/resize
             n::DescriptorHeapSlice {
-                heap: heap_sampler.raw.clone(),
-                handle_size: heap_sampler.handle_size as _,
-                range_allocator: RangeAllocator::new(range),
-                start: heap_sampler.start,
+                slice: slice.clone(),
+                free_list: RangeAllocator::new(slice),
             }
         };
 
         n::DescriptorPool {
-            heap_srv_cbv_uav,
+            heap_cbv_srv_uav,
             heap_sampler,
             pools: descriptor_pools,
             max_size: max_sets as _,
@@ -2431,20 +2403,31 @@ impl d::Device<B> for Device {
                     bind_info = &write.set.binding_infos[target_binding];
                     offset = 0;
                 }
+
+                let dst_view = bind_info
+                    .view_range
+                    .as_ref()
+                    .map(|r| self.shared.heap_cbv_srv_uav.at((r.slice.start + offset) as _).cpu);
+                let dst_sampler = bind_info
+                    .sampler_range
+                    .as_ref()
+                    .map(|r| self.shared.heap_sampler.at((r.slice.start + offset) as _).cpu);
+
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
                         if update_pool_index == descriptor_update_pools.len() {
                             let max_size = 1u64<<12; //arbitrary
                             descriptor_update_pools.push(
-                                descriptors_cpu::HeapLinear::new(
+                                descriptors::HeapLinear::new(
                                     &self.raw,
                                     d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                                    false,
                                     max_size as _,
                                 )
                             );
                         }
                         let heap = descriptor_update_pools.last_mut().unwrap();
-                        let handle = heap.alloc_handle();
+                        let handle = heap.alloc_handle().cpu;
                         if heap.is_full() {
                             // pool is full, move to the next one
                             update_pool_index += 1;
@@ -2484,7 +2467,7 @@ impl d::Device<B> for Device {
                         }
 
                         src_views.push(handle);
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                        dst_views.push(dst_view.unwrap());
                         num_views.push(1);
                     }
                     pso::Descriptor::Image(image, _layout) => {
@@ -2494,27 +2477,28 @@ impl d::Device<B> for Device {
                             image.handle_srv.unwrap()
                         };
                         src_views.push(handle);
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                        dst_views.push(dst_view.unwrap());
                         num_views.push(1);
                     }
                     pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
+                        let sampler_slot =
                         src_views.push(image.handle_srv.unwrap());
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                        dst_views.push(dst_view.unwrap());
                         num_views.push(1);
                         src_samplers.push(sampler.handle);
-                        dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
+                        dst_samplers.push(dst_sampler.unwrap());
                         num_samplers.push(1);
                     }
                     pso::Descriptor::Sampler(sampler) => {
                         src_samplers.push(sampler.handle);
-                        dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
+                        dst_samplers.push(dst_sampler.unwrap());
                         num_samplers.push(1);
                     }
                     pso::Descriptor::UniformTexelBuffer(buffer_view) => {
                         let handle = buffer_view.handle_srv;
                         if handle.ptr != 0 {
                             src_views.push(handle);
-                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                            dst_views.push(dst_view.unwrap());
                             num_views.push(1);
                         } else {
                             error!("SRV handle of the uniform texel buffer is zero (not supported by specified format).");
@@ -2524,7 +2508,7 @@ impl d::Device<B> for Device {
                         let handle = buffer_view.handle_uav;
                         if handle.ptr != 0 {
                             src_views.push(handle);
-                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                            dst_views.push(dst_view.unwrap());
                             num_views.push(1);
                         } else {
                             error!("UAV handle of the storage texel buffer is zero (not supported by specified format).");
@@ -2585,17 +2569,39 @@ impl d::Device<B> for Device {
             let src_info = &copy.src_set.binding_infos[copy.src_binding as usize];
             let dst_info = &copy.dst_set.binding_infos[copy.dst_binding as usize];
             if let (Some(src_range), Some(dst_range)) = (src_info.view_range.as_ref(), dst_info.view_range.as_ref()) {
-                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
-                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
-                src_views.push(src_range.at(copy.src_array_offset as _));
-                dst_views.push(dst_range.at(copy.dst_array_offset as _));
+                assert!(copy.src_array_offset + copy.count <= (src_range.slice.end - src_range.slice.start) as usize);
+                assert!(copy.dst_array_offset + copy.count <= (dst_range.slice.end - dst_range.slice.start) as usize);
+
+                src_views.push(
+                    self.shared
+                        .heap_cbv_srv_uav
+                        .at(src_range.slice.start as usize + copy.src_array_offset)
+                        .cpu
+                );
+                dst_views.push(
+                    self.shared
+                        .heap_cbv_srv_uav
+                        .at(dst_range.slice.start as usize + copy.dst_array_offset)
+                        .cpu
+                );
                 num_views.push(copy.count as u32);
             }
             if let (Some(src_range), Some(dst_range)) = (src_info.sampler_range.as_ref(), dst_info.sampler_range.as_ref()) {
-                assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
-                assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
-                src_samplers.push(src_range.at(copy.src_array_offset as _));
-                dst_samplers.push(dst_range.at(copy.dst_array_offset as _));
+                assert!(copy.src_array_offset + copy.count <= (src_range.slice.end - src_range.slice.start) as usize);
+                assert!(copy.dst_array_offset + copy.count <= (dst_range.slice.end - dst_range.slice.start) as usize);
+
+                src_samplers.push(
+                    self.shared
+                        .heap_sampler
+                        .at(src_range.slice.start as usize + copy.src_array_offset)
+                        .cpu
+                );
+                dst_samplers.push(
+                    self.shared
+                        .heap_sampler
+                        .at(dst_range.slice.start as usize + copy.dst_array_offset)
+                        .cpu
+                );
                 num_samplers.push(copy.count as u32);
             }
         }
@@ -2943,8 +2949,8 @@ impl d::Device<B> for Device {
             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
             .. unsafe { mem::zeroed() }
         };
-        let rtv_heap = Device::create_descriptor_heap_impl(
-            &mut self.raw.clone(),
+        let mut rtv_heap = descriptors::HeapLinear::new(
+            &self.raw,
             d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV,
             false,
             config.image_count as _,
@@ -2996,10 +3002,8 @@ impl d::Device<B> for Device {
                     &mut resource as *mut *mut _ as *mut *mut _);
             }
 
-            let rtv_handle = rtv_heap.at(i as _, 0).cpu;
-            unsafe {
-                self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
-            }
+            let rtv = rtv_heap.alloc_handle().cpu;
+            unsafe { self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv); }
 
             let surface_type = config
                 .color_format
@@ -3033,7 +3037,7 @@ impl d::Device<B> for Device {
                 },
                 bytes_per_block,
                 block_dim,
-                clear_cv: vec![rtv_handle],
+                clear_cv: vec![rtv],
                 clear_dv: Vec::new(),
                 clear_sv: Vec::new(),
             }
