@@ -1,7 +1,7 @@
 use PrivateCapabilities;
 
 use hal::{pass, image, pso, IndexType};
-use hal::format::Format;
+use hal::format::{Format, Swizzle};
 use hal::pso::{Comparison, StencilOp};
 use metal::*;
 
@@ -114,6 +114,23 @@ impl PrivateCapabilities {
             //f::A1r5g5b5Unorm =>
             _ => return None,
         })
+    }
+
+    pub fn map_format_with_swizzle(&self, format: Format, swizzle: Swizzle) -> Option<MTLPixelFormat> {
+        use metal::MTLPixelFormat as Pf;
+        use hal::format::{Format::*, Component::*};
+        match (format, swizzle) {
+            (R8Unorm, Swizzle(Zero, Zero, Zero, R)) => Some(Pf::A8Unorm),
+            (Rgba8Unorm, Swizzle(B, G, R, A)) => Some(Pf::BGRA8Unorm),
+            (Bgra8Unorm, Swizzle(B, G, R, A)) => Some(Pf::RGBA8Unorm),
+            (Bgra8Srgb, Swizzle(B, G, R, A)) => Some(Pf::RGBA8Unorm_sRGB),
+            _ => {
+                if swizzle != Swizzle::NO {
+                    error!("Unsupported swizzle {:?} for format {:?}", swizzle, format);
+                }
+                self.map_format(format)
+            }
+        }
     }
 }
 

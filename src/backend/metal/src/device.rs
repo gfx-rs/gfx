@@ -1912,18 +1912,13 @@ impl hal::Device<Backend> for Device {
         swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
-        let mtl_format = match self.private_caps.map_format(format) {
+        let mtl_format = match self.private_caps.map_format_with_swizzle(format, swizzle) {
             Some(f) => f,
             None => {
-                error!("failed to find corresponding Metal format for {:?}", format);
+                error!("failed to swizzle format {:?} with {:?}", format, swizzle);
                 return Err(image::ViewError::BadFormat);
             },
         };
-
-        if swizzle != format::Swizzle::NO {
-            error!("swizzling not supported");
-            //return Err(image::ViewError::Unsupported);
-        }
 
         let raw = image.raw.new_texture_view_from_slice(
             mtl_format,
