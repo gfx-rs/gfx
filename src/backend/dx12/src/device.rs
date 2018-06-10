@@ -11,7 +11,7 @@ use winapi::shared::minwindef::{FALSE, TRUE, UINT};
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
 use wio::com::ComPtr;
 
-use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
+use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query, window};
 use hal::format::{Aspects, Format};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
@@ -2921,6 +2921,8 @@ impl d::Device<B> for Device {
         &self,
         surface: &mut w::Surface,
         config: hal::SwapchainConfig,
+        _old_swapchain: Option<w::Swapchain>,
+        _extent: &window::Extent2D,
     ) -> (w::Swapchain, hal::Backbuffer<B>) {
         let mut swap_chain: *mut dxgi1_2::IDXGISwapChain1 = ptr::null_mut();
 
@@ -2987,6 +2989,7 @@ impl d::Device<B> for Device {
         let swap_chain = unsafe { ComPtr::<dxgi1_4::IDXGISwapChain3>::from_raw(swap_chain as _) };
 
         // Get backbuffer images
+        let mut resources: Vec<ComPtr<d3d12::ID3D12Resource>> = Vec::new();
         let images = (0 .. config.image_count).map(|i| {
             let mut resource: *mut d3d12::ID3D12Resource = ptr::null_mut();
             unsafe {
@@ -3000,6 +3003,8 @@ impl d::Device<B> for Device {
             unsafe {
                 self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
             }
+
+            unsafe { resources.push(ComPtr::<d3d12::ID3D12Resource>::from_raw(resource)); }
 
             let surface_type = config
                 .color_format
@@ -3044,6 +3049,7 @@ impl d::Device<B> for Device {
             next_frame: 0,
             frame_queue: VecDeque::new(),
             rtv_heap,
+            _resources: resources,
         };
 
         (swapchain, hal::Backbuffer::Images(images))

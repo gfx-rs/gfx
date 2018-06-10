@@ -7,7 +7,7 @@ use std::borrow::{Borrow, BorrowMut};
 use std::ops::Range;
 use hal::{
     buffer, command, device, error, format, image, mapping,
-    memory, pass, pool, pso, query, queue,
+    memory, pass, pool, pso, query, queue, window
 };
 use hal::range::RangeArg;
 
@@ -96,7 +96,7 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
         unimplemented!()
     }
 
-    fn present<IS, IW>(&mut self, _: IS, _: IW)
+    fn present<IS, IW>(&mut self, _: IS, _: IW) -> Result<(), ()>
     where
         IS: IntoIterator,
         IS::Item: BorrowMut<Swapchain>,
@@ -358,6 +358,8 @@ impl hal::Device<Backend> for Device {
         &self,
         _: &mut Surface,
         _: hal::SwapchainConfig,
+        _: Option<Swapchain>,
+        _: &window::Extent2D,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
         unimplemented!()
     }
@@ -783,7 +785,7 @@ impl hal::Surface<Backend> for Surface {
 /// Dummy swapchain.
 pub struct Swapchain;
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, _: hal::FrameSync<Backend>) -> hal::Frame {
+    fn acquire_frame(&mut self, _: hal::FrameSync<Backend>) -> Result<hal::Frame, ()> {
         unimplemented!()
     }
 }

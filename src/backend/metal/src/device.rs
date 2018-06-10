@@ -12,7 +12,7 @@ use std::path::Path;
 use std::sync::{Arc, Condvar, Mutex};
 use std::{cmp, mem, slice, time};
 
-use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
+use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query, window};
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
@@ -1998,6 +1998,8 @@ impl hal::Device<Backend> for Device {
         &self,
         surface: &mut Surface,
         config: hal::SwapchainConfig,
+        _old_swapchain: Option<Swapchain>,
+        _extent: &window::Extent2D,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
         self.build_swapchain(surface, config)
     }

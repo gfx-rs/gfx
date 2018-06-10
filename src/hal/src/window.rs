@@ -290,6 +290,8 @@ pub enum Backbuffer<B: Backend> {
 pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// Acquire a new frame for rendering. This needs to be called before presenting.
     ///
+    /// Will fail if the swapchain needs recreation.
+    ///
     /// # Synchronization
     ///
     /// The acquired image will not be immediately available when the function returns.
@@ -302,7 +304,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// ```no_run
     ///
     /// ```
-    fn acquire_frame(&mut self, sync: FrameSync<B>) -> Frame;
+    fn acquire_frame(&mut self, sync: FrameSync<B>) -> Result<Frame, ()>;
 
     /// Present one acquired frame in FIFO order.
     ///
@@ -320,7 +322,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
         &'a mut self,
         present_queue: &mut CommandQueue<B, C>,
         wait_semaphores: IW,
-    )
+    ) -> Result<(), ()>
     where
         &'a mut Self: BorrowMut<B::Swapchain>,
         Self: Sized + 'a,

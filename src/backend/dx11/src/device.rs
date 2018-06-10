@@ -1,7 +1,7 @@
 use hal;
 use hal::queue::QueueFamilyId;
 use hal::range::RangeArg;
-use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query};
+use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query, window};
 
 use winapi::shared::dxgi::{IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD};
 use winapi::shared::minwindef::{TRUE};
@@ -198,7 +198,7 @@ impl Device {
         }
     }
 
-    // TODO: fix return type.. 
+    // TODO: fix return type..
     fn extract_entry_point(
         stage: pso::Stage,
         source: &pso::EntryPoint<Backend>,
@@ -373,7 +373,7 @@ impl hal::Device<Backend> for Device {
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
     {
         // TODO: pipelinelayout
-        
+
         PipelineLayout
     }
 
@@ -532,7 +532,7 @@ impl hal::Device<Backend> for Device {
                 return Err(device::BindError::WrongMemory);
             } else {
                 InternalBuffer::Coherent(unsafe { ComPtr::from_raw(buffer) })
-            } 
+            }
         } else if memory.properties == (Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::CPU_CACHED) {
             // coherent device local and cpu-visible memory
             let desc = d3d11::D3D11_BUFFER_DESC {
@@ -557,10 +557,10 @@ impl hal::Device<Backend> for Device {
                 return Err(device::BindError::WrongMemory);
             } else {
                 InternalBuffer::Coherent(unsafe { ComPtr::from_raw(buffer) })
-            } 
+            }
         } else if memory.properties == (Properties::CPU_VISIBLE | Properties::CPU_CACHED) {
             // non-coherent cpu-visible memory, need to create two buffers to
-            // allow gpu-read beyond copying 
+            // allow gpu-read beyond copying
             let staging = {
                 let desc = d3d11::D3D11_BUFFER_DESC {
                     ByteWidth: unbound_buffer.size as _,
@@ -584,7 +584,7 @@ impl hal::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 } else {
                     unsafe { ComPtr::from_raw(buffer) }
-                } 
+                }
             };
 
             let device = {
@@ -611,7 +611,7 @@ impl hal::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 } else {
                     unsafe { ComPtr::from_raw(buffer) }
-                } 
+                }
             };
 
             InternalBuffer::NonCoherent {
@@ -681,7 +681,7 @@ impl hal::Device<Backend> for Device {
     ) -> Result<UnboundImage, image::CreationError> {
         use image::Usage;
         //
-        // TODO: create desc 
+        // TODO: create desc
 
         let surface_desc = format.base_format().0.desc();
         let bytes_per_texel  = surface_desc.bits / 8;
@@ -689,7 +689,7 @@ impl hal::Device<Backend> for Device {
         let size = (ext.width * ext.height * ext.depth) as u64 * bytes_per_texel as u64;
 
         let mut bind = 0;
-        
+
         if usage.contains(Usage::TRANSFER_SRC) ||
            usage.contains(Usage::SAMPLED) ||
            usage.contains(Usage::STORAGE) { bind |= d3d11::D3D11_BIND_SHADER_RESOURCE; }
@@ -710,7 +710,7 @@ impl hal::Device<Backend> for Device {
             usage,
             flags,
             bind,
-            // TODO: 
+            // TODO:
             requirements: memory::Requirements {
                 size: size,
                 alignment: 1,
@@ -965,7 +965,7 @@ impl hal::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
-        
+
         for write in write_iter {
             let mut offset = write.array_offset as u64;
             let mut target_binding = write.binding as usize;
@@ -1180,6 +1180,8 @@ impl hal::Device<Backend> for Device {
         &self,
         surface: &mut Surface,
         config: hal::SwapchainConfig,
+        _old_swapchain: Option<Swapchain>,
+        _extent: &window::Extent2D,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
         // TODO: use IDXGIFactory2 for >=11.1
         // TODO: this function should be able to fail (Result)?

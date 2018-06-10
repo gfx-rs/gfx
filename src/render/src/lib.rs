@@ -214,7 +214,7 @@ impl<B: Backend, C> Context<B, C>
     where C: Capability + Supports<Transfer>
 {
     pub fn init<Cf>(
-        mut surface: B::Surface, adapter: hal::Adapter<B>
+        mut surface: B::Surface, mut adapter: hal::Adapter<B>
     ) -> Result<(Self, Vec<Backbuffer<B, Cf>>), failure::Error>
     where
         Cf: AsFormat,
@@ -228,7 +228,12 @@ impl<B: Backend, C> Context<B, C>
 
         let swap_config = hal::SwapchainConfig::new()
             .with_color(Cf::SELF); // TODO: check support
-        let (swapchain, backbuffer) = device.create_swapchain(&mut surface, swap_config);
+
+        let extent = match surface.kind() {
+            hal::image::Kind::D2(width, height, _, _) => hal::window::Extent2D {width, height},
+            _ => unimplemented!(),
+        };
+        let (swapchain, backbuffer) = device.create_swapchain(&mut surface, swap_config, None, &extent);
 
         let backbuffer_images = match backbuffer {
             hal::Backbuffer::Images(images) => images,
@@ -307,7 +312,7 @@ impl<B: Backend, C> Context<B, C>
 
         let frame = self.swapchain.acquire_frame(
             hal::FrameSync::Semaphore(&mut bundle.wait_semaphore)
-        );
+        ).expect("Failed to acquire frame.");
         self.frame_acquired = Some(bundle);
 
         self.garbage.collect();
@@ -347,7 +352,7 @@ impl<B: Backend, C> Context<B, C>
         self.swapchain.present(
             &mut self.queue.group.queues[0],
             Some(&bundle.signal_semaphore),
-        );
+        ).expect("Failed to present.");
 
         self.frame_bundles.push_back(bundle);
     }

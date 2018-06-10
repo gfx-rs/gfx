@@ -377,7 +377,7 @@ pub struct Swapchain {
 
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, sync: hal::FrameSync<Backend>) -> hal::Frame {
+    fn acquire_frame(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::Frame, ()> {
         let (semaphore, fence) = match sync {
             hal::FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
             hal::FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
@@ -386,9 +386,15 @@ impl hal::Swapchain<Backend> for Swapchain {
         let index = unsafe {
             // will block if no image is available
             self.functor.acquire_next_image_khr(self.raw, !0, semaphore, fence)
-        }.expect("Unable to acquire a swapchain image");
+        };
 
-        self.frame_queue.push_back(index as usize);
-        hal::Frame::new(index as usize)
+        match index {
+            Ok(i) => {
+                self.frame_queue.push_back(i as usize);
+                Ok(hal::Frame::new(i as usize))
+            }
+            Err(vk::Result::SuboptimalKhr) | Err(vk::Result::ErrorOutOfDateKhr) => Err(()),
+            _ => panic!("Failed to acquire image."),
+        }
     }
 }

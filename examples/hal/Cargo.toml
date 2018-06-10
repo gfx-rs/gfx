@@ -25,6 +25,7 @@ env_logger = "0.5"
 image = "0.18"
 log = "0.4"
 winit = "0.13"
+glsl-to-spirv = "0.1.4"
 gfx-hal = { path = "../../src/hal", version = "0.1" }
 
 [dependencies.gfx-backend-gl]

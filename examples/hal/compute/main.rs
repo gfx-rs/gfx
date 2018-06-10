@@ -19,6 +19,11 @@ use hal::{
 };
 use hal::{queue, pso, memory, buffer, pool, command};
 
+extern crate glsl_to_spirv;
+
+use std::fs;
+use std::io::Read;
+
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
 fn main() {
     env_logger::init();
@@ -34,7 +39,7 @@ fn main() {
     #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let instance = back::Instance::create("gfx-rs compute", 1);
 
-    let adapter = instance.enumerate_adapters().into_iter()
+    let mut adapter = instance.enumerate_adapters().into_iter()
         .find(|a| a.queue_families
             .iter()
             .any(|family| family.supports_compute())
@@ -46,7 +51,13 @@ fn main() {
         .open_with::<_, Compute>(1, |_family| true)
         .unwrap();
 
-    let shader = device.create_shader_module(include_bytes!("shader/collatz.spv")).unwrap();
+    let glsl = fs::read_to_string("compute/shader/collatz.comp").unwrap();
+    let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Compute)
+        .unwrap()
+        .bytes()
+        .map(|b| b.unwrap())
+        .collect();
+    let shader = device.create_shader_module(&spirv).unwrap();
 
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {
         let set_layout = device.create_descriptor_set_layout(

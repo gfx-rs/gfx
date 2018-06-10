@@ -54,9 +54,9 @@ impl<'a> core::Swapchain<device_gl::Backend> for Swapchain {
         &self.backbuffer
     }
 
-    fn acquire_frame(&mut self, sync: core::FrameSync<device_gl::Resources>) -> core::Frame {
+    fn acquire_frame(&mut self, sync: core::FrameSync<device_gl::Resources>) -> Result<core::Frame, ()> {
         // TODO: fence sync
-        core::Frame::new(0)
+        Ok(core::Frame::new(0))
     }
 
     fn present<'i, Q, I>(&mut self, _: &mut Q, _: I)

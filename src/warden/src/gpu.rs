@@ -143,7 +143,7 @@ fn align(x: u64, y: u64) -> u64 {
 
 impl<B: hal::Backend> Scene<B, hal::General> {
     pub fn new(
-        adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: PathBuf
+        mut adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: PathBuf
     ) -> Result<Self, Error> {
         info!("creating Scene from {:?}", data_path);
         let memory_types = adapter

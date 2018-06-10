@@ -996,7 +996,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW)
+    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
     where
         IS: IntoIterator,
         IS::Item: borrow::BorrowMut<window::Swapchain>,
@@ -1023,6 +1023,8 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 default_capture_scope.begin_scope();
             }
         }
+
+        Ok(())
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
