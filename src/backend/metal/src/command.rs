@@ -1542,46 +1542,62 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         descriptor.set_render_target_array_length(num_layers);
                     };
 
-                    if sub.aspects.contains(Aspects::COLOR) {
+                    let clear_color_attachment = sub.aspects.contains(Aspects::COLOR);
+                    if clear_color_attachment || image.format_desc.aspects.contains(Aspects::COLOR) {
                         let attachment = descriptor
                             .color_attachments()
                             .object_at(0)
                             .unwrap();
                         attachment.set_texture(Some(texture));
                         attachment.set_level(level as _);
+                        attachment.set_store_action(metal::MTLStoreAction::Store);
                         if !CLEAR_IMAGE_ARRAY {
                             attachment.set_slice(layer as _);
                         }
-                        attachment.set_load_action(metal::MTLLoadAction::Clear);
-                        attachment.set_store_action(metal::MTLStoreAction::Store);
-                        attachment.set_clear_color(clear_color.clone());
+                        if clear_color_attachment {
+                            attachment.set_load_action(metal::MTLLoadAction::Clear);
+                            attachment.set_clear_color(clear_color.clone());
+                        } else {
+                            attachment.set_load_action(metal::MTLLoadAction::Load);
+                        }
                     }
 
-                    if sub.aspects.contains(Aspects::DEPTH) {
+                    let clear_depth_attachment = sub.aspects.contains(Aspects::DEPTH);
+                    if clear_depth_attachment || image.format_desc.aspects.contains(Aspects::DEPTH) {
                         let attachment = descriptor
                             .depth_attachment()
                             .unwrap();
                         attachment.set_texture(Some(texture));
                         attachment.set_level(level as _);
+                        attachment.set_store_action(metal::MTLStoreAction::Store);
                         if !CLEAR_IMAGE_ARRAY {
                             attachment.set_slice(layer as _);
                         }
-                        attachment.set_load_action(metal::MTLLoadAction::Clear);
-                        attachment.set_store_action(metal::MTLStoreAction::Store);
-                        attachment.set_clear_depth(depth_stencil.depth as _);
+                        if clear_depth_attachment {
+                            attachment.set_load_action(metal::MTLLoadAction::Clear);
+                            attachment.set_clear_depth(depth_stencil.depth as _);
+                        } else {
+                            attachment.set_load_action(metal::MTLLoadAction::Load);
+                        }
                     }
-                    if sub.aspects.contains(Aspects::STENCIL) {
+
+                    let clear_stencil_attachment = sub.aspects.contains(Aspects::STENCIL);
+                    if clear_stencil_attachment || image.format_desc.aspects.contains(Aspects::STENCIL) {
                         let attachment = descriptor
                             .stencil_attachment()
                             .unwrap();
                         attachment.set_texture(Some(texture));
                         attachment.set_level(level as _);
+                        attachment.set_store_action(metal::MTLStoreAction::Store);
                         if !CLEAR_IMAGE_ARRAY {
                             attachment.set_slice(layer as _);
                         }
-                        attachment.set_load_action(metal::MTLLoadAction::Clear);
-                        attachment.set_store_action(metal::MTLStoreAction::Store);
-                        attachment.set_clear_stencil(depth_stencil.stencil);
+                        if clear_stencil_attachment {
+                            attachment.set_load_action(metal::MTLLoadAction::Clear);
+                            attachment.set_clear_stencil(depth_stencil.stencil);
+                        } else {
+                            attachment.set_load_action(metal::MTLLoadAction::Load);
+                        }
                     }
 
                     sink.as_mut()
