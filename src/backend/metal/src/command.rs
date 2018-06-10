@@ -123,7 +123,8 @@ struct State {
     index_buffer: Option<IndexBuffer>,
     rasterizer_state: Option<native::RasterizerState>,
     pipeline_depth_stencil: Option<(pso::DepthStencilDesc, metal::DepthStencilState)>,
-    dynamic_depth_stencil: Option<metal::DepthStencilDescriptor>,
+    dynamic_depth_stencil_desc: Option<metal::DepthStencilDescriptor>,
+    dynamic_depth_stencil_state: Option<metal::DepthStencilState>,
     stencil: native::StencilState<pso::StencilValue>,
     push_constants: Vec<u32>,
     vertex_buffers: Vec<Option<(metal::Buffer, u64)>>,
@@ -172,6 +173,15 @@ impl State {
                 soft::RenderCommand::BindPipeline(pso.clone(), rast)
             }));
         }
+
+        let com = if let Some((_, ref static_state)) = self.pipeline_depth_stencil {
+            Some(static_state.clone())
+        } else if let Some(ref dynamic_state) = self.dynamic_depth_stencil_state {
+            Some(dynamic_state.clone())
+        } else {
+            None
+        };
+        commands.extend(com.map(soft::RenderCommand::SetDepthStencilDesc));
 
         let stages = [pso::Stage::Vertex, pso::Stage::Fragment];
         for (&stage, resources) in stages.iter().zip(&[&self.resources_vs, &self.resources_fs]) {
@@ -1060,7 +1070,8 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 index_buffer: None,
                 rasterizer_state: None,
                 pipeline_depth_stencil: None,
-                dynamic_depth_stencil: None,
+                dynamic_depth_stencil_desc: None,
+                dynamic_depth_stencil_state: None,
                 stencil: native::StencilState::<pso::StencilValue> {
                     front_reference: 0,
                     back_reference: 0,
@@ -1277,10 +1288,10 @@ impl CommandBuffer {
         }
 
         if let Some(ds) = dynamic_depth_stencil_from_pipeline {
-            self.state.dynamic_depth_stencil = Some(ds.clone());
+            self.state.dynamic_depth_stencil_desc = Some(ds.clone());
         }
 
-        self.state.dynamic_depth_stencil.as_ref().map(|desc| {
+        let dynamic_state = self.state.dynamic_depth_stencil_desc.as_ref().map(|desc| {
             let f_owned;
             let front = match desc.front_face_stencil() {
                 Some(f) => f,
@@ -1311,13 +1322,15 @@ impl CommandBuffer {
                 back.set_write_mask(bm);
             }
 
-            soft::RenderCommand::SetDepthStencilDesc(
-                self.shared.device
-                    .lock()
-                    .unwrap()
-                    .new_depth_stencil_state(&desc)
-            )
-        })
+            self.shared.device
+                .lock()
+                .unwrap()
+                .new_depth_stencil_state(&desc)
+        });
+
+        self.state.dynamic_depth_stencil_state = dynamic_state.as_ref().map(|ds| ds.clone());
+
+        dynamic_state.map(soft::RenderCommand::SetDepthStencilDesc)
     }
 }
 
@@ -2929,5 +2942,4 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         unimplemented!()
     }
-
 }
