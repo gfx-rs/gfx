@@ -259,11 +259,11 @@ fn main() {
         {
             let data = pipe::Data {
                 desc: (&desc, &desc_data),
-                color: &frame_rtvs[frame.id()],
+                color: &frame_rtvs[frame as usize],
                 vertices: &vertex_buffer,
                 viewports: &[viewport.clone()],
                 scissors: &[scissor],
-                framebuffer: &framebuffers[frame.id()],
+                framebuffer: &framebuffers[frame as usize],
             };
             encoder.draw(0..6, &pipeline, data);
         }

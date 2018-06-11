@@ -84,10 +84,6 @@ unsafe impl Send for Swapchain {}
 unsafe impl Sync for Swapchain {}
 
 impl Swapchain {
-    pub(crate) fn matches(&self, other: &Arc<RwLock<SwapchainInner>>) -> bool {
-        Arc::ptr_eq(&self.inner, other)
-    }
-
     pub(crate) fn present(&self, index: hal::FrameImage) {
         let (drawable, _) = self.inner
             .write()
@@ -258,9 +254,6 @@ impl hal::Swapchain<Backend> for Swapchain {
             (drawable, texture)
         });
 
-            let frame = self.frame_index % self.io_surfaces.len();
-            self.frame_index += 1;
-            Ok(frame as _)
-        }
+        Ok(index as _)
     }
 }

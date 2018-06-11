@@ -2,7 +2,7 @@ use {AutoreleasePool, Backend, Shared, validate_line_width};
 use {conversions as conv, native, soft, window};
 use internal::{BlitVertex, Channel, ClearKey, ClearVertex};
 
-use std::borrow::{self, Borrow};
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::{Deref, Range};
@@ -11,7 +11,7 @@ use std::{iter, mem};
 use std::slice;
 
 use hal::{buffer, command as com, error, memory, pool, pso};
-use hal::{DrawCount, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
+use hal::{DrawCount, FrameImage, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
 use hal::format::{Aspects, Format, FormatDesc};
 use hal::image::{Extent, Filter, Layout, SubresourceRange};
 use hal::pass::{AttachmentLoadOp, AttachmentOps};
@@ -584,7 +584,6 @@ pub struct CommandBufferInner {
     sink: Option<CommandSink>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
-    present_frames: Vec<native::Frame>,
 }
 
 impl Drop for CommandBufferInner {
@@ -606,7 +605,6 @@ impl CommandBufferInner {
         }
         self.retained_buffers.clear();
         self.retained_textures.clear();
-        self.present_frames.clear();
     }
 
     fn sink(&mut self) -> &mut CommandSink {
@@ -971,14 +969,12 @@ unsafe impl Sync for CommandBuffer {}
 
 pub struct CommandQueue {
     shared: Arc<Shared>,
-    present_frames: Vec<native::Frame>,
 }
 
 impl CommandQueue {
     pub(crate) fn new(shared: Arc<Shared>) -> Self {
         CommandQueue {
             shared,
-            present_frames: Vec::new(),
         }
     }
 }
@@ -1018,10 +1014,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 ref sink,
                 ref mut retained_buffers,
                 ref mut retained_textures,
-                ref present_frames,
             } = *inner;
-            trace!("\tappending {} present frames", present_frames.len());
-            self.present_frames.extend_from_slice(&present_frames);
 
             let temp_cmd_buffer;
             let command_buffer: &metal::CommandBufferRef = match *sink {
@@ -1070,31 +1063,17 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator,
-        IS::Item: borrow::BorrowMut<window::Swapchain>,
+        IS: IntoIterator<Item = (S, FrameImage)>,
+        S: Borrow<window::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
-        use std::borrow::BorrowMut;
-        for mut swapchain in swapchains {
+        for (swapchain, index) in swapchains {
             // TODO: wait for semaphores
-            let swapchain = swapchain.borrow_mut();
-            match self.present_frames
-                .iter()
-                .find(|frame| swapchain.matches(&frame.swapchain)) //TODO: use `rfind`?
-                .map(|frame| frame.index)
-            {
-                Some(index) => {
-                    debug!("presenting frame {}", index);
-                    swapchain.present(index);
-                    self.present_frames.retain(|frame| !swapchain.matches(&frame.swapchain));
-                }
-                None => {
-                    error!("Nothing to present on a swapchain!");
-                }
-            }
+            debug!("presenting frame {}", index);
+            swapchain.borrow().present(index);
         }
 
         let shared_capture_manager = CaptureManager::shared();
@@ -1133,7 +1112,6 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 sink: None,
                 retained_buffers: Vec::new(),
                 retained_textures: Vec::new(),
-                present_frames: Vec::new(),
             })),
             shared: self.shared.clone(),
             state: State {
@@ -1455,31 +1433,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         _stages: Range<pso::PipelineStage>,
         _dependencies: memory::Dependencies,
-        barriers: T,
+        _barriers: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
         // TODO: MTLRenderCommandEncoder.textureBarrier on macOS?
-        for barrier in barriers {
-            // remember the presented frame index
-            if let memory::Barrier::Image {
-                states: Range { end: (_, Layout::Present), .. },
-                target,
-                ..
-            } = *barrier.borrow()
-            {
-                match target.root {
-                    native::ImageRoot::Texture(_) => panic!("Unable to present a regular image!"),
-                    native::ImageRoot::Frame(ref frame) => {
-                        self.inner
-                            .borrow_mut()
-                            .present_frames
-                            .push(frame.clone())
-                    },
-                }
-            }
-        }
     }
 
     fn fill_buffer<R>(
@@ -2279,10 +2238,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut num_colors = 0;
         let mut inner = self.inner.borrow_mut();
 
+        let dummy_value = com::ClearValueRaw {
+            color: com:: ClearColorRaw {
+                int32: [0; 4],
+            },
+        };
         let clear_values_iter = clear_values
             .into_iter()
-            .map(|c| Some(*c.borrow()))
-            .chain(iter::repeat(None));
+            .map(|c| *c.borrow())
+            .chain(iter::repeat(dummy_value));
 
         for (rat, clear_value) in render_pass.attachments.iter().zip(clear_values_iter) {
             let (aspects, channel) = match rat.format {
@@ -2294,16 +2258,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     .color_attachments()
                     .object_at(num_colors)
                     .unwrap();
-                if rat.layouts.end == Layout::Present {
-                    let frame = framebuffer.inner.colors[num_colors].frame
-                        .as_ref()
-                        .expect("Presenting a regular texture is not possible");
-                    debug!("\t found RP presenting frame {}", frame.index);
-                    inner.present_frames.push(frame.clone());
-                }
                 if set_operations(color_desc, rat.ops) == AttachmentLoadOp::Clear {
                     let mtl_color = channel
-                        .interpret(unsafe { clear_value.unwrap().color });
+                        .interpret(unsafe { clear_value.color });
                     color_desc.set_clear_color(mtl_color);
                 }
                 num_colors += 1;
@@ -2311,14 +2268,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             if aspects.contains(Aspects::DEPTH) {
                 let depth_desc = descriptor.depth_attachment().unwrap();
                 if set_operations(depth_desc, rat.ops) == AttachmentLoadOp::Clear {
-                    let mtl_depth = unsafe { clear_value.unwrap().depth_stencil.depth as f64 };
+                    let mtl_depth = unsafe { clear_value.depth_stencil.depth as f64 };
                     depth_desc.set_clear_depth(mtl_depth);
                 }
             }
             if aspects.contains(Aspects::STENCIL) {
                 let stencil_desc = descriptor.stencil_attachment().unwrap();
                 if set_operations(stencil_desc, rat.stencil_ops) == AttachmentLoadOp::Clear {
-                    let mtl_stencil = unsafe { clear_value.unwrap().depth_stencil.stencil };
+                    let mtl_stencil = unsafe { clear_value.depth_stencil.stencil };
                     stencil_desc.set_clear_stencil(mtl_stencil);
                 }
             }

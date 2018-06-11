@@ -37,7 +37,7 @@
 //! let frame = swapchain.acquire_frame(FrameSync::Semaphore(&acquisition_semaphore));
 //! // render the scene..
 //! // `render_semaphore` will be signalled once rendering has been finished
-//! swapchain.present(&mut present_queue, &[render_semaphore]);
+//! swapchain.present(&mut present_queue, 0, &[render_semaphore]);
 //! # }
 //! ```
 //!
@@ -55,7 +55,7 @@ use format::Format;
 use queue::CommandQueue;
 
 use std::any::Any;
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::ops::Range;
 
 /// An extent describes the size of a rectangle, such as
@@ -288,7 +288,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// ```
     fn acquire_frame(&mut self, sync: FrameSync<B>) -> Result<FrameImage, ()>;
 
-    /// Present one acquired frame in FIFO order.
+    /// Present one acquired frame.
     ///
     /// # Safety
     ///
@@ -301,16 +301,17 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     ///
     /// ```
     fn present<'a, C, IW>(
-        &'a mut self,
+        &'a self,
         present_queue: &mut CommandQueue<B, C>,
+        frame_index: FrameImage,
         wait_semaphores: IW,
     ) -> Result<(), ()>
     where
-        &'a mut Self: BorrowMut<B::Swapchain>,
+        &'a Self: Borrow<B::Swapchain>,
         Self: Sized + 'a,
         IW: IntoIterator,
         IW::Item: Borrow<B::Semaphore>,
     {
-        present_queue.present(Some(self), wait_semaphores)
+        present_queue.present(Some((self, frame_index)), wait_semaphores)
     }
 }

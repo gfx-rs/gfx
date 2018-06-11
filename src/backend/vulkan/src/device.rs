@@ -1505,7 +1505,6 @@ impl d::Device<B> for Device {
         let swapchain = w::Swapchain {
             raw: swapchain_raw,
             functor,
-            frame_queue: VecDeque::new(),
         };
 
         let images = backbuffer_images

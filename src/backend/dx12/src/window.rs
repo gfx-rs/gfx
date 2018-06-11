@@ -105,7 +105,7 @@ pub struct Swapchain {
 }
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, _sync: hal::FrameSync<Backend>) -> Result<hal::Frame, ()> {
+    fn acquire_frame(&mut self, _sync: hal::FrameSync<Backend>) -> Result<hal::FrameImage, ()> {
         // TODO: sync
 
         if false {
@@ -118,8 +118,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         }
 
         // TODO:
-        let index = unsafe { self.inner.GetCurrentBackBufferIndex() };
-        Ok(hal::Frame::new(index as usize))
+        Ok(unsafe { self.inner.GetCurrentBackBufferIndex() })
     }
 }
 

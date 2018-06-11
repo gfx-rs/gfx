@@ -128,9 +128,6 @@ impl Instance {
             let class = Class::get("CAMetalLayer").unwrap();
             let render_layer: *mut Object = msg_send![class, new];
             msg_send![view, setLayer: render_layer];
-            //let render_layer: *mut Object = msg_send![view, layer];
-            //assert!(msg_send![render_layer, isKindOfClass: class]);
-            //msg_send![render_layer, retain];
             let view_size: CGRect = msg_send![view, bounds];
             msg_send![render_layer, setFrame: view_size];
             msg_send![view, retain];
