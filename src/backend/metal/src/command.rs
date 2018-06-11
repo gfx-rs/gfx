@@ -2133,7 +2133,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             _ => (value, value),
         };
 
-        let com = self.set_stencil_mask_values(Some((front, back)), None, None);
+        let com = self.set_stencil_mask_values(None, Some((front, back)), None);
         self.inner
             .borrow_mut()
             .sink()
