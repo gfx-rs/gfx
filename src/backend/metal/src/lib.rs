@@ -204,6 +204,7 @@ struct PrivateCapabilities {
     resource_heaps: bool,
     argument_buffers: bool,
     shared_textures: bool,
+    base_instance: bool,
     format_depth24_stencil8: bool,
     format_depth32_stencil8: bool,
     format_min_srgb_channels: u8,

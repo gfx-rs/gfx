@@ -739,31 +739,53 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
             }
         }
         Cmd::Draw { primitive_type, ref vertices, ref instances } =>  {
-            encoder.draw_primitives_instanced_base_instance(
-                primitive_type,
-                vertices.start as NSUInteger,
-                (vertices.end - vertices.start) as NSUInteger,
-                (instances.end - instances.start) as NSUInteger,
-                instances.start as NSUInteger,
-            );
+            /*if instances.start == 0 { //TODO: needs metal-rs breaking update
+                encoder.draw_primitives_instanced(
+                    primitive_type,
+                    vertices.start as NSUInteger,
+                    (vertices.end - vertices.start) as NSUInteger,
+                    instances.end as NSUInteger,
+                );
+            } else*/ {
+                encoder.draw_primitives_instanced_base_instance(
+                    primitive_type,
+                    vertices.start as NSUInteger,
+                    (vertices.end - vertices.start) as NSUInteger,
+                    (instances.end - instances.start) as NSUInteger,
+                    instances.start as NSUInteger,
+                );
+            }
         }
         Cmd::DrawIndexed { primitive_type, ref index, ref indices, base_vertex, ref instances } => {
-            let index_offset = indices.start as buffer::Offset * match index.index_type {
+            let index_size = match index.index_type {
                 MTLIndexType::UInt16 => 2,
                 MTLIndexType::UInt32 => 4,
             };
+            let index_offset = index.offset + indices.start as buffer::Offset * index_size;
             // Metal requires `indexBufferOffset` alignment of 4
-            assert_eq!((index_offset + index.offset) & 3, 0);
-            encoder.draw_indexed_primitives_instanced_base_instance(
-                primitive_type,
-                (indices.end - indices.start) as NSUInteger,
-                index.index_type,
-                &index.buffer,
-                (index_offset + index.offset) as NSUInteger,
-                (instances.end - instances.start) as NSUInteger,
-                base_vertex as NSInteger,
-                instances.start as NSUInteger,
-            );
+            if base_vertex == 0 && instances.start == 0 {
+                //Note: for a strange reason, index alignment is not enforced here
+                encoder.draw_indexed_primitives_instanced(
+                    primitive_type,
+                    (indices.end - indices.start) as NSUInteger,
+                    index.index_type,
+                    &index.buffer,
+                    index_offset,
+                    instances.end as NSUInteger,
+                );
+            } else {
+                assert_eq!(index_offset % WORD_ALIGNMENT, 0);
+                encoder.draw_indexed_primitives_instanced_base_instance(
+                    primitive_type,
+                    (indices.end - indices.start) as NSUInteger,
+                    index.index_type,
+                    &index.buffer,
+                    index_offset,
+                    (instances.end - instances.start) as NSUInteger,
+                    base_vertex as NSInteger,
+                    instances.start as NSUInteger,
+                );
+            }
         }
         Cmd::DrawIndirect { primitive_type, ref buffer, offset } => {
             encoder.draw_primitives_indirect(

@@ -44,6 +44,11 @@ const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v3,
 ];
 
+const BASE_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily1_v4,
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+];
+
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
 
@@ -261,6 +266,7 @@ impl PhysicalDevice {
                 resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
                 argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
                 shared_textures: !Self::is_mac(device),
+                base_instance: Self::supports_any(device, BASE_INSTANCE_SUPPORT),
                 format_depth24_stencil8: device.d24_s8_supported(),
                 format_depth32_stencil8: true, //TODO: crashing the Metal validation layer upon copying from buffer
                 format_min_srgb_channels: if Self::is_mac(&*device) {4} else {1},
