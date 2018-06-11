@@ -40,8 +40,7 @@ use std::os::raw::c_void;
 
 use hal::queue::QueueFamilyId;
 
-use objc::runtime::{Object, Class};
-use cocoa::base::YES;
+use objc::runtime::{Class, Object};
 use cocoa::foundation::NSAutoreleasePool;
 use core_graphics::geometry::CGRect;
 
@@ -126,13 +125,14 @@ impl Instance {
                 panic!("window does not have a valid contentView");
             }
 
-            msg_send![view, setWantsLayer: YES];
             let class = Class::get("CAMetalLayer").unwrap();
-            let render_layer: *mut Object = msg_send![class, new]; // Returns retained
+            let render_layer: *mut Object = msg_send![class, new];
+            msg_send![view, setLayer: render_layer];
+            //let render_layer: *mut Object = msg_send![view, layer];
+            //assert!(msg_send![render_layer, isKindOfClass: class]);
+            //msg_send![render_layer, retain];
             let view_size: CGRect = msg_send![view, bounds];
             msg_send![render_layer, setFrame: view_size];
-            let view_layer: *mut Object = msg_send![view, layer];
-            msg_send![view_layer, addSublayer: render_layer];
             msg_send![view, retain];
 
             window::SurfaceInner {

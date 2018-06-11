@@ -89,7 +89,6 @@ impl Swapchain {
     }
 
     pub(crate) fn present(&self, index: hal::FrameImage) {
-        let render_layer_borrow = self.surface.render_layer.lock().unwrap();
         let (drawable, _) = self.inner
             .write()
             .unwrap()
@@ -97,8 +96,7 @@ impl Swapchain {
             .take()
             .expect("Frame is not ready to present!");
         unsafe {
-            let render_layer = *render_layer_borrow;
-            msg_send![render_layer, presentDrawable:drawable];
+            msg_send![drawable, present];
             msg_send![drawable, release];
         }
     }
@@ -115,14 +113,25 @@ impl hal::Surface<Backend> for Surface {
     fn capabilities_and_formats(
         &self, _: &PhysicalDevice,
     ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>) {
+        let render_layer_borrow = self.inner.render_layer.lock().unwrap();
+        let render_layer = *render_layer_borrow;
+        let max_frames: u64 = unsafe {
+            msg_send![render_layer, maximumDrawableCount]
+        };
+
         let caps = hal::SurfaceCapabilities {
-            image_count: 1..8,
+            image_count: 1 .. max_frames as hal::FrameImage,
             current_extent: None,
             extents: Extent2D { width: 4, height: 4} .. Extent2D { width: 4096, height: 4096 },
             max_image_layers: 1,
         };
-        let formats = Some(vec![format::Format::Rgba8Srgb]);
-        (caps, formats)
+
+        let formats = vec![
+            format::Format::Bgra8Unorm,
+            format::Format::Bgra8Srgb,
+            format::Format::Rgba16Float,
+        ];
+        (caps, Some(formats))
     }
 
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
@@ -157,9 +166,10 @@ impl Device {
         let format_desc = config.color_format.surface_desc();
         let framebuffer_only = config.image_usage == image::Usage::COLOR_ATTACHMENT;
         let device = self.shared.device.lock().unwrap();
+        let device_raw: &metal::DeviceRef = &*device;
 
         let (view_size, scale_factor) = unsafe {
-            msg_send![render_layer, setDevice: &device];
+            msg_send![render_layer, setDevice: device_raw];
             msg_send![render_layer, setPixelFormat: mtl_format];
             msg_send![render_layer, setFramebufferOnly: framebuffer_only];
 
@@ -229,18 +239,20 @@ impl hal::Swapchain<Backend> for Swapchain {
             }
         }
 
-        let layer = self.surface.render_layer.lock().unwrap();
         let mut inner = self.inner.write().unwrap();
-
         let index = inner.frames
             .iter_mut()
-            .position(|d| d.is_some())
-            .expect("No frames available to acquire!");
+            .position(|d| d.is_none())
+            .expect("No frame available to acquire!");
+
+        debug!("acquired frame {}", index);
+        let layer = self.surface.render_layer.lock().unwrap();
 
         let _ap = AutoreleasePool::new(); // for the drawable
         inner.frames[index] = Some(unsafe {
             let drawable: *mut Object = msg_send![*layer, nextDrawable];
-            let texture: metal::Texture = msg_send![drawable, getTexture];
+            assert!(!drawable.is_null());
+            let texture: metal::Texture = msg_send![drawable, texture];
             msg_send![drawable, retain];
             msg_send![texture, retain];
             (drawable, texture)

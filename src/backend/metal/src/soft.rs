@@ -1,5 +1,5 @@
 use command::{IndexBuffer};
-use native::{ImageRoot, RasterizerState};
+use native::{Frame, ImageRoot, RasterizerState};
 
 use hal;
 use metal;
@@ -35,7 +35,7 @@ pub enum RenderCommand {
     BindTexture {
         stage: hal::pso::Stage,
         index: usize,
-        texture: Option<metal::Texture>,
+        texture: Option<ImageRoot>,
     },
     BindSampler {
         stage: hal::pso::Stage,
@@ -79,18 +79,18 @@ pub enum BlitCommand {
         region: hal::command::BufferCopy,
     },
     CopyImage {
-        src: metal::Texture,
-        dst: metal::Texture,
+        src: ImageRoot,
+        dst: ImageRoot,
         region: hal::command::ImageCopy,
     },
     CopyBufferToImage {
         src: metal::Buffer,
-        dst: metal::Texture,
+        dst: ImageRoot,
         dst_desc: hal::format::FormatDesc,
         region: hal::command::BufferImageCopy,
     },
     CopyImageToBuffer {
-        src: metal::Texture,
+        src: ImageRoot,
         src_desc: hal::format::FormatDesc,
         dst: metal::Buffer,
         region: hal::command::BufferImageCopy,
@@ -110,7 +110,7 @@ pub enum ComputeCommand {
     },
     BindTexture {
         index: usize,
-        texture: Option<metal::Texture>,
+        texture: Option<ImageRoot>,
     },
     BindSampler {
         index: usize,
@@ -130,7 +130,11 @@ pub enum ComputeCommand {
 
 #[derive(Debug)]
 pub enum Pass {
-    Render(metal::RenderPassDescriptor, Vec<RenderCommand>),
+    Render {
+        desc: metal::RenderPassDescriptor,
+        frames: Vec<(usize, Frame)>,
+        commands: Vec<RenderCommand>,
+    },
     Blit(Vec<BlitCommand>),
     Compute(Vec<ComputeCommand>),
 }

@@ -230,6 +230,7 @@ impl DepthTest {
 }
 
 /// The operation to use for stencil masking.
+#[repr(u8)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum StencilOp {
