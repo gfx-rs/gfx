@@ -102,7 +102,7 @@ impl BufferImageCopy {
 
     pub fn copy_2d(&mut self,
                 context: ComPtr<d3d11::ID3D11DeviceContext>,
-                buffer: ComPtr<d3d11::ID3D11ShaderResourceView>,
+                buffer: *mut d3d11::ID3D11ShaderResourceView,
                 image: ComPtr<d3d11::ID3D11UnorderedAccessView>,
                 info: command::BufferImageCopy) {
         self.update_buffer(context.clone(), info.clone());
@@ -110,7 +110,7 @@ impl BufferImageCopy {
         unsafe {
             context.CSSetShader(self.cs.as_raw(), ptr::null_mut(), 0);
             context.CSSetConstantBuffers(0, 1, &self.copy_info.as_raw());
-            context.CSSetShaderResources(0, 1, &buffer.as_raw());
+            context.CSSetShaderResources(0, 1, &buffer);
             context.CSSetUnorderedAccessViews(0, 1, &image.as_raw(), ptr::null_mut());
 
             context.Dispatch(
