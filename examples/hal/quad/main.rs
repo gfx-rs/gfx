@@ -463,7 +463,7 @@ fn main() {
 
         device.reset_fence(&frame_fence);
         command_pool.reset();
-        let frame: hal::Frame = {
+        let frame: hal::FrameImage = {
             match swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore)) {
                 Ok(i) => i,
                 Err(_) => {
@@ -486,7 +486,7 @@ fn main() {
             {
                 let mut encoder = cmd_buffer.begin_render_pass_inline(
                     &render_pass,
-                    &framebuffers[frame.id()],
+                    &framebuffers[frame as usize],
                     viewport.rect,
                     &[command::ClearValue::Color(command::ClearColor::Float([
                         0.8, 0.8, 0.8, 1.0,
@@ -507,7 +507,7 @@ fn main() {
         device.wait_for_fence(&frame_fence, !0);
 
         // present frame
-        if let Err(_) = swap_chain.present(&mut queue_group.queues[0], &[]) {
+        if let Err(_) = swap_chain.present(&mut queue_group.queues[0], frame, &[]) {
             recreate_swapchain = true;
         }
     }

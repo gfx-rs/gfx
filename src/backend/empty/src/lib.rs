@@ -3,7 +3,7 @@
 
 extern crate gfx_hal as hal;
 
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::ops::Range;
 use hal::{
     buffer, command, device, error, format, image, mapping,
@@ -96,10 +96,10 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
         unimplemented!()
     }
 
-    fn present<IS, IW>(&mut self, _: IS, _: IW) -> Result<(), ()>
+    fn present<IS, S, IW>(&mut self, _: IS, _: IW) -> Result<(), ()>
     where
-        IS: IntoIterator,
-        IS::Item: BorrowMut<Swapchain>,
+        IS: IntoIterator<Item = (S, hal::FrameImage)>,
+        S: Borrow<Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<()>,
     {
@@ -785,7 +785,7 @@ impl hal::Surface<Backend> for Surface {
 /// Dummy swapchain.
 pub struct Swapchain;
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, _: hal::FrameSync<Backend>) -> Result<hal::Frame, ()> {
+    fn acquire_frame(&mut self, _: hal::FrameSync<Backend>) -> Result<hal::FrameImage, ()> {
         unimplemented!()
     }
 }

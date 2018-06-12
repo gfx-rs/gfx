@@ -26,11 +26,11 @@ use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 
 use hal::{format, image, memory, queue};
-use hal::{Features, Limits, PatchSize, QueueType};
+use hal::{Features, FrameImage, Limits, PatchSize, QueueType};
 use hal::error::{DeviceCreationError, HostExecutionError};
 
 use std::{fmt, mem, ptr};
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 
@@ -701,10 +701,10 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         assert_eq!(Ok(()), result);
     }
 
-    fn present<IS, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
+    fn present<IS, S, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator,
-        IS::Item: BorrowMut<window::Swapchain>,
+        IS: IntoIterator<Item = (S, FrameImage)>,
+        S: Borrow<window::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
@@ -715,15 +715,9 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
         let mut frames = Vec::new();
         let mut vk_swapchains = Vec::new();
-        for mut swapchain in swapchains {
-            let swapchain = swapchain.borrow_mut();
-
-            frames.push(swapchain
-                .frame_queue
-                .pop_front()
-                .expect("No frame currently acquired.") as _
-            );
-            vk_swapchains.push(swapchain.raw);
+        for (swapchain, index) in swapchains {
+            vk_swapchains.push(swapchain.borrow().raw);
+            frames.push(index);
         }
 
         let info = vk::PresentInfoKHR {

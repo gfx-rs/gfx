@@ -2,7 +2,7 @@ use {AutoreleasePool, Backend, Shared, validate_line_width};
 use {conversions as conv, native, soft, window};
 use internal::{BlitVertex, Channel, ClearKey, ClearVertex};
 
-use std::borrow::{self, Borrow};
+use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::{Deref, Range};
@@ -11,7 +11,7 @@ use std::{iter, mem};
 use std::slice;
 
 use hal::{buffer, command as com, error, memory, pool, pso};
-use hal::{DrawCount, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
+use hal::{DrawCount, FrameImage, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
 use hal::format::{Aspects, Format, FormatDesc};
 use hal::image::{Extent, Filter, Layout, SubresourceRange};
 use hal::pass::{AttachmentLoadOp, AttachmentOps};
@@ -275,7 +275,7 @@ impl State {
 #[derive(Clone, Debug)]
 struct StageResources {
     buffers: Vec<Option<(metal::Buffer, buffer::Offset)>>,
-    textures: Vec<Option<metal::Texture>>,
+    textures: Vec<Option<native::ImageRoot>>,
     samplers: Vec<Option<metal::SamplerState>>,
     push_constants_buffer_id: Option<u32>,
 }
@@ -304,12 +304,12 @@ impl StageResources {
         self.buffers[slot] = Some((buffer.to_owned(), offset));
     }
 
-    fn add_textures(&mut self, start: usize, textures: &[Option<(metal::Texture, Layout)>]) {
-        while self.textures.len() < start + textures.len() {
+    fn add_textures(&mut self, start: usize, roots: &[Option<(native::ImageRoot, Layout)>]) {
+        while self.textures.len() < start + roots.len() {
             self.textures.push(None)
         }
-        for (out, entry) in self.textures[start..].iter_mut().zip(textures.iter()) {
-            *out = entry.as_ref().map(|&(ref texture, _)| texture.clone());
+        for (out, root) in self.textures[start..].iter_mut().zip(roots.iter()) {
+            *out = root.as_ref().map(|&(ref root, _)| root.clone());
         }
     }
 
@@ -352,7 +352,7 @@ impl CommandSink {
                 }
             }
             CommandSink::Deferred { ref mut passes, is_encoding: true } => {
-                if let Some(&mut soft::Pass::Render(_, ref mut list)) = passes.last_mut() {
+                if let Some(&mut soft::Pass::Render { commands: ref mut list, .. }) = passes.last_mut() {
                     list.extend(commands);
                 }
             }
@@ -379,7 +379,7 @@ impl CommandSink {
             CommandSink::Deferred { ref mut passes, is_encoding } => {
                 assert!(is_encoding);
                 match passes.last_mut() {
-                    Some(&mut soft::Pass::Render(_, ref mut list)) => {
+                    Some(&mut soft::Pass::Render { commands: ref mut list, .. }) => {
                         list.extend(commands);
                     }
                     _ => panic!("Active pass is not a render pass")
@@ -488,18 +488,21 @@ impl CommandSink {
         }
     }
 
-    fn quick_render_pass<I>(
+    fn quick_render_pass<I, J>(
         &mut self,
         descriptor: &metal::RenderPassDescriptorRef,
-        commands: I,
+        frames: I,
+        commands: J,
     ) where
-        I: IntoIterator<Item = soft::RenderCommand>,
+        I: IntoIterator<Item = (usize, native::Frame)>,
+        J: IntoIterator<Item = soft::RenderCommand>,
     {
         self.stop_encoding();
 
         match *self {
             CommandSink::Immediate { ref cmd_buffer, .. } => {
                 let _ap = AutoreleasePool::new();
+                resolve_frames(descriptor, frames);
                 let encoder = cmd_buffer.new_render_command_encoder(descriptor);
                 for command in commands {
                     exec_render(encoder, &command);
@@ -507,24 +510,29 @@ impl CommandSink {
                 encoder.end_encoding();
             }
             CommandSink::Deferred { ref mut passes, .. } => {
-                passes.push(soft::Pass::Render(
-                    descriptor.to_owned(),
-                    commands.into_iter().collect(),
-                ));
+                passes.push(soft::Pass::Render {
+                    desc: descriptor.to_owned(),
+                    frames: frames.into_iter().collect(),
+                    commands: commands.into_iter().collect(),
+                });
             }
         }
     }
 
-    fn begin_render_pass(
+    fn begin_render_pass<I>(
         &mut self,
         descriptor: metal::RenderPassDescriptor,
+        frames: I,
         init_commands: Vec<soft::RenderCommand>,
-    ) {
+    ) where
+        I: Iterator<Item = (usize, native::Frame)>,
+    {
         self.stop_encoding();
 
         match *self {
             CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
                 let _ap = AutoreleasePool::new();
+                resolve_frames(&descriptor, frames);
                 let encoder = cmd_buffer.new_render_command_encoder(&descriptor);
                 for command in init_commands {
                     exec_render(encoder, &command);
@@ -533,7 +541,11 @@ impl CommandSink {
             }
             CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
                 *is_encoding = true;
-                passes.push(soft::Pass::Render(descriptor, init_commands));
+                passes.push(soft::Pass::Render {
+                    desc: descriptor,
+                    frames: frames.into_iter().collect(),
+                    commands: init_commands,
+                });
             }
         }
     }
@@ -690,7 +702,14 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
             }
         }
         Cmd::BindTexture { stage, index, ref texture } => {
-            let texture = texture.as_ref().map(|x| x.as_ref());
+            let guard;
+            let texture = match texture {
+                Some(ref root) => {
+                    guard = root.resolve();
+                    Some(&*guard)
+                }
+                None => None,
+            };
             match stage {
                 pso::Stage::Vertex =>
                     encoder.set_vertex_texture(index as _, texture),
@@ -718,31 +737,53 @@ fn exec_render(encoder: &metal::RenderCommandEncoderRef, command: &soft::RenderC
             }
         }
         Cmd::Draw { primitive_type, ref vertices, ref instances } =>  {
-            encoder.draw_primitives_instanced_base_instance(
-                primitive_type,
-                vertices.start as NSUInteger,
-                (vertices.end - vertices.start) as NSUInteger,
-                (instances.end - instances.start) as NSUInteger,
-                instances.start as NSUInteger,
-            );
+            /*if instances.start == 0 { //TODO: needs metal-rs breaking update
+                encoder.draw_primitives_instanced(
+                    primitive_type,
+                    vertices.start as NSUInteger,
+                    (vertices.end - vertices.start) as NSUInteger,
+                    instances.end as NSUInteger,
+                );
+            } else*/ {
+                encoder.draw_primitives_instanced_base_instance(
+                    primitive_type,
+                    vertices.start as NSUInteger,
+                    (vertices.end - vertices.start) as NSUInteger,
+                    (instances.end - instances.start) as NSUInteger,
+                    instances.start as NSUInteger,
+                );
+            }
         }
         Cmd::DrawIndexed { primitive_type, ref index, ref indices, base_vertex, ref instances } => {
-            let index_offset = indices.start as buffer::Offset * match index.index_type {
+            let index_size = match index.index_type {
                 MTLIndexType::UInt16 => 2,
                 MTLIndexType::UInt32 => 4,
             };
+            let index_offset = index.offset + indices.start as buffer::Offset * index_size;
             // Metal requires `indexBufferOffset` alignment of 4
-            assert_eq!((index_offset + index.offset) & 3, 0);
-            encoder.draw_indexed_primitives_instanced_base_instance(
-                primitive_type,
-                (indices.end - indices.start) as NSUInteger,
-                index.index_type,
-                &index.buffer,
-                (index_offset + index.offset) as NSUInteger,
-                (instances.end - instances.start) as NSUInteger,
-                base_vertex as NSInteger,
-                instances.start as NSUInteger,
-            );
+            if base_vertex == 0 && instances.start == 0 {
+                //Note: for a strange reason, index alignment is not enforced here
+                encoder.draw_indexed_primitives_instanced(
+                    primitive_type,
+                    (indices.end - indices.start) as NSUInteger,
+                    index.index_type,
+                    &index.buffer,
+                    index_offset,
+                    instances.end as NSUInteger,
+                );
+            } else {
+                assert_eq!(index_offset % WORD_ALIGNMENT, 0);
+                encoder.draw_indexed_primitives_instanced_base_instance(
+                    primitive_type,
+                    (indices.end - indices.start) as NSUInteger,
+                    index.index_type,
+                    &index.buffer,
+                    index_offset,
+                    (instances.end - instances.start) as NSUInteger,
+                    base_vertex as NSInteger,
+                    instances.start as NSUInteger,
+                );
+            }
         }
         Cmd::DrawIndirect { primitive_type, ref buffer, offset } => {
             encoder.draw_primitives_indirect(
@@ -783,12 +824,12 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
             let layers = region.src_subresource.layers.clone().zip(region.dst_subresource.layers.clone());
             for (src_layer, dst_layer) in layers {
                 encoder.copy_from_texture(
-                    src,
+                    &*src.resolve(),
                     src_layer as _,
                     region.src_subresource.level as _,
                     src_offset,
                     size,
-                    dst,
+                    &*dst.resolve(),
                     dst_layer as _,
                     region.dst_subresource.level as _,
                     dst_offset,
@@ -809,7 +850,7 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
                     row_pitch as NSUInteger,
                     slice_pitch as NSUInteger,
                     extent,
-                    dst,
+                    &*dst.resolve(),
                     layer as NSUInteger,
                     r.level as NSUInteger,
                     origin,
@@ -826,7 +867,7 @@ pub(crate) fn exec_blit(encoder: &metal::BlitCommandEncoderRef, command: &soft::
             for layer in r.layers.clone() {
                 let offset = region.buffer_offset + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
                 encoder.copy_from_texture_to_buffer(
-                    src,
+                    &*src.resolve(),
                     layer as NSUInteger,
                     r.level as NSUInteger,
                     origin,
@@ -852,7 +893,15 @@ fn exec_compute(encoder: &metal::ComputeCommandEncoderRef, command: &soft::Compu
             encoder.set_bytes(index as _, bytes.len() as _, bytes.as_ptr() as _);
         }
         Cmd::BindTexture { index, ref texture } => {
-            encoder.set_texture(index as _, texture.as_ref().map(|x| x.as_ref()));
+            let guard;
+            let texture = match texture {
+                Some(ref root) => {
+                    guard = root.resolve();
+                    Some(&*guard)
+                }
+                None => None,
+            };
+            encoder.set_texture(index as _, texture);
         }
         Cmd::BindSampler { index, ref sampler } => {
             encoder.set_sampler_state(index as _, sampler.as_ref().map(|x| x.as_ref()));
@@ -869,27 +918,44 @@ fn exec_compute(encoder: &metal::ComputeCommandEncoderRef, command: &soft::Compu
     }
 }
 
+fn resolve_frames<I>(desc: &metal::RenderPassDescriptorRef, frames: I)
+where
+    I: IntoIterator,
+    I::Item: Borrow<(usize, native::Frame)>,
+{
+    for f in frames {
+        let (index, ref frame) = *f.borrow();
+        let swapchain = frame.swapchain.read().unwrap();
+        desc
+            .color_attachments()
+            .object_at(index as _)
+            .unwrap()
+            .set_texture(Some(&swapchain[frame.index]))
+    }
+}
+
 fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass]) {
     let _ap = AutoreleasePool::new(); // for encoder creation
     for pass in passes {
         match *pass {
-            soft::Pass::Render(ref desc, ref list) => {
+            soft::Pass::Render { ref desc, ref frames, ref commands } => {
+                resolve_frames(desc, frames);
                 let encoder = command_buf.new_render_command_encoder(desc);
-                for command in list {
+                for command in commands {
                     exec_render(&encoder, command);
                 }
                 encoder.end_encoding();
             }
-            soft::Pass::Blit(ref list) => {
+            soft::Pass::Blit(ref commands) => {
                 let encoder = command_buf.new_blit_command_encoder();
-                for command in list {
+                for command in commands {
                     exec_blit(&encoder, command);
                 }
                 encoder.end_encoding();
             }
-            soft::Pass::Compute(ref list) => {
+            soft::Pass::Compute(ref commands) => {
                 let encoder = command_buf.new_compute_command_encoder();
-                for command in list {
+                for command in commands {
                     exec_compute(&encoder, command);
                 }
                 encoder.end_encoding();
@@ -949,6 +1015,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 ref mut retained_buffers,
                 ref mut retained_textures,
             } = *inner;
+
             let temp_cmd_buffer;
             let command_buffer: &metal::CommandBufferRef = match *sink {
                 Some(CommandSink::Immediate { ref cmd_buffer, ref token, .. }) => {
@@ -996,32 +1063,22 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator,
-        IS::Item: borrow::BorrowMut<window::Swapchain>,
+        IS: IntoIterator<Item = (S, FrameImage)>,
+        S: Borrow<window::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
-        use std::borrow::BorrowMut;
-        for mut swapchain in swapchains {
+        for (swapchain, index) in swapchains {
             // TODO: wait for semaphores
-            let swapchain = swapchain.borrow_mut();
-            let (surface, io_surface, present_id) = swapchain.present();
-            debug!("presenting frame {}", present_id);
-            unsafe {
-                let render_layer_borrow = surface.render_layer.lock().unwrap();
-                let render_layer = *render_layer_borrow;
-                msg_send![render_layer, setContents: io_surface.obj];
-            }
+            debug!("presenting frame {}", index);
+            swapchain.borrow().present(index);
         }
 
-        if cfg!(feature = "auto-capture") {
-            let shared_capture_manager = CaptureManager::shared();
-            if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
-                default_capture_scope.end_scope();
-                default_capture_scope.begin_scope();
-            }
+        let shared_capture_manager = CaptureManager::shared();
+        if shared_capture_manager.is_capturing() {
+            shared_capture_manager.stop_capture();
         }
 
         Ok(())
@@ -1510,15 +1567,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
 
+            let mut frame = None;
             let num_layers = (sub.layers.end - sub.layers.start) as u64;
-            let (layers, texture) = if CLEAR_IMAGE_ARRAY && sub.layers.start > 0 {
+            let layers = if CLEAR_IMAGE_ARRAY {
+                0 .. 1
+            } else {
+                sub.layers.clone()
+            };
+            let texture = if CLEAR_IMAGE_ARRAY && sub.layers.start > 0 {
+                let image_raw = image.root.resolve();
                 // aliasing is necessary for bulk-clearing all layers starting with 0
-                let tex = image.raw.new_texture_view_from_slice(
+                let tex = image_raw.new_texture_view_from_slice(
                     image.mtl_format,
                     image.mtl_type,
                     NSRange {
                         location: 0,
-                        length: image.raw.mipmap_level_count(),
+                        length: image_raw.mipmap_level_count(),
                     },
                     NSRange {
                         location: sub.layers.start as _,
@@ -1526,11 +1590,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     },
                 );
                 retained_textures.push(tex);
-                (0 .. 1, retained_textures.last().unwrap())
-            } else if CLEAR_IMAGE_ARRAY {
-                (0 .. 1, &image.raw)
+                retained_textures.last().map(|tex| tex.as_ref())
             } else {
-                (sub.layers.clone(), &image.raw)
+                match image.root {
+                    native::ImageRoot::Texture(ref tex) => Some(tex.as_ref()),
+                    native::ImageRoot::Frame(ref f) => {
+                        frame = Some((0, f.clone()));
+                        None
+                    }
+                }
             };
 
             for layer in layers {
@@ -1550,7 +1618,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             .color_attachments()
                             .object_at(0)
                             .unwrap();
-                        attachment.set_texture(Some(texture));
+                        attachment.set_texture(texture);
                         attachment.set_level(level as _);
                         attachment.set_store_action(metal::MTLStoreAction::Store);
                         if !CLEAR_IMAGE_ARRAY {
@@ -1569,7 +1637,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let attachment = descriptor
                             .depth_attachment()
                             .unwrap();
-                        attachment.set_texture(Some(texture));
+                        attachment.set_texture(texture);
                         attachment.set_level(level as _);
                         attachment.set_store_action(metal::MTLStoreAction::Store);
                         if !CLEAR_IMAGE_ARRAY {
@@ -1588,7 +1656,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let attachment = descriptor
                             .stencil_attachment()
                             .unwrap();
-                        attachment.set_texture(Some(texture));
+                        attachment.set_texture(texture);
                         attachment.set_level(level as _);
                         attachment.set_store_action(metal::MTLStoreAction::Store);
                         if !CLEAR_IMAGE_ARRAY {
@@ -1604,7 +1672,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                     sink.as_mut()
                         .unwrap()
-                        .quick_render_pass(descriptor, None);
+                        .quick_render_pass(descriptor, frame.clone(), None);
                     // no actual pass body - everything is in the attachment clear operations
                 }
             }
@@ -1680,13 +1748,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     .unwrap_or(metal::MTLPixelFormat::Invalid),
                 target_index: None,
             };
-            for (out, &(fm, _)) in key.color_formats.iter_mut().zip(&self.state.framebuffer_inner.colors) {
-                *out = fm;
+            for (out, cat) in key.color_formats.iter_mut().zip(&self.state.framebuffer_inner.colors) {
+                *out = cat.mtl_format;
             }
 
             let aspects = match *clear.borrow() {
                 com::AttachmentClear::Color { index, value } => {
-                    let (_, channel) = self.state.framebuffer_inner.colors[index];
+                    let cat = &self.state.framebuffer_inner.colors[index];
                     //Note: technically we should be able to derive the Channel from the
                     // `value` variant, but this is blocked by the portability that is
                     // always passing the attachment clears as `ClearColor::Float` atm.
@@ -1698,7 +1766,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             slice::from_raw_parts(raw_value.float32.as_ptr() as *const u8, 16)
                         }.to_owned(),
                     });
-                    key.target_index = Some((index as u8, channel));
+                    key.target_index = Some((index as u8, cat.channel));
                     Aspects::COLOR
                 }
                 com::AttachmentClear::DepthStencil { depth, stencil } => {
@@ -1816,6 +1884,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::ImageBlit>
     {
         let mut vertices = HashMap::new(); // a list of vertices per mipmap
+        let mut frame = None;
+        let dst_texture = match dst.root {
+            native::ImageRoot::Texture(ref tex) => Some(tex.as_ref()),
+            native::ImageRoot::Frame(ref f) => {
+                frame = Some((0, f.clone()));
+                None
+            }
+        };
+
         for region in regions {
             let r = region.borrow();
 
@@ -1914,7 +1991,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::RenderCommand::BindTexture {
                 stage: pso::Stage::Fragment,
                 index: 0,
-                texture: Some(src.raw.clone())
+                texture: Some(src.root.clone())
             },
         ];
 
@@ -1967,21 +2044,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     .color_attachments()
                     .object_at(0)
                     .unwrap();
-                attachment.set_texture(Some(&dst.raw));
+                attachment.set_texture(dst_texture);
                 attachment.set_level(level as _);
             }
             if aspects.contains(Aspects::DEPTH) {
                 let attachment = descriptor
                     .depth_attachment()
                     .unwrap();
-                attachment.set_texture(Some(&dst.raw));
+                attachment.set_texture(dst_texture);
                 attachment.set_level(level as _);
             }
             if aspects.contains(Aspects::STENCIL) {
                 let attachment = descriptor
                     .stencil_attachment()
                     .unwrap();
-                attachment.set_texture(Some(&dst.raw));
+                attachment.set_texture(dst_texture);
                 attachment.set_level(level as _);
             }
 
@@ -1990,7 +2067,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .chain(&extra)
                 .cloned();
 
-            inner.sink().quick_render_pass(descriptor, commands);
+            inner.sink().quick_render_pass(descriptor, frame.clone(), commands);
         }
     }
 
@@ -2159,11 +2236,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             msg_send![framebuffer.descriptor, copy]
         };
         let mut num_colors = 0;
+        let mut inner = self.inner.borrow_mut();
 
+        let dummy_value = com::ClearValueRaw {
+            color: com:: ClearColorRaw {
+                int32: [0; 4],
+            },
+        };
         let clear_values_iter = clear_values
             .into_iter()
-            .map(|c| Some(*c.borrow()))
-            .chain(iter::repeat(None));
+            .map(|c| *c.borrow())
+            .chain(iter::repeat(dummy_value));
 
         for (rat, clear_value) in render_pass.attachments.iter().zip(clear_values_iter) {
             let (aspects, channel) = match rat.format {
@@ -2177,7 +2260,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     .unwrap();
                 if set_operations(color_desc, rat.ops) == AttachmentLoadOp::Clear {
                     let mtl_color = channel
-                        .interpret(unsafe { clear_value.unwrap().color });
+                        .interpret(unsafe { clear_value.color });
                     color_desc.set_clear_color(mtl_color);
                 }
                 num_colors += 1;
@@ -2185,14 +2268,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             if aspects.contains(Aspects::DEPTH) {
                 let depth_desc = descriptor.depth_attachment().unwrap();
                 if set_operations(depth_desc, rat.ops) == AttachmentLoadOp::Clear {
-                    let mtl_depth = unsafe { clear_value.unwrap().depth_stencil.depth as f64 };
+                    let mtl_depth = unsafe { clear_value.depth_stencil.depth as f64 };
                     depth_desc.set_clear_depth(mtl_depth);
                 }
             }
             if aspects.contains(Aspects::STENCIL) {
                 let stencil_desc = descriptor.stencil_attachment().unwrap();
                 if set_operations(stencil_desc, rat.stencil_ops) == AttachmentLoadOp::Clear {
-                    let mtl_stencil = unsafe { clear_value.unwrap().depth_stencil.stencil };
+                    let mtl_stencil = unsafe { clear_value.depth_stencil.stencil };
                     stencil_desc.set_clear_stencil(mtl_stencil);
                 }
             }
@@ -2205,11 +2288,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         self.state.framebuffer_inner = framebuffer.inner.clone();
+        let frames = framebuffer.inner.colors
+            .iter()
+            .enumerate()
+            .filter_map(|(index, ref cat)| cat.frame.clone().map(|f| (index, f)));
         let init_commands = self.state.make_render_commands();
-        self.inner
-            .borrow_mut()
+        inner
             .sink()
-            .begin_render_pass(descriptor, init_commands);
+            .begin_render_pass(descriptor, frames, init_commands);
     }
 
     fn next_subpass(&mut self, _contents: com::SubpassContents) {
@@ -2353,7 +2439,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                         soft::RenderCommand::BindTexture {
                                             stage,
                                             index: start + i,
-                                            texture: texture.as_ref().map(|&(ref texture, _)| texture.clone()),
+                                            texture: texture.as_ref().map(|&(ref root, _)| root.clone()),
                                         }
                                     }));
                                 }
@@ -2362,13 +2448,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 for &mut (stage, ref loc, ref mut resources) in &mut bind_stages {
                                     let start_tx = layout.res_overrides[loc].texture_id as usize;
                                     let start_sm = layout.res_overrides[loc].sampler_id as usize;
-                                    for (i, (ref tex, ref sampler)) in combos.iter().cloned().enumerate() {
-                                        resources.add_textures(start_tx + i, &[tex.clone()]);
+                                    for (i, (ref texture, ref sampler)) in combos.iter().cloned().enumerate() {
+                                        resources.add_textures(start_tx + i, &[texture.clone()]);
                                         resources.add_samplers(start_sm + i, &[sampler.clone()]);
                                         commands.push(soft::RenderCommand::BindTexture {
                                             stage,
                                             index: start_tx + i,
-                                            texture: tex.as_ref().map(|(t, _)| t.clone()),
+                                            texture: texture.as_ref().map(|&(ref root, _)| root.clone()),
                                         });
                                         commands.push(soft::RenderCommand::BindSampler {
                                             stage,
@@ -2520,14 +2606,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                     }));
                                 }
                                 Combined(ref combos) => {
-                                    for (i, (ref tex, ref sampler)) in combos.iter().cloned().enumerate() {
+                                    for (i, (ref texture, ref sampler)) in combos.iter().cloned().enumerate() {
                                         let id_tx = res.texture_id as usize + i;
                                         let id_sm = res.sampler_id as usize + i;
-                                        resources.add_textures(id_tx, &[tex.clone()]);
+                                        resources.add_textures(id_tx, &[texture.clone()]);
                                         resources.add_samplers(id_sm, &[sampler.clone()]);
                                         commands.push(soft::ComputeCommand::BindTexture {
                                             index: id_tx,
-                                            texture: tex.as_ref().map(|(t, _)| t.clone()),
+                                            texture: texture.as_ref().map(|&(ref root, _)| root.clone()),
                                         });
                                         commands.push(soft::ComputeCommand::BindSampler {
                                             index: id_sm,
@@ -2713,18 +2799,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         } = *self.inner.borrow_mut();
 
         let new_src = if src.mtl_format == dst.mtl_format {
-            &src.raw
+            src.root.clone()
         } else {
             assert_eq!(src.format_desc.bits, dst.format_desc.bits);
-            let tex = src.raw.new_texture_view(dst.mtl_format);
-            retained_textures.push(tex);
-            retained_textures.last().unwrap()
+            let tex = src.root.resolve().new_texture_view(dst.mtl_format);
+            retained_textures.push(tex.clone());
+            native::ImageRoot::Texture(tex)
         };
 
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyImage {
                 src: new_src.clone(),
-                dst: dst.raw.clone(),
+                dst: dst.root.clone(),
                 region: region.borrow().clone(),
             }
         });
@@ -2747,7 +2833,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyBufferToImage {
                 src: src.raw.clone(),
-                dst: dst.raw.clone(),
+                dst: dst.root.clone(),
                 dst_desc: dst.format_desc,
                 region: region.borrow().clone(),
             }
@@ -2771,7 +2857,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // FIXME: layout
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyImageToBuffer {
-                src: src.raw.clone(),
+                src: src.root.clone(),
                 src_desc: src.format_desc,
                 dst: dst.raw.clone(),
                 region: region.borrow().clone(),

@@ -103,7 +103,7 @@ pub mod traits {
 
 // public re-exports
 pub use hal::format;
-pub use hal::{Backend, Frame, Primitive};
+pub use hal::{Backend, FrameImage, Primitive};
 pub use hal::queue::{Supports, Transfer, General, Graphics};
 pub use hal::{VertexCount, InstanceCount};
 // pub use hal::{ShaderSet, VertexShader, HullShader, DomainShader, GeometryShader, PixelShader};
@@ -293,7 +293,7 @@ impl<B: Backend, C> Context<B, C>
         Ok((context, backbuffers))
     }
 
-    pub fn acquire_frame(&mut self) -> Frame {
+    pub fn acquire_frame(&mut self) -> FrameImage {
         assert!(self.frame_acquired.is_none());
 
         let mut bundle = self.frame_bundles.pop_front()
@@ -351,6 +351,7 @@ impl<B: Backend, C> Context<B, C>
 
         self.swapchain.present(
             &mut self.queue.group.queues[0],
+            0,
             Some(&bundle.signal_semaphore),
         ).expect("Failed to present.");
 

@@ -24,7 +24,7 @@ mod pool;
 mod root_constants;
 mod window;
 
-use hal::{error, format as f, image, memory, Features, Limits, QueueType};
+use hal::{error, format as f, image, memory, Features, FrameImage, Limits, QueueType};
 use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
 use descriptors_cpu::DescriptorCpuPool;
 
@@ -34,7 +34,7 @@ use winapi::um::{d3d12, d3d12sdklayers, d3dcommon, handleapi, synchapi, winbase,
 use wio::com::ComPtr;
 
 use std::{mem, ptr};
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
 use std::sync::{Arc, Mutex};
@@ -465,15 +465,15 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator,
-        IS::Item: BorrowMut<window::Swapchain>,
+        IS: IntoIterator<Item = (S, FrameImage)>,
+        S: Borrow<window::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
         // TODO: semaphores
-        for swapchain in swapchains {
+        for (swapchain, _) in swapchains {
             unsafe { swapchain.borrow().inner.Present(1, 0); }
         }
 

@@ -1,5 +1,5 @@
 use std::{mem, ptr, slice};
-use std::borrow::{Borrow, BorrowMut};
+use std::borrow::Borrow;
 use Starc;
 
 use hal;
@@ -707,17 +707,17 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 
     #[cfg(feature = "glutin")]
-    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator,
-        IS::Item: BorrowMut<window::glutin::Swapchain>,
+        IS: IntoIterator<Item = (S, hal::FrameImage)>,
+        S: Borrow<window::glutin::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
         use glutin::GlContext;
 
         for swapchain in swapchains {
-            swapchain
+            swapchain.0
                 .borrow()
                 .window
                 .swap_buffers()

@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::ptr;
 use std::sync::Arc;
 use std::os::raw::c_void;
@@ -332,7 +331,7 @@ impl hal::Surface<Backend> for Surface {
             image_count: caps.min_image_count..max_images,
             current_extent,
             extents: min_extent..max_extent,
-            max_image_layers: caps.max_image_array_layers,
+            max_image_layers: caps.max_image_array_layers as _,
         };
 
         // Swapchain formats
@@ -371,13 +370,11 @@ impl hal::Surface<Backend> for Surface {
 pub struct Swapchain {
     pub(crate) raw: vk::SwapchainKHR,
     pub(crate) functor: ext::Swapchain,
-    // Queued up frames for presentation
-    pub(crate) frame_queue: VecDeque<usize>,
 }
 
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::Frame, ()> {
+    fn acquire_frame(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::FrameImage, ()> {
         let (semaphore, fence) = match sync {
             hal::FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
             hal::FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
@@ -389,10 +386,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         };
 
         match index {
-            Ok(i) => {
-                self.frame_queue.push_back(i as usize);
-                Ok(hal::Frame::new(i as usize))
-            }
+            Ok(i) => Ok(i),
             Err(vk::Result::SuboptimalKhr) | Err(vk::Result::ErrorOutOfDateKhr) => Err(()),
             _ => panic!("Failed to acquire image."),
         }

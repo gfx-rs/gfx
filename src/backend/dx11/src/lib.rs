@@ -15,7 +15,7 @@ extern crate winit;
 extern crate wio;
 
 use hal::{buffer, command, error, format, image, memory, query, pso, Features, Limits, QueueType};
-use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use hal::{DrawCount, FrameImage, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::queue::{QueueFamilyId, Queues};
 use hal::backend::RawQueueGroup;
 use hal::range::RangeArg;
@@ -34,7 +34,7 @@ use std::ptr;
 use std::mem;
 use std::ops::Range;
 use std::cell::RefCell;
-use std::borrow::{BorrowMut, Borrow};
+use std::borrow::Borrow;
 
 use std::os::raw::c_void;
 
@@ -645,11 +645,11 @@ unsafe impl Send for Swapchain { }
 unsafe impl Sync for Swapchain { }
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, _sync: hal::FrameSync<Backend>) -> Result<hal::Frame, ()> {
+    fn acquire_frame(&mut self, _sync: hal::FrameSync<Backend>) -> Result<hal::FrameImage, ()> {
         // TODO: non-`_DISCARD` swap effects have more than one buffer, `FLIP`
         //       effects are dxgi 1.3 (w10+?) in which case there is
         //       `GetCurrentBackBufferIndex()` on the swapchain
-        Ok(hal::Frame::new(0))
+        Ok(0)
     }
 }
 
@@ -685,14 +685,14 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator,
-        IS::Item: BorrowMut<Swapchain>,
+        IS: IntoIterator<Item = (S, FrameImage)>,
+        S: Borrow<Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<Semaphore>,
     {
-        for swapchain in swapchains {
+        for (swapchain, _) in swapchains {
             unsafe { swapchain.borrow().dxgi_swapchain.Present(1, 0); }
         }
 
