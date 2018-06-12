@@ -44,6 +44,8 @@ mod shader;
 mod internal;
 mod device;
 
+
+
 #[derive(Clone, Debug)]
 pub(crate) struct ViewInfo {
     resource: *mut d3d11::ID3D11Resource,
@@ -251,18 +253,6 @@ impl hal::Instance for Instance {
                 (unsafe { ComPtr::<d3d11::ID3D11Device>::from_raw(device) }, feature_level)
             };
 
-            // TODO: we should improve the way memory is managed. we should
-            //       give access to DEFAULT, DYNAMIC and STAGING;
-            //
-            //       roughly this should translate to:
-            //
-            //       DEFAULT => DEVICE_LOCAL
-            //
-            //       NOTE: DYNAMIC only offers cpu write, potentially add
-            //             a HOST_WRITE_ONLY flag..
-            //       DYNAMIC => DEVICE_LOCAL | CPU_VISIBLE
-            //
-            //       STAGING => CPU_VISIBLE | CPU_CACHED
             let memory_properties = hal::MemoryProperties {
                 memory_types: vec![
                     hal::MemoryType {
@@ -270,11 +260,7 @@ impl hal::Instance for Instance {
                         heap_index: 0,
                     },
                     hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL, //| Properties::CPU_VISIBLE | Properties::CPU_CACHED,
-                        heap_index: 0,
-                    },
-                    hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
+                        properties: Properties::CPU_VISIBLE,
                         heap_index: 1,
                     },
                 ],
@@ -864,7 +850,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
         unsafe {
             self.context.IASetIndexBuffer(
-                ibv.buffer.device_local_buffer().as_raw(),
+                ibv.buffer.internal.raw,
                 conv::map_index_type(ibv.index_type),
                 ibv.offset as u32
             );
@@ -873,7 +859,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<Backend>) {
         let (buffers, offsets): (Vec<*mut d3d11::ID3D11Buffer>, Vec<u32>) = vbs.0.iter()
-            .map(|(buf, offset)| (buf.device_local_buffer().as_raw(), *offset as u32))
+            .map(|(buf, offset)| (buf.internal.raw, *offset as u32))
             .unzip();
 
         // TODO: strides
@@ -976,8 +962,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             let set = set.borrow();
 
             for (binding, cbv) in set.cbv_handles.borrow().iter() {
-                let cbv = cbv.as_raw();
-                unsafe { self.context.VSSetConstantBuffers(*binding, 1, &cbv); }
+                unsafe { self.context.VSSetConstantBuffers(*binding, 1, cbv); }
             }
 
             for (binding, srv) in set.srv_handles.borrow().iter() {
@@ -1047,10 +1032,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
+        assert_eq!(buffer.internal.srv.is_some(), true);
+
         for copy in regions.into_iter() {
             self.internal.copy_2d(
                 self.context.clone(),
-                buffer.srv.clone().unwrap(),
+                buffer.internal.srv.unwrap(),
                 image.uav.clone().unwrap(),
                 copy.borrow().clone()
             );
@@ -1129,18 +1116,43 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 }
 
+// Since we dont have any heaps to work with directly, everytime we bind a
+// buffer/image to memory we allocate a dx11 resource and assign it a range.
+//
+// `HOST_VISIBLE` memory gets a staging buffer which covers the entire memory
+// range. This forces us to only expose non-coherent memory, as this
+// abstraction acts as a "cache" since the staging buffer is disjoint from all
+// the dx11 resources we store in the struct.
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Memory {
     properties: memory::Properties,
-    #[derivative(Debug="ignore")]
-    // TODO: :-(
-    buffer: RefCell<Option<InternalBuffer>>,
     size: u64,
+
+    // stores flushed ranges inbetween mappings
+    flushes: RefCell<Vec<Range<u64>>>,
+
+    // list of all buffers bound to this memory
+    #[derivative(Debug="ignore")]
+    local_buffers: RefCell<Vec<(Range<u64>, InternalBuffer)>>,
+
+    // staging buffer covering the whole memory region, if it's HOST_VISIBLE
+    #[derivative(Debug="ignore")]
+    host_buffer: Option<ComPtr<d3d11::ID3D11Buffer>>,
 }
 
 unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
+
+impl Memory {
+    pub fn flush(&self, range: Range<u64>) {
+        self.flushes.borrow_mut().push(range);
+    }
+
+    pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) {
+        self.local_buffers.borrow_mut().push((range, buffer));
+    }
+}
 
 pub struct CommandPool {
     device: ComPtr<d3d11::ID3D11Device>,
@@ -1202,37 +1214,17 @@ pub struct UnboundBuffer {
 }
 
 #[derive(Clone)]
-pub enum InternalBuffer {
-    Coherent(ComPtr<d3d11::ID3D11Buffer>),
-    NonCoherent {
-        device: ComPtr<d3d11::ID3D11Buffer>,
-        staging: ComPtr<d3d11::ID3D11Buffer>
-    }
-}
-
-impl InternalBuffer {
-    pub fn device_local_buffer(&self) -> ComPtr<d3d11::ID3D11Buffer> {
-        match self {
-            InternalBuffer::Coherent(ref buf) => buf.clone(),
-            InternalBuffer::NonCoherent { ref device, ref staging } => device.clone()
-        }
-    }
+pub struct InternalBuffer {
+    raw: *mut d3d11::ID3D11Buffer,
+    srv: Option<*mut d3d11::ID3D11ShaderResourceView>
 }
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Buffer {
     #[derivative(Debug="ignore")]
-    buffer: InternalBuffer,
-    #[derivative(Debug="ignore")]
-    srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
+    internal: InternalBuffer,
     size: u64,
-}
-
-impl Buffer {
-    pub fn device_local_buffer(&self) -> ComPtr<d3d11::ID3D11Buffer> {
-        self.buffer.device_local_buffer()
-    }
 }
 
 unsafe impl Send for Buffer {}
@@ -1363,7 +1355,7 @@ pub struct DescriptorSet {
     #[derivative(Debug="ignore")]
     srv_handles: RefCell<Vec<(u32, ComPtr<d3d11::ID3D11ShaderResourceView>)>>,
     #[derivative(Debug="ignore")]
-    cbv_handles: RefCell<Vec<(u32, ComPtr<d3d11::ID3D11Buffer>)>>,
+    cbv_handles: RefCell<Vec<(u32, *mut d3d11::ID3D11Buffer)>>,
     #[derivative(Debug="ignore")]
     sampler_handles: RefCell<Vec<(u32, ComPtr<d3d11::ID3D11SamplerState>)>>,
 }
