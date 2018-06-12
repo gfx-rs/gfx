@@ -22,7 +22,7 @@ use hal::range::RangeArg;
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal::{self,
     MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass,
-    MTLCPUCacheMode, MTLStorageMode, MTLResourceOptions,
+    MTLCPUCacheMode, MTLStorageMode, MTLResourceOptions, MTLCompareFunction,
     MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLTextureType,
     CaptureManager
 };
@@ -136,7 +136,10 @@ fn create_depth_stencil_state(
             raw.set_depth_compare_function(conv::map_compare_function(fun));
             raw.set_depth_write_enabled(write);
         }
-        pso::DepthTest::Off => {}
+        pso::DepthTest::Off => {
+            raw.set_depth_compare_function(MTLCompareFunction::Always);
+            raw.set_depth_write_enabled(false);
+        }
     }
     match desc.stencil {
         pso::StencilTest::On { ref front, ref back } => {
@@ -187,7 +190,10 @@ fn create_depth_stencil_state(
 
             raw.set_back_face_stencil(Some(&back_desc));
         }
-        pso::StencilTest::Off => {}
+        pso::StencilTest::Off => {
+            raw.set_front_face_stencil(None);
+            raw.set_back_face_stencil(None);
+        }
     }
 
     if all_masks_static {
