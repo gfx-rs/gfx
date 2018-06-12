@@ -196,8 +196,8 @@ impl AaMode {
 
 /// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
 /// texture when sampling. They correspond to increasing levels of quality,
-/// but also cost. They "layer" on top of each other: it is not possible to
-/// have bilinear filtering without mipmapping, for example.
+/// but also cost. Mipmap, trilinear and anisotropic filtering require
+/// mipmapping, but the other filtering methods do not.
 ///
 /// These names are somewhat poor, in that "bilinear" is really just doing
 /// linear filtering on each axis, and it is only bilinear in the case of 2D
