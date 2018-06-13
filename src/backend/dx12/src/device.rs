@@ -2019,9 +2019,13 @@ impl d::Device<B> for Device {
             self.raw.clone().GetResourceAllocationInfo(0, 1, &desc)
         };
 
+        // Image usages which require RT/DS heap due to internal implementation.
+        let target_usage = image::Usage::COLOR_ATTACHMENT | image::Usage::DEPTH_STENCIL_ATTACHMENT
+            | image::Usage::TRANSFER_DST;
+
         let type_mask_shift = if self.private_caps.heterogeneous_resource_heaps {
             MEM_TYPE_UNIVERSAL_SHIFT
-        } else if usage.can_target() {
+        } else if usage.intersects(target_usage) {
             MEM_TYPE_TARGET_SHIFT
         } else {
             MEM_TYPE_IMAGE_SHIFT
