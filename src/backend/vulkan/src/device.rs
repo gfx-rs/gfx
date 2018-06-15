@@ -12,7 +12,6 @@ use hal::range::RangeArg;
 
 use std::{mem, ptr};
 use std::borrow::Borrow;
-use std::collections::VecDeque;
 use std::ffi::CString;
 use std::ops::Range;
 use std::sync::Arc;
