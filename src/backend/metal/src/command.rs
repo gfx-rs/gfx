@@ -154,7 +154,7 @@ impl State {
         }
     }
 
-    fn make_render_commands(&self) -> Vec<soft::RenderCommand> {
+    fn make_render_commands(&self, aspects: Aspects) -> Vec<soft::RenderCommand> {
         // TODO: re-use storage
         let mut commands = Vec::new();
         // Apply previously bound values for this command buffer
@@ -163,10 +163,14 @@ impl State {
             let clamped = self.clamp_scissor(sr);
             commands.push(soft::RenderCommand::SetScissor(clamped));
         }
-        commands.extend(self.blend_color.map(soft::RenderCommand::SetBlendColor));
-        commands.push(soft::RenderCommand::SetDepthBias(
-            self.rasterizer_state.clone().map(|r| r.depth_bias).unwrap_or_default()
-        ));
+        if aspects.contains(Aspects::COLOR) {
+            commands.extend(self.blend_color.map(soft::RenderCommand::SetBlendColor));
+        }
+        if aspects.contains(Aspects::DEPTH) {
+            commands.push(soft::RenderCommand::SetDepthBias(
+                self.rasterizer_state.clone().map(|r| r.depth_bias).unwrap_or_default()
+            ));
+        }
         if self.render_pso_is_compatible {
             let rast = self.rasterizer_state.clone();
             commands.extend(self.render_pso.as_ref().map(|&(ref pso, _, _)| {
@@ -181,7 +185,9 @@ impl State {
         } else {
             None
         };
-        commands.extend(com.map(soft::RenderCommand::SetDepthStencilDesc));
+        if aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
+            commands.extend(com.map(soft::RenderCommand::SetDepthStencilDesc));
+        }
 
         let stages = [pso::Stage::Vertex, pso::Stage::Fragment];
         for (&stage, resources) in stages.iter().zip(&[&self.resources_vs, &self.resources_fs]) {
@@ -2236,6 +2242,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             msg_send![framebuffer.descriptor, copy]
         };
         let mut num_colors = 0;
+        let mut full_aspects = Aspects::empty();
         let mut inner = self.inner.borrow_mut();
 
         let dummy_value = com::ClearValueRaw {
@@ -2253,6 +2260,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 Some(format) => (format.surface_desc().aspects, Channel::from(format.base_format().1)),
                 None => continue,
             };
+            full_aspects |= aspects;
             if aspects.contains(Aspects::COLOR) {
                 let color_desc = descriptor
                     .color_attachments()
@@ -2292,7 +2300,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .iter()
             .enumerate()
             .filter_map(|(index, ref cat)| cat.frame.clone().map(|f| (index, f)));
-        let init_commands = self.state.make_render_commands();
+        let init_commands = self.state.make_render_commands(full_aspects);
         inner
             .sink()
             .begin_render_pass(descriptor, frames, init_commands);
