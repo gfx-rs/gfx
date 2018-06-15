@@ -9,7 +9,5 @@ members = [
     "src/backend/vulkan",
     "src/hal",
     "src/warden",
-    "src/render",
-    "examples/hal",
-    "examples/render/quad_render",
+    "examples",
 ]
