@@ -464,7 +464,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                         context: device.context.clone(),
                     };
                     group.add_queue(queue);
-                    (QueueFamilyId(0), group)
+                    group
                 })
                 .collect()
         );

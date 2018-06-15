@@ -408,7 +408,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                         swapchain_fn: swapchain_fn.clone(),
                     });
                 }
-                (queue::QueueFamilyId(family_index as _), family_raw)
+                family_raw
             })
             .collect();
 

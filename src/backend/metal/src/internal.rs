@@ -1,13 +1,12 @@
 use metal;
+use hal::backend::FastHashMap;
 use hal::command::ClearColorRaw;
 use hal::format::{Aspects, ChannelType};
 use hal::image::Filter;
 
 use std::mem;
-use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
-
 
 #[derive(Debug)]
 pub struct ClearVertex {
@@ -88,8 +87,8 @@ pub struct ServicePipes {
     ds_write_depth_state: metal::DepthStencilState,
     ds_write_stencil_state: metal::DepthStencilState,
     ds_write_all_state: metal::DepthStencilState,
-    clears: HashMap<ClearKey, metal::RenderPipelineState>,
-    blits: HashMap<BlitKey, metal::RenderPipelineState>,
+    clears: FastHashMap<ClearKey, metal::RenderPipelineState>,
+    blits: FastHashMap<BlitKey, metal::RenderPipelineState>,
     copy_buffer: metal::ComputePipelineState,
     fill_buffer: metal::ComputePipelineState,
 }
@@ -124,8 +123,8 @@ impl ServicePipes {
         let fill_buffer = Self::create_fill_buffer(&library, device);
 
         ServicePipes {
-            clears: HashMap::new(),
-            blits: HashMap::new(),
+            clears: FastHashMap::default(),
+            blits: FastHashMap::default(),
             sampler_nearest,
             sampler_linear,
             ds_write_depth_state,

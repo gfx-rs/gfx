@@ -1,7 +1,7 @@
+use hal::backend::FastHashMap;
 use hal::pso;
 use spirv_cross::hlsl;
 use std::{mem, ptr};
-use std::collections::HashMap;
 use std::sync::Mutex;
 
 use d3d12;
@@ -28,7 +28,7 @@ pub struct BlitData {
 }
 
 pub type BlitKey = (dxgiformat::DXGI_FORMAT, d3d12::D3D12_FILTER);
-type BlitMap = HashMap<BlitKey, BlitPipe>;
+type BlitMap = FastHashMap<BlitKey, BlitPipe>;
 
 pub(crate) struct ServicePipes {
     pub(crate) device: ComPtr<d3d12::ID3D12Device>,
@@ -39,7 +39,7 @@ impl ServicePipes {
     pub fn new(device: ComPtr<d3d12::ID3D12Device>) -> Self {
         ServicePipes {
             device,
-            blits_2d_color: Mutex::new(HashMap::new()),
+            blits_2d_color: Mutex::new(FastHashMap::default()),
         }
     }
 

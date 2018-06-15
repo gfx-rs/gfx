@@ -1,12 +1,12 @@
 
 use hal::{buffer, command as com, format, image, memory, pass, pso, query};
 use hal::{DrawCount, IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use hal::backend::FastHashMap;
 use hal::format::Aspects;
 use hal::range::RangeArg;
 
 use std::{cmp, iter, mem, ptr};
 use std::borrow::Borrow;
-use std::collections::HashMap;
 use std::ops::Range;
 use std::sync::Arc;
 
@@ -1448,7 +1448,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             viewport: d3d12::D3D12_VIEWPORT,
             data: internal::BlitData,
         };
-        let mut instances = HashMap::<internal::BlitKey, Vec<Instance>>::new();
+        let mut instances = FastHashMap::<internal::BlitKey, Vec<Instance>>::default();
         let mut barriers = Vec::new();
 
         for region in regions {

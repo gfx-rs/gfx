@@ -1,6 +1,5 @@
 use std::borrow::Borrow;
 use std::cell::Cell;
-use std::collections::HashMap;
 use std::iter::repeat;
 use std::ops::Range;
 use std::{ptr, mem, slice};
@@ -10,6 +9,7 @@ use gl;
 use gl::types::{GLint, GLenum, GLfloat};
 
 use hal::{self as c, device as d, error, image as i, memory, pass, pso, buffer, mapping, query, window};
+use hal::backend::FastHashMap;
 use hal::format::{ChannelType, Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::QueueFamilyId;
@@ -325,7 +325,7 @@ impl d::Device<B> for Device {
         let limits = self.share.limits.into();
         let memory = if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
             BufferMemory::Individual {
-                storage: HashMap::new(),
+                storage: FastHashMap::default(),
                 next_buffer_id: 0,
             }
         } else {

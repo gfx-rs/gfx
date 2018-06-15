@@ -275,7 +275,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     let mut family = hal::backend::RawQueueGroup::new(proto_family.clone());
                     let queue = queue::CommandQueue::new(&self.0, vao);
                     family.add_queue(queue);
-                    (QueueFamilyId(0), family)
+                    family
                 })
                 .collect()),
         })

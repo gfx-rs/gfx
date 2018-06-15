@@ -6,7 +6,6 @@ use queue::{CommandQueue, QueueType};
 use queue::capability::{Capability, Graphics, Compute};
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::fmt::Debug;
 
 /// General information about a queue family, available upon adapter discovery.
@@ -25,7 +24,7 @@ pub trait QueueFamily: Debug + Any + Send + Sync {
     fn supports_compute(&self) -> bool {
         Compute::supported_by(self.queue_type())
     }
-    ///
+    /// Returns the queue family ID.
     fn id(&self) -> QueueFamilyId;
 }
 
@@ -53,10 +52,10 @@ impl<B: Backend, C: Capability> QueueGroup<B, C> {
     /// # Panics
     ///
     /// Panics if the family doesn't expose required queue capabilities.
-    fn new(id: QueueFamilyId, raw: RawQueueGroup<B>) -> Self {
+    fn new(raw: RawQueueGroup<B>) -> Self {
         assert!(C::supported_by(raw.family.queue_type()));
         QueueGroup {
-            family: id,
+            family: raw.family.id(),
             queues: raw.queues
                 .into_iter()
                 .map(|q| unsafe { CommandQueue::new(q) })
@@ -67,7 +66,7 @@ impl<B: Backend, C: Capability> QueueGroup<B, C> {
 
 /// Contains a list of all instantiated queues. Conceptually structured as a collection of
 /// `QueueGroup`s, one for each queue family.
-pub struct Queues<B: Backend>(pub(crate) HashMap<QueueFamilyId, RawQueueGroup<B>>);
+pub struct Queues<B: Backend>(pub(crate) Vec<RawQueueGroup<B>>);
 
 impl<B: Backend> Queues<B> {
     /// Removes the queue family with the passed id from the queue list and
@@ -77,12 +76,18 @@ impl<B: Backend> Queues<B> {
     ///
     /// Panics if the family doesn't expose required queue capabilities.
     pub fn take<C: Capability>(&mut self, id: QueueFamilyId) -> Option<QueueGroup<B, C>> {
-        self.0.remove(&id).map(|group| QueueGroup::new(id, group))
+        self.0
+            .iter()
+            .position(|raw| raw.family.id() == id)
+            .map(|index| QueueGroup::new(self.0.swap_remove(index)))
     }
 
     /// Removes the queue family with the passed id from the queue list and
     /// returns the command queues.
     pub fn take_raw(&mut self, id: QueueFamilyId) -> Option<Vec<B::CommandQueue>> {
-        self.0.remove(&id).map(|group| group.queues)
+        self.0
+            .iter()
+            .position(|raw| raw.family.id() == id)
+            .map(|index| self.0.swap_remove(index).queues)
     }
 }

@@ -4,7 +4,6 @@ use internal::{BlitVertex, Channel, ClearKey, ClearVertex};
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ops::{Deref, Range};
 use std::sync::{Arc, Mutex};
 use std::{iter, mem};
@@ -12,6 +11,7 @@ use std::slice;
 
 use hal::{buffer, command as com, error, memory, pool, pso};
 use hal::{DrawCount, FrameImage, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
+use hal::backend::FastHashMap;
 use hal::format::{Aspects, Format, FormatDesc};
 use hal::image::{Extent, Filter, Layout, SubresourceRange};
 use hal::pass::{AttachmentLoadOp, AttachmentOps};
@@ -1883,7 +1883,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
-        let mut vertices = HashMap::new(); // a list of vertices per mipmap
+        let mut vertices = FastHashMap::default(); // a list of vertices per mipmap
         let mut frame = None;
         let dst_texture = match dst.root {
             native::ImageRoot::Texture(ref tex) => Some(tex.as_ref()),
@@ -2396,7 +2396,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 native::DescriptorSet::Emulated(ref desc_inner) => {
                     use native::DescriptorSetBinding::*;
                     let set = desc_inner.lock().unwrap();
-                    for (&binding, values) in set.bindings.iter() {
+                    let bindings = set.bindings
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(binding, values)| values.as_ref().map(|v| (binding as u32, v)));
+
+                    for (binding, values) in bindings {
                         let desc_layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
 
                         let mut bind_stages = SmallVec::<[_; 2]>::new();
@@ -2417,7 +2422,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             bind_stages.push((pso::Stage::Fragment, loc, &mut self.state.resources_fs));
                         }
 
-                        match *values {
+                        match values {
                             Sampler(ref samplers) => {
                                 for &mut (stage, ref loc, ref mut resources) in &mut bind_stages {
                                     let start = layout.res_overrides[loc].sampler_id as usize;
@@ -2576,7 +2581,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 native::DescriptorSet::Emulated(ref desc_inner) => {
                     use native::DescriptorSetBinding::*;
                     let set = desc_inner.lock().unwrap();
-                    for (&binding, values) in set.bindings.iter() {
+                    let bindings = set.bindings
+                        .iter()
+                        .enumerate()
+                        .filter_map(|(binding, values)| values.as_ref().map(|v| (binding as u32, v)));
+
+                    for (binding, values) in bindings {
                         let desc_layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
 
                         if desc_layout.stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
@@ -2584,7 +2594,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 binding: binding as _,
                                 .. location_cs
                             }];
-                            match *values {
+                            match values {
                                 Sampler(ref samplers) => {
                                     let start = res.sampler_id as usize;
                                     resources.add_samplers(start, samplers.as_slice());

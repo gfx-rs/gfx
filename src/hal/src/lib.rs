@@ -8,6 +8,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate failure;
 extern crate smallvec;
+extern crate fxhash;
 
 #[cfg(feature = "mint")]
 extern crate mint;

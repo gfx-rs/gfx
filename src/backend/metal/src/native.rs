@@ -1,13 +1,14 @@
-use {Backend};
+use Backend;
 use internal::Channel;
 use window::SwapchainInner;
 
-use std::collections::{HashMap};
+use std::collections::HashMap;
 use std::ops::{Deref, Range};
 use std::os::raw::{c_void, c_long};
 use std::sync::{Arc, Condvar, Mutex, RwLock, RwLockReadGuard};
 
 use hal::{self, image, pso};
+use hal::backend::FastHashMap;
 use hal::format::{Aspects, Format, FormatDesc};
 
 use cocoa::foundation::{NSUInteger};
@@ -23,7 +24,7 @@ use range_alloc::RangeAllocator;
 pub enum ShaderModule {
     Compiled {
         library: metal::Library,
-        entry_point_map: HashMap<String, spirv::EntryPoint>,
+        entry_point_map: FastHashMap<String, spirv::EntryPoint>,
     },
     Raw(Vec<u8>),
 }
@@ -122,7 +123,7 @@ impl Default for DepthStencilState {
     }
 }
 
-pub type VertexBufferMap = HashMap<(pso::BufferIndex, pso::ElemOffset), pso::VertexBufferDesc>;
+pub type VertexBufferMap = FastHashMap<(pso::BufferIndex, pso::ElemOffset), pso::VertexBufferDesc>;
 
 #[derive(Debug)]
 pub struct GraphicsPipeline {
@@ -291,7 +292,10 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 };
                 let mut sampler_offset = 0;
 
-                let bindings = layout_bindings.iter().map(|layout| {
+                // Assume some reasonable starting capacity
+                let mut bindings = Vec::with_capacity(layout_bindings.len());
+
+                for layout in layout_bindings.iter() {
                     let binding = match layout.ty {
                         pso::DescriptorType::Sampler => {
                             DescriptorSetBinding::Sampler(if layout.immutable_samplers {
@@ -333,8 +337,18 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                             DescriptorSetBinding::Buffer(vec![BufferBinding { base: None, dynamic: true }; layout.count])
                         }
                     };
-                    (layout.binding, binding)
-                }).collect();
+
+                    let layout_binding = layout.binding as usize;
+
+                    if bindings.len() <= layout_binding {
+                        bindings.resize(layout_binding + 1, None);
+                    }
+
+                    bindings[layout_binding] = Some(binding);
+                }
+
+                // The set may be held onto for a long time, so attempt to shrink to avoid large overallocations
+                bindings.shrink_to_fit();
 
                 let inner = DescriptorSetInner {
                     layout: layout_bindings.to_vec(),
@@ -422,7 +436,8 @@ unsafe impl Sync for DescriptorSet {}
 #[derive(Debug)]
 pub struct DescriptorSetInner {
     pub(crate) layout: Vec<pso::DescriptorSetLayoutBinding>, // TODO: maybe don't clone?
-    pub(crate) bindings: HashMap<pso::DescriptorBinding, DescriptorSetBinding>,
+    // The index of `bindings` is `pso::DescriptorBinding`
+    pub(crate) bindings: Vec<Option<DescriptorSetBinding>>,
 }
 unsafe impl Send for DescriptorSetInner {}
 
@@ -432,7 +447,7 @@ pub struct BufferBinding {
     pub dynamic: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum DescriptorSetBinding {
     Sampler(Vec<Option<metal::SamplerState>>),
     Image(Vec<Option<(ImageRoot, image::Layout)>>),

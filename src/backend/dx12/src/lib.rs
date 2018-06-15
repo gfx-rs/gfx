@@ -25,7 +25,7 @@ mod root_constants;
 mod window;
 
 use hal::{error, format as f, image, memory, Features, FrameImage, Limits, QueueType};
-use hal::queue::{QueueFamily as HalQueueFamily, QueueFamilyId, Queues};
+use hal::queue::{QueueFamilyId, Queues};
 use descriptors_cpu::DescriptorCpuPool;
 
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
@@ -309,7 +309,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     }
                 }
 
-                (family.id(), group)
+                group
             })
             .collect();
 
