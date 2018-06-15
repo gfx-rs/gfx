@@ -4,7 +4,6 @@ use internal::{BlitVertex, Channel, ClearKey, ClearVertex};
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ops::{Deref, Range};
 use std::sync::{Arc, Mutex};
 use std::{iter, mem};
@@ -12,6 +11,7 @@ use std::slice;
 
 use hal::{buffer, command as com, error, memory, pool, pso};
 use hal::{DrawCount, FrameImage, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
+use hal::backend::FastHashMap;
 use hal::format::{Aspects, Format, FormatDesc};
 use hal::image::{Extent, Filter, Layout, SubresourceRange};
 use hal::pass::{AttachmentLoadOp, AttachmentOps};
@@ -1883,7 +1883,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
-        let mut vertices = HashMap::new(); // a list of vertices per mipmap
+        let mut vertices = FastHashMap::default(); // a list of vertices per mipmap
         let mut frame = None;
         let dst_texture = match dst.root {
             native::ImageRoot::Texture(ref tex) => Some(tex.as_ref()),

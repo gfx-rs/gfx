@@ -1,9 +1,9 @@
 use hal::{self, pool};
+use hal::backend::FastHashMap;
 use command::{self, Command, RawCommandBuffer};
 use native as n;
 use Backend;
 
-use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 
@@ -47,7 +47,7 @@ pub enum BufferMemory {
     // Storing the memory for each command buffer separately to allow individual
     // command buffer resets.
     Individual {
-        storage: HashMap<u64, OwnedBuffer>,
+        storage: FastHashMap<u64, OwnedBuffer>,
         next_buffer_id: u64,
     },
 }

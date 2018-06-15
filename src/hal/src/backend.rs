@@ -4,6 +4,9 @@ use Backend;
 use queue::{QueueFamily, QueueFamilyId, Queues};
 
 use std::collections::HashMap;
+use std::hash::BuildHasherDefault;
+
+use fxhash::FxHasher;
 
 /// Bare-metal queue group.
 ///
@@ -37,7 +40,10 @@ impl<B: Backend> RawQueueGroup<B> {
 
 impl<B: Backend> Queues<B> {
     /// Create a new collection of queues.
-    pub fn new(queues: HashMap<QueueFamilyId, RawQueueGroup<B>>) -> Self {
+    pub fn new(queues: FastHashMap<QueueFamilyId, RawQueueGroup<B>>) -> Self {
         Queues(queues)
     }
 }
+
+/// Fast hash map used internally.
+pub type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;

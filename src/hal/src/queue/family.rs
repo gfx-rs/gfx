@@ -1,12 +1,12 @@
 //! Queue family and groups.
 
 use Backend;
+use backend::FastHashMap;
 use backend::RawQueueGroup;
 use queue::{CommandQueue, QueueType};
 use queue::capability::{Capability, Graphics, Compute};
 
 use std::any::Any;
-use std::collections::HashMap;
 use std::fmt::Debug;
 
 /// General information about a queue family, available upon adapter discovery.
@@ -67,7 +67,7 @@ impl<B: Backend, C: Capability> QueueGroup<B, C> {
 
 /// Contains a list of all instantiated queues. Conceptually structured as a collection of
 /// `QueueGroup`s, one for each queue family.
-pub struct Queues<B: Backend>(pub(crate) HashMap<QueueFamilyId, RawQueueGroup<B>>);
+pub struct Queues<B: Backend>(pub(crate) FastHashMap<QueueFamilyId, RawQueueGroup<B>>);
 
 impl<B: Backend> Queues<B> {
     /// Removes the queue family with the passed id from the queue list and

@@ -13,6 +13,7 @@ use std::sync::{Arc, Condvar, Mutex};
 use std::{cmp, mem, slice, time};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query, window};
+use hal::backend::FastHashMap;
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
@@ -336,7 +337,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             memory_types: self.memory_types,
         };
 
-        let mut queues = HashMap::new();
+        let mut queues = FastHashMap::default();
         queues.insert(id, queue_group);
 
         Ok(hal::Gpu {
@@ -493,7 +494,7 @@ impl Device {
         {
             Ok(library) => Ok(n::ShaderModule::Compiled {
                 library,
-                entry_point_map: HashMap::new(),
+                entry_point_map: FastHashMap::default(),
             }),
             Err(err) => Err(ShaderError::CompilationFailed(err.into())),
         }
@@ -504,7 +505,7 @@ impl Device {
         raw_data: &[u8],
         primitive_class: MTLPrimitiveTopologyClass,
         overrides: &HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
-    ) -> Result<(metal::Library, HashMap<String, spirv::EntryPoint>), ShaderError> {
+    ) -> Result<(metal::Library, FastHashMap<String, spirv::EntryPoint>), ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
 
@@ -554,7 +555,7 @@ impl Device {
                 ShaderError::CompilationFailed(msg)
             })?;
 
-        let mut entry_point_map = HashMap::new();
+        let mut entry_point_map = FastHashMap::default();
         for entry_point in entry_points {
             info!("Entry point {:?}", entry_point);
             let cleansed = ast.get_cleansed_entry_point_name(&entry_point.name, entry_point.execution_model)
@@ -960,7 +961,7 @@ impl hal::Device<Backend> for Device {
 
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();
-        let mut vertex_buffer_map = n::VertexBufferMap::new();
+        let mut vertex_buffer_map = n::VertexBufferMap::default();
         let mut next_buffer_index = pipeline_layout.attribute_buffer_index;
         trace!("Vertex attribute remapping started");
 
