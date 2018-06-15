@@ -292,7 +292,10 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 };
                 let mut sampler_offset = 0;
 
-                let bindings = layout_bindings.iter().map(|layout| {
+                // Assume some reasonable starting capacity
+                let mut bindings = Vec::with_capacity(layout_bindings.len());
+
+                for layout in layout_bindings.iter() {
                     let binding = match layout.ty {
                         pso::DescriptorType::Sampler => {
                             DescriptorSetBinding::Sampler(if layout.immutable_samplers {
@@ -334,8 +337,18 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                             DescriptorSetBinding::Buffer(vec![BufferBinding { base: None, dynamic: true }; layout.count])
                         }
                     };
-                    (layout.binding, binding)
-                }).collect();
+
+                    let layout_binding = layout.binding as usize;
+
+                    if bindings.len() <= layout_binding {
+                        bindings.resize(layout_binding + 1, None);
+                    }
+
+                    bindings[layout_binding] = Some(binding);
+                }
+
+                // The set may be held onto for a long time, so attempt to shrink to avoid large overallocations
+                bindings.shrink_to_fit();
 
                 let inner = DescriptorSetInner {
                     layout: layout_bindings.to_vec(),
@@ -423,7 +436,8 @@ unsafe impl Sync for DescriptorSet {}
 #[derive(Debug)]
 pub struct DescriptorSetInner {
     pub(crate) layout: Vec<pso::DescriptorSetLayoutBinding>, // TODO: maybe don't clone?
-    pub(crate) bindings: FastHashMap<pso::DescriptorBinding, DescriptorSetBinding>,
+    // The index of `bindings` is `pso::DescriptorBinding`
+    pub(crate) bindings: Vec<Option<DescriptorSetBinding>>,
 }
 unsafe impl Send for DescriptorSetInner {}
 
@@ -433,7 +447,7 @@ pub struct BufferBinding {
     pub dynamic: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum DescriptorSetBinding {
     Sampler(Vec<Option<metal::SamplerState>>),
     Image(Vec<Option<(ImageRoot, image::Layout)>>),

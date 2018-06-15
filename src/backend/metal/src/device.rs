@@ -1439,7 +1439,8 @@ impl hal::Device<Backend> for Device {
                             array_offset = 0;
                             binding += 1;
                         }
-                        match (descriptor.borrow(), set.bindings.get_mut(&binding).unwrap()) {
+
+                        match (descriptor.borrow(), set.bindings[binding as usize].as_mut().unwrap()) {
                             (&pso::Descriptor::Sampler(sampler), &mut n::DescriptorSetBinding::Sampler(ref mut vec)) => {
                                 vec[array_offset] = Some(sampler.0.clone());
                             }
