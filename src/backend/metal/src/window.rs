@@ -161,6 +161,10 @@ impl Device {
         let nsview = surface.inner.nsview;
         let format_desc = config.color_format.surface_desc();
         let framebuffer_only = config.image_usage == image::Usage::COLOR_ATTACHMENT;
+        let display_sync = match config.present_mode {
+            hal::PresentMode::Immediate => false,
+            _ => true,
+        };
         let device = self.shared.device.lock().unwrap();
         let device_raw: &metal::DeviceRef = &*device;
 
@@ -168,6 +172,8 @@ impl Device {
             msg_send![render_layer, setDevice: device_raw];
             msg_send![render_layer, setPixelFormat: mtl_format];
             msg_send![render_layer, setFramebufferOnly: framebuffer_only];
+            //TODO: only set it where supported
+            msg_send![render_layer, setDisplaySyncEnabled: display_sync];
 
             // Update render layer size
             let view_points_size: CGRect = msg_send![nsview, bounds];

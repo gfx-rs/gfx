@@ -155,6 +155,20 @@ pub enum FrameSync<'a, B: Backend> {
     Fence(&'a B::Fence),
 }
 
+/// Specifies the mode regulating how a swapchain presents frames.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum PresentMode {
+    /// Don't ever wait for v-sync.
+    Immediate = 0,
+    /// Wait for v-sync, overwrite the last rendered frame.
+    Mailbox = 1,
+    /// Present frames in the same order they are rendered.
+    Fifo = 2,
+    /// Don't wait for the next v-sync if we just missed it.
+    Relaxed = 3,
+}
+
 /// Contains all the data necessary to create a new `Swapchain`:
 /// color, depth, and number of images.
 ///
@@ -176,6 +190,8 @@ pub enum FrameSync<'a, B: Backend> {
 /// ```
 #[derive(Debug, Clone)]
 pub struct SwapchainConfig {
+    /// Presentation mode.
+    pub present_mode: PresentMode,
     /// Color format of the backbuffer images.
     pub color_format: Format,
     /// Depth stencil format of the backbuffer images (optional).
@@ -196,11 +212,24 @@ impl SwapchainConfig {
     /// ```
     pub fn new() -> Self {
         SwapchainConfig {
+            present_mode: PresentMode::Fifo,
             color_format: Format::Bgra8Unorm, // TODO: try to find best default format
             depth_stencil_format: None,
             image_count: 2,
             image_usage: image::Usage::empty(),
         }
+    }
+
+    /// Specify the presentation mode.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
+    pub fn with_mode(mut self, mode: PresentMode) -> Self {
+        self.present_mode = mode;
+        self
     }
 
     /// Specify the color format for the backbuffer images.
