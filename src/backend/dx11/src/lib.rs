@@ -607,7 +607,9 @@ impl hal::Surface<Backend> for Surface {
         image::Kind::D2(self.width, self.height, 1, 1)
     }
 
-    fn capabilities_and_formats(&self, _: &PhysicalDevice) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>) {
+    fn compatibility(
+        &self, _: &PhysicalDevice
+    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>) {
         let extent = hal::window::Extent2D {
             width: self.width,
             height: self.height,
@@ -632,7 +634,11 @@ impl hal::Surface<Backend> for Surface {
             format::Format::Rgba16Float,
         ];
 
-        (capabilities, Some(formats))
+        let present_modes = vec![
+            hal::PresentMode::Fifo //TODO
+        ];
+
+        (capabilities, Some(formats), present_modes)
     }
 
 }

@@ -31,6 +31,7 @@ bitflags!(
 );
 
 /// Type of queries in a query pool.
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
 pub enum QueryType {
     /// Occlusion query. Count the number of drawn samples between
     /// the start and end of the query command.

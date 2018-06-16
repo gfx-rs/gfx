@@ -569,8 +569,7 @@ fn swapchain_stuff(
     <back::Backend as hal::Backend>::PipelineLayout,
     Extent2D,
 ) {
-    let (caps, formats) = surface
-        .capabilities_and_formats(physical_device);
+    let (caps, formats, _present_modes) = surface.compatibility(physical_device);
     let format = formats.
         map_or(f::Format::Rgba8Srgb, |formats| {
             formats

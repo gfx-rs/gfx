@@ -294,7 +294,9 @@ impl hal::Surface<Backend> for Surface {
         hal::image::Kind::D2(self.width, self.height, 1, self.samples)
     }
 
-    fn capabilities_and_formats(&self, physical_device: &PhysicalDevice) -> (hal::SurfaceCapabilities, Option<Vec<Format>>) {
+    fn compatibility(
+        &self, physical_device: &PhysicalDevice
+    ) -> (hal::SurfaceCapabilities, Option<Vec<Format>>, Vec<hal::PresentMode>) {
         // Capabilities
         let caps =
             self.raw.functor.get_physical_device_surface_capabilities_khr(
@@ -348,14 +350,24 @@ impl hal::Surface<Backend> for Surface {
             vk::Format::Undefined => None,
             _ => {
                 Some(formats
-                    .iter()
+                    .into_iter()
                     .filter_map(|sf| conv::map_vk_format(sf.format))
                     .collect()
                 )
             }
         };
 
-        (capabilities, formats)
+        let present_modes =
+            self.raw.functor.get_physical_device_surface_present_modes_khr(
+                physical_device.handle,
+                self.raw.handle,
+            ).expect("Unable to query present modes");
+        let present_modes = present_modes
+            .into_iter()
+            .map(conv::map_vk_present_mode)
+            .collect();
+
+        (capabilities, formats, present_modes)
     }
 
     fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {

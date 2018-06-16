@@ -1457,9 +1457,6 @@ impl d::Device<B> for Device {
         let functor = ext::Swapchain::new(&surface.raw.instance.0, &self.raw.0)
             .expect("Unable to query swapchain function");
 
-        // TODO: check for better ones if available
-        let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
-
         // TODO: handle depth stencil
         let format = config.color_format;
 
@@ -1490,7 +1487,7 @@ impl d::Device<B> for Device {
             p_queue_family_indices: ptr::null(),
             pre_transform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
             composite_alpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
-            present_mode: present_mode,
+            present_mode: unsafe { mem::transmute(config.present_mode) },
             clipped: 1,
             old_swapchain,
         };
