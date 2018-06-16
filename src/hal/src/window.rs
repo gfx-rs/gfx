@@ -122,14 +122,16 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
     /// ```
     fn supports_queue_family(&self, family: &B::QueueFamily) -> bool;
 
-    /// Query surface capabilities and formats for this physical device.
+    /// Query surface capabilities, formats, and present modes for this physical device.
     ///
     /// Use this function for configuring swapchain creation.
     ///
     /// Returns a tuple of surface capabilities and formats.
     /// If formats is `None` than the surface has no preferred format and the
     /// application may use any desired format.
-    fn capabilities_and_formats(&self, physical_device: &B::PhysicalDevice) -> (SurfaceCapabilities, Option<Vec<Format>>);
+    fn compatibility(
+        &self, physical_device: &B::PhysicalDevice
+    ) -> (SurfaceCapabilities, Option<Vec<Format>>, Vec<PresentMode>);
 }
 
 /// Index of an image in the swapchain.

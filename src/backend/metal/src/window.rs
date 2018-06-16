@@ -106,9 +106,9 @@ impl hal::Surface<Backend> for Surface {
         image::Kind::D2(width, height, 1, 1)
     }
 
-    fn capabilities_and_formats(
+    fn compatibility(
         &self, _: &PhysicalDevice,
-    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>) {
+    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>) {
         let render_layer_borrow = self.inner.render_layer.lock().unwrap();
         let render_layer = *render_layer_borrow;
         let max_frames: u64 = unsafe {
@@ -127,7 +127,12 @@ impl hal::Surface<Backend> for Surface {
             format::Format::Bgra8Srgb,
             format::Format::Rgba16Float,
         ];
-        (caps, Some(formats))
+        let present_modes = vec![
+            hal::PresentMode::Fifo,
+            hal::PresentMode::Immediate,
+        ];
+
+        (caps, Some(formats), present_modes)
     }
 
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
