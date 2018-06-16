@@ -166,7 +166,7 @@ fn create_depth_stencil_state(
             raw.set_front_face_stencil(Some(&front_desc));
 
             let back_desc = metal::StencilDescriptor::new();
-            back_desc.set_stencil_compare_function(conv::map_compare_function(back.fun));    
+            back_desc.set_stencil_compare_function(conv::map_compare_function(back.fun));
 
             dss.stencil.back_read_mask = back.mask_read;
             match back.mask_read {
@@ -1667,22 +1667,22 @@ impl hal::Device<Backend> for Device {
 
     fn create_buffer_view<R: RangeArg<u64>>(
         &self, buffer: &n::Buffer, format_maybe: Option<format::Format>, range: R
-    ) -> Result<n::BufferView, buffer::ViewError> {
+    ) -> Result<n::BufferView, buffer::ViewCreationError> {
         let start = buffer.range.start + *range.start().unwrap_or(&0);
         let end_rough = *range.end().unwrap_or(&buffer.raw.length());
         let format = match format_maybe {
             Some(fmt) => fmt,
-            None => return Err(buffer::ViewError::Unsupported),
+            None => return Err(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe }),
         };
         let format_desc = format.surface_desc();
         if format_desc.aspects != format::Aspects::COLOR {
             // no depth/stencil support for buffer views here
-            return Err(buffer::ViewError::Unsupported)
+            return Err(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe })
         }
         let block_count = (end_rough - start) * 8 / format_desc.bits as u64;
         let mtl_format = self.private_caps
             .map_format(format)
-            .ok_or(buffer::ViewError::Unsupported)?;
+            .ok_or(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe })?;
 
         let descriptor = metal::TextureDescriptor::new();
         descriptor.set_texture_type(MTLTextureType::D2);

@@ -1910,14 +1910,14 @@ impl d::Device<B> for Device {
         buffer: &n::Buffer,
         format: Option<format::Format>,
         range: R,
-    ) -> Result<n::BufferView, buffer::ViewError> {
+    ) -> Result<n::BufferView, buffer::ViewCreationError> {
         let buffer_features = {
             let idx = format.map(|fmt| fmt as usize).unwrap_or(0);
             self.format_properties[idx].buffer_features
         };
         let (format, format_desc) = match format.and_then(conv::map_format) {
             Some(fmt) => (fmt, format.unwrap().surface_desc()),
-            None => return Err(buffer::ViewError::Unsupported),
+            None => return Err(buffer::ViewCreationError::UnsupportedFormat { format }),
         };
 
         let start = *range.start().unwrap_or(&0);

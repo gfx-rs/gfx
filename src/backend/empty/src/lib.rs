@@ -177,7 +177,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_buffer_view<R: RangeArg<u64>>(&self, _: &(), _: Option<format::Format>, _: R) -> Result<(), buffer::ViewError> {
+    fn create_buffer_view<R: RangeArg<u64>>(&self, _: &(), _: Option<format::Format>, _: R) -> Result<(), buffer::ViewCreationError> {
         unimplemented!()
     }
 

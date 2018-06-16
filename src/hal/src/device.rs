@@ -1,3 +1,5 @@
+//! Logical device
+//!
 //! # Device
 //!
 //! This module exposes the `Device` trait, which provides methods for creating
@@ -306,7 +308,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     fn create_buffer_view<R: RangeArg<u64>>(
         &self, buf: &B::Buffer, fmt: Option<format::Format>, range: R
-    ) -> Result<B::BufferView, buffer::ViewError>;
+    ) -> Result<B::BufferView, buffer::ViewCreationError>;
 
     ///
     fn destroy_buffer_view(&self, view: B::BufferView);

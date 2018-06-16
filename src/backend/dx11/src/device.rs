@@ -666,7 +666,7 @@ impl hal::Device<Backend> for Device {
         buffer: &Buffer,
         format: Option<format::Format>,
         range: R,
-    ) -> Result<BufferView, buffer::ViewError> {
+    ) -> Result<BufferView, buffer::ViewCreationError> {
         unimplemented!()
     }
 

@@ -672,8 +672,7 @@ impl d::Device<B> for Device {
     ) -> Result<UnboundBuffer, buffer::CreationError> {
         if !self.share.legacy_features.contains(LegacyFeatures::CONSTANT_BUFFER) &&
             usage.contains(buffer::Usage::UNIFORM) {
-            error!("Constant buffers are not supported by this GL version");
-            return Err(buffer::CreationError::Other);
+            return Err(buffer::CreationError::UnsupportedUsage { usage });
         }
 
         let target = if self.share.private_caps.buffer_role_change {
@@ -681,7 +680,7 @@ impl d::Device<B> for Device {
         } else {
             match conv::buffer_usage_to_gl_target(usage) {
                 Some(target) => target,
-                None => return Err(buffer::CreationError::Usage(usage)),
+                None => return Err(buffer::CreationError::UnsupportedUsage { usage }),
             }
         };
 
@@ -838,7 +837,7 @@ impl d::Device<B> for Device {
 
     fn create_buffer_view<R: RangeArg<u64>>(
         &self, _: &n::Buffer, _: Option<Format>, _: R
-    ) -> Result<n::BufferView, buffer::ViewError> {
+    ) -> Result<n::BufferView, buffer::ViewCreationError> {
         unimplemented!()
     }
 
