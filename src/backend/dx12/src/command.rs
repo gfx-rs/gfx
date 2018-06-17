@@ -10,6 +10,7 @@ use std::borrow::Borrow;
 use std::ops::Range;
 use std::sync::Arc;
 
+use winapi::Interface;
 use winapi::um::{d3d12, d3dcommon};
 use winapi::shared::minwindef::{FALSE, UINT, TRUE};
 use winapi::shared::{dxgiformat, winerror};
@@ -2005,7 +2006,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     &desc,
                     d3d12::D3D12_RESOURCE_STATE_COMMON,
                     ptr::null(),
-                    &d3d12::IID_ID3D12Resource,
+                    &d3d12::ID3D12Resource::uuidof(),
                     &mut alias,
                 )
             });

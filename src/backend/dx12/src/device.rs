@@ -500,7 +500,7 @@ impl Device {
             device.CreateCommandSignature(
                 &desc,
                 ptr::null_mut(),
-                &d3d12::IID_ID3D12CommandSignature,
+                &d3d12::ID3D12CommandSignature::uuidof(),
                 &mut signature as *mut *mut _ as *mut *mut _,
             )
         };
@@ -535,7 +535,7 @@ impl Device {
         let descriptor_size = unsafe {
             device.CreateDescriptorHeap(
                 &desc,
-                &d3d12::IID_ID3D12DescriptorHeap,
+                &d3d12::ID3D12DescriptorHeap::uuidof(),
                 &mut heap as *mut *mut _ as *mut *mut _,
             );
             device.GetDescriptorHandleIncrementSize(heap_type) as usize
@@ -955,7 +955,7 @@ impl Device {
             self.raw.clone().CreateFence(
                 if signalled { 1 } else { 0 },
                 d3d12::D3D12_FENCE_FLAG_NONE,
-                &d3d12::IID_ID3D12Fence,
+                &d3d12::ID3D12Fence::uuidof(),
                 &mut handle,
             )
         });
@@ -1000,7 +1000,7 @@ impl d::Device<B> for Device {
 
         let mut heap = ptr::null_mut();
         let hr = unsafe {
-            self.raw.clone().CreateHeap(&desc, &d3d12::IID_ID3D12Heap, &mut heap)
+            self.raw.clone().CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), &mut heap)
         };
         if hr == winerror::E_OUTOFMEMORY {
             return Err(d::OutOfMemory);
@@ -1067,7 +1067,7 @@ impl d::Device<B> for Device {
         let hr = unsafe {
             self.raw.clone().CreateCommandAllocator(
                 list_type,
-                &d3d12::IID_ID3D12CommandAllocator,
+                &d3d12::ID3D12CommandAllocator::uuidof(),
                 &mut command_allocator as *mut *mut _ as *mut *mut _,
             )
         };
@@ -1456,7 +1456,7 @@ impl d::Device<B> for Device {
                 0,
                 (*signature_raw).GetBufferPointer(),
                 (*signature_raw).GetBufferSize(),
-                &d3d12::IID_ID3D12RootSignature,
+                &d3d12::ID3D12RootSignature::uuidof(),
                 &mut signature as *mut *mut _ as *mut *mut _,
             );
             (*signature_raw).Release();
@@ -1677,7 +1677,7 @@ impl d::Device<B> for Device {
                     unsafe {
                         device2.CreatePipelineState(
                             &pss_desc,
-                            &d3d12::IID_ID3D12PipelineState,
+                            &d3d12::ID3D12PipelineState::uuidof(),
                             &mut pipeline as *mut *mut _ as *mut *mut _)
                     }
                 }
@@ -1686,7 +1686,7 @@ impl d::Device<B> for Device {
             unsafe {
                 self.raw.clone().CreateGraphicsPipelineState(
                     &pso_desc,
-                    &d3d12::IID_ID3D12PipelineState,
+                    &d3d12::ID3D12PipelineState::uuidof(),
                     &mut pipeline as *mut *mut _ as *mut *mut _)
             }
         };
@@ -1747,7 +1747,7 @@ impl d::Device<B> for Device {
         let hr = unsafe {
             self.raw.clone().CreateComputePipelineState(
                 &pso_desc,
-                &d3d12::IID_ID3D12PipelineState,
+                &d3d12::ID3D12PipelineState::uuidof(),
                 &mut pipeline as *mut *mut _ as *mut *mut _)
         };
 
@@ -1864,7 +1864,7 @@ impl d::Device<B> for Device {
                 &desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
-                &d3d12::IID_ID3D12Resource,
+                &d3d12::ID3D12Resource::uuidof(),
                 &mut resource,
             )
         });
@@ -2131,7 +2131,7 @@ impl d::Device<B> for Device {
                 &image.desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
-                &d3d12::IID_ID3D12Resource,
+                &d3d12::ID3D12Resource::uuidof(),
                 &mut resource,
             )
         });
@@ -2841,7 +2841,7 @@ impl d::Device<B> for Device {
         assert_eq!(winerror::S_OK, unsafe {
             self.raw.clone().CreateQueryHeap(
                 &desc,
-                &d3d12::IID_ID3D12QueryHeap,
+                &d3d12::ID3D12QueryHeap::uuidof(),
                 &mut handle,
             )
         });
@@ -2999,7 +2999,7 @@ impl d::Device<B> for Device {
             unsafe {
                 swap_chain.GetBuffer(
                     i as _,
-                    &d3d12::IID_ID3D12Resource,
+                    &d3d12::ID3D12Resource::uuidof(),
                     &mut resource as *mut *mut _ as *mut *mut _);
             }
 
