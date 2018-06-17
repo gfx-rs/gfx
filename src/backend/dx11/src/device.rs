@@ -46,7 +46,7 @@ impl Device {
             raw: device.clone(),
             context,
             memory_properties,
-            internal: internal::Internal::new(device)
+            internal: internal::Internal::new(&device)
         }
     }
 
@@ -613,7 +613,8 @@ impl hal::Device<Backend> for Device {
             };
 
             if !winerror::SUCCEEDED(hr) {
-                // TODO: better errors
+                error!("CreateShaderResourceView failed: 0x{:x}", hr);
+
                 return Err(device::BindError::WrongMemory);
             }
 
@@ -644,7 +645,8 @@ impl hal::Device<Backend> for Device {
             };
 
             if !winerror::SUCCEEDED(hr) {
-                // TODO: better errors
+                error!("CreateUnorderedAccessView failed: 0x{:x}", hr);
+
                 return Err(device::BindError::WrongMemory);
             }
 
@@ -701,7 +703,8 @@ impl hal::Device<Backend> for Device {
            usage.contains(Usage::SAMPLED) ||
            usage.contains(Usage::STORAGE) { bind |= d3d11::D3D11_BIND_SHADER_RESOURCE; }
 
-        if usage.contains(Usage::COLOR_ATTACHMENT) { bind |= d3d11::D3D11_BIND_RENDER_TARGET; }
+        if usage.contains(Usage::COLOR_ATTACHMENT) ||
+           usage.contains(Usage::TRANSFER_DST) { bind |= d3d11::D3D11_BIND_RENDER_TARGET; }
         if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) { bind |= d3d11::D3D11_BIND_DEPTH_STENCIL; }
 
         // TODO: how to do buffer copies
@@ -793,7 +796,8 @@ impl hal::Device<Backend> for Device {
                 };
 
                 if !winerror::SUCCEEDED(hr) {
-                    // TODO: better errors
+                    error!("CreateTexture2D failed: 0x{:x}", hr);
+
                     return Err(device::BindError::WrongMemory);
                 }
 
@@ -818,7 +822,8 @@ impl hal::Device<Backend> for Device {
             };
 
             if !winerror::SUCCEEDED(hr) {
-                // TODO: better errors
+                error!("CreateUnorderedAccessView failed: 0x{:x}", hr);
+
                 return Err(device::BindError::WrongMemory);
             }
 
@@ -827,7 +832,7 @@ impl hal::Device<Backend> for Device {
             None
         };
 
-        let srv = if image.usage.contains(image::Usage::TRANSFER_SRC) {
+        let (copy_srv, srv) = if image.usage.contains(image::Usage::TRANSFER_SRC) {
             let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC>() };
             desc.Format = typed_raw_format;
             desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2D;
@@ -836,6 +841,23 @@ impl hal::Device<Backend> for Device {
                 MostDetailedMip: 0,
                 MipLevels: 1,
             };
+
+            let mut copy_srv = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateShaderResourceView(
+                    resource,
+                    &desc,
+                    &mut copy_srv as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                error!("CreateShaderResourceView failed: 0x{:x}", hr);
+
+                return Err(device::BindError::WrongMemory);
+            }
+
+            desc.Format = dxgi_format;
 
             let mut srv = ptr::null_mut();
             let hr = unsafe {
@@ -847,21 +869,27 @@ impl hal::Device<Backend> for Device {
             };
 
             if !winerror::SUCCEEDED(hr) {
-                // TODO: better errors
+                error!("CreateShaderResourceView failed: 0x{:x}", hr);
+
                 return Err(device::BindError::WrongMemory);
             }
 
-            Some(unsafe { ComPtr::from_raw(srv) })
+            unsafe { (Some(ComPtr::from_raw(copy_srv)), Some(ComPtr::from_raw(srv))) }
         } else {
-            None
+            (None, None)
         };
 
-        let rtv = if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
+        let rtv = if image.usage.contains(image::Usage::COLOR_ATTACHMENT) ||
+                     image.usage.contains(image::Usage::TRANSFER_DST) {
+            let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_RENDER_TARGET_VIEW_DESC>() };
+            desc.Format = dxgi_format;
+            desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
+
             let mut rtv = ptr::null_mut();
             let hr = unsafe {
                 self.raw.CreateRenderTargetView(
                     resource,
-                    ptr::null_mut(),
+                    &desc,
                     &mut rtv as *mut *mut _ as *mut *mut _
                 )
             };
@@ -877,6 +905,7 @@ impl hal::Device<Backend> for Device {
 
         let internal = InternalImage {
             raw: resource,
+            copy_srv,
             srv,
             uav,
             rtv,
@@ -885,6 +914,7 @@ impl hal::Device<Backend> for Device {
         Ok(Image {
             kind: image.kind,
             usage: image.usage,
+            format: image.format,
             storage_flags: image.flags,
             dxgi_format,
             typed_raw_format,
@@ -1065,7 +1095,8 @@ impl hal::Device<Backend> for Device {
 
             Ok(unsafe { ptr.offset(*range.start().unwrap_or(&0) as isize) })
         } else {
-            // TODO: better error
+            error!("Tried to map non-host visible memory");
+
             Err(mapping::Error::InvalidAccess)
         }
     }
@@ -1165,11 +1196,11 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_render_pass(&self, _rp: RenderPass) {
-        unimplemented!()
+        //unimplemented!()
     }
 
     fn destroy_pipeline_layout(&self, layout: PipelineLayout) {
-        unimplemented!()
+        //unimplemented!()
     }
 
     fn destroy_graphics_pipeline(&self, pipeline: GraphicsPipeline) {
@@ -1180,7 +1211,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_framebuffer(&self, _fb: Framebuffer) {
-        unimplemented!()
+        //unimplemented!()
     }
 
     fn destroy_buffer(&self, buffer: Buffer) {
@@ -1196,18 +1227,18 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_image_view(&self, _view: ImageView) {
-        unimplemented!()
+        //unimplemented!()
     }
 
     fn destroy_sampler(&self, _sampler: Sampler) {
     }
 
     fn destroy_descriptor_pool(&self, pool: DescriptorPool) {
-        unimplemented!()
+        //unimplemented!()
     }
 
     fn destroy_descriptor_set_layout(&self, _layout: DescriptorSetLayout) {
-        unimplemented!()
+        //unimplemented!()
     }
 
     fn destroy_fence(&self, _fence: Fence) {
@@ -1215,7 +1246,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_semaphore(&self, _semaphore: Semaphore) {
-        unimplemented!()
+        //unimplemented!()
     }
 
     fn create_swapchain(
@@ -1332,6 +1363,7 @@ impl hal::Device<Backend> for Device {
 
             let internal = InternalImage {
                 raw: resource,
+                copy_srv: None,
                 srv: None,
                 uav: None,
                 rtv: Some(unsafe { ComPtr::from_raw(rtv) })
@@ -1340,6 +1372,7 @@ impl hal::Device<Backend> for Device {
             Image {
                 kind,
                 usage: config.image_usage,
+                format: config.color_format,
                 storage_flags: image::StorageFlags::empty(),
                 // NOTE: not the actual format of the backbuffer(s)
                 typed_raw_format: dxgiformat::DXGI_FORMAT_UNKNOWN,
