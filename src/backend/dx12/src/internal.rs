@@ -5,6 +5,7 @@ use std::{mem, ptr};
 use std::sync::Mutex;
 
 use d3d12;
+use winapi::Interface;
 use winapi::shared::{dxgiformat, dxgitype, winerror};
 use winapi::shared::minwindef::{FALSE, TRUE};
 use winapi::um::d3d12::*;
@@ -133,7 +134,7 @@ impl ServicePipes {
                 0,
                 (*signature_raw).GetBufferPointer(),
                 (*signature_raw).GetBufferSize(),
-                &d3d12::IID_ID3D12RootSignature,
+                &d3d12::ID3D12RootSignature::uuidof(),
                 &mut signature as *mut *mut _ as *mut *mut _,
             );
             (*signature_raw).Release();
@@ -219,7 +220,7 @@ impl ServicePipes {
         let hr = unsafe {
             self.device.CreateGraphicsPipelineState(
                 &pso_desc,
-                &d3d12::IID_ID3D12PipelineState,
+                &d3d12::ID3D12PipelineState::uuidof(),
                 &mut pipeline as *mut *mut _ as *mut *mut _)
         };
         assert_eq!(hr, winerror::S_OK);

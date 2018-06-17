@@ -3,6 +3,7 @@ use hal::queue::QueueFamilyId;
 use hal::range::RangeArg;
 use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query, window};
 
+use winapi::Interface;
 use winapi::shared::dxgi::{IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD};
 use winapi::shared::minwindef::{TRUE};
 use winapi::shared::{dxgiformat, dxgitype, winerror};
@@ -1255,7 +1256,7 @@ impl hal::Device<Backend> for Device {
             let hr = unsafe {
                 swapchain.GetBuffer(
                     i as _,
-                    &d3d11::IID_ID3D11Resource,
+                    &d3d11::ID3D11Resource::uuidof(),
                     &mut resource as *mut *mut _ as *mut *mut _
                 )
             };

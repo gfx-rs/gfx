@@ -28,6 +28,7 @@ use hal::{error, format as f, image, memory, Features, FrameImage, Limits, Queue
 use hal::queue::{QueueFamilyId, Queues};
 use descriptors_cpu::DescriptorCpuPool;
 
+use winapi::Interface;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::shared::minwindef::{FALSE, TRUE};
 use winapi::um::{d3d12, d3d12sdklayers, d3dcommon, handleapi, synchapi, winbase, winnt};
@@ -207,7 +208,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 d3d12::D3D12CreateDevice(
                     self.adapter.as_raw() as *mut _,
                     d3dcommon::D3D_FEATURE_LEVEL_11_0, // Minimum required feature level
-                    &d3d12::IID_ID3D12Device,
+                    &d3d12::ID3D12Device::uuidof(),
                     &mut device_raw as *mut *mut _ as *mut *mut _,
                 )
             };
@@ -231,7 +232,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             let hr = unsafe {
                 device_raw.CreateCommandQueue(
                     &queue_desc,
-                    &d3d12::IID_ID3D12CommandQueue,
+                    &d3d12::ID3D12CommandQueue::uuidof(),
                     &mut queue as *mut *mut _ as *mut *mut _,
                 )
             };
@@ -289,7 +290,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                             let hr = unsafe {
                                 device.raw.CreateCommandQueue(
                                     &queue_desc,
-                                    &d3d12::IID_ID3D12CommandQueue,
+                                    &d3d12::ID3D12CommandQueue::uuidof(),
                                     &mut queue as *mut *mut _ as *mut *mut _,
                                 )
                             };
@@ -656,7 +657,7 @@ impl Instance {
             let mut debug_controller: *mut d3d12sdklayers::ID3D12Debug = ptr::null_mut();
             let hr = unsafe {
                 d3d12::D3D12GetDebugInterface(
-                    &d3d12sdklayers::IID_ID3D12Debug,
+                    &d3d12sdklayers::ID3D12Debug::uuidof(),
                     &mut debug_controller as *mut *mut _ as *mut *mut _)
             };
 
@@ -672,7 +673,7 @@ impl Instance {
         let hr = unsafe {
             dxgi1_3::CreateDXGIFactory2(
                 dxgi1_3::DXGI_CREATE_FACTORY_DEBUG,
-                &dxgi1_4::IID_IDXGIFactory4,
+                &dxgi1_4::IDXGIFactory4::uuidof(),
                 &mut dxgi_factory as *mut *mut _ as *mut *mut _)
         };
 
@@ -721,7 +722,7 @@ impl hal::Instance for Instance {
                     d3d12::D3D12CreateDevice(
                         adapter.as_raw() as *mut _,
                         d3dcommon::D3D_FEATURE_LEVEL_11_0,
-                        &d3d12::IID_ID3D12Device,
+                        &d3d12::ID3D12Device::uuidof(),
                         &mut device as *mut *mut _ as *mut *mut _,
                     )
                 };
@@ -968,7 +969,7 @@ impl hal::Instance for Instance {
                     unsafe {
                         assert_eq!(winerror::S_OK, self.factory.EnumAdapterByLuid(
                             adapter_id,
-                            &dxgi1_4::IID_IDXGIAdapter3,
+                            &dxgi1_4::IDXGIAdapter3::uuidof(),
                             &mut adapter as *mut *mut _ as *mut *mut _,
                         ));
                         ComPtr::from_raw(adapter)

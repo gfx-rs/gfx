@@ -2,6 +2,7 @@ use wio::com::ComPtr;
 use std::ptr;
 use std::sync::Arc;
 
+use winapi::Interface;
 use winapi::um::d3d12;
 use winapi::shared::winerror::SUCCEEDED;
 
@@ -27,7 +28,7 @@ impl RawCommandPool {
                     self.list_type,
                     self.inner.as_raw(),
                     ptr::null_mut(),
-                    &d3d12::IID_ID3D12GraphicsCommandList,
+                    &d3d12::ID3D12GraphicsCommandList::uuidof(),
                     &mut command_list as *mut *mut _ as *mut *mut _,
                 )
             };
