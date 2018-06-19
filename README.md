@@ -2,9 +2,6 @@
   <img src="info/logo.png">
 </p>
 <p align="center">
-  <!--a href="https://docs.rs/gfx-hal">
-      <img src="https://docs.rs/gfx-hal/badge.svg" alt="Documentation on docs.rs">
-  </a-->
   <a href="https://travis-ci.org/gfx-rs/gfx">
       <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?style=flat-square" alt="Travis Build Status">
   </a>
@@ -18,7 +15,7 @@
     <img src="https://img.shields.io/badge/gitter-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
   </a>
   <br>
-  <strong><a href="info/getting_started.md">Getting Started</a> | <a href="http://docs.rs/gfx-hal">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
+  <strong><a href="info/getting_started.md">Getting Started</a> | <s><!--<a href="http://docs.rs/gfx-hal">-->Documentation<!--</a>--></s> (work in progress) | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
 </p>
 
 # gfx-rs
@@ -28,14 +25,14 @@ gfx-rs is a low-level, cross-platform graphics abstraction library in Rust. It c
 * `gfx-hal` which is gfx's hardware abstraction layer: a Vulkan-ic mostly unsafe API which translates to native graphics backends.
 * `gfx-backend-*` which contains graphics backends for various platforms:
   * [Vulkan](src/backend/vulkan)
-  * [DirectX 12](src/backend/dx12)
+  * [DirectX 12](src/backend/dx12) and [11](src/backend/dx11)
   * [Metal](src/backend/metal)
   * [OpenGL 2.1+/ES2+](src/backend/gl)
 * `gfx-warden` which is a data-driven reference test framework, used to verify consistency across all graphics backends.
 
 ## Example
 
-To run an example, simply use `cargo run` and specify the backend with `--features {backend}` (where `{backend}` is one of `vulkan`, `dx12`, `metal`, or `gl`). For example:
+To run an example, simply use `cargo run` and specify the backend with `--features {backend}` (where `{backend}` is one of `vulkan`, `dx12`, `dx11`, `metal`, or `gl`). For example:
 
 ```bash
 git clone https://github.com/gfx-rs/gfx
@@ -58,9 +55,11 @@ Currently HAL has backends for Vulkan, DirectX 12, Metal, and OpenGL/OpenGL ES/W
 
 The HAL layer is consumed directly by user applications or libraries. HAL is also used in efforts such as [gfx-portability](https://github.com/gfx-rs/portability).
 
-## pre-LL
+## Previously Released Crates and API (pre-LL)
 
-If you are looking for information about the released crates (`gfx_core`, `gfx`, `gfx_device_*`, `gfx_window_`, etc), they are being developed and published from the [pre-ll](https://github.com/gfx-rs/gfx/tree/pre-ll) branch. Code in `master` is a complete rewrite that will be shipped in different crates.
+The code in `master` is a complete low-level rewrite of gfx based on HAL as described above.
+
+The previously released crates (`gfx_core`, `gfx`, `gfx_device_*`, `gfx_window_`) are still being developed and published from the [pre-ll](https://github.com/gfx-rs/gfx/tree/pre-ll) (pre-low level rewrite) branch.
 
 ## License
 
