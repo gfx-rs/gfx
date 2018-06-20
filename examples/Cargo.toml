@@ -14,11 +14,11 @@ unstable = []
 
 [[bin]]
 name = "quad"
-path = "quad/main.rs"
+path = "1-quad/main.rs"
 
 [[bin]]
 name = "compute"
-path = "compute/main.rs"
+path = "2-compute/main.rs"
 
 [dependencies]
 env_logger = "0.5"
