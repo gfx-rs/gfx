@@ -463,8 +463,8 @@ fn main() {
 
         device.reset_fence(&frame_fence);
         command_pool.reset();
-        let frame: hal::FrameImage = {
-            match swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore)) {
+        let frame: hal::SwapImageIndex = {
+            match swap_chain.acquire_image(FrameSync::Semaphore(&mut frame_semaphore)) {
                 Ok(i) => i,
                 Err(_) => {
                     recreate_swapchain = true;

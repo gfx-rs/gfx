@@ -722,7 +722,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     #[cfg(feature = "glutin")]
     fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, hal::FrameImage)>,
+        IS: IntoIterator<Item = (S, hal::SwapImageIndex)>,
         S: Borrow<window::glutin::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,

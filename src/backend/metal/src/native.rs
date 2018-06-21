@@ -162,7 +162,7 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Clone, Debug)]
 pub struct Frame {
     pub swapchain: Arc<RwLock<SwapchainInner>>,
-    pub index: hal::FrameImage,
+    pub index: hal::SwapImageIndex,
 }
 
 #[derive(Clone, Debug)]
@@ -199,7 +199,7 @@ pub enum ImageGuard<'a> {
     Texture(&'a metal::TextureRef),
     Frame {
         swapchain: RwLockReadGuard<'a, SwapchainInner>,
-        index: hal::FrameImage,
+        index: hal::SwapImageIndex,
     },
 }
 

@@ -34,7 +34,7 @@
 //! let acquisition_semaphore = device.create_semaphore();
 //! let render_semaphore = device.create_semaphore();
 //!
-//! let frame = swapchain.acquire_frame(FrameSync::Semaphore(&acquisition_semaphore));
+//! let frame = swapchain.acquire_image(FrameSync::Semaphore(&acquisition_semaphore));
 //! // render the scene..
 //! // `render_semaphore` will be signalled once rendering has been finished
 //! swapchain.present(&mut present_queue, 0, &[render_semaphore]);
@@ -89,7 +89,7 @@ pub struct SurfaceCapabilities {
     ///
     /// - `image_count.start` must be at least 1.
     /// - `image_count.end` must be larger of equal to `image_count.start`.
-    pub image_count: Range<FrameImage>,
+    pub image_count: Range<SwapImageIndex>,
 
     /// Current extent of the surface.
     ///
@@ -138,9 +138,9 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
 ///
 /// The swapchain is a series of one or more images, usually
 /// with one being drawn on while the other is displayed by
-/// the GPU (aka double-buffering). A `Frame` refers to a
-/// particular image in the swapchain.
-pub type FrameImage = u32;
+/// the GPU (aka double-buffering). A `SwapImageIndex` refers
+/// to a particular image in the swapchain.
+pub type SwapImageIndex = u32;
 
 /// Synchronization primitives which will be signalled once a frame got retrieved.
 ///
@@ -199,7 +199,7 @@ pub struct SwapchainConfig {
     /// Depth stencil format of the backbuffer images (optional).
     pub depth_stencil_format: Option<Format>,
     /// Number of images in the swapchain.
-    pub image_count: FrameImage,
+    pub image_count: SwapImageIndex,
     /// Image usage of the backbuffer images.
     pub image_usage: image::Usage,
 }
@@ -301,7 +301,7 @@ pub enum Backbuffer<B: Backend> {
 /// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
 pub trait Swapchain<B: Backend>: Any + Send + Sync {
-    /// Acquire a new frame for rendering. This needs to be called before presenting.
+    /// Acquire a new swapchain image for rendering. This needs to be called before presenting.
     ///
     /// Will fail if the swapchain needs recreation.
     ///
@@ -317,9 +317,9 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// ```no_run
     ///
     /// ```
-    fn acquire_frame(&mut self, sync: FrameSync<B>) -> Result<FrameImage, ()>;
+    fn acquire_image(&mut self, sync: FrameSync<B>) -> Result<SwapImageIndex, ()>;
 
-    /// Present one acquired frame.
+    /// Present one acquired image.
     ///
     /// # Safety
     ///
@@ -334,7 +334,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     fn present<'a, C, IW>(
         &'a self,
         present_queue: &mut CommandQueue<B, C>,
-        frame_index: FrameImage,
+        image_index: SwapImageIndex,
         wait_semaphores: IW,
     ) -> Result<(), ()>
     where
@@ -343,6 +343,6 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
         IW: IntoIterator,
         IW::Item: Borrow<B::Semaphore>,
     {
-        present_queue.present(Some((self, frame_index)), wait_semaphores)
+        present_queue.present(Some((self, image_index)), wait_semaphores)
     }
 }

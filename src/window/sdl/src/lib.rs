@@ -100,7 +100,7 @@ impl core::Swapchain<Backend> for Swapchain {
         &self.backbuffer
     }
 
-    fn acquire_frame(&mut self, sync: core::FrameSync<R>) -> Result<core::Frame, ()> {
+    fn acquire_image(&mut self, sync: core::FrameSync<R>) -> Result<core::Frame, ()> {
         // TODO: fence sync
         Ok(core::Frame::new(0))
     }

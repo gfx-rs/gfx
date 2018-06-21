@@ -98,7 +98,7 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
 
     fn present<IS, S, IW>(&mut self, _: IS, _: IW) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, hal::FrameImage)>,
+        IS: IntoIterator<Item = (S, hal::SwapImageIndex)>,
         S: Borrow<Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<()>,
@@ -785,7 +785,7 @@ impl hal::Surface<Backend> for Surface {
 /// Dummy swapchain.
 pub struct Swapchain;
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, _: hal::FrameSync<Backend>) -> Result<hal::FrameImage, ()> {
+    fn acquire_image(&mut self, _: hal::FrameSync<Backend>) -> Result<hal::SwapImageIndex, ()> {
         unimplemented!()
     }
 }

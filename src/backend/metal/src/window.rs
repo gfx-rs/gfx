@@ -50,9 +50,9 @@ pub struct SwapchainInner {
     frames: Vec<Frame>,
 }
 
-impl ops::Index<hal::FrameImage> for SwapchainInner {
+impl ops::Index<hal::SwapImageIndex> for SwapchainInner {
     type Output = metal::TextureRef;
-    fn index(&self, index: hal::FrameImage) -> &Self::Output {
+    fn index(&self, index: hal::SwapImageIndex) -> &Self::Output {
         &self.frames[index as usize].texture
     }
 }
@@ -88,7 +88,7 @@ unsafe impl Send for Swapchain {}
 unsafe impl Sync for Swapchain {}
 
 impl Swapchain {
-    pub(crate) fn present(&self, index: hal::FrameImage) {
+    pub(crate) fn present(&self, index: hal::SwapImageIndex) {
         let drawable = self.inner
             .write()
             .unwrap()
@@ -122,7 +122,7 @@ impl hal::Surface<Backend> for Surface {
         };
 
         let caps = hal::SurfaceCapabilities {
-            image_count: 2 .. max_frames as hal::FrameImage,
+            image_count: 2 .. max_frames as hal::SwapImageIndex,
             current_extent: None,
             extents: Extent2D { width: 4, height: 4} .. Extent2D { width: 4096, height: 4096 },
             max_image_layers: 1,
@@ -256,7 +256,7 @@ impl Device {
 }
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_frame(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::FrameImage, ()> {
+    fn acquire_image(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::SwapImageIndex, ()> {
         let _ap = AutoreleasePool::new(); // for the drawable
 
         unsafe {

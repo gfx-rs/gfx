@@ -24,7 +24,7 @@ mod pool;
 mod root_constants;
 mod window;
 
-use hal::{error, format as f, image, memory, Features, FrameImage, Limits, QueueType};
+use hal::{error, format as f, image, memory, Features, SwapImageIndex, Limits, QueueType};
 use hal::queue::{QueueFamilyId, Queues};
 use descriptors_cpu::DescriptorCpuPool;
 
@@ -468,7 +468,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
     fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, FrameImage)>,
+        IS: IntoIterator<Item = (S, SwapImageIndex)>,
         S: Borrow<window::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,

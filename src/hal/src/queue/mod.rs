@@ -15,7 +15,7 @@ use std::borrow::Borrow;
 use std::marker::PhantomData;
 
 use error::HostExecutionError;
-use window::FrameImage;
+use window::SwapImageIndex;
 use Backend;
 
 pub use self::capability::{
@@ -65,7 +65,7 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
     fn present<IS, S, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
     where
         Self: Sized,
-        IS: IntoIterator<Item = (S, FrameImage)>,
+        IS: IntoIterator<Item = (S, SwapImageIndex)>,
         S: Borrow<B::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<B::Semaphore>;
@@ -121,7 +121,7 @@ impl<B: Backend, C> CommandQueue<B, C> {
     /// list more than once.
     pub fn present<IS, S, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, FrameImage)>,
+        IS: IntoIterator<Item = (S, SwapImageIndex)>,
         S: Borrow<B::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<B::Semaphore>

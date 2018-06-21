@@ -10,7 +10,7 @@ use std::{iter, mem};
 use std::slice;
 
 use hal::{buffer, command as com, error, memory, pool, pso};
-use hal::{DrawCount, FrameImage, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
+use hal::{DrawCount, SwapImageIndex, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
 use hal::backend::FastHashMap;
 use hal::format::{Aspects, Format, FormatDesc};
 use hal::image::{Extent, Filter, Layout, Level, SubresourceRange};
@@ -1322,7 +1322,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
     fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, FrameImage)>,
+        IS: IntoIterator<Item = (S, SwapImageIndex)>,
         S: Borrow<window::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
