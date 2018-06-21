@@ -15,6 +15,7 @@ use objc::runtime::{Object};
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
+use foreign_types::{ForeignType, ForeignTypeRef};
 
 
 pub type CAMetalLayer = *mut Object;
@@ -39,17 +40,20 @@ impl Drop for SurfaceInner {
     }
 }
 
+#[derive(Debug)]
+struct Frame {
+    drawable: Option<CADrawable>,
+    texture: metal::Texture,
+}
+
 pub struct SwapchainInner {
-    frames: Vec<Option<(CADrawable, metal::Texture)>>,
+    frames: Vec<Frame>,
 }
 
 impl ops::Index<hal::FrameImage> for SwapchainInner {
     type Output = metal::TextureRef;
     fn index(&self, index: hal::FrameImage) -> &Self::Output {
-        self.frames[index as usize]
-            .as_ref()
-            .map(|&(_, ref tex)| tex)
-            .expect("Frame texture is not resident!")
+        &self.frames[index as usize].texture
     }
 }
 
@@ -64,8 +68,8 @@ impl fmt::Debug for SwapchainInner {
 
 impl Drop for SwapchainInner {
     fn drop(&mut self) {
-        for maybe in self.frames.drain(..) {
-            if let Some((drawable, _)) = maybe {
+        for mut frame in self.frames.drain(..) {
+            if let Some(drawable) = frame.drawable.take() {
                 unsafe {
                     msg_send![drawable, release];
                 }
@@ -85,14 +89,16 @@ unsafe impl Sync for Swapchain {}
 
 impl Swapchain {
     pub(crate) fn present(&self, index: hal::FrameImage) {
-        let (drawable, _) = self.inner
+        let drawable = self.inner
             .write()
             .unwrap()
             .frames[index as usize]
+            .drawable
             .take()
-            .expect("Frame is not ready to present!");
+            .unwrap();
         unsafe {
             msg_send![drawable, present];
+            //TODO: delay the actual release
             msg_send![drawable, release];
         }
     }
@@ -116,7 +122,7 @@ impl hal::Surface<Backend> for Surface {
         };
 
         let caps = hal::SurfaceCapabilities {
-            image_count: 1 .. max_frames as hal::FrameImage,
+            image_count: 2 .. max_frames as hal::FrameImage,
             current_extent: None,
             extents: Extent2D { width: 4, height: 4} .. Extent2D { width: 4096, height: 4096 },
             max_image_layers: 1,
@@ -157,6 +163,8 @@ impl Device {
         surface: &mut Surface,
         config: SwapchainConfig,
     ) -> (Swapchain, Backbuffer<Backend>) {
+        let _ap = AutoreleasePool::new(); // for the drawable
+
         let mtl_format = self.private_caps
             .map_format(config.color_format)
             .expect("unsupported backbuffer format");
@@ -177,8 +185,10 @@ impl Device {
             msg_send![render_layer, setDevice: device_raw];
             msg_send![render_layer, setPixelFormat: mtl_format];
             msg_send![render_layer, setFramebufferOnly: framebuffer_only];
+            msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
             //TODO: only set it where supported
             msg_send![render_layer, setDisplaySyncEnabled: display_sync];
+            //msg_send![render_layer, setPresentsWithTransaction: true];
 
             // Update render layer size
             let view_points_size: CGRect = msg_send![nsview, bounds];
@@ -202,7 +212,18 @@ impl Device {
         let pixel_height = (view_size.height * scale_factor) as u64;
 
         let inner = SwapchainInner {
-            frames: (0 .. config.image_count).map(|_| None).collect(),
+            frames: (0 .. config.image_count)
+                .map(|_| unsafe {
+                    let drawable: *mut Object = msg_send![render_layer, nextDrawable];
+                    assert!(!drawable.is_null());
+                    let texture: metal::Texture = msg_send![drawable, texture];
+                    //HACK: not retaining the texture here
+                    Frame {
+                        drawable: None, //Note: careful!
+                        texture,
+                    }
+                })
+                .collect(),
         };
 
         let swapchain = Swapchain {
@@ -236,6 +257,8 @@ impl Device {
 
 impl hal::Swapchain<Backend> for Swapchain {
     fn acquire_frame(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::FrameImage, ()> {
+        let _ap = AutoreleasePool::new(); // for the drawable
+
         unsafe {
             match sync {
                 hal::FrameSync::Semaphore(semaphore) => {
@@ -246,24 +269,20 @@ impl hal::Swapchain<Backend> for Swapchain {
             }
         }
 
+        let layer_ref = self.surface.render_layer.lock().unwrap();
+        let drawable: CADrawable = unsafe {
+            msg_send![*layer_ref, nextDrawable]
+        };
+        let texture_temp: &metal::TextureRef = unsafe {
+            msg_send![drawable, retain];
+            msg_send![drawable, texture]
+        };
         let mut inner = self.inner.write().unwrap();
         let index = inner.frames
-            .iter_mut()
-            .position(|d| d.is_none())
-            .expect("No frame available to acquire!");
-
-        debug!("acquired frame {}", index);
-        let layer = self.surface.render_layer.lock().unwrap();
-
-        let _ap = AutoreleasePool::new(); // for the drawable
-        inner.frames[index] = Some(unsafe {
-            let drawable: *mut Object = msg_send![*layer, nextDrawable];
-            assert!(!drawable.is_null());
-            let texture: metal::Texture = msg_send![drawable, texture];
-            msg_send![drawable, retain];
-            msg_send![texture, retain];
-            (drawable, texture)
-        });
+            .iter()
+            .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
+            .expect(&format!("Surface lost? ptr {:?}, frames {:?}", texture_temp, inner.frames));
+        inner.frames[index].drawable = Some(drawable);
 
         Ok(index as _)
     }
