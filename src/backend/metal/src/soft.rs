@@ -1,5 +1,5 @@
-use command::{IndexBuffer};
-use native::{Frame, ImageRoot, ImageRootRef, RasterizerState};
+use command::IndexBuffer;
+use native::RasterizerState;
 
 use hal;
 use metal;
@@ -22,7 +22,7 @@ pub enum Own {}
 impl Resources for Own {
     type Data = Vec<u32>;
     type Buffer = metal::Buffer;
-    type Texture = ImageRoot;
+    type Texture = metal::Texture;
     type Sampler = metal::SamplerState;
     type DepthStencil = metal::DepthStencilState;
     type RenderPipeline = metal::RenderPipelineState;
@@ -31,7 +31,7 @@ impl Resources for Own {
 impl<'a> Resources for &'a Own {
     type Data = &'a [u32];
     type Buffer = &'a metal::BufferRef;
-    type Texture = ImageRootRef<'a>;
+    type Texture = &'a metal::TextureRef;
     type Sampler = &'a metal::SamplerStateRef;
     type DepthStencil = &'a metal::DepthStencilStateRef;
     type RenderPipeline = &'a metal::RenderPipelineStateRef;
@@ -122,7 +122,7 @@ impl RenderCommand<Own> {
             BindTexture { stage, index, ref texture } => BindTexture {
                 stage,
                 index,
-                texture: texture.as_ref().map(ImageRoot::as_ref),
+                texture: texture.as_ref().map(Borrow::borrow),
             },
             BindSampler { stage, index, ref sampler } => BindSampler {
                 stage,
@@ -181,7 +181,7 @@ impl<'a> RenderCommand<&'a Own> {
             BindTexture { stage, index, texture } => BindTexture {
                 stage,
                 index,
-                texture: texture.map(ImageRootRef::own),
+                texture: texture.map(ToOwned::to_owned),
             },
             BindSampler { stage, index, sampler } => BindSampler {
                 stage,
@@ -283,18 +283,18 @@ impl<'a> BlitCommand<&'a Own> {
                 region,
             },
             CopyImage { src, dst, region } => CopyImage {
-                src: src.own(),
-                dst: dst.own(),
+                src: src.to_owned(),
+                dst: dst.to_owned(),
                 region,
             },
             CopyBufferToImage { src, dst, dst_desc, region } => CopyBufferToImage {
                 src: src.to_owned(),
-                dst: dst.own(),
+                dst: dst.to_owned(),
                 dst_desc,
                 region,
             },
             CopyImageToBuffer { src, src_desc, dst, region } => CopyImageToBuffer {
-                src: src.own(),
+                src: src.to_owned(),
                 src_desc,
                 dst: dst.to_owned(),
                 region,
@@ -351,7 +351,7 @@ impl ComputeCommand<Own> {
             },
             BindTexture { index, ref texture } => BindTexture {
                 index,
-                texture: texture.as_ref().map(ImageRoot::as_ref),
+                texture: texture.as_ref().map(Borrow::borrow),
             },
             BindSampler { index, ref sampler } => BindSampler {
                 index,
@@ -386,7 +386,7 @@ impl<'a> ComputeCommand<&'a Own> {
             },
             BindTexture { index, texture } => BindTexture {
                 index,
-                texture: texture.map(ImageRootRef::own),
+                texture: texture.map(ToOwned::to_owned),
             },
             BindSampler { index, sampler } => BindSampler {
                 index,
@@ -411,7 +411,6 @@ impl<'a> ComputeCommand<&'a Own> {
 pub enum Pass {
     Render {
         desc: metal::RenderPassDescriptor,
-        frames: Vec<(usize, Frame)>,
         commands: Vec<RenderCommand<Own>>,
     },
     Blit(Vec<BlitCommand<Own>>),

@@ -3,8 +3,8 @@ use internal::Channel;
 use native;
 use device::{Device, PhysicalDevice};
 
-use std::{fmt, ops};
-use std::sync::{Arc, Mutex, RwLock};
+use std::cell::Cell;
+use std::sync::{Arc, Mutex};
 
 use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
@@ -26,6 +26,7 @@ pub struct Surface {
     pub(crate) apply_pixel_scale: bool,
 }
 
+//TODO: double-check who needs it shared
 pub(crate) struct SurfaceInner {
     pub(crate) nsview: *mut Object,
     pub(crate) render_layer: Mutex<CAMetalLayer>,
@@ -42,44 +43,22 @@ impl Drop for SurfaceInner {
 
 #[derive(Debug)]
 struct Frame {
-    drawable: Option<CADrawable>,
+    drawable: Cell<Option<CADrawable>>,
     texture: metal::Texture,
 }
 
-pub struct SwapchainInner {
-    frames: Vec<Frame>,
-}
-
-impl ops::Index<hal::SwapImageIndex> for SwapchainInner {
-    type Output = metal::TextureRef;
-    fn index(&self, index: hal::SwapImageIndex) -> &Self::Output {
-        &self.frames[index as usize].texture
-    }
-}
-
-unsafe impl Send for SwapchainInner {}
-unsafe impl Sync for SwapchainInner {}
-
-impl fmt::Debug for SwapchainInner {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "Swapchain with {} image", self.frames.len())
-    }
-}
-
-impl Drop for SwapchainInner {
+impl Drop for Frame {
     fn drop(&mut self) {
-        for mut frame in self.frames.drain(..) {
-            if let Some(drawable) = frame.drawable.take() {
-                unsafe {
-                    msg_send![drawable, release];
-                }
+        if let Some(drawable) = self.drawable.get() {
+            unsafe {
+                msg_send![drawable, release];
             }
         }
     }
 }
 
 pub struct Swapchain {
-    inner: Arc<RwLock<SwapchainInner>>,
+    frames: Vec<Frame>,
     surface: Arc<SurfaceInner>,
     _size_pixels: (u64, u64),
 }
@@ -89,12 +68,8 @@ unsafe impl Sync for Swapchain {}
 
 impl Swapchain {
     pub(crate) fn present(&self, index: hal::SwapImageIndex) {
-        let drawable = self.inner
-            .write()
-            .unwrap()
-            .frames[index as usize]
-            .drawable
-            .take()
+        let drawable = self.frames[index as usize].drawable
+            .replace(None)
             .unwrap();
         unsafe {
             msg_send![drawable, present];
@@ -115,14 +90,9 @@ impl hal::Surface<Backend> for Surface {
     fn compatibility(
         &self, _: &PhysicalDevice,
     ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>) {
-        let render_layer_borrow = self.inner.render_layer.lock().unwrap();
-        let render_layer = *render_layer_borrow;
-        let max_frames: u64 = unsafe {
-            msg_send![render_layer, maximumDrawableCount]
-        };
-
         let caps = hal::SurfaceCapabilities {
-            image_count: 2 .. max_frames as hal::SwapImageIndex,
+            //Note: this is hardcoded in `CAMetalLayer` documentation
+            image_count: 2 .. 3,
             current_extent: None,
             extents: Extent2D { width: 4, height: 4} .. Extent2D { width: 4096, height: 4096 },
             max_image_layers: 1,
@@ -142,7 +112,8 @@ impl hal::Surface<Backend> for Surface {
     }
 
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
-        true // TODO: Not sure this is the case, don't know associativity of IOSurface
+        // we only expose one family atm, so it's compatible
+        true
     }
 }
 
@@ -211,33 +182,23 @@ impl Device {
         let pixel_width = (view_size.width * scale_factor) as u64;
         let pixel_height = (view_size.height * scale_factor) as u64;
 
-        let inner = SwapchainInner {
-            frames: (0 .. config.image_count)
-                .map(|_| unsafe {
-                    let drawable: *mut Object = msg_send![render_layer, nextDrawable];
-                    assert!(!drawable.is_null());
-                    let texture: metal::Texture = msg_send![drawable, texture];
-                    //HACK: not retaining the texture here
-                    Frame {
-                        drawable: None, //Note: careful!
-                        texture,
-                    }
-                })
-                .collect(),
-        };
+        let frames = (0 .. config.image_count)
+            .map(|_| unsafe {
+                let drawable: *mut Object = msg_send![render_layer, nextDrawable];
+                assert!(!drawable.is_null());
+                let texture: metal::Texture = msg_send![drawable, texture];
+                //HACK: not retaining the texture here
+                Frame {
+                    drawable: Cell::new(None), //Note: careful!
+                    texture,
+                }
+            })
+            .collect::<Vec<_>>();
 
-        let swapchain = Swapchain {
-            inner: Arc::new(RwLock::new(inner)),
-            surface: surface.inner.clone(),
-            _size_pixels: (pixel_width, pixel_height),
-        };
-
-        let images = (0 .. config.image_count)
-            .map(|index| native::Image {
-                root: native::ImageRoot::Frame(native::Frame {
-                    swapchain: swapchain.inner.clone(),
-                    index,
-                }),
+        let images = frames
+            .iter()
+            .map(|frame| native::Image {
+                raw: frame.texture.clone(), //Note: careful!
                 extent: image::Extent {
                     width: pixel_width as _,
                     height: pixel_height as _,
@@ -250,6 +211,12 @@ impl Device {
                 mtl_type: metal::MTLTextureType::D2,
             })
             .collect();
+
+        let swapchain = Swapchain {
+            frames,
+            surface: surface.inner.clone(),
+            _size_pixels: (pixel_width, pixel_height),
+        };
 
         (swapchain, Backbuffer::Images(images))
     }
@@ -277,12 +244,13 @@ impl hal::Swapchain<Backend> for Swapchain {
             msg_send![drawable, retain];
             msg_send![drawable, texture]
         };
-        let mut inner = self.inner.write().unwrap();
-        let index = inner.frames
+
+        let index = self.frames
             .iter()
             .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
-            .expect(&format!("Surface lost? ptr {:?}, frames {:?}", texture_temp, inner.frames));
-        inner.frames[index].drawable = Some(drawable);
+            .expect("Surface lost?");
+        let old = self.frames[index].drawable.replace(Some(drawable));
+        assert_eq!(old, None);
 
         Ok(index as _)
     }

@@ -1,11 +1,10 @@
 use Backend;
 use internal::Channel;
-use window::SwapchainInner;
 
 use std::collections::HashMap;
-use std::ops::{Deref, Range};
+use std::ops::Range;
 use std::os::raw::{c_void, c_long};
-use std::sync::{Arc, Condvar, Mutex, RwLock, RwLockReadGuard};
+use std::sync::{Arc, Condvar, Mutex};
 
 use hal::{self, image, pso};
 use hal::backend::FastHashMap;
@@ -44,7 +43,6 @@ unsafe impl Sync for RenderPass {}
 pub struct ColorAttachment {
     pub mtl_format: metal::MTLPixelFormat,
     pub channel: Channel,
-    pub frame: Option<Frame>,
 }
 
 #[derive(Clone, Debug)]
@@ -159,75 +157,9 @@ pub struct ComputePipeline {
 unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
 
-#[derive(Clone, Debug)]
-pub struct Frame {
-    pub swapchain: Arc<RwLock<SwapchainInner>>,
-    pub index: hal::SwapImageIndex,
-}
-
-#[derive(Clone, Debug)]
-pub enum ImageRoot {
-    Texture(metal::Texture),
-    Frame(Frame),
-}
-
-#[derive(Clone)]
-pub enum ImageRootRef<'a> {
-    Texture(&'a metal::TextureRef),
-    Frame(&'a Frame),
-}
-
-impl ImageRoot {
-    pub(crate) fn as_ref(&self) -> ImageRootRef {
-        match *self {
-            ImageRoot::Texture(ref tex) => ImageRootRef::Texture(tex),
-            ImageRoot::Frame(ref frame) => ImageRootRef::Frame(frame),
-        }
-    }
-}
-
-impl<'a> ImageRootRef<'a> {
-    pub fn own(self) -> ImageRoot {
-        match self {
-            ImageRootRef::Texture(tex) => ImageRoot::Texture(tex.to_owned()),
-            ImageRootRef::Frame(frame) => ImageRoot::Frame(frame.clone()),
-        }
-    }
-}
-
-pub enum ImageGuard<'a> {
-    Texture(&'a metal::TextureRef),
-    Frame {
-        swapchain: RwLockReadGuard<'a, SwapchainInner>,
-        index: hal::SwapImageIndex,
-    },
-}
-
-impl<'a> Deref for ImageGuard<'a> {
-    type Target = metal::TextureRef;
-    fn deref(&self) -> &Self::Target {
-        match *self {
-            ImageGuard::Texture(tex) => tex,
-            ImageGuard::Frame { ref swapchain, index } => &swapchain[index],
-        }
-    }
-}
-
-impl<'a> ImageRootRef<'a> {
-    pub fn resolve(&self) -> ImageGuard<'a> {
-        match *self {
-            ImageRootRef::Texture(ref tex) => ImageGuard::Texture(tex),
-            ImageRootRef::Frame(ref frame) => ImageGuard::Frame {
-                swapchain: frame.swapchain.read().unwrap(),
-                index: frame.index,
-            },
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Image {
-    pub(crate) root: ImageRoot,
+    pub(crate) raw: metal::Texture,
     pub(crate) extent: image::Extent,
     pub(crate) num_layers: Option<image::Layer>,
     pub(crate) format_desc: FormatDesc,
@@ -264,7 +196,7 @@ unsafe impl Sync for BufferView {}
 
 #[derive(Debug)]
 pub struct ImageView {
-    pub(crate) root: ImageRoot,
+    pub(crate) raw: metal::Texture,
     pub(crate) mtl_format: metal::MTLPixelFormat,
 }
 
@@ -474,8 +406,8 @@ pub struct BufferBinding {
 #[derive(Clone, Debug)]
 pub enum DescriptorSetBinding {
     Sampler(Vec<Option<metal::SamplerState>>),
-    Image(Vec<Option<(ImageRoot, image::Layout)>>),
-    Combined(Vec<(Option<(ImageRoot, image::Layout)>, Option<metal::SamplerState>)>),
+    Image(Vec<Option<(metal::Texture, image::Layout)>>),
+    Combined(Vec<(Option<(metal::Texture, image::Layout)>, Option<metal::SamplerState>)>),
     Buffer(Vec<BufferBinding>),
     //InputAttachment(Vec<(metal::Texture, image::Layout)>),
 }
