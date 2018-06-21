@@ -1290,11 +1290,17 @@ impl RawCommandQueue<Backend> for CommandQueue {
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
+        let queue = self.shared.queue.lock().unwrap();
+        let command_buffer = queue.raw.new_command_buffer();
+
         for (swapchain, index) in swapchains {
             // TODO: wait for semaphores
             debug!("presenting frame {}", index);
-            swapchain.borrow().present(index);
+            let drawable = swapchain.borrow().take_drawable(index);
+            command_buffer.present_drawable(&drawable);
         }
+
+        command_buffer.commit();
 
         let shared_capture_manager = CaptureManager::shared();
         if shared_capture_manager.is_capturing() {

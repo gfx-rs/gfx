@@ -3,7 +3,7 @@ use internal::Channel;
 use native;
 use device::{Device, PhysicalDevice};
 
-use std::cell::Cell;
+use std::mem;
 use std::sync::{Arc, Mutex};
 
 use hal::{self, format, image};
@@ -19,7 +19,6 @@ use foreign_types::{ForeignType, ForeignTypeRef};
 
 
 pub type CAMetalLayer = *mut Object;
-pub type CADrawable = *mut Object;
 
 pub struct Surface {
     pub(crate) inner: Arc<SurfaceInner>,
@@ -43,18 +42,8 @@ impl Drop for SurfaceInner {
 
 #[derive(Debug)]
 struct Frame {
-    drawable: Cell<Option<CADrawable>>,
+    drawable: Mutex<Option<metal::Drawable>>,
     texture: metal::Texture,
-}
-
-impl Drop for Frame {
-    fn drop(&mut self) {
-        if let Some(drawable) = self.drawable.get() {
-            unsafe {
-                msg_send![drawable, release];
-            }
-        }
-    }
 }
 
 pub struct Swapchain {
@@ -67,15 +56,12 @@ unsafe impl Send for Swapchain {}
 unsafe impl Sync for Swapchain {}
 
 impl Swapchain {
-    pub(crate) fn present(&self, index: hal::SwapImageIndex) {
-        let drawable = self.frames[index as usize].drawable
-            .replace(None)
-            .unwrap();
-        unsafe {
-            msg_send![drawable, present];
-            //TODO: delay the actual release
-            msg_send![drawable, release];
-        }
+    pub(crate) fn take_drawable(&self, index: hal::SwapImageIndex) -> metal::Drawable {
+        self.frames[index as usize].drawable
+            .lock()
+            .unwrap()
+            .take()
+            .expect("Drawable has not been acquired!")
     }
 }
 
@@ -184,12 +170,11 @@ impl Device {
 
         let frames = (0 .. config.image_count)
             .map(|_| unsafe {
-                let drawable: *mut Object = msg_send![render_layer, nextDrawable];
-                assert!(!drawable.is_null());
+                let drawable: &metal::DrawableRef = msg_send![render_layer, nextDrawable];
                 let texture: metal::Texture = msg_send![drawable, texture];
                 //HACK: not retaining the texture here
                 Frame {
-                    drawable: Cell::new(None), //Note: careful!
+                    drawable: Mutex::new(None),
                     texture,
                 }
             })
@@ -237,20 +222,17 @@ impl hal::Swapchain<Backend> for Swapchain {
         }
 
         let layer_ref = self.surface.render_layer.lock().unwrap();
-        let drawable: CADrawable = unsafe {
-            msg_send![*layer_ref, nextDrawable]
-        };
-        let texture_temp: &metal::TextureRef = unsafe {
-            msg_send![drawable, retain];
-            msg_send![drawable, texture]
+        let (drawable, texture_temp): (metal::Drawable, &metal::TextureRef) = unsafe {
+            let drawable: &metal::DrawableRef = msg_send![*layer_ref, nextDrawable];
+            (drawable.to_owned(), msg_send![drawable, texture])
         };
 
         let index = self.frames
             .iter()
             .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
             .expect("Surface lost?");
-        let old = self.frames[index].drawable.replace(Some(drawable));
-        assert_eq!(old, None);
+        let old = mem::replace(&mut *self.frames[index].drawable.lock().unwrap(), Some(drawable));
+        assert!(old.is_none());
 
         Ok(index as _)
     }
