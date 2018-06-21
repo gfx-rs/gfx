@@ -23,5 +23,5 @@ log = "0.4"
 gfx_gl = "0.5"
 gfx-hal = { path = "../../hal", version = "0.1" }
 smallvec = "0.6"
-glutin = { version = "0.15", optional = true }
+glutin = { version = "0.16", optional = true }
 spirv_cross = "0.8"
