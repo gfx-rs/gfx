@@ -36,8 +36,12 @@ To run an example, simply use `cargo run` and specify the backend with `--featur
 
 ```bash
 git clone https://github.com/gfx-rs/gfx
-cd gfx/examples/hal
+cd gfx/examples
+# macOS
+cargo run --bin quad --features metal
+# vulkan
 cargo run --bin quad --features vulkan
+# Windows
 cargo run --bin compute --features dx12 1 2 3 4
 ```
 
