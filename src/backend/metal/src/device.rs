@@ -264,6 +264,7 @@ impl PhysicalDevice {
         let private_caps = {
             let device = &*shared.device.lock().unwrap();
             PrivateCapabilities {
+                exposed_queues: 1,
                 resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
                 argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
                 shared_textures: !Self::is_mac(device),
@@ -328,7 +329,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         let mut queue_group = hal::backend::RawQueueGroup::new(family);
-        queue_group.add_queue(command::CommandQueue::new(self.shared.clone()));
+        for _ in 0 .. self.private_caps.exposed_queues {
+            queue_group.add_queue(command::CommandQueue::new(self.shared.clone()));
+        }
 
         let device = Device {
             shared: self.shared.clone(),
@@ -1325,7 +1328,16 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_semaphore(&self) -> n::Semaphore {
-        unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) } // Returns retained
+        n::Semaphore {
+            // Semaphore synchronization between command buffers of the same queue
+            // is useless, don't bother even creating one.
+            system: if self.private_caps.exposed_queues > 1 {
+                Some(n::SystemSemaphore::new())
+            } else {
+                None
+            },
+            image_ready: Arc::new(Mutex::new(None)),
+        }
     }
 
     fn create_descriptor_pool<I>(&self, _max_sets: usize, descriptor_ranges: I) -> n::DescriptorPool
@@ -1524,8 +1536,7 @@ impl hal::Device<Backend> for Device {
     fn destroy_framebuffer(&self, _buffer: n::Framebuffer) {
     }
 
-    fn destroy_semaphore(&self, semaphore: n::Semaphore) {
-        unsafe { n::dispatch_release(semaphore.0) }
+    fn destroy_semaphore(&self, _semaphore: n::Semaphore) {
     }
 
     fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {

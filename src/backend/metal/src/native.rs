@@ -1,5 +1,6 @@
 use Backend;
 use internal::Channel;
+use window::SwapchainImage;
 
 use std::collections::HashMap;
 use std::ops::Range;
@@ -210,10 +211,10 @@ unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
 
 #[derive(Debug)]
-pub struct Semaphore(pub(crate) *mut c_void);
-
-unsafe impl Send for Semaphore {}
-unsafe impl Sync for Semaphore {}
+pub struct Semaphore {
+    pub(crate) system: Option<SystemSemaphore>,
+    pub(crate) image_ready: Arc<Mutex<Option<SwapchainImage>>>,
+}
 
 #[derive(Debug)]
 pub struct Buffer {
@@ -481,21 +482,50 @@ pub struct FenceInner {
 pub type Fence = Arc<FenceInner>;
 
 extern "C" {
-    #[allow(dead_code)]
-    pub fn dispatch_semaphore_wait(
+    fn dispatch_semaphore_wait(
         semaphore: *mut c_void,
         timeout: u64,
     ) -> c_long;
 
-    pub fn dispatch_semaphore_signal(
+    fn dispatch_semaphore_signal(
         semaphore: *mut c_void,
     ) -> c_long;
 
-    pub fn dispatch_semaphore_create(
+    fn dispatch_semaphore_create(
         value: c_long,
     ) -> *mut c_void;
 
-    pub fn dispatch_release(
+    fn dispatch_release(
         object: *mut c_void,
     );
+}
+
+#[derive(Clone, Debug)]
+pub struct SystemSemaphore(*mut c_void);
+unsafe impl Send for SystemSemaphore {}
+unsafe impl Sync for SystemSemaphore {}
+
+impl Drop for SystemSemaphore {
+    fn drop(&mut self) {
+        unsafe {
+            dispatch_release(self.0)
+        }
+    }
+}
+impl SystemSemaphore {
+    pub(crate) fn new() -> Self {
+        SystemSemaphore(unsafe {
+            dispatch_semaphore_create(1)
+        })
+    }
+    pub(crate) fn signal(&self) {
+        unsafe {
+            dispatch_semaphore_signal(self.0);
+        }
+    }
+    pub(crate) fn wait(&self, timeout: u64) {
+        unsafe {
+            dispatch_semaphore_wait(self.0, timeout);
+        }
+    }
 }

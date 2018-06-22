@@ -3,8 +3,7 @@ use internal::Channel;
 use native;
 use device::{Device, PhysicalDevice};
 
-use std::mem;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, MutexGuard};
 
 use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
@@ -25,7 +24,7 @@ pub struct Surface {
     pub(crate) apply_pixel_scale: bool,
 }
 
-//TODO: double-check who needs it shared
+#[derive(Debug)]
 pub(crate) struct SurfaceInner {
     pub(crate) nsview: *mut Object,
     pub(crate) render_layer: Mutex<CAMetalLayer>,
@@ -40,28 +39,108 @@ impl Drop for SurfaceInner {
     }
 }
 
+impl SurfaceInner {
+    fn next_frame<'a>(&self, frames: &'a [Frame]) -> (usize, MutexGuard<'a, FrameInner>) {
+        let _ap = AutoreleasePool::new();
+        let layer_ref = self.render_layer.lock().unwrap();
+
+        let (drawable, texture_temp): (metal::Drawable, &metal::TextureRef) = unsafe {
+            let drawable: &metal::DrawableRef = msg_send![*layer_ref, nextDrawable];
+            (drawable.to_owned(), msg_send![drawable, texture])
+        };
+
+        let index = frames
+            .iter()
+            .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
+            .expect("Surface lost?");
+
+        let mut frame = frames[index].inner.lock().unwrap();
+        assert!(frame.drawable.is_none());
+        frame.drawable = Some(drawable);
+
+        debug!("Surface next frame is {}", index);
+        (index, frame)
+    }
+}
+
+#[derive(Debug)]
+struct FrameInner {
+    drawable: Option<metal::Drawable>,
+    /// If there is a `drawable`, availability indicates if it's free for grabs.
+    /// If there is `None`, `available == false` means that the frame has already
+    /// been acquired and the `drawable` will appear at some point.
+    available: bool,
+    last_frame: usize,
+}
+
 #[derive(Debug)]
 struct Frame {
-    drawable: Mutex<Option<metal::Drawable>>,
+    inner: Mutex<FrameInner>,
     texture: metal::Texture,
 }
 
+unsafe impl Send for Frame {}
+unsafe impl Sync for Frame {}
+
 pub struct Swapchain {
-    frames: Vec<Frame>,
+    frames: Arc<Vec<Frame>>,
     surface: Arc<SurfaceInner>,
     _size_pixels: (u64, u64),
+    last_frame: usize,
 }
 
-unsafe impl Send for Swapchain {}
-unsafe impl Sync for Swapchain {}
-
 impl Swapchain {
+    /// Returns the drawable for the specified swapchain image index,
+    /// marks the index as free for future use.
     pub(crate) fn take_drawable(&self, index: hal::SwapImageIndex) -> metal::Drawable {
-        self.frames[index as usize].drawable
+        let mut frame = self
+            .frames[index as usize]
+            .inner
             .lock()
-            .unwrap()
+            .unwrap();
+        assert!(!frame.available);
+        frame.available = true;
+        frame.drawable
             .take()
             .expect("Drawable has not been acquired!")
+    }
+
+    fn signal_sync(&self, sync: hal::FrameSync<Backend>) {
+        match sync {
+            hal::FrameSync::Semaphore(semaphore) => {
+                if let Some(ref system) = semaphore.system {
+                    system.signal();
+                }
+            }
+            hal::FrameSync::Fence(fence) => {
+                *fence.mutex.lock().unwrap() = true;
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct SwapchainImage {
+    frames: Arc<Vec<Frame>>,
+    surface: Arc<SurfaceInner>,
+    index: hal::SwapImageIndex,
+}
+
+impl SwapchainImage {
+    /// Waits until the specified swapchain index is available for rendering.
+    pub fn wait_until_ready(&self) {
+        // check the target frame first
+        {
+            let frame = self.frames[self.index as usize].inner.lock().unwrap();
+            assert!(!frame.available);
+            if frame.drawable.is_some() {
+                return
+            }
+        }
+        // wait for new frames to come until we meet the chosen one
+        while self.surface.next_frame(&self.frames).0 != self.index as usize {
+        }
+        debug!("Swapchain image is ready")
     }
 }
 
@@ -174,7 +253,11 @@ impl Device {
                 let texture: metal::Texture = msg_send![drawable, texture];
                 //HACK: not retaining the texture here
                 Frame {
-                    drawable: Mutex::new(None),
+                    inner: Mutex::new(FrameInner {
+                        drawable: None,
+                        available: true,
+                        last_frame: 0,
+                    }),
                     texture,
                 }
             })
@@ -198,9 +281,10 @@ impl Device {
             .collect();
 
         let swapchain = Swapchain {
-            frames,
+            frames: Arc::new(frames),
             surface: surface.inner.clone(),
             _size_pixels: (pixel_width, pixel_height),
+            last_frame: 0,
         };
 
         (swapchain, Backbuffer::Images(images))
@@ -209,30 +293,52 @@ impl Device {
 
 impl hal::Swapchain<Backend> for Swapchain {
     fn acquire_image(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::SwapImageIndex, ()> {
-        let _ap = AutoreleasePool::new(); // for the drawable
+        let mut oldest_index = 0;
+        let mut oldest_frame = self.last_frame;
 
-        unsafe {
-            match sync {
-                hal::FrameSync::Semaphore(semaphore) => {
-                    // FIXME: this is definitely wrong
-                    native::dispatch_semaphore_signal(semaphore.0);
-                },
-                hal::FrameSync::Fence(_fence) => unimplemented!(),
+        self.last_frame += 1;
+
+        for (index, frame_arc) in self.frames.iter().enumerate() {
+            let mut frame = frame_arc.inner.lock().unwrap();
+            if frame.available && frame.drawable.is_some() {
+                frame.available = false;
+                frame.last_frame = self.last_frame;
+                self.signal_sync(sync);
+                return Ok(index as _);
+            }
+            if frame.last_frame < oldest_frame {
+                oldest_frame = frame.last_frame;
+                oldest_index = index;
             }
         }
 
-        let layer_ref = self.surface.render_layer.lock().unwrap();
-        let (drawable, texture_temp): (metal::Drawable, &metal::TextureRef) = unsafe {
-            let drawable: &metal::DrawableRef = msg_send![*layer_ref, nextDrawable];
-            (drawable.to_owned(), msg_send![drawable, texture])
+        let blocking = false;
+
+        let (index, mut frame) = if blocking {
+            self.surface.next_frame(&self.frames)
+        } else {
+            match sync {
+                hal::FrameSync::Semaphore(semaphore) => {
+                    let mut sw_image = semaphore.image_ready.lock().unwrap();
+                    assert!(sw_image.is_none());
+                    *sw_image = Some(SwapchainImage {
+                        frames: self.frames.clone(),
+                        surface: self.surface.clone(),
+                        index: oldest_index as _,
+                    });
+                }
+                hal::FrameSync::Fence(_fence) => {
+                    //TODO: need presentation handlers always created and setting a bool
+                    unimplemented!()
+                }
+            }
+
+            let frame = self.frames[oldest_index].inner.lock().unwrap();
+            (oldest_index, frame)
         };
 
-        let index = self.frames
-            .iter()
-            .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
-            .expect("Surface lost?");
-        let old = mem::replace(&mut *self.frames[index].drawable.lock().unwrap(), Some(drawable));
-        assert!(old.is_none());
+        frame.last_frame = self.last_frame;
+        frame.available = false;
 
         Ok(index as _)
     }

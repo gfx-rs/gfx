@@ -1197,6 +1197,22 @@ impl CommandQueue {
             shared,
         }
     }
+
+    fn wait<I>(&mut self, wait_semaphores: I)
+    where
+        I: IntoIterator,
+        I::Item: Borrow<native::Semaphore>,
+    {
+        for semaphore in wait_semaphores {
+            let sem = semaphore.borrow();
+            if let Some(ref system) = sem.system {
+                system.wait(!0);
+            }
+            if let Some(swap_image) = sem.image_ready.lock().unwrap().take() {
+                swap_image.wait_until_ready();
+            }
+        }
+    }
 }
 
 impl RawCommandQueue<Backend> for CommandQueue {
@@ -1208,17 +1224,20 @@ impl RawCommandQueue<Backend> for CommandQueue {
         IC::Item: Borrow<CommandBuffer>,
     {
         debug!("submitting with fence {:?}", fence);
-        // FIXME: wait for semaphores!
 
-        // FIXME: multiple buffers signaling!
-        let signal_block = if !submit.signal_semaphores.is_empty() {
-            let semaphores_copy: Vec<_> = submit.signal_semaphores.iter().map(|semaphore| {
-                semaphore.0
-            }).collect();
+        self.wait(submit.wait_semaphores.iter().map(|&(s, _)| s));
+
+        let system_semaphores = submit.signal_semaphores
+            .into_iter()
+            .filter_map(|semaphore| {
+                semaphore.system.clone()
+            })
+            .collect::<Vec<_>>();
+        let signal_block = if !system_semaphores.is_empty() {
             //Note: careful with those `ConcreteBlock::copy()` calls!
             Some(ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                for semaphore in semaphores_copy.iter() {
-                    native::dispatch_semaphore_signal(*semaphore);
+                for semaphore in &system_semaphores {
+                    semaphore.signal();
                 }
             }).copy())
         } else {
@@ -1283,18 +1302,19 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<IS, S, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
     where
         IS: IntoIterator<Item = (S, SwapImageIndex)>,
         S: Borrow<window::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
+        self.wait(wait_semaphores);
+
         let queue = self.shared.queue.lock().unwrap();
         let command_buffer = queue.raw.new_command_buffer();
 
         for (swapchain, index) in swapchains {
-            // TODO: wait for semaphores
             debug!("presenting frame {}", index);
             let drawable = swapchain.borrow().take_drawable(index);
             command_buffer.present_drawable(&drawable);
