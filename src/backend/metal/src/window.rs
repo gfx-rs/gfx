@@ -44,11 +44,12 @@ impl SurfaceInner {
         let _ap = AutoreleasePool::new();
         let layer_ref = self.render_layer.lock().unwrap();
 
-        let (drawable, texture_temp): (metal::Drawable, &metal::TextureRef) = unsafe {
-            let drawable: &metal::DrawableRef = msg_send![*layer_ref, nextDrawable];
-            (drawable.to_owned(), msg_send![drawable, texture])
+        let (drawable, texture_temp): (&metal::DrawableRef, &metal::TextureRef) = unsafe {
+            let drawable = msg_send![*layer_ref, nextDrawable];
+            (drawable, msg_send![drawable, texture])
         };
 
+        trace!("looking for {:?}", texture_temp);
         let index = frames
             .iter()
             .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
@@ -56,9 +57,9 @@ impl SurfaceInner {
 
         let mut frame = frames[index].inner.lock().unwrap();
         assert!(frame.drawable.is_none());
-        frame.drawable = Some(drawable);
+        frame.drawable = Some(drawable.to_owned());
 
-        debug!("Surface next frame is {}", index);
+        debug!("next is frame[{}]", index);
         (index, frame)
     }
 }
@@ -82,11 +83,29 @@ struct Frame {
 unsafe impl Send for Frame {}
 unsafe impl Sync for Frame {}
 
+impl Drop for Frame {
+    fn drop(&mut self) {
+        info!("dropping Frame");
+    }
+}
+
 pub struct Swapchain {
     frames: Arc<Vec<Frame>>,
     surface: Arc<SurfaceInner>,
-    _size_pixels: (u64, u64),
+    size_pixels: (image::Size, image::Size),
     last_frame: usize,
+    image_ready_callbacks: Vec<Arc<Mutex<Option<SwapchainImage>>>>,
+}
+
+impl Drop for Swapchain {
+    fn drop(&mut self) {
+        info!("dropping Swapchain");
+        for ir in self.image_ready_callbacks.drain(..) {
+            if ir.lock().unwrap().take().is_some() {
+                debug!("\twith a callback");
+            }
+        }
+    }
 }
 
 impl Swapchain {
@@ -147,7 +166,7 @@ impl SwapchainImage {
 
 impl hal::Surface<Backend> for Surface {
     fn kind(&self) -> image::Kind {
-        let (width, height) = self.pixel_dimensions();
+        let (width, height) = self.inner.pixel_dimensions();
 
         image::Kind::D2(width, height, 1, 1)
     }
@@ -157,7 +176,7 @@ impl hal::Surface<Backend> for Surface {
     ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>) {
         let caps = hal::SurfaceCapabilities {
             //Note: this is hardcoded in `CAMetalLayer` documentation
-            image_count: 2 .. 3,
+            image_count: 2 .. 4,
             current_extent: None,
             extents: Extent2D { width: 4, height: 4} .. Extent2D { width: 4096, height: 4096 },
             max_image_layers: 1,
@@ -182,12 +201,12 @@ impl hal::Surface<Backend> for Surface {
     }
 }
 
-impl Surface {
+impl SurfaceInner {
     fn pixel_dimensions(&self) -> (image::Size, image::Size) {
         unsafe {
             // NSView bounds are measured in DIPs
-            let bounds: NSRect = msg_send![self.inner.nsview, bounds];
-            let bounds_pixel: NSRect = msg_send![self.inner.nsview, convertRectToBacking:bounds];
+            let bounds: NSRect = msg_send![self.nsview, bounds];
+            let bounds_pixel: NSRect = msg_send![self.nsview, convertRectToBacking:bounds];
             (bounds_pixel.size.width as _, bounds_pixel.size.height as _)
         }
     }
@@ -199,7 +218,7 @@ impl Device {
         surface: &mut Surface,
         config: SwapchainConfig,
     ) -> (Swapchain, Backbuffer<Backend>) {
-        let _ap = AutoreleasePool::new(); // for the drawable
+        info!("build_swapchain {:?}", config);
 
         let mtl_format = self.private_caps
             .map_format(config.color_format)
@@ -224,7 +243,6 @@ impl Device {
             msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
             //TODO: only set it where supported
             msg_send![render_layer, setDisplaySyncEnabled: display_sync];
-            //msg_send![render_layer, setPresentsWithTransaction: true];
 
             // Update render layer size
             let view_points_size: CGRect = msg_send![nsview, bounds];
@@ -244,21 +262,30 @@ impl Device {
             (view_points_size.size, scale_factor)
         };
 
-        let pixel_width = (view_size.width * scale_factor) as u64;
-        let pixel_height = (view_size.height * scale_factor) as u64;
+        let pixel_width = (view_size.width * scale_factor) as image::Size;
+        let pixel_height = (view_size.height * scale_factor) as image::Size;
 
         let frames = (0 .. config.image_count)
-            .map(|_| unsafe {
-                let drawable: &metal::DrawableRef = msg_send![render_layer, nextDrawable];
-                let texture: metal::Texture = msg_send![drawable, texture];
-                //HACK: not retaining the texture here
+            .map(|index| {
+                let _ap = AutoreleasePool::new(); // for the drawable & texture
+                let (drawable, texture) = unsafe {
+                    let drawable: &metal::DrawableRef = msg_send![render_layer, nextDrawable];
+                    assert!(!drawable.as_ptr().is_null());
+                    let texture: &metal::TextureRef = msg_send![drawable, texture];
+                    (drawable, texture)
+                };
+                if index == 0 {
+                    // when resizing, this trick frees up the currently shown frame
+                    drawable.present();
+                }
+                trace!("\tframe[{}] = {:?}", index, texture);
                 Frame {
                     inner: Mutex::new(FrameInner {
-                        drawable: None,
+                        drawable: Some(drawable.to_owned()),
                         available: true,
                         last_frame: 0,
                     }),
-                    texture,
+                    texture: texture.to_owned(),
                 }
             })
             .collect::<Vec<_>>();
@@ -266,10 +293,10 @@ impl Device {
         let images = frames
             .iter()
             .map(|frame| native::Image {
-                raw: frame.texture.clone(), //Note: careful!
+                raw: frame.texture.clone(),
                 extent: image::Extent {
-                    width: pixel_width as _,
-                    height: pixel_height as _,
+                    width: pixel_width,
+                    height: pixel_height,
                     depth: 1,
                 },
                 num_layers: None,
@@ -283,8 +310,9 @@ impl Device {
         let swapchain = Swapchain {
             frames: Arc::new(frames),
             surface: surface.inner.clone(),
-            _size_pixels: (pixel_width, pixel_height),
+            size_pixels: (pixel_width, pixel_height),
             last_frame: 0,
+            image_ready_callbacks: Vec::new(),
         };
 
         (swapchain, Backbuffer::Images(images))
@@ -293,14 +321,22 @@ impl Device {
 
 impl hal::Swapchain<Backend> for Swapchain {
     fn acquire_image(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::SwapImageIndex, ()> {
+        self.last_frame += 1;
+
+        //TODO: figure out a proper story of HiDPI
+        if false && self.surface.pixel_dimensions() != self.size_pixels {
+            return Err(())
+        }
+
         let mut oldest_index = 0;
         let mut oldest_frame = self.last_frame;
 
-        self.last_frame += 1;
-
         for (index, frame_arc) in self.frames.iter().enumerate() {
             let mut frame = frame_arc.inner.lock().unwrap();
-            if frame.available && frame.drawable.is_some() {
+            if !frame.available {
+                continue
+            }
+            if frame.drawable.is_some() {
                 frame.available = false;
                 frame.last_frame = self.last_frame;
                 self.signal_sync(sync);
@@ -317,8 +353,10 @@ impl hal::Swapchain<Backend> for Swapchain {
         let (index, mut frame) = if blocking {
             self.surface.next_frame(&self.frames)
         } else {
+            self.image_ready_callbacks.retain(|ir| ir.lock().unwrap().is_some());
             match sync {
                 hal::FrameSync::Semaphore(semaphore) => {
+                    self.image_ready_callbacks.push(Arc::clone(&semaphore.image_ready));
                     let mut sw_image = semaphore.image_ready.lock().unwrap();
                     assert!(sw_image.is_none());
                     *sw_image = Some(SwapchainImage {
@@ -337,6 +375,7 @@ impl hal::Swapchain<Backend> for Swapchain {
             (oldest_index, frame)
         };
 
+        assert!(frame.available);
         frame.last_frame = self.last_frame;
         frame.available = false;
 

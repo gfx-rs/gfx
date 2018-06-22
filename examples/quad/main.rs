@@ -599,6 +599,7 @@ fn swapchain_stuff(
     println!("Surface format: {:?}", format);
     let swap_config = SwapchainConfig::new()
         .with_color(format)
+        .with_image_count(caps.image_count.start)
         .with_image_usage(i::Usage::COLOR_ATTACHMENT);
     let (swap_chain, backbuffer) = device.create_swapchain(surface, swap_config, None, &extent);
 

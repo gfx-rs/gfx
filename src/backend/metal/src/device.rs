@@ -2024,9 +2024,12 @@ impl hal::Device<Backend> for Device {
         &self,
         surface: &mut Surface,
         config: hal::SwapchainConfig,
-        _old_swapchain: Option<Swapchain>,
+        old_swapchain: Option<Swapchain>,
         _extent: &window::Extent2D,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
+        if let Some(_swapchain) = old_swapchain {
+            //swapchain is dropped here
+        }
         self.build_swapchain(surface, config)
     }
 
