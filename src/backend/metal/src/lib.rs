@@ -198,6 +198,7 @@ impl hal::Backend for Backend {
 
 #[derive(Clone, Copy, Debug)]
 struct PrivateCapabilities {
+    exposed_queues: usize,
     resource_heaps: bool,
     argument_buffers: bool,
     shared_textures: bool,

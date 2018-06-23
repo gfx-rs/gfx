@@ -215,7 +215,7 @@ impl core::Swapchain<device_dx11::Backend> for Swapchain11 {
         &self.images
     }
 
-    fn acquire_frame(&mut self, sync: core::FrameSync<device_dx11::Resources>) -> Result<core::Frame, ()> {
+    fn acquire_image(&mut self, sync: core::FrameSync<device_dx11::Resources>) -> Result<core::Frame, ()> {
         // TODO: sync
         Ok(core::Frame::new(0))
     }

@@ -463,8 +463,8 @@ fn main() {
 
         device.reset_fence(&frame_fence);
         command_pool.reset();
-        let frame: hal::FrameImage = {
-            match swap_chain.acquire_frame(FrameSync::Semaphore(&mut frame_semaphore)) {
+        let frame: hal::SwapImageIndex = {
+            match swap_chain.acquire_image(FrameSync::Semaphore(&mut frame_semaphore)) {
                 Ok(i) => i,
                 Err(_) => {
                     recreate_swapchain = true;
@@ -599,6 +599,7 @@ fn swapchain_stuff(
     println!("Surface format: {:?}", format);
     let swap_config = SwapchainConfig::new()
         .with_color(format)
+        .with_image_count(caps.image_count.start)
         .with_image_usage(i::Usage::COLOR_ATTACHMENT);
     let (swap_chain, backbuffer) = device.create_swapchain(surface, swap_config, None, &extent);
 

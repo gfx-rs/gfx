@@ -26,7 +26,7 @@ use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
 use ash::vk;
 
 use hal::{format, image, memory, queue};
-use hal::{Features, FrameImage, Limits, PatchSize, QueueType};
+use hal::{Features, SwapImageIndex, Limits, PatchSize, QueueType};
 use hal::error::{DeviceCreationError, HostExecutionError};
 
 use std::{fmt, mem, ptr};
@@ -703,7 +703,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
     fn present<IS, S, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, FrameImage)>,
+        IS: IntoIterator<Item = (S, SwapImageIndex)>,
         S: Borrow<window::Swapchain>,
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,

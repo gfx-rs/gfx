@@ -264,6 +264,7 @@ impl PhysicalDevice {
         let private_caps = {
             let device = &*shared.device.lock().unwrap();
             PrivateCapabilities {
+                exposed_queues: 1,
                 resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
                 argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
                 shared_textures: !Self::is_mac(device),
@@ -328,7 +329,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         let mut queue_group = hal::backend::RawQueueGroup::new(family);
-        queue_group.add_queue(command::CommandQueue::new(self.shared.clone()));
+        for _ in 0 .. self.private_caps.exposed_queues {
+            queue_group.add_queue(command::CommandQueue::new(self.shared.clone()));
+        }
 
         let device = Device {
             shared: self.shared.clone(),
@@ -1132,28 +1135,15 @@ impl hal::Device<Backend> for Device {
             inner.aspects |= aspects;
 
             let at = attachment.borrow();
-            let texture = match at.root {
-                native::ImageRoot::Texture(ref tex) => tex,
-                native::ImageRoot::Frame(ref frame) => {
-                    // we don't have the actual MTLTexture for the frame at this point
-                    inner.colors.push(native::ColorAttachment {
-                        mtl_format: at.mtl_format,
-                        channel: format.base_format().1.into(),
-                        frame: Some(frame.clone()),
-                    });
-                    continue;
-                }
-            };
             if aspects.contains(format::Aspects::COLOR) {
                 descriptor
                     .color_attachments()
                     .object_at(inner.colors.len())
                     .expect("too many color attachments")
-                    .set_texture(Some(texture));
+                    .set_texture(Some(&at.raw));
                 inner.colors.push(native::ColorAttachment {
                     mtl_format: at.mtl_format,
                     channel: format.base_format().1.into(),
-                    frame: None,
                 });
             }
             if aspects.contains(format::Aspects::DEPTH) {
@@ -1162,7 +1152,7 @@ impl hal::Device<Backend> for Device {
                 descriptor
                     .depth_attachment()
                     .unwrap()
-                    .set_texture(Some(texture));
+                    .set_texture(Some(&at.raw));
             }
             if aspects.contains(format::Aspects::STENCIL) {
                 if let Some(old_format) = inner.depth_stencil {
@@ -1173,7 +1163,7 @@ impl hal::Device<Backend> for Device {
                 descriptor
                     .stencil_attachment()
                     .unwrap()
-                    .set_texture(Some(texture));
+                    .set_texture(Some(&at.raw));
             }
         }
 
@@ -1338,7 +1328,16 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_semaphore(&self) -> n::Semaphore {
-        unsafe { n::Semaphore(n::dispatch_semaphore_create(1)) } // Returns retained
+        n::Semaphore {
+            // Semaphore synchronization between command buffers of the same queue
+            // is useless, don't bother even creating one.
+            system: if self.private_caps.exposed_queues > 1 {
+                Some(n::SystemSemaphore::new())
+            } else {
+                None
+            },
+            image_ready: Arc::new(Mutex::new(None)),
+        }
     }
 
     fn create_descriptor_pool<I>(&self, _max_sets: usize, descriptor_ranges: I) -> n::DescriptorPool
@@ -1445,18 +1444,17 @@ impl hal::Device<Backend> for Device {
                                 vec[array_offset] = Some(sampler.0.clone());
                             }
                             (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
-                                vec[array_offset] = Some((image.root.clone(), layout));
+                                vec[array_offset] = Some((image.raw.clone(), layout));
                             }
                             (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
-                                vec[array_offset].0 = Some((image.root.clone(), layout));
+                                vec[array_offset].0 = Some((image.raw.clone(), layout));
                             }
                             (&pso::Descriptor::CombinedImageSampler(image, layout, sampler), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
-                                vec[array_offset] = (Some((image.root.clone(), layout)), Some(sampler.0.clone()));
+                                vec[array_offset] = (Some((image.raw.clone(), layout)), Some(sampler.0.clone()));
                             }
                             (&pso::Descriptor::UniformTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) |
                             (&pso::Descriptor::StorageTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
-                                let root = native::ImageRoot::Texture(view.raw.clone());
-                                vec[array_offset] = Some((root, image::Layout::General));
+                                vec[array_offset] = Some((view.raw.clone(), image::Layout::General));
                             }
                             (&pso::Descriptor::Buffer(buffer, ref range), &mut n::DescriptorSetBinding::Buffer(ref mut vec)) => {
                                 let buf_length = buffer.raw.length();
@@ -1489,8 +1487,7 @@ impl hal::Device<Backend> for Device {
                                 encoder.set_sampler_states(&[&sampler.0], write.binding as _);
                             }
                             pso::Descriptor::Image(image, _layout) => {
-                                let guard = image.root.as_ref().resolve();
-                                encoder.set_textures(&[&*guard], write.binding as _);
+                                encoder.set_textures(&[&image.raw], write.binding as _);
                             }
                             pso::Descriptor::Buffer(buffer, ref range) => {
                                 encoder.set_buffer(&buffer.raw, range.start.unwrap_or(0), write.binding as _);
@@ -1539,8 +1536,7 @@ impl hal::Device<Backend> for Device {
     fn destroy_framebuffer(&self, _buffer: n::Framebuffer) {
     }
 
-    fn destroy_semaphore(&self, semaphore: n::Semaphore) {
-        unsafe { n::dispatch_release(semaphore.0) }
+    fn destroy_semaphore(&self, _semaphore: n::Semaphore) {
     }
 
     fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
@@ -1907,7 +1903,7 @@ impl hal::Device<Backend> for Device {
         };
 
         Ok(n::Image {
-            root: native::ImageRoot::Texture(raw),
+            raw,
             extent: image.extent,
             num_layers: image.num_layers,
             format_desc,
@@ -1942,35 +1938,28 @@ impl hal::Device<Backend> for Device {
             },
         };
 
-        let root = match image.root {
-            native::ImageRoot::Texture(ref raw) => {
-                let view = raw.new_texture_view_from_slice(
-                    mtl_format,
-                    conv::map_texture_type(kind),
-                    NSRange {
-                        location: range.levels.start as _,
-                        length: (range.levels.end - range.levels.start) as _,
-                    },
-                    NSRange {
-                        location: range.layers.start as _,
-                        length: (range.layers.end - range.layers.start) as _,
-                    },
-                );
-                native::ImageRoot::Texture(view)
-            }
-            native::ImageRoot::Frame(ref frame) => {
-                assert_eq!(mtl_format, image.mtl_format);
-                assert_eq!(kind, image::ViewKind::D2);
-                assert_eq!(range, image::SubresourceRange {
-                    aspects: format::Aspects::COLOR,
-                    levels: 0 .. 1,
-                    layers: 0 .. 1,
-                });
-                native::ImageRoot::Frame(frame.clone())
-            }
+        let view = if mtl_format == image.mtl_format && kind == image::ViewKind::D2 &&
+            swizzle == format::Swizzle::NO && image.num_layers.is_none()
+        {
+            // Some images are marked as framebuffer-only, and we can't create aliases of them
+            //TODO: check more things?
+            image.raw.clone()
+        } else {
+            image.raw.new_texture_view_from_slice(
+                mtl_format,
+                conv::map_texture_type(kind),
+                NSRange {
+                    location: range.levels.start as _,
+                    length: (range.levels.end - range.levels.start) as _,
+                },
+                NSRange {
+                    location: range.layers.start as _,
+                    length: (range.layers.end - range.layers.start) as _,
+                },
+            )
         };
 
-        Ok(n::ImageView { root, mtl_format })
+        Ok(n::ImageView { raw: view, mtl_format })
     }
 
     fn destroy_image_view(&self, _view: n::ImageView) {
@@ -2035,9 +2024,12 @@ impl hal::Device<Backend> for Device {
         &self,
         surface: &mut Surface,
         config: hal::SwapchainConfig,
-        _old_swapchain: Option<Swapchain>,
+        old_swapchain: Option<Swapchain>,
         _extent: &window::Extent2D,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
+        if let Some(_swapchain) = old_swapchain {
+            //swapchain is dropped here
+        }
         self.build_swapchain(surface, config)
     }
 
