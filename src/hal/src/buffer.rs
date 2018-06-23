@@ -1,72 +1,58 @@
-//! Memory buffers
+//! Memory buffers.
+//!
+//! # Buffer
+//!
+//! Buffers interpret memory slices as linear continguous data array.
+//! They can be used as shader resources, vertex buffers, index buffers or for
+//! specifying the action commands for indirect exection.
 
-use std::error::Error;
-use std::fmt;
-
-use {IndexType, Backend};
+use {format, IndexType, Backend};
 
 
 /// An offset inside a buffer, in bytes.
 pub type Offset = u64;
 
+/// Buffer state.
+pub type State = Access;
+
 /// Error creating a buffer.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Fail, Debug, Clone, PartialEq, Eq)]
 pub enum CreationError {
-    /// Required `Usage` is not supported.
-    Usage(Usage),
-    /// Some other problem.
-    Other,
+    /// Memory allocation on the host side failed.
+    /// This could be caused by a lack of memory.
+    #[fail(display = "Host memory allocation failed.")]
+    OutOfHostMemory,
+    /// Memory allocation on the device side failed.
+    /// This could be caused by a lack of memory.
+    #[fail(display = "Device memory allocation failed.")]
+    OutOfDeviceMemory,
+    /// Requested buffer usage is not supported.
+    ///
+    /// Older GL version don't support constant buffers or multiple usage flags.
+    #[fail(display = "Buffer usage unsupported ({:?}).", usage)]
+    UnsupportedUsage {
+        /// Unsupported usage passed on buffer creation.
+        usage: Usage,
+    },
 }
 
-impl fmt::Display for CreationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let description = self.description();
-        match *self {
-            CreationError::Usage(usage) => write!(f, "{}: {:?}", description, usage),
-            _ => write!(f, "{}", description)
-        }
-    }
-}
-
-impl Error for CreationError {
-    fn description(&self) -> &str {
-        match *self {
-            CreationError::Usage(_) =>
-                "Required `Usage` is not supported",
-            CreationError::Other =>
-                "Some other problem",
-        }
-    }
-}
-
-/// Error creating a `BufferView`.
-#[derive(Clone, Debug, PartialEq)]
-pub enum ViewError {
-    /// The required usage flag is not present in the image.
-    Usage(Usage),
-    /// The backend refused for some reason.
-    Unsupported,
-}
-
-impl fmt::Display for ViewError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let description = self.description();
-        match *self {
-            ViewError::Usage(usage) => write!(f, "{}: {:?}", description, usage),
-            _ => write!(f, "{}", description)
-        }
-    }
-}
-
-impl Error for ViewError {
-    fn description(&self) -> &str {
-        match *self {
-            ViewError::Usage(_) =>
-                "The required usage flag is not present in the image",
-            ViewError::Unsupported =>
-                "The backend refused for some reason",
-        }
-    }
+/// Error creating a buffer view.
+#[derive(Fail, Debug, Clone, PartialEq, Eq)]
+pub enum ViewCreationError {
+    /// Memory allocation on the host side failed.
+    /// This could be caused by a lack of memory.
+    #[fail(display = "Host memory allocation failed.")]
+    OutOfHostMemory,
+    /// Memory allocation on the device side failed.
+    /// This could be caused by a lack of memory.
+    #[fail(display = "Device memory allocation failed.")]
+    OutOfDeviceMemory,
+    /// Buffer view format is not supported.
+    #[fail(display = "Buffer view format unsupported ({:?}).", format)]
+    UnsupportedFormat {
+        /// Unsupported format passed on view creation.
+        format: Option<format::Format>,
+    },
 }
 
 bitflags!(
@@ -95,21 +81,27 @@ bitflags!(
 );
 
 impl Usage {
-    /// Can this buffer be used in transfer operations ?
+    /// Returns if the buffer can be used in transfer operations.
     pub fn can_transfer(&self) -> bool {
         self.intersects(Usage::TRANSFER_SRC | Usage::TRANSFER_DST)
     }
 }
 
 bitflags!(
-    /// Buffer state flags.
+    /// Buffer access flags.
+    ///
+    /// Access of buffers by the pipeline or shaders.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Access: u32 {
-        ///
+        /// Read commands instruction for indirect execution.
         const INDIRECT_COMMAND_READ = 0x1;
+        /// Read index values for indexed draw commands.
         ///
+        /// See [`draw_indexed`](../command/trait.RawCommandBuffer.html#tymethod.draw_indexed)
+        /// and [`draw_indexed_indirect`](../command/trait.RawCommandBuffer.html#tymethod.draw_indexed_indirect).
         const INDEX_BUFFER_READ = 0x2;
-        ///
+        /// Read vertices from vertex buffer for draw commands in the [`VERTEX_INPUT`](
+        /// ../pso/struct.PipelineStage.html#associatedconstant.VERTEX_INPUT) stage.
         const VERTEX_BUFFER_READ = 0x4;
         ///
         const CONSTANT_BUFFER_READ = 0x8;
@@ -132,11 +124,10 @@ bitflags!(
     }
 );
 
-/// Buffer state
-pub type State = Access;
-
-/// Index buffer view for `bind_index_buffer`, slightly
-/// analogous to an index table into an array.
+/// Index buffer view for `bind_index_buffer`.
+///
+/// Defines a buffer slice used for acquiring the indicies on draw commands.
+/// Indices are used to lookup vertex indices in the vertex buffers.
 pub struct IndexBufferView<'a, B: Backend> {
     /// The buffer to bind.
     pub buffer: &'a B::Buffer,

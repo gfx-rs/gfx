@@ -108,6 +108,10 @@ pub enum Command {
     CopySurfaceToBuffer(n::Surface, n::RawBuffer, command::BufferImageCopy),
     CopyImageToTexture(n::ImageKind, n::Texture, command::ImageCopy),
     CopyImageToSurface(n::ImageKind, n::Surface, command::ImageCopy),
+
+    BindBufferRange(gl::types::GLenum, gl::types::GLuint, n::RawBuffer, gl::types::GLintptr, gl::types::GLsizeiptr),
+    BindTexture(gl::types::GLenum, n::Texture),
+    BindSampler(gl::types::GLuint, n::Texture),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -862,17 +866,56 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
-        _layout: &n::PipelineLayout,
-        _first_set: usize,
-        _sets: I,
-        _offsets: J,
+        layout: &n::PipelineLayout,
+        first_set: usize,
+        sets: I,
+        offsets: J,
     ) where
         I: IntoIterator,
         I::Item: Borrow<n::DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
-        // TODO
+        assert!(offsets.into_iter().next().is_none()); // TODO: offsets unsupported
+
+        let mut set = first_set as _;
+        let drd = &*layout.desc_remap_data.read().unwrap();
+
+        for desc_set in sets {
+            let desc_set = desc_set.borrow();
+            for new_binding in &*desc_set.bindings.lock().unwrap() {
+                match new_binding {
+                    n::DescSetBindings::Buffer {ty: btype, binding, buffer, offset, size} => {
+                        for binding in drd.get_binding(n::BindingTypes::UniformBuffers, set, *binding).unwrap() {
+                            self.push_cmd(Command::BindBufferRange(
+                                gl::UNIFORM_BUFFER,
+                                *binding,
+                                *buffer,
+                                *offset,
+                                *size,
+                            ))
+                        }
+                    }
+                    n::DescSetBindings::Texture(binding, texture) => {
+                        for binding in drd.get_binding(n::BindingTypes::Images, set, *binding).unwrap() {
+                            self.push_cmd(Command::BindTexture(
+                                *binding,
+                                *texture,
+                            ))
+                        }
+                    }
+                    n::DescSetBindings::Sampler(binding, sampler) => {
+                        for binding in drd.get_binding(n::BindingTypes::Images, set, *binding).unwrap() {
+                            self.push_cmd(Command::BindSampler(
+                                *binding,
+                                *sampler,
+                            ))
+                        }
+                    }
+                }
+            }
+            set += 1;
+        }
     }
 
     fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {

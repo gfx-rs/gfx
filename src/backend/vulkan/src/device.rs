@@ -929,7 +929,7 @@ impl d::Device<B> for Device {
 
     fn create_buffer_view<R: RangeArg<u64>>(
         &self, buffer: &n::Buffer, format: Option<format::Format>, range: R
-    ) -> Result<n::BufferView, buffer::ViewError> {
+    ) -> Result<n::BufferView, buffer::ViewCreationError> {
         let (offset, size) = conv::map_range_arg(&range);
         let info = vk::BufferViewCreateInfo {
             s_type: vk::StructureType::BufferViewCreateInfo,

@@ -44,8 +44,12 @@ mod shader;
 mod internal;
 mod device;
 
-#[derive(Clone, Debug)]
+
+
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub(crate) struct ViewInfo {
+    #[derivative(Debug="ignore")]
     resource: *mut d3d11::ID3D11Resource,
     kind: image::Kind,
     flags: image::StorageFlags,
@@ -251,18 +255,6 @@ impl hal::Instance for Instance {
                 (unsafe { ComPtr::<d3d11::ID3D11Device>::from_raw(device) }, feature_level)
             };
 
-            // TODO: we should improve the way memory is managed. we should
-            //       give access to DEFAULT, DYNAMIC and STAGING;
-            //
-            //       roughly this should translate to:
-            //
-            //       DEFAULT => DEVICE_LOCAL
-            //
-            //       NOTE: DYNAMIC only offers cpu write, potentially add
-            //             a HOST_WRITE_ONLY flag..
-            //       DYNAMIC => DEVICE_LOCAL | CPU_VISIBLE
-            //
-            //       STAGING => CPU_VISIBLE | CPU_CACHED
             let memory_properties = hal::MemoryProperties {
                 memory_types: vec![
                     hal::MemoryType {
@@ -270,11 +262,7 @@ impl hal::Instance for Instance {
                         heap_index: 0,
                     },
                     hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL, //| Properties::CPU_VISIBLE | Properties::CPU_CACHED,
-                        heap_index: 0,
-                    },
-                    hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
+                        properties: Properties::CPU_VISIBLE,
                         heap_index: 1,
                     },
                 ],
@@ -716,7 +704,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 pub struct CommandBuffer {
     // TODO: better way of sharing
     #[derivative(Debug="ignore")]
-    internal: internal::BufferImageCopy,
+    internal: internal::Internal,
     #[derivative(Debug="ignore")]
     context: ComPtr<d3d11::ID3D11DeviceContext>,
     #[derivative(Debug="ignore")]
@@ -727,7 +715,7 @@ unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 
 impl CommandBuffer {
-    fn create_deferred(device: ComPtr<d3d11::ID3D11Device>, internal: internal::BufferImageCopy) -> Self {
+    fn create_deferred(device: ComPtr<d3d11::ID3D11Device>, internal: internal::Internal) -> Self {
         let mut context: *mut d3d11::ID3D11DeviceContext = ptr::null_mut();
         let hr = unsafe {
             device.CreateDeferredContext(0, &mut context as *mut *mut _ as *mut *mut _)
@@ -834,7 +822,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             let _sub = subresource_range.borrow();
             unsafe {
                 self.context.ClearRenderTargetView(
-                    image.rtv.clone().unwrap().as_raw(),
+                    image.internal.rtv.clone().unwrap().as_raw(),
                     &color.float32
                 );
             }
@@ -870,7 +858,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
         unsafe {
             self.context.IASetIndexBuffer(
-                ibv.buffer.device_local_buffer().as_raw(),
+                ibv.buffer.internal.raw,
                 conv::map_index_type(ibv.index_type),
                 ibv.offset as u32
             );
@@ -879,7 +867,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<Backend>) {
         let (buffers, offsets): (Vec<*mut d3d11::ID3D11Buffer>, Vec<u32>) = vbs.0.iter()
-            .map(|(buf, offset)| (buf.device_local_buffer().as_raw(), *offset as u32))
+            .map(|(buf, offset)| (buf.internal.raw, *offset as u32))
             .unzip();
 
         // TODO: strides
@@ -982,8 +970,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             let set = set.borrow();
 
             for (binding, cbv) in set.cbv_handles.borrow().iter() {
-                let cbv = cbv.as_raw();
-                unsafe { self.context.VSSetConstantBuffers(*binding, 1, &cbv); }
+                unsafe { self.context.VSSetConstantBuffers(*binding, 1, cbv); }
             }
 
             for (binding, srv) in set.srv_handles.borrow().iter() {
@@ -1037,7 +1024,29 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
     {
-        unimplemented!()
+        for region in regions.into_iter() {
+            let info = region.borrow();
+
+            unsafe {
+                self.context.CopySubresourceRegion(
+                    dst.internal.raw as _,
+                    0,
+                    info.dst as _,
+                    0,
+                    0,
+                    src.internal.raw as _,
+                    0,
+                    &d3d11::D3D11_BOX {
+                        left: info.src as _,
+                        top: 0,
+                        front: 0,
+                        right: (info.src + info.size) as _,
+                        bottom: 1,
+                        back: 1,
+                    }
+                );
+            }
+        }
     }
 
     fn copy_image<T>(&mut self, src: &Image, _: image::Layout, dst: &Image, _: image::Layout, regions: T)
@@ -1045,7 +1054,30 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ImageCopy>,
     {
-        unimplemented!()
+        for region in regions.into_iter() {
+            let info = region.borrow();
+
+            // TODO: subresources
+            unsafe {
+                self.context.CopySubresourceRegion(
+                    dst.internal.raw as _,
+                    0,
+                    info.dst_offset.x as _,
+                    info.dst_offset.y as _,
+                    info.dst_offset.z as _,
+                    src.internal.raw as _,
+                    0,
+                    &d3d11::D3D11_BOX {
+                        left: info.src_offset.x as _,
+                        top: info.src_offset.y as _,
+                        front: info.src_offset.z as _,
+                        right: info.extent.width as _,
+                        bottom: info.extent.height as _,
+                        back: info.extent.depth as _,
+                    }
+                );
+            }
+        }
     }
 
     fn copy_buffer_to_image<T>(&mut self, buffer: &Buffer, image: &Image, _: image::Layout, regions: T)
@@ -1053,11 +1085,15 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
+        assert_eq!(buffer.internal.srv.is_some(), true);
+
+        // TODO: more than 2D
         for copy in regions.into_iter() {
-            self.internal.copy_2d(
+            self.internal.copy_buffer_image_2d(
                 self.context.clone(),
-                buffer.srv.clone().unwrap(),
-                image.uav.clone().unwrap(),
+                buffer.internal.srv.unwrap(),
+                image.internal.uav.clone().unwrap(),
+                image.typed_raw_format,
                 copy.borrow().clone()
             );
         }
@@ -1068,7 +1104,17 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        unimplemented!()
+        assert_eq!(buffer.internal.uav.is_some(), true);
+
+        for copy in regions.into_iter() {
+            self.internal.copy_image_2d_buffer(
+                self.context.clone(),
+                image.internal.srv.clone().unwrap(),
+                image.typed_raw_format,
+                buffer.internal.uav.unwrap(),
+                copy.borrow().clone()
+            );
+        }
     }
 
     fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
@@ -1135,22 +1181,156 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 }
 
+// Since we dont have any heaps to work with directly, everytime we bind a
+// buffer/image to memory we allocate a dx11 resource and assign it a range.
+//
+// `HOST_VISIBLE` memory gets a `Vec<u8>` which covers the entire memory
+// range. This forces us to only expose non-coherent memory, as this
+// abstraction acts as a "cache" since the "staging buffer" vec is disjoint
+// from all the dx11 resources we store in the struct.
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Memory {
     properties: memory::Properties,
-    #[derivative(Debug="ignore")]
-    // TODO: :-(
-    buffer: RefCell<Option<InternalBuffer>>,
     size: u64,
+
+    mapped_ptr: RefCell<Option<*mut u8>>,
+
+    // staging buffer covering the whole memory region, if it's HOST_VISIBLE
+    host_visible: Option<RefCell<Vec<u8>>>,
+
+    #[derivative(Debug="ignore")]
+    working_buffer: Option<ComPtr<d3d11::ID3D11Buffer>>,
+
+    // list of all buffers bound to this memory
+    #[derivative(Debug="ignore")]
+    local_buffers: RefCell<Vec<(Range<u64>, InternalBuffer)>>,
+
+    // list of all images bound to this memory
+    #[derivative(Debug="ignore")]
+    local_images: RefCell<Vec<(Range<u64>, InternalImage)>>,
 }
 
 unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
 
+fn intersection(a: &Range<u64>, b: &Range<u64>) -> Option<Range<u64>> {
+    let min = if a.start < b.start { a } else { b };
+    let max = if min == a { b } else { a };
+
+    if min.end < max.start {
+        None
+    } else {
+        let end = if min.end < max.end { min.end } else { max.end };
+        Some(max.start..end) 
+    }
+}
+
+// TODO: implement flush/invalidate for bound images as well
+impl Memory {
+    pub fn resolve<R: hal::range::RangeArg<u64>>(&self, range: &R) -> Range<u64> {
+        *range.start().unwrap_or(&0) .. *range.end().unwrap_or(&self.size)
+    }
+
+    pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) {
+        self.local_buffers.borrow_mut().push((range, buffer));
+    }
+
+    pub fn flush(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, range: Range<u64>) {
+        for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
+            if let Some(range) = intersection(&range, &buffer_range) {
+                unsafe {
+                    let src = self.mapped_ptr.borrow().unwrap();
+
+                    context.UpdateSubresource(
+                        buffer.raw as _,
+                        0,
+                        &d3d11::D3D11_BOX {
+                            left: (range.start - buffer_range.start) as _,
+                            top: 0,
+                            front: 0,
+                            right: (range.end - buffer_range.start) as _,
+                            bottom: 1,
+                            back: 1,
+                        },
+                        src.offset(range.start as isize) as _,
+                        0,
+                        0
+                    );
+                }
+            }
+        }
+    }
+
+    fn map(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>) -> *mut u8 {
+        assert_eq!(self.working_buffer.is_some(), true);
+
+        unsafe {
+            let mut map = mem::zeroed();
+            let hr = context.Map(
+                self.working_buffer.clone().unwrap().as_raw() as _,
+                0,
+                d3d11::D3D11_MAP_READ,
+                0,
+                &mut map
+            );
+
+            assert_eq!(hr, winerror::S_OK);
+
+            map.pData as _
+        }
+    }
+
+    fn unmap(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        unsafe {
+            context.Unmap(
+                self.working_buffer.clone().unwrap().as_raw() as _,
+                0,
+            );
+        }
+    }
+
+    pub fn invalidate(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, range: Range<u64>) {
+        for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
+            if let Some(range) = intersection(&range, &buffer_range) {
+                unsafe {
+
+                    // upload to staging buffer
+                    context.CopySubresourceRegion(
+                        self.working_buffer.clone().unwrap().as_raw() as _,
+                        0,
+                        0,
+                        0,
+                        0,
+                        buffer.raw as _,
+                        0,
+                        &d3d11::D3D11_BOX {
+                            left: range.start as _,
+                            top: 0,
+                            front: 0,
+                            right: range.end as _,
+                            bottom: 1,
+                            back: 1,
+                        }
+                    );
+
+                    // TODO: handle memory larger than our hardcoded 1<<15
+                    //       staging buffer
+
+                    // copy over to our vec
+                    let dst = self.mapped_ptr.borrow().unwrap().offset(range.start as isize);
+                    let src = self.map(&context);
+                    ptr::copy(src, dst, (range.end - range.start) as usize);
+                    self.unmap(&context);
+                }
+            }
+        }
+    }
+}
+
 pub struct CommandPool {
     device: ComPtr<d3d11::ID3D11Device>,
-    internal: internal::BufferImageCopy,
+    internal: internal::Internal,
 }
 
 unsafe impl Send for CommandPool {}
@@ -1168,7 +1348,8 @@ impl hal::pool::RawCommandPool<Backend> for CommandPool {
     }
 
     unsafe fn free(&mut self, _cbufs: Vec<CommandBuffer>) {
-        unimplemented!()
+        // TODO:
+        // unimplemented!()
     }
 }
 
@@ -1208,37 +1389,18 @@ pub struct UnboundBuffer {
 }
 
 #[derive(Clone)]
-pub enum InternalBuffer {
-    Coherent(ComPtr<d3d11::ID3D11Buffer>),
-    NonCoherent {
-        device: ComPtr<d3d11::ID3D11Buffer>,
-        staging: ComPtr<d3d11::ID3D11Buffer>
-    }
-}
-
-impl InternalBuffer {
-    pub fn device_local_buffer(&self) -> ComPtr<d3d11::ID3D11Buffer> {
-        match self {
-            InternalBuffer::Coherent(ref buf) => buf.clone(),
-            InternalBuffer::NonCoherent { ref device, ref staging } => device.clone()
-        }
-    }
+pub struct InternalBuffer {
+    raw: *mut d3d11::ID3D11Buffer,
+    srv: Option<*mut d3d11::ID3D11ShaderResourceView>,
+    uav: Option<*mut d3d11::ID3D11UnorderedAccessView>
 }
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Buffer {
     #[derivative(Debug="ignore")]
-    buffer: InternalBuffer,
-    #[derivative(Debug="ignore")]
-    srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
+    internal: InternalBuffer,
     size: u64,
-}
-
-impl Buffer {
-    pub fn device_local_buffer(&self) -> ComPtr<d3d11::ID3D11Buffer> {
-        self.buffer.device_local_buffer()
-    }
 }
 
 unsafe impl Send for Buffer {}
@@ -1261,15 +1423,24 @@ pub struct UnboundImage {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Image {
-    #[derivative(Debug="ignore")]
-    resource: *mut d3d11::ID3D11Resource,
     kind: image::Kind,
     usage: image::Usage,
     storage_flags: image::StorageFlags,
     dxgi_format: dxgiformat::DXGI_FORMAT,
+    typed_raw_format: dxgiformat::DXGI_FORMAT,
     bytes_per_block: u8,
     block_dim: (u8, u8),
     num_levels: image::Level,
+    internal: InternalImage,
+}
+
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct InternalImage {
+    #[derivative(Debug="ignore")]
+    raw: *mut d3d11::ID3D11Resource,
+    #[derivative(Debug="ignore")]
+    srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
     #[derivative(Debug="ignore")]
     uav: Option<ComPtr<d3d11::ID3D11UnorderedAccessView>>,
     #[derivative(Debug="ignore")]
@@ -1369,7 +1540,7 @@ pub struct DescriptorSet {
     #[derivative(Debug="ignore")]
     srv_handles: RefCell<Vec<(u32, ComPtr<d3d11::ID3D11ShaderResourceView>)>>,
     #[derivative(Debug="ignore")]
-    cbv_handles: RefCell<Vec<(u32, ComPtr<d3d11::ID3D11Buffer>)>>,
+    cbv_handles: RefCell<Vec<(u32, *mut d3d11::ID3D11Buffer)>>,
     #[derivative(Debug="ignore")]
     sampler_handles: RefCell<Vec<(u32, ComPtr<d3d11::ID3D11SamplerState>)>>,
 }

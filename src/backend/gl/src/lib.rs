@@ -20,7 +20,7 @@ use std::sync::Arc;
 use std::ops::Deref;
 use std::thread::{self, ThreadId};
 
-use hal::{error, image};
+use hal::{error, image, pso};
 use hal::queue::{Queues, QueueFamilyId};
 
 pub use self::device::Device;

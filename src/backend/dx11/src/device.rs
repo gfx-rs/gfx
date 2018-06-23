@@ -19,9 +19,9 @@ use std::ptr;
 
 use {
     Backend, Buffer, BufferView, CommandPool, ComputePipeline, DescriptorPool, DescriptorSetLayout,
-    Fence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer, Memory, PipelineLayout,
-    QueryPool, RenderPass, Sampler, Semaphore, ShaderModule, Surface, Swapchain, UnboundBuffer,
-    UnboundImage, ViewInfo,
+    Fence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer, InternalImage, Memory,
+    PipelineLayout, QueryPool, RenderPass, Sampler, Semaphore, ShaderModule, Surface, Swapchain,
+    UnboundBuffer, UnboundImage, ViewInfo,
 };
 
 use {conv, internal, shader};
@@ -30,19 +30,23 @@ pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     memory_properties: hal::MemoryProperties,
-    pub(crate) internal: internal::BufferImageCopy
+    pub(crate) internal: internal::Internal
 }
 
 unsafe impl Send for Device { }
 unsafe impl Sync for Device { }
 
 impl Device {
+    pub fn as_raw(&self) -> *mut d3d11::ID3D11Device {
+        self.raw.as_raw()
+    }
+
     pub fn new(device: ComPtr<d3d11::ID3D11Device>, context: ComPtr<d3d11::ID3D11DeviceContext>, memory_properties: hal::MemoryProperties) -> Self {
         Device {
             raw: device.clone(),
             context,
             memory_properties,
-            internal: internal::BufferImageCopy::new(device)
+            internal: internal::Internal::new(device)
         }
     }
 
@@ -321,11 +325,42 @@ impl hal::Device<Backend> for Device {
         mem_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<Memory, device::OutOfMemory> {
-        // TODO:
+        let working_buffer = if mem_type.0 == 1 {
+            let desc = d3d11::D3D11_BUFFER_DESC {
+                ByteWidth: 65535,
+                Usage: d3d11::D3D11_USAGE_STAGING,
+                BindFlags: 0,
+                CPUAccessFlags: d3d11::D3D11_CPU_ACCESS_READ | d3d11::D3D11_CPU_ACCESS_WRITE,
+                MiscFlags:0,
+                StructureByteStride: 0,
+
+            };
+            let mut working_buffer = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateBuffer(
+                    &desc,
+                    ptr::null_mut(),
+                    &mut working_buffer as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                return Err(device::OutOfMemory);
+            }
+
+            Some(unsafe { ComPtr::from_raw(working_buffer) })
+        } else {
+            None
+        };
+
         Ok(Memory {
             properties: self.memory_properties.memory_types[mem_type.0].properties,
-            buffer: RefCell::new(None),
             size,
+            mapped_ptr: RefCell::new(None),
+            host_visible: Some(RefCell::new(Vec::with_capacity(size as usize))),
+            working_buffer,
+            local_buffers: RefCell::new(Vec::new()),
+            local_images: RefCell::new(Vec::new()),
         })
     }
 
@@ -340,7 +375,8 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_command_pool(&self, _pool: CommandPool) {
-        unimplemented!()
+        // TODO:
+        // unimplemented!()
     }
 
     fn create_render_pass<'a, IA, IS, ID>(
@@ -493,23 +529,17 @@ impl hal::Device<Backend> for Device {
         offset: u64,
         unbound_buffer: UnboundBuffer,
     ) -> Result<Buffer, device::BindError> {
-        // TODO: offset
-        assert_eq!(0, offset);
-        // TODO: structured buffers
-        // assert_eq!(0, unbound_buffer.bind & d3d11::D3D11_BIND_SHADER_RESOURCE);
-        // TODO: change memory to be capable of more than one buffer?
-        // assert_eq!(None, memory.buffer);
-
         use memory::Properties;
 
         debug!("usage={:?}, props={:b}", unbound_buffer.usage, memory.properties);
+
         let MiscFlags = if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) {
             d3d11::D3D11_RESOURCE_MISC_BUFFER_STRUCTURED
         } else {
             0
         };
 
-        let buffer = if memory.properties == Properties::DEVICE_LOCAL {
+        let raw = if memory.properties == Properties::DEVICE_LOCAL {
             // device local memory
             let desc = d3d11::D3D11_BUFFER_DESC {
                 ByteWidth: unbound_buffer.size as _,
@@ -517,7 +547,7 @@ impl hal::Device<Backend> for Device {
                 BindFlags: unbound_buffer.bind,
                 CPUAccessFlags: 0,
                 MiscFlags,
-                StructureByteStride: 0,
+                StructureByteStride: if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
             };
 
             let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
@@ -531,18 +561,18 @@ impl hal::Device<Backend> for Device {
 
             if !winerror::SUCCEEDED(hr) {
                 return Err(device::BindError::WrongMemory);
-            } else {
-                InternalBuffer::Coherent(unsafe { ComPtr::from_raw(buffer) })
             }
-        } else if memory.properties == (Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::CPU_CACHED) {
-            // coherent device local and cpu-visible memory
+
+            unsafe { ComPtr::from_raw(buffer) }
+        } else if memory.properties == (Properties::CPU_VISIBLE) {
             let desc = d3d11::D3D11_BUFFER_DESC {
                 ByteWidth: unbound_buffer.size as _,
-                Usage: d3d11::D3D11_USAGE_DYNAMIC,
+                // TODO: dynamic?
+                Usage: d3d11::D3D11_USAGE_DEFAULT,
                 BindFlags: unbound_buffer.bind,
-                CPUAccessFlags: d3d11::D3D11_CPU_ACCESS_WRITE,
+                CPUAccessFlags: 0,
                 MiscFlags,
-                StructureByteStride: 0,
+                StructureByteStride: if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
             };
 
             let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
@@ -556,69 +586,9 @@ impl hal::Device<Backend> for Device {
 
             if !winerror::SUCCEEDED(hr) {
                 return Err(device::BindError::WrongMemory);
-            } else {
-                InternalBuffer::Coherent(unsafe { ComPtr::from_raw(buffer) })
             }
-        } else if memory.properties == (Properties::CPU_VISIBLE | Properties::CPU_CACHED) {
-            // non-coherent cpu-visible memory, need to create two buffers to
-            // allow gpu-read beyond copying
-            let staging = {
-                let desc = d3d11::D3D11_BUFFER_DESC {
-                    ByteWidth: unbound_buffer.size as _,
-                    Usage: d3d11::D3D11_USAGE_STAGING,
-                    BindFlags: 0,
-                    CPUAccessFlags: d3d11::D3D11_CPU_ACCESS_READ | d3d11::D3D11_CPU_ACCESS_WRITE,
-                    MiscFlags: 0,
-                    StructureByteStride: 0,
-                };
 
-                let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
-                let hr = unsafe {
-                    self.raw.CreateBuffer(
-                        &desc,
-                        ptr::null_mut(),
-                        &mut buffer as *mut *mut _ as *mut *mut _
-                    )
-                };
-
-                if !winerror::SUCCEEDED(hr) {
-                    return Err(device::BindError::WrongMemory);
-                } else {
-                    unsafe { ComPtr::from_raw(buffer) }
-                }
-            };
-
-            let device = {
-                let desc = d3d11::D3D11_BUFFER_DESC {
-                    ByteWidth: unbound_buffer.size as _,
-                    // TODO: dynamic?
-                    Usage: d3d11::D3D11_USAGE_DEFAULT,
-                    BindFlags: unbound_buffer.bind,
-                    CPUAccessFlags: 0,
-                    MiscFlags,
-                    StructureByteStride: if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
-                };
-
-                let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
-                let hr = unsafe {
-                    self.raw.CreateBuffer(
-                        &desc,
-                        ptr::null_mut(),
-                        &mut buffer as *mut *mut _ as *mut *mut _
-                    )
-                };
-
-                if !winerror::SUCCEEDED(hr) {
-                    return Err(device::BindError::WrongMemory);
-                } else {
-                    unsafe { ComPtr::from_raw(buffer) }
-                }
-            };
-
-            InternalBuffer::NonCoherent {
-                device,
-                staging
-            }
+            unsafe { ComPtr::from_raw(buffer) }
         } else {
             unimplemented!()
         };
@@ -636,7 +606,7 @@ impl hal::Device<Backend> for Device {
             let mut srv = ptr::null_mut();
             let hr = unsafe {
                 self.raw.CreateShaderResourceView(
-                    buffer.device_local_buffer().as_raw() as *mut _,
+                    raw.as_raw() as *mut _,
                     &desc,
                     &mut srv as *mut *mut _ as *mut *mut _
                 )
@@ -645,19 +615,55 @@ impl hal::Device<Backend> for Device {
             if !winerror::SUCCEEDED(hr) {
                 // TODO: better errors
                 return Err(device::BindError::WrongMemory);
-            } else {
-                Some(unsafe { ComPtr::from_raw(srv) })
             }
+
+            Some(srv)
         } else {
             None
         };
 
-        // TODO:
-        memory.buffer.replace(Some(buffer.clone()));
+        let uav = if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_DST) {
+            let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC>() };
+            desc.Format = dxgiformat::DXGI_FORMAT_R32_UINT;
+            desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_BUFFER;
+            unsafe {
+                *desc.u.Buffer_mut() = d3d11::D3D11_BUFFER_UAV {
+                    FirstElement: 0,
+                    NumElements: unbound_buffer.size as u32 / 4,
+                    Flags: 0
+                };
+            };
+
+            let mut uav = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateUnorderedAccessView(
+                    raw.as_raw() as *mut _,
+                    &desc,
+                    &mut uav as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                // TODO: better errors
+                return Err(device::BindError::WrongMemory);
+            }
+
+            Some(uav)
+        } else {
+            None
+        };
+
+        let buffer = InternalBuffer {
+            raw: raw.into_raw(),
+            srv,
+            uav,
+        };
+        let range = offset..unbound_buffer.size;
+
+        memory.bind_buffer(range, buffer.clone());
 
         Ok(Buffer {
-            buffer,
-            srv,
+            internal: buffer,
             size: unbound_buffer.size
         })
     }
@@ -667,7 +673,7 @@ impl hal::Device<Backend> for Device {
         buffer: &Buffer,
         format: Option<format::Format>,
         range: R,
-    ) -> Result<BufferView, buffer::ViewError> {
+    ) -> Result<BufferView, buffer::ViewCreationError> {
         unimplemented!()
     }
 
@@ -755,7 +761,7 @@ impl hal::Device<Backend> for Device {
         };
 
         let dxgi_format = conv::map_format(image.format).unwrap();
-        let typeless_format = conv::typeless_format(dxgi_format).unwrap();
+        let (typeless_format, typed_raw_format) = conv::typeless_format(dxgi_format).unwrap();
 
         let (resource, levels) = match image.kind {
             image::Kind::D2(width, height, layers, _) => {
@@ -796,9 +802,10 @@ impl hal::Device<Backend> for Device {
             _ => unimplemented!()
         };
 
+        // TODO: view dimensions
         let uav = if image.usage.contains(image::Usage::TRANSFER_DST) {
             let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC>() };
-            desc.Format = dxgiformat::DXGI_FORMAT_R32_UINT;
+            desc.Format = typed_raw_format;
             desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_TEXTURE2D;
 
             let mut uav = ptr::null_mut();
@@ -813,13 +820,41 @@ impl hal::Device<Backend> for Device {
             if !winerror::SUCCEEDED(hr) {
                 // TODO: better errors
                 return Err(device::BindError::WrongMemory);
-            } else {
-                Some(unsafe { ComPtr::from_raw(uav) })
             }
+
+            Some(unsafe { ComPtr::from_raw(uav) })
         } else {
             None
         };
 
+        let srv = if image.usage.contains(image::Usage::TRANSFER_SRC) {
+            let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC>() };
+            desc.Format = typed_raw_format;
+            desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2D;
+            // TODO:
+            *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_SRV {
+                MostDetailedMip: 0,
+                MipLevels: 1,
+            };
+
+            let mut srv = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateShaderResourceView(
+                    resource,
+                    &desc,
+                    &mut srv as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                // TODO: better errors
+                return Err(device::BindError::WrongMemory);
+            }
+
+            Some(unsafe { ComPtr::from_raw(srv) })
+        } else {
+            None
+        };
 
         let rtv = if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
             let mut rtv = ptr::null_mut();
@@ -833,24 +868,30 @@ impl hal::Device<Backend> for Device {
 
             if !winerror::SUCCEEDED(hr) {
                 return Err(device::BindError::WrongMemory);
-            } else {
-                Some(unsafe { ComPtr::from_raw(rtv) })
             }
+
+            Some(unsafe { ComPtr::from_raw(rtv) })
         } else {
             None
         };
 
+        let internal = InternalImage {
+            raw: resource,
+            srv,
+            uav,
+            rtv,
+        };
+
         Ok(Image {
-            resource: resource,
             kind: image.kind,
             usage: image.usage,
             storage_flags: image.flags,
             dxgi_format,
+            typed_raw_format,
             bytes_per_block: bytes_per_block,
             block_dim: block_dim,
             num_levels: levels as _,
-            uav,
-            rtv //unsafe { ComPtr::from_raw(rtv) }
+            internal,
         })
     }
 
@@ -863,7 +904,7 @@ impl hal::Device<Backend> for Device {
         range: image::SubresourceRange,
     ) -> Result<ImageView, image::ViewError> {
         let info = ViewInfo {
-            resource: image.resource,
+            resource: image.internal.raw,
             kind: image.kind,
             flags: image.storage_flags,
             view_kind,
@@ -983,7 +1024,7 @@ impl hal::Device<Backend> for Device {
                 debug!("offset={}, target_binding={}", offset, target_binding);
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
-                        write.set.cbv_handles.borrow_mut().push((target_binding as _, buffer.device_local_buffer()));
+                        write.set.cbv_handles.borrow_mut().push((target_binding as _, buffer.internal.raw));
                         debug!("buffer={:#?}, range={:#?}", buffer, range);
                     }
                     pso::Descriptor::Image(image, _layout) => {
@@ -1018,24 +1059,11 @@ impl hal::Device<Backend> for Device {
     where
         R: RangeArg<u64>,
     {
-        let buffer = match memory.buffer.borrow().clone().unwrap() {
-            InternalBuffer::Coherent(buf) => buf,
-            InternalBuffer::NonCoherent { device, staging } => staging
-        };
-        let mut mapped = unsafe { mem::zeroed::<d3d11::D3D11_MAPPED_SUBRESOURCE>() };
-        let hr = unsafe {
-            self.context.Map(
-                buffer.as_raw() as _,
-                0,
-                // TODO:
-                d3d11::D3D11_MAP_WRITE,
-                0,
-                &mut mapped
-            )
-        };
+        if let Some(ref host_visible) = memory.host_visible {
+            let ptr = host_visible.borrow_mut().as_mut_ptr();
+            memory.mapped_ptr.replace(Some(ptr));
 
-        if winerror::SUCCEEDED(hr) {
-            Ok(mapped.pData as _)
+            Ok(unsafe { ptr.offset(*range.start().unwrap_or(&0) as isize) })
         } else {
             // TODO: better error
             Err(mapping::Error::InvalidAccess)
@@ -1043,25 +1071,17 @@ impl hal::Device<Backend> for Device {
     }
 
     fn unmap_memory(&self, memory: &Memory) {
-        let (buffer, device_buffer) = match memory.buffer.borrow().clone().unwrap() {
-            InternalBuffer::Coherent(buf) => (buf, None),
-            InternalBuffer::NonCoherent { device, staging } => (staging, Some(device))
-        };
+        assert_eq!(memory.host_visible.is_some(), true);
+        let buffer = memory.host_visible.clone().unwrap();
 
-        unsafe {
+        /*unsafe {
             self.context.Unmap(
                 buffer.as_raw() as _,
                 0,
             );
+        }*/
 
-            // coherency!
-            if let Some(device_buffer) = device_buffer {
-                self.context.CopyResource(
-                    device_buffer.as_raw() as _,
-                    buffer.as_raw() as _,
-                );
-            }
-        }
+        memory.mapped_ptr.replace(None);
     }
 
     fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
@@ -1070,7 +1090,14 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a Memory, R)>,
         R: RangeArg<u64>,
     {
-        // TODO: flush?
+
+        // go through every range we wrote to
+        for range in ranges.into_iter() {
+            let &(memory, ref range) = range.borrow();
+            let range = memory.resolve(range);
+
+            memory.flush(&self.context, range);
+        }
     }
 
     fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
@@ -1079,7 +1106,13 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a Memory, R)>,
         R: RangeArg<u64>,
     {
-        unimplemented!()
+        // go through every range we want to read from
+        for range in ranges.into_iter() {
+            let &(memory, ref range) = range.borrow();
+            let range = *range.start().unwrap_or(&0)..*range.end().unwrap_or(&memory.size);
+
+            memory.invalidate(&self.context, range);
+        }
     }
 
     fn create_semaphore(&self) -> Semaphore {
@@ -1110,7 +1143,14 @@ impl hal::Device<Backend> for Device {
     }
 
     fn free_memory(&self, memory: Memory) {
-        unimplemented!()
+        for (_range, internal) in memory.local_buffers.borrow_mut().iter() {
+            unsafe {
+                (*internal.raw).Release();
+                if let Some(srv) = internal.srv {
+                    (*srv).Release();
+                }
+            }
+        }
     }
 
     fn create_query_pool(&self, query_ty: query::QueryType, count: u32) -> QueryPool {
@@ -1151,7 +1191,8 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_image(&self, image: Image) {
-        unimplemented!()
+        // TODO:
+        // unimplemented!()
     }
 
     fn destroy_image_view(&self, _view: ImageView) {
@@ -1170,7 +1211,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_fence(&self, _fence: Fence) {
-        unimplemented!()
+        // unimplemented!()
     }
 
     fn destroy_semaphore(&self, _semaphore: Semaphore) {
@@ -1289,18 +1330,24 @@ impl hal::Device<Backend> for Device {
 
             let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
 
+            let internal = InternalImage {
+                raw: resource,
+                srv: None,
+                uav: None,
+                rtv: Some(unsafe { ComPtr::from_raw(rtv) })
+            };
+
             Image {
-                resource,
                 kind,
                 usage: config.image_usage,
                 storage_flags: image::StorageFlags::empty(),
                 // NOTE: not the actual format of the backbuffer(s)
+                typed_raw_format: dxgiformat::DXGI_FORMAT_UNKNOWN,
                 dxgi_format: format,
                 bytes_per_block,
                 block_dim,
                 num_levels: 1,
-                uav: None,
-                rtv: Some(unsafe { ComPtr::from_raw(rtv) })
+                internal
             }
         }).collect();
 
