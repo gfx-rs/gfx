@@ -1489,7 +1489,8 @@ impl hal::Device<Backend> for Device {
                                 encoder.set_sampler_states(&[&sampler.0], write.binding as _);
                             }
                             pso::Descriptor::Image(image, _layout) => {
-                                encoder.set_textures(&[&*image.root.resolve()], write.binding as _);
+                                let guard = image.root.as_ref().resolve();
+                                encoder.set_textures(&[&*guard], write.binding as _);
                             }
                             pso::Descriptor::Buffer(buffer, ref range) => {
                                 encoder.set_buffer(&buffer.raw, range.start.unwrap_or(0), write.binding as _);

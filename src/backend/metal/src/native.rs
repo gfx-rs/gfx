@@ -171,7 +171,31 @@ pub enum ImageRoot {
     Frame(Frame),
 }
 
+#[derive(Clone)]
 pub enum ImageRootRef<'a> {
+    Texture(&'a metal::TextureRef),
+    Frame(&'a Frame),
+}
+
+impl ImageRoot {
+    pub(crate) fn as_ref(&self) -> ImageRootRef {
+        match *self {
+            ImageRoot::Texture(ref tex) => ImageRootRef::Texture(tex),
+            ImageRoot::Frame(ref frame) => ImageRootRef::Frame(frame),
+        }
+    }
+}
+
+impl<'a> ImageRootRef<'a> {
+    pub fn own(self) -> ImageRoot {
+        match self {
+            ImageRootRef::Texture(tex) => ImageRoot::Texture(tex.to_owned()),
+            ImageRootRef::Frame(frame) => ImageRoot::Frame(frame.clone()),
+        }
+    }
+}
+
+pub enum ImageGuard<'a> {
     Texture(&'a metal::TextureRef),
     Frame {
         swapchain: RwLockReadGuard<'a, SwapchainInner>,
@@ -179,21 +203,21 @@ pub enum ImageRootRef<'a> {
     },
 }
 
-impl<'a> Deref for ImageRootRef<'a> {
+impl<'a> Deref for ImageGuard<'a> {
     type Target = metal::TextureRef;
     fn deref(&self) -> &Self::Target {
         match *self {
-            ImageRootRef::Texture(tex) => tex,
-            ImageRootRef::Frame { ref swapchain, index } => &swapchain[index],
+            ImageGuard::Texture(tex) => tex,
+            ImageGuard::Frame { ref swapchain, index } => &swapchain[index],
         }
     }
 }
 
-impl ImageRoot {
-    pub fn resolve(&self) -> ImageRootRef {
+impl<'a> ImageRootRef<'a> {
+    pub fn resolve(&self) -> ImageGuard<'a> {
         match *self {
-            ImageRoot::Texture(ref tex) => ImageRootRef::Texture(tex),
-            ImageRoot::Frame(ref frame) => ImageRootRef::Frame {
+            ImageRootRef::Texture(ref tex) => ImageGuard::Texture(tex),
+            ImageRootRef::Frame(ref frame) => ImageGuard::Frame {
                 swapchain: frame.swapchain.read().unwrap(),
                 index: frame.index,
             },
@@ -454,6 +478,17 @@ pub enum DescriptorSetBinding {
     Combined(Vec<(Option<(ImageRoot, image::Layout)>, Option<metal::SamplerState>)>),
     Buffer(Vec<BufferBinding>),
     //InputAttachment(Vec<(metal::Texture, image::Layout)>),
+}
+
+impl DescriptorSetBinding {
+    pub(crate) fn count(&self) -> usize {
+        match *self {
+            DescriptorSetBinding::Sampler(ref vec) => vec.len(),
+            DescriptorSetBinding::Image(ref vec) => vec.len(),
+            DescriptorSetBinding::Combined(ref vec) => 2 * vec.len(),
+            DescriptorSetBinding::Buffer(ref vec) => vec.len(),
+        }
+    }
 }
 
 #[derive(Debug)]

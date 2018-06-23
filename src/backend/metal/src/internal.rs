@@ -8,12 +8,12 @@ use std::mem;
 use std::path::Path;
 use std::sync::Mutex;
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct ClearVertex {
     pub pos: [f32; 4],
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct BlitVertex {
     pub uv: [f32; 4],
     pub pos: [f32; 4],
@@ -70,6 +70,78 @@ impl Channel {
 }
 
 
+pub struct SamplerStates {
+    nearest: metal::SamplerState,
+    linear: metal::SamplerState,
+}
+
+impl SamplerStates {
+    fn new(device: &metal::DeviceRef) -> Self {
+        let desc = metal::SamplerDescriptor::new();
+        desc.set_min_filter(metal::MTLSamplerMinMagFilter::Nearest);
+        desc.set_mag_filter(metal::MTLSamplerMinMagFilter::Nearest);
+        desc.set_mip_filter(metal::MTLSamplerMipFilter::Nearest);
+        let nearest = device.new_sampler(&desc);
+        desc.set_min_filter(metal::MTLSamplerMinMagFilter::Linear);
+        desc.set_mag_filter(metal::MTLSamplerMinMagFilter::Linear);
+        let linear = device.new_sampler(&desc);
+
+        SamplerStates {
+            nearest,
+            linear,
+        }
+    }
+
+    pub fn get(&self, filter: Filter) -> &metal::SamplerStateRef {
+        match filter {
+            Filter::Nearest => &self.nearest,
+            Filter::Linear => &self.linear,
+        }
+    }
+}
+
+pub struct DepthStencilStates {
+    write_depth: metal::DepthStencilState,
+    write_stencil: metal::DepthStencilState,
+    write_all: metal::DepthStencilState,
+}
+
+impl DepthStencilStates {
+    fn new(device: &metal::DeviceRef) -> Self {
+        let desc = metal::DepthStencilDescriptor::new();
+        desc.set_depth_write_enabled(true);
+        desc.set_depth_compare_function(metal::MTLCompareFunction::Always);
+        let write_depth = device.new_depth_stencil_state(&desc);
+        let stencil_desc = metal::StencilDescriptor::new();
+        stencil_desc.set_depth_stencil_pass_operation(metal::MTLStencilOperation::Replace);
+        desc.set_front_face_stencil(Some(&stencil_desc));
+        desc.set_back_face_stencil(Some(&stencil_desc));
+        let write_all = device.new_depth_stencil_state(&desc);
+        desc.set_depth_write_enabled(false);
+        let write_stencil = device.new_depth_stencil_state(&desc);
+
+        DepthStencilStates {
+            write_depth,
+            write_stencil,
+            write_all,
+        }
+    }
+
+    //TODO: return `Option<metal::DepthStencilState>` instead?
+    pub fn get(&self, aspects: Aspects) -> &metal::DepthStencilStateRef {
+        if aspects.contains(Aspects::DEPTH | Aspects::STENCIL) {
+            &self.write_all
+        } else if aspects.contains(Aspects::DEPTH) {
+            &self.write_depth
+        } else if aspects.contains(Aspects::STENCIL) {
+            &self.write_stencil
+        } else {
+            panic!("Can't write nothing!")
+        }
+    }
+}
+
+
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ClearKey {
     pub framebuffer_aspects: Aspects,
@@ -77,97 +149,24 @@ pub struct ClearKey {
     pub depth_stencil_format: metal::MTLPixelFormat,
     pub target_index: Option<(u8, Channel)>,
 }
-pub type BlitKey = (metal::MTLTextureType, metal::MTLPixelFormat, Aspects, Channel);
 
-//#[derive(Clone)]
-pub struct ServicePipes {
-    library: metal::Library,
-    sampler_nearest: metal::SamplerState,
-    sampler_linear: metal::SamplerState,
-    ds_write_depth_state: metal::DepthStencilState,
-    ds_write_stencil_state: metal::DepthStencilState,
-    ds_write_all_state: metal::DepthStencilState,
-    clears: FastHashMap<ClearKey, metal::RenderPipelineState>,
-    blits: FastHashMap<BlitKey, metal::RenderPipelineState>,
-    copy_buffer: metal::ComputePipelineState,
-    fill_buffer: metal::ComputePipelineState,
+pub struct ImageClearPipes {
+    map: FastHashMap<ClearKey, metal::RenderPipelineState>,
 }
 
-impl ServicePipes {
-    pub fn new(device: &metal::DeviceRef) -> Self {
-        let lib_path = Path::new(env!("OUT_DIR"))
-            .join("gfx_shaders.metallib");
-        let library = device.new_library_with_file(lib_path).unwrap();
-
-        let sampler_desc = metal::SamplerDescriptor::new();
-        sampler_desc.set_min_filter(metal::MTLSamplerMinMagFilter::Nearest);
-        sampler_desc.set_mag_filter(metal::MTLSamplerMinMagFilter::Nearest);
-        sampler_desc.set_mip_filter(metal::MTLSamplerMipFilter::Nearest);
-        let sampler_nearest = device.new_sampler(&sampler_desc);
-        sampler_desc.set_min_filter(metal::MTLSamplerMinMagFilter::Linear);
-        sampler_desc.set_mag_filter(metal::MTLSamplerMinMagFilter::Linear);
-        let sampler_linear = device.new_sampler(&sampler_desc);
-
-        let ds_desc = metal::DepthStencilDescriptor::new();
-        ds_desc.set_depth_write_enabled(true);
-        ds_desc.set_depth_compare_function(metal::MTLCompareFunction::Always);
-        let ds_write_depth_state = device.new_depth_stencil_state(&ds_desc);
-        let stencil_desc = metal::StencilDescriptor::new();
-        stencil_desc.set_depth_stencil_pass_operation(metal::MTLStencilOperation::Replace);
-        ds_desc.set_front_face_stencil(Some(&stencil_desc));
-        let ds_write_all_state = device.new_depth_stencil_state(&ds_desc);
-        ds_desc.set_depth_write_enabled(false);
-        let ds_write_stencil_state = device.new_depth_stencil_state(&ds_desc);
-
-        let copy_buffer = Self::create_copy_buffer(&library, device);
-        let fill_buffer = Self::create_fill_buffer(&library, device);
-
-        ServicePipes {
-            clears: FastHashMap::default(),
-            blits: FastHashMap::default(),
-            sampler_nearest,
-            sampler_linear,
-            ds_write_depth_state,
-            ds_write_all_state,
-            ds_write_stencil_state,
-            library,
-            copy_buffer,
-            fill_buffer,
-        }
-    }
-
-    pub fn get_sampler(&self, filter: Filter) -> &metal::SamplerStateRef {
-        match filter {
-            Filter::Nearest => &self.sampler_nearest,
-            Filter::Linear => &self.sampler_linear,
-        }
-    }
-
-    //TODO: return `Option<metal::DepthStencilState>` instead?
-    pub fn get_depth_stencil(&self, aspects: Aspects) -> &metal::DepthStencilStateRef {
-        if aspects.contains(Aspects::DEPTH | Aspects::STENCIL) {
-            &self.ds_write_all_state
-        } else if aspects.contains(Aspects::DEPTH) {
-            &self.ds_write_depth_state
-        } else if aspects.contains(Aspects::STENCIL) {
-            &self.ds_write_stencil_state
-        } else {
-            panic!("Can't write nothing!")
-        }
-    }
-
-    pub fn get_clear_image(
+impl ImageClearPipes {
+    pub fn get(
         &mut self,
         key: ClearKey,
+        library: &metal::LibraryRef,
         device: &Mutex<metal::Device>,
     ) -> &metal::RenderPipelineStateRef {
-        let lib = &self.library;
-        self.clears
+        self.map
             .entry(key)
-            .or_insert_with(|| Self::create_clear_image(key, lib, &*device.lock().unwrap()))
+            .or_insert_with(|| Self::create(key, library, &*device.lock().unwrap()))
     }
 
-    fn create_clear_image(
+    fn create(
         key: ClearKey, library: &metal::LibraryRef, device: &metal::DeviceRef,
     ) -> metal::RenderPipelineState {
         let pipeline = metal::RenderPipelineDescriptor::new();
@@ -224,19 +223,28 @@ impl ServicePipes {
 
         device.new_render_pipeline_state(&pipeline).unwrap()
     }
+}
 
-    pub fn get_blit_image(
+
+pub type BlitKey = (metal::MTLTextureType, metal::MTLPixelFormat, Aspects, Channel);
+
+pub struct ImageBlitPipes {
+    map: FastHashMap<BlitKey, metal::RenderPipelineState>,
+}
+
+impl ImageBlitPipes {
+    pub fn get(
         &mut self,
         key: BlitKey,
+        library: &metal::LibraryRef,
         device: &Mutex<metal::Device>,
     ) -> &metal::RenderPipelineStateRef {
-        let lib = &self.library;
-        self.blits
+        self.map
             .entry(key)
-            .or_insert_with(|| Self::create_blit_image(key, lib, &*device.lock().unwrap()))
+            .or_insert_with(|| Self::create(key, library, &*device.lock().unwrap()))
     }
 
-    fn create_blit_image(
+    fn create(
         key: BlitKey, library: &metal::LibraryRef, device: &metal::DeviceRef,
     ) -> metal::RenderPipelineState {
         use metal::MTLTextureType as Tt;
@@ -303,6 +311,42 @@ impl ServicePipes {
         pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
 
         device.new_render_pipeline_state(&pipeline).unwrap()
+    }
+}
+
+
+pub struct ServicePipes {
+    pub library: metal::Library,
+    pub sampler_states: SamplerStates,
+    pub depth_stencil_states: DepthStencilStates,
+    pub clears: ImageClearPipes,
+    pub blits: ImageBlitPipes,
+    copy_buffer: metal::ComputePipelineState,
+    fill_buffer: metal::ComputePipelineState,
+}
+
+impl ServicePipes {
+    pub fn new(device: &metal::DeviceRef) -> Self {
+        let lib_path = Path::new(env!("OUT_DIR"))
+            .join("gfx_shaders.metallib");
+        let library = device.new_library_with_file(lib_path).unwrap();
+
+        let copy_buffer = Self::create_copy_buffer(&library, device);
+        let fill_buffer = Self::create_fill_buffer(&library, device);
+
+        ServicePipes {
+            sampler_states: SamplerStates::new(device),
+            depth_stencil_states: DepthStencilStates::new(device),
+            clears: ImageClearPipes {
+                map: FastHashMap::default(),
+            },
+            blits: ImageBlitPipes {
+                map: FastHashMap::default(),
+            },
+            library,
+            copy_buffer,
+            fill_buffer,
+        }
     }
 
     pub fn get_copy_buffer(&self) -> &metal::ComputePipelineStateRef {
