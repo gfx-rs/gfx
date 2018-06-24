@@ -144,6 +144,7 @@ impl Instance {
         window::Surface {
             inner: Arc::new(self.create_from_nsview(nsview)),
             apply_pixel_scale: false,
+            has_swapchain: false
         }
     }
 
@@ -153,6 +154,7 @@ impl Instance {
         window::Surface {
             inner: Arc::new(self.create_from_nsview(window.get_nsview())),
             apply_pixel_scale: true,
+            has_swapchain: false,
         }
     }
 }
