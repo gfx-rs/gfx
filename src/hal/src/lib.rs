@@ -268,6 +268,8 @@ pub struct Limits {
     pub framebuffer_depth_samples_count: image::NumSamples,
     /// Number of samples supported for stencil attachments of framebuffers.
     pub framebuffer_stencil_samples_count: image::NumSamples,
+    /// Maximum number of color attachments that can be used by a subpass in a render pass.
+    pub max_color_attachments: usize,
     /// Size and alignment in bytes that bounds concurrent access to host-mapped device memory.
     pub non_coherent_atom_size: usize,
 }

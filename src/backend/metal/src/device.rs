@@ -441,6 +441,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             framebuffer_color_samples_count: 0b101, // TODO
             framebuffer_depth_samples_count: 0b101, // TODO
             framebuffer_stencil_samples_count: 0b101, // TODO
+            max_color_attachments: 1, // TODO
 
             // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
             // and those need to operate on sizes being multiples of 4.
