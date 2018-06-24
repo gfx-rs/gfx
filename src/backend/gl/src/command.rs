@@ -889,9 +889,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             for new_binding in &*desc_set.bindings.lock().unwrap() {
                 match new_binding {
                     n::DescSetBindings::Buffer {ty: btype, binding, buffer, offset, size} => {
+                        let btype = match btype {
+                            n::BindingTypes::UniformBuffers => gl::UNIFORM_BUFFER,
+                            n::BindingTypes::Images => panic!("Wrong desc set binding"),
+                        };
                         for binding in drd.get_binding(n::BindingTypes::UniformBuffers, set, *binding).unwrap() {
                             self.push_cmd(Command::BindBufferRange(
-                                gl::UNIFORM_BUFFER,
+                                btype,
                                 *binding,
                                 *buffer,
                                 *offset,

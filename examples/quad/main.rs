@@ -19,7 +19,7 @@ extern crate image;
 extern crate winit;
 
 use hal::{buffer, command, format as f, image as i, memory as m, pass, pso, pool, window::Extent2D};
-use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
+use hal::{Device, PhysicalDevice, Surface, Swapchain};
 use hal::{
     DescriptorPool, FrameSync, Primitive,
     Backbuffer, SwapchainConfig,
@@ -32,6 +32,11 @@ use hal::queue::Submission;
 use std::fs;
 use std::io::{Cursor, Read};
 
+
+use std::sync::{Arc, Mutex};
+
+#[cfg(feature = "gl")]
+use back::GlInstance;
 
 const ENTRY_NAME: &str = "main";
 
@@ -52,6 +57,8 @@ const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
 
+const DIMS: Extent2D = Extent2D { width: 1024, height: 768 };
+
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     aspects: f::Aspects::COLOR,
     levels: 0..1,
@@ -62,32 +69,23 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 fn main() {
     env_logger::init();
 
-    let mut events_loop = winit::EventsLoop::new();
+    let events_loop = Arc::new(Mutex::new(winit::EventsLoop::new()));
 
+    // My understanding of the winit docs is that it will issue a window resize 
+    // event if the window's display's dpi ends up not equaling 1.
     let wb = winit::WindowBuilder::new()
-        .with_dimensions(1024, 768)
+        .with_dimensions(winit::dpi::LogicalSize::from_physical(winit::dpi::PhysicalSize {
+            width: DIMS.width as _,
+            height: DIMS.height as _,
+        }, 1.0))
         .with_title("quad".to_string());
     // instantiate backend
-    #[cfg(not(feature = "gl"))]
     let (window, _instance, mut adapters, mut surface) = {
-        let window = wb.build(&events_loop).unwrap();
-        let instance = back::Instance::create("gfx-rs quad", 1);
+        let instance = back::Instance::create("gfx-rs quad", 1, Arc::clone(&events_loop));
+        let window = instance.create_window(wb);
         let surface = instance.create_surface(&window);
         let adapters = instance.enumerate_adapters();
         (window, instance, adapters, surface)
-    };
-    #[cfg(feature = "gl")]
-    let (mut adapters, mut surface) = {
-        let window = {
-            let builder =
-                back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
-                    .with_vsync(true);
-            back::glutin::GlWindow::new(wb, builder, &events_loop).unwrap()
-        };
-
-        let surface = back::Surface::from_window(window);
-        let adapters = surface.enumerate_adapters();
-        (adapters, surface)
     };
 
     for adapter in &adapters {
@@ -335,43 +333,21 @@ fn main() {
         device.wait_for_fence(&frame_fence, !0);
     }
 
-    let mut swap_chain;
-    let mut render_pass;
-    let mut framebuffers;
-    let mut frame_images;
-    let mut pipeline;
-    let mut pipeline_layout;
-    let mut extent;
-
-    {
-        #[cfg(not(feature = "gl"))]
-        let window = &window;
-        #[cfg(feature = "gl")]
-        let window = &0;
-        let (
-            new_swap_chain,
-            new_render_pass,
-            new_framebuffers,
-            new_frame_images,
-            new_pipeline,
-            new_pipeline_layout,
-            new_extent,
-        ) = swapchain_stuff(
-            &mut surface,
-            &mut device,
-            &adapter.physical_device,
-            &set_layout,
-            window,
-        );
-
-        swap_chain = new_swap_chain;
-        render_pass = new_render_pass;
-        framebuffers = new_framebuffers;
-        frame_images = new_frame_images;
-        pipeline = new_pipeline;
-        pipeline_layout = new_pipeline_layout;
-        extent = new_extent;
-    }
+    let (
+        mut swap_chain,
+        mut render_pass,
+        mut framebuffers,
+        mut frame_images,
+        mut pipeline,
+        mut pipeline_layout,
+        mut extent,
+    ) = swapchain_stuff(
+        &mut surface,
+        &mut device,
+        &adapter.physical_device,
+        &set_layout,
+        &window,
+    );
 
     // Rendering setup
     let mut viewport = pso::Viewport {
@@ -387,9 +363,8 @@ fn main() {
     //
     let mut running = true;
     let mut recreate_swapchain = false;
-    let mut first = true;
     while running {
-        events_loop.poll_events(|event| {
+        events_loop.lock().unwrap().poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
                 match event {
                     winit::WindowEvent::KeyboardInput {
@@ -401,16 +376,13 @@ fn main() {
                         ..
                     }
                     | winit::WindowEvent::CloseRequested => running = false,
-                    winit::WindowEvent::Resized(_width, _height) => {
-                        if !first {
-                            recreate_swapchain = true;
-                        }
+                    winit::WindowEvent::Resized(_dims) => {
+                        recreate_swapchain = true;
                     }
                     _ => (),
                 }
             }
         });
-        first = false;
 
         if recreate_swapchain {
             device.wait_idle().unwrap();
@@ -429,10 +401,6 @@ fn main() {
             device.destroy_render_pass(render_pass);
             device.destroy_swapchain(swap_chain);
 
-            #[cfg(not(feature = "gl"))]
-            let window = &window;
-            #[cfg(feature = "gl")]
-            let window = &0;
             let (
                 new_swap_chain,
                 new_render_pass,
@@ -446,7 +414,7 @@ fn main() {
                 &mut device,
                 &adapter.physical_device,
                 &set_layout,
-                window,
+                &window,
             );
             swap_chain = new_swap_chain;
             render_pass = new_render_pass;
@@ -545,18 +513,13 @@ fn main() {
     println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
 }
 
-#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
-type WindowType = winit::Window;
-#[cfg(feature = "gl")]
-type WindowType = u32;
-
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
 fn swapchain_stuff(
     surface: &mut <back::Backend as hal::Backend>::Surface,
-    device: &mut back::Device,
+    device: &mut <back::Backend as hal::Backend>::Device,
     physical_device: &back::PhysicalDevice,
     set_layout: &<back::Backend as hal::Backend>::DescriptorSetLayout,
-    window: &WindowType,
+    window: &Arc<Mutex<back::Window>>,
 ) -> (
     <back::Backend as hal::Backend>::Swapchain,
     <back::Backend as hal::Backend>::RenderPass,
@@ -581,13 +544,18 @@ fn swapchain_stuff(
     let extent = match caps.current_extent {
         Some(e) => e,
         None => {
-            #[cfg(feature = "gl")]
-            let _window = window;
-            #[cfg(feature = "gl")]
-            let window = surface.get_window();
-
-            let window_size = window.get_inner_size().unwrap();
-            let mut extent = hal::window::Extent2D { width: window_size.0, height: window_size.1 };
+            let px = window
+                .lock()
+                .unwrap()
+                .get_inner_size()
+                .unwrap_or(winit::dpi::PhysicalSize {
+                    width: DIMS.width as _,
+                    height: DIMS.height as _,
+                });
+            let mut extent = hal::window::Extent2D {
+                width: px.width as _,
+                height: px.height as _,
+            };
 
             extent.width = extent.width.max(caps.extents.start.width).min(caps.extents.end.width);
             extent.height = extent.height.max(caps.extents.start.height).min(caps.extents.end.height);
@@ -601,7 +569,7 @@ fn swapchain_stuff(
         .with_color(format)
         .with_image_count(caps.image_count.start)
         .with_image_usage(i::Usage::COLOR_ATTACHMENT);
-    let (swap_chain, backbuffer) = device.create_swapchain(surface, swap_config, None, &extent);
+    let (swap_chain, backbuffer) = device.create_swapchain(surface, swap_config, None, extent);
 
     let render_pass = {
         let attachment = pass::Attachment {
@@ -664,7 +632,6 @@ fn swapchain_stuff(
                 .collect();
             (pairs, fbos)
         }
-        Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
     };
 
     let pipeline_layout =

@@ -17,8 +17,14 @@ use hal::range::RangeArg;
 
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
-use {Backend as B, Share, Surface, Swapchain, Starc};
-use {conv, native as n, state};
+use {
+    Backend as B, Share, Starc, conv, native as n, state, GlContainer, Surface,
+    Swapchain
+};
+
+#[cfg(feature = "glutin")]
+use window::glutin::GlGlutinDevice;
+
 use info::LegacyFeatures;
 use pool::{BufferMemory, OwnedBuffer, RawCommandPool};
 
@@ -32,19 +38,19 @@ fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
     d::ShaderError::CompilationFailed(msg)
 }
 
-fn get_shader_iv(gl: &gl::Gl, name: n::Shader, query: GLenum) -> gl::types::GLint {
+fn get_shader_iv(gl: &GlContainer, name: n::Shader, query: GLenum) -> gl::types::GLint {
     let mut iv = 0;
     unsafe { gl.GetShaderiv(name, query, &mut iv) };
     iv
 }
 
-fn get_program_iv(gl: &gl::Gl, name: n::Program, query: GLenum) -> gl::types::GLint {
+fn get_program_iv(gl: &GlContainer, name: n::Program, query: GLenum) -> gl::types::GLint {
     let mut iv = 0;
     unsafe { gl.GetProgramiv(name, query, &mut iv) };
     iv
 }
 
-fn get_shader_log(gl: &gl::Gl, name: n::Shader) -> String {
+fn get_shader_log(gl: &GlContainer, name: n::Shader) -> String {
     let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
     if length > 0 {
         let mut log = String::with_capacity(length as usize);
@@ -60,7 +66,7 @@ fn get_shader_log(gl: &gl::Gl, name: n::Shader) -> String {
     }
 }
 
-pub fn get_program_log(gl: &gl::Gl, name: n::Program) -> String {
+pub(crate) fn get_program_log(gl: &GlContainer, name: n::Program) -> String {
     let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
     if length > 0 {
         let mut log = String::with_capacity(length as usize);
@@ -76,7 +82,7 @@ pub fn get_program_log(gl: &gl::Gl, name: n::Program) -> String {
     }
 }
 
-fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
+fn create_fbo_internal(gl: &GlContainer) -> gl::types::GLuint {
     let mut name = 0 as n::FrameBuffer;
     unsafe {
         gl.GenFramebuffers(1, &mut name);
@@ -102,13 +108,70 @@ pub struct UnboundImage {
 /// GL device.
 #[derive(Debug)]
 pub struct Device {
-    share: Starc<Share>,
+    pub(crate) share: Starc<Share>,
 }
 
 impl Drop for Device {
     fn drop(&mut self) {
         self.share.open.set(false);
     }
+}
+
+// We can't use `impl Arc<Device>` but we can use `impl GlDevice for Arc<Device>`
+// so we got to use this cheat.
+pub(crate) trait GlDevice {
+    fn create_shader_module_from_source(
+        &self,
+        data: &[u8],
+        stage: pso::Stage,
+    ) -> Result<n::ShaderModule, d::ShaderError>;
+    fn bind_target_compat(gl: &GlContainer, point: GLenum, attachment: GLenum, view: &n::ImageView);
+    fn bind_target(gl: &GlContainer, point: GLenum, attachment: GLenum, view: &n::ImageView);
+    fn parse_spirv(&self, raw_data: &[u8]) -> Result<spirv::Ast<glsl::Target>, d::ShaderError>;
+    fn specialize_ast(
+        &self,
+        ast: &mut spirv::Ast<glsl::Target>,
+        specializations: &[pso::Specialization],
+    ) -> Result<(), d::ShaderError>;
+    fn translate_spirv(
+        &self,
+        ast: &mut spirv::Ast<glsl::Target>,
+    ) -> Result<String, d::ShaderError>;
+    fn remap_bindings(
+        &self,
+        ast: &mut spirv::Ast<glsl::Target>,
+        desc_remap_data: &mut n::DescRemapData,
+        nb_map: &mut FastHashMap<String, pso::DescriptorBinding>,
+    );
+    fn remap_binding(
+        &self,
+        ast: &mut spirv::Ast<glsl::Target>,
+        desc_remap_data: &mut n::DescRemapData,
+        nb_map: &mut FastHashMap<String, pso::DescriptorBinding>,
+        all_res: &[spirv::Resource],
+        btype: n::BindingTypes,
+    );
+    fn combine_seperate_images_and_samplers(
+        &self,
+        ast: &mut spirv::Ast<glsl::Target>,
+        desc_remap_data: &mut n::DescRemapData,
+        nb_map: &mut FastHashMap<String, pso::DescriptorBinding>,
+    );
+    fn populate_id_map(
+        &self,
+        ast: &mut spirv::Ast<glsl::Target>,
+        id_map: &mut FastHashMap<u32, (pso::DescriptorSetIndex, pso::DescriptorBinding)>,
+        all_res: &[spirv::Resource],
+    );
+    fn compile_shader(
+        &self, point: &pso::EntryPoint<B>, stage: pso::Stage, desc_remap_data: Option<&mut n::DescRemapData>
+    ) -> n::Shader;
+    fn create_shader_program<'a>(
+        &self,
+        shaders: &pso::GraphicsShaderSet<'a, B>,
+        color_attachments_num: usize,
+        desc_remap_data: Option<&mut n::DescRemapData>,
+    ) -> Result<n::Program, pso::CreationError>;
 }
 
 impl Device {
@@ -118,8 +181,10 @@ impl Device {
             share: share,
         }
     }
+}
 
-    pub fn create_shader_module_from_source(
+impl GlDevice for Arc<Device> {
+    fn create_shader_module_from_source(
         &self,
         data: &[u8],
         stage: pso::Stage,
@@ -162,7 +227,7 @@ impl Device {
         }
     }
 
-    fn bind_target_compat(gl: &gl::Gl, point: GLenum, attachment: GLenum, view: &n::ImageView) {
+    fn bind_target_compat(gl: &GlContainer, point: GLenum, attachment: GLenum, view: &n::ImageView) {
         match *view {
             n::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
@@ -178,7 +243,7 @@ impl Device {
         }
     }
 
-    fn bind_target(gl: &gl::Gl, point: GLenum, attachment: GLenum, view: &n::ImageView) {
+    fn bind_target(gl: &GlContainer, point: GLenum, attachment: GLenum, view: &n::ImageView) {
         match *view {
             n::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
@@ -380,7 +445,7 @@ impl Device {
         &self,
         point: &pso::EntryPoint<B>,
         stage: pso::Stage,
-        desc_remap_data: &mut n::DescRemapData,
+        desc_remap_data: Option<&mut n::DescRemapData>,
         name_binding_map: &mut FastHashMap<String, pso::DescriptorBinding>,
     ) -> n::Shader {
         assert_eq!(point.entry, "main");
@@ -393,8 +458,11 @@ impl Device {
                 let mut ast = self.parse_spirv(spirv).unwrap();
 
                 self.specialize_ast(&mut ast, point.specialization).unwrap();
-                self.remap_bindings(&mut ast, desc_remap_data, name_binding_map);
-                self.combine_seperate_images_and_samplers(&mut ast, desc_remap_data, name_binding_map);
+
+                if let Some(desc_remap_data) = desc_remap_data {
+                    self.remap_bindings(&mut ast, desc_remap_data, name_binding_map);
+                    self.combine_seperate_images_and_samplers(&mut ast, desc_remap_data, name_binding_map);
+                }
 
                 let glsl = self.translate_spirv(&mut ast).unwrap();
                 info!("Generated:\n{:?}", glsl);
@@ -407,9 +475,77 @@ impl Device {
             }
         }
     }
+
+    fn create_shader_program<'a>(
+        &self,
+        shaders: &pso::GraphicsShaderSet<'a, B>,
+        color_attachments_num: usize,
+        mut desc_remap_data: Option<&mut n::DescRemapData>,
+    ) -> Result<n::Program, pso::CreationError> {
+        let gl = &self.share.context;
+        let share = &self.share;
+
+        let name = unsafe { gl.CreateProgram() };
+        // Attach shaders to program
+        let shaders = [
+            (pso::Stage::Vertex, Some(&shaders.vertex)),
+            (pso::Stage::Hull, shaders.hull.as_ref()),
+            (pso::Stage::Domain, shaders.domain.as_ref()),
+            (pso::Stage::Geometry, shaders.geometry.as_ref()),
+            (pso::Stage::Fragment, shaders.fragment.as_ref()),
+        ];
+
+        let shader_names = &shaders
+            .iter()
+            .filter_map(|&(stage, point_maybe)| {
+                point_maybe.map(|point| {
+                    let shader_name = self.compile_shader(
+                        point,
+                        stage,
+                        if let Some(ref mut d) = desc_remap_data { Some(d) } else { None },
+                    );
+                    unsafe { gl.AttachShader(name, shader_name); }
+                    shader_name
+                })
+            })
+            .collect::<Vec<_>>();
+
+        if !share.private_caps.program_interface && share.private_caps.frag_data_location {
+            for i in 0..color_attachments_num {
+                let color_name = format!("Target{}\0", i);
+                unsafe {
+                    gl.BindFragDataLocation(name, i as u32, (&color_name[..]).as_ptr() as *mut gl::types::GLchar);
+                }
+            }
+        }
+
+        unsafe { gl.LinkProgram(name) };
+        info!("\tLinked program {}", name);
+        if let Err(err) = share.check() {
+            panic!("Error linking program: {:?}", err);
+        }
+
+        for shader_name in shader_names {
+            unsafe {
+                gl.DetachShader(name, *shader_name);
+                gl.DeleteShader(*shader_name);
+            }
+        }
+
+        let status = get_program_iv(gl, name, gl::LINK_STATUS);
+        let log = get_program_log(gl, name);
+        if status != 0 {
+            if !log.is_empty() {
+                warn!("\tLog: {}", log);
+            }
+            Ok(name)
+        } else {
+            Err(pso::CreationError::Shader(d::ShaderError::CompilationFailed(log)))
+        }
+    }
 }
 
-impl d::Device<B> for Device {
+impl d::Device<B> for Arc<Device> {
     fn allocate_memory(
         &self, _mem_type: c::MemoryTypeId, size: u64,
     ) -> Result<n::Memory, d::OutOfMemory> {
@@ -544,8 +680,6 @@ impl d::Device<B> for Device {
     fn create_graphics_pipeline<'a>(
         &self, desc: &pso::GraphicsPipelineDesc<'a, B>
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
-        let gl = &self.share.context;
-        let share = &self.share;
         let desc = desc.borrow();
         let subpass = {
             let subpass = desc.subpass;
@@ -555,6 +689,7 @@ impl d::Device<B> for Device {
             }
         };
 
+<<<<<<< HEAD
         let program = {
             let name = unsafe { gl.CreateProgram() };
 
@@ -630,6 +765,13 @@ impl d::Device<B> for Device {
             name
         };
 
+=======
+        let program = self.create_shader_program(
+            &desc.shaders,
+            subpass.color_attachments.len(),
+            Some(&mut desc.layout.desc_remap_data.write().unwrap()),
+        )?;
+>>>>>>> cacdb1ff... Window creation stuff
         let patch_size = match desc.input_assembler.primitive {
             c::Primitive::PatchList(size) => Some(size as _),
             _ => None
@@ -676,6 +818,7 @@ impl d::Device<B> for Device {
         let program = {
             let name = unsafe { gl.CreateProgram() };
 
+<<<<<<< HEAD
             let mut name_binding_map = FastHashMap::<String, pso::DescriptorBinding>::default();
             let shader = self.compile_shader(
                 &desc.shader,
@@ -683,6 +826,9 @@ impl d::Device<B> for Device {
                 &mut desc.layout.desc_remap_data.write().unwrap(),
                 &mut name_binding_map,
             );
+=======
+            let shader = self.compile_shader(&desc.shader, pso::Stage::Compute, Some(&mut desc.layout.desc_remap_data.write().unwrap()));
+>>>>>>> cacdb1ff... Window creation stuff
             unsafe { gl.AttachShader(name, shader) };
 
             unsafe { gl.LinkProgram(name) };
@@ -1391,12 +1537,12 @@ impl d::Device<B> for Device {
 
     fn create_swapchain(
         &self,
-        surface: &mut Surface,
+        surface: &mut Arc<Surface>,
         config: c::SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
-        _extent: &window::Extent2D,
+        extent: window::Extent2D,
     ) -> (Swapchain, c::Backbuffer<B>) {
-        self.create_swapchain_impl(surface, config)
+        self.create_swapchain_impl(surface, config, extent)
     }
 
     fn destroy_swapchain(&self, _swapchain: Swapchain) {
@@ -1409,7 +1555,7 @@ impl d::Device<B> for Device {
     }
 }
 
-pub fn wait_fence(fence: &n::Fence, gl: &gl::Gl, timeout_ms: u32) -> GLenum {
+pub(crate) fn wait_fence(fence: &n::Fence, gl: &GlContainer, timeout_ms: u32) -> GLenum {
     let timeout = timeout_ms as u64 * 1_000_000;
     // TODO:
     // This can be called by multiple objects wanting to ensure they have exclusive

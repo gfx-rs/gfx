@@ -727,14 +727,39 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
-        use glutin::GlContext;
-
         for swapchain in swapchains {
-            swapchain.0
-                .borrow()
+            let swapchain = swapchain.0.borrow().window.lock().unwrap();
+            let w = swapchain.window.as_ref().unwrap();
+
+            // We draw to this window's framebuffer a quad with the texture
+            // which was rendered to previously.
+            // We do this because we can't share framebuffers between contexts.
+
+            // But first, insure the extent hasn't changed.
+            let extent = swapchain.swapchain.as_ref().unwrap().extent;
+            let new_extent = w
                 .window
-                .swap_buffers()
-                .unwrap();
+                .get_inner_size()
+                .unwrap()
+                .to_physical(w.window.get_hidpi_factor());
+            if extent.width != new_extent.width as _ || extent.height != new_extent.height as _ {
+                return Err(())
+            }
+
+            let share = &w.device.share;
+            let gl = &share.context;
+            unsafe {
+                gl.BindFramebuffer(gl::READ_FRAMEBUFFER, w.fbo);
+                gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
+                gl.BlitFramebuffer(
+                    0, 0, extent.width as _, extent.height as _,
+                    0, 0, extent.width as _, extent.height as _,
+                    gl::COLOR_BUFFER_BIT,
+                    gl::NEAREST,
+                );
+            }
+
+            w.window.swap_buffers().unwrap();
         }
 
         Ok(())

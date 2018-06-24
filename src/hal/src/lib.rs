@@ -330,20 +330,11 @@ pub enum IndexType {
     U32,
 }
 
-/// Basic backend instance trait.
-pub trait Instance: Any + Send + Sync {
-    /// Associated backend type of this instance.
-    type Backend: Backend;
-    /// Return all available adapters.
-    fn enumerate_adapters(&self) -> Vec<Adapter<Self::Backend>>;
-}
-
 /// The `Backend` trait wraps together all the types needed
 /// for a graphics backend. Each backend module, such as OpenGL
 /// or Metal, will implement this trait with its own concrete types.
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send + Sync {
-    //type Instance:          Instance<Self>;
     type PhysicalDevice:      PhysicalDevice<Self>;
     type Device:              Device<Self>;
 
