@@ -298,6 +298,7 @@ impl hal::Instance for Instance {
                 framebuffer_color_samples_count: 1,     // TODO
                 framebuffer_depth_samples_count: 1,     // TODO
                 framebuffer_stencil_samples_count: 1,   // TODO
+                max_color_attachments: 1,               // TODO
                 non_coherent_atom_size: 0,              // TODO
             };
 
