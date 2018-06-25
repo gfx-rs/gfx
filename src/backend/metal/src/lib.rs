@@ -43,6 +43,7 @@ use hal::queue::QueueFamilyId;
 use objc::runtime::{Class, Object};
 use cocoa::foundation::NSAutoreleasePool;
 use core_graphics::geometry::CGRect;
+use foreign_types::ForeignTypeRef;
 
 
 const MAX_ACTIVE_COMMAND_BUFFERS: usize = 1 << 14;
@@ -251,4 +252,55 @@ fn validate_line_width(width: f32) {
     // > If the wide lines feature is not enabled, lineWidth must be 1.0
     // Simply assert and no-op because Metal never exposes `Features::LINE_WIDTH` 
     assert_eq!(width, 1.0);
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct BufferPtr(*mut metal::MTLBuffer);
+
+impl BufferPtr {
+    #[inline]
+    pub fn as_native(&self) -> &metal::BufferRef {
+        unsafe {
+            metal::BufferRef::from_ptr(self.0)
+        }
+    }
+
+    #[inline]
+    pub fn as_ptr(&self) -> *mut metal::MTLBuffer {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TexturePtr(*mut metal::MTLTexture);
+
+impl TexturePtr {
+    #[inline]
+    pub fn as_native(&self) -> &metal::TextureRef {
+        unsafe {
+            metal::TextureRef::from_ptr(self.0)
+        }
+    }
+
+    #[inline]
+    pub fn as_ptr(&self) -> *mut metal::MTLTexture {
+        self.0
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SamplerPtr(*mut metal::MTLSamplerState);
+
+impl SamplerPtr {
+    #[inline]
+    pub fn as_native(&self) -> &metal::SamplerStateRef {
+        unsafe {
+            metal::SamplerStateRef::from_ptr(self.0)
+        }
+    }
+
+    #[inline]
+    pub fn as_ptr(&self) -> *mut metal::MTLSamplerState {
+        self.0
+    }
 }

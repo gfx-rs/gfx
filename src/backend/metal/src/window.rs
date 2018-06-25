@@ -10,7 +10,7 @@ use hal::{Backbuffer, SwapchainConfig};
 use hal::window::Extent2D;
 
 use metal;
-use objc::runtime::{Object};
+use objc::runtime::Object;
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
