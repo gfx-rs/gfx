@@ -1,15 +1,14 @@
-
 use Device;
 use winapi::um::d3d12;
 use wio::com::ComPtr;
 
-mod cbv_srv_uav;
 mod cpu;
-mod sampler;
+mod managed;
+mod placed;
 
-pub use self::cbv_srv_uav::CbvSrvUavGpuHeap;
 pub use self::cpu::DescriptorCpuPool;
-pub use self::sampler::SamplerGpuHeap;
+pub use self::managed::ManagedHeap;
+pub use self::placed::PlacedHeap;
 
 #[derive(Copy, Clone)]
 pub struct DualHandle {

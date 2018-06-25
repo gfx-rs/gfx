@@ -514,8 +514,8 @@ struct Shared {
     pub signatures: CmdSignatures,
     pub service_pipes: internal::ServicePipes,
     // Global CPU/GPU descriptor heaps
-    pub heap_cbv_srv_uav: descriptors::CbvSrvUavGpuHeap,
-    pub heap_sampler: descriptors::SamplerGpuHeap,
+    pub heap_cbv_srv_uav: descriptors::PlacedHeap,
+    pub heap_sampler: descriptors::ManagedHeap,
 }
 
 pub struct Device {
@@ -556,12 +556,14 @@ impl Device {
         let sampler_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
         let max_descriptors = 1_000_000; // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
-        let heap_cbv_srv_uav = descriptors::CbvSrvUavGpuHeap::new(
+        let heap_cbv_srv_uav = descriptors::PlacedHeap::new(
             &mut device,
-            max_descriptors
+            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            max_descriptors,
         );
-        let heap_sampler = descriptors::SamplerGpuHeap::new(
+        let heap_sampler = descriptors::ManagedHeap::new(
             &mut device,
+            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
             max_descriptors,
         );
 

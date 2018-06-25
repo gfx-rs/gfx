@@ -6,17 +6,21 @@ use std::sync::Mutex;
 use winapi::um::d3d12;
 use wio::com::ComPtr;
 
-/// Free-list heap allocator for GPU CBV/SRV/UAV descriptors.
-pub struct CbvSrvUavGpuHeap {
+/// Free-list heap allocator for GPU descriptors.
+/// Descriptors are directly placed in the GPU descriptor heap.
+pub struct PlacedHeap {
     handle_size: usize,
     start: DualHandle,
     free_list: Mutex<RangeAllocator<u64>>,
     raw: ComPtr<d3d12::ID3D12DescriptorHeap>,
 }
 
-impl CbvSrvUavGpuHeap {
-    pub fn new(device: &ComPtr<d3d12::ID3D12Device>, size: usize) -> Self {
-        let ty = d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+impl PlacedHeap {
+    pub fn new(
+        device: &ComPtr<d3d12::ID3D12Device>,
+        ty: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE,
+        size: usize,
+    ) -> Self {
         let heap = Device::create_descriptor_heap(device, ty, true, size);
         let handle_size = unsafe { device.GetDescriptorHandleIncrementSize(ty) as usize };
         let start = DualHandle {
@@ -24,7 +28,7 @@ impl CbvSrvUavGpuHeap {
             gpu: unsafe { heap.GetGPUDescriptorHandleForHeapStart() },
         };
 
-        CbvSrvUavGpuHeap {
+        PlacedHeap {
             handle_size,
             start,
             free_list: Mutex::new(RangeAllocator::new(0..size as _)),
@@ -33,17 +37,11 @@ impl CbvSrvUavGpuHeap {
     }
 
     pub fn allocate(&self, num: usize) -> Option<Range<u64>> {
-        self.free_list
-            .lock()
-            .unwrap()
-            .allocate_range(num as _)
+        self.free_list.lock().unwrap().allocate_range(num as _)
     }
 
     pub fn free(&self, range: Range<u64>) {
-        self.free_list
-            .lock()
-            .unwrap()
-            .free_range(range);
+        self.free_list.lock().unwrap().free_range(range);
     }
 
     pub fn as_raw(&self) -> *mut d3d12::ID3D12DescriptorHeap {
@@ -65,4 +63,3 @@ impl CbvSrvUavGpuHeap {
         self.handle_size
     }
 }
-
