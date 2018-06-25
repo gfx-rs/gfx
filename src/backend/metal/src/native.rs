@@ -56,7 +56,7 @@ pub struct FramebufferInner {
 
 #[derive(Debug)]
 pub struct Framebuffer {
-    pub(crate) descriptor: metal::RenderPassDescriptor,
+    pub(crate) descriptor: Mutex<metal::RenderPassDescriptor>,
     pub(crate) inner: FramebufferInner,
 }
 
