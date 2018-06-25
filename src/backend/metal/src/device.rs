@@ -1169,7 +1169,10 @@ impl hal::Device<Backend> for Device {
             }
         }
 
-        Ok(n::Framebuffer { descriptor, inner })
+        Ok(n::Framebuffer {
+            descriptor: Mutex::new(descriptor),
+            inner,
+        })
     }
 
     fn create_shader_module(&self, raw_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
