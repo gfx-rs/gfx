@@ -1,3 +1,4 @@
+use {BufferPtr, SamplerPtr, TexturePtr};
 use command::IndexBuffer;
 use native::RasterizerState;
 
@@ -21,18 +22,19 @@ pub trait Resources {
 pub enum Own {}
 impl Resources for Own {
     type Data = Vec<u32>;
-    type Buffer = metal::Buffer;
-    type Texture = metal::Texture;
-    type Sampler = metal::SamplerState;
+    type Buffer = BufferPtr;
+    type Texture = TexturePtr;
+    type Sampler = SamplerPtr;
     type DepthStencil = metal::DepthStencilState;
     type RenderPipeline = metal::RenderPipelineState;
     type ComputePipeline = metal::ComputePipelineState;
 }
+
 impl<'a> Resources for &'a Own {
     type Data = &'a [u32];
-    type Buffer = &'a metal::BufferRef;
-    type Texture = &'a metal::TextureRef;
-    type Sampler = &'a metal::SamplerStateRef;
+    type Buffer = BufferPtr;
+    type Texture = TexturePtr;
+    type Sampler = SamplerPtr;
     type DepthStencil = &'a metal::DepthStencilStateRef;
     type RenderPipeline = &'a metal::RenderPipelineStateRef;
     type ComputePipeline = &'a metal::ComputePipelineStateRef;
@@ -99,7 +101,6 @@ pub enum RenderCommand<R: Resources> {
 
 impl RenderCommand<Own> {
     pub fn as_ref<'a>(&'a self) -> RenderCommand<&'a Own> {
-        use std::borrow::Borrow;
         use self::RenderCommand::*;
         match *self {
             SetViewport(vp) => SetViewport(vp),
@@ -108,10 +109,10 @@ impl RenderCommand<Own> {
             SetDepthBias(bias) => SetDepthBias(bias),
             SetDepthStencilDesc(ref desc) => SetDepthStencilDesc(&**desc),
             SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
-            BindBuffer { stage, index, ref buffer, offset } => BindBuffer {
+            BindBuffer { stage, index, buffer, offset } => BindBuffer {
                 stage,
                 index,
-                buffer: buffer.as_ref().map(Borrow::borrow),
+                buffer,
                 offset,
             },
             BindBufferData { stage, index, ref words } => BindBufferData {
@@ -119,15 +120,15 @@ impl RenderCommand<Own> {
                 index,
                 words: words.as_slice(),
             },
-            BindTexture { stage, index, ref texture } => BindTexture {
+            BindTexture { stage, index, texture } => BindTexture {
                 stage,
                 index,
-                texture: texture.as_ref().map(Borrow::borrow),
+                texture,
             },
-            BindSampler { stage, index, ref sampler } => BindSampler {
+            BindSampler { stage, index, sampler } => BindSampler {
                 stage,
                 index,
-                sampler: sampler.as_ref().map(Borrow::borrow),
+                sampler,
             },
             BindPipeline(ref pso, ref state) => BindPipeline(&**pso, state.clone()),
             Draw { primitive_type, ref vertices, ref instances } => Draw {
@@ -135,22 +136,22 @@ impl RenderCommand<Own> {
                 vertices: vertices.clone(),
                 instances: instances.clone(),
             },
-            DrawIndexed { primitive_type, ref index, ref indices, base_vertex, ref instances } => DrawIndexed {
+            DrawIndexed { primitive_type, index, ref indices, base_vertex, ref instances } => DrawIndexed {
                 primitive_type,
-                index: index.as_ref(),
+                index,
                 indices: indices.clone(),
                 base_vertex,
                 instances: instances.clone(),
             },
-            DrawIndirect { primitive_type, ref buffer, offset } => DrawIndirect {
+            DrawIndirect { primitive_type, buffer, offset } => DrawIndirect {
                 primitive_type,
-                buffer: &**buffer,
+                buffer,
                 offset,
             },
-            DrawIndexedIndirect { primitive_type, ref index, ref buffer, offset } => DrawIndexedIndirect {
+            DrawIndexedIndirect { primitive_type, index, buffer, offset } => DrawIndexedIndirect {
                 primitive_type,
-                index: index.as_ref(),
-                buffer: &**buffer,
+                index,
+                buffer,
                 offset,
             },
         }
@@ -170,7 +171,7 @@ impl<'a> RenderCommand<&'a Own> {
             BindBuffer { stage, index, buffer, offset } => BindBuffer {
                 stage,
                 index,
-                buffer: buffer.map(ToOwned::to_owned),
+                buffer,
                 offset,
             },
             BindBufferData { stage, index, words } => BindBufferData {
@@ -181,12 +182,12 @@ impl<'a> RenderCommand<&'a Own> {
             BindTexture { stage, index, texture } => BindTexture {
                 stage,
                 index,
-                texture: texture.map(ToOwned::to_owned),
+                texture,
             },
             BindSampler { stage, index, sampler } => BindSampler {
                 stage,
                 index,
-                sampler: sampler.map(ToOwned::to_owned),
+                sampler,
             },
             BindPipeline(pso, state) => BindPipeline(pso.to_owned(), state),
             Draw { primitive_type, vertices, instances } => Draw {
@@ -196,20 +197,20 @@ impl<'a> RenderCommand<&'a Own> {
             },
             DrawIndexed { primitive_type, index, indices, base_vertex, instances } => DrawIndexed {
                 primitive_type,
-                index: index.own(),
+                index,
                 indices,
                 base_vertex,
                 instances,
             },
             DrawIndirect { primitive_type, buffer, offset } => DrawIndirect {
                 primitive_type,
-                buffer: buffer.to_owned(),
+                buffer,
                 offset,
             },
             DrawIndexedIndirect { primitive_type, index, buffer, offset } => DrawIndexedIndirect {
                 primitive_type,
-                index: index.own(),
-                buffer: buffer.to_owned(),
+                index,
+                buffer,
                 offset,
             },
         }
@@ -247,26 +248,26 @@ impl BlitCommand<Own> {
     pub fn as_ref<'a>(&'a self) -> BlitCommand<&'a Own> {
         use self::BlitCommand::*;
         match *self {
-            CopyBuffer { ref src, ref dst, region } => CopyBuffer {
-                src: &*src,
-                dst: &*dst,
+            CopyBuffer { src, dst, region } => CopyBuffer {
+                src,
+                dst,
                 region,
             },
-            CopyImage { ref src, ref dst, ref region } => CopyImage {
-                src: src.as_ref(),
-                dst: dst.as_ref(),
+            CopyImage { src, dst, ref region } => CopyImage {
+                src,
+                dst,
                 region: region.clone(),
             },
-            CopyBufferToImage { ref src, ref dst, dst_desc, ref region } => CopyBufferToImage {
-                src: &*src,
-                dst: dst.as_ref(),
+            CopyBufferToImage { src, dst, dst_desc, ref region } => CopyBufferToImage {
+                src,
+                dst,
                 dst_desc,
                 region: region.clone(),
             },
-            CopyImageToBuffer { ref src, src_desc, ref dst, ref region } => CopyImageToBuffer {
-                src: src.as_ref(),
+            CopyImageToBuffer { src, src_desc, dst, ref region } => CopyImageToBuffer {
+                src,
                 src_desc,
-                dst: &*dst,
+                dst,
                 region: region.clone(),
             },
         }
@@ -278,8 +279,8 @@ impl<'a> BlitCommand<&'a Own> {
         use self::BlitCommand::*;
         match self {
             CopyBuffer { src, dst, region } => CopyBuffer {
-                src: src.to_owned(),
-                dst: dst.to_owned(),
+                src,
+                dst,
                 region,
             },
             CopyImage { src, dst, region } => CopyImage {
@@ -288,7 +289,7 @@ impl<'a> BlitCommand<&'a Own> {
                 region,
             },
             CopyBufferToImage { src, dst, dst_desc, region } => CopyBufferToImage {
-                src: src.to_owned(),
+                src,
                 dst: dst.to_owned(),
                 dst_desc,
                 region,
@@ -296,7 +297,7 @@ impl<'a> BlitCommand<&'a Own> {
             CopyImageToBuffer { src, src_desc, dst, region } => CopyImageToBuffer {
                 src: src.to_owned(),
                 src_desc,
-                dst: dst.to_owned(),
+                dst,
                 region,
             },
         }
@@ -337,34 +338,33 @@ pub enum ComputeCommand<R: Resources> {
 
 impl ComputeCommand<Own> {
     pub fn as_ref<'a>(&'a self) -> ComputeCommand<&'a Own> {
-        use std::borrow::Borrow;
         use self::ComputeCommand::*;
         match *self {
-            BindBuffer { index, ref buffer, offset } => BindBuffer {
+            BindBuffer { index, buffer, offset } => BindBuffer {
                 index,
-                buffer: buffer.as_ref().map(Borrow::borrow),
+                buffer,
                 offset,
             },
             BindBufferData { index, ref words } => BindBufferData {
                 index,
                 words: words.as_slice(),
             },
-            BindTexture { index, ref texture } => BindTexture {
+            BindTexture { index, texture } => BindTexture {
                 index,
-                texture: texture.as_ref().map(Borrow::borrow),
+                texture,
             },
-            BindSampler { index, ref sampler } => BindSampler {
+            BindSampler { index, sampler } => BindSampler {
                 index,
-                sampler: sampler.as_ref().map(Borrow::borrow),
+                sampler,
             },
             BindPipeline(ref pso) => BindPipeline(&**pso),
             Dispatch { wg_size, wg_count } => Dispatch {
                 wg_size,
                 wg_count,
             },
-            DispatchIndirect { wg_size, ref buffer, offset } => DispatchIndirect {
+            DispatchIndirect { wg_size, buffer, offset } => DispatchIndirect {
                 wg_size,
-                buffer: buffer.borrow(),
+                buffer,
                 offset,
             },
         }
@@ -377,7 +377,7 @@ impl<'a> ComputeCommand<&'a Own> {
         match self {
             BindBuffer { index, buffer, offset } => BindBuffer {
                 index,
-                buffer: buffer.map(ToOwned::to_owned),
+                buffer,
                 offset,
             },
             BindBufferData { index, words } => BindBufferData {
@@ -386,11 +386,11 @@ impl<'a> ComputeCommand<&'a Own> {
             },
             BindTexture { index, texture } => BindTexture {
                 index,
-                texture: texture.map(ToOwned::to_owned),
+                texture,
             },
             BindSampler { index, sampler } => BindSampler {
                 index,
-                sampler: sampler.map(ToOwned::to_owned),
+                sampler,
             },
             BindPipeline(pso) => BindPipeline(pso.to_owned()),
             Dispatch { wg_size, wg_count } => Dispatch {
@@ -399,7 +399,7 @@ impl<'a> ComputeCommand<&'a Own> {
             },
             DispatchIndirect { wg_size, buffer, offset } => DispatchIndirect {
                 wg_size,
-                buffer: buffer.to_owned(),
+                buffer,
                 offset,
             },
         }

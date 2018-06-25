@@ -1,4 +1,4 @@
-use Backend;
+use {Backend, BufferPtr, SamplerPtr, TexturePtr};
 use internal::Channel;
 use window::SwapchainImage;
 
@@ -14,6 +14,7 @@ use hal::format::{Aspects, Format, FormatDesc};
 use cocoa::foundation::{NSUInteger};
 use metal;
 use spirv_cross::{msl, spirv};
+use foreign_types::ForeignType;
 
 use range_alloc::RangeAllocator;
 
@@ -231,7 +232,7 @@ unsafe impl Sync for Buffer {}
 pub enum DescriptorPool {
     Emulated,
     ArgumentBuffer {
-        buffer: metal::Buffer,
+        raw: metal::Buffer,
         range_allocator: RangeAllocator<NSUInteger>,
     }
 }
@@ -260,7 +261,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                                 sampler_offset += layout.count;
                                 slice
                                     .iter()
-                                    .map(|s| Some(s.clone()))
+                                    .map(|s| Some(SamplerPtr(s.as_ptr())))
                                     .collect()
                             } else {
                                 vec![None; layout.count]
@@ -272,7 +273,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                                 sampler_offset += layout.count;
                                 slice
                                     .iter()
-                                    .map(|s| (None, Some(s.clone())))
+                                    .map(|s| (None, Some(SamplerPtr(s.as_ptr()))))
                                     .collect()
                             } else {
                                 vec![(None, None); layout.count]
@@ -313,14 +314,14 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 };
                 Ok(DescriptorSet::Emulated(Arc::new(Mutex::new(inner))))
             }
-            DescriptorPool::ArgumentBuffer { ref buffer, ref mut range_allocator, } => {
+            DescriptorPool::ArgumentBuffer { ref raw, ref mut range_allocator, } => {
                 let (encoder, stage_flags) = match layout {
                     &DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
                 range_allocator.allocate_range(encoder.encoded_length()).map(|range| {
                     DescriptorSet::ArgumentBuffer {
-                        buffer: buffer.clone(),
+                        raw: raw.clone(),
                         offset: range.start,
                         encoder: encoder.clone(),
                         stage_flags,
@@ -381,7 +382,7 @@ unsafe impl Sync for DescriptorSetLayout {}
 pub enum DescriptorSet {
     Emulated(Arc<Mutex<DescriptorSetInner>>),
     ArgumentBuffer {
-        buffer: metal::Buffer,
+        raw: metal::Buffer,
         offset: NSUInteger,
         encoder: metal::ArgumentEncoder,
         stage_flags: pso::ShaderStageFlags,
@@ -400,17 +401,17 @@ unsafe impl Send for DescriptorSetInner {}
 
 #[derive(Clone, Debug)]
 pub struct BufferBinding {
-    pub base: Option<(metal::Buffer, u64)>,
+    pub base: Option<(BufferPtr, u64)>,
     pub dynamic: bool,
 }
 
 #[derive(Clone, Debug)]
 pub enum DescriptorSetBinding {
-    Sampler(Vec<Option<metal::SamplerState>>),
-    Image(Vec<Option<(metal::Texture, image::Layout)>>),
-    Combined(Vec<(Option<(metal::Texture, image::Layout)>, Option<metal::SamplerState>)>),
+    Sampler(Vec<Option<SamplerPtr>>),
+    Image(Vec<Option<(TexturePtr, image::Layout)>>),
+    Combined(Vec<(Option<(TexturePtr, image::Layout)>, Option<SamplerPtr>)>),
     Buffer(Vec<BufferBinding>),
-    //InputAttachment(Vec<(metal::Texture, image::Layout)>),
+    //InputAttachment(Vec<(TexturePtr, image::Layout)>),
 }
 
 impl DescriptorSetBinding {

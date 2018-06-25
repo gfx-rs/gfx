@@ -1,6 +1,6 @@
 use {
     AutoreleasePool, Backend, PrivateCapabilities, QueueFamily,
-    Shared, Surface, Swapchain, validate_line_width
+    Shared, Surface, Swapchain, validate_line_width, BufferPtr, SamplerPtr, TexturePtr,
 };
 use {conversions as conv, command, native as n};
 use native;
@@ -28,6 +28,7 @@ use metal::{self,
     CaptureManager
 };
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
+use foreign_types::ForeignType;
 
 use range_alloc::RangeAllocator;
 
@@ -1310,7 +1311,7 @@ impl hal::Device<Backend> for Device {
                 n::MemoryHeap::Native(_) => unimplemented!(),
                 n::MemoryHeap::Public(mt, ref cpu_buffer) if 1<<mt.0 != MemoryTypes::SHARED.bits() as usize => {
                     num_syncs += 1;
-                    encoder.synchronize_resource(cpu_buffer.as_ref());
+                    encoder.synchronize_resource(cpu_buffer);
                 }
                 n::MemoryHeap::Public(..) => continue,
                 n::MemoryHeap::Private => panic!("Can't map private memory!"),
@@ -1372,10 +1373,10 @@ impl hal::Device<Backend> for Device {
         let encoder = device.new_argument_encoder(&arg_array);
 
         let total_size = encoder.encoded_length();
-        let buffer = device.new_buffer(total_size, MTLResourceOptions::empty());
+        let raw = device.new_buffer(total_size, MTLResourceOptions::empty());
 
         n::DescriptorPool::ArgumentBuffer {
-            buffer,
+            raw,
             range_allocator: RangeAllocator::new(0..total_size),
         }
     }
@@ -1442,27 +1443,27 @@ impl hal::Device<Backend> for Device {
 
                         match (descriptor.borrow(), set.bindings[binding as usize].as_mut().unwrap()) {
                             (&pso::Descriptor::Sampler(sampler), &mut n::DescriptorSetBinding::Sampler(ref mut vec)) => {
-                                vec[array_offset] = Some(sampler.0.clone());
+                                vec[array_offset] = Some(SamplerPtr(sampler.0.as_ptr()));
                             }
                             (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
-                                vec[array_offset] = Some((image.raw.clone(), layout));
+                                vec[array_offset] = Some((TexturePtr(image.raw.as_ptr()), layout));
                             }
                             (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
-                                vec[array_offset].0 = Some((image.raw.clone(), layout));
+                                vec[array_offset].0 = Some((TexturePtr(image.raw.as_ptr()), layout));
                             }
                             (&pso::Descriptor::CombinedImageSampler(image, layout, sampler), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
-                                vec[array_offset] = (Some((image.raw.clone(), layout)), Some(sampler.0.clone()));
+                                vec[array_offset] = (Some((TexturePtr(image.raw.as_ptr()), layout)), Some(SamplerPtr(sampler.0.as_ptr())));
                             }
                             (&pso::Descriptor::UniformTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) |
                             (&pso::Descriptor::StorageTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
-                                vec[array_offset] = Some((view.raw.clone(), image::Layout::General));
+                                vec[array_offset] = Some((TexturePtr(view.raw.as_ptr()), image::Layout::General));
                             }
                             (&pso::Descriptor::Buffer(buffer, ref range), &mut n::DescriptorSetBinding::Buffer(ref mut vec)) => {
                                 let buf_length = buffer.raw.length();
                                 let start = range.start.unwrap_or(0);
                                 let end = range.end.unwrap_or(buf_length);
                                 assert!(end <= buf_length);
-                                vec[array_offset].base = Some((buffer.raw.clone(), start));
+                                vec[array_offset].base = Some((BufferPtr(buffer.raw.as_ptr()), start));
                             }
                             (&pso::Descriptor::Sampler(..), _) |
                             (&pso::Descriptor::Image(..), _) |
@@ -1475,10 +1476,10 @@ impl hal::Device<Backend> for Device {
                         }
                     }
                 }
-                n::DescriptorSet::ArgumentBuffer { ref buffer, offset, ref encoder, .. } => {
+                n::DescriptorSet::ArgumentBuffer { ref raw, offset, ref encoder, .. } => {
                     debug_assert!(self.private_caps.argument_buffers);
 
-                    encoder.set_argument_buffer(buffer, offset);
+                    encoder.set_argument_buffer(raw, offset);
                     //TODO: range checks, need to keep some layout metadata around
                     assert_eq!(write.array_offset, 0); //TODO
 
