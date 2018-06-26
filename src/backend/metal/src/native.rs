@@ -5,7 +5,7 @@ use window::SwapchainImage;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 
 use hal::{self, image, pso};
 use hal::backend::FastHashMap;
@@ -230,7 +230,7 @@ unsafe impl Sync for Buffer {}
 
 #[derive(Debug)]
 pub enum DescriptorPool {
-    Emulated,
+    Emulated(Arc<RwLock<DescriptorPoolInner>>),
     ArgumentBuffer {
         raw: metal::Buffer,
         range_allocator: RangeAllocator<NSUInteger>,
@@ -240,82 +240,141 @@ pub enum DescriptorPool {
 unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
+#[derive(Clone, Debug)]
+pub struct BufferBinding {
+    pub base: Option<(BufferPtr, u64)>,
+    pub dynamic: bool,
+}
+
+#[derive(Debug)]
+pub struct DescriptorPoolInner {
+    pub samplers: Vec<Option<SamplerPtr>>,
+    sampler_alloc: RangeAllocator<pso::DescriptorBinding>,
+    pub textures: Vec<Option<(TexturePtr, image::Layout)>>,
+    texture_alloc: RangeAllocator<pso::DescriptorBinding>,
+    pub buffers: Vec<BufferBinding>,
+    buffer_alloc: RangeAllocator<pso::DescriptorBinding>,
+}
+
+impl DescriptorPoolInner {
+    pub fn new(num_samplers: usize, num_textures: usize, num_buffers: usize) -> Self {
+        DescriptorPoolInner {
+            samplers: vec![None; num_samplers],
+            sampler_alloc: RangeAllocator::new(0 .. num_samplers as pso::DescriptorBinding),
+            textures: vec![None; num_textures],
+            texture_alloc: RangeAllocator::new(0 .. num_textures as pso::DescriptorBinding),
+            buffers: vec![BufferBinding { base: None, dynamic: false }; num_buffers],
+            buffer_alloc: RangeAllocator::new(0 .. num_buffers as pso::DescriptorBinding),
+        }
+    }
+}
+
+impl DescriptorPool {
+    pub(crate) fn count_bindings(
+        desc_type: pso::DescriptorType,
+        desc_count: usize,
+        num_samplers: &mut usize,
+        num_textures: &mut usize,
+        num_buffers: &mut usize,
+    ) {
+        match desc_type {
+            pso::DescriptorType::Sampler => {
+                *num_samplers += desc_count;
+            }
+            pso::DescriptorType::CombinedImageSampler => {
+                *num_samplers += desc_count;
+                *num_textures += desc_count;
+            }
+            pso::DescriptorType::SampledImage |
+            pso::DescriptorType::StorageImage |
+            pso::DescriptorType::UniformTexelBuffer |
+            pso::DescriptorType::StorageTexelBuffer |
+            pso::DescriptorType::InputAttachment => {
+                *num_textures += desc_count;
+            }
+            pso::DescriptorType::UniformBuffer |
+            pso::DescriptorType::StorageBuffer |
+            pso::DescriptorType::UniformBufferDynamic |
+            pso::DescriptorType::StorageBufferDynamic => {
+                *num_buffers += desc_count;
+            }
+        };
+    }
+}
+
 impl hal::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
+    fn allocate_set(&mut self, set_layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
         match *self {
-            DescriptorPool::Emulated => {
-                let (layout_bindings, immutable_samplers) = match layout {
+            DescriptorPool::Emulated(ref pool_inner) => {
+                let (layout_bindings, immutable_samplers) = match set_layout {
                     &DescriptorSetLayout::Emulated(ref bindings, ref samplers) => (bindings, samplers),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
-                let mut sampler_offset = 0;
 
-                // Assume some reasonable starting capacity
-                let mut bindings = Vec::with_capacity(layout_bindings.len());
-
+                // step[1]: count the total number of descriptors needed
+                let mut total_samplers = 0;
+                let mut total_textures = 0;
+                let mut total_buffers = 0;
                 for layout in layout_bindings.iter() {
-                    let binding = match layout.ty {
-                        pso::DescriptorType::Sampler => {
-                            DescriptorSetBinding::Sampler(if layout.immutable_samplers {
-                                let slice = &immutable_samplers[sampler_offset.. sampler_offset + layout.count];
-                                sampler_offset += layout.count;
-                                slice
-                                    .iter()
-                                    .map(|s| Some(SamplerPtr(s.as_ptr())))
-                                    .collect()
-                            } else {
-                                vec![None; layout.count]
-                            })
-                        }
-                        pso::DescriptorType::CombinedImageSampler => {
-                            DescriptorSetBinding::Combined(if layout.immutable_samplers {
-                                let slice = &immutable_samplers[sampler_offset.. sampler_offset + layout.count];
-                                sampler_offset += layout.count;
-                                slice
-                                    .iter()
-                                    .map(|s| (None, Some(SamplerPtr(s.as_ptr()))))
-                                    .collect()
-                            } else {
-                                vec![(None, None); layout.count]
-                            })
-                        }
-                        pso::DescriptorType::SampledImage |
-                        pso::DescriptorType::StorageImage |
-                        pso::DescriptorType::UniformTexelBuffer |
-                        pso::DescriptorType::StorageTexelBuffer |
-                        pso::DescriptorType::InputAttachment => {
-                            DescriptorSetBinding::Image(vec![None; layout.count])
-                        }
-                        pso::DescriptorType::UniformBuffer |
-                        pso::DescriptorType::StorageBuffer => {
-                            DescriptorSetBinding::Buffer(vec![BufferBinding { base: None, dynamic: false }; layout.count])
-                        }
-                        pso::DescriptorType::UniformBufferDynamic |
-                        pso::DescriptorType::StorageBufferDynamic => {
-                            DescriptorSetBinding::Buffer(vec![BufferBinding { base: None, dynamic: true }; layout.count])
-                        }
-                    };
-
-                    let layout_binding = layout.binding as usize;
-
-                    if bindings.len() <= layout_binding {
-                        bindings.resize(layout_binding + 1, None);
-                    }
-
-                    bindings[layout_binding] = Some(binding);
+                    Self::count_bindings(layout.ty, layout.count,
+                        &mut total_samplers, &mut total_textures, &mut total_buffers);
                 }
 
-                // The set may be held onto for a long time, so attempt to shrink to avoid large overallocations
-                bindings.shrink_to_fit();
-
-                let inner = DescriptorSetInner {
-                    layout: layout_bindings.to_vec(),
-                    bindings,
+                // step[2]: try to allocate the ranges from the pool
+                let mut inner = pool_inner.write().unwrap();
+                let sampler_range = match inner.sampler_alloc.allocate_range(total_samplers as _) {
+                    Some(range) => range,
+                    None => {
+                        warn!("Not enough samplers for {}", total_samplers);
+                        return Err(pso::AllocationError::FragmentedPool);
+                    }
                 };
-                Ok(DescriptorSet::Emulated(Arc::new(Mutex::new(inner))))
+                let texture_range = match inner.texture_alloc.allocate_range(total_textures as _) {
+                    Some(range) => range,
+                    None => {
+                        inner.sampler_alloc.free_range(sampler_range);
+                        warn!("Not enough images for {}", total_textures);
+                        return Err(pso::AllocationError::FragmentedPool);
+                    }
+                };
+                let buffer_range = match inner.buffer_alloc.allocate_range(total_buffers as _) {
+                    Some(range) => range,
+                    None => {
+                        inner.sampler_alloc.free_range(sampler_range);
+                        inner.texture_alloc.free_range(texture_range);
+                        warn!("Not enough buffers for {}", total_buffers);
+                        return Err(pso::AllocationError::FragmentedPool);
+                    }
+                };
+
+                // step[3]: fill out immutable samplers
+                let mut immutable_sampler_offset = 0;
+                let mut sampler_offset = sampler_range.start as usize;
+                for layout in layout_bindings.iter() {
+                    if layout.immutable_samplers {
+                        for (sampler, immutable) in inner
+                            .samplers[sampler_offset .. sampler_offset + layout.count]
+                            .iter_mut()
+                            .zip(&immutable_samplers[immutable_sampler_offset..])
+                        {
+                            *sampler = Some(SamplerPtr(immutable.as_ptr()))
+                        }
+                        immutable_sampler_offset += layout.count;
+                    }
+                    let (mut tx_temp, mut bf_temp) = (0, 0);
+                    Self::count_bindings(layout.ty, layout.count, &mut sampler_offset, &mut tx_temp, &mut bf_temp);
+                }
+
+                Ok(DescriptorSet::Emulated {
+                    pool: Arc::clone(pool_inner),
+                    layouts: Arc::clone(layout_bindings),
+                    sampler_range,
+                    texture_range,
+                    buffer_range,
+                })
             }
             DescriptorPool::ArgumentBuffer { ref raw, ref mut range_allocator, } => {
-                let (encoder, stage_flags) = match layout {
+                let (encoder, stage_flags) = match set_layout {
                     &DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
@@ -333,37 +392,72 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
 
     fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
         match self {
-            DescriptorPool::Emulated => {
-                return; // Does nothing!  No metal allocation happened here.
-            },
-            DescriptorPool::ArgumentBuffer {
-                ref mut range_allocator,
-                ..
-            } => {
+            DescriptorPool::Emulated(pool_inner) => {
+                let mut inner = pool_inner.write().unwrap();
                 for descriptor_set in descriptor_sets {
-                    match descriptor_set {
-                        DescriptorSet::Emulated(..) => panic!("Tried to free a DescriptorSet not given out by this DescriptorPool!"),
-                        DescriptorSet::ArgumentBuffer {
-                            offset,
-                            encoder,
-                            ..
-                        } => {
-                            let handle_range = (*offset)..offset + encoder.encoded_length();
-                            range_allocator.free_range(handle_range);
-                        },
+                    match *descriptor_set {
+                        DescriptorSet::Emulated { ref sampler_range, ref texture_range, ref buffer_range, .. } => {
+                            if sampler_range.start != sampler_range.end {
+                                inner.sampler_alloc.free_range(sampler_range.clone());
+                            }
+                            for sampler in &mut inner.samplers[sampler_range.start as usize .. sampler_range.end as usize] {
+                                *sampler = None;
+                            }
+                            if texture_range.start != texture_range.end {
+                                inner.texture_alloc.free_range(texture_range.clone());
+                            }
+                            for image in &mut inner.textures[texture_range.start as usize .. texture_range.end as usize] {
+                                *image = None;
+                            }
+                            if buffer_range.start != buffer_range.end {
+                                inner.buffer_alloc.free_range(buffer_range.clone());
+                            }
+                            for buffer in &mut inner.buffers[buffer_range.start as usize .. buffer_range.end as usize] {
+                                buffer.base = None;
+                            }
+                        }
+                        DescriptorSet::ArgumentBuffer{..} => {
+                            panic!("Tried to free a DescriptorSet not given out by this DescriptorPool!")
+                        }
                     }
                 }
-            },
+            }
+            DescriptorPool::ArgumentBuffer { ref mut range_allocator, .. } => {
+                for descriptor_set in descriptor_sets {
+                    match descriptor_set {
+                        DescriptorSet::Emulated{..} => {
+                            panic!("Tried to free a DescriptorSet not given out by this DescriptorPool!")
+                        }
+                        DescriptorSet::ArgumentBuffer { offset, encoder, .. } => {
+                            let handle_range = (*offset)..offset + encoder.encoded_length();
+                            range_allocator.free_range(handle_range);
+                        }
+                    }
+                }
+            }
         }
     }
 
     fn reset(&mut self) {
-        match self {
-            DescriptorPool::Emulated => {/* No action necessary */}
-            DescriptorPool::ArgumentBuffer {
-                range_allocator,
-                ..
-            } => {
+        match *self {
+            DescriptorPool::Emulated(ref pool_inner) => {
+                let mut inner = pool_inner.write().unwrap();
+
+                inner.sampler_alloc.reset();
+                inner.texture_alloc.reset();
+                inner.buffer_alloc.reset();
+
+                for sampler in &mut inner.samplers {
+                    *sampler = None;
+                }
+                for texture in &mut inner.textures {
+                    *texture = None;
+                }
+                for buffer in &mut inner.buffers {
+                    buffer.base = None;
+                }
+            }
+            DescriptorPool::ArgumentBuffer { ref mut range_allocator, .. } => {
                 range_allocator.reset();
             }
         }
@@ -372,7 +466,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
 
 #[derive(Debug)]
 pub enum DescriptorSetLayout {
-    Emulated(Vec<pso::DescriptorSetLayoutBinding>, Vec<metal::SamplerState>),
+    Emulated(Arc<Vec<pso::DescriptorSetLayoutBinding>>, Vec<metal::SamplerState>),
     ArgumentBuffer(metal::ArgumentEncoder, pso::ShaderStageFlags),
 }
 unsafe impl Send for DescriptorSetLayout {}
@@ -380,50 +474,23 @@ unsafe impl Sync for DescriptorSetLayout {}
 
 #[derive(Clone, Debug)]
 pub enum DescriptorSet {
-    Emulated(Arc<Mutex<DescriptorSetInner>>),
+    Emulated {
+        pool: Arc<RwLock<DescriptorPoolInner>>,
+        layouts: Arc<Vec<pso::DescriptorSetLayoutBinding>>,
+        sampler_range: Range<pso::DescriptorBinding>,
+        texture_range: Range<pso::DescriptorBinding>,
+        buffer_range: Range<pso::DescriptorBinding>
+    },
     ArgumentBuffer {
         raw: metal::Buffer,
         offset: NSUInteger,
         encoder: metal::ArgumentEncoder,
         stage_flags: pso::ShaderStageFlags,
-    }
+    },
 }
 unsafe impl Send for DescriptorSet {}
 unsafe impl Sync for DescriptorSet {}
 
-#[derive(Debug)]
-pub struct DescriptorSetInner {
-    pub(crate) layout: Vec<pso::DescriptorSetLayoutBinding>, // TODO: maybe don't clone?
-    // The index of `bindings` is `pso::DescriptorBinding`
-    pub(crate) bindings: Vec<Option<DescriptorSetBinding>>,
-}
-unsafe impl Send for DescriptorSetInner {}
-
-#[derive(Clone, Debug)]
-pub struct BufferBinding {
-    pub base: Option<(BufferPtr, u64)>,
-    pub dynamic: bool,
-}
-
-#[derive(Clone, Debug)]
-pub enum DescriptorSetBinding {
-    Sampler(Vec<Option<SamplerPtr>>),
-    Image(Vec<Option<(TexturePtr, image::Layout)>>),
-    Combined(Vec<(Option<(TexturePtr, image::Layout)>, Option<SamplerPtr>)>),
-    Buffer(Vec<BufferBinding>),
-    //InputAttachment(Vec<(TexturePtr, image::Layout)>),
-}
-
-impl DescriptorSetBinding {
-    pub(crate) fn count(&self) -> usize {
-        match *self {
-            DescriptorSetBinding::Sampler(ref vec) => vec.len(),
-            DescriptorSetBinding::Image(ref vec) => vec.len(),
-            DescriptorSetBinding::Combined(ref vec) => 2 * vec.len(),
-            DescriptorSetBinding::Buffer(ref vec) => vec.len(),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct Memory {

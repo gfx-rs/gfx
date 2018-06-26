@@ -138,6 +138,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
             .collect()
     }
 
+    //TODO: change the API to use an iterator
     /// Free the descriptor sets given, after calling this all descriptor sets in `descriptor_sets`
     /// will be invalid.
     fn free_sets(&mut self, descriptor_sets: &[B::DescriptorSet]);
