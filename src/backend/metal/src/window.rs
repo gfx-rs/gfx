@@ -22,6 +22,7 @@ pub type CAMetalLayer = *mut Object;
 pub struct Surface {
     pub(crate) inner: Arc<SurfaceInner>,
     pub(crate) apply_pixel_scale: bool,
+    pub(crate) has_swapchain: bool
 }
 
 #[derive(Debug)]
@@ -274,14 +275,20 @@ impl Device {
                     let texture: &metal::TextureRef = msg_send![drawable, texture];
                     (drawable, texture)
                 };
-                if index == 0 {
-                    // when resizing, this trick frees up the currently shown frame
-                    drawable.present();
-                }
                 trace!("\tframe[{}] = {:?}", index, texture);
+
+                let drawable = if index == 0 && surface.has_swapchain {
+                    // when resizing, this trick frees up the currently shown frame
+                    // HACK: the has_swapchain is unfortunate, and might not be
+                    //       correct in all cases.
+                    drawable.present();
+                    None
+                } else {
+                    Some(drawable.to_owned())
+                };
                 Frame {
                     inner: Mutex::new(FrameInner {
-                        drawable: Some(drawable.to_owned()),
+                        drawable: drawable,
                         available: true,
                         last_frame: 0,
                     }),
@@ -307,6 +314,8 @@ impl Device {
             })
             .collect();
 
+        surface.has_swapchain = true;
+
         let swapchain = Swapchain {
             frames: Arc::new(frames),
             surface: surface.inner.clone(),
@@ -314,6 +323,7 @@ impl Device {
             last_frame: 0,
             image_ready_callbacks: Vec::new(),
         };
+
 
         (swapchain, Backbuffer::Images(images))
     }
