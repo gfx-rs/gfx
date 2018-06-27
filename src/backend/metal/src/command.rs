@@ -821,11 +821,11 @@ impl CommandSink {
     ) where
         I: Iterator<Item = soft::RenderCommand<&'a soft::Own>>,
     {
+        //assert!(AutoReleasePool::is_active());
         self.stop_encoding();
 
         match *self {
             CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
-                let _ap = AutoreleasePool::new();
                 let encoder = cmd_buffer.new_render_command_encoder(descriptor);
                 for command in init_commands {
                     exec_render(encoder, command);
@@ -1446,7 +1446,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 framebuffer_inner: native::FramebufferInner {
                     extent: Extent::default(),
                     aspects: Aspects::empty(),
-                    colors: Vec::new(),
+                    colors: SmallVec::new(),
                     depth_stencil: None,
                 }
             },
@@ -1653,6 +1653,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<SubresourceRange>,
     {
+        let _ap = AutoreleasePool::new();
+
         let CommandBufferInner {
             ref mut retained_textures,
             ref mut sink,
@@ -2017,6 +2019,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
+        let _ap = AutoreleasePool::new();
+
         let vertices = &mut self.temp.blit_vertices;
         vertices.clear();
 
@@ -2220,7 +2224,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .chain(&extra)
                 .cloned();
 
-            inner.sink().begin_render_pass(false, &descriptor, commands);
+            inner
+                .sink()
+                .begin_render_pass(false, &descriptor, commands);
         }
     }
 

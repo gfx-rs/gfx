@@ -27,6 +27,7 @@ use metal::{self,
     MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLTextureType,
     CaptureManager
 };
+use smallvec::SmallVec;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 use foreign_types::ForeignType;
 
@@ -1124,7 +1125,7 @@ impl hal::Device<Backend> for Device {
         let mut inner = n::FramebufferInner {
             extent,
             aspects: format::Aspects::empty(),
-            colors: Vec::new(),
+            colors: SmallVec::new(),
             depth_stencil: None,
         };
 

@@ -13,6 +13,7 @@ use hal::format::{Aspects, Format, FormatDesc};
 
 use cocoa::foundation::{NSUInteger};
 use metal;
+use smallvec::SmallVec;
 use spirv_cross::{msl, spirv};
 use foreign_types::ForeignType;
 
@@ -51,7 +52,7 @@ pub struct ColorAttachment {
 pub struct FramebufferInner {
     pub extent: image::Extent,
     pub aspects: Aspects,
-    pub colors: Vec<ColorAttachment>,
+    pub colors: SmallVec<[ColorAttachment; 4]>,
     pub depth_stencil: Option<metal::MTLPixelFormat>,
 }
 
