@@ -1634,15 +1634,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<Backend>) {
+    fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    where
+        I: IntoIterator<Item = (T, buffer::Offset)>,
+        T: Borrow<n::Buffer>,
+    {
         // Only cache the vertex buffer views as we don't know the stride (PSO).
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
-        for (&(buffer, offset), view) in vbs.0.iter()
+        for (&(buffer, offset), view) in buffers
+            .into_iter()
             .zip(self.vertex_buffer_views[first_binding as _..].iter_mut())
         {
-            let base = unsafe { (*buffer.resource).GetGPUVirtualAddress() };
+            let b = buffer.borrow();
+            let base = unsafe { (*b.resource).GetGPUVirtualAddress() };
             view.BufferLocation = base + offset as u64;
-            view.SizeInBytes = buffer.size_in_bytes - offset as u32;
+            view.SizeInBytes = b.size_in_bytes - offset as u32;
         }
     }
 

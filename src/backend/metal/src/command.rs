@@ -2233,13 +2233,26 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         });
     }
 
-    fn bind_vertex_buffers(&mut self, first_binding: u32, buffer_set: pso::VertexBufferSet<Backend>) {
-        while self.state.vertex_buffers.len() < first_binding as usize + buffer_set.0.len() {
-            self.state.vertex_buffers.push(None);
+
+    fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    where
+        I: IntoIterator<Item = (T, buffer::Offset)>,
+        T: Borrow<native::Buffer>,
+    {
+        if self.state.vertex_buffers.len() <= first_binding as usize {
+            self.state.vertex_buffers.resize(first_binding as usize + 1, None);
         }
-        for (i, &(buffer, offset)) in buffer_set.0.iter().enumerate() {
-            let buffer_ptr = BufferPtr(buffer.raw.as_ptr());
-            self.state.vertex_buffers[first_binding as usize + i] = Some((buffer_ptr, buffer.range.start + offset));
+        for (i, (buffer, offset)) in buffers.into_iter().enumerate() {
+            let b = buffer.borrow();
+            let buffer_ptr = BufferPtr(b.raw.as_ptr());
+            let index = first_binding as usize + i;
+            let value = Some((buffer_ptr, b.range.start + offset));
+            if index >= self.state.vertex_buffers.len() {
+                debug_assert_eq!(index, self.state.vertex_buffers.len());
+                self.state.vertex_buffers.push(value);
+            } else {
+                self.state.vertex_buffers[index] = value;
+            }
         }
 
         let mask = self.state.set_vertex_buffers();

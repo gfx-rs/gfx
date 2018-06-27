@@ -3,8 +3,7 @@ use std::borrow::Borrow;
 use std::ops::Range;
 
 use Backend;
-use {image, pso};
-use buffer::IndexBufferView;
+use {buffer, image, pso};
 use query::{Query, QueryControl, QueryId};
 use queue::capability::{Graphics, GraphicsOrCompute, Supports};
 use super::{
@@ -181,13 +180,17 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<'a,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_index_buffer(&mut self, ibv: IndexBufferView<B>) {
+    pub fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<B>) {
         self.raw.bind_index_buffer(ibv)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<B>) {
-        self.raw.bind_vertex_buffers(first_binding, vbs)
+    pub fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    where
+        I: IntoIterator<Item = (T, buffer::Offset)>,
+        T: Borrow<B::Buffer>,
+    {
+        self.raw.bind_vertex_buffers(first_binding, buffers)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

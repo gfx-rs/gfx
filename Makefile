@@ -36,7 +36,7 @@ else
 endif
 
 
-.PHONY: all check test reftests travis-sdl2
+.PHONY: all check quad test reftests travis-sdl2
 
 all: check test
 
@@ -61,6 +61,9 @@ reftests:
 reftests-ci:
 	cd src/warden && cargo test --features "gl"
 	cd src/warden && cargo run --features "gl" -- ci #TODO: "gl-headless"
+
+quad:
+	cd examples && cargo run --bin quad --features ${FEATURES_HAL}
 
 travis-sdl2:
 	#TODO

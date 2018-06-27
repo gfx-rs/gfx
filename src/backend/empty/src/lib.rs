@@ -499,7 +499,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_vertex_buffers(&mut self, _: u32, _: pso::VertexBufferSet<Backend>) {
+    fn bind_vertex_buffers<I, T>(&mut self, _: u32, _: I)
+    where
+        I: IntoIterator<Item = (T, buffer::Offset)>,
+        T: Borrow<()>,
+    {
         unimplemented!()
     }
 

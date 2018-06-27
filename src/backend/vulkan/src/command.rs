@@ -483,11 +483,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<Backend>) {
-        let buffers: SmallVec<[vk::Buffer; 16]> =
-            vbs.0.iter().map(|&(ref buffer, _)| buffer.raw).collect();
-        let offsets: SmallVec<[vk::DeviceSize; 16]> =
-            vbs.0.iter().map(|&(_, offset)| offset as u64).collect();
+    fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    where
+        I: IntoIterator<Item = (T, buffer::Offset)>,
+        T: Borrow<n::Buffer>,
+    {
+        let (buffers, offsets): (SmallVec<[vk::Buffer; 16]>, SmallVec<[vk::DeviceSize; 16]>) = buffers
+            .into_iter()
+            .map(|(buffer, offset)| (buffer.borrow().raw, offset))
+            .unzip();
 
         unsafe {
             self.device.0.cmd_bind_vertex_buffers(

@@ -866,9 +866,14 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_vertex_buffers(&mut self, first_binding: u32, vbs: pso::VertexBufferSet<Backend>) {
-        let (buffers, offsets): (Vec<*mut d3d11::ID3D11Buffer>, Vec<u32>) = vbs.0.iter()
-            .map(|(buf, offset)| (buf.internal.raw, *offset as u32))
+    fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    where
+        I: IntoIterator<Item = (T, buffer::Offset)>,
+        T: Borrow<Buffer>,
+    {
+        let (buffers, offsets): (Vec<*mut d3d11::ID3D11Buffer>, Vec<u32>) = buffers
+            .into_iter()
+            .map(|(buf, offset)| (buf.borrow().internal.raw, offset as u32))
             .unzip();
 
         // TODO: strides

@@ -2,8 +2,7 @@
 //! The input assembler collects raw vertex and index data.
 
 use format;
-use buffer::Offset;
-use {Backend, Primitive};
+use {Primitive};
 
 /// Shader binding location.
 pub type Location = u32;
@@ -86,19 +85,5 @@ impl InputAssemblerDesc {
             primitive,
             primitive_restart: PrimitiveRestart::Disabled,
         }
-    }
-}
-
-/// A complete set of vertex buffers to be used for vertex import in PSO.
-#[derive(Clone, Debug)]
-pub struct VertexBufferSet<'a, B: Backend>(
-    /// Array of buffer handles with offsets in them
-    pub Vec<(&'a B::Buffer, Offset)>,
-);
-
-impl<'a, B: Backend> VertexBufferSet<'a, B> {
-    /// Create an empty set
-    pub fn new() -> Self {
-        VertexBufferSet(Vec::new())
     }
 }
