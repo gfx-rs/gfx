@@ -2,7 +2,6 @@ use {Backend, BufferPtr, SamplerPtr, TexturePtr};
 use internal::Channel;
 use window::SwapchainImage;
 
-use std::collections::HashMap;
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -20,13 +19,15 @@ use foreign_types::ForeignType;
 use range_alloc::RangeAllocator;
 
 
+pub type EntryPointMap = FastHashMap<String, spirv::EntryPoint>;
+
 /// Shader module can be compiled in advance if it's resource bindings do not
 /// depend on pipeline layout, in which case the value would become `Compiled`.
 #[derive(Debug)]
 pub enum ShaderModule {
     Compiled {
         library: metal::Library,
-        entry_point_map: FastHashMap<String, spirv::EntryPoint>,
+        entry_point_map: EntryPointMap,
     },
     Raw(Vec<u8>),
 }
@@ -65,11 +66,13 @@ pub struct Framebuffer {
 unsafe impl Send for Framebuffer {}
 unsafe impl Sync for Framebuffer {}
 
+pub type ResourceOverrideMap = FastHashMap<msl::ResourceBindingLocation, msl::ResourceBinding>;
+
 #[derive(Debug)]
 pub struct PipelineLayout {
     // First vertex buffer index to be used by attributes
     pub(crate) attribute_buffer_index: u32,
-    pub(crate) res_overrides: HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
+    pub(crate) res_overrides: ResourceOverrideMap,
 }
 
 #[derive(Clone, Debug)]

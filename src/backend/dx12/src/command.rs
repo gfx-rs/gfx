@@ -1641,13 +1641,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         // Only cache the vertex buffer views as we don't know the stride (PSO).
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
-        for (&(buffer, offset), view) in buffers
+        for ((buffer, offset), view) in buffers
             .into_iter()
             .zip(self.vertex_buffer_views[first_binding as _..].iter_mut())
         {
             let b = buffer.borrow();
             let base = unsafe { (*b.resource).GetGPUVirtualAddress() };
-            view.BufferLocation = base + offset as u64;
+            view.BufferLocation = base + offset;
             view.SizeInBytes = b.size_in_bytes - offset as u32;
         }
     }
