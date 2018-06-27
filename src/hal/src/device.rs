@@ -221,7 +221,10 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         I: IntoIterator,
         I::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
     {
-        descs.into_iter().map(|desc| self.create_graphics_pipeline(desc.borrow())).collect()
+        descs
+            .into_iter()
+            .map(|desc| self.create_graphics_pipeline(desc.borrow()))
+            .collect()
     }
 
     /// Destroys a graphics pipeline.
@@ -246,7 +249,10 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         I: IntoIterator,
         I::Item: Borrow<pso::ComputePipelineDesc<'a, B>>,
     {
-        descs.into_iter().map(|desc| self.create_compute_pipeline(desc.borrow())).collect()
+        descs
+            .into_iter()
+            .map(|desc| self.create_compute_pipeline(desc.borrow()))
+            .collect()
     }
 
     /// Destroys a compute pipeline.

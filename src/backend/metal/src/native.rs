@@ -390,12 +390,15 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         }
     }
 
-    fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
+    fn free_sets<I>(&mut self, descriptor_sets: I)
+    where
+        I: IntoIterator<Item = DescriptorSet>
+    {
         match self {
             DescriptorPool::Emulated(pool_inner) => {
                 let mut inner = pool_inner.write().unwrap();
                 for descriptor_set in descriptor_sets {
-                    match *descriptor_set {
+                    match descriptor_set {
                         DescriptorSet::Emulated { ref sampler_range, ref texture_range, ref buffer_range, .. } => {
                             if sampler_range.start != sampler_range.end {
                                 inner.sampler_alloc.free_range(sampler_range.clone());
@@ -429,7 +432,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                             panic!("Tried to free a DescriptorSet not given out by this DescriptorPool!")
                         }
                         DescriptorSet::ArgumentBuffer { offset, encoder, .. } => {
-                            let handle_range = (*offset)..offset + encoder.encoded_length();
+                            let handle_range = offset .. offset + encoder.encoded_length();
                             range_allocator.free_range(handle_range);
                         }
                     }

@@ -140,9 +140,12 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         }
     }
 
-    fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
+    fn free_sets<I>(&mut self, descriptor_sets: I)
+    where
+        I: IntoIterator<Item = DescriptorSet>
+    {
         self.set_free_vec.clear();
-        self.set_free_vec.extend(descriptor_sets.iter().map(|d| d.raw));
+        self.set_free_vec.extend(descriptor_sets.into_iter().map(|d| d.raw));
         unsafe {
             self.device.0.free_descriptor_sets(self.raw, &self.set_free_vec);
         }

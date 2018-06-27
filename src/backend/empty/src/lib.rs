@@ -755,7 +755,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 #[derive(Debug)]
 pub struct DescriptorPool;
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    fn free_sets(&mut self, _descriptor_sets: &[()]) {
+    fn free_sets<I>(&mut self, _descriptor_sets: I)
+    where
+        I: IntoIterator<Item = ()>
+    {
         unimplemented!()
     }
 
