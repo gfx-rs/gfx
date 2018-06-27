@@ -558,28 +558,59 @@ impl StageResources {
         self.push_constants_buffer_id = None;
     }
 
-    fn add_buffer(&mut self, slot: usize, buffer: BufferPtr, offset: buffer::Offset) {
-        while self.buffers.len() <= slot {
-            self.buffers.push(None)
+    fn set_buffer(&mut self, slot: usize, buffer: BufferPtr, offset: buffer::Offset) -> bool {
+        if self.buffers.len() <= slot {
+            self.buffers.resize(slot + 1, None);
         }
-        self.buffers[slot] = Some((buffer.to_owned(), offset));
-    }
-
-    fn add_textures(&mut self, start: usize, textures: &[Option<(TexturePtr, Layout)>]) {
-        while self.textures.len() < start + textures.len() {
-            self.textures.push(None)
-        }
-        for (out, tex) in self.textures[start..].iter_mut().zip(textures.iter()) {
-            *out = tex.map(|(t, _)| t);
+        let value = Some((buffer, offset));
+        if self.buffers[slot] != value {
+            self.buffers[slot] = value;
+            true
+        } else {
+            false
         }
     }
 
-    fn add_samplers(&mut self, start: usize, samplers: &[Option<SamplerPtr>]) {
-        while self.samplers.len() < start + samplers.len() {
-            self.samplers.push(None)
+    fn set_textures<F>(
+        &mut self, start: usize, textures: &[Option<(TexturePtr, Layout)>], mut update: F
+    ) where
+        F: FnMut(usize, Option<TexturePtr>)
+    {
+        if self.textures.len() < start + textures.len() {
+            self.textures.resize(start + textures.len(), None);
         }
-        for (out, sampler) in self.samplers[start..].iter_mut().zip(samplers.iter()) {
-            *out = *sampler;
+        for (i, (out, maybe)) in self
+            .textures[start..]
+            .iter_mut()
+            .zip(textures)
+            .enumerate()
+        {
+            let value = maybe.map(|(t, _)| t);
+            if *out != value {
+                *out = value;
+                update(start + i, value);
+            }
+        }
+    }
+
+    fn set_samplers<F>(
+        &mut self, start: usize, samplers: &[Option<SamplerPtr>], mut update: F
+    ) where
+        F: FnMut(usize, Option<SamplerPtr>)
+    {
+        if self.samplers.len() < start + samplers.len() {
+            self.samplers.resize(start + samplers.len(), None);
+        }
+        for (i, (out, &value)) in self
+            .samplers[start..]
+            .iter_mut()
+            .zip(samplers)
+            .enumerate()
+        {
+            if *out != value {
+                *out = value;
+                update(start + i, value);
+            }
         }
     }
 }
@@ -2540,29 +2571,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         for (stage, loc, resources) in bind_vs.into_iter().chain(bind_fs) {
                             if sampler_base != sm_range.start {
                                 debug_assert_eq!(sampler_base, sm_range.end);
-                                let samplers = &pool.samplers[sm_range.clone()];
-                                let start = pipe_layout.res_overrides[&loc].sampler_id as usize;
-                                resources.add_samplers(start, samplers);
-                                commands.extend(samplers.iter().enumerate().map(|(i, &sampler)| {
-                                    soft::RenderCommand::BindSampler {
-                                        stage,
-                                        index: start + i,
-                                        sampler,
-                                    }
-                                }));
+                                resources.set_samplers(
+                                    pipe_layout.res_overrides[&loc].sampler_id as usize,
+                                    &pool.samplers[sm_range.clone()],
+                                    |index, sampler| {
+                                        commands.push(soft::RenderCommand::BindSampler { stage, index, sampler });
+                                    },
+                                );
                             }
                             if texture_base != tx_range.start {
                                 debug_assert_eq!(texture_base, tx_range.end);
-                                let textures = &pool.textures[tx_range.clone()];
-                                let start = pipe_layout.res_overrides[&loc].texture_id as usize;
-                                resources.add_textures(start, textures);
-                                commands.extend(textures.iter().enumerate().map(|(i, texture)| {
-                                    soft::RenderCommand::BindTexture {
-                                        stage,
-                                        index: start + i,
-                                        texture: texture.map(|(tex, _)| tex),
-                                    }
-                                }));
+                                resources.set_textures(
+                                    pipe_layout.res_overrides[&loc].texture_id as usize,
+                                    &pool.textures[tx_range.clone()],
+                                    |index, texture| {
+                                        commands.push(soft::RenderCommand::BindTexture { stage, index, texture });
+                                    },
+                                );
                             }
                             if buffer_base != bf_range.start {
                                 debug_assert_eq!(buffer_base, bf_range.end);
@@ -2576,7 +2601,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                                 offset += dynamic_offsets[dynamic_index];
                                                 dynamic_index += 1;
                                             }
-                                            resources.add_buffer(start + i, buffer, offset as _);
+                                            if !resources.set_buffer(start + i, buffer, offset as _) {
+                                                continue
+                                            }
                                             (Some(buffer), offset)
                                         }
                                         None => (None, 0),
@@ -2605,13 +2632,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             binding: 0,
                         };
                         let slot = pipe_layout.res_overrides[&loc].buffer_id;
-                        self.state.resources_vs.add_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _);
-                        Some(soft::RenderCommand::BindBuffer {
-                            stage: pso::Stage::Vertex,
-                            index: slot as _,
-                            buffer: Some(BufferPtr(raw.as_ptr())),
-                            offset,
-                        })
+                        if self.state.resources_vs.set_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _) {
+                            Some(soft::RenderCommand::BindBuffer {
+                                stage: pso::Stage::Vertex,
+                                index: slot as _,
+                                buffer: Some(BufferPtr(raw.as_ptr())),
+                                offset,
+                            })
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     };
@@ -2622,13 +2652,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             binding: 0,
                         };
                         let slot = pipe_layout.res_overrides[&loc].buffer_id;
-                        self.state.resources_fs.add_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _);
-                        Some(soft::RenderCommand::BindBuffer {
-                            stage: pso::Stage::Fragment,
-                            index: slot as _,
-                            buffer: Some(BufferPtr(raw.as_ptr())),
-                            offset,
-                        })
+                        if self.state.resources_fs.set_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _) {
+                            Some(soft::RenderCommand::BindBuffer {
+                                stage: pso::Stage::Fragment,
+                                index: slot as _,
+                                buffer: Some(BufferPtr(raw.as_ptr())),
+                                offset,
+                            })
+                        } else {
+                            None
+                        }
                     } else {
                         None
                     };
@@ -2708,27 +2741,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                         if sampler_base != sm_range.start {
                             debug_assert_eq!(sampler_base, sm_range.end);
-                            let samplers = &pool.samplers[sm_range];
-                            let start = res_override.sampler_id as usize;
-                            resources.add_samplers(start, samplers);
-                            commands.extend(samplers.iter().enumerate().map(|(i, &sampler)| {
-                                soft::ComputeCommand::BindSampler {
-                                    index: start + i,
-                                    sampler,
-                                }
-                            }));
+                            resources.set_samplers(
+                                res_override.sampler_id as usize,
+                                &pool.samplers[sm_range],
+                                |index, sampler| {
+                                    commands.push(soft::ComputeCommand::BindSampler { index, sampler });
+                                },
+                            );
                         }
                         if texture_base != tx_range.start {
                             debug_assert_eq!(texture_base, tx_range.end);
-                            let textures = &pool.textures[tx_range];
-                            let start = res_override.texture_id as usize;
-                            resources.add_textures(start, textures);
-                            commands.extend(textures.iter().enumerate().map(|(i, texture)| {
-                                soft::ComputeCommand::BindTexture {
-                                    index: start + i,
-                                    texture: texture.map(|(tex, _)| tex),
-                                }
-                            }));
+                            resources.set_textures(
+                                res_override.texture_id as usize,
+                                &pool.textures[tx_range],
+                                |index, texture| {
+                                    commands.push(soft::ComputeCommand::BindTexture { index, texture });
+                                },
+                            );
                         }
                         if buffer_base != bf_range.start {
                             debug_assert_eq!(buffer_base, bf_range.end);
@@ -2742,7 +2771,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                             offset += dynamic_offsets[dynamic_index];
                                             dynamic_index += 1;
                                         }
-                                        resources.add_buffer(start + i, buffer, offset as _);
+                                        if !resources.set_buffer(start + i, buffer, offset as _) {
+                                            continue
+                                        }
                                         (Some(buffer), offset)
                                     }
                                     None => (None, 0),
@@ -2763,11 +2794,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
-                        resources.add_buffer(
-                            res_override.buffer_id as _,
-                            BufferPtr(raw.as_ptr()),
-                            offset as _,
-                        );
+                        let index = res_override.buffer_id as usize;
+                        let buffer = BufferPtr(raw.as_ptr());
+                        if resources.set_buffer(index, buffer, offset as _) {
+                            let com = soft::ComputeCommand::BindBuffer {
+                                index,
+                                buffer: Some(buffer),
+                                offset,
+                            };
+                            self.inner
+                                .borrow_mut()
+                                .sink()
+                                .pre_compute_commands(iter::once(com));
+                        }
                     }
                 }
             }
