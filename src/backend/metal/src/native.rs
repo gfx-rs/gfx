@@ -322,29 +322,47 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
 
                 // step[2]: try to allocate the ranges from the pool
                 let mut inner = pool_inner.write().unwrap();
-                let sampler_range = match inner.sampler_alloc.allocate_range(total_samplers as _) {
-                    Some(range) => range,
-                    None => {
-                        warn!("Not enough samplers for {}", total_samplers);
-                        return Err(pso::AllocationError::FragmentedPool);
+                let sampler_range = if total_samplers != 0 {
+                    match inner.sampler_alloc.allocate_range(total_samplers as _) {
+                        Some(range) => range,
+                        None => {
+                            warn!("Not enough samplers for {}", total_samplers);
+                            return Err(pso::AllocationError::FragmentedPool);
+                        }
                     }
+                } else {
+                    0 .. 0
                 };
-                let texture_range = match inner.texture_alloc.allocate_range(total_textures as _) {
-                    Some(range) => range,
-                    None => {
-                        inner.sampler_alloc.free_range(sampler_range);
-                        warn!("Not enough images for {}", total_textures);
-                        return Err(pso::AllocationError::FragmentedPool);
+                let texture_range = if total_textures != 0 {
+                    match inner.texture_alloc.allocate_range(total_textures as _) {
+                        Some(range) => range,
+                        None => {
+                            if sampler_range.end != 0 {
+                                inner.sampler_alloc.free_range(sampler_range);
+                            }
+                            warn!("Not enough images for {}", total_textures);
+                            return Err(pso::AllocationError::FragmentedPool);
+                        }
                     }
+                } else {
+                    0 .. 0
                 };
-                let buffer_range = match inner.buffer_alloc.allocate_range(total_buffers as _) {
-                    Some(range) => range,
-                    None => {
-                        inner.sampler_alloc.free_range(sampler_range);
-                        inner.texture_alloc.free_range(texture_range);
-                        warn!("Not enough buffers for {}", total_buffers);
-                        return Err(pso::AllocationError::FragmentedPool);
+                let buffer_range = if total_buffers != 0 {
+                    match inner.buffer_alloc.allocate_range(total_buffers as _) {
+                        Some(range) => range,
+                        None => {
+                            if sampler_range.end != 0 {
+                                inner.sampler_alloc.free_range(sampler_range);
+                            }
+                            if texture_range.end != 0 {
+                                inner.texture_alloc.free_range(texture_range);
+                            }
+                            warn!("Not enough buffers for {}", total_buffers);
+                            return Err(pso::AllocationError::FragmentedPool);
+                        }
                     }
+                } else {
+                    0 .. 0
                 };
 
                 // step[3]: fill out immutable samplers
@@ -399,24 +417,24 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 let mut inner = pool_inner.write().unwrap();
                 for descriptor_set in descriptor_sets {
                     match descriptor_set {
-                        DescriptorSet::Emulated { ref sampler_range, ref texture_range, ref buffer_range, .. } => {
-                            if sampler_range.start != sampler_range.end {
-                                inner.sampler_alloc.free_range(sampler_range.clone());
-                            }
+                        DescriptorSet::Emulated { sampler_range, texture_range, buffer_range, .. } => {
                             for sampler in &mut inner.samplers[sampler_range.start as usize .. sampler_range.end as usize] {
                                 *sampler = None;
                             }
-                            if texture_range.start != texture_range.end {
-                                inner.texture_alloc.free_range(texture_range.clone());
+                            if sampler_range.start != sampler_range.end {
+                                inner.sampler_alloc.free_range(sampler_range);
                             }
                             for image in &mut inner.textures[texture_range.start as usize .. texture_range.end as usize] {
                                 *image = None;
                             }
-                            if buffer_range.start != buffer_range.end {
-                                inner.buffer_alloc.free_range(buffer_range.clone());
+                            if texture_range.start != texture_range.end {
+                                inner.texture_alloc.free_range(texture_range);
                             }
                             for buffer in &mut inner.buffers[buffer_range.start as usize .. buffer_range.end as usize] {
                                 buffer.base = None;
+                            }
+                            if buffer_range.start != buffer_range.end {
+                                inner.buffer_alloc.free_range(buffer_range);
                             }
                         }
                         DescriptorSet::ArgumentBuffer{..} => {
