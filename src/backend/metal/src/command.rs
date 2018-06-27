@@ -1690,51 +1690,63 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 &*image.raw
             };
 
-            let clear_color_attachment = sub.aspects.contains(Aspects::COLOR);
-            if image.format_desc.aspects.contains(Aspects::COLOR) {
+            let color_attachment = if image.format_desc.aspects.contains(Aspects::COLOR) {
                 let attachment = descriptor
                     .color_attachments()
                     .object_at(0)
                     .unwrap();
                 attachment.set_texture(Some(texture));
                 attachment.set_store_action(metal::MTLStoreAction::Store);
-                if clear_color_attachment {
+                if sub.aspects.contains(Aspects::COLOR) {
                     attachment.set_load_action(metal::MTLLoadAction::Clear);
                     attachment.set_clear_color(clear_color.clone());
+                    Some(attachment)
                 } else {
                     attachment.set_load_action(metal::MTLLoadAction::Load);
+                    None
                 }
-            }
+            } else {
+                assert!(!sub.aspects.contains(Aspects::COLOR));
+                None
+            };
 
-            let clear_depth_attachment = sub.aspects.contains(Aspects::DEPTH);
-            if image.format_desc.aspects.contains(Aspects::DEPTH) {
+            let depth_attachment = if image.format_desc.aspects.contains(Aspects::DEPTH) {
                 let attachment = descriptor
                     .depth_attachment()
                     .unwrap();
                 attachment.set_texture(Some(texture));
                 attachment.set_store_action(metal::MTLStoreAction::Store);
-                if clear_depth_attachment {
+                if sub.aspects.contains(Aspects::DEPTH) {
                     attachment.set_load_action(metal::MTLLoadAction::Clear);
                     attachment.set_clear_depth(depth_stencil.depth as _);
+                    Some(attachment)
                 } else {
                     attachment.set_load_action(metal::MTLLoadAction::Load);
+                    None
                 }
-            }
+            } else {
+                assert!(!sub.aspects.contains(Aspects::DEPTH));
+                None
+            };
 
-            let clear_stencil_attachment = sub.aspects.contains(Aspects::STENCIL);
-            if image.format_desc.aspects.contains(Aspects::STENCIL) {
+            let stencil_attachment = if image.format_desc.aspects.contains(Aspects::STENCIL) {
                 let attachment = descriptor
                     .stencil_attachment()
                     .unwrap();
                 attachment.set_texture(Some(texture));
                 attachment.set_store_action(metal::MTLStoreAction::Store);
-                if clear_stencil_attachment {
+                if sub.aspects.contains(Aspects::STENCIL) {
                     attachment.set_load_action(metal::MTLLoadAction::Clear);
                     attachment.set_clear_stencil(depth_stencil.stencil);
+                    Some(attachment)
                 } else {
                     attachment.set_load_action(metal::MTLLoadAction::Load);
+                    None
                 }
-            }
+            } else {
+                assert!(!sub.aspects.contains(Aspects::STENCIL));
+                None
+            };
 
             for layer in layers {
                 for level in sub.levels.clone() {
@@ -1746,29 +1758,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         descriptor.set_render_target_array_length(num_layers);
                     };
 
-                    if clear_color_attachment {
-                        let attachment = descriptor
-                            .color_attachments()
-                            .object_at(0)
-                            .unwrap();
+                    if let Some(attachment) = color_attachment {
                         attachment.set_level(level as _);
                         if !CLEAR_IMAGE_ARRAY {
                             attachment.set_slice(layer as _);
                         }
                     }
-                    if clear_depth_attachment {
-                        let attachment = descriptor
-                            .depth_attachment()
-                            .unwrap();
+                    if let Some(attachment) = depth_attachment {
                         attachment.set_level(level as _);
                         if !CLEAR_IMAGE_ARRAY {
                             attachment.set_slice(layer as _);
                         }
                     }
-                    if clear_stencil_attachment {
-                        let attachment = descriptor
-                            .stencil_attachment()
-                            .unwrap();
+                    if let Some(attachment) = stencil_attachment {
                         attachment.set_level(level as _);
                         if !CLEAR_IMAGE_ARRAY {
                             attachment.set_slice(layer as _);
