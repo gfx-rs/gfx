@@ -494,7 +494,10 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         })
     }
 
-    fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
+    fn free_sets<I>(&mut self, descriptor_sets: I)
+    where
+        I: IntoIterator<Item = DescriptorSet>
+    {
         for descriptor_set in descriptor_sets {
             for binding_info in &descriptor_set.binding_infos {
                 if let Some(ref view_range) = binding_info.view_range {

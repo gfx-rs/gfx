@@ -558,28 +558,59 @@ impl StageResources {
         self.push_constants_buffer_id = None;
     }
 
-    fn add_buffer(&mut self, slot: usize, buffer: BufferPtr, offset: buffer::Offset) {
-        while self.buffers.len() <= slot {
-            self.buffers.push(None)
+    fn set_buffer(&mut self, slot: usize, buffer: BufferPtr, offset: buffer::Offset) -> bool {
+        if self.buffers.len() <= slot {
+            self.buffers.resize(slot + 1, None);
         }
-        self.buffers[slot] = Some((buffer.to_owned(), offset));
-    }
-
-    fn add_textures(&mut self, start: usize, textures: &[Option<(TexturePtr, Layout)>]) {
-        while self.textures.len() < start + textures.len() {
-            self.textures.push(None)
-        }
-        for (out, tex) in self.textures[start..].iter_mut().zip(textures.iter()) {
-            *out = tex.map(|(t, _)| t);
+        let value = Some((buffer, offset));
+        if self.buffers[slot] != value {
+            self.buffers[slot] = value;
+            true
+        } else {
+            false
         }
     }
 
-    fn add_samplers(&mut self, start: usize, samplers: &[Option<SamplerPtr>]) {
-        while self.samplers.len() < start + samplers.len() {
-            self.samplers.push(None)
+    fn set_textures<F>(
+        &mut self, start: usize, textures: &[Option<(TexturePtr, Layout)>], mut update: F
+    ) where
+        F: FnMut(usize, Option<TexturePtr>)
+    {
+        if self.textures.len() < start + textures.len() {
+            self.textures.resize(start + textures.len(), None);
         }
-        for (out, sampler) in self.samplers[start..].iter_mut().zip(samplers.iter()) {
-            *out = *sampler;
+        for (i, (out, maybe)) in self
+            .textures[start..]
+            .iter_mut()
+            .zip(textures)
+            .enumerate()
+        {
+            let value = maybe.map(|(t, _)| t);
+            if *out != value {
+                *out = value;
+                update(start + i, value);
+            }
+        }
+    }
+
+    fn set_samplers<F>(
+        &mut self, start: usize, samplers: &[Option<SamplerPtr>], mut update: F
+    ) where
+        F: FnMut(usize, Option<SamplerPtr>)
+    {
+        if self.samplers.len() < start + samplers.len() {
+            self.samplers.resize(start + samplers.len(), None);
+        }
+        for (i, (out, &value)) in self
+            .samplers[start..]
+            .iter_mut()
+            .zip(samplers)
+            .enumerate()
+        {
+            if *out != value {
+                *out = value;
+                update(start + i, value);
+            }
         }
     }
 }
@@ -597,27 +628,64 @@ enum CommandSink {
     },
 }
 
+/// A helper temporary object that consumes state-setting commands only
+/// applicable to a render pass currently encoded.
+enum PreRender<'a> {
+    Immediate(&'a metal::RenderCommandEncoder),
+    Deferred(&'a mut Vec<soft::RenderCommand<soft::Own>>),
+    Void,
+}
+
+impl<'a> PreRender<'a> {
+    fn is_void(&self) -> bool {
+        match *self {
+            PreRender::Void => true,
+            _ => false,
+        }
+    }
+
+    fn issue<'b>(&mut self, command: soft::RenderCommand<&'b soft::Own>) {
+        match *self {
+            PreRender::Immediate(encoder) => exec_render(encoder, command),
+            PreRender::Deferred(ref mut list) => list.push(command.own()),
+            PreRender::Void => (),
+        }
+    }
+}
+
+/// A helper temporary object that consumes state-setting commands only
+/// applicable to a compute pass currently encoded.
+enum PreCompute<'a> {
+    Immediate(&'a metal::ComputeCommandEncoder),
+    Deferred(&'a mut Vec<soft::ComputeCommand<soft::Own>>),
+    Void,
+}
+
+impl<'a> PreCompute<'a> {
+    fn issue<'b>(&mut self, command: soft::ComputeCommand<&'b soft::Own>) {
+        match *self {
+            PreCompute::Immediate(encoder) => exec_compute(encoder, command),
+            PreCompute::Deferred(ref mut list) => list.push(command.own()),
+            PreCompute::Void => (),
+        }
+    }
+}
+
 impl CommandSink {
-    /// Issue provided (state-setting) commands only when there is already
-    /// a render pass being actively encoded.
-    /// The caller is expected to change the cached state accordingly, so these commands
-    /// are going to be issued when a next pass starts, if not at this very moment.
-    fn pre_render_commands<'a, I>(&mut self, commands: I)
-    where
-        I: IntoIterator<Item = soft::RenderCommand<&'a soft::Own>>,
-    {
+    /// Start issuing pre-render commands. Those can be rejected, so the caller is responsible
+    /// for updating the state cache accordingly, so that it's set upon the start of a next pass.
+    fn pre_render(&mut self) -> PreRender {
         match *self {
             CommandSink::Immediate { encoder_state: EncoderState::Render(ref encoder), .. } => {
-                for command in commands {
-                    exec_render(encoder, command);
-                }
+                PreRender::Immediate(encoder)
             }
             CommandSink::Deferred { ref mut passes, is_encoding: true } => {
-                if let Some(&mut soft::Pass::Render { commands: ref mut list, .. }) = passes.last_mut() {
-                    list.extend(commands.into_iter().map(soft::RenderCommand::own));
+                match passes.last_mut() {
+                    Some(&mut soft::Pass::Render { commands: ref mut list, .. }) => PreRender::Deferred(list),
+                    _ => PreRender::Void,
                 }
             }
-            _ => {}
+            _ => PreRender::Void
         }
     }
 
@@ -690,26 +758,20 @@ impl CommandSink {
         }
     }
 
-    /// Issue provided (state-setting) commands only when there is already
-    /// a compute pass being actively encoded.
-    /// The caller is expected to change the cached state accordingly, so these commands
-    /// are going to be issued when a next pass starts, if not at this very moment.
-    fn pre_compute_commands<'a, I>(&mut self, commands: I)
-    where
-        I: IntoIterator<Item = soft::ComputeCommand<&'a soft::Own>>,
-    {
+    /// Start issuing pre-compute commands. Those can be rejected, so the caller is responsible
+    /// for updating the state cache accordingly, so that it's set upon the start of a next pass.
+    fn pre_compute(&mut self) -> PreCompute {
         match *self {
             CommandSink::Immediate { encoder_state: EncoderState::Compute(ref encoder), .. } => {
-                for command in commands {
-                    exec_compute(encoder, command);
-                }
+                PreCompute::Immediate(encoder)
             }
             CommandSink::Deferred { ref mut passes, is_encoding: true } => {
-                if let Some(&mut soft::Pass::Compute(ref mut list)) = passes.last_mut() {
-                    list.extend(commands.into_iter().map(soft::ComputeCommand::own));
+                match passes.last_mut() {
+                    Some(&mut soft::Pass::Compute(ref mut list)) => PreCompute::Deferred(list),
+                    _ => PreCompute::Void,
                 }
             }
-            _ => {}
+            _ => PreCompute::Void
         }
     }
 
@@ -2182,11 +2244,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let mask = self.state.set_vertex_buffers();
         if mask != 0 {
-            let commands = self.state.iter_vertex_buffers(mask);
-            self.inner
-                .borrow_mut()
-                .sink()
-                .pre_render_commands(commands);
+            let mut inner = self.inner.borrow_mut();
+            let mut pre = inner.sink().pre_render();
+            if !pre.is_void() {
+                for com in self.state.iter_vertex_buffers(mask) {
+                    pre.issue(com);
+                }
+            }
         }
     }
 
@@ -2211,7 +2275,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .pre_render_commands(iter::once(com));
+            .pre_render()
+            .issue(com);
     }
 
     fn set_scissors<T>(&mut self, first_scissor: u32, rects: T)
@@ -2234,7 +2299,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .pre_render_commands(iter::once(com));
+            .pre_render()
+            .issue(com);
     }
 
     fn set_blend_constants(&mut self, color: pso::ColorValue) {
@@ -2242,7 +2308,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .pre_render_commands(iter::once(com));
+            .pre_render()
+            .issue(com);
     }
 
     fn set_depth_bounds(&mut self, _: Range<f32>) {
@@ -2258,7 +2325,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .pre_render_commands(iter::once(com));
+            .pre_render()
+            .issue(com);
     }
 
     fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
@@ -2271,11 +2339,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         let com = self.state.set_stencil_reference_values(front, back);
-
         self.inner
             .borrow_mut()
             .sink()
-            .pre_render_commands(iter::once(com));
+            .pre_render()
+            .issue(com);
     }
 
     fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
@@ -2287,11 +2355,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             _ => (value, value),
         };
 
-        let com = self.state.set_stencil_mask_values(&self.shared, Some((front, back)), None, None);
-        self.inner
-            .borrow_mut()
-            .sink()
-            .pre_render_commands(com);
+        if let Some(com) = self.state.set_stencil_mask_values(&self.shared, Some((front, back)), None, None) {
+            self.inner
+                .borrow_mut()
+                .sink()
+                .pre_render()
+                .issue(com);
+        }
     }
 
     fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
@@ -2303,11 +2373,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             _ => (value, value),
         };
 
-        let com = self.state.set_stencil_mask_values(&self.shared, None, Some((front, back)), None);
-        self.inner
-            .borrow_mut()
-            .sink()
-            .pre_render_commands(com);
+        if let Some(com) = self.state.set_stencil_mask_values(&self.shared, None, Some((front, back)), None) {
+            self.inner
+                .borrow_mut()
+                .sink()
+                .pre_render()
+                .issue(com);
+        }
     }
 
     fn begin_render_pass<T>(
@@ -2412,26 +2484,27 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let vertex_mask = self.state.set_vertex_buffers();
 
         let mut inner = self.inner.borrow_mut();
-        let mut commands = SmallVec::<[soft::RenderCommand<_>; 5]>::new();
-        commands.push(soft::RenderCommand::BindPipeline(
+        let mut pre = inner.sink().pre_render();
+        pre.issue(soft::RenderCommand::BindPipeline(
             &*pipeline.raw,
             pipeline.rasterizer_state.clone(),
         ));
 
         if let Some(ref vp) = pipeline.baked_states.viewport {
-            commands.push(self.state.set_viewport(vp, &self.shared.disabilities));
+            pre.issue(self.state.set_viewport(vp, &self.shared.disabilities));
         }
         if let Some(ref rect) = pipeline.baked_states.scissor {
-            commands.push(self.state.set_scissor(rect));
+            pre.issue(self.state.set_scissor(rect));
         }
         if let Some(ref color) = pipeline.baked_states.blend_color {
-            commands.push(self.state.set_blend_color(color));
+            pre.issue(self.state.set_blend_color(color));
         }
 
         // re-bind vertex buffers
         if vertex_mask != 0 {
-            let vertex_commands = self.state.iter_vertex_buffers(vertex_mask);
-            inner.sink().pre_render_commands(vertex_commands);
+            for command in self.state.iter_vertex_buffers(vertex_mask) {
+                pre.issue(command);
+            }
         }
 
         let ds = &pipeline.depth_stencil_state;
@@ -2441,34 +2514,32 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let front_ref = ds.stencil.front_reference.static_or(self.state.stencil.front_reference);
             let back_ref = ds.stencil.back_reference.static_or(self.state.stencil.back_reference);
             if ds.stencil.front_reference.is_static() || ds.stencil.back_reference.is_static() {
-                commands.push(self.state.set_stencil_reference_values(front_ref, back_ref));
+                pre.issue(self.state.set_stencil_reference_values(front_ref, back_ref));
             }
 
-            let command = match ds.depth_stencil_static {
-                Some(ref raw) => Some(self.state.set_depth_stencil_desc(&desc, raw)),
+            match ds.depth_stencil_static {
+                Some(ref raw) => pre.issue(self.state.set_depth_stencil_desc(&desc, raw)),
                 None => {
                     let front_r = ds.stencil.front_read_mask.static_or(self.state.stencil.front_read_mask);
                     let back_r = ds.stencil.back_read_mask.static_or(self.state.stencil.back_read_mask);
                     let front_w = ds.stencil.front_write_mask.static_or(self.state.stencil.front_write_mask);
                     let back_w = ds.stencil.back_write_mask.static_or(self.state.stencil.back_write_mask);
-                    self.state.set_stencil_mask_values(
+                    if let Some(com) = self.state.set_stencil_mask_values(
                         &self.shared,
                         Some((front_r, back_r)),
                         Some((front_w, back_w)),
                         ds.depth_stencil_desc_raw.as_ref().map(Borrow::borrow),
-                    )
+                    ) {
+                        pre.issue(com);
+                    }
                 }
             };
-
-            commands.extend(command);
         }
-
-        inner.sink().pre_render_commands(commands);
     }
 
     fn bind_graphics_descriptor_sets<'a, I, J>(
         &mut self,
-        layout: &native::PipelineLayout,
+        pipe_layout: &native::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
@@ -2481,168 +2552,144 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         use spirv_cross::{msl, spirv};
 
         let mut offset_iter = offsets.into_iter();
+        let mut dynamic_offsets = SmallVec::<[u64; 16]>::new();
+        let mut inner = self.inner.borrow_mut();
+        let mut pre = inner.sink().pre_render();
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             match *desc_set.borrow() {
-                native::DescriptorSet::Emulated(ref desc_inner) => {
-                    use native::DescriptorSetBinding::*;
+                native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
+                    let pool = pool.read().unwrap();
+                    let mut sampler_base = sampler_range.start as usize;
+                    let mut texture_base = texture_range.start as usize;
+                    let mut buffer_base = buffer_range.start as usize;
 
-                    let set = desc_inner.lock().unwrap();
-                    let mut commands = Vec::with_capacity(
-                        set.bindings
-                            .iter()
-                            .map(|values| values.as_ref().map_or(0, |v| v.count()))
-                            .sum()
-                    );
-                    let bindings = set.bindings
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(binding, values)| values.as_ref().map(|v| (binding as u32, v)));
+                    for layout in layouts.iter() {
+                        let sm_range = sampler_base .. sampler_base + layout.count;
+                        let tx_range = texture_base .. texture_base + layout.count;
+                        let bf_range = buffer_base .. buffer_base + layout.count;
+                        native::DescriptorPool::count_bindings(layout.ty, layout.count,
+                            &mut sampler_base, &mut texture_base, &mut buffer_base);
 
-                    for (binding, values) in bindings {
-                        let desc_layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
+                        if buffer_base != bf_range.start {
+                            dynamic_offsets.clear();
+                            for bref in &pool.buffers[bf_range.clone()] {
+                                if bref.base.is_some() && bref.dynamic {
+                                    dynamic_offsets.push(*offset_iter
+                                        .next()
+                                        .expect("No dynamic offset provided!")
+                                        .borrow() as u64
+                                    );
+                                }
+                            }
+                        }
 
-                        let mut bind_stages = SmallVec::<[_; 2]>::new();
-                        if desc_layout.stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
+                        // collect the binding stages
+                        let bind_vs = if layout.stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
                             let loc = msl::ResourceBindingLocation {
                                 stage: spirv::ExecutionModel::Vertex,
                                 desc_set: (first_set + set_index) as _,
-                                binding: binding as _,
+                                binding: layout.binding as _,
                             };
-                            bind_stages.push((pso::Stage::Vertex, loc, &mut self.state.resources_vs));
-                        }
-                        if desc_layout.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
+                            Some((pso::Stage::Vertex, loc, &mut self.state.resources_vs))
+                        } else {
+                            None
+                        };
+                        let bind_fs = if layout.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
                             let loc = msl::ResourceBindingLocation {
                                 stage: spirv::ExecutionModel::Fragment,
                                 desc_set: (first_set + set_index) as _,
-                                binding: binding as _,
+                                binding: layout.binding as _,
                             };
-                            bind_stages.push((pso::Stage::Fragment, loc, &mut self.state.resources_fs));
-                        }
+                            Some((pso::Stage::Fragment, loc, &mut self.state.resources_fs))
+                        } else {
+                            None
+                        };
 
-                        match values {
-                            Sampler(ref samplers) => {
-                                for &mut (stage, ref loc, ref mut resources) in &mut bind_stages {
-                                    let start = layout.res_overrides[loc].sampler_id as usize;
-                                    resources.add_samplers(start, samplers.as_slice());
-                                    commands.extend(samplers.iter().enumerate().map(|(i, sampler)| {
-                                        soft::RenderCommand::BindSampler {
-                                            stage,
-                                            index: start + i,
-                                            sampler: *sampler,
-                                        }
-                                    }));
-                                }
+                        for (stage, loc, resources) in bind_vs.into_iter().chain(bind_fs) {
+                            if sampler_base != sm_range.start {
+                                debug_assert_eq!(sampler_base, sm_range.end);
+                                resources.set_samplers(
+                                    pipe_layout.res_overrides[&loc].sampler_id as usize,
+                                    &pool.samplers[sm_range.clone()],
+                                    |index, sampler| {
+                                        pre.issue(soft::RenderCommand::BindSampler { stage, index, sampler });
+                                    },
+                                );
                             }
-                            Image(ref images) => {
-                                for &mut (stage, ref loc, ref mut resources) in &mut bind_stages {
-                                    let start = layout.res_overrides[loc].texture_id as usize;
-                                    resources.add_textures(start, images.as_slice());
-                                    commands.extend(images.iter().enumerate().map(|(i, texture)| {
-                                        soft::RenderCommand::BindTexture {
-                                            stage,
-                                            index: start + i,
-                                            texture: texture.map(|(root, _)| root),
-                                        }
-                                    }));
-                                }
+                            if texture_base != tx_range.start {
+                                debug_assert_eq!(texture_base, tx_range.end);
+                                resources.set_textures(
+                                    pipe_layout.res_overrides[&loc].texture_id as usize,
+                                    &pool.textures[tx_range.clone()],
+                                    |index, texture| {
+                                        pre.issue(soft::RenderCommand::BindTexture { stage, index, texture });
+                                    },
+                                );
                             }
-                            Combined(ref combos) => {
-                                for &mut (stage, ref loc, ref mut resources) in &mut bind_stages {
-                                    let start_tx = layout.res_overrides[loc].texture_id as usize;
-                                    let start_sm = layout.res_overrides[loc].sampler_id as usize;
-                                    for (i, (texture, sampler)) in combos.iter().enumerate() {
-                                        resources.add_textures(start_tx + i, &[texture.clone()]);
-                                        resources.add_samplers(start_sm + i, &[sampler.clone()]);
-                                        commands.push(soft::RenderCommand::BindTexture {
-                                            stage,
-                                            index: start_tx + i,
-                                            texture: texture.map(|(root, _)| root),
-                                        });
-                                        commands.push(soft::RenderCommand::BindSampler {
-                                            stage,
-                                            index: start_sm + i,
-                                            sampler: *sampler,
-                                        });
-                                    }
-                                }
-                            }
-                            Buffer(ref buffers) => {
+                            if buffer_base != bf_range.start {
+                                debug_assert_eq!(buffer_base, bf_range.end);
+                                let buffers = &pool.buffers[bf_range.clone()];
+                                let start = pipe_layout.res_overrides[&loc].buffer_id as usize;
+                                let mut dynamic_index = 0;
                                 for (i, bref) in buffers.iter().enumerate() {
                                     let (buffer, offset) = match bref.base {
                                         Some((buffer, mut offset)) => {
                                             if bref.dynamic {
-                                                offset += *offset_iter
-                                                    .next()
-                                                    .expect("No dynamic offset provided!")
-                                                    .borrow() as u64;
+                                                offset += dynamic_offsets[dynamic_index];
+                                                dynamic_index += 1;
+                                            }
+                                            if !resources.set_buffer(start + i, buffer, offset as _) {
+                                                continue
                                             }
                                             (Some(buffer), offset)
                                         }
                                         None => (None, 0),
                                     };
-                                    for &mut (stage, ref loc, ref mut resources) in &mut bind_stages {
-                                        let start = layout.res_overrides[loc].buffer_id as usize;
-                                        if let Some(buffer) = buffer {
-                                            resources.add_buffer(start + i, buffer, offset as _);
-                                        }
-                                        commands.push(soft::RenderCommand::BindBuffer {
-                                            stage,
-                                            index: start + i,
-                                            buffer,
-                                            offset,
-                                        });
-                                    }
+                                    pre.issue(soft::RenderCommand::BindBuffer {
+                                        stage,
+                                        index: start + i,
+                                        buffer,
+                                        offset,
+                                    });
                                 }
                             }
                         }
                     }
-
-                    self.inner
-                        .borrow_mut()
-                        .sink()
-                        .pre_render_commands(commands);
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
-                    let com_vs = if stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
+                    if stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
                         let loc = msl::ResourceBindingLocation {
                             stage: spirv::ExecutionModel::Vertex,
                             desc_set: (first_set + set_index) as _,
                             binding: 0,
                         };
-                        let slot = layout.res_overrides[&loc].buffer_id;
-                        self.state.resources_vs.add_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _);
-                        Some(soft::RenderCommand::BindBuffer {
-                            stage: pso::Stage::Vertex,
-                            index: slot as _,
-                            buffer: Some(BufferPtr(raw.as_ptr())),
-                            offset,
-                        })
-                    } else {
-                        None
-                    };
-                    let com_fs = if stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
+                        let slot = pipe_layout.res_overrides[&loc].buffer_id;
+                        if self.state.resources_vs.set_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _) {
+                            pre.issue(soft::RenderCommand::BindBuffer {
+                                stage: pso::Stage::Vertex,
+                                index: slot as _,
+                                buffer: Some(BufferPtr(raw.as_ptr())),
+                                offset,
+                            });
+                        }
+                    }
+                    if stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
                         let loc = msl::ResourceBindingLocation {
                             stage: spirv::ExecutionModel::Fragment,
                             desc_set: (first_set + set_index) as _,
                             binding: 0,
                         };
-                        let slot = layout.res_overrides[&loc].buffer_id;
-                        self.state.resources_fs.add_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _);
-                        Some(soft::RenderCommand::BindBuffer {
-                            stage: pso::Stage::Fragment,
-                            index: slot as _,
-                            buffer: Some(BufferPtr(raw.as_ptr())),
-                            offset,
-                        })
-                    } else {
-                        None
-                    };
-                    let commands = com_vs.into_iter().chain(com_fs);
-                    self.inner
-                        .borrow_mut()
-                        .sink()
-                        .pre_render_commands(commands);
+                        let slot = pipe_layout.res_overrides[&loc].buffer_id;
+                        if self.state.resources_fs.set_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _) {
+                            pre.issue(soft::RenderCommand::BindBuffer {
+                                stage: pso::Stage::Fragment,
+                                index: slot as _,
+                                buffer: Some(BufferPtr(raw.as_ptr())),
+                                offset,
+                            });
+                        }
+                    }
                 }
             }
         }
@@ -2653,16 +2700,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.work_group_size = pipeline.work_group_size;
 
         let command = soft::ComputeCommand::BindPipeline(&*pipeline.raw);
-
         self.inner
             .borrow_mut()
             .sink()
-            .pre_compute_commands(iter::once(command));
+            .pre_compute()
+            .issue(command);
     }
 
     fn bind_compute_descriptor_sets<'a, I, J>(
         &mut self,
-        layout: &native::PipelineLayout,
+        pipe_layout: &native::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
@@ -2675,109 +2722,103 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         use spirv_cross::{msl, spirv};
 
         let mut offset_iter = offsets.into_iter();
+        let mut dynamic_offsets = SmallVec::<[u64; 16]>::new();
         let mut inner = self.inner.borrow_mut();
+        let mut pre = inner.sink().pre_compute();
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             let resources = &mut self.state.resources_cs;
-            let location_cs = msl::ResourceBindingLocation {
+            let res_override = &pipe_layout.res_overrides[&msl::ResourceBindingLocation {
                 stage: spirv::ExecutionModel::GlCompute,
                 desc_set: (first_set + set_index) as _,
                 binding: 0,
-            };
+            }];
             match *desc_set.borrow() {
-                native::DescriptorSet::Emulated(ref desc_inner) => {
-                    use native::DescriptorSetBinding::*;
+                native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
+                    let pool = pool.read().unwrap();
+                    let mut sampler_base = sampler_range.start as usize;
+                    let mut texture_base = texture_range.start as usize;
+                    let mut buffer_base = buffer_range.start as usize;
 
-                    let set = desc_inner.lock().unwrap();
-                    let mut commands = Vec::with_capacity(
-                        set.bindings
-                            .iter()
-                            .map(|values| values.as_ref().map_or(0, |v| v.count()))
-                            .sum()
-                    );
-                    let bindings = set.bindings
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(binding, values)| values.as_ref().map(|v| (binding as u32, v)));
+                    for layout in layouts.iter() {
+                        let sm_range = sampler_base .. sampler_base + layout.count;
+                        let tx_range = texture_base .. texture_base + layout.count;
+                        let bf_range = buffer_base .. buffer_base + layout.count;
+                        native::DescriptorPool::count_bindings(layout.ty, layout.count,
+                            &mut sampler_base, &mut texture_base, &mut buffer_base);
 
-                    for (binding, values) in bindings {
-                        let desc_layout = set.layout.iter().find(|x| x.binding == binding).unwrap();
-
-                        if desc_layout.stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
-                            let res = &layout.res_overrides[&msl::ResourceBindingLocation {
-                                binding: binding as _,
-                                .. location_cs
-                            }];
-                            match values {
-                                Sampler(ref samplers) => {
-                                    let start = res.sampler_id as usize;
-                                    resources.add_samplers(start, samplers.as_slice());
-                                    commands.extend(samplers.iter().enumerate().map(|(i, sampler)| {
-                                        soft::ComputeCommand::BindSampler {
-                                            index: start + i,
-                                            sampler: *sampler,
-                                        }
-                                    }));
-                                }
-                                Image(ref images) => {
-                                    let start = res.texture_id as usize;
-                                    resources.add_textures(start, images.as_slice());
-                                    commands.extend(images.iter().enumerate().map(|(i, texture)| {
-                                        soft::ComputeCommand::BindTexture {
-                                            index: start + i,
-                                            texture: texture.map(|(root, _)| root),
-                                        }
-                                    }));
-                                }
-                                Combined(ref combos) => {
-                                    for (i, (texture, sampler)) in combos.iter().enumerate() {
-                                        let id_tx = res.texture_id as usize + i;
-                                        let id_sm = res.sampler_id as usize + i;
-                                        resources.add_textures(id_tx, &[texture.clone()]);
-                                        resources.add_samplers(id_sm, &[sampler.clone()]);
-                                        commands.push(soft::ComputeCommand::BindTexture {
-                                            index: id_tx,
-                                            texture: texture.map(|(root, _)| root),
-                                        });
-                                        commands.push(soft::ComputeCommand::BindSampler {
-                                            index: id_sm,
-                                            sampler: *sampler,
-                                        });
-                                    }
-                                }
-                                Buffer(ref buffers) => {
-                                    let start = res.buffer_id as usize;
-                                    for (i, bref) in buffers.iter().enumerate() {
-                                        let (buffer, offset) = match bref.base {
-                                            Some((buffer, mut offset)) => {
-                                                if bref.dynamic {
-                                                    offset += *offset_iter
-                                                        .next()
-                                                        .expect("No dynamic offset provided!")
-                                                        .borrow() as u64;
-                                                }
-                                                resources.add_buffer(start + i, buffer, offset as _);
-                                                (Some(buffer), offset)
-                                            },
-                                            None => (None, 0),
-                                        };
-                                        commands.push(soft::ComputeCommand::BindBuffer {
-                                            index: start + i,
-                                            buffer,
-                                            offset,
-                                        });
-                                    }
+                        if buffer_base != bf_range.start {
+                            dynamic_offsets.clear();
+                            for bref in &pool.buffers[bf_range.clone()] {
+                                if bref.base.is_some() && bref.dynamic {
+                                    dynamic_offsets.push(*offset_iter
+                                        .next()
+                                        .expect("No dynamic offset provided!")
+                                        .borrow() as u64
+                                    );
                                 }
                             }
                         }
-                    }
 
-                    inner.sink().pre_compute_commands(commands);
+                        if sampler_base != sm_range.start {
+                            debug_assert_eq!(sampler_base, sm_range.end);
+                            resources.set_samplers(
+                                res_override.sampler_id as usize,
+                                &pool.samplers[sm_range],
+                                |index, sampler| {
+                                    pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
+                                },
+                            );
+                        }
+                        if texture_base != tx_range.start {
+                            debug_assert_eq!(texture_base, tx_range.end);
+                            resources.set_textures(
+                                res_override.texture_id as usize,
+                                &pool.textures[tx_range],
+                                |index, texture| {
+                                    pre.issue(soft::ComputeCommand::BindTexture { index, texture });
+                                },
+                            );
+                        }
+                        if buffer_base != bf_range.start {
+                            debug_assert_eq!(buffer_base, bf_range.end);
+                            let buffers = &pool.buffers[bf_range];
+                            let start = res_override.buffer_id as usize;
+                            let mut dynamic_index = 0;
+                            for (i, bref) in buffers.iter().enumerate() {
+                                let (buffer, offset) = match bref.base {
+                                    Some((buffer, mut offset)) => {
+                                        if bref.dynamic {
+                                            offset += dynamic_offsets[dynamic_index];
+                                            dynamic_index += 1;
+                                        }
+                                        if !resources.set_buffer(start + i, buffer, offset as _) {
+                                            continue
+                                        }
+                                        (Some(buffer), offset)
+                                    }
+                                    None => (None, 0),
+                                };
+                                pre.issue(soft::ComputeCommand::BindBuffer {
+                                    index: start + i,
+                                    buffer,
+                                    offset,
+                                });
+                            }
+                        }
+                    }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
-                        let slot = layout.res_overrides[&location_cs].buffer_id;
-                        resources.add_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _);
+                        let index = res_override.buffer_id as usize;
+                        let buffer = BufferPtr(raw.as_ptr());
+                        if resources.set_buffer(index, buffer, offset as _) {
+                            pre.issue(soft::ComputeCommand::BindBuffer {
+                                index,
+                                buffer: Some(buffer),
+                                offset,
+                            });
+                        }
                     }
                 }
             }
@@ -3119,22 +3160,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let id = self.shared.push_constants_buffer_id;
 
         if stages.intersects(pso::ShaderStageFlags::GRAPHICS) {
-            // Note: it's a waste to heap allocate the bytes here in case
-            // of no active render pass.
+            let mut inner = self.inner.borrow_mut();
+            let mut pre = inner.sink().pre_render();
             // Note: the whole range is re-uploaded, which may be inefficient
             if stages.contains(pso::ShaderStageFlags::VERTEX) {
-                let com = self.state.push_vs_constants(id);
-                self.inner
-                    .borrow_mut()
-                    .sink()
-                    .pre_render_commands(iter::once(com));
+                pre.issue(self.state.push_vs_constants(id));
             }
             if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-                let com = self.state.push_ps_constants(id);
-                self.inner
-                    .borrow_mut()
-                    .sink()
-                    .pre_render_commands(iter::once(com));
+                pre.issue(self.state.push_ps_constants(id));
             }
         }
     }
@@ -3148,15 +3181,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.update_push_constants(offset, constants);
         let id = self.shared.push_constants_buffer_id;
 
-        // Note: it's a waste to heap allocate the bytes here in case
-        // of no active render pass.
         // Note: the whole range is re-uploaded, which may be inefficient
-        let command = self.state.push_cs_constants(id);
-
         self.inner
             .borrow_mut()
             .sink()
-            .pre_compute_commands(iter::once(command));
+            .pre_compute()
+            .issue(self.state.push_cs_constants(id));
     }
 
     fn execute_commands<I>(

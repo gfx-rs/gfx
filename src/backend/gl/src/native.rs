@@ -185,7 +185,10 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         })).collect()
     }
 
-    fn free_sets(&mut self, _descriptor_sets: &[DescriptorSet]) {
+    fn free_sets<I>(&mut self, _descriptor_sets: I)
+    where
+        I: IntoIterator<Item = DescriptorSet>
+    {
         // Poof!  Does nothing, because OpenGL doesn't have a meaningful concept of a `DescriptorSet`.
     }
 

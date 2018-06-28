@@ -256,7 +256,7 @@ fn validate_line_width(width: f32) {
     assert_eq!(width, 1.0);
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct BufferPtr(*mut metal::MTLBuffer);
 
 impl BufferPtr {
@@ -273,7 +273,7 @@ impl BufferPtr {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct TexturePtr(*mut metal::MTLTexture);
 
 impl TexturePtr {
@@ -290,7 +290,7 @@ impl TexturePtr {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SamplerPtr(*mut metal::MTLSamplerState);
 
 impl SamplerPtr {

@@ -1525,7 +1525,10 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         Ok(DescriptorSet::new())
     }
 
-    fn free_sets(&mut self, descriptor_sets: &[DescriptorSet]) {
+    fn free_sets<I>(&mut self, _descriptor_sets: I)
+    where
+        I: IntoIterator<Item = DescriptorSet>
+    {
         unimplemented!()
     }
 

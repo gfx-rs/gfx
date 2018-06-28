@@ -19,11 +19,12 @@ where
     pub fn new(range: Range<T>) -> Self {
         RangeAllocator {
             initial_range: range.clone(),
-            free_ranges: vec![range.clone()],
+            free_ranges: vec![range],
         }
     }
 
     pub fn allocate_range(&mut self, length: T) -> Option<Range<T>> {
+        assert_ne!(length + length, length);
         let mut best_fit: Option<(usize, Range<T>)> = None;
         for (index, range) in self.free_ranges.iter().cloned().enumerate() {
             let range_length = range.end - range.start;

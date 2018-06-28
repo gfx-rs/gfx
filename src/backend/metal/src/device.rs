@@ -9,7 +9,7 @@ use std::borrow::Borrow;
 use std::collections::hash_map::{Entry, HashMap};
 use std::ops::Range;
 use std::path::Path;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::{cmp, mem, slice, time};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query, window};
@@ -731,7 +731,7 @@ impl hal::Device<Backend> for Device {
         for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
             match set_layout.borrow() {
                 &n::DescriptorSetLayout::Emulated(ref set_bindings, _) => {
-                    for set_binding in set_bindings {
+                    for set_binding in set_bindings.iter() {
                         for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
                             if !set_binding.stage_flags.contains(stage_bit) {
                                 continue
@@ -1350,37 +1350,45 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        if !self.private_caps.argument_buffers {
-            return n::DescriptorPool::Emulated;
-        }
-
         let mut num_samplers = 0;
         let mut num_textures = 0;
-        let mut num_uniforms = 0;
+        let mut num_buffers = 0;
 
-        let arguments = descriptor_ranges.into_iter().map(|desc| {
-            let desc = desc.borrow();
-            let offset_ref = match desc.ty {
-                pso::DescriptorType::Sampler => &mut num_samplers,
-                pso::DescriptorType::SampledImage => &mut num_textures,
-                pso::DescriptorType::UniformBuffer | pso::DescriptorType::StorageBuffer => &mut num_uniforms,
-                _ => unimplemented!()
-            };
-            let index = *offset_ref;
-            *offset_ref += desc.count;
-            Self::describe_argument(desc.ty, index as _, desc.count)
-        }).collect::<Vec<_>>();
+        if self.private_caps.argument_buffers {
+            let mut arguments = Vec::new();
+            for desc_range in descriptor_ranges {
+                let desc = desc_range.borrow();
+                let offset_ref = match desc.ty {
+                    pso::DescriptorType::Sampler => &mut num_samplers,
+                    pso::DescriptorType::SampledImage => &mut num_textures,
+                    pso::DescriptorType::UniformBuffer | pso::DescriptorType::StorageBuffer => &mut num_buffers,
+                    _ => unimplemented!()
+                };
+                let index = *offset_ref;
+                *offset_ref += desc.count;
+                let arg_desc = Self::describe_argument(desc.ty, index as _, desc.count);
+                arguments.push(arg_desc);
+            }
 
-        let device = self.shared.device.lock().unwrap();
-        let arg_array = metal::Array::from_owned_slice(&arguments);
-        let encoder = device.new_argument_encoder(&arg_array);
+            let device = self.shared.device.lock().unwrap();
+            let arg_array = metal::Array::from_owned_slice(&arguments);
+            let encoder = device.new_argument_encoder(&arg_array);
 
-        let total_size = encoder.encoded_length();
-        let raw = device.new_buffer(total_size, MTLResourceOptions::empty());
+            let total_size = encoder.encoded_length();
+            let raw = device.new_buffer(total_size, MTLResourceOptions::empty());
 
-        n::DescriptorPool::ArgumentBuffer {
-            raw,
-            range_allocator: RangeAllocator::new(0..total_size),
+            n::DescriptorPool::ArgumentBuffer {
+                raw,
+                range_allocator: RangeAllocator::new(0..total_size),
+            }
+        } else {
+            for desc_range in descriptor_ranges {
+                let desc = desc_range.borrow();
+                n::DescriptorPool::count_bindings(desc.ty, desc.count,
+                    &mut num_samplers, &mut num_textures, &mut num_buffers);
+            }
+            let inner = n::DescriptorPoolInner::new(num_samplers, num_textures, num_buffers);
+            n::DescriptorPool::Emulated(Arc::new(RwLock::new(inner)))
         }
     }
 
@@ -1408,11 +1416,15 @@ impl hal::Device<Backend> for Device {
 
             n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
         } else {
+            //TODO: if we always process the layout bindings in the order of binding points,
+            // the spill logic becomes trivial. Problem is - keeping track of immutable samplers.
             n::DescriptorSetLayout::Emulated(
-                binding_iter
-                    .into_iter()
-                    .map(|b| b.borrow().clone())
-                    .collect(),
+                Arc::new(
+                    binding_iter
+                        .into_iter()
+                        .map(|b| b.borrow().clone())
+                        .collect()
+                ),
                 immutable_sampler_iter
                     .into_iter()
                     .map(|is| is.borrow().0.clone())
@@ -1429,52 +1441,60 @@ impl hal::Device<Backend> for Device {
     {
         for write in write_iter {
             match *write.set {
-                n::DescriptorSet::Emulated(ref inner) => {
-                    let mut set = inner.lock().unwrap();
+                n::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
                     let mut array_offset = write.array_offset;
                     let mut binding = write.binding;
+                    let mut pool = pool.write().unwrap();
 
                     for descriptor in write.descriptors {
-                        while array_offset >= set.layout.iter()
-                                .find(|layout| layout.binding == binding)
-                                .expect("invalid descriptor set binding index")
-                                .count
-                        {
+                        let mut layout;
+                        let mut sampler_index;
+                        let mut texture_index;
+                        let mut buffer_index;
+                        loop {
+                            sampler_index = sampler_range.start as usize + array_offset;
+                            texture_index = texture_range.start as usize + array_offset;
+                            buffer_index = buffer_range.start as usize + array_offset;
+                            //TODO: can pre-compute this
+                            layout = layouts.iter()
+                                .find(|layout| {
+                                    if layout.binding == binding {
+                                        true
+                                    } else {
+                                        n::DescriptorPool::count_bindings(layout.ty, layout.count,
+                                            &mut sampler_index, &mut texture_index, &mut buffer_index);
+                                        false
+                                    }
+                                })
+                                .expect("invalid descriptor set binding index");
+                            if array_offset < layout.count {
+                                break;
+                            }
                             array_offset = 0;
                             binding += 1;
                         }
 
-                        match (descriptor.borrow(), set.bindings[binding as usize].as_mut().unwrap()) {
-                            (&pso::Descriptor::Sampler(sampler), &mut n::DescriptorSetBinding::Sampler(ref mut vec)) => {
-                                vec[array_offset] = Some(SamplerPtr(sampler.0.as_ptr()));
+                        match *descriptor.borrow() {
+                            pso::Descriptor::Sampler(sampler) => {
+                                pool.samplers[sampler_index] = Some(SamplerPtr(sampler.0.as_ptr()));
                             }
-                            (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
-                                vec[array_offset] = Some((TexturePtr(image.raw.as_ptr()), layout));
+                            pso::Descriptor::Image(image, layout) => {
+                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), layout));
                             }
-                            (&pso::Descriptor::Image(image, layout), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
-                                vec[array_offset].0 = Some((TexturePtr(image.raw.as_ptr()), layout));
+                            pso::Descriptor::CombinedImageSampler(image, layout, sampler) => {
+                                pool.samplers[sampler_index] = Some(SamplerPtr(sampler.0.as_ptr()));
+                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), layout));
                             }
-                            (&pso::Descriptor::CombinedImageSampler(image, layout, sampler), &mut n::DescriptorSetBinding::Combined(ref mut vec)) => {
-                                vec[array_offset] = (Some((TexturePtr(image.raw.as_ptr()), layout)), Some(SamplerPtr(sampler.0.as_ptr())));
+                            pso::Descriptor::UniformTexelBuffer(view) |
+                            pso::Descriptor::StorageTexelBuffer(view) => {
+                                pool.textures[texture_index] = Some((TexturePtr(view.raw.as_ptr()), image::Layout::General));
                             }
-                            (&pso::Descriptor::UniformTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) |
-                            (&pso::Descriptor::StorageTexelBuffer(view), &mut n::DescriptorSetBinding::Image(ref mut vec)) => {
-                                vec[array_offset] = Some((TexturePtr(view.raw.as_ptr()), image::Layout::General));
-                            }
-                            (&pso::Descriptor::Buffer(buffer, ref range), &mut n::DescriptorSetBinding::Buffer(ref mut vec)) => {
+                            pso::Descriptor::Buffer(buffer, ref range) => {
                                 let buf_length = buffer.raw.length();
                                 let start = range.start.unwrap_or(0);
                                 let end = range.end.unwrap_or(buf_length);
                                 assert!(end <= buf_length);
-                                vec[array_offset].base = Some((BufferPtr(buffer.raw.as_ptr()), start));
-                            }
-                            (&pso::Descriptor::Sampler(..), _) |
-                            (&pso::Descriptor::Image(..), _) |
-                            (&pso::Descriptor::CombinedImageSampler(..), _) |
-                            (&pso::Descriptor::Buffer(..), _) |
-                            (&pso::Descriptor::UniformTexelBuffer(..), _) |
-                            (&pso::Descriptor::StorageTexelBuffer(..), _) => {
-                                panic!("mismatched descriptor set type")
+                                pool.buffers[buffer_index].base = Some((BufferPtr(buffer.raw.as_ptr()), start));
                             }
                         }
                     }
