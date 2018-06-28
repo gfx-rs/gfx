@@ -110,7 +110,8 @@ fn get_window_dimensions(window: &glutin::GlWindow) -> texture::Dimensions {
     let (width, height) = emscripten::get_canvas_size();
     #[cfg(not(target_os = "emscripten"))]
     let (width, height) = {
-        let (w, h) = window.get_inner_size().unwrap();
+        let logical_size = window.get_inner_size().unwrap();
+        let (w, h): (u32, u32) = logical_size.to_physical(window.get_hidpi_factor()).into();
         (w as _, h as _)
     };
     let aa = window
