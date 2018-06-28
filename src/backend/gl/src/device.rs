@@ -349,8 +349,8 @@ impl Device {
             );
 
             let new_name = "GFX_HAL_COMBINED_SAMPLER".to_owned()
-                + "_" + &cis.sampler_id.to_string() 
-                + "_" + &cis.image_id.to_string() 
+                + "_" + &cis.sampler_id.to_string()
+                + "_" + &cis.image_id.to_string()
                 + "_" + &cis.combined_id.to_string() ;
             ast.set_name(cis.combined_id, &new_name).unwrap();
             if self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
@@ -359,8 +359,7 @@ impl Device {
                 ast.unset_decoration(cis.combined_id, spirv::Decoration::Binding).unwrap();
                 assert!(nb_map.insert(new_name, nb).is_none())
             }
-            ast.unset_decoration(cis.sampler_id, spirv::Decoration::DescriptorSet).unwrap();
-            ast.unset_decoration(cis.image_id, spirv::Decoration::DescriptorSet).unwrap();
+            ast.unset_decoration(cis.combined_id, spirv::Decoration::DescriptorSet).unwrap();
         }
     }
 
