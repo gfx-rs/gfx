@@ -146,7 +146,8 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
 pub fn init_existing_raw(inner: winit::Window, color_format: format::Format)
                          -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError>
 {
-    let (width, height) = inner.get_inner_size().unwrap();
+    let logical_size = inner.get_inner_size().unwrap();
+    let (width, height): (u32, u32) = logical_size.to_physical(inner.get_hidpi_factor()).into();
 
     let driver_types = [
         d3dcommon::D3D_DRIVER_TYPE_HARDWARE,

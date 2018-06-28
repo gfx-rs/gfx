@@ -106,7 +106,8 @@ impl<T: Clone> Window<T> {
     }
 
     pub fn get_size(&self) -> (u32, u32) {
-        self.window.get_inner_size_points().unwrap()
+        let logical_size = self.window.get_inner_size().unwrap();
+        logical_size.to_physical(self.window.get_hidpi_factor()).into()
     }
 }
 
@@ -226,7 +227,8 @@ pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder, events_loop
         modes
     };
 
-    let (width, height) = window.get_inner_size_points().unwrap();
+    let logical_size = window.get_inner_size().unwrap();
+    let (width, height): (u32, u32) = logical_size.to_physical(window.get_hidpi_factor()).into();
 
     // TODO: Use the queried information to check if our values are supported before creating the swapchain
     let swapchain_info = vk::SwapchainCreateInfoKHR {

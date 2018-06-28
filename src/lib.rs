@@ -133,7 +133,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let mut events_loop = glutin::EventsLoop::new();
     let (window, mut device, mut factory, main_color, main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
-    let (mut cur_width, mut cur_height) = window.get_inner_size().unwrap();
+    let mut cur_size = window.get_inner_size().unwrap();
     let shade_lang = device.get_info().shading_language;
 
     let backend = if shade_lang.is_embedded {
@@ -144,7 +144,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let mut app = A::new(&mut factory, backend, WindowTargets {
         color: main_color,
         depth: main_depth,
-        aspect_ratio: cur_width as f32 / cur_height as f32,
+        aspect_ratio: (cur_size.width / cur_size.height) as f32,
     });
 
     let mut harness = Harness::new();
@@ -162,16 +162,16 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
                         },
                         ..
                     } if key == A::get_exit_key() => running = false,
-                    winit::WindowEvent::Resized(width, height) => {
-                        if width != cur_width || height != cur_height {
-                            window.resize(width, height);
-                            cur_width = width;
-                            cur_height = height;
+                    winit::WindowEvent::Resized(logical_size) => {
+                        if logical_size != cur_size {
+                            let physical_size = logical_size.to_physical(window.get_hidpi_factor());
+                            window.resize(physical_size);
+                            cur_size = logical_size;
                             let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
                             app.on_resize(&mut factory, WindowTargets {
                                 color: new_color,
                                 depth: new_depth,
-                                aspect_ratio: width as f32 / height as f32,
+                                aspect_ratio: (logical_size.width / logical_size.height) as f32,
                             });
                         }
                     },
@@ -240,8 +240,12 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
                         },
                         ..
                     } if key == A::get_exit_key() => return,
-                    winit::WindowEvent::Resized(width, height) => {
-                        let size = (width as gfx::texture::Size, height as gfx::texture::Size);
+                    winit::WindowEvent::Resized(logical_size) => {
+                        let physical_size = logical_size.to_physical(window.inner.get_hidpi_factor());
+                        let size = (
+                            physical_size.width as gfx::texture::Size,
+                            physical_size.height as gfx::texture::Size
+                        );
                         if size != window.size {
                             // working around the borrow checker: window is already borrowed here
                             new_size = Some(size);
@@ -293,7 +297,9 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
     let mut events_loop = winit::EventsLoop::new();
     let (window, mut device, mut factory, main_color) = gfx_window_metal::init::<ColorFormat>(wb, &events_loop)
                                                                                 .unwrap();
-    let (width, height) = window.get_inner_size().unwrap();
+    let logical_size = window.get_inner_size().unwrap();
+    let physical_size = logical_size.to_physical(window.get_hidpi_factor());
+    let (width, height) = (size.width, size.height);
     let main_depth = factory.create_depth_stencil_view_only(width as Size, height as Size).unwrap();
 
     let backend = shade::Backend::Msl(device.get_shader_model());
@@ -318,7 +324,7 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
                         },
                         ..
                     } if key == A::get_exit_key() => return,
-                    winit::WindowEvent::Resized(_width, _height) => {
+                    winit::WindowEvent::Resized(_logical_size) => {
                         warn!("TODO: resize on Metal");
                     },
                     _ => app.on(event),
@@ -376,7 +382,7 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
                         },
                         ..
                     } if key == A::get_exit_key() => return,
-                    winit::WindowEvent::Resized(_width, _height) => {
+                    winit::WindowEvent::Resized(_logical_size) => {
                         warn!("TODO: resize on Vulkan");
                     },
                     _ => app.on(event),

@@ -28,7 +28,7 @@ documentation = "https://docs.rs/gfx_window_glutin"
 name = "gfx_window_glutin"
 
 [dependencies]
-glutin = "0.16"
+glutin = "0.17"
 gfx_core = { path = "../../core", version = "0.8" }
 gfx_device_gl = { path = "../../backend/gl", version = "0.16" }
 
