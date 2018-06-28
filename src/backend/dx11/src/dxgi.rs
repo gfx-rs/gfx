@@ -67,24 +67,6 @@ pub(crate) enum DxgiVersion {
     Dxgi1_5,
 }
 
-fn create_dxgi_factory2(guid: &GUID) -> Result<ComPtr<dxgi::IDXGIFactory>, winerror::HRESULT> {
-    let mut factory: *mut IUnknown = ptr::null_mut();
-
-    let hr = unsafe {
-        dxgi1_3::CreateDXGIFactory2(
-            dxgi1_3::DXGI_CREATE_FACTORY_DEBUG,
-            guid,
-            &mut factory as *mut *mut _ as *mut *mut _
-        )
-    };
-
-    if winerror::SUCCEEDED(hr) {
-        Ok(unsafe { ComPtr::from_raw(factory as *mut _) })
-    } else {
-        Err(hr)
-    }
-}
-
 fn create_dxgi_factory1(guid: &GUID) -> Result<ComPtr<dxgi::IDXGIFactory>, winerror::HRESULT> {
     let mut factory: *mut IUnknown = ptr::null_mut();
 
@@ -103,8 +85,6 @@ fn create_dxgi_factory1(guid: &GUID) -> Result<ComPtr<dxgi::IDXGIFactory>, winer
 }
 
 pub(crate) fn get_dxgi_factory() -> Result<(ComPtr<dxgi::IDXGIFactory>, DxgiVersion), winerror::HRESULT> {
-    let mut factory: *mut IUnknown = ptr::null_mut();
-
     // TODO: do we even need `create_dxgi_factory2`?
     if let Ok(factory) = create_dxgi_factory1(&dxgi1_5::IDXGIFactory5::uuidof()) {
         return Ok((factory, DxgiVersion::Dxgi1_5));

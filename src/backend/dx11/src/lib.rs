@@ -107,7 +107,7 @@ impl Instance {
 fn get_features(_device: ComPtr<d3d11::ID3D11Device>, _feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Features {
     use hal::Features;
 
-    let mut features =
+    let features =
         Features::ROBUST_BUFFER_ACCESS |
         Features::FULL_DRAW_INDEX_U32 |
         Features::FORMAT_BC;
@@ -583,7 +583,7 @@ unsafe impl Send for Surface { }
 unsafe impl Sync for Surface { }
 
 impl hal::Surface<Backend> for Surface {
-    fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
+    fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         true
         /*match queue_family {
             &QueueFamily::Present => true,
@@ -669,7 +669,7 @@ unsafe impl Send for CommandQueue { }
 unsafe impl Sync for CommandQueue { }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(&mut self, submission: hal::queue::RawSubmission<Backend, IC>, fence: Option<&Fence>)
+    unsafe fn submit_raw<IC>(&mut self, submission: hal::queue::RawSubmission<Backend, IC>, _fence: Option<&Fence>)
     where
         IC: IntoIterator,
         IC::Item: Borrow<CommandBuffer>,
@@ -721,6 +721,7 @@ impl CommandBuffer {
         let hr = unsafe {
             device.CreateDeferredContext(0, &mut context as *mut *mut _ as *mut *mut _)
         };
+        assert_eq!(hr, winerror::S_OK);
 
         CommandBuffer {
             internal,
@@ -746,6 +747,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
         let mut list = ptr::null_mut();
         let hr = unsafe { self.context.FinishCommandList(FALSE, &mut list as *mut *mut _ as *mut *mut _) };
+        assert_eq!(hr, winerror::S_OK);
+
         self.list = Some(unsafe { ComPtr::from_raw(list) });
     }
 
@@ -753,7 +756,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn begin_render_pass<T>(&mut self, render_pass: &RenderPass, framebuffer: &Framebuffer, target_rect: pso::Rect, clear_values: T, _first_subpass: command::SubpassContents)
+    fn begin_render_pass<T>(&mut self, _render_pass: &RenderPass, framebuffer: &Framebuffer, _target_rect: pso::Rect, clear_values: T, _first_subpass: command::SubpassContents)
     where
         T: IntoIterator,
         T::Item: Borrow<command::ClearValueRaw>,
@@ -804,7 +807,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         //unimplemented!()
     }
 
-    fn pipeline_barrier<'a, T>(&mut self, _stages: Range<pso::PipelineStage>, _dependencies: memory::Dependencies, barriers: T)
+    fn pipeline_barrier<'a, T>(&mut self, _stages: Range<pso::PipelineStage>, _dependencies: memory::Dependencies, _barriers: T)
     where
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
@@ -813,7 +816,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         // unimplemented!()
     }
 
-    fn clear_image<T>(&mut self, image: &Image, _: image::Layout, color: command::ClearColorRaw, depth_stencil: command::ClearDepthStencilRaw, subresource_ranges: T)
+    fn clear_image<T>(&mut self, image: &Image, _: image::Layout, color: command::ClearColorRaw, _depth_stencil: command::ClearDepthStencilRaw, subresource_ranges: T)
     where
         T: IntoIterator,
         T::Item: Borrow<image::SubresourceRange>,
@@ -830,7 +833,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
+    fn clear_attachments<T, U>(&mut self, _clears: T, _rects: U)
     where
         T: IntoIterator,
         T::Item: Borrow<command::AttachmentClear>,
@@ -840,7 +843,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn resolve_image<T>(&mut self, src: &Image, _src_layout: image::Layout, dst: &Image, _dst_layout: image::Layout, regions: T)
+    fn resolve_image<T>(&mut self, _src: &Image, _src_layout: image::Layout, _dst: &Image, _dst_layout: image::Layout, _regions: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::ImageResolve>,
@@ -890,7 +893,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
+    fn set_viewports<T>(&mut self, _first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
@@ -900,10 +903,11 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             conv::map_viewport(v)
         }).collect::<Vec<_>>();
 
+        // TODO: DX only lets us set all VPs at once, so cache in slice?
         unsafe { self.context.RSSetViewports(viewports.len() as _, viewports.as_ptr()); }
     }
 
-    fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
+    fn set_scissors<T>(&mut self, _first_scissor: u32, scissors: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
@@ -913,10 +917,11 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             conv::map_rect(s)
         }).collect::<Vec<_>>();
 
+        // TODO: same as for viewports
         unsafe { self.context.RSSetScissorRects(scissors.len() as _, scissors.as_ptr()); }
     }
 
-    fn set_blend_constants(&mut self, color: pso::ColorValue) {
+    fn set_blend_constants(&mut self, _color: pso::ColorValue) {
         unimplemented!()
     }
 
@@ -932,7 +937,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!();
     }
 
-    fn set_depth_bounds(&mut self, bounds: Range<f32>) {
+    fn set_depth_bounds(&mut self, _bounds: Range<f32>) {
         unimplemented!()
     }
 
@@ -965,7 +970,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_graphics_descriptor_sets<'a, I, J>(&mut self, layout: &PipelineLayout, first_set: usize, sets: I, _offsets: J)
+    fn bind_graphics_descriptor_sets<'a, I, J>(&mut self, _layout: &PipelineLayout, _first_set: usize, sets: I, _offsets: J)
     where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSet>,
@@ -991,12 +996,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_compute_pipeline(&mut self, pipeline: &ComputePipeline) {
+    fn bind_compute_pipeline(&mut self, _pipeline: &ComputePipeline) {
         unimplemented!()
     }
 
 
-    fn bind_compute_descriptor_sets<I, J>(&mut self, layout: &PipelineLayout, first_set: usize, sets: I, offsets: J)
+    fn bind_compute_descriptor_sets<I, J>(&mut self, _layout: &PipelineLayout, _first_set: usize, _sets: I, _offsets: J)
     where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSet>,
@@ -1006,15 +1011,15 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn dispatch(&mut self, count: WorkGroupCount) {
+    fn dispatch(&mut self, _count: WorkGroupCount) {
         unimplemented!()
     }
 
-    fn dispatch_indirect(&mut self, buffer: &Buffer, offset: buffer::Offset) {
+    fn dispatch_indirect(&mut self, _buffer: &Buffer, _offset: buffer::Offset) {
         unimplemented!()
     }
 
-    fn fill_buffer<R>(&mut self, buffer: &Buffer, range: R, data: u32)
+    fn fill_buffer<R>(&mut self, _buffer: &Buffer, _range: R, _data: u32)
     where
         R: RangeArg<buffer::Offset>,
     {
@@ -1102,19 +1107,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn draw_indirect(&mut self, buffer: &Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
+    fn draw_indirect(&mut self, _buffer: &Buffer, _offset: buffer::Offset, _draw_count: DrawCount, _stride: u32) {
         unimplemented!()
     }
 
-    fn draw_indexed_indirect(&mut self, buffer: &Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
+    fn draw_indexed_indirect(&mut self, _buffer: &Buffer, _offset: buffer::Offset, _draw_count: DrawCount, _stride: u32) {
         unimplemented!()
     }
 
-    fn begin_query(&mut self, query: query::Query<Backend>, flags: query::QueryControl) {
+    fn begin_query(&mut self, _query: query::Query<Backend>, _flags: query::QueryControl) {
         unimplemented!()
     }
 
-    fn end_query(&mut self, query: query::Query<Backend>) {
+    fn end_query(&mut self, _query: query::Query<Backend>) {
         unimplemented!()
     }
 
@@ -1122,19 +1127,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn write_timestamp(&mut self, _: pso::PipelineStage, query: query::Query<Backend>) {
+    fn write_timestamp(&mut self, _: pso::PipelineStage, _query: query::Query<Backend>) {
         unimplemented!()
     }
 
-    fn push_graphics_constants(&mut self, layout: &PipelineLayout, _stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
+    fn push_graphics_constants(&mut self, _layout: &PipelineLayout, _stages: pso::ShaderStageFlags, _offset: u32, _constants: &[u32]) {
         unimplemented!()
     }
 
-    fn push_compute_constants(&mut self, layout: &PipelineLayout, offset: u32, constants: &[u32]) {
+    fn push_compute_constants(&mut self, _layout: &PipelineLayout, _offset: u32, _constants: &[u32]) {
         unimplemented!()
     }
 
-    fn execute_commands<I>(&mut self, buffers: I)
+    fn execute_commands<I>(&mut self, _buffers: I)
     where
         I: IntoIterator,
         I::Item: Borrow<CommandBuffer>,
@@ -1303,7 +1308,7 @@ impl hal::pool::RawCommandPool<Backend> for CommandPool {
         //unimplemented!()
     }
 
-    fn allocate(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
+    fn allocate(&mut self, num: usize, _level: command::RawLevel) -> Vec<CommandBuffer> {
         (0..num)
             .map(|_| CommandBuffer::create_deferred(self.device.clone(), self.internal.clone()))
             .collect()
@@ -1484,7 +1489,7 @@ pub struct DescriptorSetLayout {
 #[derive(Debug)]
 pub struct DescriptorPool;
 impl hal::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
+    fn allocate_set(&mut self, _layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
         // TODO: actually look at the layout maybe..
         Ok(DescriptorSet::new())
     }

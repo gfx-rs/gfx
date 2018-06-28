@@ -211,7 +211,7 @@ impl Device {
     ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, device::ShaderError> {
         // TODO: entrypoint stuff
         match *source.module {
-            ShaderModule::Dxbc(ref shader) => {
+            ShaderModule::Dxbc(ref _shader) => {
                 unimplemented!()
 
                 // Ok(Some(shader))
@@ -226,10 +226,10 @@ impl Device {
         let mut desc: d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
 
+        #[allow(non_snake_case)]
         let MostDetailedMip = info.range.levels.start as _;
+        #[allow(non_snake_case)]
         let MipLevels = (info.range.levels.end - info.range.levels.start) as _;
-        // let FirstArraySlice = info.range.layers.start as _;
-        // let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
         match info.view_kind {
             image::ViewKind::D2 => {
@@ -365,7 +365,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_command_pool(
-        &self, family: QueueFamilyId, _create_flags: pool::CommandPoolCreateFlags
+        &self, _family: QueueFamilyId, _create_flags: pool::CommandPoolCreateFlags
     ) -> CommandPool {
         // TODO:
         CommandPool {
@@ -381,9 +381,9 @@ impl hal::Device<Backend> for Device {
 
     fn create_render_pass<'a, IA, IS, ID>(
         &self,
-        attachments: IA,
-        subpasses: IS,
-        dependencies: ID,
+        _attachments: IA,
+        _subpasses: IS,
+        _dependencies: ID,
     ) -> RenderPass
     where
         IA: IntoIterator,
@@ -400,8 +400,8 @@ impl hal::Device<Backend> for Device {
 
     fn create_pipeline_layout<IS, IR>(
         &self,
-        sets: IS,
-        push_constant_ranges: IR,
+        _sets: IS,
+        _push_constant_ranges: IR,
     ) -> PipelineLayout
     where
         IS: IntoIterator,
@@ -461,7 +461,7 @@ impl hal::Device<Backend> for Device {
 
     fn create_compute_pipeline<'a>(
         &self,
-        desc: &pso::ComputePipelineDesc<'a, Backend>,
+        _desc: &pso::ComputePipelineDesc<'a, Backend>,
     ) -> Result<ComputePipeline, pso::CreationError> {
         unimplemented!()
     }
@@ -488,7 +488,7 @@ impl hal::Device<Backend> for Device {
 
     fn create_buffer(
         &self,
-        mut size: u64,
+        size: u64,
         usage: buffer::Usage,
     ) -> Result<UnboundBuffer, buffer::CreationError> {
         use buffer::Usage;
@@ -533,6 +533,7 @@ impl hal::Device<Backend> for Device {
 
         debug!("usage={:?}, props={:b}", unbound_buffer.usage, memory.properties);
 
+        #[allow(non_snake_case)]
         let MiscFlags = if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) {
             d3d11::D3D11_RESOURCE_MISC_BUFFER_STRUCTURED
         } else {
@@ -672,9 +673,9 @@ impl hal::Device<Backend> for Device {
 
     fn create_buffer_view<R: RangeArg<u64>>(
         &self,
-        buffer: &Buffer,
-        format: Option<format::Format>,
-        range: R,
+        _buffer: &Buffer,
+        _format: Option<format::Format>,
+        _range: R,
     ) -> Result<BufferView, buffer::ViewCreationError> {
         unimplemented!()
     }
@@ -742,7 +743,7 @@ impl hal::Device<Backend> for Device {
     fn bind_image_memory(
         &self,
         memory: &Memory,
-        offset: u64,
+        _offset: u64,
         image: UnboundImage,
     ) -> Result<Image, device::BindError> {
         use memory::Properties;
@@ -751,7 +752,6 @@ impl hal::Device<Backend> for Device {
         let format_desc = base_format.0.desc();
         let bytes_per_block = (format_desc.bits / 8) as _;
         let block_dim = format_desc.dim;
-        let extent = image.kind.extent();
 
         let (bind, usage, cpu) = if memory.properties == Properties::DEVICE_LOCAL {
             (image.bind, d3d11::D3D11_USAGE_DEFAULT, 0)
@@ -1003,8 +1003,8 @@ impl hal::Device<Backend> for Device {
 
     fn create_descriptor_pool<I>(
         &self,
-        max_sets: usize,
-        descriptor_pools: I,
+        _max_sets: usize,
+        _descriptor_pools: I,
     ) -> DescriptorPool
     where
         I: IntoIterator,
@@ -1061,15 +1061,15 @@ impl hal::Device<Backend> for Device {
                         write.set.srv_handles.borrow_mut().push((target_binding as _, image.srv_handle.clone().unwrap()));
                         debug!("image={:#?}, layout={:#?}", image, _layout);
                     }
-                    pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
+                    pso::Descriptor::CombinedImageSampler(_image, _layout, _sampler) => {
                     }
                     pso::Descriptor::Sampler(sampler) => {
                         write.set.sampler_handles.borrow_mut().push((target_binding as _, sampler.sampler_handle.clone()));
                         debug!("sampler={:#?}", sampler);
                     }
-                    pso::Descriptor::UniformTexelBuffer(buffer_view) => {
+                    pso::Descriptor::UniformTexelBuffer(_buffer_view) => {
                     }
-                    pso::Descriptor::StorageTexelBuffer(buffer_view) => {
+                    pso::Descriptor::StorageTexelBuffer(_buffer_view) => {
                     }
                 }
                 offset += 1;
@@ -1077,7 +1077,7 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
+    fn copy_descriptor_sets<'a, I>(&self, _copy_iter: I)
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
@@ -1103,7 +1103,6 @@ impl hal::Device<Backend> for Device {
 
     fn unmap_memory(&self, memory: &Memory) {
         assert_eq!(memory.host_visible.is_some(), true);
-        let buffer = memory.host_visible.clone().unwrap();
 
         /*unsafe {
             self.context.Unmap(
@@ -1151,16 +1150,16 @@ impl hal::Device<Backend> for Device {
         Semaphore
     }
 
-    fn create_fence(&self, signalled: bool) -> Fence {
+    fn create_fence(&self, _signalled: bool) -> Fence {
         // TODO:
         Fence
     }
 
-    fn reset_fence(&self, fence: &Fence) {
+    fn reset_fence(&self, _fence: &Fence) {
         // TODO:
     }
 
-    fn wait_for_fences<I>(&self, fences: I, wait: device::WaitFor, timeout_ms: u32) -> bool
+    fn wait_for_fences<I>(&self, _fences: I, _wait: device::WaitFor, _timeout_ms: u32) -> bool
     where
         I: IntoIterator,
         I::Item: Borrow<Fence>,
@@ -1184,7 +1183,7 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_query_pool(&self, query_ty: query::QueryType, count: u32) -> QueryPool {
+    fn create_query_pool(&self, _query_ty: query::QueryType, _count: u32) -> QueryPool {
         unimplemented!()
     }
 
@@ -1192,21 +1191,21 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn destroy_shader_module(&self, shader_lib: ShaderModule) {
+    fn destroy_shader_module(&self, _shader_lib: ShaderModule) {
     }
 
     fn destroy_render_pass(&self, _rp: RenderPass) {
         //unimplemented!()
     }
 
-    fn destroy_pipeline_layout(&self, layout: PipelineLayout) {
+    fn destroy_pipeline_layout(&self, _layout: PipelineLayout) {
         //unimplemented!()
     }
 
-    fn destroy_graphics_pipeline(&self, pipeline: GraphicsPipeline) {
+    fn destroy_graphics_pipeline(&self, _pipeline: GraphicsPipeline) {
     }
 
-    fn destroy_compute_pipeline(&self, pipeline: ComputePipeline) {
+    fn destroy_compute_pipeline(&self, _pipeline: ComputePipeline) {
         unimplemented!()
     }
 
@@ -1214,14 +1213,14 @@ impl hal::Device<Backend> for Device {
         //unimplemented!()
     }
 
-    fn destroy_buffer(&self, buffer: Buffer) {
+    fn destroy_buffer(&self, _buffer: Buffer) {
     }
 
     fn destroy_buffer_view(&self, _view: BufferView) {
         unimplemented!()
     }
 
-    fn destroy_image(&self, image: Image) {
+    fn destroy_image(&self, _image: Image) {
         // TODO:
         // unimplemented!()
     }
@@ -1233,7 +1232,7 @@ impl hal::Device<Backend> for Device {
     fn destroy_sampler(&self, _sampler: Sampler) {
     }
 
-    fn destroy_descriptor_pool(&self, pool: DescriptorPool) {
+    fn destroy_descriptor_pool(&self, _pool: DescriptorPool) {
         //unimplemented!()
     }
 
