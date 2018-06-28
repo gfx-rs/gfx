@@ -20,7 +20,7 @@ extern crate glutin;
 
 use gfx::traits::FactoryExt;
 use gfx::Device;
-use glutin::GlContext;
+use glutin::{GlContext, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
@@ -49,7 +49,7 @@ pub fn main() {
     let mut events_loop = glutin::EventsLoop::new();
     let window_config = glutin::WindowBuilder::new()
         .with_title("Triangle example".to_string())
-        .with_dimensions(1024, 768);
+        .with_dimensions((1024, 768).into());
 
     let (api, version, vs_code, fs_code) = if cfg!(target_os = "emscripten") {
         (
@@ -80,26 +80,27 @@ pub fn main() {
         out: main_color
     };
 
-    events_loop.run_forever(move |event| {
-        use glutin::{ControlFlow, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
-
-        if let Event::WindowEvent { event, .. } = event {
-            match event {
-                WindowEvent::CloseRequested |
-                WindowEvent::KeyboardInput {
-                    input: KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
+    let mut running = true;
+    while running {
+        events_loop.poll_events(|event| {
+            if let Event::WindowEvent { event, .. } = event {
+                match event {
+                    WindowEvent::CloseRequested |
+                    WindowEvent::KeyboardInput {
+                        input: KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                            ..
+                        },
                         ..
+                    } => running = false,
+                    WindowEvent::Resized(size) => {
+                        window.resize(size.to_physical(window.get_hidpi_factor()));
+                        gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
                     },
-                    ..
-                } => return ControlFlow::Break,
-                WindowEvent::Resized(width, height) => {
-                    window.resize(width, height);
-                    gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
-                },
-                _ => (),
+                    _ => (),
+                }
             }
-        }
+        });
 
         // draw a frame
         encoder.clear(&data.out, CLEAR_COLOR);
@@ -107,7 +108,5 @@ pub fn main() {
         encoder.flush(&mut device);
         window.swap_buffers().unwrap();
         device.cleanup();
-
-        ControlFlow::Continue
-    });
+    }
 }

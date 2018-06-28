@@ -106,7 +106,7 @@ impl<T: Clone> Window<T> {
     }
 
     pub fn get_size(&self) -> (u32, u32) {
-        self.window.get_inner_size_points().unwrap()
+        self.window.get_inner_size().unwrap().into()
     }
 }
 
@@ -185,7 +185,7 @@ pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder, events_loop
         capabilities
     };
 
-    // Determine whether a queue family of a physical device supports presentation to a given surface 
+    // Determine whether a queue family of a physical device supports presentation to a given surface
     let supports_presentation = {
         let (_, vk) = backend.get_instance();
         let dev = backend.get_physical_device();
@@ -226,7 +226,11 @@ pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder, events_loop
         modes
     };
 
-    let (width, height) = window.get_inner_size_points().unwrap();
+    let (width, height): (u32, u32) = window
+        .get_inner_size()
+        .unwrap()
+        .to_physical(window.get_hidpi_factor())
+        .into();
 
     // TODO: Use the queried information to check if our values are supported before creating the swapchain
     let swapchain_info = vk::SwapchainCreateInfoKHR {

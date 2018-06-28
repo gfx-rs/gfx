@@ -146,7 +146,11 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
 pub fn init_existing_raw(inner: winit::Window, color_format: format::Format)
                          -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError>
 {
-    let (width, height) = inner.get_inner_size().unwrap();
+    let (width, height): (u32, u32) = inner
+        .get_inner_size()
+        .unwrap()
+        .to_physical(inner.get_hidpi_factor())
+        .into();
 
     let driver_types = [
         d3dcommon::D3D_DRIVER_TYPE_HARDWARE,
@@ -225,7 +229,7 @@ pub fn update_views<Cf, D>(window: &mut Window, factory: &mut Factory, device: &
             -> Result<h::RenderTargetView<Resources, Cf>, f::TargetViewError>
 where Cf: format::RenderFormat, D: DeviceExt
 {
-    
+
     factory.cleanup();
     device.clear_state();
     device.cleanup();
@@ -235,5 +239,5 @@ where Cf: format::RenderFormat, D: DeviceExt
             error!("Resize failed with code {:X}", hr);
             f::TargetViewError::NotDetached
         }
-    )    
+    )
 }
