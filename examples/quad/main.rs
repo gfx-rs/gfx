@@ -30,8 +30,8 @@ use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
 use hal::queue::Submission;
 
 use std::fs;
-use std::io::Cursor;
-use std::io::Read;
+use std::io::{Cursor, Read};
+
 
 const ENTRY_NAME: &str = "main";
 
@@ -480,7 +480,7 @@ fn main() {
             cmd_buffer.set_viewports(0, &[viewport.clone()]);
             cmd_buffer.set_scissors(0, &[viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(&pipeline);
-            cmd_buffer.bind_vertex_buffers(0, pso::VertexBufferSet(vec![(&vertex_buffer, 0)]));
+            cmd_buffer.bind_vertex_buffers(0, Some((&vertex_buffer, 0)));
             cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, Some(&desc_set), &[]); //TODO
 
             {

@@ -6,14 +6,13 @@ use {conversions as conv, command, native as n};
 use native;
 
 use std::borrow::Borrow;
-use std::collections::hash_map::{Entry, HashMap};
+use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::{Arc, Condvar, Mutex, RwLock};
 use std::{cmp, mem, slice, time};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query, window};
-use hal::backend::FastHashMap;
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
@@ -27,6 +26,7 @@ use metal::{self,
     MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLTextureType,
     CaptureManager
 };
+use smallvec::SmallVec;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 use foreign_types::ForeignType;
 
@@ -495,7 +495,7 @@ impl Device {
         {
             Ok(library) => Ok(n::ShaderModule::Compiled {
                 library,
-                entry_point_map: FastHashMap::default(),
+                entry_point_map: n::EntryPointMap::default(),
             }),
             Err(err) => Err(ShaderError::CompilationFailed(err.into())),
         }
@@ -505,8 +505,8 @@ impl Device {
         &self,
         raw_data: &[u8],
         primitive_class: MTLPrimitiveTopologyClass,
-        overrides: &HashMap<msl::ResourceBindingLocation, msl::ResourceBinding>,
-    ) -> Result<(metal::Library, FastHashMap<String, spirv::EntryPoint>), ShaderError> {
+        overrides: &n::ResourceOverrideMap,
+    ) -> Result<(metal::Library, n::EntryPointMap), ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
 
@@ -527,7 +527,10 @@ impl Device {
         compiler_options.resolve_specialized_array_lengths = true;
         compiler_options.vertex.invert_y = true;
         // fill the overrides
-        compiler_options.resource_binding_overrides = overrides.clone();
+        compiler_options.resource_binding_overrides = overrides
+            .iter()
+            .map(|(key, value)| (key.clone(), value.clone()))
+            .collect();
 
         ast.set_compiler_options(&compiler_options)
             .map_err(|err| {
@@ -556,7 +559,7 @@ impl Device {
                 ShaderError::CompilationFailed(msg)
             })?;
 
-        let mut entry_point_map = FastHashMap::default();
+        let mut entry_point_map = n::EntryPointMap::default();
         for entry_point in entry_points {
             info!("Entry point {:?}", entry_point);
             let cleansed = ast.get_cleansed_entry_point_name(&entry_point.name, entry_point.execution_model)
@@ -726,7 +729,7 @@ impl hal::Device<Backend> for Device {
             (ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  Counters { buffers:0, textures:0, samplers:0 }),
             (ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, Counters { buffers:0, textures:0, samplers:0 }),
         ];
-        let mut res_overrides = HashMap::new();
+        let mut res_overrides = n::ResourceOverrideMap::default();
 
         for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
             match set_layout.borrow() {
@@ -1124,7 +1127,7 @@ impl hal::Device<Backend> for Device {
         let mut inner = n::FramebufferInner {
             extent,
             aspects: format::Aspects::empty(),
-            colors: Vec::new(),
+            colors: SmallVec::new(),
             depth_stencil: None,
         };
 
@@ -1184,7 +1187,7 @@ impl hal::Device<Backend> for Device {
             let (library, entry_point_map) = self.compile_shader_library(
                 raw_data,
                 MTLPrimitiveTopologyClass::Unspecified,
-                &HashMap::new(),
+                &n::ResourceOverrideMap::default(),
             )?;
             n::ShaderModule::Compiled {
                 library,

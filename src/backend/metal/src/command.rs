@@ -821,11 +821,11 @@ impl CommandSink {
     ) where
         I: Iterator<Item = soft::RenderCommand<&'a soft::Own>>,
     {
+        //assert!(AutoReleasePool::is_active());
         self.stop_encoding();
 
         match *self {
             CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
-                let _ap = AutoreleasePool::new();
                 let encoder = cmd_buffer.new_render_command_encoder(descriptor);
                 for command in init_commands {
                     exec_render(encoder, command);
@@ -1446,7 +1446,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 framebuffer_inner: native::FramebufferInner {
                     extent: Extent::default(),
                     aspects: Aspects::empty(),
-                    colors: Vec::new(),
+                    colors: SmallVec::new(),
                     depth_stencil: None,
                 }
             },
@@ -1653,6 +1653,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<SubresourceRange>,
     {
+        let _ap = AutoreleasePool::new();
+
         let CommandBufferInner {
             ref mut retained_textures,
             ref mut sink,
@@ -1690,51 +1692,63 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 &*image.raw
             };
 
-            let clear_color_attachment = sub.aspects.contains(Aspects::COLOR);
-            if image.format_desc.aspects.contains(Aspects::COLOR) {
+            let color_attachment = if image.format_desc.aspects.contains(Aspects::COLOR) {
                 let attachment = descriptor
                     .color_attachments()
                     .object_at(0)
                     .unwrap();
                 attachment.set_texture(Some(texture));
                 attachment.set_store_action(metal::MTLStoreAction::Store);
-                if clear_color_attachment {
+                if sub.aspects.contains(Aspects::COLOR) {
                     attachment.set_load_action(metal::MTLLoadAction::Clear);
                     attachment.set_clear_color(clear_color.clone());
+                    Some(attachment)
                 } else {
                     attachment.set_load_action(metal::MTLLoadAction::Load);
+                    None
                 }
-            }
+            } else {
+                assert!(!sub.aspects.contains(Aspects::COLOR));
+                None
+            };
 
-            let clear_depth_attachment = sub.aspects.contains(Aspects::DEPTH);
-            if image.format_desc.aspects.contains(Aspects::DEPTH) {
+            let depth_attachment = if image.format_desc.aspects.contains(Aspects::DEPTH) {
                 let attachment = descriptor
                     .depth_attachment()
                     .unwrap();
                 attachment.set_texture(Some(texture));
                 attachment.set_store_action(metal::MTLStoreAction::Store);
-                if clear_depth_attachment {
+                if sub.aspects.contains(Aspects::DEPTH) {
                     attachment.set_load_action(metal::MTLLoadAction::Clear);
                     attachment.set_clear_depth(depth_stencil.depth as _);
+                    Some(attachment)
                 } else {
                     attachment.set_load_action(metal::MTLLoadAction::Load);
+                    None
                 }
-            }
+            } else {
+                assert!(!sub.aspects.contains(Aspects::DEPTH));
+                None
+            };
 
-            let clear_stencil_attachment = sub.aspects.contains(Aspects::STENCIL);
-            if image.format_desc.aspects.contains(Aspects::STENCIL) {
+            let stencil_attachment = if image.format_desc.aspects.contains(Aspects::STENCIL) {
                 let attachment = descriptor
                     .stencil_attachment()
                     .unwrap();
                 attachment.set_texture(Some(texture));
                 attachment.set_store_action(metal::MTLStoreAction::Store);
-                if clear_stencil_attachment {
+                if sub.aspects.contains(Aspects::STENCIL) {
                     attachment.set_load_action(metal::MTLLoadAction::Clear);
                     attachment.set_clear_stencil(depth_stencil.stencil);
+                    Some(attachment)
                 } else {
                     attachment.set_load_action(metal::MTLLoadAction::Load);
+                    None
                 }
-            }
+            } else {
+                assert!(!sub.aspects.contains(Aspects::STENCIL));
+                None
+            };
 
             for layer in layers {
                 for level in sub.levels.clone() {
@@ -1746,29 +1760,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         descriptor.set_render_target_array_length(num_layers);
                     };
 
-                    if clear_color_attachment {
-                        let attachment = descriptor
-                            .color_attachments()
-                            .object_at(0)
-                            .unwrap();
+                    if let Some(attachment) = color_attachment {
                         attachment.set_level(level as _);
                         if !CLEAR_IMAGE_ARRAY {
                             attachment.set_slice(layer as _);
                         }
                     }
-                    if clear_depth_attachment {
-                        let attachment = descriptor
-                            .depth_attachment()
-                            .unwrap();
+                    if let Some(attachment) = depth_attachment {
                         attachment.set_level(level as _);
                         if !CLEAR_IMAGE_ARRAY {
                             attachment.set_slice(layer as _);
                         }
                     }
-                    if clear_stencil_attachment {
-                        let attachment = descriptor
-                            .stencil_attachment()
-                            .unwrap();
+                    if let Some(attachment) = stencil_attachment {
                         attachment.set_level(level as _);
                         if !CLEAR_IMAGE_ARRAY {
                             attachment.set_slice(layer as _);
@@ -2015,6 +2019,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
+        let _ap = AutoreleasePool::new();
+
         let vertices = &mut self.temp.blit_vertices;
         vertices.clear();
 
@@ -2218,7 +2224,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .chain(&extra)
                 .cloned();
 
-            inner.sink().begin_render_pass(false, &descriptor, commands);
+            inner
+                .sink()
+                .begin_render_pass(false, &descriptor, commands);
         }
     }
 
@@ -2233,13 +2241,26 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         });
     }
 
-    fn bind_vertex_buffers(&mut self, first_binding: u32, buffer_set: pso::VertexBufferSet<Backend>) {
-        while self.state.vertex_buffers.len() < first_binding as usize + buffer_set.0.len() {
-            self.state.vertex_buffers.push(None);
+
+    fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    where
+        I: IntoIterator<Item = (T, buffer::Offset)>,
+        T: Borrow<native::Buffer>,
+    {
+        if self.state.vertex_buffers.len() <= first_binding as usize {
+            self.state.vertex_buffers.resize(first_binding as usize + 1, None);
         }
-        for (i, &(buffer, offset)) in buffer_set.0.iter().enumerate() {
-            let buffer_ptr = BufferPtr(buffer.raw.as_ptr());
-            self.state.vertex_buffers[first_binding as usize + i] = Some((buffer_ptr, buffer.range.start + offset));
+        for (i, (buffer, offset)) in buffers.into_iter().enumerate() {
+            let b = buffer.borrow();
+            let buffer_ptr = BufferPtr(b.raw.as_ptr());
+            let index = first_binding as usize + i;
+            let value = Some((buffer_ptr, b.range.start + offset));
+            if index >= self.state.vertex_buffers.len() {
+                debug_assert_eq!(index, self.state.vertex_buffers.len());
+                self.state.vertex_buffers.push(value);
+            } else {
+                self.state.vertex_buffers[index] = value;
+            }
         }
 
         let mask = self.state.set_vertex_buffers();

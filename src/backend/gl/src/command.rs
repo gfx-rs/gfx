@@ -698,17 +698,20 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::BindIndexBuffer(ibv.buffer.raw));
     }
 
-    fn bind_vertex_buffers(&mut self, _first_binding: u32, vbs: hal::pso::VertexBufferSet<Backend>) {
-        if vbs.0.len() == 0 {
-            return
-        }
-
-        let needed_length = vbs.0.iter().map(|vb| vb.1).max().unwrap() + 1;
-
-        self.cache.vertex_buffers.resize(needed_length as usize, 0);
-
-        for vb in vbs.0 {
-            self.cache.vertex_buffers[vb.1 as usize] = vb.0.raw;
+    fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    where
+        I: IntoIterator<Item = (T, buffer::Offset)>,
+        T: Borrow<n::Buffer>,
+    {
+        for (i, (buffer, offset)) in buffers.into_iter().enumerate() {
+            let index = first_binding as usize + i;
+            if self.cache.vertex_buffers.len() <= index {
+                self.cache.vertex_buffers.resize(index+1, 0);
+            }
+            self.cache.vertex_buffers[index] = buffer.borrow().raw;
+            if offset != 0 {
+                error!("Vertex buffer offset {} is not supported", offset);
+            }
         }
     }
 
