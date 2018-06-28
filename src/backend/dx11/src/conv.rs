@@ -2,7 +2,7 @@ use hal::format::{Format};
 use hal::pso::{
     BlendDesc, BlendOp, BlendState, ColorBlendDesc, Comparison, DepthStencilDesc,
     DepthTest, Face, Factor, PolygonMode, Rasterizer, Rect, StencilFace, StencilOp, StencilTest,
-    Viewport, Stage, State, FrontFace,
+    Viewport, Stage, State, StencilValue, FrontFace,
 };
 use hal::image::{Anisotropic, Filter, WrapMode};
 use hal::{IndexType, Primitive};
@@ -46,6 +46,7 @@ pub fn typeless_format(format: DXGI_FORMAT) -> Option<(DXGI_FORMAT, DXGI_FORMAT)
         DXGI_FORMAT_R8G8_UINT |
         DXGI_FORMAT_R8G8_SINT => Some((DXGI_FORMAT_R8G8_TYPELESS, DXGI_FORMAT_R8G8_UINT)),
 
+        DXGI_FORMAT_D16_UNORM |
         DXGI_FORMAT_R16_UNORM |
         DXGI_FORMAT_R16_SNORM |
         DXGI_FORMAT_R16_UINT |
@@ -313,11 +314,43 @@ fn map_blend_factor(factor: Factor) -> D3D11_BLEND {
     }
 }
 
+fn map_alpha_blend_factor(factor: Factor) -> D3D11_BLEND {
+    match factor {
+        Factor::Zero |
+        Factor::One => D3D11_BLEND_ONE,
+        Factor::SrcColor |
+        Factor::SrcAlpha => D3D11_BLEND_SRC_ALPHA,
+        Factor::DstColor |
+        Factor::DstAlpha => D3D11_BLEND_DEST_ALPHA,
+        Factor::OneMinusSrcColor |
+        Factor::OneMinusSrcAlpha => D3D11_BLEND_INV_SRC_ALPHA,
+        Factor::OneMinusDstColor |
+        Factor::OneMinusDstAlpha => D3D11_BLEND_INV_DEST_ALPHA,
+        Factor::ConstColor | Factor::ConstAlpha => D3D11_BLEND_BLEND_FACTOR,
+        Factor::OneMinusConstColor | Factor::OneMinusConstAlpha => D3D11_BLEND_INV_BLEND_FACTOR,
+        Factor::SrcAlphaSaturate => D3D11_BLEND_SRC_ALPHA_SAT,
+        Factor::Src1Color |
+        Factor::Src1Alpha => D3D11_BLEND_SRC1_ALPHA,
+        Factor::OneMinusSrc1Color |
+        Factor::OneMinusSrc1Alpha => D3D11_BLEND_INV_SRC1_ALPHA,
+    }
+}
+
 fn map_blend_op(operation: BlendOp) -> (D3D11_BLEND_OP, D3D11_BLEND, D3D11_BLEND) {
     match operation {
         BlendOp::Add    { src, dst } => (D3D11_BLEND_OP_ADD,          map_blend_factor(src), map_blend_factor(dst)),
         BlendOp::Sub    { src, dst } => (D3D11_BLEND_OP_SUBTRACT,     map_blend_factor(src), map_blend_factor(dst)),
         BlendOp::RevSub { src, dst } => (D3D11_BLEND_OP_REV_SUBTRACT, map_blend_factor(src), map_blend_factor(dst)),
+        BlendOp::Min => (D3D11_BLEND_OP_MIN, D3D11_BLEND_ZERO, D3D11_BLEND_ZERO),
+        BlendOp::Max => (D3D11_BLEND_OP_MAX, D3D11_BLEND_ZERO, D3D11_BLEND_ZERO),
+    }
+}
+
+fn map_alpha_blend_op(operation: BlendOp) -> (D3D11_BLEND_OP, D3D11_BLEND, D3D11_BLEND) {
+    match operation {
+        BlendOp::Add    { src, dst } => (D3D11_BLEND_OP_ADD,          map_alpha_blend_factor(src), map_alpha_blend_factor(dst)),
+        BlendOp::Sub    { src, dst } => (D3D11_BLEND_OP_SUBTRACT,     map_alpha_blend_factor(src), map_alpha_blend_factor(dst)),
+        BlendOp::RevSub { src, dst } => (D3D11_BLEND_OP_REV_SUBTRACT, map_alpha_blend_factor(src), map_alpha_blend_factor(dst)),
         BlendOp::Min => (D3D11_BLEND_OP_MIN, D3D11_BLEND_ZERO, D3D11_BLEND_ZERO),
         BlendOp::Max => (D3D11_BLEND_OP_MAX, D3D11_BLEND_ZERO, D3D11_BLEND_ZERO),
     }
@@ -332,7 +365,7 @@ fn map_blend_targets(render_target_blends: &[ColorBlendDesc]) -> [D3D11_RENDER_T
         target.RenderTargetWriteMask = mask.bits() as _;
         if let BlendState::On { color, alpha } = blend {
             let (color_op, color_src, color_dst) = map_blend_op(color);
-            let (alpha_op, alpha_src, alpha_dst) = map_blend_op(alpha);
+            let (alpha_op, alpha_src, alpha_dst) = map_alpha_blend_op(alpha);
             target.BlendEnable = TRUE;
             target.BlendOp = color_op;
             target.SrcBlend = color_src;
@@ -390,24 +423,24 @@ fn map_stencil_side(side: &StencilFace) -> D3D11_DEPTH_STENCILOP_DESC {
     }
 }
 
-pub(crate) fn map_depth_stencil_desc(desc: &DepthStencilDesc) -> D3D11_DEPTH_STENCIL_DESC {
+pub(crate) fn map_depth_stencil_desc(desc: &DepthStencilDesc) -> (D3D11_DEPTH_STENCIL_DESC, State<StencilValue>) {
     let (depth_on, depth_write, depth_func) = match desc.depth {
         DepthTest::On { fun, write } => (TRUE, write, map_comparison(fun)),
         DepthTest::Off => unsafe { mem::zeroed() },
     };
 
-    let (stencil_on, front, back, read_mask, write_mask) = match desc.stencil {
+    let (stencil_on, front, back, read_mask, write_mask, stencil_ref) = match desc.stencil {
         StencilTest::On { ref front, ref back } => {
             // TODO: cascade to create_pipeline
             if front.mask_read != back.mask_read || front.mask_write != back.mask_write {
-                // error!("Different masks on stencil front ({:?}) and back ({:?}) are not supported", front, back);
+                error!("Different masks on stencil front ({:?}) and back ({:?}) are not supported", front, back);
             }
-            (TRUE, map_stencil_side(front), map_stencil_side(back), front.mask_read, front.mask_write)
+            (TRUE, map_stencil_side(front), map_stencil_side(back), front.mask_read, front.mask_write, front.reference)
         },
         StencilTest::Off => unsafe { mem::zeroed() },
     };
 
-    D3D11_DEPTH_STENCIL_DESC {
+    (D3D11_DEPTH_STENCIL_DESC {
         DepthEnable: depth_on,
         DepthWriteMask: if depth_write {D3D11_DEPTH_WRITE_MASK_ALL} else {D3D11_DEPTH_WRITE_MASK_ZERO},
         DepthFunc: depth_func,
@@ -422,7 +455,7 @@ pub(crate) fn map_depth_stencil_desc(desc: &DepthStencilDesc) -> D3D11_DEPTH_STE
         },
         FrontFace: front,
         BackFace: back,
-    }
+    }, stencil_ref)
 }
 
 pub fn map_execution_model(model: spirv::ExecutionModel) -> Stage {

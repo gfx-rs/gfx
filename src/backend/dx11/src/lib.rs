@@ -960,12 +960,25 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             }
 
             self.context.RSSetState(pipeline.rasterizer_state.as_raw());
+            if let Some(ref viewport) = pipeline.baked_states.viewport {
+                self.context.RSSetViewports(1, [conv::map_viewport(&viewport)].as_ptr());
+            }
+            if let Some(ref scissor) = pipeline.baked_states.scissor {
+                self.context.RSSetScissorRects(1, [conv::map_rect(&scissor)].as_ptr());
+            }
+
+            let blend_color = pipeline.baked_states.blend_color.unwrap_or([1f32; 4]);
 
             // TODO: blend constants
-            self.context.OMSetBlendState(pipeline.blend_state.as_raw(), &[1f32; 4], !0);
-            if let Some(ref state) = pipeline.depth_stencil_state {
-                // TODO stencil
-                self.context.OMSetDepthStencilState(state.as_raw(), 0);
+            self.context.OMSetBlendState(pipeline.blend_state.as_raw(), &blend_color, !0);
+            if let Some((ref state, reference)) = pipeline.depth_stencil_state {
+                let stencil_ref = if let pso::State::Static(reference) = reference {
+                    reference
+                } else {
+                    unimplemented!()
+                };
+
+                self.context.OMSetDepthStencilState(state.as_raw(), stencil_ref);
             }
         }
     }
@@ -1471,7 +1484,8 @@ pub struct GraphicsPipeline {
     #[derivative(Debug="ignore")]
     blend_state: ComPtr<d3d11::ID3D11BlendState>,
     #[derivative(Debug="ignore")]
-    depth_stencil_state: Option<ComPtr<d3d11::ID3D11DepthStencilState>>,
+    depth_stencil_state: Option<(ComPtr<d3d11::ID3D11DepthStencilState>, pso::State<pso::StencilValue>)>,
+    baked_states: pso::BakedStates,
 }
 
 unsafe impl Send for GraphicsPipeline { }

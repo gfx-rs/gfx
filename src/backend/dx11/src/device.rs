@@ -86,9 +86,9 @@ impl Device {
         }
     }
 
-    fn create_depth_stencil_state(&self, depth_desc: &pso::DepthStencilDesc) -> Result<ComPtr<d3d11::ID3D11DepthStencilState>, pso::CreationError> {
+    fn create_depth_stencil_state(&self, depth_desc: &pso::DepthStencilDesc) -> Result<(ComPtr<d3d11::ID3D11DepthStencilState>, pso::State<pso::StencilValue>), pso::CreationError> {
         let mut depth = ptr::null_mut();
-        let desc = conv::map_depth_stencil_desc(depth_desc);
+        let (desc, stencil_ref) = conv::map_depth_stencil_desc(depth_desc);
 
         let hr = unsafe {
             self.raw.CreateDepthStencilState(
@@ -98,7 +98,7 @@ impl Device {
         };
 
         if winerror::SUCCEEDED(hr) {
-            Ok(unsafe { ComPtr::from_raw(depth) })
+            Ok((unsafe { ComPtr::from_raw(depth) }, stencil_ref))
         } else {
             Err(pso::CreationError::Other)
         }
@@ -455,7 +455,8 @@ impl hal::Device<Backend> for Device {
             input_layout,
             rasterizer_state,
             blend_state,
-            depth_stencil_state
+            depth_stencil_state,
+            baked_states: desc.baked_states.clone(),
         })
     }
 
