@@ -55,7 +55,7 @@ pub fn main() {
     let mut events_loop = glutin::EventsLoop::new();
     let window_builder = glutin::WindowBuilder::new()
         .with_title("Gamma example".to_string())
-        .with_dimensions(1024, 768);
+        .with_dimensions((1024, 768).into());
 
     let (api, version, vs_code, fs_code) = if cfg!(target_os = "emscripten") {
         (
@@ -90,80 +90,83 @@ pub fn main() {
     let mut download = factory.create_download_buffer::<SurfaceData>(w as usize * h as usize)
         .unwrap();
 
-    events_loop.run_forever(move |event| {
-        use glutin::{ControlFlow, ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+    let mut running = true;
+    while running {
+        events_loop.poll_events(|event| {
+            use glutin::{ElementState, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 
-        if let Event::WindowEvent { event, .. } = event {
-            match event {
-                WindowEvent::CloseRequested |
-                WindowEvent::KeyboardInput {
-                    input: KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::Escape),
+            if let Event::WindowEvent { event, .. } = event {
+                match event {
+                    WindowEvent::CloseRequested |
+                    WindowEvent::KeyboardInput {
+                        input: KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::Escape),
+                            ..
+                        },
                         ..
+                    } => running = false,
+                    WindowEvent::Resized(size) => {
+                        window.resize(size.to_physical(window.get_hidpi_factor()));
+                        gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
+                        download = factory
+                            .create_download_buffer(
+                                size.width.round() as usize * size.height.round() as usize,
+                            )
+                            .unwrap();
                     },
-                    ..
-                } => return ControlFlow::Break,
-                WindowEvent::Resized(width, height) => {
-                    window.resize(width, height);
-                    gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
-                    download = factory.create_download_buffer(width as usize * height as usize)
-                        .unwrap();
-                },
-                WindowEvent::KeyboardInput {
-                    input: KeyboardInput {
-                        virtual_keycode: Some(VirtualKeyCode::S),
-                        state: ElementState::Released,
+                    WindowEvent::KeyboardInput {
+                        input: KeyboardInput {
+                            virtual_keycode: Some(VirtualKeyCode::S),
+                            state: ElementState::Released,
+                            ..
+                        },
                         ..
+                    } => screenshot = true,
+                _ => (),
+                }
+            }
+
+            if screenshot {
+                println!("taking screenshot");
+                let (w, h, _, _) = data.out.get_dimensions();
+                encoder.copy_texture_to_buffer_raw(
+                    data.out.raw().get_texture(),
+                    None,
+                    gfx::texture::RawImageInfo {
+                        xoffset: 0,
+                        yoffset: 0,
+                        zoffset: 0,
+                        width: w,
+                        height: h,
+                        depth: 0,
+                        format: ColorFormat::get_format(),
+                        mipmap: 0,
                     },
-                    ..
-                } => screenshot = true,
-            _ => (),
+                    download.raw(),
+                    0
+                ).unwrap();
+                encoder.flush(&mut device);
+
+                let path = "screen.png";
+                println!("saving screenshot to {}", path);
+                let reader = factory.read_mapping(&download).unwrap();
+                // intermediary buffer only to avoid casting
+                let mut data = Vec::with_capacity(w as usize * h as usize * 4);
+                for pixel in reader.iter() {
+                    data.extend(pixel);
+                }
+                image::save_buffer(path, &data, w as u32, h as u32, image::ColorType::RGBA(8))
+                    .unwrap();
+
+                println!("done!");
+                screenshot = false;
             }
-        }
-
-        if screenshot {
-            println!("taking screenshot");
-            let (w, h, _, _) = data.out.get_dimensions();
-            encoder.copy_texture_to_buffer_raw(
-                data.out.raw().get_texture(),
-                None,
-                gfx::texture::RawImageInfo {
-                    xoffset: 0,
-                    yoffset: 0,
-                    zoffset: 0,
-                    width: w,
-                    height: h,
-                    depth: 0,
-                    format: ColorFormat::get_format(),
-                    mipmap: 0,
-                },
-                download.raw(),
-                0
-            ).unwrap();
-            encoder.flush(&mut device);
-
-            let path = "screen.png";
-            println!("saving screenshot to {}", path);
-            let reader = factory.read_mapping(&download).unwrap();
-            // intermediary buffer only to avoid casting
-            let mut data = Vec::with_capacity(w as usize * h as usize * 4);
-            for pixel in reader.iter() {
-                data.extend(pixel);
-            }
-            image::save_buffer(path, &data, w as u32, h as u32, image::ColorType::RGBA(8))
-                .unwrap();
-
-            println!("done!");
-            screenshot = false;
-        }
-
+        });
         // draw a frame
         encoder.clear(&data.out, CLEAR_COLOR);
         encoder.draw(&slice, &pso, &data);
         encoder.flush(&mut device);
         window.swap_buffers().unwrap();
         device.cleanup();
-
-        ControlFlow::Continue
-    });
+    }
 }

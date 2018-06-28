@@ -86,7 +86,7 @@ impl Drop for Harness {
         let time_end = self.start.elapsed();
         println!("Avg frame time: {} ms",
                  ((time_end.as_secs() * 1000) as f64 +
-                  (time_end.subsec_nanos() / 1000_000) as f64) / self.num_frames);
+                  (time_end.subsec_nanos() / 1_000_000) as f64) / self.num_frames);
     }
 }
 
@@ -133,7 +133,10 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let mut events_loop = glutin::EventsLoop::new();
     let (window, mut device, mut factory, main_color, main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
-    let (mut cur_width, mut cur_height) = window.get_inner_size().unwrap();
+    let mut current_size = window
+        .get_inner_size()
+        .unwrap()
+        .to_physical(window.get_hidpi_factor());
     let shade_lang = device.get_info().shading_language;
 
     let backend = if shade_lang.is_embedded {
@@ -144,38 +147,41 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let mut app = A::new(&mut factory, backend, WindowTargets {
         color: main_color,
         depth: main_depth,
-        aspect_ratio: cur_width as f32 / cur_height as f32,
+        aspect_ratio: current_size.width as f32 / current_size.height as f32,
     });
 
     let mut harness = Harness::new();
-    events_loop.run_forever(move |event| {
-        use glutin::ControlFlow;
-
-        if let winit::Event::WindowEvent { event, .. } = event {
-            match event {
-                winit::WindowEvent::CloseRequested => return ControlFlow::Break,
-                winit::WindowEvent::KeyboardInput {
-                    input: winit::KeyboardInput {
-                        state: winit::ElementState::Pressed,
-                        virtual_keycode: key,
+    let mut running = true;
+    while running {
+        events_loop.poll_events(|event| {
+            if let winit::Event::WindowEvent { event, .. } = event {
+                match event {
+                    winit::WindowEvent::CloseRequested => running = false,
+                    winit::WindowEvent::KeyboardInput {
+                        input: winit::KeyboardInput {
+                            state: winit::ElementState::Pressed,
+                            virtual_keycode: key,
+                            ..
+                        },
                         ..
-                    },
-                    ..
-                } if key == A::get_exit_key() => return ControlFlow::Break,
-                winit::WindowEvent::Resized(width, height) => if width != cur_width || height != cur_height {
-                    window.resize(width, height);
-                    cur_width = width;
-                    cur_height = height;
-                    let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
-                    app.on_resize(&mut factory, WindowTargets {
-                        color: new_color,
-                        depth: new_depth,
-                        aspect_ratio: width as f32 / height as f32,
-                    });
-                },
-                _ => app.on(event),
+                    } if key == A::get_exit_key() => running = false,
+                    winit::WindowEvent::Resized(size) => {
+                        let physical = size.to_physical(window.get_hidpi_factor());
+                        if physical != current_size {
+                            window.resize(physical);
+                            current_size = physical;
+                            let (new_color, new_depth) = gfx_window_glutin::new_views(&window);
+                            app.on_resize(&mut factory, WindowTargets {
+                                color: new_color,
+                                depth: new_depth,
+                                aspect_ratio: size.width as f32 / size.height as f32,
+                            });
+                        }
+                    }
+                    _ => app.on(event),
+                }
             }
-        }
+        });
 
         // draw a frame
         app.render(&mut device);
@@ -183,8 +189,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
         device.cleanup();
 
         harness.bump();
-        ControlFlow::Continue
-    });
+    }
 }
 
 
@@ -238,7 +243,9 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
                         },
                         ..
                     } if key == A::get_exit_key() => return,
-                    winit::WindowEvent::Resized(width, height) => {
+                    winit::WindowEvent::Resized(size) => {
+                        let physical = size.to_physical(window.inner.get_hidpi_factor());
+                        let (width, height): (u32, u32) = physical.into();
                         let size = (width as gfx::texture::Size, height as gfx::texture::Size);
                         if size != window.size {
                             // working around the borrow checker: window is already borrowed here
@@ -291,7 +298,7 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
     let mut events_loop = winit::EventsLoop::new();
     let (window, mut device, mut factory, main_color) = gfx_window_metal::init::<ColorFormat>(wb, &events_loop)
                                                                                 .unwrap();
-    let (width, height) = window.get_inner_size().unwrap();
+    let (width, height): (u32, u32) = window.get_inner_size().unwrap().into();
     let main_depth = factory.create_depth_stencil_view_only(width as Size, height as Size).unwrap();
 
     let backend = shade::Backend::Msl(device.get_shader_model());
@@ -316,7 +323,7 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
                         },
                         ..
                     } if key == A::get_exit_key() => return,
-                    winit::WindowEvent::Resized(_width, _height) => {
+                    winit::WindowEvent::Resized(_size) => {
                         warn!("TODO: resize on Metal");
                     },
                     _ => app.on(event),
@@ -374,7 +381,7 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
                         },
                         ..
                     } if key == A::get_exit_key() => return,
-                    winit::WindowEvent::Resized(_width, _height) => {
+                    winit::WindowEvent::Resized(_size) => {
                         warn!("TODO: resize on Vulkan");
                     },
                     _ => app.on(event),
