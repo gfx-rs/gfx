@@ -510,39 +510,38 @@ impl<R: Resources, C: command::Buffer<R>> Encoder<R, C> {
     pub fn clear<T: format::RenderFormat>(&mut self,
                  view: &handle::RenderTargetView<R, T>, value: T::View)
     where T::View: Into<command::ClearColor> {
-        self.clear_raw::<T>(view.raw(), value);
+        self.clear_raw(view.raw(), value.into());
     }
     /// Clear a depth view with a specified value.
     pub fn clear_depth<T: format::DepthFormat>(&mut self,
                        view: &handle::DepthStencilView<R, T>, depth: Depth) {
-        self.clear_depth_raw::<T>(view.raw(), depth);
+        self.clear_depth_raw(view.raw(), depth);
     }
 
     /// Clear a stencil view with a specified value.
     pub fn clear_stencil<T: format::StencilFormat>(&mut self,
                          view: &handle::DepthStencilView<R, T>, stencil: Stencil) {
-        self.clear_stencil_raw::<T>(view.raw(), stencil);
+        self.clear_stencil_raw(view.raw(), stencil);
     }
 
 
     /// Clears the supplied `RawRenderTargetView` to the supplied `ClearColor`.
-    pub fn clear_raw<T: format::RenderFormat>(&mut self,
-                 view: &handle::RawRenderTargetView<R>, value: T::View)
-    where T::View: Into<command::ClearColor> {
+    pub fn clear_raw(&mut self,
+                 view: &handle::RawRenderTargetView<R>, value: command::ClearColor) {
         let target = self.handles.ref_rtv(view).clone();
-        self.command_buffer.clear_color(target, value.into())
+        self.command_buffer.clear_color(target, value)
     }
 
 
     /// Clear a raw depth view with a specified value.
-    pub fn clear_depth_raw<T: format::DepthFormat>(&mut self,
+    pub fn clear_depth_raw(&mut self,
                        view: &handle::RawDepthStencilView<R>, depth: Depth) {
         let target = self.handles.ref_dsv(view).clone();
         self.command_buffer.clear_depth_stencil(target, Some(depth), None)
     }
 
     /// Clear a raw stencil view with a specified value.
-    pub fn clear_stencil_raw<T: format::StencilFormat>(&mut self,
+    pub fn clear_stencil_raw(&mut self,
                          view: &handle::RawDepthStencilView<R>, stencil: Stencil) {
         let target = self.handles.ref_dsv(view).clone();
         self.command_buffer.clear_depth_stencil(target, None, Some(stencil))
