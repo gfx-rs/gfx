@@ -848,12 +848,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn blit_image<T>(&mut self, _src: &Image, _src_layout: image::Layout, _dst: &Image, _dst_layout: image::Layout, _filter: image::Filter, _regions: T)
+    fn blit_image<T>(&mut self, src: &Image, _src_layout: image::Layout, dst: &Image, _dst_layout: image::Layout, filter: image::Filter, regions: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::ImageBlit>
     {
-        unimplemented!()
+        self.internal.blit_2d_image(&self.context, src, dst, filter, regions);
     }
 
     fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
@@ -1060,30 +1060,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ImageCopy>,
     {
-        for region in regions.into_iter() {
-            let info = region.borrow();
-
-            // TODO: subresources
-            unsafe {
-                self.context.CopySubresourceRegion(
-                    dst.internal.raw as _,
-                    0,
-                    info.dst_offset.x as _,
-                    info.dst_offset.y as _,
-                    info.dst_offset.z as _,
-                    src.internal.raw as _,
-                    0,
-                    &d3d11::D3D11_BOX {
-                        left: info.src_offset.x as _,
-                        top: info.src_offset.y as _,
-                        front: info.src_offset.z as _,
-                        right: info.extent.width as _,
-                        bottom: info.extent.height as _,
-                        back: info.extent.depth as _,
-                    }
-                );
-            }
-        }
+        self.internal.copy_image_2d(&self.context, src, dst, regions);
     }
 
     fn copy_buffer_to_image<T>(&mut self, buffer: &Buffer, image: &Image, _: image::Layout, regions: T)
@@ -1091,18 +1068,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        assert_eq!(buffer.internal.srv.is_some(), true);
-
-        // TODO: more than 2D
-        for copy in regions.into_iter() {
-            self.internal.copy_buffer_image_2d(
-                self.context.clone(),
-                buffer.internal.srv.unwrap(),
-                image.internal.uav.clone().unwrap(),
-                image.typed_raw_format,
-                copy.borrow().clone()
-            );
-        }
+        self.internal.copy_buffer_to_image_2d(&self.context, buffer, image, regions);
     }
 
     fn copy_image_to_buffer<T>(&mut self, image: &Image, _: image::Layout, buffer: &Buffer, regions: T)
@@ -1110,17 +1076,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        assert_eq!(buffer.internal.uav.is_some(), true);
-
-        for copy in regions.into_iter() {
-            self.internal.copy_image_2d_buffer(
-                self.context.clone(),
-                image.internal.srv.clone().unwrap(),
-                image.typed_raw_format,
-                buffer.internal.uav.unwrap(),
-                copy.borrow().clone()
-            );
-        }
+        self.internal.copy_image_2d_to_buffer(&self.context, image, buffer, regions);
     }
 
     fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
@@ -1431,6 +1387,7 @@ pub struct UnboundImage {
 pub struct Image {
     kind: image::Kind,
     usage: image::Usage,
+    format: format::Format,
     storage_flags: image::StorageFlags,
     dxgi_format: dxgiformat::DXGI_FORMAT,
     typed_raw_format: dxgiformat::DXGI_FORMAT,
@@ -1445,6 +1402,8 @@ pub struct Image {
 pub struct InternalImage {
     #[derivative(Debug="ignore")]
     raw: *mut d3d11::ID3D11Resource,
+    #[derivative(Debug="ignore")]
+    copy_srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
     #[derivative(Debug="ignore")]
     srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
     #[derivative(Debug="ignore")]
