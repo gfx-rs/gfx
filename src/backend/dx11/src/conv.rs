@@ -2,7 +2,7 @@ use hal::format::{Format};
 use hal::pso::{
     BlendDesc, BlendOp, BlendState, ColorBlendDesc, Comparison, DepthStencilDesc,
     DepthTest, Face, Factor, PolygonMode, Rasterizer, Rect, StencilFace, StencilOp, StencilTest,
-    Viewport, Stage, State,
+    Viewport, Stage, State, FrontFace,
 };
 use hal::image::{Anisotropic, Filter, WrapMode};
 use hal::{IndexType, Primitive};
@@ -274,8 +274,8 @@ pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
         FillMode: map_fill_mode(desc.polygon_mode),
         CullMode: map_cull_mode(desc.cull_face),
         FrontCounterClockwise: match desc.front_face {
-            Clockwise => FALSE,
-            CounterClockwise => TRUE,
+            FrontFace::Clockwise => FALSE,
+            FrontFace::CounterClockwise => TRUE,
         },
         DepthBias: desc.depth_bias.map_or(0, |bias| bias.const_factor as INT),
         DepthBiasClamp: desc.depth_bias.map_or(0.0, |bias| bias.clamp),

@@ -292,19 +292,6 @@ impl Internal {
         }
     }
 
-    fn update_buffer(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>, info: &command::BufferCopy) {
-        unsafe { ptr::copy(&BufferImageCopyInfo {
-            buffer: BufferCopy {
-                src: info.src as _,
-                dst: info.dst as _,
-                _padding: [0u32; 2]
-            },
-            .. mem::zeroed()
-        }, self.map(context) as *mut _, 1) };
-
-        self.unmap(context);
-    }
-
     fn update_image(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>, info: &command::ImageCopy) {
         unsafe { ptr::copy(&BufferImageCopyInfo {
             image: ImageCopy {
@@ -547,7 +534,7 @@ impl Internal {
         }
     }
 
-    fn find_blit_shader(&self, src: &Image, dst: &Image) -> Option<*mut d3d11::ID3D11PixelShader> {
+    fn find_blit_shader(&self, src: &Image) -> Option<*mut d3d11::ID3D11PixelShader> {
         use format::ChannelType::*;
 
         match src.format.base_format().1 {
@@ -566,7 +553,7 @@ impl Internal {
 
         use std::cmp;
 
-        let shader = self.find_blit_shader(src, dst).unwrap();
+        let shader = self.find_blit_shader(src).unwrap();
 
         let srv = src.internal.srv.clone().unwrap().as_raw();
         let rtv = dst.internal.rtv.clone().unwrap().as_raw();

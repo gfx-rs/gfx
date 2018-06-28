@@ -173,7 +173,7 @@ fn parse_spirv(raw_data: &[u8]) -> Result<spirv::Ast<hlsl::Target>, device::Shad
 
 fn patch_spirv_resources(
     ast: &mut spirv::Ast<hlsl::Target>,
-    layout: Option<&PipelineLayout>,
+    _layout: Option<&PipelineLayout>,
 ) -> Result<(), device::ShaderError> {
     // Patch descriptor sets due to the splitting of descriptor heaps into
     // SrvCbvUav and sampler heap. Each set will have a new location to match
@@ -227,8 +227,8 @@ fn patch_spirv_resources(
 fn translate_spirv(
     ast: &mut spirv::Ast<hlsl::Target>,
     shader_model: hlsl::ShaderModel,
-    layout: &PipelineLayout,
-    stage: pso::Stage,
+    _layout: &PipelineLayout,
+    _stage: pso::Stage,
 ) -> Result<String, device::ShaderError> {
     let mut compile_options = hlsl::CompilerOptions::default();
     compile_options.shader_model = shader_model;
