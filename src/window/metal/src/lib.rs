@@ -149,12 +149,16 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
             },
             _ => return Err(InitError::BackbufferFormat(color_format)),
         }
-        let draw_size = winit_window.get_inner_size().unwrap();
+        let draw_size: (f64, f64) = winit_window
+            .get_inner_size()
+            .unwrap()
+            .to_physical(winit_window.get_hidpi_factor())
+            .into();
         layer.set_edge_antialiasing_mask(0);
         layer.set_masks_to_bounds(true);
         //layer.set_magnification_filter(kCAFilterNearest);
         //layer.set_minification_filter(kCAFilterNearest);
-        layer.set_drawable_size(NSSize::new(draw_size.0 as f64, draw_size.1 as f64));
+        layer.set_drawable_size(NSSize::new(draw_size.0, draw_size.1));
         layer.set_presents_with_transaction(false);
         layer.remove_all_animations();
 
@@ -162,7 +166,11 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
         view.setWantsLayer(YES);
         view.setLayer(mem::transmute(layer.0));
 
-        let (device, factory, color, daddr, addr) = device_metal::create(color_format, draw_size.0, draw_size.1).unwrap();
+        let (device, factory, color, daddr, addr) = device_metal::create(
+            color_format,
+            draw_size.0.round() as _,
+            draw_size.1.round() as _,
+        ).unwrap();
         layer.set_device(device.device);
 
         let drawable = layer.next_drawable().unwrap();

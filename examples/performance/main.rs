@@ -363,6 +363,13 @@ fn main() {
         return;
     }
 
+    if cfg!(target_os = "linux") {
+        // example relies on dpi=1 & x11 has weird dpis
+        if env::var("WINIT_HIDPI_FACTOR").is_err() {
+            env::set_var("WINIT_HIDPI_FACTOR", "1");
+        }
+    }
+
     let mode = args.nth(1).unwrap();
     let count: i32 = if args_count == 3 {
         FromStr::from_str(&args.next().unwrap()).ok()
@@ -375,7 +382,7 @@ fn main() {
     let mut events_loop = glutin::EventsLoop::new();
     let builder = glutin::WindowBuilder::new()
         .with_title("Performance example".to_string())
-        .with_dimensions(800, 600);
+        .with_dimensions((800, 600).into());
     let context = glutin::ContextBuilder::new()
         .with_vsync(false);
 
@@ -397,7 +404,7 @@ fn main() {
 
         let proj = {
             let aspect = {
-                let (w, h) = r.window().get_inner_size().unwrap();
+                let (w, h): (u32, u32) = r.window().get_inner_size().unwrap().into();
                 w as f32 / h as f32
             };
             cgmath::perspective(Deg(45.0f32), aspect, 1.0, 10.0)
