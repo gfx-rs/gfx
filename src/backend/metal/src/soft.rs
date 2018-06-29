@@ -47,7 +47,7 @@ pub enum RenderCommand<R: Resources> {
     SetScissor(metal::MTLScissorRect),
     SetBlendColor(hal::pso::ColorValue),
     SetDepthBias(hal::pso::DepthBias),
-    SetDepthStencilDesc(R::DepthStencil),
+    SetDepthStencilState(R::DepthStencil),
     SetStencilReferenceValues(hal::pso::StencilValue, hal::pso::StencilValue),
     BindBuffer {
         stage: hal::pso::Stage,
@@ -107,7 +107,7 @@ impl RenderCommand<Own> {
             SetScissor(rect) => SetScissor(rect),
             SetBlendColor(color) => SetBlendColor(color),
             SetDepthBias(bias) => SetDepthBias(bias),
-            SetDepthStencilDesc(ref desc) => SetDepthStencilDesc(&**desc),
+            SetDepthStencilState(ref state) => SetDepthStencilState(&**state),
             SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
             BindBuffer { stage, index, buffer, offset } => BindBuffer {
                 stage,
@@ -166,7 +166,7 @@ impl<'a> RenderCommand<&'a Own> {
             SetScissor(rect) => SetScissor(rect),
             SetBlendColor(color) => SetBlendColor(color),
             SetDepthBias(bias) => SetDepthBias(bias),
-            SetDepthStencilDesc(desc) => SetDepthStencilDesc(desc.to_owned()),
+            SetDepthStencilState(state) => SetDepthStencilState(state.to_owned()),
             SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
             BindBuffer { stage, index, buffer, offset } => BindBuffer {
                 stage,
