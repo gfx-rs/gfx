@@ -309,13 +309,13 @@ impl Device {
             let nbs = desc_remap_data.get_binding(btype, set as _, binding).unwrap();
 
             for nb in nbs {
-                ast.set_decoration(res.id, spirv::Decoration::DescriptorSet, 0).unwrap();
                 if self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
                     ast.set_decoration(res.id, spirv::Decoration::Binding, *nb).unwrap()
                 } else {
-                    ast.set_decoration(res.id, spirv::Decoration::Binding, 0).unwrap();
-                    assert!(nb_map.insert(res.name.clone(), *nb).is_none())
+                    ast.unset_decoration(res.id, spirv::Decoration::Binding).unwrap();
+                    assert!(nb_map.insert(res.name.clone(), *nb).is_none());
                 }
+                ast.unset_decoration(res.id, spirv::Decoration::DescriptorSet).unwrap();
             }
         }
     }
@@ -330,8 +330,6 @@ impl Device {
         let res = ast.get_shader_resources().unwrap();
         self.populate_id_map(ast, &mut id_map, &res.separate_images);
         self.populate_id_map(ast, &mut id_map, &res.separate_samplers);
-
-        let comb_res = ast.get_shader_resources().unwrap().sampled_images;
 
         for cis in ast.get_combined_image_samplers().unwrap() {
             let (set, binding) = id_map.get(&cis.image_id).unwrap();
@@ -350,25 +348,18 @@ impl Device {
                 *binding,
             );
 
-            ast.set_decoration(cis.combined_id, spirv::Decoration::DescriptorSet, 0).unwrap();
+            let new_name = "GFX_HAL_COMBINED_SAMPLER".to_owned()
+                + "_" + &cis.sampler_id.to_string()
+                + "_" + &cis.image_id.to_string()
+                + "_" + &cis.combined_id.to_string() ;
+            ast.set_name(cis.combined_id, &new_name).unwrap();
             if self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
                 ast.set_decoration(cis.combined_id, spirv::Decoration::Binding, nb).unwrap()
             } else {
-                ast.set_decoration(cis.combined_id, spirv::Decoration::Binding, 0).unwrap();
-                let name = comb_res
-                    .iter()
-                    .filter_map(|t|
-                        if t.id == cis.combined_id {
-                            Some(t.name.clone())
-                        } else {
-                            None
-                        }
-                    )
-                    .next()
-                    .unwrap();
-
-                assert!(nb_map.insert(name, nb).is_none())
+                ast.unset_decoration(cis.combined_id, spirv::Decoration::Binding).unwrap();
+                assert!(nb_map.insert(new_name, nb).is_none())
             }
+            ast.unset_decoration(cis.combined_id, spirv::Decoration::DescriptorSet).unwrap();
         }
     }
 
@@ -386,7 +377,11 @@ impl Device {
     }
 
     fn compile_shader(
-        &self, point: &pso::EntryPoint<B>, stage: pso::Stage, desc_remap_data: &mut n::DescRemapData
+        &self,
+        point: &pso::EntryPoint<B>,
+        stage: pso::Stage,
+        desc_remap_data: &mut n::DescRemapData,
+        name_binding_map: &mut FastHashMap<String, pso::DescriptorBinding>,
     ) -> n::Shader {
         assert_eq!(point.entry, "main");
         match *point.module {
@@ -397,30 +392,18 @@ impl Device {
             n::ShaderModule::Spirv(ref spirv) => {
                 let mut ast = self.parse_spirv(spirv).unwrap();
 
-                let mut name_binding_map = FastHashMap::<String, pso::DescriptorBinding>::default();
-
                 self.specialize_ast(&mut ast, point.specialization).unwrap();
-                self.remap_bindings(&mut ast, desc_remap_data, &mut name_binding_map);
-                self.combine_seperate_images_and_samplers(&mut ast, desc_remap_data, &mut name_binding_map);
+                self.remap_bindings(&mut ast, desc_remap_data, name_binding_map);
+                self.combine_seperate_images_and_samplers(&mut ast, desc_remap_data, name_binding_map);
 
                 let glsl = self.translate_spirv(&mut ast).unwrap();
                 info!("Generated:\n{:?}", glsl);
-                let program = match self.create_shader_module_from_source(glsl.as_bytes(), stage).unwrap() {
+                let shader = match self.create_shader_module_from_source(glsl.as_bytes(), stage).unwrap() {
                     n::ShaderModule::Raw(raw) => raw,
                     _ => panic!("Unhandled")
                 };
 
-                if !self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
-                    let gl = &self.share.context;
-                    for (name, binding) in name_binding_map.iter() {
-                        unsafe {
-                            let index = gl.GetUniformBlockIndex(program, name.as_ptr() as _);
-                            gl.UniformBlockBinding(program, index, *binding)
-                        }
-                    }
-                }
-
-                program
+                shader
             }
         }
     }
@@ -584,11 +567,17 @@ impl d::Device<B> for Device {
                 (pso::Stage::Fragment, desc.shaders.fragment.as_ref()),
             ];
 
+            let mut name_binding_map = FastHashMap::<String, pso::DescriptorBinding>::default();
             let shader_names = &shaders
                 .iter()
                 .filter_map(|&(stage, point_maybe)| {
                     point_maybe.map(|point| {
-                        let shader_name = self.compile_shader(point, stage, &mut desc.layout.desc_remap_data.write().unwrap());
+                        let shader_name = self.compile_shader(
+                            point,
+                            stage,
+                            &mut desc.layout.desc_remap_data.write().unwrap(),
+                            &mut name_binding_map,
+                        );
                         unsafe { gl.AttachShader(name, shader_name); }
                         shader_name
                     })
@@ -614,6 +603,17 @@ impl d::Device<B> for Device {
                 unsafe {
                     gl.DetachShader(name, *shader_name);
                     gl.DeleteShader(*shader_name);
+                }
+            }
+
+            if !self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
+                let gl = &self.share.context;
+                unsafe {
+                    gl.UseProgram(name);
+                    for (bname, binding) in name_binding_map.iter() {
+                        let loc = gl.GetUniformLocation(name, bname.as_ptr() as _);
+                        gl.Uniform1i(loc, *binding as _);
+                    }
                 }
             }
 
@@ -676,7 +676,13 @@ impl d::Device<B> for Device {
         let program = {
             let name = unsafe { gl.CreateProgram() };
 
-            let shader = self.compile_shader(&desc.shader, pso::Stage::Compute, &mut desc.layout.desc_remap_data.write().unwrap());
+            let mut name_binding_map = FastHashMap::<String, pso::DescriptorBinding>::default();
+            let shader = self.compile_shader(
+                &desc.shader,
+                pso::Stage::Compute,
+                &mut desc.layout.desc_remap_data.write().unwrap(),
+                &mut name_binding_map,
+            );
             unsafe { gl.AttachShader(name, shader) };
 
             unsafe { gl.LinkProgram(name) };
@@ -688,6 +694,17 @@ impl d::Device<B> for Device {
             unsafe {
                 gl.DetachShader(name, shader);
                 gl.DeleteShader(shader);
+            }
+
+            if !self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
+                let gl = &self.share.context;
+                unsafe {
+                    gl.UseProgram(name);
+                    for (bname, binding) in name_binding_map.iter() {
+                        let loc = gl.GetUniformLocation(name, bname.as_ptr() as _);
+                        gl.Uniform1i(loc, *binding as _);
+                    }
+                }
             }
 
             let status = get_program_iv(gl, name, gl::LINK_STATUS);
