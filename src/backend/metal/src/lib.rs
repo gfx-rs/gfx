@@ -5,7 +5,6 @@ extern crate cocoa;
 extern crate derivative;
 extern crate foreign_types;
 #[macro_use] extern crate objc;
-extern crate io_surface;
 extern crate core_foundation;
 extern crate core_graphics;
 #[macro_use] extern crate log;

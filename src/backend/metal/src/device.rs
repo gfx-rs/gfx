@@ -120,88 +120,6 @@ fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: 
     Ok(mtl_function)
 }
 
-fn create_depth_stencil_state(
-    device: &metal::DeviceRef,
-    desc: &pso::DepthStencilDesc,
-) -> native::DepthStencilState {
-    let raw = metal::DepthStencilDescriptor::new();
-
-    let mut dss = native::DepthStencilState {
-        depth_stencil_desc: Some(*desc),
-        ..Default::default()
-    };
-
-    let mut all_masks_static = true;
-
-    match desc.depth {
-        pso::DepthTest::On { fun, write } => {
-            raw.set_depth_compare_function(conv::map_compare_function(fun));
-            raw.set_depth_write_enabled(write);
-        }
-        pso::DepthTest::Off => {}
-    }
-    match desc.stencil {
-        pso::StencilTest::On { ref front, ref back } => {
-            dss.stencil.front_reference = front.reference;
-            dss.stencil.back_reference = back.reference;
-
-            let front_desc = metal::StencilDescriptor::new();
-            front_desc.set_stencil_compare_function(conv::map_compare_function(front.fun));
-
-            dss.stencil.front_read_mask = front.mask_read;
-            match front.mask_read {
-                pso::State::Static(mr) => front_desc.set_read_mask(mr),
-                pso::State::Dynamic => all_masks_static = false,
-            }
-
-            dss.stencil.front_write_mask = front.mask_write;
-            if let pso::State::Static(mw) = front.mask_write {
-                front_desc.set_write_mask(mw);
-            } else {
-                all_masks_static = false;
-            }
-
-            front_desc.set_stencil_failure_operation(conv::map_stencil_op(front.op_fail));
-            front_desc.set_depth_failure_operation(conv::map_stencil_op(front.op_depth_fail));
-            front_desc.set_depth_stencil_pass_operation(conv::map_stencil_op(front.op_pass));
-
-            raw.set_front_face_stencil(Some(&front_desc));
-
-            let back_desc = metal::StencilDescriptor::new();
-            back_desc.set_stencil_compare_function(conv::map_compare_function(back.fun));
-
-            dss.stencil.back_read_mask = back.mask_read;
-            match back.mask_read {
-                pso::State::Static(mr) => back_desc.set_read_mask(mr),
-                pso::State::Dynamic => all_masks_static = false,
-            }
-
-            dss.stencil.back_write_mask = back.mask_write;
-            if let pso::State::Static(mw) = back.mask_write {
-                back_desc.set_write_mask(mw);
-            } else {
-                all_masks_static = false;
-            }
-
-            back_desc.set_stencil_failure_operation(conv::map_stencil_op(back.op_fail));
-            back_desc.set_depth_failure_operation(conv::map_stencil_op(back.op_depth_fail));
-            back_desc.set_depth_stencil_pass_operation(conv::map_stencil_op(back.op_pass));
-
-            raw.set_back_face_stencil(Some(&back_desc));
-        }
-        pso::StencilTest::Off => {}
-    }
-
-    if all_masks_static {
-        // The depth stencil state will never be updated for this pipeline, so cache it
-        dss.depth_stencil_static = Some(device.new_depth_stencil_state(&raw));
-    }
-
-    dss.depth_stencil_desc_raw = Some(raw);
-
-    dss
-}
-
 //#[derive(Clone)]
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
@@ -960,9 +878,6 @@ impl hal::Device<Backend> for Device {
             }
         }
 
-        let depth_stencil = pipeline_desc.depth_stencil;
-        let depth_stencil_state = create_depth_stencil_state(&device, &depth_stencil);
-
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();
         let mut vertex_buffer_map = n::VertexBufferMap::default();
@@ -1057,6 +972,14 @@ impl hal::Device<Backend> for Device {
             },
             depth_bias: pipeline_desc.rasterizer.depth_bias.unwrap_or_default(),
         });
+
+        // prepare the depth-stencil state now
+        self.shared.service_pipes
+            .lock()
+            .unwrap()
+            .depth_stencil_states
+            .prepare(&pipeline_desc.depth_stencil, &*device);
+
         let attachment_formats = pass_descriptor.main_pass.attachments
             .iter()
             .map(|at| at.format)
@@ -1071,7 +994,7 @@ impl hal::Device<Backend> for Device {
                     primitive_type,
                     attribute_buffer_index: pipeline_layout.attribute_buffer_index,
                     rasterizer_state,
-                    depth_stencil_state,
+                    depth_stencil_desc: pipeline_desc.depth_stencil.clone(),
                     baked_states: pipeline_desc.baked_states.clone(),
                     vertex_buffer_map,
                     attachment_formats,

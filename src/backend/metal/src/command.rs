@@ -117,11 +117,19 @@ struct Temp {
 }
 
 #[derive(Clone)]
+struct RenderPipelineState {
+    raw: metal::RenderPipelineState,
+    ds_desc: pso::DepthStencilDesc,
+    vbuf_map: native::VertexBufferMap,
+    at_formats: SmallVec<[Option<Format>; 8]>,
+}
+
+#[derive(Clone)]
 struct State {
     viewport: Option<MTLViewport>,
     scissors: Option<MTLScissorRect>,
     blend_color: Option<pso::ColorValue>,
-    render_pso: Option<(metal::RenderPipelineState, native::VertexBufferMap, Vec<Option<Format>>)>,
+    render_pso: Option<RenderPipelineState>,
     /// A flag to handle edge cases of Vulkan binding inheritance:
     /// we don't want to consider the current PSO bound for a new pass if it's not compatible.
     render_pso_is_compatible: bool,
@@ -133,9 +141,6 @@ struct State {
     resources_cs: StageResources,
     index_buffer: Option<IndexBuffer<BufferPtr>>,
     rasterizer_state: Option<native::RasterizerState>,
-    pipeline_depth_stencil: Option<(pso::DepthStencilDesc, metal::DepthStencilState)>,
-    dynamic_depth_stencil_desc: Option<metal::DepthStencilDescriptor>,
-    dynamic_depth_stencil_state: Option<metal::DepthStencilState>,
     stencil: native::StencilState<pso::StencilValue>,
     push_constants: Vec<u32>,
     vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
@@ -164,7 +169,9 @@ impl State {
         }
     }
 
-    fn make_render_commands<'a>(&'a self, aspects: Aspects) -> impl Iterator<Item = soft::RenderCommand<&'a soft::Own>> {
+    fn make_render_commands<'a>(
+        &'a self, aspects: Aspects
+    ) -> impl Iterator<Item = soft::RenderCommand<&'a soft::Own>> {
         // Apply previously bound values for this command buffer
         let com_vp = self.viewport.map(soft::RenderCommand::SetViewport);
         let com_scissor = self.scissors.map(|sr| soft::RenderCommand::SetScissor(
@@ -184,21 +191,9 @@ impl State {
         };
         let com_pso = if self.render_pso_is_compatible {
             let rast = self.rasterizer_state.clone();
-            self.render_pso.as_ref().map(|&(ref pso, _, _)| {
-                soft::RenderCommand::BindPipeline(&**pso, rast)
+            self.render_pso.as_ref().map(|ps| {
+                soft::RenderCommand::BindPipeline(&*ps.raw, rast)
             })
-        } else {
-            None
-        };
-
-        let com_ds = if aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
-            if let Some((_, ref static_state)) = self.pipeline_depth_stencil {
-                Some(soft::RenderCommand::SetDepthStencilDesc(&**static_state))
-            } else if let Some(ref dynamic_state) = self.dynamic_depth_stencil_state {
-                Some(soft::RenderCommand::SetDepthStencilDesc(&**dynamic_state))
-            } else {
-                None
-            }
         } else {
             None
         };
@@ -255,7 +250,7 @@ impl State {
             .chain(com_blend)
             .chain(com_depth_bias)
             .chain(com_pso)
-            .chain(com_ds)
+            //.chain(com_ds) // done outside
             .chain(com_resources)
     }
 
@@ -313,7 +308,7 @@ impl State {
 
     fn set_vertex_buffers(&mut self) -> u64 {
         let map = match self.render_pso {
-            Some((_, ref map, _)) => map,
+            Some(ref ps) => &ps.vbuf_map,
             None => return 0
         };
 
@@ -362,67 +357,32 @@ impl State {
             })
     }
 
-    fn set_stencil_mask_values<'a>(
-        &'a mut self,
-        shared: &Shared,
-        front_back_read_masks_to_update: Option<(pso::StencilValue, pso::StencilValue)>,
-        front_back_write_masks_to_update: Option<(pso::StencilValue, pso::StencilValue)>,
-        dynamic_depth_stencil_from_pipeline: Option<&'a metal::DepthStencilDescriptorRef>,
+    fn sync_depth_stencil<'a>(
+        &'a self, pipes: &'a mut ServicePipes, device: &Mutex<metal::Device>,
     ) -> Option<soft::RenderCommand<&'a soft::Own>> {
-        if let Some((f, b)) = front_back_read_masks_to_update {
-            self.stencil.front_read_mask = f;
-            self.stencil.back_read_mask = b;
-        }
-
-        if let Some((f, b)) = front_back_write_masks_to_update {
-            self.stencil.front_write_mask = f;
-            self.stencil.back_write_mask = b;
-        }
-
-        if let Some(ds) = dynamic_depth_stencil_from_pipeline {
-            self.dynamic_depth_stencil_desc = Some(ds.to_owned());
-        }
-
-        self.dynamic_depth_stencil_state = self.dynamic_depth_stencil_desc.as_ref().map(|desc| {
-            let f_owned;
-            let front = match desc.front_face_stencil() {
-                Some(f) => f,
-                None => {
-                    f_owned = metal::StencilDescriptor::new();
-                    desc.set_front_face_stencil(Some(&f_owned));
-                    &f_owned
-                }
-            };
-
-            let b_owned;
-            let back = match desc.back_face_stencil() {
-                Some(b) => b,
-                None => {
-                    b_owned = metal::StencilDescriptor::new();
-                    desc.set_front_face_stencil(Some(&b_owned));
-                    &b_owned
-                }
-            };
-
-            if let Some((fm, bm)) = front_back_read_masks_to_update {
-                front.set_read_mask(fm);
-                back.set_read_mask(bm);
+        let mut desc = match self.render_pso {
+            Some(ref ps) => ps.ds_desc.clone(),
+            None => return None,
+        };
+        if let pso::StencilTest::On { ref mut front, ref mut back } = desc.stencil {
+            front.reference = pso::State::Dynamic;
+            if front.mask_read.is_dynamic() {
+                front.mask_read = pso::State::Static(self.stencil.front_read_mask);
             }
-
-            if let Some((fm, bm)) = front_back_write_masks_to_update {
-                front.set_write_mask(fm);
-                back.set_write_mask(bm);
+            if front.mask_write.is_dynamic() {
+                front.mask_write = pso::State::Static(self.stencil.front_write_mask);
             }
+            back.reference = pso::State::Dynamic;
+            if back.mask_read.is_dynamic() {
+                back.mask_read = pso::State::Static(self.stencil.back_read_mask);
+            }
+            if back.mask_write.is_dynamic() {
+                back.mask_write = pso::State::Static(self.stencil.back_write_mask);
+            }
+        }
 
-            shared.device
-                .lock()
-                .unwrap()
-                .new_depth_stencil_state(&desc)
-        });
-
-        self.dynamic_depth_stencil_state
-            .as_ref()
-            .map(|ds| soft::RenderCommand::SetDepthStencilDesc(&**ds))
+        let state = pipes.depth_stencil_states.get(desc, device);
+        Some(soft::RenderCommand::SetDepthStencilState(state))
     }
 
     fn set_depth_bias<'a>(&mut self, depth_bias: &pso::DepthBias) -> soft::RenderCommand<&'a soft::Own> {
@@ -435,25 +395,6 @@ impl State {
             });
         }
         soft::RenderCommand::SetDepthBias(*depth_bias)
-    }
-
-    fn set_depth_stencil_desc<'a>(
-        &mut self,
-        depth_stencil_desc: &pso::DepthStencilDesc,
-        depth_stencil_raw: &'a metal::DepthStencilStateRef,
-    ) -> soft::RenderCommand<&'a soft::Own> {
-        self.pipeline_depth_stencil = Some((depth_stencil_desc.clone(), depth_stencil_raw.to_owned()));
-        soft::RenderCommand::SetDepthStencilDesc(depth_stencil_raw)
-    }
-
-    fn set_stencil_reference_values<'a>(
-        &mut self,
-        front: pso::StencilValue,
-        back: pso::StencilValue,
-    ) -> soft::RenderCommand<&'a soft::Own> {
-        self.stencil.front_reference = front;
-        self.stencil.back_reference = back;
-        soft::RenderCommand::SetStencilReferenceValues(front, back)
     }
 
     fn push_vs_constants<'a>(&'a mut self, id: u32) -> soft::RenderCommand<&'a soft::Own>{
@@ -980,8 +921,8 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
         Cmd::SetDepthBias(depth_bias) => {
             encoder.set_depth_bias(depth_bias.const_factor, depth_bias.slope_factor, depth_bias.clamp);
         }
-        Cmd::SetDepthStencilDesc(depth_stencil_desc) => {
-            encoder.set_depth_stencil_state(depth_stencil_desc);
+        Cmd::SetDepthStencilState(depth_stencil) => {
+            encoder.set_depth_stencil_state(depth_stencil);
         }
         Cmd::SetStencilReferenceValues(front, back) => {
             encoder.set_stencil_front_back_reference_value(front, back);
@@ -1430,9 +1371,6 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 resources_cs: StageResources::new(),
                 index_buffer: None,
                 rasterizer_state: None,
-                pipeline_depth_stencil: None,
-                dynamic_depth_stencil_desc: None,
-                dynamic_depth_stencil_state: None,
                 stencil: native::StencilState::<pso::StencilValue> {
                     front_reference: 0,
                     back_reference: 0,
@@ -1490,6 +1428,19 @@ fn set_operations(attachment: &metal::RenderPassAttachmentDescriptorRef, ops: At
     attachment.set_load_action(conv::map_load_operation(ops.load));
     attachment.set_store_action(conv::map_store_operation(ops.store));
     ops.load
+}
+
+impl CommandBuffer {
+    fn update_depth_stencil(&self) {
+        let mut inner = self.inner.borrow_mut();
+        let mut pre = inner.sink().pre_render();
+        if !pre.is_void() {
+            let mut pipes = self.shared.service_pipes.lock().unwrap();
+            if let Some(com) = self.state.sync_depth_stencil(&mut *pipes, &self.shared.device) {
+                pre.issue(com)
+            }
+        }
+    }
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
@@ -1925,8 +1876,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let com_pso = iter::once(soft::RenderCommand::BindPipeline(clear_pso, None));
 
             let com_ds = if !aspects.contains(Aspects::COLOR) {
-                Some(soft::RenderCommand::SetDepthStencilDesc(
-                    depth_stencil_states.get(aspects)
+                Some(soft::RenderCommand::SetDepthStencilState(
+                    depth_stencil_states.get_write(aspects)
                 ))
             } else {
                 None
@@ -1947,9 +1898,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         // reset all the affected states
-        let com_pso = if let Some((ref pso, _, _)) = self.state.render_pso {
+        let com_pso = if let Some(ref ps) = self.state.render_pso {
             if self.state.render_pso_is_compatible {
-                Some(soft::RenderCommand::BindPipeline(&**pso, None))
+                Some(soft::RenderCommand::BindPipeline(&*ps.raw, None))
             } else {
                 warn!("Not restoring the current PSO after clear_attachments because it's not compatible");
                 None
@@ -1958,9 +1909,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             None
         };
 
-        let com_ds = self.state.pipeline_depth_stencil
-            .as_ref()
-            .map(|&(_, ref raw)| soft::RenderCommand::SetDepthStencilDesc(&**raw));
+        let com_ds = self.state.sync_depth_stencil(&mut *pipes, &self.shared.device);
 
         let com_vs = if let Some(&Some((buffer, offset))) = self.state.resources_vs.buffers.first() {
             Some(soft::RenderCommand::BindBuffer {
@@ -2154,8 +2103,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         ];
 
         let com_ds = if src.format_desc.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
-            Some(soft::RenderCommand::SetDepthStencilDesc(
-                depth_stencil_states.get(src.format_desc.aspects)
+            Some(soft::RenderCommand::SetDepthStencilState(
+                depth_stencil_states.get_write(src.format_desc.aspects)
             ))
         } else {
             None
@@ -2351,15 +2300,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
-        assert!(!faces.is_empty());
+        if faces.contains(pso::Face::FRONT) {
+            self.state.stencil.front_reference = value;
+        }
+        if faces.contains(pso::Face::BACK) {
+            self.state.stencil.back_reference = value;
+        }
 
-        let (front, back) = match faces {
-            pso::Face::FRONT => (value, self.state.stencil.back_reference),
-            pso::Face::BACK => (self.state.stencil.front_reference, value),
-            _ => (value, value),
-        };
-
-        let com = self.state.set_stencil_reference_values(front, back);
+        let com = soft::RenderCommand::SetStencilReferenceValues(
+            self.state.stencil.front_reference,
+            self.state.stencil.back_reference,
+        );
         self.inner
             .borrow_mut()
             .sink()
@@ -2368,39 +2319,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
-        assert!(!faces.is_empty());
-
-        let (front, back) = match faces {
-            pso::Face::FRONT => (value, self.state.stencil.back_read_mask),
-            pso::Face::BACK => (self.state.stencil.front_read_mask, value),
-            _ => (value, value),
-        };
-
-        if let Some(com) = self.state.set_stencil_mask_values(&self.shared, Some((front, back)), None, None) {
-            self.inner
-                .borrow_mut()
-                .sink()
-                .pre_render()
-                .issue(com);
+        if faces.contains(pso::Face::FRONT) {
+            self.state.stencil.front_read_mask = value;
         }
+        if faces.contains(pso::Face::BACK) {
+            self.state.stencil.back_read_mask = value;
+        }
+        self.update_depth_stencil();
     }
 
     fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
-        assert!(!faces.is_empty());
-
-        let (front, back) = match faces {
-            pso::Face::FRONT => (value, self.state.stencil.back_write_mask),
-            pso::Face::BACK => (self.state.stencil.front_write_mask, value),
-            _ => (value, value),
-        };
-
-        if let Some(com) = self.state.set_stencil_mask_values(&self.shared, None, Some((front, back)), None) {
-            self.inner
-                .borrow_mut()
-                .sink()
-                .pre_render()
-                .issue(com);
+        if faces.contains(pso::Face::FRONT) {
+            self.state.stencil.front_write_mask = value;
         }
+        if faces.contains(pso::Face::BACK) {
+            self.state.stencil.back_write_mask = value;
+        }
+        self.update_depth_stencil();
     }
 
     fn begin_render_pass<T>(
@@ -2470,13 +2405,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         self.state.render_pso_is_compatible = match self.state.render_pso {
-            Some((_, _, ref formats)) => formats.len() == render_pass.attachments.len() &&
-                formats.iter().zip(&render_pass.attachments).all(|(f, at)| *f == at.format),
+            Some(ref ps) => ps.at_formats.len() == render_pass.attachments.len() &&
+                ps.at_formats.iter().zip(&render_pass.attachments).all(|(f, at)| *f == at.format),
             _ => false
         };
 
         self.state.framebuffer_inner = framebuffer.inner.clone();
-        let init_commands = self.state.make_render_commands(full_aspects);
+        let mut pipes = self.shared.service_pipes.lock().unwrap();
+        let com_ds = if full_aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
+            self.state.sync_depth_stencil(&mut *pipes, &self.shared.device)
+        } else {
+            None
+        };
+        let init_commands = self.state
+            .make_render_commands(full_aspects)
+            .chain(com_ds);
+
         inner
             .sink()
             .begin_render_pass(true, &*descriptor, init_commands);
@@ -2494,22 +2438,73 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
+        let mut ds_desc = pipeline.depth_stencil_desc.clone();
+        let mut set_stencil_references = false;
+        match ds_desc.depth {
+            pso::DepthTest::On { .. } if !self.state.framebuffer_inner.aspects.contains(Aspects::DEPTH) => {
+                error!("Using {:?} with no depth attachment!", ds_desc);
+                ds_desc.depth = pso::DepthTest::Off;
+            }
+            pso::DepthTest::On { .. } => {}
+            pso::DepthTest::Off => {}
+        }
+        match ds_desc.stencil {
+            pso::StencilTest::On { .. } if !self.state.framebuffer_inner.aspects.contains(Aspects::STENCIL) => {
+                error!("Using {:?} with no stencil attachment!", ds_desc);
+                ds_desc.stencil = pso::StencilTest::Off;
+            }
+            pso::StencilTest::On { ref front, ref back } => {
+                if let pso::State::Static(value) = front.mask_read {
+                    self.state.stencil.front_read_mask = value;
+                }
+                if let pso::State::Static(value) = front.mask_write {
+                    self.state.stencil.front_write_mask = value;
+                }
+                if let pso::State::Static(value) = front.reference {
+                    self.state.stencil.front_reference = value;
+                    set_stencil_references = true;
+                }
+                if let pso::State::Static(value) = back.mask_read {
+                    self.state.stencil.back_read_mask = value;
+                }
+                if let pso::State::Static(value) = back.mask_write {
+                    self.state.stencil.back_write_mask = value;
+                }
+                if let pso::State::Static(value) = back.reference {
+                    self.state.stencil.back_reference = value;
+                    set_stencil_references = true;
+                }
+            }
+            pso::StencilTest::Off => {}
+        }
+
         self.state.render_pso_is_compatible = true; //assume good intent :)
-        self.state.render_pso = Some((
-            pipeline.raw.to_owned(),
-            pipeline.vertex_buffer_map.clone(),
-            pipeline.attachment_formats.clone(),
-        ));
+        self.state.render_pso = Some(RenderPipelineState {
+            raw: pipeline.raw.to_owned(),
+            ds_desc,
+            vbuf_map: pipeline.vertex_buffer_map.clone(),
+            at_formats: pipeline.attachment_formats.clone(),
+        });
         self.state.rasterizer_state = pipeline.rasterizer_state.clone();
         self.state.primitive_type = pipeline.primitive_type;
         let vertex_mask = self.state.set_vertex_buffers();
 
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
+
         pre.issue(soft::RenderCommand::BindPipeline(
             &*pipeline.raw,
             pipeline.rasterizer_state.clone(),
         ));
+
+        let mut pipes = self.shared.service_pipes.lock().unwrap();
+        pre.issue(self.state.sync_depth_stencil(&mut *pipes, &self.shared.device).unwrap());
+        if set_stencil_references {
+            pre.issue(soft::RenderCommand::SetStencilReferenceValues(
+                self.state.stencil.front_reference,
+                self.state.stencil.back_reference,
+            ));
+        }
 
         if let Some(ref vp) = pipeline.baked_states.viewport {
             pre.issue(self.state.set_viewport(vp, &self.shared.disabilities));
@@ -2526,35 +2521,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             for command in self.state.iter_vertex_buffers(vertex_mask) {
                 pre.issue(command);
             }
-        }
-
-        let ds = &pipeline.depth_stencil_state;
-        if let Some(desc) = ds.depth_stencil_desc {
-            // If static stencil reference values were provided, update them here
-            // Otherwise, leave any dynamic stencil reference values bound
-            let front_ref = ds.stencil.front_reference.static_or(self.state.stencil.front_reference);
-            let back_ref = ds.stencil.back_reference.static_or(self.state.stencil.back_reference);
-            if ds.stencil.front_reference.is_static() || ds.stencil.back_reference.is_static() {
-                pre.issue(self.state.set_stencil_reference_values(front_ref, back_ref));
-            }
-
-            match ds.depth_stencil_static {
-                Some(ref raw) => pre.issue(self.state.set_depth_stencil_desc(&desc, raw)),
-                None => {
-                    let front_r = ds.stencil.front_read_mask.static_or(self.state.stencil.front_read_mask);
-                    let back_r = ds.stencil.back_read_mask.static_or(self.state.stencil.back_read_mask);
-                    let front_w = ds.stencil.front_write_mask.static_or(self.state.stencil.front_write_mask);
-                    let back_w = ds.stencil.back_write_mask.static_or(self.state.stencil.back_write_mask);
-                    if let Some(com) = self.state.set_stencil_mask_values(
-                        &self.shared,
-                        Some((front_r, back_r)),
-                        Some((front_w, back_w)),
-                        ds.depth_stencil_desc_raw.as_ref().map(Borrow::borrow),
-                    ) {
-                        pre.issue(com);
-                    }
-                }
-            };
         }
     }
 

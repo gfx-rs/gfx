@@ -1,4 +1,7 @@
+use conversions as conv;
+
 use metal;
+use hal::pso;
 use hal::backend::FastHashMap;
 use hal::command::ClearColorRaw;
 use hal::format::{Aspects, ChannelType};
@@ -7,6 +10,7 @@ use hal::image::Filter;
 use std::mem;
 use std::path::Path;
 use std::sync::Mutex;
+
 
 #[derive(Clone, Debug)]
 pub struct ClearVertex {
@@ -101,43 +105,152 @@ impl SamplerStates {
 }
 
 pub struct DepthStencilStates {
-    write_depth: metal::DepthStencilState,
-    write_stencil: metal::DepthStencilState,
-    write_all: metal::DepthStencilState,
+    map: FastHashMap<pso::DepthStencilDesc, metal::DepthStencilState>,
+    write_none: pso::DepthStencilDesc,
+    write_depth: pso::DepthStencilDesc,
+    write_stencil: pso::DepthStencilDesc,
+    write_all: pso::DepthStencilDesc,
 }
 
 impl DepthStencilStates {
     fn new(device: &metal::DeviceRef) -> Self {
-        let desc = metal::DepthStencilDescriptor::new();
-        desc.set_depth_write_enabled(true);
-        desc.set_depth_compare_function(metal::MTLCompareFunction::Always);
-        let write_depth = device.new_depth_stencil_state(&desc);
-        let stencil_desc = metal::StencilDescriptor::new();
-        stencil_desc.set_depth_stencil_pass_operation(metal::MTLStencilOperation::Replace);
-        desc.set_front_face_stencil(Some(&stencil_desc));
-        desc.set_back_face_stencil(Some(&stencil_desc));
-        let write_all = device.new_depth_stencil_state(&desc);
-        desc.set_depth_write_enabled(false);
-        let write_stencil = device.new_depth_stencil_state(&desc);
+        let write_none = pso::DepthStencilDesc {
+            depth: pso::DepthTest::Off,
+            depth_bounds: false,
+            stencil: pso::StencilTest::Off,
+        };
+        let write_depth = pso::DepthStencilDesc {
+            depth: pso::DepthTest::On {
+                fun: pso::Comparison::Always,
+                write: true,
+            },
+            depth_bounds: false,
+            stencil: pso::StencilTest::Off,
+        };
+        let face = pso::StencilFace {
+            fun: pso::Comparison::Always,
+            mask_read: pso::State::Static(!0),
+            mask_write: pso::State::Static(!0),
+            op_fail: pso::StencilOp::Replace,
+            op_depth_fail: pso::StencilOp::Replace,
+            op_pass: pso::StencilOp::Replace,
+            reference: pso::State::Dynamic, //irrelevant
+        };
+        let write_stencil = pso::DepthStencilDesc {
+            depth: pso::DepthTest::Off,
+            depth_bounds: false,
+            stencil: pso::StencilTest::On {
+                front: face,
+                back: face,
+            },
+        };
+        let write_all = pso::DepthStencilDesc {
+            depth: pso::DepthTest::On {
+                fun: pso::Comparison::Always,
+                write: true,
+            },
+            depth_bounds: false,
+            stencil: pso::StencilTest::On {
+                front: face,
+                back: face,
+            },
+        };
+
+        let mut map = FastHashMap::default();
+        for desc in &[&write_none, &write_depth, &write_stencil, &write_all] {
+            let raw_desc = Self::create_desc(desc).unwrap();
+            let raw = device.new_depth_stencil_state(&raw_desc);
+            map.insert(**desc, raw);
+        }
 
         DepthStencilStates {
+            map,
+            write_none,
             write_depth,
             write_stencil,
             write_all,
         }
     }
 
-    //TODO: return `Option<metal::DepthStencilState>` instead?
-    pub fn get(&self, aspects: Aspects) -> &metal::DepthStencilStateRef {
-        if aspects.contains(Aspects::DEPTH | Aspects::STENCIL) {
+    pub fn get(
+        &mut self,
+        desc: pso::DepthStencilDesc,
+        device: &Mutex<metal::Device>,
+    ) -> &metal::DepthStencilStateRef {
+        self.map
+            .entry(desc)
+            .or_insert_with(|| {
+                let raw_desc = Self::create_desc(&desc)
+                    .expect("Incomplete descriptor provided");
+                device.lock().unwrap().new_depth_stencil_state(&raw_desc)
+            })
+    }
+
+    pub fn get_write(&self, aspects: Aspects) -> &metal::DepthStencilStateRef {
+        let key = if aspects.contains(Aspects::DEPTH | Aspects::STENCIL) {
             &self.write_all
         } else if aspects.contains(Aspects::DEPTH) {
             &self.write_depth
         } else if aspects.contains(Aspects::STENCIL) {
             &self.write_stencil
         } else {
-            panic!("Can't write nothing!")
+            &self.write_none
+        };
+        self.map.get(key).unwrap()
+    }
+
+    pub fn prepare(&mut self, desc: &pso::DepthStencilDesc, device: &metal::DeviceRef) {
+        use std::collections::hash_map::Entry;
+
+        if let Entry::Vacant(e) = self.map.entry(*desc) {
+            if let Some(raw_desc) = Self::create_desc(desc) {
+                e.insert(device.new_depth_stencil_state(&raw_desc));
+            }
         }
+    }
+
+    fn create_stencil(face: &pso::StencilFace) -> Option<metal::StencilDescriptor> {
+        let desc = metal::StencilDescriptor::new();
+        desc.set_stencil_compare_function(conv::map_compare_function(face.fun));
+        desc.set_read_mask(match face.mask_read {
+            pso::State::Static(value) => value,
+            pso::State::Dynamic => return None,
+        });
+        desc.set_write_mask(match face.mask_write {
+            pso::State::Static(value) => value,
+            pso::State::Dynamic => return None,
+        });
+        desc.set_stencil_failure_operation(conv::map_stencil_op(face.op_fail));
+        desc.set_depth_failure_operation(conv::map_stencil_op(face.op_depth_fail));
+        desc.set_depth_stencil_pass_operation(conv::map_stencil_op(face.op_pass));
+        Some(desc)
+    }
+
+    fn create_desc(desc: &pso::DepthStencilDesc) -> Option<metal::DepthStencilDescriptor> {
+        let raw = metal::DepthStencilDescriptor::new();
+
+        match desc.depth {
+            pso::DepthTest::On { fun, write } => {
+                raw.set_depth_compare_function(conv::map_compare_function(fun));
+                raw.set_depth_write_enabled(write);
+            }
+            pso::DepthTest::Off => {}
+        }
+        match desc.stencil {
+            pso::StencilTest::On { ref front, ref back } => {
+                let front_desc = Self::create_stencil(front)?;
+                raw.set_front_face_stencil(Some(&front_desc));
+                let back_desc = if front == back {
+                    front_desc
+                } else {
+                    Self::create_stencil(back)?
+                };
+                raw.set_back_face_stencil(Some(&back_desc));
+            }
+            pso::StencilTest::Off => {}
+        }
+
+        Some(raw)
     }
 }
 

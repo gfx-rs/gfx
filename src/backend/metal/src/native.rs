@@ -101,32 +101,6 @@ pub struct StencilState<T> {
     pub back_write_mask: T,
 }
 
-#[derive(Clone, Debug)]
-pub struct DepthStencilState {
-    pub depth_stencil_desc: Option<pso::DepthStencilDesc>,
-    pub depth_stencil_desc_raw: Option<metal::DepthStencilDescriptor>,
-    pub depth_stencil_static: Option<metal::DepthStencilState>,
-    pub stencil: StencilState<pso::State<pso::StencilValue>>,
-}
-
-impl Default for DepthStencilState {
-    fn default() -> Self {
-        DepthStencilState {
-            depth_stencil_desc: None,
-            depth_stencil_desc_raw: None,
-            depth_stencil_static: None,
-            stencil: StencilState::<pso::State<pso::StencilValue>> {
-                front_reference: pso::State::Static(0),
-                back_reference: pso::State::Static(0),
-                front_read_mask: pso::State::Static(!0),
-                back_read_mask: pso::State::Static(!0),
-                front_write_mask: pso::State::Static(!0),
-                back_write_mask: pso::State::Static(!0),
-            }
-        }
-    }
-}
-
 pub type VertexBufferMap = FastHashMap<(pso::BufferIndex, pso::ElemOffset), pso::VertexBufferDesc>;
 
 #[derive(Debug)]
@@ -139,7 +113,7 @@ pub struct GraphicsPipeline {
     pub(crate) primitive_type: metal::MTLPrimitiveType,
     pub(crate) attribute_buffer_index: u32,
     pub(crate) rasterizer_state: Option<RasterizerState>,
-    pub(crate) depth_stencil_state: DepthStencilState,
+    pub(crate) depth_stencil_desc: pso::DepthStencilDesc,
     pub(crate) baked_states: pso::BakedStates,
     /// The mapping of additional vertex buffer bindings over the original ones.
     /// This is needed because Vulkan allows attribute offsets to exceed the strides,
@@ -147,7 +121,7 @@ pub struct GraphicsPipeline {
     /// adjusted offsets to cover this use case.
     pub(crate) vertex_buffer_map: VertexBufferMap,
     /// Tracked attachment formats for figuring (roughly) renderpass compatibility.
-    pub(crate) attachment_formats: Vec<Option<Format>>,
+    pub(crate) attachment_formats: SmallVec<[Option<Format>; 8]>,
 }
 
 unsafe impl Send for GraphicsPipeline {}
