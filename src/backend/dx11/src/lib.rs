@@ -272,34 +272,115 @@ impl hal::Instance for Instance {
             };
 
             let limits = hal::Limits {
-                max_texture_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
-                max_patch_size: 0, // TODO
-                max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
+                max_1d_texture_size: d3d11::D3D11_REQ_TEXTURE1D_U_DIMENSION,
+                max_2d_texture_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION,
+                max_3d_texture_size: d3d11::D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION,
+                max_cube_texture_size: d3d11::D3D11_REQ_TEXTURECUBE_DIMENSION,
+                max_array_layers: 0,
+                max_texel_buffer_elements: 0,
+                max_uniform_buffer_range: 0,
+                max_storage_buffer_range: 0,
+                max_push_constant_size: 0,
+                max_memory_allocation_count: 0,
+                max_sampler_count: 0,
+                buffer_granularity: 0,
+                sparse_address_space_size: 0,
+                max_bound_descriptor_sets: 0,
+                max_samplers_per_stage: 0,
+                max_uniform_buffers_per_stage: 0,
+                max_storage_buffers_per_stage: 0,
+                max_sampled_images_per_stage: 0,
+                max_storage_images_per_stage: 0,
+                max_input_attachments_per_stage: 0,
+                max_resources_per_stage: 0,
+                max_samplers_per_pipeline: 0,
+                max_uniform_buffers_per_pipeline: 0,
+                max_dynamic_uniform_buffers_per_pipeline: 0,
+                max_storage_buffers_per_pipeline: 0,
+                max_dynamic_storage_buffers_per_pipeline: 0,
+                max_sampled_images_per_pipeline: 0,
+                max_storage_images_per_pipeline: 0,
+                max_input_attachments_per_pipeline: 0,
+                max_vertex_input_attribute_offset: 255, // TODO
+                max_vertex_input_attributes: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
+                max_vertex_input_binding_stride: d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES,
+                max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT, // TODO: verify same as attributes
+                max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT, // TODO
+                max_generation_level: 0,
+                max_patch_size: 0,
+                max_tesselation_control_input_components_per_vertex: 0,
+                max_tesselation_control_output_components_per_vertex: 0,
+                max_tesselation_control_output_components_per_patch: 0,
+                max_tesselation_control_output_components_total: 0,
+                max_tesselation_evaluation_input_components: 0,
+                max_tesselation_evaluation_output_components: 0,
+                max_geometry_shader_invocations: 0,
+                max_geometry_input_components: 0,
+                max_geometry_output_components: 0,
+                max_geometry_output_vertices: 0,
+                max_geometry_output_components_total: 0,
+                max_fragment_input_components: 0,
+                max_fragment_output_attachments: 0,
+                max_fragment_output_attachment_dual_src: 0,
+                max_fragment_output_resources: 0,
+                max_compute_shared_memory_size: 0,
                 max_compute_group_count: [
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_Z
                 ],
+                max_compute_group_invocations: 0,
                 max_compute_group_size: [
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
                     1,
                     1
                 ], // TODO
-                max_vertex_input_attribute_offset: 255, // TODO
-                max_vertex_input_attributes: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
-                max_vertex_input_binding_stride: d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
-                max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _, // TODO: verify same as attributes
-                max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _, // TODO
-                min_buffer_copy_offset_alignment: 1,    // TODO
-                min_buffer_copy_pitch_alignment: 1,     // TODO
+                sub_pixel_precision_bits: 0,
+                sub_texel_precision_bits: 0,
+                mipmap_precision_bits: 0,
+                max_draw_index_value: 0,
+                max_draw_indirect_count: 0,
+                max_sampler_lod_bias: 0.0,
+                max_sampler_anisotropy: 0.0,
+                max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE,
+                max_viewport_dimensions: [],
+                viewport_bounds_range: (),
+                viewport_sub_pixel_bits: 0,
+                min_memory_map_alignment: 0,
                 min_texel_buffer_offset_alignment: 1,   // TODO
                 min_uniform_buffer_offset_alignment: 16, // TODO: verify
                 min_storage_buffer_offset_alignment: 1, // TODO
-                framebuffer_color_samples_count: 1,     // TODO
-                framebuffer_depth_samples_count: 1,     // TODO
-                framebuffer_stencil_samples_count: 1,   // TODO
-                max_color_attachments: 1,               // TODO
-                non_coherent_atom_size: 0,              // TODO
+                texel_offset_bounds: (),
+                texel_gather_offset_bounds: (),
+                interpolation_offset_bounds: (),
+                sub_pixel_interpolation_offset_bits: 0,
+                max_framebuffer_dimensions: [],
+                framebuffer_color_sample_counts: 1,     // TODO
+                framebuffer_depth_sample_counts: 1,     // TODO
+                framebuffer_stencil_sample_counts: 1,   // TODO
+                framebuffer_none_sample_counts: 0,
+                max_subpass_color_attachments: 1,       // TODO
+                sampled_image_color_sample_counts: 0,
+                sampled_image_integer_sample_counts: 0,
+                sampled_image_depth_sample_counts: 0,
+                sampled_image_stencil_sample_counts: 0,
+                storage_image_sample_counts: 0,
+                max_sample_mask_words: 0,
+                all_compute_and_graphics_support_timestamps: false,
+                timestamp_precision: 0.0,
+                max_clip_distances: 0,
+                max_cull_distances: 0,
+                max_clip_cull_distances_total: 0,
+                discrete_queue_priorities: 0,
+                point_size_range: (),
+                line_width_range: (),
+                point_size_granularity: 0.0,
+                line_width_granularity: 0.0,
+                is_strict_lines: false,
+                is_standard_sampler_locations: false,
+                optimal_buffer_copy_offset_alignment: 1,    // TODO
+                optimal_buffer_copy_pitch_alignment: 1,     // TODO
+                non_coherent_atom_size: 0,
             };
 
             let features = get_features(device.clone(), feature_level);

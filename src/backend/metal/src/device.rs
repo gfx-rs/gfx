@@ -338,30 +338,106 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn limits(&self) -> hal::Limits {
         hal::Limits {
-            max_texture_size: 4096, // TODO: feature set
-            max_patch_size: 0, // No tessellation
-            max_viewports: 1,
-
-            min_buffer_copy_offset_alignment: self.private_caps.buffer_alignment,
-            min_buffer_copy_pitch_alignment: 4,
-            min_texel_buffer_offset_alignment: self.private_caps.buffer_alignment,
-            min_uniform_buffer_offset_alignment: self.private_caps.buffer_alignment,
-            min_storage_buffer_offset_alignment: self.private_caps.buffer_alignment,
-
-            max_compute_group_count: [16; 3], // TODO
-            max_compute_group_size: [64; 3], // TODO
-
+            max_1d_texture_size: 4096, // TODO: feature set
+            max_2d_texture_size: 4096,
+            max_3d_texture_size: 2048,
+            max_cube_texture_size: 2048,
+            max_array_layers: 2048,
+            max_texel_buffer_elements: 0,
+            max_uniform_buffer_range: 0,
+            max_storage_buffer_range: 0,
+            max_push_constant_size: 0,
+            max_memory_allocation_count: 0,
+            max_sampler_count: 0,
+            buffer_granularity: 0,
+            sparse_address_space_size: 0,
+            max_bound_descriptor_sets: 0,
+            max_samplers_per_stage: 0,
+            max_uniform_buffers_per_stage: 0,
+            max_storage_buffers_per_stage: 0,
+            max_sampled_images_per_stage: 0,
+            max_storage_images_per_stage: 0,
+            max_input_attachments_per_stage: 0,
+            max_resources_per_stage: 0,
+            max_samplers_per_pipeline: 0,
+            max_uniform_buffers_per_pipeline: 0,
+            max_dynamic_uniform_buffers_per_pipeline: 0,
+            max_storage_buffers_per_pipeline: 0,
+            max_dynamic_storage_buffers_per_pipeline: 0,
+            max_sampled_images_per_pipeline: 0,
+            max_storage_images_per_pipeline: 0,
+            max_input_attachments_per_pipeline: 0,
             max_vertex_input_attributes: 31,
             max_vertex_input_bindings: 31,
             max_vertex_input_attribute_offset: 255, // TODO
             max_vertex_input_binding_stride: 256, // TODO
             max_vertex_output_components: 16, // TODO
-
-            framebuffer_color_samples_count: 0b101, // TODO
-            framebuffer_depth_samples_count: 0b101, // TODO
-            framebuffer_stencil_samples_count: 0b101, // TODO
-            max_color_attachments: 1, // TODO
-
+            max_generation_level: 0,
+            max_patch_size: 0, // No tessellation
+            max_tesselation_control_input_components_per_vertex: 0,
+            max_tesselation_control_output_components_per_vertex: 0,
+            max_tesselation_control_output_components_per_patch: 0,
+            max_tesselation_control_output_components_total: 0,
+            max_tesselation_evaluation_input_components: 0,
+            max_tesselation_evaluation_output_components: 0,
+            max_geometry_shader_invocations: 0,
+            max_geometry_input_components: 0,
+            max_geometry_output_components: 0,
+            max_geometry_output_vertices: 0,
+            max_geometry_output_components_total: 0,
+            max_fragment_input_components: 0,
+            max_fragment_output_attachments: 0,
+            max_fragment_output_attachment_dual_src: 0,
+            max_fragment_output_resources: 0,
+            max_compute_shared_memory_size: 0,
+            max_compute_group_count: [16; 3], // TODO
+            max_compute_group_invocations: 0,
+            max_compute_group_size: [64; 3], // TODO
+            sub_pixel_precision_bits: 0,
+            sub_texel_precision_bits: 0,
+            mipmap_precision_bits: 0,
+            max_draw_index_value: 0,
+            max_draw_indirect_count: 0,
+            max_sampler_lod_bias: 0.0,
+            max_sampler_anisotropy: 0.0,
+            max_viewports: 1, // TODO
+            max_viewport_dimensions: [],
+            viewport_bounds_range: (),
+            viewport_sub_pixel_bits: 0,
+            min_memory_map_alignment: 0,
+            min_texel_buffer_offset_alignment: self.private_caps.buffer_alignment,
+            min_uniform_buffer_offset_alignment: self.private_caps.buffer_alignment,
+            min_storage_buffer_offset_alignment: self.private_caps.buffer_alignment,
+            texel_offset_bounds: (),
+            texel_gather_offset_bounds: (),
+            interpolation_offset_bounds: (),
+            sub_pixel_interpolation_offset_bits: 0,
+            max_framebuffer_dimensions: [],
+            framebuffer_color_sample_counts: 0b101, // TODO
+            framebuffer_depth_sample_counts: 0b101, // TODO
+            framebuffer_stencil_sample_counts: 0b101, // TODO
+            framebuffer_none_sample_counts: 0,
+            max_subpass_color_attachments: 1, // TODO
+            sampled_image_color_sample_counts: 0,
+            sampled_image_integer_sample_counts: 0,
+            sampled_image_depth_sample_counts: 0,
+            sampled_image_stencil_sample_counts: 0,
+            storage_image_sample_counts: 0,
+            max_sample_mask_words: 0,
+            all_compute_and_graphics_support_timestamps: false,
+            timestamp_precision: 0.0,
+            max_clip_distances: 0,
+            max_cull_distances: 0,
+            max_clip_cull_distances_total: 0,
+            discrete_queue_priorities: 0,
+            point_size_range: 0.0..=511.0,
+            line_width_range: (),
+            point_size_granularity: 0.0,
+            line_width_granularity: 0.0,
+            is_strict_lines: false,
+            is_standard_sampler_locations: false,
+            optimal_buffer_copy_offset_alignment: self.private_caps.buffer_alignment,
+            optimal_buffer_copy_pitch_alignment: 4,
             // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
             // and those need to operate on sizes being multiples of 4.
             non_coherent_atom_size: 4,

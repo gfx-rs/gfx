@@ -39,6 +39,7 @@ pub use self::window::{
     Backbuffer, SwapImageIndex, FrameSync, PresentMode,
     Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,
 };
+use std::ops::RangeInclusive;
 
 pub mod adapter;
 pub mod buffer;
@@ -230,48 +231,208 @@ bitflags! {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
     /// Maximum supported texture size.
-    pub max_texture_size: usize,
+    pub max_1d_texture_size: u32,
+    /// 
+    pub max_2d_texture_size: u32,
+    /// 
+    pub max_3d_texture_size: u32,
+    /// 
+    pub max_cube_texture_size: u32,
+    /// 
+    pub max_array_layers: u32,
+    /// Maximum number of texels in a texel buffer
+    pub max_texel_buffer_elements: u32,
+    /// 
+    pub max_uniform_buffer_range: u32,
+    /// 
+    pub max_storage_buffer_range: u32,
+    /// 
+    pub max_push_constant_size: u32,
+    /// 
+    pub max_memory_allocation_count: u32,
+    /// 
+    pub max_sampler_count: u32,
+    /// 
+    pub buffer_granularity: usize,
+    /// 
+    pub sparse_address_space_size: usize,
+    /// 
+    pub max_bound_descriptor_sets: u32,
+    /// 
+    pub max_samplers_per_stage: u32,
+    /// 
+    pub max_uniform_buffers_per_stage: u32,
+    /// 
+    pub max_storage_buffers_per_stage: u32,
+    /// 
+    pub max_sampled_images_per_stage: u32,
+    /// 
+    pub max_storage_images_per_stage: u32,
+    /// 
+    pub max_input_attachments_per_stage: u32,
+    /// 
+    pub max_resources_per_stage: u32,
+    /// 
+    pub max_samplers_per_pipeline: u32,
+    /// 
+    pub max_uniform_buffers_per_pipeline: u32,
+    /// 
+    pub max_dynamic_uniform_buffers_per_pipeline: u32,
+    /// 
+    pub max_storage_buffers_per_pipeline: u32,
+    /// 
+    pub max_dynamic_storage_buffers_per_pipeline: u32,
+    /// 
+    pub max_sampled_images_per_pipeline: u32,
+    /// 
+    pub max_storage_images_per_pipeline: u32,
+    /// 
+    pub max_input_attachments_per_pipeline: u32,
+    /// Maximum number of vertex input attributes that can be specified for a graphics pipeline.
+    pub max_vertex_input_attributes: u32,
+    /// Maximum number of vertex buffers that can be specified for providing vertex attributes to a graphics pipeline.
+    pub max_vertex_input_bindings: u32,
+    /// Maximum vertex input attribute offset that can be added to the vertex input binding stride.
+    pub max_vertex_input_attribute_offset: u32,
+    /// Maximum vertex input binding stride that can be specified in a vertex input binding.
+    pub max_vertex_input_binding_stride: u32,
+    /// Maximum number of components of output variables which can be output by a vertex shader.
+    pub max_vertex_output_components: u32,
+    /// 
+    pub max_generation_level: u32,
     /// Maximum number of vertices for each patch.
     pub max_patch_size: PatchSize,
-    /// Maximum number of viewports.
-    pub max_viewports: usize,
-    ///
+    /// 
+    pub max_tesselation_control_input_components_per_vertex: u32,
+    /// 
+    pub max_tesselation_control_output_components_per_vertex: u32,
+    /// 
+    pub max_tesselation_control_output_components_per_patch: u32,
+    /// 
+    pub max_tesselation_control_output_components_total: u32,
+    /// 
+    pub max_tesselation_evaluation_input_components: u32,
+    /// 
+    pub max_tesselation_evaluation_output_components: u32,
+    /// 
+    pub max_geometry_shader_invocations: u32,
+    /// 
+    pub max_geometry_input_components: u32,
+    /// 
+    pub max_geometry_output_components: u32,
+    /// 
+    pub max_geometry_output_vertices: u32,
+    /// 
+    pub max_geometry_output_components_total: u32,
+    /// 
+    pub max_fragment_input_components: u32,
+    /// 
+    pub max_fragment_output_attachments: u32,
+    /// 
+    pub max_fragment_output_attachment_dual_src: u32,
+    /// 
+    pub max_fragment_output_resources: u32,
+    /// 
+    pub max_compute_shared_memory_size: u32,
+    /// 
     pub max_compute_group_count: WorkGroupCount,
-    ///
+    /// 
+    pub max_compute_group_invocations: u32,
+    /// 
     pub max_compute_group_size: [u32; 3],
-
-    /// Maximum number of vertex input attributes that can be specified for a graphics pipeline.
-    pub max_vertex_input_attributes: usize,
-    /// Maximum number of vertex buffers that can be specified for providing vertex attributes to a graphics pipeline.
-    pub max_vertex_input_bindings: usize,
-    /// Maximum vertex input attribute offset that can be added to the vertex input binding stride.
-    pub max_vertex_input_attribute_offset: usize,
-    /// Maximum vertex input binding stride that can be specified in a vertex input binding.
-    pub max_vertex_input_binding_stride: usize,
-    /// Maximum number of components of output variables which can be output by a vertex shader.
-    pub max_vertex_output_components: usize,
-
-    /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
-    pub min_buffer_copy_offset_alignment: buffer::Offset,
-    /// The alignment of the row pitch of the texture data stored in a buffer that is
-    /// used in a GPU copy operation, in bytes, non-zero.
-    pub min_buffer_copy_pitch_alignment: buffer::Offset,
-    /// The alignment of the start of buffer used as a texel buffer, in bytes, non-zero.
+    /// 
+    pub sub_pixel_precision_bits: u32,
+    /// 
+    pub sub_texel_precision_bits: u32,
+    /// 
+    pub mipmap_precision_bits: u32,
+    /// 
+    pub max_draw_index_value: u32,
+    /// 
+    pub max_draw_indirect_count: u32,
+    /// 
+    pub max_sampler_lod_bias: f32,
+    /// 
+    pub max_sampler_anisotropy: f32,
+    /// Maximum number of viewports.
+    pub max_viewports: u32,
+    /// 
+    pub max_viewport_dimensions: [u32; 2],
+    /// 
+    pub viewport_bounds_range: RangeInclusive<f32>,
+    /// 
+    pub viewport_sub_pixel_bits: u32,
+    /// 
+    pub min_memory_map_alignment: usize,
+    /// The minimum alignment of the start of buffer used as a texel buffer, in bytes, non-zero.
     pub min_texel_buffer_offset_alignment: buffer::Offset,
-    /// The alignment of the start of buffer used for uniform buffer updates, in bytes, non-zero.
+    /// The minimum alignment of the start of buffer used as a uniform buffer, in bytes, non-zero.
     pub min_uniform_buffer_offset_alignment: buffer::Offset,
-    /// The alignment of the start of buffer used as a storage buffer, in bytes, non-zero.
+    /// The minimum alignment of the offset of buffer used as a storage buffer, in bytes, non-zero.
     pub min_storage_buffer_offset_alignment: buffer::Offset,
-    /// Number of samples supported for color attachments of framebuffers (floating/fixed point).
-    pub framebuffer_color_samples_count: image::NumSamples,
+    /// 
+    pub texel_offset_bounds: RangeInclusive<i32>,
+    /// 
+    pub texel_gather_offset_bounds: RangeInclusive<i32>,
+    /// 
+    pub interpolation_offset_bounds: RangeInclusive<f32>,
+    /// 
+    pub sub_pixel_interpolation_offset_bits: u32,
+    /// 
+    pub max_framebuffer_dimensions: [u32; 3],
+    /// Number of samples supported for color attachments of framebuffers.
+    pub framebuffer_color_sample_counts: image::NumSamples,
     /// Number of samples supported for depth attachments of framebuffers.
-    pub framebuffer_depth_samples_count: image::NumSamples,
+    pub framebuffer_depth_sample_counts: image::NumSamples,
     /// Number of samples supported for stencil attachments of framebuffers.
-    pub framebuffer_stencil_samples_count: image::NumSamples,
+    pub framebuffer_stencil_sample_counts: image::NumSamples,
+    /// Number of samples supported for framebuffers with no attachments.
+    pub framebuffer_none_sample_counts: image::NumSamples,
     /// Maximum number of color attachments that can be used by a subpass in a render pass.
-    pub max_color_attachments: usize,
+    pub max_subpass_color_attachments: u32,
+    /// 
+    pub sampled_image_color_sample_counts: image::NumSamples,
+    /// 
+    pub sampled_image_integer_sample_counts: image::NumSamples,
+    /// 
+    pub sampled_image_depth_sample_counts: image::NumSamples,
+    /// 
+    pub sampled_image_stencil_sample_counts: image::NumSamples,
+    /// 
+    pub storage_image_sample_counts: image::NumSamples,
+    /// 
+    pub max_sample_mask_words: u32,
+    /// 
+    pub all_compute_and_graphics_support_timestamps: bool,
+    /// 
+    pub timestamp_precision: f32,
+    /// 
+    pub max_clip_distances: u32,
+    /// 
+    pub max_cull_distances: u32,
+    /// 
+    pub max_clip_cull_distances_total: u32,
+    /// 
+    pub discrete_queue_priorities: u32,
+    /// 
+    pub point_size_range: RangeInclusive<f32>,
+    /// 
+    pub line_width_range: RangeInclusive<f32>,
+    /// 
+    pub point_size_granularity: f32,
+    /// 
+    pub line_width_granularity: f32,
+    /// 
+    pub is_strict_lines: bool,
+    /// 
+    pub is_standard_sampler_locations: bool,
+    /// The optimal alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
+    pub optimal_buffer_copy_offset_alignment: buffer::Offset,
+    /// The optimal alignment of the row pitch of the texture data stored in a buffer that is
+    /// used in a GPU copy operation, in bytes, non-zero.
+    pub optimal_buffer_copy_pitch_alignment: buffer::Offset,
     /// Size and alignment in bytes that bounds concurrent access to host-mapped device memory.
-    pub non_coherent_atom_size: usize,
+    pub non_coherent_atom_size: u32,
 }
 
 /// Describes the type of geometric primitives,
