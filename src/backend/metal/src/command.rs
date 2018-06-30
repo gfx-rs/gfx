@@ -842,7 +842,9 @@ impl CommandSink {
                     //Note: the original descriptor belongs to the framebuffer,
                     // and will me mutated afterwards.
                     desc: unsafe {
-                        msg_send![descriptor, copy]
+                        let desc: metal::RenderPassDescriptor = msg_send![descriptor, copy];
+                        msg_send![desc.as_ptr(), retain];
+                        desc
                     },
                     commands: init_commands.map(soft::RenderCommand::own).collect(),
                 });
