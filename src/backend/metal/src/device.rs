@@ -1365,6 +1365,7 @@ impl hal::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
+        debug!("write_descriptor_sets");
         for write in write_iter {
             match *write.set {
                 n::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
@@ -1373,16 +1374,15 @@ impl hal::Device<Backend> for Device {
                     let mut pool = pool.write().unwrap();
 
                     for descriptor in write.descriptors {
-                        let mut layout;
                         let mut sampler_index;
                         let mut texture_index;
                         let mut buffer_index;
-                        loop {
+                        let layout = loop {
                             sampler_index = sampler_range.start as usize + array_offset;
                             texture_index = texture_range.start as usize + array_offset;
                             buffer_index = buffer_range.start as usize + array_offset;
                             //TODO: can pre-compute this
-                            layout = layouts.iter()
+                            let layout = layouts.iter()
                                 .find(|layout| {
                                     if layout.binding == binding {
                                         true
@@ -1394,22 +1394,27 @@ impl hal::Device<Backend> for Device {
                                 })
                                 .expect("invalid descriptor set binding index");
                             if array_offset < layout.count {
-                                break;
+                                break layout;
                             }
                             array_offset = 0;
                             binding += 1;
-                        }
+                        };
+                        trace!("\t{:?} at sampler {}, texture {}, buffer {}",
+                            layout.ty, sampler_index, texture_index, buffer_index);
 
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
+                                assert!(!layout.immutable_samplers);
                                 pool.samplers[sampler_index] = Some(SamplerPtr(sampler.0.as_ptr()));
                             }
-                            pso::Descriptor::Image(image, layout) => {
-                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), layout));
+                            pso::Descriptor::Image(image, il) => {
+                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), il));
                             }
-                            pso::Descriptor::CombinedImageSampler(image, layout, sampler) => {
-                                pool.samplers[sampler_index] = Some(SamplerPtr(sampler.0.as_ptr()));
-                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), layout));
+                            pso::Descriptor::CombinedImageSampler(image, il, sampler) => {
+                                if !layout.immutable_samplers {
+                                    pool.samplers[sampler_index] = Some(SamplerPtr(sampler.0.as_ptr()));
+                                }
+                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), il));
                             }
                             pso::Descriptor::UniformTexelBuffer(view) |
                             pso::Descriptor::StorageTexelBuffer(view) => {
@@ -1493,6 +1498,7 @@ impl hal::Device<Backend> for Device {
     fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
         let (storage, cache) = MemoryTypes::describe(memory_type.0);
         let device = self.shared.device.lock().unwrap();
+        debug!("allocating memory type {:?} of size {}", memory_type, size);
 
         // Heaps cannot be used for CPU coherent resources
         //TEMP: MacOS supports Private only, iOS and tvOS can do private/shared
@@ -1508,13 +1514,18 @@ impl hal::Device<Backend> for Device {
         } else {
             let options = conv::resource_options_from_storage_and_cache(storage, cache);
             let cpu_buffer = device.new_buffer(size, options);
+            debug!("\tbacked by cpu buffer {:?}", cpu_buffer.as_ptr());
             n::MemoryHeap::Public(memory_type, cpu_buffer)
         };
 
         Ok(n::Memory::new(heap, size))
     }
 
-    fn free_memory(&self, _memory: n::Memory) {
+    fn free_memory(&self, memory: n::Memory) {
+        debug!("freeing memory of size {}", memory.size);
+        if let n::MemoryHeap::Public(_, ref cpu_buffer) = memory.heap {
+            debug!("\tbacked by cpu buffer {:?}", cpu_buffer.as_ptr());
+        }
     }
 
     fn create_buffer(
@@ -1568,6 +1579,7 @@ impl hal::Device<Backend> for Device {
     fn bind_buffer_memory(
         &self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
+        debug!("mapping buffer of size {} at offset {}", buffer.size, offset);
         let (raw, res_options, range) = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = conv::resource_options_from_storage_and_cache(
@@ -1585,6 +1597,7 @@ impl hal::Device<Backend> for Device {
                 (raw, resource_options, 0 .. buffer.size) //TODO?
             }
             n::MemoryHeap::Public(mt, ref cpu_buffer) => {
+                debug!("\tmapped to public heap with address {:?}", cpu_buffer.as_ptr());
                 let (storage, cache) = MemoryTypes::describe(mt.0);
                 let options = conv::resource_options_from_storage_and_cache(storage, cache);
                 (cpu_buffer.clone(), options, offset .. offset + buffer.size)
@@ -1608,7 +1621,8 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn destroy_buffer(&self, _buffer: n::Buffer) {
+    fn destroy_buffer(&self, buffer: n::Buffer) {
+        debug!("destroing buffer {:?} occupying memory {:?}", buffer.raw.as_ptr(), buffer.range);
     }
 
     fn create_buffer_view<R: RangeArg<u64>>(

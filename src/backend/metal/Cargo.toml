@@ -19,7 +19,6 @@ auto-capture = []
 name = "gfx_backend_metal"
 
 [dependencies]
-derivative = "1"
 gfx-hal = { path = "../../hal", version = "0.1" }
 bitflags = "1.0"
 log = "0.4"

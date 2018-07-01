@@ -297,15 +297,20 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     Self::count_bindings(layout.ty, layout.count,
                         &mut total_samplers, &mut total_textures, &mut total_buffers);
                 }
+                debug!("allocating {} sampler, {} texture, and {} buffer sets",
+                    total_samplers, total_textures, total_buffers);
 
                 // step[2]: try to allocate the ranges from the pool
                 let mut inner = pool_inner.write().unwrap();
                 let sampler_range = if total_samplers != 0 {
                     match inner.sampler_alloc.allocate_range(total_samplers as _) {
-                        Some(range) => range,
-                        None => {
-                            warn!("Not enough samplers for {}", total_samplers);
-                            return Err(pso::AllocationError::FragmentedPool);
+                        Ok(range) => range,
+                        Err(e) => {
+                            return Err(if e.fragmented_free_length >= total_samplers as u32 {
+                                pso::AllocationError::FragmentedPool
+                            } else {
+                                pso::AllocationError::OutOfPoolMemory
+                            });
                         }
                     }
                 } else {
@@ -313,13 +318,16 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 };
                 let texture_range = if total_textures != 0 {
                     match inner.texture_alloc.allocate_range(total_textures as _) {
-                        Some(range) => range,
-                        None => {
+                        Ok(range) => range,
+                        Err(e) => {
                             if sampler_range.end != 0 {
                                 inner.sampler_alloc.free_range(sampler_range);
                             }
-                            warn!("Not enough images for {}", total_textures);
-                            return Err(pso::AllocationError::FragmentedPool);
+                            return Err(if e.fragmented_free_length >= total_samplers as u32 {
+                                pso::AllocationError::FragmentedPool
+                            } else {
+                                pso::AllocationError::OutOfPoolMemory
+                            });
                         }
                     }
                 } else {
@@ -327,16 +335,19 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 };
                 let buffer_range = if total_buffers != 0 {
                     match inner.buffer_alloc.allocate_range(total_buffers as _) {
-                        Some(range) => range,
-                        None => {
+                        Ok(range) => range,
+                        Err(e) => {
                             if sampler_range.end != 0 {
                                 inner.sampler_alloc.free_range(sampler_range);
                             }
                             if texture_range.end != 0 {
                                 inner.texture_alloc.free_range(texture_range);
                             }
-                            warn!("Not enough buffers for {}", total_buffers);
-                            return Err(pso::AllocationError::FragmentedPool);
+                            return Err(if e.fragmented_free_length >= total_samplers as u32 {
+                                pso::AllocationError::FragmentedPool
+                            } else {
+                                pso::AllocationError::OutOfPoolMemory
+                            });
                         }
                     }
                 } else {
@@ -360,6 +371,8 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     let (mut tx_temp, mut bf_temp) = (0, 0);
                     Self::count_bindings(layout.ty, layout.count, &mut sampler_offset, &mut tx_temp, &mut bf_temp);
                 }
+                assert_eq!(immutable_sampler_offset, immutable_samplers.len());
+                debug!("\tassigning {} immutable_samplers", immutable_samplers.len());
 
                 Ok(DescriptorSet::Emulated {
                     pool: Arc::clone(pool_inner),
@@ -374,14 +387,15 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     &DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
-                range_allocator.allocate_range(encoder.encoded_length()).map(|range| {
-                    DescriptorSet::ArgumentBuffer {
+                match range_allocator.allocate_range(encoder.encoded_length()) {
+                    Ok(range) => Ok(DescriptorSet::ArgumentBuffer {
                         raw: raw.clone(),
                         offset: range.start,
                         encoder: encoder.clone(),
                         stage_flags,
-                    }
-                }).ok_or(pso::AllocationError::OutOfPoolMemory)
+                    }),
+                    Err(_) => Err(pso::AllocationError::OutOfPoolMemory),
+                }
             }
         }
     }
@@ -396,6 +410,8 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 for descriptor_set in descriptor_sets {
                     match descriptor_set {
                         DescriptorSet::Emulated { sampler_range, texture_range, buffer_range, .. } => {
+                            debug!("freeing {:?} samplers, {:?} textures, and {:?} buffers",
+                                sampler_range, texture_range, buffer_range);
                             for sampler in &mut inner.samplers[sampler_range.start as usize .. sampler_range.end as usize] {
                                 *sampler = None;
                             }
