@@ -132,6 +132,7 @@ unsafe impl Sync for Device {}
 impl Drop for Device {
     fn drop(&mut self) {
         if cfg!(feature = "auto-capture") {
+            println!("Metal capture stop");
             let shared_capture_manager = CaptureManager::shared();
             if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
                 default_capture_scope.end_scope();
@@ -239,6 +240,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let family = *families[0].0;
 
         if cfg!(feature = "auto-capture") {
+            println!("Metal capture start");
             let device = self.shared.device.lock().unwrap();
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&*device);

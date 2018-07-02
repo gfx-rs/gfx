@@ -569,6 +569,11 @@ enum CommandSink {
     },
 }
 
+enum PassDoor<'a> {
+    Open,
+    Closed { label: &'a str },
+}
+
 /// A helper temporary object that consumes state-setting commands only
 /// applicable to a render pass currently encoded.
 enum PreRender<'a> {
@@ -756,7 +761,7 @@ impl CommandSink {
 
     fn begin_render_pass<'a, I>(
         &mut self,
-        keep_open: bool,
+        door: PassDoor,
         descriptor: &'a metal::RenderPassDescriptorRef,
         init_commands: I,
     ) where
@@ -771,14 +776,21 @@ impl CommandSink {
                 for command in init_commands {
                     exec_render(encoder, command);
                 }
-                if keep_open {
-                    *encoder_state = EncoderState::Render(encoder.to_owned());
-                } else {
-                    encoder.end_encoding();
+                match door {
+                    PassDoor::Open => {
+                        *encoder_state = EncoderState::Render(encoder.to_owned())
+                    }
+                    PassDoor::Closed { label } => {
+                        encoder.set_label(label);
+                        encoder.end_encoding();
+                    }
                 }
             }
             CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
-                *is_encoding = keep_open;
+                *is_encoding = match door {
+                    PassDoor::Open => true,
+                    PassDoor::Closed {..} => false,
+                };
                 passes.push(soft::Pass::Render {
                     //Note: the original descriptor belongs to the framebuffer,
                     // and will me mutated afterwards.
@@ -795,6 +807,7 @@ impl CommandSink {
 
     fn begin_compute_pass<'a, I>(
         &mut self,
+        door: PassDoor,
         init_commands: I,
     ) where
         I: Iterator<Item = soft::ComputeCommand<&'a soft::Own>>,
@@ -808,10 +821,21 @@ impl CommandSink {
                 for command in init_commands {
                     exec_compute(encoder, command);
                 }
-                *encoder_state = EncoderState::Compute(encoder.to_owned());
+                match door {
+                    PassDoor::Open => {
+                        *encoder_state = EncoderState::Compute(encoder.to_owned());
+                    }
+                    PassDoor::Closed { label } => {
+                        encoder.set_label(label);
+                        encoder.end_encoding();
+                    }
+                }
             }
             CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
-                *is_encoding = true;
+                *is_encoding = match door {
+                    PassDoor::Open => true,
+                    PassDoor::Closed {..} => false,
+                };
                 passes.push(soft::Pass::Compute(
                     init_commands.map(soft::ComputeCommand::own).collect(),
                 ));
@@ -1233,9 +1257,11 @@ impl RawCommandQueue<Backend> for CommandQueue {
             })
             .collect::<Vec<_>>();
         let signal_block = if !system_semaphores.is_empty() {
+            let arc = Arc::new(system_semaphores);
             //Note: careful with those `ConcreteBlock::copy()` calls!
             Some(ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                for semaphore in &system_semaphores {
+                let semaphores = Arc::clone(&arc);
+                for semaphore in semaphores.iter() {
                     semaphore.signal();
                 }
             }).copy())
@@ -1276,6 +1302,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     num_deferred += 1;
                     trace!("\tdeferred with {} passes", passes.len());
                     temp_cmd_buffer = queue.raw.new_command_buffer_with_unretained_references();
+                    temp_cmd_buffer.set_label("deferred");
                     record_commands(&*temp_cmd_buffer, passes);
                     &*temp_cmd_buffer
                  }
@@ -1291,6 +1318,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         if let Some(ref fence) = fence {
             let command_buffer = queue.raw.new_command_buffer_with_unretained_references();
+            command_buffer.set_label("fence");
             let fence = Arc::clone(fence);
             let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                 *fence.mutex.lock().unwrap() = true;
@@ -1312,6 +1340,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         let queue = self.shared.queue.lock().unwrap();
         let command_buffer = queue.raw.new_command_buffer();
+        command_buffer.set_label("present");
 
         for (swapchain, index) in swapchains {
             debug!("presenting frame {}", index);
@@ -1556,8 +1585,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             },
         ];
 
-        inner.sink().begin_compute_pass(commands.iter().cloned());
-        inner.sink().stop_encoding();
+        inner.sink().begin_compute_pass(
+            PassDoor::Closed { label: "fill_buffer" },
+            commands.iter().cloned(),
+        );
     }
 
     fn update_buffer(
@@ -1574,6 +1605,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 data.len() as _,
                 metal::MTLResourceOptions::CPUCacheModeWriteCombined,
             );
+        src.set_label("update_buffer");
 
         let mut inner = self.inner.borrow_mut();
         {
@@ -1734,7 +1766,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                     sink.as_mut()
                         .unwrap()
-                        .begin_render_pass(false, descriptor, None.into_iter());
+                        .begin_render_pass(
+                            PassDoor::Closed { label: "clear_image" },
+                            descriptor,
+                            iter::empty(),
+                        );
                     // no actual pass body - everything is in the attachment clear operations
                 }
             }
@@ -2177,7 +2213,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             inner
                 .sink()
-                .begin_render_pass(false, &descriptor, commands);
+                .begin_render_pass(
+                    PassDoor::Closed { label: "blit_image" },
+                    &descriptor,
+                    commands,
+                );
         }
     }
 
@@ -2425,7 +2465,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         inner
             .sink()
-            .begin_render_pass(true, &*descriptor, init_commands);
+            .begin_render_pass(PassDoor::Open, &*descriptor, init_commands);
     }
 
     fn next_subpass(&mut self, _contents: com::SubpassContents) {
@@ -2829,7 +2869,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let sink = inner.sink();
         //TODO: re-use compute encoders
-        sink.begin_compute_pass(init_commands);
+        sink.begin_compute_pass(PassDoor::Open, init_commands);
         sink.compute_commands(iter::once(command));
         sink.stop_encoding();
     }
@@ -2846,7 +2886,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let sink = inner.sink();
         //TODO: re-use compute encoders
-        sink.begin_compute_pass(init_commands);
+        sink.begin_compute_pass(PassDoor::Open, init_commands);
         sink.compute_commands(iter::once(command));
         sink.stop_encoding();
     }
@@ -2924,8 +2964,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         if compute_commands.len() > 1 { // first is bind PSO
-            sink.begin_compute_pass(compute_commands.into_iter());
-            sink.stop_encoding();
+            sink.begin_compute_pass(
+                PassDoor::Closed { label: "copy_buffer" },
+                compute_commands.into_iter(),
+            );
         }
     }
 

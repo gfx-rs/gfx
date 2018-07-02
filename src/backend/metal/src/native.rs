@@ -303,7 +303,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 // step[2]: try to allocate the ranges from the pool
                 let mut inner = pool_inner.write().unwrap();
                 let sampler_range = if total_samplers != 0 {
-                    match inner.sampler_alloc.allocate_range(total_samplers as _) {
+                    match inner.sampler_alloc.allocate_range((total_samplers * 2) as _) {
                         Ok(range) => range,
                         Err(e) => {
                             return Err(if e.fragmented_free_length >= total_samplers as u32 {
@@ -317,7 +317,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     0 .. 0
                 };
                 let texture_range = if total_textures != 0 {
-                    match inner.texture_alloc.allocate_range(total_textures as _) {
+                    match inner.texture_alloc.allocate_range((total_textures * 2) as _) {
                         Ok(range) => range,
                         Err(e) => {
                             if sampler_range.end != 0 {
@@ -334,7 +334,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     0 .. 0
                 };
                 let buffer_range = if total_buffers != 0 {
-                    match inner.buffer_alloc.allocate_range(total_buffers as _) {
+                    match inner.buffer_alloc.allocate_range((total_buffers * 2) as _) {
                         Ok(range) => range,
                         Err(e) => {
                             if sampler_range.end != 0 {
