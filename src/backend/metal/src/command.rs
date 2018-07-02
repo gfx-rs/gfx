@@ -1257,11 +1257,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
             })
             .collect::<Vec<_>>();
         let signal_block = if !system_semaphores.is_empty() {
-            let arc = Arc::new(system_semaphores);
             //Note: careful with those `ConcreteBlock::copy()` calls!
             Some(ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                let semaphores = Arc::clone(&arc);
-                for semaphore in semaphores.iter() {
+                for semaphore in &system_semaphores {
                     semaphore.signal();
                 }
             }).copy())
@@ -1645,7 +1643,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             ref mut sink,
             ..
         } = *self.inner.borrow_mut();
+
         let clear_color = image.shader_channel.interpret(color);
+        let base_extent = image.kind.extent();
 
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
@@ -1737,9 +1737,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             for layer in layers {
                 for level in sub.levels.clone() {
-                    if image.extent.depth > 1 {
+                    if base_extent.depth > 1 {
                         assert_eq!(sub.layers.end, 1);
-                        let depth = image.extent.at_level(level).depth as u64;
+                        let depth = base_extent.at_level(level).depth as u64;
                         descriptor.set_render_target_array_length(depth);
                     } else if CLEAR_IMAGE_ARRAY {
                         descriptor.set_render_target_array_length(num_layers);
@@ -2020,8 +2020,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             debug_assert!(src.format_desc.aspects.contains(r.src_subresource.aspects));
             debug_assert!(dst.format_desc.aspects.contains(r.dst_subresource.aspects));
 
-            let se = src.extent.at_level(r.src_subresource.level);
-            let de = dst.extent.at_level(r.dst_subresource.level);
+            let se = src.kind.extent().at_level(r.src_subresource.level);
+            let de = dst.kind.extent().at_level(r.dst_subresource.level);
             //TODO: support 3D textures
             if se.depth != 1 || de.depth != 1 {
                 warn!("3D image blits are not supported properly yet: {:?} -> {:?}", se, de);
@@ -2149,7 +2149,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         for ((aspects, level), list) in vertices.drain() {
-            let ext = dst.extent.at_level(level);
+            let ext = dst.kind.extent().at_level(level);
 
             let extra = [
                 //Note: flipping Y coordinate of the destination here

@@ -132,7 +132,7 @@ unsafe impl Sync for Device {}
 impl Drop for Device {
     fn drop(&mut self) {
         if cfg!(feature = "auto-capture") {
-            println!("Metal capture stop");
+            info!("Metal capture stop");
             let shared_capture_manager = CaptureManager::shared();
             if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
                 default_capture_scope.end_scope();
@@ -240,7 +240,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let family = *families[0].0;
 
         if cfg!(feature = "auto-capture") {
-            println!("Metal capture start");
+            info!("Metal capture start");
             let device = self.shared.device.lock().unwrap();
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&*device);
@@ -1752,8 +1752,7 @@ impl hal::Device<Backend> for Device {
         Ok(n::UnboundImage {
             texture_desc: descriptor,
             format,
-            extent,
-            num_layers,
+            kind,
             mip_sizes,
             host_visible,
         })
@@ -1814,7 +1813,7 @@ impl hal::Device<Backend> for Device {
     fn get_image_subresource_footprint(
         &self, image: &n::Image, sub: image::Subresource
     ) -> image::SubresourceFootprint {
-        let num_layers = image.num_layers.unwrap_or(1) as buffer::Offset;
+        let num_layers = image.kind.num_layers() as buffer::Offset;
         let level_offset = (0 .. sub.level).fold(0, |offset, level| {
             let pitches = image.pitches(level);
             offset + num_layers * pitches[2]
@@ -1851,7 +1850,7 @@ impl hal::Device<Backend> for Device {
                     })
             },
             n::MemoryHeap::Public(memory_type, ref cpu_buffer) => {
-                let row_size = image.extent.width as u64 * (format_desc.bits as u64 / 8);
+                let row_size = image.kind.extent().width as u64 * (format_desc.bits as u64 / 8);
                 let stride = (row_size + STRIDE_MASK) & !STRIDE_MASK;
 
                 let (storage_mode, cache_mode) = MemoryTypes::describe(memory_type.0);
@@ -1871,8 +1870,7 @@ impl hal::Device<Backend> for Device {
 
         Ok(n::Image {
             raw,
-            extent: image.extent,
-            num_layers: image.num_layers,
+            kind: image.kind,
             format_desc,
             shader_channel: base.1.into(),
             mtl_format: match self.private_caps.map_format(image.format) {
@@ -1905,11 +1903,27 @@ impl hal::Device<Backend> for Device {
             },
         };
 
-        let view = if mtl_format == image.mtl_format && kind == image::ViewKind::D2 &&
-            swizzle == format::Swizzle::NO && image.num_layers.is_none()
+        let full_range = image::SubresourceRange {
+            aspects: image.format_desc.aspects,
+            levels: 0 .. image.raw.mipmap_level_count() as image::Level,
+            layers: 0 .. image.kind.num_layers(),
+        };
+        let view = if
+            mtl_format == image.mtl_format &&
+            //kind == image::ViewKind::D2 && //TODO: find a better way to check this
+            swizzle == format::Swizzle::NO &&
+            range == full_range &&
+            match (kind, image.kind) {
+                (image::ViewKind::D1, image::Kind::D1(..)) |
+                (image::ViewKind::D1Array, image::Kind::D1(..)) |
+                (image::ViewKind::D2, image::Kind::D2(..)) |
+                (image::ViewKind::D2Array, image::Kind::D2(..)) |
+                (image::ViewKind::D3, image::Kind::D3(..)) => true,
+                (_, _) => false, //TODO: expose more choices here?
+            }
         {
-            // Some images are marked as framebuffer-only, and we can't create aliases of them
-            //TODO: check more things?
+            // Some images are marked as framebuffer-only, and we can't create aliases of them.
+            // Also helps working around Metal bugs with aliased array textures.
             image.raw.clone()
         } else {
             image.raw.new_texture_view_from_slice(

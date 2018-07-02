@@ -140,8 +140,7 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Debug)]
 pub struct Image {
     pub(crate) raw: metal::Texture,
-    pub(crate) extent: image::Extent,
-    pub(crate) num_layers: Option<image::Layer>,
+    pub(crate) kind: image::Kind,
     pub(crate) format_desc: FormatDesc,
     pub(crate) shader_channel: Channel,
     pub(crate) mtl_format: metal::MTLPixelFormat,
@@ -159,7 +158,8 @@ impl Image {
         [row_pitch as _, depth_pitch as _, array_pitch as _]
     }
     pub(crate) fn pitches(&self, level: image::Level) -> [hal::buffer::Offset; 3] {
-        Self::pitches_impl(self.extent.at_level(level), self.format_desc)
+        let extent = self.kind.extent().at_level(level);
+        Self::pitches_impl(extent, self.format_desc)
     }
 }
 
@@ -303,7 +303,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 // step[2]: try to allocate the ranges from the pool
                 let mut inner = pool_inner.write().unwrap();
                 let sampler_range = if total_samplers != 0 {
-                    match inner.sampler_alloc.allocate_range((total_samplers * 2) as _) {
+                    match inner.sampler_alloc.allocate_range(total_samplers as _) {
                         Ok(range) => range,
                         Err(e) => {
                             return Err(if e.fragmented_free_length >= total_samplers as u32 {
@@ -317,7 +317,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     0 .. 0
                 };
                 let texture_range = if total_textures != 0 {
-                    match inner.texture_alloc.allocate_range((total_textures * 2) as _) {
+                    match inner.texture_alloc.allocate_range(total_textures as _) {
                         Ok(range) => range,
                         Err(e) => {
                             if sampler_range.end != 0 {
@@ -334,7 +334,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     0 .. 0
                 };
                 let buffer_range = if total_buffers != 0 {
-                    match inner.buffer_alloc.allocate_range((total_buffers * 2) as _) {
+                    match inner.buffer_alloc.allocate_range(total_buffers as _) {
                         Ok(range) => range,
                         Err(e) => {
                             if sampler_range.end != 0 {
@@ -548,8 +548,7 @@ unsafe impl Sync for UnboundBuffer {}
 pub struct UnboundImage {
     pub(crate) texture_desc: metal::TextureDescriptor,
     pub(crate) format: hal::format::Format,
-    pub(crate) extent: image::Extent,
-    pub(crate) num_layers: Option<image::Layer>,
+    pub(crate) kind: image::Kind,
     pub(crate) mip_sizes: Vec<u64>,
     pub(crate) host_visible: bool,
 }
