@@ -132,6 +132,7 @@ unsafe impl Sync for Device {}
 impl Drop for Device {
     fn drop(&mut self) {
         if cfg!(feature = "auto-capture") {
+            info!("Metal capture stop");
             let shared_capture_manager = CaptureManager::shared();
             if let Some(default_capture_scope) = shared_capture_manager.default_capture_scope() {
                 default_capture_scope.end_scope();
@@ -239,6 +240,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let family = *families[0].0;
 
         if cfg!(feature = "auto-capture") {
+            info!("Metal capture start");
             let device = self.shared.device.lock().unwrap();
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&*device);
@@ -1365,6 +1367,7 @@ impl hal::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
+        debug!("write_descriptor_sets");
         for write in write_iter {
             match *write.set {
                 n::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
@@ -1373,16 +1376,15 @@ impl hal::Device<Backend> for Device {
                     let mut pool = pool.write().unwrap();
 
                     for descriptor in write.descriptors {
-                        let mut layout;
                         let mut sampler_index;
                         let mut texture_index;
                         let mut buffer_index;
-                        loop {
+                        let layout = loop {
                             sampler_index = sampler_range.start as usize + array_offset;
                             texture_index = texture_range.start as usize + array_offset;
                             buffer_index = buffer_range.start as usize + array_offset;
                             //TODO: can pre-compute this
-                            layout = layouts.iter()
+                            let layout = layouts.iter()
                                 .find(|layout| {
                                     if layout.binding == binding {
                                         true
@@ -1394,22 +1396,27 @@ impl hal::Device<Backend> for Device {
                                 })
                                 .expect("invalid descriptor set binding index");
                             if array_offset < layout.count {
-                                break;
+                                break layout;
                             }
                             array_offset = 0;
                             binding += 1;
-                        }
+                        };
+                        trace!("\t{:?} at sampler {}, texture {}, buffer {}",
+                            layout.ty, sampler_index, texture_index, buffer_index);
 
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
+                                assert!(!layout.immutable_samplers);
                                 pool.samplers[sampler_index] = Some(SamplerPtr(sampler.0.as_ptr()));
                             }
-                            pso::Descriptor::Image(image, layout) => {
-                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), layout));
+                            pso::Descriptor::Image(image, il) => {
+                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), il));
                             }
-                            pso::Descriptor::CombinedImageSampler(image, layout, sampler) => {
-                                pool.samplers[sampler_index] = Some(SamplerPtr(sampler.0.as_ptr()));
-                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), layout));
+                            pso::Descriptor::CombinedImageSampler(image, il, sampler) => {
+                                if !layout.immutable_samplers {
+                                    pool.samplers[sampler_index] = Some(SamplerPtr(sampler.0.as_ptr()));
+                                }
+                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), il));
                             }
                             pso::Descriptor::UniformTexelBuffer(view) |
                             pso::Descriptor::StorageTexelBuffer(view) => {
@@ -1493,6 +1500,7 @@ impl hal::Device<Backend> for Device {
     fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
         let (storage, cache) = MemoryTypes::describe(memory_type.0);
         let device = self.shared.device.lock().unwrap();
+        debug!("allocating memory type {:?} of size {}", memory_type, size);
 
         // Heaps cannot be used for CPU coherent resources
         //TEMP: MacOS supports Private only, iOS and tvOS can do private/shared
@@ -1508,13 +1516,18 @@ impl hal::Device<Backend> for Device {
         } else {
             let options = conv::resource_options_from_storage_and_cache(storage, cache);
             let cpu_buffer = device.new_buffer(size, options);
+            debug!("\tbacked by cpu buffer {:?}", cpu_buffer.as_ptr());
             n::MemoryHeap::Public(memory_type, cpu_buffer)
         };
 
         Ok(n::Memory::new(heap, size))
     }
 
-    fn free_memory(&self, _memory: n::Memory) {
+    fn free_memory(&self, memory: n::Memory) {
+        debug!("freeing memory of size {}", memory.size);
+        if let n::MemoryHeap::Public(_, ref cpu_buffer) = memory.heap {
+            debug!("\tbacked by cpu buffer {:?}", cpu_buffer.as_ptr());
+        }
     }
 
     fn create_buffer(
@@ -1568,6 +1581,7 @@ impl hal::Device<Backend> for Device {
     fn bind_buffer_memory(
         &self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
+        debug!("mapping buffer of size {} at offset {}", buffer.size, offset);
         let (raw, res_options, range) = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = conv::resource_options_from_storage_and_cache(
@@ -1585,6 +1599,7 @@ impl hal::Device<Backend> for Device {
                 (raw, resource_options, 0 .. buffer.size) //TODO?
             }
             n::MemoryHeap::Public(mt, ref cpu_buffer) => {
+                debug!("\tmapped to public heap with address {:?}", cpu_buffer.as_ptr());
                 let (storage, cache) = MemoryTypes::describe(mt.0);
                 let options = conv::resource_options_from_storage_and_cache(storage, cache);
                 (cpu_buffer.clone(), options, offset .. offset + buffer.size)
@@ -1608,7 +1623,8 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn destroy_buffer(&self, _buffer: n::Buffer) {
+    fn destroy_buffer(&self, buffer: n::Buffer) {
+        debug!("destroing buffer {:?} occupying memory {:?}", buffer.raw.as_ptr(), buffer.range);
     }
 
     fn create_buffer_view<R: RangeArg<u64>>(
@@ -1736,8 +1752,7 @@ impl hal::Device<Backend> for Device {
         Ok(n::UnboundImage {
             texture_desc: descriptor,
             format,
-            extent,
-            num_layers,
+            kind,
             mip_sizes,
             host_visible,
         })
@@ -1798,7 +1813,7 @@ impl hal::Device<Backend> for Device {
     fn get_image_subresource_footprint(
         &self, image: &n::Image, sub: image::Subresource
     ) -> image::SubresourceFootprint {
-        let num_layers = image.num_layers.unwrap_or(1) as buffer::Offset;
+        let num_layers = image.kind.num_layers() as buffer::Offset;
         let level_offset = (0 .. sub.level).fold(0, |offset, level| {
             let pitches = image.pitches(level);
             offset + num_layers * pitches[2]
@@ -1835,7 +1850,7 @@ impl hal::Device<Backend> for Device {
                     })
             },
             n::MemoryHeap::Public(memory_type, ref cpu_buffer) => {
-                let row_size = image.extent.width as u64 * (format_desc.bits as u64 / 8);
+                let row_size = image.kind.extent().width as u64 * (format_desc.bits as u64 / 8);
                 let stride = (row_size + STRIDE_MASK) & !STRIDE_MASK;
 
                 let (storage_mode, cache_mode) = MemoryTypes::describe(memory_type.0);
@@ -1855,8 +1870,7 @@ impl hal::Device<Backend> for Device {
 
         Ok(n::Image {
             raw,
-            extent: image.extent,
-            num_layers: image.num_layers,
+            kind: image.kind,
             format_desc,
             shader_channel: base.1.into(),
             mtl_format: match self.private_caps.map_format(image.format) {
@@ -1889,11 +1903,27 @@ impl hal::Device<Backend> for Device {
             },
         };
 
-        let view = if mtl_format == image.mtl_format && kind == image::ViewKind::D2 &&
-            swizzle == format::Swizzle::NO && image.num_layers.is_none()
+        let full_range = image::SubresourceRange {
+            aspects: image.format_desc.aspects,
+            levels: 0 .. image.raw.mipmap_level_count() as image::Level,
+            layers: 0 .. image.kind.num_layers(),
+        };
+        let view = if
+            mtl_format == image.mtl_format &&
+            //kind == image::ViewKind::D2 && //TODO: find a better way to check this
+            swizzle == format::Swizzle::NO &&
+            range == full_range &&
+            match (kind, image.kind) {
+                (image::ViewKind::D1, image::Kind::D1(..)) |
+                (image::ViewKind::D1Array, image::Kind::D1(..)) |
+                (image::ViewKind::D2, image::Kind::D2(..)) |
+                (image::ViewKind::D2Array, image::Kind::D2(..)) |
+                (image::ViewKind::D3, image::Kind::D3(..)) => true,
+                (_, _) => false, //TODO: expose more choices here?
+            }
         {
-            // Some images are marked as framebuffer-only, and we can't create aliases of them
-            //TODO: check more things?
+            // Some images are marked as framebuffer-only, and we can't create aliases of them.
+            // Also helps working around Metal bugs with aliased array textures.
             image.raw.clone()
         } else {
             image.raw.new_texture_view_from_slice(

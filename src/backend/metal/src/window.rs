@@ -301,12 +301,7 @@ impl Device {
             .iter()
             .map(|frame| native::Image {
                 raw: frame.texture.clone(),
-                extent: image::Extent {
-                    width: pixel_width,
-                    height: pixel_height,
-                    depth: 1,
-                },
-                num_layers: None,
+                kind: image::Kind::D2(pixel_width, pixel_height, 1, 1),
                 format_desc,
                 shader_channel: Channel::Float,
                 mtl_format,

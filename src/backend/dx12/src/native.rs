@@ -407,7 +407,7 @@ pub struct DescriptorHeapSlice {
 
 impl DescriptorHeapSlice {
     pub(crate) fn alloc_handles(&mut self, count: u64) -> Option<DualHandle> {
-        self.range_allocator.allocate_range(count).map(|range| {
+        self.range_allocator.allocate_range(count).ok().map(|range| {
             DualHandle {
                 cpu: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: self.start.cpu.ptr + (self.handle_size * range.start) as usize },
                 gpu: d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: self.start.gpu.ptr + (self.handle_size * range.start) as u64 },

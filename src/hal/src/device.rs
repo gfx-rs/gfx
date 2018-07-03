@@ -519,10 +519,11 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         I::Item: Borrow<B::Fence>,
     {
         use std::{time, thread};
-        let start = time::Instant::now();
         fn to_ms(duration: time::Duration) -> u32 {
             duration.as_secs() as u32 * 1000 + duration.subsec_nanos() / 1_000_000
         }
+
+        let start = time::Instant::now();
         match wait {
             WaitFor::All => {
                 for fence in fences {
@@ -537,7 +538,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
                     }
                 }
                 true
-            },
+            }
             WaitFor::Any => {
                 let fences: Vec<_> = fences.into_iter().collect();
                 loop {
