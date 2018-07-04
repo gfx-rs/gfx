@@ -712,9 +712,21 @@ pub struct CommandBuffer {
     context: ComPtr<d3d11::ID3D11DeviceContext>,
     #[derivative(Debug="ignore")]
     list: Option<ComPtr<d3d11::ID3D11CommandList>>,
-    vertex_buffers: [*mut d3d11::ID3D11Buffer; d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as usize],
-    vertex_offsets: [u32; d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as usize],
-    vertex_strides: [u32; d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as usize]
+
+    // TODO: clearly mark these as runtime state, eg. `State` struct
+    // TODO: reset state
+
+    // a bitmask that keeps track of what vertex buffer bindings have been "bound" into
+    // our vec
+    bound_bindings: u32,
+    // a bitmask that hold the required binding slots to be bound for the currently
+    // bound pipeline
+    required_bindings: Option<u32>,
+    // the highest binding number in currently bound pipeline
+    max_bindings: Option<u32>,
+    vertex_buffers: Vec<*mut d3d11::ID3D11Buffer>,
+    vertex_offsets: Vec<u32>,
+    vertex_strides: Vec<u32>,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -732,9 +744,12 @@ impl CommandBuffer {
             internal,
             context: unsafe { ComPtr::from_raw(context) },
             list: None,
-            vertex_buffers: [ptr::null_mut(); d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as usize],
-            vertex_offsets: [0u32; d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as usize],
-            vertex_strides: [0u32; d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as usize]
+            bound_bindings: 0,
+            required_bindings: None,
+            max_bindings: None,
+            vertex_buffers: Vec::new(),
+            vertex_offsets: Vec::new(),
+            vertex_strides: Vec::new(),
         }
     }
 
@@ -742,16 +757,21 @@ impl CommandBuffer {
         self.list.clone().unwrap().clone()
     }
 
-    fn set_graphics_bind_point(&mut self) {
-        // TODO: check if needed
-        unsafe {
-            self.context.IASetVertexBuffers(
-                0,
-                d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT,
-                self.vertex_buffers.as_ptr(),
-                self.vertex_strides.as_ptr(),
-                self.vertex_offsets.as_ptr(),
-            );
+    fn set_vertex_buffers(&self) {
+        if let Some(binding_count) = self.max_bindings {
+            if self.vertex_buffers.len() >= binding_count as usize &&
+               self.vertex_strides.len() >= binding_count as usize
+            {
+                unsafe {
+                    self.context.IASetVertexBuffers(
+                        0,
+                        binding_count,
+                        self.vertex_buffers.as_ptr(),
+                        self.vertex_strides.as_ptr(),
+                        self.vertex_offsets.as_ptr(),
+                    );
+                }
+            }
         }
     }
 
@@ -950,12 +970,26 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<Buffer>,
     {
+        if self.vertex_buffers.len() <= first_binding as usize {
+            self.vertex_buffers.resize(first_binding as usize + 1, ptr::null_mut());
+            self.vertex_offsets.resize(first_binding as usize + 1, 0);
+        }
+
         for (i, (buf, offset)) in buffers.into_iter().enumerate() {
             let idx = i + first_binding as usize;
 
-            self.vertex_buffers[idx] = buf.borrow().internal.raw;
-            self.vertex_offsets[idx] = offset as u32;
+            self.bound_bindings |= 1 << i as u32;
+
+            if idx >= self.vertex_buffers.len() {
+                self.vertex_buffers.push(buf.borrow().internal.raw);
+                self.vertex_offsets.push(offset as u32);
+            } else {
+                self.vertex_buffers[idx] = buf.borrow().internal.raw;
+                self.vertex_offsets[idx] = offset as u32;
+            }
         }
+
+        self.set_vertex_buffers();
     }
 
     fn set_viewports<T>(&mut self, _first_viewport: u32, viewports: T)
@@ -1015,7 +1049,13 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &GraphicsPipeline) {
-        self.vertex_strides = pipeline.strides;
+        self.vertex_strides.clear();
+        self.vertex_strides.extend(&pipeline.strides);
+
+        self.required_bindings = Some(pipeline.required_bindings);
+        self.max_bindings = Some(pipeline.max_vertex_bindings);
+
+        self.set_vertex_buffers();
 
         unsafe {
             self.context.IASetPrimitiveTopology(pipeline.topology);
@@ -1160,7 +1200,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
-        self.set_graphics_bind_point();
+        debug_assert!((self.bound_bindings | self.required_bindings.unwrap_or(!0)) == self.bound_bindings);
 
         unsafe {
             self.context.DrawInstanced(
@@ -1173,7 +1213,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
-        self.set_graphics_bind_point();
+        debug_assert!((self.bound_bindings | self.required_bindings.unwrap_or(!0)) == self.bound_bindings);
 
         unsafe {
             self.context.DrawIndexedInstanced(
@@ -1579,7 +1619,9 @@ pub struct GraphicsPipeline {
     #[derivative(Debug="ignore")]
     depth_stencil_state: Option<(ComPtr<d3d11::ID3D11DepthStencilState>, pso::State<pso::StencilValue>)>,
     baked_states: pso::BakedStates,
-    strides: [u32; d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as usize],
+    required_bindings: u32,
+    max_vertex_bindings: u32,
+    strides: Vec<u32>,
 }
 
 unsafe impl Send for GraphicsPipeline { }
@@ -1658,7 +1700,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 handles: unsafe { self.handles.as_mut_ptr().offset(range.start as _) },
                 offset_mapping: layout.offset_mapping.clone(),
             }
-        }).ok_or(pso::AllocationError::OutOfPoolMemory)
+        }).map_err(|_| pso::AllocationError::OutOfPoolMemory)
     }
 
     fn free_sets<I>(&mut self, descriptor_sets: I)

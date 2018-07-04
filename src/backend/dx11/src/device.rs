@@ -26,6 +26,14 @@ use {
 
 use {conv, internal, shader};
 
+struct InputLayout {
+    raw: ComPtr<d3d11::ID3D11InputLayout>,
+    required_bindings: u32,
+    max_vertex_bindings: u32,
+    topology: d3d11::D3D11_PRIMITIVE_TOPOLOGY,
+    vertex_strides: Vec<u32>,
+}
+
 pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
@@ -104,11 +112,21 @@ impl Device {
         }
     }
 
-    fn create_input_layout(&self, vs: ComPtr<d3dcommon::ID3DBlob>, vertex_buffers: &[pso::VertexBufferDesc], attributes: &[pso::AttributeDesc], input_assembler: &pso::InputAssemblerDesc) -> Result<([u32; d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as usize], d3d11::D3D11_PRIMITIVE_TOPOLOGY, ComPtr<d3d11::ID3D11InputLayout>), pso::CreationError> {
+
+    fn create_input_layout(&self, vs: ComPtr<d3dcommon::ID3DBlob>, vertex_buffers: &[pso::VertexBufferDesc], attributes: &[pso::AttributeDesc], input_assembler: &pso::InputAssemblerDesc) -> Result<InputLayout, pso::CreationError> {
         let mut layout = ptr::null_mut();
 
-        let mut vertex_strides = [0u32; d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as usize];
+        let mut vertex_strides = Vec::new();
+        let mut required_bindings = 0u32;
+        let mut max_vertex_bindings = 0u32;
         for buffer in vertex_buffers {
+            required_bindings |= 1 << buffer.binding as u32;
+            max_vertex_bindings = max_vertex_bindings.max(1u32 + buffer.binding as u32);
+
+            while vertex_strides.len() <= buffer.binding as usize {
+                vertex_strides.push(0);
+            }
+
             vertex_strides[buffer.binding as usize] = buffer.stride;
         }
 
@@ -121,6 +139,7 @@ impl Device {
                     Some(buffer_desc) => buffer_desc,
                     None => {
                         // TODO:
+                        // L
                         // error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
                         return Some(Err(pso::CreationError::Other));
                     }
@@ -164,7 +183,13 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             let topology = conv::map_topology(input_assembler.primitive);
 
-            Ok((vertex_strides, topology, unsafe { ComPtr::from_raw(layout) }))
+            Ok(InputLayout {
+                raw: unsafe { ComPtr::from_raw(layout) },
+                required_bindings,
+                max_vertex_bindings,
+                topology,
+                vertex_strides,
+            })
         } else {
             Err(pso::CreationError::Other)
         }
@@ -468,65 +493,64 @@ impl hal::Device<Backend> for Device {
             // for every shader stage we get a range of descriptor handles that can be bound with
             // PS/VS/CSSetXX()
             for &stage in &stages {
-                let mut current_type = None;
-                let mut current_range = None;
-                // track the starting offset of the handles
-                let mut start_offset = 0;
-                // and where our current tail of the range is
-                let mut current_offset = 0;
+                let mut state = None;
 
                 for binding in bindings {
-                    match (current_type, current_range.clone()) {
-                        (None, None) => {
+                    state = match state {
+                        None => {
                             if binding.stage.contains(stage) {
-                                current_type = Some(binding.ty);
-                                current_range = Some(binding.binding_range.clone());
-                                start_offset = binding.handle_offset;
+                                let offset = binding.handle_offset;
+
+                                Some((binding.ty, binding.binding_range.start, binding.binding_range.end, offset, offset))
+                            } else {
+                                None
                             }
                         }
-                        (Some(ty), Some(ref mut range)) => {
+                        Some((mut ty, mut start, mut end, mut start_offset, mut current_offset)) => {
                             // if we encounter another type or the binding/handle
                             // range is broken, push our current descriptor range
                             // and begin a new one.
                             if ty != binding.ty ||
-                               (range.end) != binding.binding_range.start ||
-                               (current_offset + 1) != binding.handle_offset ||
+                               end != binding.binding_range.start ||
+                               current_offset + 1 != binding.handle_offset ||
                                stage != binding.stage
                             {
                                 optimized_bindings.push(PipelineBinding {
                                     stage,
                                     ty,
-                                    binding_range: range.clone(),
+                                    binding_range: start..end,
                                     handle_offset: start_offset
                                 });
-                            
+
                                 if binding.stage.contains(stage) {
-                                    current_type = Some(binding.ty);
-                                    current_range = Some(binding.binding_range.clone());
+                                    ty = binding.ty;
+                                    start = binding.binding_range.start;
+                                    end = binding.binding_range.end;
 
                                     start_offset = binding.handle_offset;
                                     current_offset = binding.handle_offset;
+
+                                    Some((ty, start, end, start_offset, current_offset))
                                 } else {
-                                    current_type = None;
-                                    current_range = None;
+                                    None
                                 }
                             } else {
-                                range.end += 1;
+                                end += 1;
                                 current_offset += 1;
+
+                                Some((ty, start, end, start_offset, current_offset))
                             }
                         }
-                        // either both Something, or both Nonething
-                        _ => unreachable!()
                     }
                 }
 
                 // catch trailing descriptors
-                if let (Some(ty), Some(range)) = (current_type, &mut current_range) {
+                if let Some((ty, start, end, start_offset, _)) = state {
                     optimized_bindings.push(PipelineBinding {
                         stage,
                         ty,
-                        binding_range: range.clone(),
-                        handle_offset: current_offset
+                        binding_range: start..end,
+                        handle_offset: start_offset
                     });
                 }
             }
@@ -534,6 +558,7 @@ impl hal::Device<Backend> for Device {
             set_bindings.push(optimized_bindings);
         }
 
+        println!("{:#?}", set_bindings);
         PipelineLayout {
             set_bindings
         }
@@ -561,7 +586,7 @@ impl hal::Device<Backend> for Device {
         let ds = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
         let hs = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;*/
 
-        let (strides, topology, input_layout) = self.create_input_layout(vs.clone(), &desc.vertex_buffers, &desc.attributes, &desc.input_assembler)?;
+        let layout = self.create_input_layout(vs.clone(), &desc.vertex_buffers, &desc.attributes, &desc.input_assembler)?;
         let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
         let blend_state = self.create_blend_state(&desc.blender)?;
         let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);
@@ -576,13 +601,15 @@ impl hal::Device<Backend> for Device {
         Ok(GraphicsPipeline {
             vs,
             ps,
-            topology,
-            input_layout,
+            topology: layout.topology,
+            input_layout: layout.raw,
             rasterizer_state,
             blend_state,
             depth_stencil_state,
             baked_states: desc.baked_states.clone(),
-            strides,
+            required_bindings: layout.required_bindings,
+            max_vertex_bindings: layout.max_vertex_bindings,
+            strides: layout.vertex_strides,
         })
     }
 
@@ -1129,9 +1156,10 @@ impl hal::Device<Backend> for Device {
         }
     }
 
+    // TODO: make use of `max_sets`
     fn create_descriptor_pool<I>(
         &self,
-        max_sets: usize,
+        _max_sets: usize,
         ranges: I,
     ) -> DescriptorPool
     where
@@ -1140,11 +1168,12 @@ impl hal::Device<Backend> for Device {
     {
         let count = ranges.into_iter().map(|r| {
             let r = r.borrow();
+
             r.count * match r.ty {
                 pso::DescriptorType::CombinedImageSampler => 2,
                 _ => 1
             }
-        }).sum::<usize>() * max_sets;
+        }).sum::<usize>();
 
         DescriptorPool::with_capacity(count)
     }
