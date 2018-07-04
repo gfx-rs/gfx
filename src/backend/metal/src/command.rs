@@ -23,7 +23,7 @@ use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
 
 use foreign_types::{ForeignType, ForeignTypeRef};
-use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize, CaptureManager};
+use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize};
 use cocoa::foundation::{NSUInteger, NSInteger, NSRange};
 use block::{ConcreteBlock};
 use smallvec::SmallVec;
@@ -1347,11 +1347,6 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
 
         command_buffer.commit();
-
-        let shared_capture_manager = CaptureManager::shared();
-        if shared_capture_manager.is_capturing() {
-            shared_capture_manager.stop_capture();
-        }
 
         Ok(())
     }
