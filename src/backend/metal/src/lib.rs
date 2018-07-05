@@ -69,7 +69,7 @@ impl Shared {
     fn new(device: metal::Device) -> Self {
         let feature_macos_10_14: metal::MTLFeatureSet = unsafe { mem::transmute(10004u64) };
         Shared {
-            queue: Mutex::new(command::QueueInner::new(&device, MAX_ACTIVE_COMMAND_BUFFERS)),
+            queue: Mutex::new(command::QueueInner::new(&device, Some(MAX_ACTIVE_COMMAND_BUFFERS))),
             service_pipes: Mutex::new(internal::ServicePipes::new(&device)),
             push_constants_buffer_id: 30,
             disabilities: PrivateDisabilities {
