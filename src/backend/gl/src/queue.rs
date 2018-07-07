@@ -731,9 +731,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             let swapchain = swapchain.0.borrow().window.lock().unwrap();
             let w = swapchain.window.as_ref().unwrap();
 
-            // We draw to this window's framebuffer a quad with the texture
-            // which was rendered to previously.
-            // We do this because we can't share framebuffers between contexts.
+            // We blit from one framebuffer to the window's
 
             // But first, insure the extent hasn't changed.
             let extent = swapchain.swapchain.as_ref().unwrap().extent;
