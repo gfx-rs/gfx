@@ -51,10 +51,10 @@ use glutin::{self, GlContext};
 
 
 fn get_window_extent(window: &glutin::GlWindow) -> image::Extent {
-    let (width, height) = window.get_inner_size().unwrap();
+    let px = window.get_inner_size().unwrap().to_physical(window.get_hidpi_factor());
     image::Extent {
-        width: (width as f32 * window.hidpi_factor()) as image::Size,
-        height: (height as f32 * window.hidpi_factor()) as image::Size,
+        width: px.width as image::Size,
+        height: px.height as image::Size,
         depth: 1,
     }
 }
