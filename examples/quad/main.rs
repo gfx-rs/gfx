@@ -391,7 +391,6 @@ fn main() {
     //
     let mut running = true;
     let mut recreate_swapchain = false;
-    let mut first = true;
     while running {
         events_loop.poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
@@ -406,15 +405,12 @@ fn main() {
                     }
                     | winit::WindowEvent::CloseRequested => running = false,
                     winit::WindowEvent::Resized(_dims) => {
-                        if !first {
-                            recreate_swapchain = true;
-                        }
+                        recreate_swapchain = true;
                     }
                     _ => (),
                 }
             }
         });
-        first = false;
 
         if recreate_swapchain {
             device.wait_idle().unwrap();
