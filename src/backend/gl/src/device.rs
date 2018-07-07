@@ -164,7 +164,11 @@ pub(crate) trait GlDevice {
         all_res: &[spirv::Resource],
     );
     fn compile_shader(
-        &self, point: &pso::EntryPoint<B>, stage: pso::Stage, desc_remap_data: Option<&mut n::DescRemapData>
+        &self, 
+        point: &pso::EntryPoint<B>, 
+        stage: pso::Stage, 
+        desc_remap_data: Option<&mut n::DescRemapData>, 
+        name_binding_map: &mut FastHashMap<String, pso::DescriptorBinding>,
     ) -> n::Shader;
     fn create_shader_program<'a>(
         &self,
@@ -495,6 +499,7 @@ impl GlDevice for Arc<Device> {
             (pso::Stage::Fragment, shaders.fragment.as_ref()),
         ];
 
+        let mut name_binding_map = FastHashMap::<String, pso::DescriptorBinding>::default();
         let shader_names = &shaders
             .iter()
             .filter_map(|&(stage, point_maybe)| {
@@ -503,6 +508,7 @@ impl GlDevice for Arc<Device> {
                         point,
                         stage,
                         if let Some(ref mut d) = desc_remap_data { Some(d) } else { None },
+                        &mut name_binding_map,
                     );
                     unsafe { gl.AttachShader(name, shader_name); }
                     shader_name
@@ -529,6 +535,17 @@ impl GlDevice for Arc<Device> {
             unsafe {
                 gl.DetachShader(name, *shader_name);
                 gl.DeleteShader(*shader_name);
+            }
+        }
+
+        if !self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
+            let gl = &self.share.context;
+            unsafe {
+                gl.UseProgram(name);
+                for (bname, binding) in name_binding_map.iter() {
+                    let loc = gl.GetUniformLocation(name, bname.as_ptr() as _);
+                    gl.Uniform1i(loc, *binding as _);
+                }
             }
         }
 
@@ -689,89 +706,12 @@ impl d::Device<B> for Arc<Device> {
             }
         };
 
-<<<<<<< HEAD
-        let program = {
-            let name = unsafe { gl.CreateProgram() };
-
-            // Attach shaders to program
-            let shaders = [
-                (pso::Stage::Vertex, Some(&desc.shaders.vertex)),
-                (pso::Stage::Hull, desc.shaders.hull.as_ref()),
-                (pso::Stage::Domain, desc.shaders.domain.as_ref()),
-                (pso::Stage::Geometry, desc.shaders.geometry.as_ref()),
-                (pso::Stage::Fragment, desc.shaders.fragment.as_ref()),
-            ];
-
-            let mut name_binding_map = FastHashMap::<String, pso::DescriptorBinding>::default();
-            let shader_names = &shaders
-                .iter()
-                .filter_map(|&(stage, point_maybe)| {
-                    point_maybe.map(|point| {
-                        let shader_name = self.compile_shader(
-                            point,
-                            stage,
-                            &mut desc.layout.desc_remap_data.write().unwrap(),
-                            &mut name_binding_map,
-                        );
-                        unsafe { gl.AttachShader(name, shader_name); }
-                        shader_name
-                    })
-                })
-                .collect::<Vec<_>>();
-
-            if !share.private_caps.program_interface && share.private_caps.frag_data_location {
-                for i in 0..subpass.color_attachments.len() {
-                    let color_name = format!("Target{}\0", i);
-                    unsafe {
-                        gl.BindFragDataLocation(name, i as u32, (&color_name[..]).as_ptr() as *mut gl::types::GLchar);
-                    }
-                }
-            }
-
-            unsafe { gl.LinkProgram(name) };
-            info!("\tLinked program {}", name);
-            if let Err(err) = share.check() {
-                panic!("Error linking program: {:?}", err);
-            }
-
-            for shader_name in shader_names {
-                unsafe {
-                    gl.DetachShader(name, *shader_name);
-                    gl.DeleteShader(*shader_name);
-                }
-            }
-
-            if !self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
-                let gl = &self.share.context;
-                unsafe {
-                    gl.UseProgram(name);
-                    for (bname, binding) in name_binding_map.iter() {
-                        let loc = gl.GetUniformLocation(name, bname.as_ptr() as _);
-                        gl.Uniform1i(loc, *binding as _);
-                    }
-                }
-            }
-
-            let status = get_program_iv(gl, name, gl::LINK_STATUS);
-            let log = get_program_log(gl, name);
-            if status != 0 {
-                if !log.is_empty() {
-                    warn!("\tLog: {}", log);
-                }
-            } else {
-                return Err(pso::CreationError::Shader(d::ShaderError::CompilationFailed(log)));
-            }
-
-            name
-        };
-
-=======
         let program = self.create_shader_program(
             &desc.shaders,
             subpass.color_attachments.len(),
             Some(&mut desc.layout.desc_remap_data.write().unwrap()),
         )?;
->>>>>>> cacdb1ff... Window creation stuff
+
         let patch_size = match desc.input_assembler.primitive {
             c::Primitive::PatchList(size) => Some(size as _),
             _ => None
@@ -818,17 +758,13 @@ impl d::Device<B> for Arc<Device> {
         let program = {
             let name = unsafe { gl.CreateProgram() };
 
-<<<<<<< HEAD
             let mut name_binding_map = FastHashMap::<String, pso::DescriptorBinding>::default();
             let shader = self.compile_shader(
                 &desc.shader,
                 pso::Stage::Compute,
-                &mut desc.layout.desc_remap_data.write().unwrap(),
+                Some(&mut desc.layout.desc_remap_data.write().unwrap()),
                 &mut name_binding_map,
             );
-=======
-            let shader = self.compile_shader(&desc.shader, pso::Stage::Compute, Some(&mut desc.layout.desc_remap_data.write().unwrap()));
->>>>>>> cacdb1ff... Window creation stuff
             unsafe { gl.AttachShader(name, shader) };
 
             unsafe { gl.LinkProgram(name) };

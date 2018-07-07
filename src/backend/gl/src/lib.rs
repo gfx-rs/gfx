@@ -82,7 +82,7 @@ pub(crate) enum Contexts {
 impl Instance {
     pub fn create(_name: &str, _version: u32, el: Arc<Mutex<glutin::EventsLoop>>) -> Starc<Self> {
         let cb = glutin::ContextBuilder::new();
-        let context = glutin::Context::new(cb, &el.lock().unwrap(), true).unwrap();
+        let context = glutin::Context::new(&el.lock().unwrap(), cb, true).unwrap();
 
         let instance_context = Starc::new(InstanceContext {
             el,

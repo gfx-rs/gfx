@@ -12,6 +12,8 @@ use {command as com, native, state, window};
 use info::LegacyFeatures;
 use {Backend, Share};
 
+use glutin::GlContext;
+
 pub type ArrayBuffer = gl::types::GLuint;
 
 // State caching system for command queue.
