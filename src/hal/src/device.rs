@@ -602,7 +602,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         surface: &mut B::Surface,
         config: SwapchainConfig,
         old_swapchain: Option<B::Swapchain>,
-        extent: &window::Extent2D,
+        extent: window::Extent2D,
     ) -> (B::Swapchain, Backbuffer<B>);
 
     ///

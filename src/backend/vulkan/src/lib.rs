@@ -32,7 +32,12 @@ use hal::error::{DeviceCreationError, HostExecutionError};
 use std::{fmt, mem, ptr};
 use std::borrow::Borrow;
 use std::ffi::{CStr, CString};
+#[cfg(feature= "winit")]
+use std::sync::Mutex;
 use std::sync::Arc;
+
+#[cfg(feature = "winit")]
+pub use window::Window;
 
 mod command;
 mod conv;
@@ -92,6 +97,9 @@ pub struct Instance {
 
     /// Supported extensions of this instance.
     pub extensions: Vec<&'static str>,
+
+    #[cfg(feature= "winit")]
+    el: Arc<Mutex<winit::EventsLoop>>,
 }
 
 fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
@@ -133,7 +141,7 @@ extern "system" fn callback(
 }
 
 impl Instance {
-    pub fn create(name: &str, version: u32) -> Self {
+    fn create_internal(name: &str, version: u32) -> (Arc<RawInstance>, Vec<&'static str>) {
         // TODO: return errors instead of panic
         let entry = VK_ENTRY.as_ref().expect("Unable to load Vulkan entry points");
 
@@ -239,17 +247,29 @@ impl Instance {
         #[cfg(not(debug_assertions))]
         let debug_report = None;
 
+        (Arc::new(RawInstance(instance, debug_report)), extensions)
+    }
+
+    #[cfg(not(feature= "winit"))]
+    pub fn create(name: &str, version: u32) -> Self {
+        let (raw, extensions) = Self::create_internal(name, version);
         Instance {
-            raw: Arc::new(RawInstance(instance, debug_report)),
+            raw,
             extensions,
         }
     }
-}
 
-impl hal::Instance for Instance {
-    type Backend = Backend;
+    #[cfg(feature= "winit")]
+    pub fn create(name: &str, version: u32, el: Arc<Mutex<winit::EventsLoop>>) -> Self {
+        let (raw, extensions) = Self::create_internal(name, version);
+        Instance {
+            raw,
+            extensions,
+            el,
+        }
+    }
 
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+    pub fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
         self.raw.0.enumerate_physical_devices()
             .expect("Unable to enumerate adapter")
             .into_iter()

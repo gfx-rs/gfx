@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
-use gl;
+use {gl, GlContainer};
 use hal::{Features, Limits};
 
 /// A version number for a specific component of an OpenGL implementation
@@ -112,7 +112,7 @@ const EMPTY_STRING: &'static str = "";
 /// Get a statically allocated string from the implementation using
 /// `glGetString`. Fails if it `GLenum` cannot be handled by the
 /// implementation's `gl.GetString` function.
-fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
+fn get_string(gl: &GlContainer, name: gl::types::GLenum) -> &'static str {
     let ptr = unsafe { gl.GetString(name) } as *const i8;
     if !ptr.is_null() {
         // This should be safe to mark as statically allocated because
@@ -124,7 +124,7 @@ fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
     }
 }
 
-fn get_usize(gl: &gl::Gl, name: gl::types::GLenum) -> usize {
+fn get_usize(gl: &GlContainer, name: gl::types::GLenum) -> usize {
     let mut value = 0 as gl::types::GLint;
     unsafe { gl.GetIntegerv(name, &mut value) };
     value as usize
@@ -145,7 +145,7 @@ pub struct PlatformName {
 }
 
 impl PlatformName {
-    fn get(gl: &gl::Gl) -> Self {
+    fn get(gl: &GlContainer) -> Self {
         PlatformName {
             vendor: get_string(gl, gl::VENDOR),
             renderer: get_string(gl, gl::RENDERER),
@@ -239,7 +239,7 @@ pub enum Requirement {
 }
 
 impl Info {
-    fn get(gl: &gl::Gl) -> Info {
+    fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
         let version = Version::parse(get_string(gl, gl::VERSION)).unwrap();
         let shading_language = Version::parse(get_string(gl, gl::SHADING_LANGUAGE_VERSION)).unwrap();
@@ -295,7 +295,7 @@ impl Info {
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
-pub fn query_all(gl: &gl::Gl) -> (Info, Features, LegacyFeatures, Limits, PrivateCaps) {
+pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Limits, PrivateCaps) {
     use self::Requirement::*;
     let info = Info::get(gl);
 

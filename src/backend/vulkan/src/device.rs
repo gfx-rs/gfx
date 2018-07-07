@@ -1452,7 +1452,7 @@ impl d::Device<B> for Device {
         surface: &mut w::Surface,
         config: SwapchainConfig,
         provided_old_swapchain: Option<w::Swapchain>,
-        extent: &window::Extent2D,
+        extent: window::Extent2D,
     ) -> (w::Swapchain, Backbuffer<B>) {
         let functor = ext::Swapchain::new(&surface.raw.instance.0, &self.raw.0)
             .expect("Unable to query swapchain function");

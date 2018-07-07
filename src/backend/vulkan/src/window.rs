@@ -1,5 +1,9 @@
 use std::ptr;
+#[cfg(feature= "winit")]
+use std::sync::Mutex;
 use std::sync::Arc;
+#[cfg(feature= "winit")]
+use std::ops::Deref;
 use std::os::raw::c_void;
 
 use ash::vk;
@@ -38,6 +42,35 @@ impl Drop for RawSurface {
         }
     }
 }
+
+#[cfg(feature = "winit")]
+pub struct Window {
+    window: winit::Window,
+}
+
+#[cfg(feature = "winit")]
+impl Window {
+    pub fn new(wb: winit::WindowBuilder, el: Arc<Mutex<winit::EventsLoop>>) -> Arc<Mutex<Window>> {
+        Arc::new(Mutex::new(Window {
+            window: wb.build(&el.lock().unwrap()).unwrap(),
+        }))
+    }
+
+    pub fn get_inner_size(&self) -> Option<winit::dpi::PhysicalSize> {
+        self.window
+            .get_inner_size()
+            .map(|s| s.to_physical(self.window.get_hidpi_factor()))
+    }
+}
+
+#[cfg(feature = "winit")]
+impl Deref for Window {
+    type Target = winit::Window;
+    fn deref(&self) -> &Self::Target {
+        &self.window
+    }
+}
+
 
 impl Instance {
     #[cfg(all(unix, not(target_os = "android")))]
@@ -230,7 +263,8 @@ impl Instance {
     }
 
     #[cfg(feature = "winit")]
-    pub fn create_surface(&self, window: &winit::Window) -> Surface {
+    pub fn create_surface(&self, window: &Arc<Mutex<Window>>) -> Surface {
+        let window = &window.lock().unwrap().window;
         #[cfg(all(unix, not(target_os = "android")))]
         {
             use winit::os::unix::WindowExt;
@@ -239,8 +273,11 @@ impl Instance {
                 if let Some(display) = window.get_wayland_display() {
                     let display: *mut c_void = display as *mut _;
                     let surface: *mut c_void = window.get_wayland_surface().unwrap() as *mut _;
-                    let (width, height) = window.get_inner_size().unwrap();
-                    return self.create_surface_from_wayland(display, surface, width, height);
+                    let px = window
+                        .get_inner_size()
+                        .unwrap()
+                        .to_physical(window.get_hidpi_factor());
+                    return self.create_surface_from_wayland(display, surface, px.width as _, px.height as _);
                 }
             }
             if self.extensions.contains(&vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME) {
@@ -267,6 +304,11 @@ impl Instance {
             let hwnd = window.get_hwnd();
             self.create_surface_from_hwnd(hinstance as *mut _, hwnd as *mut _)
         }
+    }
+
+    #[cfg(feature = "winit")]
+    pub fn create_window(&self, wb: winit::WindowBuilder) -> Arc<Mutex<Window>> {
+        Arc::new(Mutex::new(Window { window: wb.build(&self.el.lock().unwrap()).unwrap() }))
     }
 
     fn create_surface_from_vk_surface_khr(
