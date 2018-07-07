@@ -78,6 +78,8 @@ pub struct PipelineLayout {
 #[derive(Clone, Debug)]
 pub struct RasterizerState {
     //TODO: more states
+    pub front_winding: metal::MTLWinding,
+    pub cull_mode: metal::MTLCullMode,
     pub depth_clip: metal::MTLDepthClipMode,
     pub depth_bias: pso::DepthBias,
 }
@@ -85,6 +87,8 @@ pub struct RasterizerState {
 impl Default for RasterizerState {
     fn default() -> Self {
         RasterizerState {
+            front_winding: metal::MTLWinding::Clockwise,
+            cull_mode: metal::MTLCullMode::None,
             depth_clip: metal::MTLDepthClipMode::Clip,
             depth_bias: Default::default(),
         }

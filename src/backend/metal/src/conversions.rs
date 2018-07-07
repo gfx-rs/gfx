@@ -381,3 +381,19 @@ pub fn map_stencil_op(op: StencilOp) -> MTLStencilOperation {
         StencilOp::Invert => MTLStencilOperation::Invert,
     }
 }
+
+pub fn map_winding(face: pso::FrontFace) -> MTLWinding {
+    match face {
+        pso::FrontFace::Clockwise => MTLWinding::Clockwise,
+        pso::FrontFace::CounterClockwise => MTLWinding::CounterClockwise,
+    }
+}
+
+pub fn map_cull_face(face: pso::Face) -> Option<MTLCullMode> {
+    match face {
+        pso::Face::NONE => Some(MTLCullMode::None),
+        pso::Face::FRONT => Some(MTLCullMode::Front),
+        pso::Face::BACK => Some(MTLCullMode::Back),
+        _ => None,
+    }
+}

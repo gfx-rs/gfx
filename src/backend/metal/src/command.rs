@@ -1008,9 +1008,11 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
         }
         Cmd::BindPipeline(pipeline_state, rasterizer) => {
             encoder.set_render_pipeline_state(pipeline_state);
-            if let Some(rasterizer_state) = rasterizer {
-                encoder.set_depth_clip_mode(rasterizer_state.depth_clip);
-                let db = rasterizer_state.depth_bias;
+            if let Some(rs) = rasterizer {
+                encoder.set_front_facing_winding(rs.front_winding);
+                encoder.set_cull_mode(rs.cull_mode);
+                encoder.set_depth_clip_mode(rs.depth_clip);
+                let db = rs.depth_bias;
                 encoder.set_depth_bias(db.const_factor, db.slope_factor, db.clamp);
             }
         }

@@ -13,13 +13,13 @@ use std::ops::Range;
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Rect {
     /// X position.
-    pub x: u16,
+    pub x: i16,
     /// Y position.
-    pub y: u16,
+    pub y: i16,
     /// Width.
-    pub w: u16,
+    pub w: i16,
     /// Height.
-    pub h: u16,
+    pub h: i16,
 }
 
 /// A simple struct describing a rect with integer coordinates.

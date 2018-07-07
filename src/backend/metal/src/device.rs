@@ -967,6 +967,17 @@ impl hal::Device<Backend> for Device {
         }
 
         let rasterizer_state = Some(n::RasterizerState {
+            front_winding: conv::map_winding(pipeline_desc.rasterizer.front_face),
+            cull_mode: match conv::map_cull_face(pipeline_desc.rasterizer.cull_face) {
+                Some(mode) => mode,
+                None => {
+                    //TODO - Metal validation fails with
+                    // RasterizationEnabled is false but the vertex shader's return type is not void
+                    error!("Culling both sides is not yet supported");
+                    //pipeline.set_rasterization_enabled(false);
+                    metal::MTLCullMode::None
+                }
+            },
             depth_clip: if pipeline_desc.rasterizer.depth_clamping {
                 metal::MTLDepthClipMode::Clamp
             } else {
