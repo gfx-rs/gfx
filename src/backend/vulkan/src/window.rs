@@ -239,8 +239,8 @@ impl Instance {
                 if let Some(display) = window.get_wayland_display() {
                     let display: *mut c_void = display as *mut _;
                     let surface: *mut c_void = window.get_wayland_surface().unwrap() as *mut _;
-                    let (width, height) = window.get_inner_size().unwrap();
-                    return self.create_surface_from_wayland(display, surface, width, height);
+                    let px = window.get_inner_size().unwrap();
+                    return self.create_surface_from_wayland(display, surface, px.width as _, px.height as _);
                 }
             }
             if self.extensions.contains(&vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME) {

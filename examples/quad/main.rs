@@ -32,6 +32,7 @@ use hal::queue::Submission;
 use std::fs;
 use std::io::{Cursor, Read};
 
+const DIMS: Extent2D = Extent2D { width: 1024, height: 768 };
 
 const ENTRY_NAME: &str = "main";
 
@@ -65,8 +66,11 @@ fn main() {
     let mut events_loop = winit::EventsLoop::new();
 
     let wb = winit::WindowBuilder::new()
-        .with_dimensions(1024, 768)
-        .with_title("quad".to_string());
+        .with_dimensions(winit::dpi::LogicalSize::from_physical(winit::dpi::PhysicalSize {
+            width: DIMS.width as _,
+            height: DIMS.height as _,
+        }, 1.0))
+         .with_title("quad".to_string());
     // instantiate backend
     #[cfg(not(feature = "gl"))]
     let (window, _instance, mut adapters, mut surface) = {
@@ -387,7 +391,6 @@ fn main() {
     //
     let mut running = true;
     let mut recreate_swapchain = false;
-    let mut first = true;
     while running {
         events_loop.poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
@@ -401,16 +404,13 @@ fn main() {
                         ..
                     }
                     | winit::WindowEvent::CloseRequested => running = false,
-                    winit::WindowEvent::Resized(_width, _height) => {
-                        if !first {
-                            recreate_swapchain = true;
-                        }
+                    winit::WindowEvent::Resized(_dims) => {
+                        recreate_swapchain = true;
                     }
                     _ => (),
                 }
             }
         });
-        first = false;
 
         if recreate_swapchain {
             device.wait_idle().unwrap();
@@ -586,8 +586,8 @@ fn swapchain_stuff(
             #[cfg(feature = "gl")]
             let window = surface.get_window();
 
-            let window_size = window.get_inner_size().unwrap();
-            let mut extent = hal::window::Extent2D { width: window_size.0, height: window_size.1 };
+            let window_size = window.get_inner_size().unwrap().to_physical(window.get_hidpi_factor());
+            let mut extent = hal::window::Extent2D { width: window_size.width as _, height: window_size.height as _};
 
             extent.width = extent.width.max(caps.extents.start.width).min(caps.extents.end.width);
             extent.height = extent.height.max(caps.extents.start.height).min(caps.extents.end.height);

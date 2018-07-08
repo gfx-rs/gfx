@@ -67,8 +67,8 @@ where Cf: format::RenderFormat
 */
 
 fn get_window_dimensions(window: &winit::Window) -> tex::Dimensions {
-    let (width, height) = window.get_inner_size().unwrap();
-    ((width as f32 * window.hidpi_factor()) as tex::Size, (height as f32 * window.hidpi_factor()) as tex::Size, 1, 1.into())
+    let px = window.get_inner_size().unwrap().to_physical(window.get_hidpi_factor());
+    (px.width as tex::Size, px.height as tex::Size, 1, 1.into())
 }
 
 pub struct Surface11 {
