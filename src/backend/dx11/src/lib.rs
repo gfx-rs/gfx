@@ -20,6 +20,8 @@ use hal::queue::{QueueFamilyId, Queues};
 use hal::backend::RawQueueGroup;
 use hal::range::RangeArg;
 
+use range_alloc::RangeAllocator;
+
 use winapi::shared::{dxgiformat, winerror};
 
 use winapi::shared::dxgi::{IDXGIFactory, IDXGIAdapter, IDXGISwapChain};
@@ -38,13 +40,13 @@ use std::borrow::Borrow;
 
 use std::os::raw::c_void;
 
+#[path = "../../auxil/range_alloc.rs"]
+mod range_alloc;
 mod conv;
 mod dxgi;
 mod shader;
 mod internal;
 mod device;
-
-
 
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
@@ -709,7 +711,22 @@ pub struct CommandBuffer {
     #[derivative(Debug="ignore")]
     context: ComPtr<d3d11::ID3D11DeviceContext>,
     #[derivative(Debug="ignore")]
-    list: Option<ComPtr<d3d11::ID3D11CommandList>>
+    list: Option<ComPtr<d3d11::ID3D11CommandList>>,
+
+    // TODO: clearly mark these as runtime state, eg. `State` struct
+    // TODO: reset state
+
+    // a bitmask that keeps track of what vertex buffer bindings have been "bound" into
+    // our vec
+    bound_bindings: u32,
+    // a bitmask that hold the required binding slots to be bound for the currently
+    // bound pipeline
+    required_bindings: Option<u32>,
+    // the highest binding number in currently bound pipeline
+    max_bindings: Option<u32>,
+    vertex_buffers: Vec<*mut d3d11::ID3D11Buffer>,
+    vertex_offsets: Vec<u32>,
+    vertex_strides: Vec<u32>,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -726,12 +743,90 @@ impl CommandBuffer {
         CommandBuffer {
             internal,
             context: unsafe { ComPtr::from_raw(context) },
-            list: None
+            list: None,
+            bound_bindings: 0,
+            required_bindings: None,
+            max_bindings: None,
+            vertex_buffers: Vec::new(),
+            vertex_offsets: Vec::new(),
+            vertex_strides: Vec::new(),
         }
     }
 
     fn as_raw_list(&self) -> ComPtr<d3d11::ID3D11CommandList> {
         self.list.clone().unwrap().clone()
+    }
+
+    fn set_vertex_buffers(&self) {
+        if let Some(binding_count) = self.max_bindings {
+            if self.vertex_buffers.len() >= binding_count as usize &&
+               self.vertex_strides.len() >= binding_count as usize
+            {
+                unsafe {
+                    self.context.IASetVertexBuffers(
+                        0,
+                        binding_count,
+                        self.vertex_buffers.as_ptr(),
+                        self.vertex_strides.as_ptr(),
+                        self.vertex_offsets.as_ptr(),
+                    );
+                }
+            }
+        }
+    }
+
+    unsafe fn bind_vertex_descriptor(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, binding: &PipelineBinding, handles: *mut Descriptor) {
+        use pso::DescriptorType::*;
+
+        let handles = handles.offset(binding.handle_offset as isize);
+        let start = binding.binding_range.start as UINT;
+        let len = binding.binding_range.end as UINT - start;
+
+        match binding.ty {
+            Sampler => context.VSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
+            SampledImage => context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
+            CombinedImageSampler => {
+                context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
+                context.VSSetSamplers(start, len, handles.offset(1) as *const *mut _ as *const *mut _);
+            },
+            UniformBuffer |
+            UniformBufferDynamic => context.VSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _),
+            _ => unimplemented!()
+        }
+    }
+
+    unsafe fn bind_fragment_descriptor(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, binding: &PipelineBinding, handles: *mut Descriptor) {
+        use pso::DescriptorType::*;
+
+        let handles = handles.offset(binding.handle_offset as isize);
+        let start = binding.binding_range.start as UINT;
+        let len = binding.binding_range.end as UINT - start;
+
+        match binding.ty {
+            Sampler => context.PSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
+            SampledImage => context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
+            CombinedImageSampler => {
+                context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
+                context.PSSetSamplers(start, len, handles.offset(1) as *const *mut _ as *const *mut _);
+            },
+            UniformBuffer |
+            UniformBufferDynamic => context.PSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _),
+            _ => unimplemented!()
+        }
+    }
+
+    fn bind_descriptor(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, binding: &PipelineBinding, handles: *mut Descriptor) {
+        //use pso::ShaderStageFlags::*;
+
+        unsafe {
+            if binding.stage.contains(pso::ShaderStageFlags::VERTEX) {
+                self.bind_vertex_descriptor(context, binding, handles);
+            }
+
+            if binding.stage.contains(pso::ShaderStageFlags::FRAGMENT) {
+                self.bind_fragment_descriptor(context, binding, handles);
+            }
+        }
     }
 }
 
@@ -803,8 +898,9 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn end_render_pass(&mut self) {
-        // TODO: end render pass
-        //unimplemented!()
+        unsafe {
+            self.context.OMSetRenderTargets(8, [ptr::null_mut(); 8].as_ptr(), ptr::null_mut());
+        }
     }
 
     fn pipeline_barrier<'a, T>(&mut self, _stages: Range<pso::PipelineStage>, _dependencies: memory::Dependencies, _barriers: T)
@@ -826,7 +922,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             let _sub = subresource_range.borrow();
             unsafe {
                 self.context.ClearRenderTargetView(
-                    image.internal.rtv.clone().unwrap().as_raw(),
+                    image.get_rtv(0, 0).unwrap().as_raw(),
                     &color.float32
                 );
             }
@@ -874,23 +970,26 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<Buffer>,
     {
-        let (buffers, offsets): (Vec<*mut d3d11::ID3D11Buffer>, Vec<u32>) = buffers
-            .into_iter()
-            .map(|(buf, offset)| (buf.borrow().internal.raw, offset as u32))
-            .unzip();
-
-        // TODO: strides
-        let strides = [32u32; 16];
-
-        unsafe {
-            self.context.IASetVertexBuffers(
-                first_binding,
-                buffers.len() as _,
-                buffers.as_ptr(),
-                strides.as_ptr(),
-                offsets.as_ptr(),
-            );
+        if self.vertex_buffers.len() <= first_binding as usize {
+            self.vertex_buffers.resize(first_binding as usize + 1, ptr::null_mut());
+            self.vertex_offsets.resize(first_binding as usize + 1, 0);
         }
+
+        for (i, (buf, offset)) in buffers.into_iter().enumerate() {
+            let idx = i + first_binding as usize;
+
+            self.bound_bindings |= 1 << i as u32;
+
+            if idx >= self.vertex_buffers.len() {
+                self.vertex_buffers.push(buf.borrow().internal.raw);
+                self.vertex_offsets.push(offset as u32);
+            } else {
+                self.vertex_buffers[idx] = buf.borrow().internal.raw;
+                self.vertex_offsets[idx] = offset as u32;
+            }
+        }
+
+        self.set_vertex_buffers();
     }
 
     fn set_viewports<T>(&mut self, _first_viewport: u32, viewports: T)
@@ -950,6 +1049,14 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &GraphicsPipeline) {
+        self.vertex_strides.clear();
+        self.vertex_strides.extend(&pipeline.strides);
+
+        self.required_bindings = Some(pipeline.required_bindings);
+        self.max_bindings = Some(pipeline.max_vertex_bindings);
+
+        self.set_vertex_buffers();
+
         unsafe {
             self.context.IASetPrimitiveTopology(pipeline.topology);
             self.context.IASetInputLayout(pipeline.input_layout.as_raw());
@@ -983,28 +1090,23 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_graphics_descriptor_sets<'a, I, J>(&mut self, _layout: &PipelineLayout, _first_set: usize, sets: I, _offsets: J)
+    fn bind_graphics_descriptor_sets<'a, I, J>(&mut self, layout: &PipelineLayout, first_set: usize, sets: I, _offsets: J)
     where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
-        for set in sets.into_iter() {
+        //let offsets: Vec<command::DescriptorSetOffset> = offsets.into_iter().map(|o| *o.borrow()).collect();
+
+        let iter = sets.into_iter().zip(layout.set_bindings.iter().skip(first_set));
+
+        for (set, bindings) in iter {
             let set = set.borrow();
 
-            for (binding, cbv) in set.cbv_handles.borrow().iter() {
-                unsafe { self.context.VSSetConstantBuffers(*binding, 1, cbv); }
-            }
-
-            for (binding, srv) in set.srv_handles.borrow().iter() {
-                let srv = srv.as_raw();
-                unsafe { self.context.PSSetShaderResources(*binding, 1, &srv); }
-            }
-
-            for (binding, sampler) in set.sampler_handles.borrow().iter() {
-                let sampler = sampler.as_raw();
-                unsafe { self.context.PSSetSamplers(*binding, 1, &sampler); }
+            // TODO: offsets
+            for binding in bindings.iter() {
+                self.bind_descriptor(&self.context, binding, set.handles);
             }
         }
     }
@@ -1098,6 +1200,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
+        debug_assert!((self.bound_bindings | self.required_bindings.unwrap_or(!0)) == self.bound_bindings);
+
         unsafe {
             self.context.DrawInstanced(
                 vertices.end - vertices.start,
@@ -1109,6 +1213,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
+        debug_assert!((self.bound_bindings | self.required_bindings.unwrap_or(!0)) == self.bound_bindings);
+
         unsafe {
             self.context.DrawIndexedInstanced(
                 indices.end - indices.start,
@@ -1181,6 +1287,7 @@ pub struct Memory {
 
     #[derivative(Debug="ignore")]
     working_buffer: Option<ComPtr<d3d11::ID3D11Buffer>>,
+    working_buffer_size: u64,
 
     // list of all buffers bound to this memory
     #[derivative(Debug="ignore")]
@@ -1225,14 +1332,7 @@ impl Memory {
                     context.UpdateSubresource(
                         buffer.raw as _,
                         0,
-                        &d3d11::D3D11_BOX {
-                            left: (range.start - buffer_range.start) as _,
-                            top: 0,
-                            front: 0,
-                            right: (range.end - buffer_range.start) as _,
-                            bottom: 1,
-                            back: 1,
-                        },
+                        ptr::null_mut(),
                         src.offset(range.start as isize) as _,
                         0,
                         0
@@ -1270,38 +1370,53 @@ impl Memory {
         }
     }
 
+    fn download(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, buffer: *mut d3d11::ID3D11Buffer, range: Range<u64>) {
+        unsafe {
+            context.CopySubresourceRegion(
+                self.working_buffer.clone().unwrap().as_raw() as _,
+                0,
+                0,
+                0,
+                0,
+                buffer as _,
+                0,
+                &d3d11::D3D11_BOX {
+                    left: range.start as _,
+                    top: 0,
+                    front: 0,
+                    right: range.end as _,
+                    bottom: 1,
+                    back: 1,
+                }
+            );
+
+            // copy over to our vec
+            let dst = self.mapped_ptr.borrow().unwrap().offset(range.start as isize);
+            let src = self.map(&context);
+            ptr::copy(src, dst, (range.end - range.start) as usize);
+            self.unmap(&context);
+        }
+
+    }
+
     pub fn invalidate(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, range: Range<u64>) {
         for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
             if let Some(range) = intersection(&range, &buffer_range) {
-                unsafe {
+                let stride = self.working_buffer_size;
+                let len = range.end - range.start;
+                let chunks = len / stride;
+                let remainder = len % stride;
 
-                    // upload to staging buffer
-                    context.CopySubresourceRegion(
-                        self.working_buffer.clone().unwrap().as_raw() as _,
-                        0,
-                        0,
-                        0,
-                        0,
-                        buffer.raw as _,
-                        0,
-                        &d3d11::D3D11_BOX {
-                            left: range.start as _,
-                            top: 0,
-                            front: 0,
-                            right: range.end as _,
-                            bottom: 1,
-                            back: 1,
-                        }
-                    );
+                // we split up the copies into chunks the size of our working buffer
+                for i in 0..chunks {
+                    let offset = range.start + i * stride;
+                    let range = offset..(offset + stride);
 
-                    // TODO: handle memory larger than our hardcoded 1<<15
-                    //       staging buffer
+                    self.download(context, buffer.raw, range);
+                }
 
-                    // copy over to our vec
-                    let dst = self.mapped_ptr.borrow().unwrap().offset(range.start as isize);
-                    let src = self.map(&context);
-                    ptr::copy(src, dst, (range.end - range.start) as usize);
-                    self.unmap(&context);
+                if remainder != 0 {
+                    self.download(context, buffer.raw, (chunks * stride)..range.end);
                 }
             }
         }
@@ -1408,10 +1523,12 @@ pub struct Image {
     format: format::Format,
     storage_flags: image::StorageFlags,
     dxgi_format: dxgiformat::DXGI_FORMAT,
+
     typed_raw_format: dxgiformat::DXGI_FORMAT,
     bytes_per_block: u8,
     block_dim: (u8, u8),
     num_levels: image::Level,
+    num_mips: image::Level,
     internal: InternalImage,
 }
 
@@ -1424,14 +1541,30 @@ pub struct InternalImage {
     copy_srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
     #[derivative(Debug="ignore")]
     srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
+    /// Contains UAVs for all subresources
     #[derivative(Debug="ignore")]
-    uav: Option<ComPtr<d3d11::ID3D11UnorderedAccessView>>,
+    unordered_access_views: Vec<ComPtr<d3d11::ID3D11UnorderedAccessView>>,
+    /// Contains RTVs for all subresources
     #[derivative(Debug="ignore")]
-    rtv: Option<ComPtr<d3d11::ID3D11RenderTargetView>>
+    render_target_views: Vec<ComPtr<d3d11::ID3D11RenderTargetView>>,
 }
 
 unsafe impl Send for Image { }
 unsafe impl Sync for Image { }
+
+impl Image {
+    pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
+        mip_level + (layer * self.num_mips as UINT)
+    }
+
+    pub fn get_uav(&self, mip_level: image::Level, layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11UnorderedAccessView>> {
+        self.internal.unordered_access_views.get(self.calc_subresource(mip_level as _, layer as _) as usize)
+    }
+
+    pub fn get_rtv(&self, mip_level: image::Level, layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11RenderTargetView>> {
+        self.internal.render_target_views.get(self.calc_subresource(mip_level as _, layer as _) as usize)
+    }
+}
 
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
@@ -1486,62 +1619,101 @@ pub struct GraphicsPipeline {
     #[derivative(Debug="ignore")]
     depth_stencil_state: Option<(ComPtr<d3d11::ID3D11DepthStencilState>, pso::State<pso::StencilValue>)>,
     baked_states: pso::BakedStates,
+    required_bindings: u32,
+    max_vertex_bindings: u32,
+    strides: Vec<u32>,
 }
 
 unsafe impl Send for GraphicsPipeline { }
 unsafe impl Sync for GraphicsPipeline { }
 
-#[derive(Debug)]
-pub struct PipelineLayout;
+#[derive(Clone, Debug)]
+struct PipelineBinding {
+    stage: pso::ShaderStageFlags,
+    ty: pso::DescriptorType,
+    binding_range: Range<u32>,
+    handle_offset: u32,
+}
 
+/// The pipeline layout holds optimized (less api calls) ranges of objects for all descriptor sets
+/// belonging to the pipeline object.
+#[derive(Debug)]
+pub struct PipelineLayout {
+    set_bindings: Vec<Vec<PipelineBinding>>
+}
+
+/// The descriptor set layout contains mappings from a given binding to the offset in our
+/// descriptor pool storage and what type of descriptor it is (combined image sampler takes up two
+/// handles).
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
-    bindings: Vec<pso::DescriptorSetLayoutBinding>,
+    bindings: Vec<PipelineBinding>,
+    offset_mapping: Vec<(u32, pso::DescriptorType)>,
+    handle_count: u32
 }
 
-// TODO: descriptor pool
-#[derive(Debug)]
-pub struct DescriptorPool;
-impl hal::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_set(&mut self, _layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
-        // TODO: actually look at the layout maybe..
-        Ok(DescriptorSet::new())
-    }
-
-    fn free_sets<I>(&mut self, _descriptor_sets: I)
-    where
-        I: IntoIterator<Item = DescriptorSet>
-    {
-        unimplemented!()
-    }
-
-    fn reset(&mut self) {
-        unimplemented!()
-    }
-}
+/// Newtype around a common interface that all bindable resources inherit from.
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+struct Descriptor(*mut d3d11::ID3D11DeviceChild);
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct DescriptorSet {
-    // TODO: need to handle arrays and stage flags
-    #[derivative(Debug="ignore")]
-    srv_handles: RefCell<Vec<(u32, ComPtr<d3d11::ID3D11ShaderResourceView>)>>,
-    #[derivative(Debug="ignore")]
-    cbv_handles: RefCell<Vec<(u32, *mut d3d11::ID3D11Buffer)>>,
-    #[derivative(Debug="ignore")]
-    sampler_handles: RefCell<Vec<(u32, ComPtr<d3d11::ID3D11SamplerState>)>>,
+    offset: usize,
+    len: usize,
+    handles: *mut Descriptor,
+    offset_mapping: Vec<(u32, pso::DescriptorType)>,
 }
 
 unsafe impl Send for DescriptorSet {}
 unsafe impl Sync for DescriptorSet {}
 
-impl DescriptorSet {
-    pub fn new() -> Self {
-        DescriptorSet {
-            srv_handles: RefCell::new(Vec::new()),
-            cbv_handles: RefCell::new(Vec::new()),
-            sampler_handles: RefCell::new(Vec::new()),
+#[derive(Debug)]
+pub struct DescriptorPool {
+    handles: Vec<Descriptor>,
+    allocator: RangeAllocator<usize>
+}
+
+unsafe impl Send for DescriptorPool {}
+unsafe impl Sync for DescriptorPool {}
+
+impl DescriptorPool {
+    pub fn with_capacity(size: usize) -> Self {
+        DescriptorPool {
+            handles: vec![Descriptor(ptr::null_mut()); size],
+            allocator: RangeAllocator::new(0..size)
         }
+    }
+}
+
+impl hal::DescriptorPool<Backend> for DescriptorPool {
+    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
+        // TODO: make sure this doesn't contradict vulkan semantics
+        // if layout has 0 bindings, allocate 1 handle anyway
+        let len = layout.handle_count.max(1) as _;
+
+        self.allocator.allocate_range(len).map(|range| {
+            DescriptorSet {
+                offset: range.start,
+                len,
+                handles: unsafe { self.handles.as_mut_ptr().offset(range.start as _) },
+                offset_mapping: layout.offset_mapping.clone(),
+            }
+        }).map_err(|_| pso::AllocationError::OutOfPoolMemory)
+    }
+
+    fn free_sets<I>(&mut self, descriptor_sets: I)
+    where
+        I: IntoIterator<Item = DescriptorSet>
+    {
+        for set in descriptor_sets {
+            self.allocator.free_range(set.offset..(set.offset + set.len))
+        }
+    }
+
+    fn reset(&mut self) {
+        self.allocator.reset();
     }
 }
 
@@ -1577,6 +1749,7 @@ impl hal::Backend for Backend {
     type BufferView = BufferView;
     type UnboundImage = UnboundImage;
     type Image = Image;
+
     type ImageView = ImageView;
     type Sampler = Sampler;
 

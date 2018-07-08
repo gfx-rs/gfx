@@ -380,18 +380,21 @@ impl Internal {
             // be cast between formats of different component types (eg.
             // Rg16 <-> Rgba8)
 
+            // TODO: subresources
             let srv = src.internal.copy_srv.clone().unwrap().as_raw();
-            let uav = dst.internal.uav.clone().unwrap().as_raw();
 
             unsafe {
                 context.CSSetShader(shader, ptr::null_mut(), 0);
                 context.CSSetConstantBuffers(0, 1, &self.copy_info.as_raw());
                 context.CSSetShaderResources(0, 1, [srv].as_ptr());
-                context.CSSetUnorderedAccessViews(0, 1, [uav].as_ptr(), ptr::null_mut());
+
 
                 for region in regions.into_iter() {
                     let info = region.borrow();
                     self.update_image(context, &info);
+
+                    let uav = dst.get_uav(info.dst_subresource.level, 0).unwrap().as_raw();
+                    context.CSSetUnorderedAccessViews(0, 1, [uav].as_ptr(), ptr::null_mut());
 
                     context.Dispatch(
                         info.extent.width as u32,
@@ -409,16 +412,17 @@ impl Internal {
             for region in regions.into_iter() {
                 let info = region.borrow();
 
-                // TODO: subresources
+                // TODO: layer subresources
                 unsafe {
                     context.CopySubresourceRegion(
+
                         dst.internal.raw as _,
-                        0,
+                        src.calc_subresource(info.src_subresource.level as _, 0),
                         info.dst_offset.x as _,
                         info.dst_offset.y as _,
                         info.dst_offset.z as _,
                         src.internal.raw as _,
-                        0,
+                        dst.calc_subresource(info.dst_subresource.level as _, 0),
                         &d3d11::D3D11_BOX {
                             left: info.src_offset.x as _,
                             top: info.src_offset.y as _,
@@ -508,18 +512,20 @@ impl Internal {
         let (shader, scale_x, scale_y) = self.find_buffer_to_image_shader(dst.typed_raw_format).unwrap();
 
         let srv = src.internal.srv.unwrap();
-        let uav = dst.internal.uav.clone().unwrap().as_raw();
 
         unsafe {
             context.CSSetShader(shader, ptr::null_mut(), 0);
             context.CSSetConstantBuffers(0, 1, &self.copy_info.as_raw());
             context.CSSetShaderResources(0, 1, [srv].as_ptr());
-            context.CSSetUnorderedAccessViews(0, 1, [uav].as_ptr(), ptr::null_mut());
+
 
 
             for copy in regions {
                 let info = copy.borrow();
                 self.update_buffer_image(context, &info);
+
+                let uav = dst.get_uav(info.image_layers.level, 0).unwrap().as_raw();
+                context.CSSetUnorderedAccessViews(0, 1, [uav].as_ptr(), ptr::null_mut());
 
                 context.Dispatch(
                     (info.image_extent.width as f32 / scale_x) as u32,
@@ -556,7 +562,6 @@ impl Internal {
         let shader = self.find_blit_shader(src).unwrap();
 
         let srv = src.internal.srv.clone().unwrap().as_raw();
-        let rtv = dst.internal.rtv.clone().unwrap().as_raw();
 
         unsafe {
             context.IASetPrimitiveTopology(d3dcommon::D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
@@ -568,21 +573,24 @@ impl Internal {
                 image::Filter::Nearest => [self.sampler_nearest.as_raw()],
                 image::Filter::Linear => [self.sampler_linear.as_raw()],
             }.as_ptr());
-            context.OMSetRenderTargets(1, [rtv].as_ptr(), ptr::null_mut());
 
 
             for region in regions {
-                let info = region.borrow();
-                self.update_blit(context, src, &info);
+                let region = region.borrow();
+                self.update_blit(context, src, &region);
+
+                // TODO: more layers
+                let rtv = dst.get_rtv(region.dst_subresource.level, region.dst_subresource.layers.start).unwrap().as_raw();
 
                 context.RSSetViewports(1, [d3d11::D3D11_VIEWPORT {
-                    TopLeftX: cmp::min(info.dst_bounds.start.x, info.dst_bounds.end.x) as _,
-                    TopLeftY: cmp::min(info.dst_bounds.start.y, info.dst_bounds.end.y) as _,
-                    Width: (info.dst_bounds.end.x - info.dst_bounds.start.x).abs() as _,
-                    Height: (info.dst_bounds.end.y - info.dst_bounds.start.y).abs() as _,
+                    TopLeftX: cmp::min(region.dst_bounds.start.x, region.dst_bounds.end.x) as _,
+                    TopLeftY: cmp::min(region.dst_bounds.start.y, region.dst_bounds.end.y) as _,
+                    Width: (region.dst_bounds.end.x - region.dst_bounds.start.x).abs() as _,
+                    Height: (region.dst_bounds.end.y - region.dst_bounds.start.y).abs() as _,
                     MinDepth: 0.0f32,
                     MaxDepth: 1.0f32,
                 }].as_ptr());
+                context.OMSetRenderTargets(1, [rtv].as_ptr(), ptr::null_mut());
                 context.Draw(3, 0);
             }
 
