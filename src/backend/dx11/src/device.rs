@@ -233,6 +233,25 @@ impl Device {
         }
     }
 
+    fn create_compute_shader(&self, blob: ComPtr<d3dcommon::ID3DBlob>) -> Result<ComPtr<d3d11::ID3D11ComputeShader>, pso::CreationError> {
+        let mut cs = ptr::null_mut();
+
+        let hr = unsafe {
+            self.raw.CreateComputeShader(
+                blob.GetBufferPointer(),
+                blob.GetBufferSize(),
+                ptr::null_mut(),
+                &mut cs as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(cs) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
     // TODO: fix return type..
     fn extract_entry_point(
         stage: pso::Stage,
@@ -288,7 +307,7 @@ impl Device {
         }
     }
 
-    fn view_image_as_unordered_access_view(&self, info: &ViewInfo) -> Result<ComPtr<d3d11::ID3D11UnorderedAccessView>, image::ViewError> {
+    fn view_image_as_unordered_access(&self, info: &ViewInfo) -> Result<ComPtr<d3d11::ID3D11UnorderedAccessView>, image::ViewError> {
         let mut desc: d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
 
@@ -558,7 +577,6 @@ impl hal::Device<Backend> for Device {
             set_bindings.push(optimized_bindings);
         }
 
-        println!("{:#?}", set_bindings);
         PipelineLayout {
             set_bindings
         }
@@ -615,9 +633,25 @@ impl hal::Device<Backend> for Device {
 
     fn create_compute_pipeline<'a>(
         &self,
-        _desc: &pso::ComputePipelineDesc<'a, Backend>,
+        desc: &pso::ComputePipelineDesc<'a, Backend>,
     ) -> Result<ComputePipeline, pso::CreationError> {
-        unimplemented!()
+        let build_shader =
+            |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, Backend>>| {
+                let source = match source {
+                    Some(src) => src,
+                    None => return Ok(None),
+                };
+
+                Self::extract_entry_point(stage, source, desc.layout)
+                    .map_err(|err| pso::CreationError::Shader(err))
+            };
+
+        let cs = build_shader(pso::Stage::Compute, Some(&desc.shader))?.unwrap();
+        let cs = self.create_compute_shader(cs)?;
+
+        Ok(ComputePipeline {
+            cs
+        })
     }
 
     fn create_framebuffer<I>(
@@ -654,12 +688,14 @@ impl hal::Device<Backend> for Device {
         if usage.contains(Usage::INDEX) { bind |= d3d11::D3D11_BIND_INDEX_BUFFER; }
 
         // TODO: >=11.1
-        if usage.contains(Usage::UNIFORM_TEXEL) ||
-           usage.contains(Usage::STORAGE_TEXEL) ||
-           usage.contains(Usage::TRANSFER_SRC) { bind |= d3d11::D3D11_BIND_SHADER_RESOURCE; }
+        if usage.intersects(Usage::UNIFORM_TEXEL | Usage::STORAGE_TEXEL | Usage::TRANSFER_SRC) {
+            bind |= d3d11::D3D11_BIND_SHADER_RESOURCE;
+        }
 
         // TODO: how to do buffer copies
-        if usage.contains(Usage::TRANSFER_DST) { bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS; }
+        if usage.intersects(Usage::TRANSFER_DST | Usage::STORAGE) {
+            bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS;
+        }
 
         Ok(UnboundBuffer {
             usage,
@@ -688,11 +724,17 @@ impl hal::Device<Backend> for Device {
         debug!("usage={:?}, props={:b}", unbound_buffer.usage, memory.properties);
 
         #[allow(non_snake_case)]
-        let MiscFlags = if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) {
-            d3d11::D3D11_RESOURCE_MISC_BUFFER_STRUCTURED
+        let MiscFlags = if unbound_buffer.bind & (d3d11::D3D11_BIND_SHADER_RESOURCE | d3d11::D3D11_BIND_UNORDERED_ACCESS) != 0 {
+            d3d11::D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS
         } else {
             0
         };
+
+        let initial_data = memory.host_visible.as_ref().map(|p| d3d11::D3D11_SUBRESOURCE_DATA {
+            pSysMem: unsafe { p.borrow().as_ptr().offset(offset as isize) as _ },
+            SysMemPitch: 0,
+            SysMemSlicePitch: 0
+        });
 
         let raw = if memory.properties == Properties::DEVICE_LOCAL {
             // device local memory
@@ -709,7 +751,11 @@ impl hal::Device<Backend> for Device {
             let hr = unsafe {
                 self.raw.CreateBuffer(
                     &desc,
-                    ptr::null_mut(),
+                    if let Some(data) = initial_data {
+                        &data
+                    } else {
+                        ptr::null_mut()
+                    },
                     &mut buffer as *mut *mut _ as *mut *mut _
                 )
             };
@@ -734,7 +780,11 @@ impl hal::Device<Backend> for Device {
             let hr = unsafe {
                 self.raw.CreateBuffer(
                     &desc,
-                    ptr::null_mut(),
+                    if let Some(data) = initial_data {
+                        &data
+                    } else {
+                        ptr::null_mut()
+                    },
                     &mut buffer as *mut *mut _ as *mut *mut _
                 )
             };
@@ -748,14 +798,17 @@ impl hal::Device<Backend> for Device {
             unimplemented!()
         };
 
-        let srv = if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) {
+        let srv = if unbound_buffer.bind & d3d11::D3D11_BIND_SHADER_RESOURCE != 0 {
             let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC>() };
-            desc.Format = dxgiformat::DXGI_FORMAT_UNKNOWN;
-            desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_BUFFER;
+            desc.Format = dxgiformat::DXGI_FORMAT_R32_TYPELESS;
+            desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_BUFFEREX;
             unsafe {
-                let mut buffer_srv = desc.u.Buffer_mut();
-                *buffer_srv.u1.FirstElement_mut() = 0;
-                *buffer_srv.u2.NumElements_mut() = unbound_buffer.size as u32 / 4;
+                *desc.u.BufferEx_mut() = d3d11::D3D11_BUFFEREX_SRV {
+                    FirstElement: 0,
+                    // TODO: enforce alignment through HAL limits
+                    NumElements: unbound_buffer.size as u32 / 4,
+                    Flags: d3d11::D3D11_BUFFEREX_SRV_FLAG_RAW,
+                };
             };
 
             let mut srv = ptr::null_mut();
@@ -778,15 +831,15 @@ impl hal::Device<Backend> for Device {
             None
         };
 
-        let uav = if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_DST) {
+        let uav = if unbound_buffer.bind & d3d11::D3D11_BIND_UNORDERED_ACCESS != 0 {
             let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC>() };
-            desc.Format = dxgiformat::DXGI_FORMAT_R32_UINT;
+            desc.Format = dxgiformat::DXGI_FORMAT_R32_TYPELESS;
             desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_BUFFER;
             unsafe {
                 *desc.u.Buffer_mut() = d3d11::D3D11_BUFFER_UAV {
                     FirstElement: 0,
                     NumElements: unbound_buffer.size as u32 / 4,
-                    Flags: 0
+                    Flags: d3d11::D3D11_BUFFER_UAV_FLAG_RAW
                 };
             };
 
@@ -863,7 +916,8 @@ impl hal::Device<Backend> for Device {
         if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) { bind |= d3d11::D3D11_BIND_DEPTH_STENCIL; }
 
         // TODO: how to do buffer copies
-        if usage.contains(Usage::TRANSFER_DST) { bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS; }
+        if usage.contains(Usage::TRANSFER_DST) ||
+           usage.contains(Usage::STORAGE) { bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS; }
 
         debug!("{:b}", bind);
 
@@ -979,7 +1033,7 @@ impl hal::Device<Backend> for Device {
                         }
                     };
 
-                    unordered_access_views.push(self.view_image_as_unordered_access_view(&view).map_err(|_| device::BindError::WrongMemory)?);
+                    unordered_access_views.push(self.view_image_as_unordered_access(&view).map_err(|_| device::BindError::WrongMemory)?);
                 }
             }
         }
@@ -1110,7 +1164,11 @@ impl hal::Device<Backend> for Device {
             } else {
                 None
             },
-            uav_handle: None,
+            uav_handle: if image.usage.contains(image::Usage::STORAGE) {
+                Some(self.view_image_as_unordered_access(&info)?)
+            } else {
+                None
+            },
             dsv_handle: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
                 Some(self.view_image_as_depth_stencil(&info)?)
             } else {
@@ -1242,7 +1300,8 @@ impl hal::Device<Backend> for Device {
     {
         for write in write_iter {
             let target_binding = write.binding as usize;
-            let (handle_offset, _ty) = write.set.offset_mapping[target_binding];
+            let (handle_offset, ty) = write.set.offset_mapping[target_binding];
+
 
             for descriptor in write.descriptors {
                 // spill over the writes onto the next binding
@@ -1258,10 +1317,26 @@ impl hal::Device<Backend> for Device {
                 match *descriptor.borrow() {
                     // TODO: binding range
                     pso::Descriptor::Buffer(buffer, ref _range) => {
-                        unsafe { *handle = Descriptor(buffer.internal.raw as *mut _); }
+                        match ty {
+                            pso::DescriptorType::UniformBuffer => {
+                                unsafe { *handle = Descriptor(buffer.internal.raw as *mut _); }
+                            },
+                            pso::DescriptorType::StorageBuffer => {
+                                unsafe { *handle = Descriptor(buffer.internal.uav.unwrap() as *mut _); }
+                            },
+                            _ => unreachable!()
+                        }
                     }
                     pso::Descriptor::Image(image, _layout) => {
-                        unsafe { *handle = Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _); }
+                        match ty {
+                            pso::DescriptorType::SampledImage => {
+                                unsafe { *handle = Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _); }
+                            },
+                            pso::DescriptorType::StorageImage => {
+                                unsafe { *handle = Descriptor(image.uav_handle.clone().unwrap().as_raw() as *mut _); }
+                            },
+                            _ => unreachable!()
+                        }
                     }
                     pso::Descriptor::Sampler(sampler) => {
                         unsafe { *handle = Descriptor(sampler.sampler_handle.as_raw() as *mut _); }
