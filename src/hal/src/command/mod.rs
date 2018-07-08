@@ -124,7 +124,12 @@ impl<'a, B: Backend, C, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
     /// The command buffer will be consumed and can't be modified further.
     /// The command pool must be reset to able to re-record commands.
     pub fn finish(self) -> Submit<B, C, S, L> {
-        Submit::new(self.raw.clone())
+        self.raw.finish();
+        let raw = self.raw.clone();
+
+        ::std::mem::forget(self);
+
+        Submit::new(raw)
     }
 
     /// Downgrade a command buffer to a lesser capability type.
@@ -157,3 +162,4 @@ impl<'a, B: Backend, C, S: Shot, L: Level> Drop for CommandBuffer<'a, B, C, S, L
         self.raw.finish();
     }
 }
+
