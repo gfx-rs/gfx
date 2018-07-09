@@ -14,6 +14,9 @@ extern crate gfx_backend_metal as back;
 extern crate gfx_backend_vulkan as back;
 extern crate gfx_hal as hal;
 
+#[cfg(feature = "gl")]
+use back::glutin::GlContext;
+
 extern crate glsl_to_spirv;
 extern crate image;
 extern crate winit;
@@ -394,6 +397,7 @@ fn main() {
     while running {
         events_loop.poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
+                #[allow(unused_variables)]
                 match event {
                     winit::WindowEvent::KeyboardInput {
                         input:
@@ -404,7 +408,9 @@ fn main() {
                         ..
                     }
                     | winit::WindowEvent::CloseRequested => running = false,
-                    winit::WindowEvent::Resized(_dims) => {
+                    winit::WindowEvent::Resized(dims) => {
+                        #[cfg(feature = "gl")]
+                        surface.get_window().resize(dims.to_physical(surface.get_window().get_hidpi_factor()));
                         recreate_swapchain = true;
                     }
                     _ => (),
@@ -570,12 +576,14 @@ fn swapchain_stuff(
     Extent2D,
 ) {
     let (caps, formats, _present_modes) = surface.compatibility(physical_device);
+    println!("formats: {:?}", formats);
     let format = formats.
         map_or(f::Format::Rgba8Srgb, |formats| {
             formats
-                .into_iter()
+                .iter()
                 .find(|format| format.base_format().1 == ChannelType::Srgb)
-                .unwrap()
+                .map(|format| *format)
+                .unwrap_or(formats[0])
         });
 
     let extent = match caps.current_extent {
