@@ -576,12 +576,14 @@ fn swapchain_stuff(
     Extent2D,
 ) {
     let (caps, formats, _present_modes) = surface.compatibility(physical_device);
+    println!("formats: {:?}", formats);
     let format = formats.
         map_or(f::Format::Rgba8Srgb, |formats| {
             formats
-                .into_iter()
+                .iter()
                 .find(|format| format.base_format().1 == ChannelType::Srgb)
-                .unwrap()
+                .map(|format| *format)
+                .unwrap_or(formats[0])
         });
 
     let extent = match caps.current_extent {
