@@ -815,6 +815,28 @@ impl CommandBuffer {
         }
     }
 
+    unsafe fn bind_compute_descriptor(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, binding: &PipelineBinding, handles: *mut Descriptor) {
+        use pso::DescriptorType::*;
+
+        let handles = handles.offset(binding.handle_offset as isize);
+        let start = binding.binding_range.start as UINT;
+        let len = binding.binding_range.end as UINT - start;
+
+        match binding.ty {
+            Sampler => context.CSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
+            SampledImage => context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
+            CombinedImageSampler => {
+                context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
+                context.CSSetSamplers(start, len, handles.offset(1) as *const *mut _ as *const *mut _);
+            },
+            UniformBuffer |
+            UniformBufferDynamic => context.CSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _),
+            StorageImage |
+            StorageBuffer => context.CSSetUnorderedAccessViews(start, len, handles as *const *mut _ as *const *mut _, ptr::null_mut()),
+            _ => unimplemented!()
+        }
+    }
+
     fn bind_descriptor(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, binding: &PipelineBinding, handles: *mut Descriptor) {
         //use pso::ShaderStageFlags::*;
 
@@ -826,6 +848,10 @@ impl CommandBuffer {
             if binding.stage.contains(pso::ShaderStageFlags::FRAGMENT) {
                 self.bind_fragment_descriptor(context, binding, handles);
             }
+
+            if binding.stage.contains(pso::ShaderStageFlags::COMPUTE) {
+                self.bind_compute_descriptor(context, binding, handles);
+            }
         }
     }
 }
@@ -833,8 +859,6 @@ impl CommandBuffer {
 impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin(&mut self, _flags: command::CommandBufferFlags, _info: command::CommandBufferInheritanceInfo<Backend>) {
-
-        // TODO:
     }
 
     fn finish(&mut self) {
@@ -1097,6 +1121,11 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
+        // TODO: find a better solution to invalidating old bindings..
+        unsafe {
+            self.context.CSSetUnorderedAccessViews(0, 16, [ptr::null_mut(); 16].as_ptr(), ptr::null_mut());
+        }
+
         //let offsets: Vec<command::DescriptorSetOffset> = offsets.into_iter().map(|o| *o.borrow()).collect();
 
         let iter = sets.into_iter().zip(layout.set_bindings.iter().skip(first_set));
@@ -1111,23 +1140,39 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_compute_pipeline(&mut self, _pipeline: &ComputePipeline) {
-        unimplemented!()
+    fn bind_compute_pipeline(&mut self, pipeline: &ComputePipeline) {
+        unsafe {
+            self.context.CSSetShader(pipeline.cs.as_raw(), ptr::null_mut(), 0);
+        }
     }
 
 
-    fn bind_compute_descriptor_sets<I, J>(&mut self, _layout: &PipelineLayout, _first_set: usize, _sets: I, _offsets: J)
+    fn bind_compute_descriptor_sets<I, J>(&mut self, layout: &PipelineLayout, first_set: usize, sets: I, _offsets: J)
     where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
-        unimplemented!()
+        unsafe {
+            self.context.CSSetUnorderedAccessViews(0, 16, [ptr::null_mut(); 16].as_ptr(), ptr::null_mut());
+        }
+        let iter = sets.into_iter().zip(layout.set_bindings.iter().skip(first_set));
+
+        for (set, bindings) in iter {
+            let set = set.borrow();
+
+            // TODO: offsets
+            for binding in bindings.iter() {
+                self.bind_descriptor(&self.context, binding, set.handles);
+            }
+        }
     }
 
-    fn dispatch(&mut self, _count: WorkGroupCount) {
-        unimplemented!()
+    fn dispatch(&mut self, count: WorkGroupCount) {
+        unsafe {
+            self.context.Dispatch(count[0], count[1], count[2]);
+        }
     }
 
     fn dispatch_indirect(&mut self, _buffer: &Buffer, _offset: buffer::Offset) {
@@ -1483,7 +1528,7 @@ pub struct UnboundBuffer {
     requirements: memory::Requirements,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct InternalBuffer {
     raw: *mut d3d11::ID3D11Buffer,
     srv: Option<*mut d3d11::ID3D11ShaderResourceView>,
@@ -1493,7 +1538,6 @@ pub struct InternalBuffer {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Buffer {
-    #[derivative(Debug="ignore")]
     internal: InternalBuffer,
     size: u64,
 }
@@ -1592,8 +1636,15 @@ pub struct Sampler {
 unsafe impl Send for Sampler { }
 unsafe impl Sync for Sampler { }
 
-#[derive(Debug)]
-pub struct ComputePipeline;
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub struct ComputePipeline {
+    #[derivative(Debug="ignore")]
+    cs: ComPtr<d3d11::ID3D11ComputeShader>,
+}
+
+unsafe impl Send for ComputePipeline { }
+unsafe impl Sync for ComputePipeline { }
 
 /// NOTE: some objects are hashed internally and reused when created with the
 ///       same params[0], need to investigate which interfaces this applies
