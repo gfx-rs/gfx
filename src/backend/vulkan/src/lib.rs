@@ -7,6 +7,8 @@ extern crate gfx_hal as hal;
 #[macro_use]
 extern crate lazy_static;
 extern crate smallvec;
+#[cfg(feature = "use-rtld-next")]
+extern crate shared_library;
 
 #[cfg(windows)]
 extern crate winapi;
@@ -20,6 +22,7 @@ extern crate xcb;
 #[cfg(feature = "glsl-to-spirv")]
 extern crate glsl_to_spirv;
 
+#[cfg(not(feature = "use-rtld-next"))]
 use ash::{Entry, LoadingError};
 use ash::extensions as ext;
 use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
@@ -33,6 +36,11 @@ use std::{fmt, mem, ptr};
 use std::borrow::Borrow;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
+
+#[cfg(feature = "use-rtld-next")]
+use shared_library::dynamic_library::{DynamicLibrary, SpecialHandles};
+#[cfg(feature = "use-rtld-next")]
+use ash::{EntryCustom, LoadingError};
 
 mod command;
 mod conv;
@@ -66,9 +74,23 @@ const SURFACE_EXTENSIONS: &'static [&'static str] = &[
     vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
 ];
 
+#[cfg(not(feature = "use-rtld-next"))]
 lazy_static! {
     // Entry function pointers
     pub static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
+}
+
+#[cfg(feature = "use-rtld-next")]
+lazy_static! {
+    // Entry function pointers
+    pub static ref VK_ENTRY: Result<EntryCustom<V1_0, ()>, LoadingError>
+        = EntryCustom::new_custom(
+            || Ok(()),
+            |_, name| unsafe {
+                DynamicLibrary::symbol_special(SpecialHandles::Next, &*name.to_string_lossy())
+                    .unwrap_or(ptr::null_mut())
+            }
+        );
 }
 
 pub struct RawInstance(pub ash::Instance<V1_0>, Option<(ext::DebugReport, vk::DebugReportCallbackEXT)>);
