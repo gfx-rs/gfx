@@ -2167,17 +2167,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 //Note: flipping Y coordinate of the destination here
                 soft::RenderCommand::SetViewport(MTLViewport {
                     originX: 0.0,
-                    originY: (ext.height >> level) as _,
-                    width: (ext.width >> level) as _,
-                    height: -((ext.height >> level) as f64),
+                    originY: ext.height as _,
+                    width: ext.width as _,
+                    height: -(ext.height as f64),
                     znear: 0.0,
                     zfar: 1.0,
                 }),
                 soft::RenderCommand::SetScissor(MTLScissorRect {
                     x: 0,
                     y: 0,
-                    width: (ext.width >> level) as _,
-                    height: (ext.height >> level) as _,
+                    width: ext.width as _,
+                    height: ext.height as _,
                 }),
                 soft::RenderCommand::BindBufferData {
                     stage: pso::Stage::Vertex,
