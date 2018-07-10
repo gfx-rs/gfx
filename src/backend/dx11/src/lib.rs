@@ -1,6 +1,6 @@
 //#[deny(missing_docs)]
 
-//#[macro_use]
+#[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate derivative;
@@ -265,6 +265,10 @@ impl hal::Instance for Instance {
                     },
                     hal::MemoryType {
                         properties: Properties::CPU_VISIBLE,
+                        heap_index: 1,
+                    },
+                    hal::MemoryType {
+                        properties: Properties::CPU_VISIBLE | Properties::COHERENT,
                         heap_index: 1,
                     },
                 ],
@@ -872,7 +876,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn reset(&mut self, _release_resources: bool) {
-        unimplemented!()
+        // unimplemented!()
     }
 
     fn begin_render_pass<T>(&mut self, _render_pass: &RenderPass, framebuffer: &Framebuffer, _target_rect: pso::Rect, clear_values: T, _first_subpass: command::SubpassContents)
@@ -1312,6 +1316,25 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 }
 
+bitflags! {
+    struct MemoryHeapType: u64 {
+        const DEVICE_LOCAL = 1 << 0;
+        const HOST_NONCOHERENT = 1 << 1;
+        const HOST_COHERENT = 1 << 2;
+    }
+}
+
+impl MemoryHeapType {
+    pub fn from_raw(index: usize) -> Option<Self> {
+        match Self::from_bits(1 << index).unwrap() {
+            Self::DEVICE_LOCAL => Some(Self::DEVICE_LOCAL),
+            Self::HOST_NONCOHERENT => Some(Self::HOST_NONCOHERENT),
+            Self::HOST_COHERENT => Some(Self::HOST_COHERENT),
+            _ => None
+        }
+    }
+}
+
 // Since we dont have any heaps to work with directly, everytime we bind a
 // buffer/image to memory we allocate a dx11 resource and assign it a range.
 //
@@ -1322,6 +1345,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Memory {
+    ty: MemoryHeapType,
     properties: memory::Properties,
     size: u64,
 
@@ -1601,8 +1625,8 @@ impl Image {
         mip_level + (layer * self.num_mips as UINT)
     }
 
-    pub fn get_uav(&self, mip_level: image::Level, layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11UnorderedAccessView>> {
-        self.internal.unordered_access_views.get(self.calc_subresource(mip_level as _, layer as _) as usize)
+    pub fn get_uav(&self, mip_level: image::Level, _layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11UnorderedAccessView>> {
+        self.internal.unordered_access_views.get(self.calc_subresource(mip_level as _, 0) as usize)
     }
 
     pub fn get_rtv(&self, mip_level: image::Level, layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11RenderTargetView>> {
