@@ -320,7 +320,7 @@ impl Device {
         }
     }
 
-    fn combine_seperate_images_and_samplers(
+    fn combine_separate_images_and_samplers(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
         desc_remap_data: &mut n::DescRemapData,
@@ -394,7 +394,7 @@ impl Device {
 
                 self.specialize_ast(&mut ast, point.specialization).unwrap();
                 self.remap_bindings(&mut ast, desc_remap_data, name_binding_map);
-                self.combine_seperate_images_and_samplers(&mut ast, desc_remap_data, name_binding_map);
+                self.combine_separate_images_and_samplers(&mut ast, desc_remap_data, name_binding_map);
 
                 let glsl = self.translate_spirv(&mut ast).unwrap();
                 info!("Generated:\n{:?}", glsl);
