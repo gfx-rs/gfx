@@ -21,7 +21,7 @@ use {
     Backend, Buffer, BufferView, CommandPool, ComputePipeline, DescriptorPool, DescriptorSetLayout,
     Fence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer, InternalImage, Memory,
     PipelineLayout, QueryPool, RenderPass, Sampler, Semaphore, ShaderModule, Surface, Swapchain,
-    UnboundBuffer, UnboundImage, ViewInfo, PipelineBinding, Descriptor, MemoryHeapType
+    UnboundBuffer, UnboundImage, ViewInfo, PipelineBinding, Descriptor, MemoryHeapFlags
 };
 
 use {conv, internal, shader};
@@ -38,6 +38,7 @@ pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     memory_properties: hal::MemoryProperties,
+    memory_heap_flags: [MemoryHeapFlags; 3],
     pub(crate) internal: internal::Internal
 }
 
@@ -54,6 +55,11 @@ impl Device {
             raw: device.clone(),
             context,
             memory_properties,
+            memory_heap_flags: [
+                MemoryHeapFlags::DEVICE_LOCAL,
+                MemoryHeapFlags::HOST_NONCOHERENT,
+                MemoryHeapFlags::HOST_COHERENT
+            ],
             internal: internal::Internal::new(&device)
         }
     }
@@ -488,50 +494,12 @@ impl hal::Device<Backend> for Device {
         mem_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<Memory, device::OutOfMemory> {
-        let heap_ty = MemoryHeapType::from_raw(mem_type.0).expect("invalid memory type id");
-
-        let (working_buffer, working_buffer_size) = match heap_ty {
-            MemoryHeapType::DEVICE_LOCAL => {
-                (None, 0)
-            },
-            MemoryHeapType::HOST_NONCOHERENT | MemoryHeapType::HOST_COHERENT => {
-                let working_buffer_size = 1 << 15;
-
-                let desc = d3d11::D3D11_BUFFER_DESC {
-                    ByteWidth: working_buffer_size,
-                    Usage: d3d11::D3D11_USAGE_STAGING,
-                    BindFlags: 0,
-                    CPUAccessFlags: d3d11::D3D11_CPU_ACCESS_READ | d3d11::D3D11_CPU_ACCESS_WRITE,
-                    MiscFlags:0,
-                    StructureByteStride: 0,
-
-                };
-                let mut working_buffer = ptr::null_mut();
-                let hr = unsafe {
-                    self.raw.CreateBuffer(
-                        &desc,
-                        ptr::null_mut(),
-                        &mut working_buffer as *mut *mut _ as *mut *mut _
-                    )
-                };
-
-                if !winerror::SUCCEEDED(hr) {
-                    return Err(device::OutOfMemory);
-                }
-
-                (Some(unsafe { ComPtr::from_raw(working_buffer) }), working_buffer_size)
-            },
-            _ => unreachable!()
-        };
-
         Ok(Memory {
-            ty: heap_ty,
+            ty: self.memory_heap_flags[mem_type.0],
             properties: self.memory_properties.memory_types[mem_type.0].properties,
             size,
             mapped_ptr: RefCell::new(None),
             host_visible: Some(RefCell::new(Vec::with_capacity(size as usize))),
-            working_buffer,
-            working_buffer_size: working_buffer_size as u64,
             local_buffers: RefCell::new(Vec::new()),
             local_images: RefCell::new(Vec::new()),
         })
@@ -795,7 +763,7 @@ impl hal::Device<Backend> for Device {
             requirements: memory::Requirements {
                 size,
                 alignment: 1,
-                type_mask: MemoryHeapType::all().bits(),
+                type_mask: MemoryHeapFlags::all().bits(),
             }
         })
     }
@@ -826,7 +794,7 @@ impl hal::Device<Backend> for Device {
         });
 
         let raw = match memory.ty {
-            MemoryHeapType::DEVICE_LOCAL => {
+            MemoryHeapFlags::DEVICE_LOCAL => {
                 // device local memory
                 let desc = d3d11::D3D11_BUFFER_DESC {
                     ByteWidth: unbound_buffer.size as _,
@@ -856,7 +824,7 @@ impl hal::Device<Backend> for Device {
 
                 unsafe { ComPtr::from_raw(buffer) }
             },
-            MemoryHeapType::HOST_NONCOHERENT | MemoryHeapType::HOST_COHERENT => {
+            MemoryHeapFlags::HOST_NONCOHERENT | MemoryHeapFlags::HOST_COHERENT => {
                 let desc = d3d11::D3D11_BUFFER_DESC {
                     ByteWidth: unbound_buffer.size as _,
                     // TODO: dynamic?
@@ -961,10 +929,19 @@ impl hal::Device<Backend> for Device {
         };
         let range = offset..unbound_buffer.size;
 
-        memory.bind_buffer(range, buffer.clone());
+        memory.bind_buffer(range.clone(), buffer.clone());
+
+        let host_ptr = if let Some(vec) = &memory.host_visible {
+            vec.borrow_mut().as_mut_ptr()
+        } else {
+            ptr::null_mut()
+        };
 
         Ok(Buffer {
             internal: buffer,
+            ty: memory.ty,
+            host_ptr,
+            bound_range: range,
             size: unbound_buffer.size
         })
     }
@@ -1024,7 +1001,7 @@ impl hal::Device<Backend> for Device {
             requirements: memory::Requirements {
                 size: size,
                 alignment: 1,
-                type_mask: MemoryHeapType::DEVICE_LOCAL.bits(),
+                type_mask: MemoryHeapFlags::DEVICE_LOCAL.bits(),
             },
         })
     }
@@ -1081,10 +1058,7 @@ impl hal::Device<Backend> for Device {
                     Usage: usage,
                     BindFlags: bind,
                     CPUAccessFlags: cpu,
-                    // unfortunately no better way of doing this, since creating a cube view
-                    // requires the resource to have been created with this flag, and we cant know
-                    // what views are going to be created for the resource beforehand
-                    MiscFlags: if layers % 6 == 0 {
+                    MiscFlags: if image.flags.contains(image::StorageFlags::CUBE_VIEW) {
                         d3d11::D3D11_RESOURCE_MISC_TEXTURECUBE
                     } else {
                         0
@@ -1420,9 +1394,22 @@ impl hal::Device<Backend> for Device {
                     pso::Descriptor::Buffer(buffer, ref _range) => {
                         match ty {
                             pso::DescriptorType::UniformBuffer => {
+                                if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
+                                    let old_buffer = unsafe { (*handle).0 } as *mut _;
+
+                                    write.set.flush_coherent(old_buffer, buffer);
+                                }
+
                                 unsafe { *handle = Descriptor(buffer.internal.raw as *mut _); }
                             },
                             pso::DescriptorType::StorageBuffer => {
+                                if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
+                                    let old_buffer = unsafe { (*handle).0 } as *mut _;
+
+                                    write.set.flush_coherent(old_buffer, buffer);
+                                    write.set.invalidate_coherent(old_buffer, buffer);
+                                }
+
                                 unsafe { *handle = Descriptor(buffer.internal.uav.unwrap() as *mut _); }
                             },
                             _ => unreachable!()
@@ -1492,10 +1479,6 @@ impl hal::Device<Backend> for Device {
             let ptr = host_visible.borrow_mut().as_mut_ptr();
             memory.mapped_ptr.replace(Some(ptr));
 
-            if memory.ty == MemoryHeapType::HOST_COHERENT {
-                memory.invalidate(&self.context, memory.resolve(&(None, None)));
-            }
-
             Ok(unsafe { ptr.offset(*range.start().unwrap_or(&0) as isize) })
         } else {
             error!("Tried to map non-host visible memory");
@@ -1508,10 +1491,6 @@ impl hal::Device<Backend> for Device {
         assert_eq!(memory.host_visible.is_some(), true);
 
         memory.mapped_ptr.replace(None);
-
-        if memory.ty == MemoryHeapType::HOST_COHERENT {
-            memory.flush(&self.context, memory.resolve(&(None, None)));
-        }
     }
 
     fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
@@ -1541,7 +1520,12 @@ impl hal::Device<Backend> for Device {
             let &(memory, ref range) = range.borrow();
             let range = *range.start().unwrap_or(&0)..*range.end().unwrap_or(&memory.size);
 
-            memory.invalidate(&self.context, range);
+            memory.invalidate(
+                &self.context,
+                range,
+                self.internal.working_buffer.clone(),
+                self.internal.working_buffer_size
+            );
         }
     }
 

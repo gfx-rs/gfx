@@ -34,7 +34,7 @@ uint4 Nearest_Uint(float4 uv)
 
     float2 pix = uv.xy * size.xy;
 
-    return BlitSrc_Uint.Load(int4(int2(pix), uv.zw)).xyzw;
+    return BlitSrc_Uint.Load(int4(int2(pix), uv.zw));
 }
 
 int4 Nearest_Sint(float4 uv)
@@ -44,7 +44,7 @@ int4 Nearest_Sint(float4 uv)
 
     float2 pix = uv.xy * size.xy;
 
-    return BlitSrc_Sint.Load(int4(int2(pix), uv.zw)).xyzw;
+    return BlitSrc_Sint.Load(int4(int2(pix), uv.zw));
 }
 
 uint4 ps_blit_2d_uint(VsOutput input) : SV_Target

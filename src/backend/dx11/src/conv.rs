@@ -230,8 +230,8 @@ pub fn map_rect(rect: &Rect) -> D3D11_RECT {
     D3D11_RECT {
         left: rect.x as _,
         top: rect.y as _,
-        right: rect.w as _,
-        bottom: rect.h as _,
+        right: (rect.x + rect.w) as _,
+        bottom: (rect.y + rect.h) as _,
     }
 }
 
