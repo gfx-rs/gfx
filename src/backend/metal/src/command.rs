@@ -9,8 +9,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::ops::{Deref, Range};
 use std::sync::{Arc, Mutex};
-use std::{iter, mem};
-use std::slice;
+use std::{iter, mem, slice, time};
 
 use hal::{buffer, command as com, error, memory, pool, pso};
 use hal::{DrawCount, SwapImageIndex, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
@@ -35,6 +34,8 @@ const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
 /// with clear operations set up to implement our `clear_image`
 /// Note: currently doesn't work, needs a repro case for Apple
 const CLEAR_IMAGE_ARRAY: bool = false;
+/// Number of frames to average when reporting the frame wait times.
+const FRAME_WAIT_REPORT_WINDOW: usize = 0;
 
 pub struct QueueInner {
     raw: metal::CommandQueue,
@@ -123,6 +124,9 @@ pub struct CommandBuffer {
     state: State,
     temp: Temp,
 }
+
+unsafe impl Send for CommandBuffer {}
+unsafe impl Sync for CommandBuffer {}
 
 #[derive(Clone)]
 struct Temp {
@@ -1231,17 +1235,28 @@ fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass])
     }
 }
 
-unsafe impl Send for CommandBuffer {}
-unsafe impl Sync for CommandBuffer {}
+#[derive(Default)]
+struct FrameWaitReport {
+    duration: time::Duration,
+    count: usize,
+    frame: usize,
+}
+
 
 pub struct CommandQueue {
     shared: Arc<Shared>,
+    frame_wait: Option<FrameWaitReport>,
 }
 
 impl CommandQueue {
     pub(crate) fn new(shared: Arc<Shared>) -> Self {
         CommandQueue {
             shared,
+            frame_wait: if FRAME_WAIT_REPORT_WINDOW != 0 {
+                Some(FrameWaitReport::default())
+            } else {
+                None
+            },
         }
     }
 
@@ -1256,7 +1271,12 @@ impl CommandQueue {
                 system.wait(!0);
             }
             if let Some(swap_image) = sem.image_ready.lock().unwrap().take() {
+                let start = time::Instant::now();
                 swap_image.wait_until_ready();
+                if let Some(ref mut wait) = self.frame_wait {
+                    wait.count += 1;
+                    wait.duration += start.elapsed();
+                }
             }
         }
     }
@@ -1372,6 +1392,18 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
 
         command_buffer.commit();
+
+        if let Some(ref mut wait) = self.frame_wait {
+            wait.frame += 1;
+            if wait.frame >= FRAME_WAIT_REPORT_WINDOW {
+                let time = wait.duration / wait.frame as u32;
+                println!("Frame wait time={}ms count={}",
+                    time.as_secs() as u32 * 1000 + time.subsec_millis(),
+                    wait.count as f32 / wait.frame as f32,
+                );
+                *wait = FrameWaitReport::default();
+            }
+        }
 
         Ok(())
     }

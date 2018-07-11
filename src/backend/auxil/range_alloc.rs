@@ -1,5 +1,7 @@
 use std::fmt::Debug;
+use std::iter::Sum;
 use std::ops::{Add, AddAssign, Range, Sub};
+
 
 #[derive(Debug)]
 pub struct RangeAllocator<T> {
@@ -121,6 +123,16 @@ where
         self.free_ranges.push(self.initial_range.clone());
     }
 }
+
+impl<T: Copy + Sub<Output = T> + Sum> RangeAllocator<T> {
+    pub fn total_available(&self) -> T {
+        self.free_ranges
+            .iter()
+            .map(|range| range.end - range.start)
+            .sum()
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

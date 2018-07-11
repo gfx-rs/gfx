@@ -125,6 +125,7 @@ pub struct Device {
     pub(crate) shared: Arc<Shared>,
     pub(crate) private_caps: PrivateCapabilities,
     memory_types: [hal::MemoryType; 4],
+    debug_min_descriptor_count: usize,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -258,6 +259,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             shared: self.shared.clone(),
             private_caps: self.private_caps.clone(),
             memory_types: self.memory_types,
+            debug_min_descriptor_count: 0,
         };
 
         Ok(hal::Gpu {
@@ -1209,7 +1211,7 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
-        debug!("flushing mapped ranges");
+        debug!("flush_mapped_memory_ranges");
         for item in iter {
             let (memory, ref generic_range) = *item.borrow();
             let range = memory.resolve(generic_range);
@@ -1237,7 +1239,7 @@ impl hal::Device<Backend> for Device {
     {
         let _ap = AutoreleasePool::new(); // for the encoder
         let mut num_syncs = 0;
-        debug!("invalidating mapped ranges");
+        debug!("invalidate_mapped_memory_ranges");
 
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
@@ -1289,9 +1291,9 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        let mut num_samplers = 0;
-        let mut num_textures = 0;
-        let mut num_buffers = 0;
+        let mut num_samplers = self.debug_min_descriptor_count;
+        let mut num_textures = self.debug_min_descriptor_count;
+        let mut num_buffers  = self.debug_min_descriptor_count;
 
         if self.private_caps.argument_buffers {
             let mut arguments = Vec::new();
@@ -1511,7 +1513,7 @@ impl hal::Device<Backend> for Device {
     fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
         let (storage, cache) = MemoryTypes::describe(memory_type.0);
         let device = self.shared.device.lock().unwrap();
-        debug!("allocating memory type {:?} of size {}", memory_type, size);
+        debug!("allocate_memory type {:?} of size {}", memory_type, size);
 
         // Heaps cannot be used for CPU coherent resources
         //TEMP: MacOS supports Private only, iOS and tvOS can do private/shared
@@ -1535,7 +1537,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn free_memory(&self, memory: n::Memory) {
-        debug!("freeing memory of size {}", memory.size);
+        debug!("free_memory of size {}", memory.size);
         if let n::MemoryHeap::Public(_, ref cpu_buffer) = memory.heap {
             debug!("\tbacked by cpu buffer {:?}", cpu_buffer.as_ptr());
         }
@@ -1592,7 +1594,7 @@ impl hal::Device<Backend> for Device {
     fn bind_buffer_memory(
         &self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
-        debug!("mapping buffer of size {} at offset {}", buffer.size, offset);
+        debug!("bind_buffer_memory of size {} at offset {}", buffer.size, offset);
         let (raw, res_options, range) = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = conv::resource_options_from_storage_and_cache(
@@ -1635,7 +1637,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_buffer(&self, buffer: n::Buffer) {
-        debug!("destroing buffer {:?} occupying memory {:?}", buffer.raw.as_ptr(), buffer.range);
+        debug!("destroy_buffer {:?} occupying memory {:?}", buffer.raw.as_ptr(), buffer.range);
     }
 
     fn create_buffer_view<R: RangeArg<u64>>(
@@ -1969,7 +1971,7 @@ impl hal::Device<Backend> for Device {
         *fence.mutex.lock().unwrap() = false;
     }
     fn wait_for_fence(&self, fence: &n::Fence, timeout_ms: u32) -> bool {
-        debug!("waiting for fence {:?} for {} ms", fence, timeout_ms);
+        debug!("wait_for_fence {:?} for {} ms", fence, timeout_ms);
         let mut guard = fence.mutex.lock().unwrap();
         match timeout_ms {
             0 => *guard,
