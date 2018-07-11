@@ -97,6 +97,9 @@ pub struct Internal {
     cs_copy_buffer_image2d_r8: ComPtr<d3d11::ID3D11ComputeShader>,
 
     copy_info: ComPtr<d3d11::ID3D11Buffer>,
+
+    pub working_buffer: ComPtr<d3d11::ID3D11Buffer>,
+    pub working_buffer_size: u64,
 }
 
 fn compile_blob(src: &[u8], entrypoint: &str, stage: Stage) -> ComPtr<d3dcommon::ID3DBlob> {
@@ -219,6 +222,31 @@ impl Internal {
             unsafe { (ComPtr::from_raw(nearest), ComPtr::from_raw(linear)) }
         };
 
+        let (working_buffer, working_buffer_size) = {
+            let working_buffer_size = 1 << 16;
+
+            let desc = d3d11::D3D11_BUFFER_DESC {
+                ByteWidth: working_buffer_size,
+                Usage: d3d11::D3D11_USAGE_STAGING,
+                BindFlags: 0,
+                CPUAccessFlags: d3d11::D3D11_CPU_ACCESS_READ | d3d11::D3D11_CPU_ACCESS_WRITE,
+                MiscFlags:0,
+                StructureByteStride: 0,
+
+            };
+            let mut working_buffer = ptr::null_mut();
+
+            assert_eq!(winerror::S_OK, unsafe {
+                device.CreateBuffer(
+                    &desc,
+                    ptr::null_mut(),
+                    &mut working_buffer as *mut *mut _ as *mut *mut _
+                )
+            });
+
+            (unsafe { ComPtr::from_raw(working_buffer) }, working_buffer_size)
+        };
+
         let copy_shaders = include_bytes!("../shaders/copy.hlsl");
         let blit_shaders = include_bytes!("../shaders/blit.hlsl");
 
@@ -262,7 +290,9 @@ impl Internal {
             cs_copy_buffer_image2d_r8g8: compile_cs(device, copy_shaders, "cs_copy_buffer_image2d_r8g8"),
             cs_copy_buffer_image2d_r8: compile_cs(device, copy_shaders, "cs_copy_buffer_image2d_r8"),
 
-            copy_info
+            copy_info,
+            working_buffer,
+            working_buffer_size: working_buffer_size as _
         }
     }
 

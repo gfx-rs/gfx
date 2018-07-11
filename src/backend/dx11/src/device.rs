@@ -21,7 +21,7 @@ use {
     Backend, Buffer, BufferView, CommandPool, ComputePipeline, DescriptorPool, DescriptorSetLayout,
     Fence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer, InternalImage, Memory,
     PipelineLayout, QueryPool, RenderPass, Sampler, Semaphore, ShaderModule, Surface, Swapchain,
-    UnboundBuffer, UnboundImage, ViewInfo, PipelineBinding, Descriptor
+    UnboundBuffer, UnboundImage, ViewInfo, PipelineBinding, Descriptor, MemoryHeapFlags
 };
 
 use {conv, internal, shader};
@@ -38,6 +38,7 @@ pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     memory_properties: hal::MemoryProperties,
+    memory_heap_flags: [MemoryHeapFlags; 3],
     pub(crate) internal: internal::Internal
 }
 
@@ -54,6 +55,11 @@ impl Device {
             raw: device.clone(),
             context,
             memory_properties,
+            memory_heap_flags: [
+                MemoryHeapFlags::DEVICE_LOCAL,
+                MemoryHeapFlags::HOST_NONCOHERENT,
+                MemoryHeapFlags::HOST_COHERENT
+            ],
             internal: internal::Internal::new(&device)
         }
     }
@@ -279,6 +285,11 @@ impl Device {
         let MostDetailedMip = info.range.levels.start as _;
         #[allow(non_snake_case)]
         let MipLevels = (info.range.levels.end - info.range.levels.start) as _;
+        #[allow(non_snake_case)]
+        let FirstArraySlice = info.range.layers.start as _;
+        #[allow(non_snake_case)]
+        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+
 
         match info.view_kind {
             image::ViewKind::D2 => {
@@ -286,6 +297,38 @@ impl Device {
                 *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_SRV {
                     MostDetailedMip,
                     MipLevels,
+                }
+            },
+            image::ViewKind::D2Array => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2DARRAY;
+                *unsafe{ desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            },
+            image::ViewKind::D3 => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE3D;
+                *unsafe{ desc.u.Texture3D_mut() } = d3d11::D3D11_TEX3D_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                }
+            },
+            image::ViewKind::Cube => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURECUBE;
+                *unsafe{ desc.u.TextureCube_mut() } = d3d11::D3D11_TEXCUBE_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                }
+            },
+            image::ViewKind::CubeArray => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURECUBEARRAY;
+                *unsafe{ desc.u.TextureCubeArray_mut() } = d3d11::D3D11_TEXCUBE_ARRAY_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                    First2DArrayFace: FirstArraySlice,
+                    NumCubes: ArraySize / 6,
                 }
             },
             _ => unimplemented!()
@@ -311,11 +354,34 @@ impl Device {
         let mut desc: d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
 
+        #[allow(non_snake_case)]
+        let MipSlice = info.range.levels.start as _;
+        #[allow(non_snake_case)]
+        let FirstArraySlice = info.range.layers.start as _;
+        #[allow(non_snake_case)]
+        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+
         match info.view_kind {
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_TEXTURE2D;
                 *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_UAV {
                     MipSlice: info.range.levels.start as _,
+                }
+            },
+            image::ViewKind::D2Array => {
+                desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
+                *unsafe{ desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_UAV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            },
+            image::ViewKind::D3 => {
+                desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_TEXTURE3D;
+                *unsafe{ desc.u.Texture3D_mut() } = d3d11::D3D11_TEX3D_UAV {
+                    MipSlice,
+                    FirstWSlice: FirstArraySlice,
+                    WSize: ArraySize,
                 }
             },
             _ => unimplemented!()
@@ -341,11 +407,34 @@ impl Device {
         let mut desc: d3d11::D3D11_RENDER_TARGET_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
 
+        #[allow(non_snake_case)]
+        let MipSlice = info.range.levels.start as _;
+        #[allow(non_snake_case)]
+        let FirstArraySlice = info.range.layers.start as _;
+        #[allow(non_snake_case)]
+        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+
         match info.view_kind {
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
                 *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV {
-                    MipSlice: 0,
+                    MipSlice,
+                }
+            },
+            image::ViewKind::D2Array => {
+                desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+                *unsafe{ desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_RTV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            },
+            image::ViewKind::D3 => {
+                desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE3D;
+                *unsafe{ desc.u.Texture3D_mut() } = d3d11::D3D11_TEX3D_RTV {
+                    MipSlice,
+                    FirstWSlice: FirstArraySlice,
+                    WSize: ArraySize,
                 }
             },
             _ => unimplemented!()
@@ -405,42 +494,12 @@ impl hal::Device<Backend> for Device {
         mem_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<Memory, device::OutOfMemory> {
-        let working_buffer_size = 1 << 15;
-        let working_buffer = if mem_type.0 == 1 {
-            let desc = d3d11::D3D11_BUFFER_DESC {
-                ByteWidth: working_buffer_size,
-                Usage: d3d11::D3D11_USAGE_STAGING,
-                BindFlags: 0,
-                CPUAccessFlags: d3d11::D3D11_CPU_ACCESS_READ | d3d11::D3D11_CPU_ACCESS_WRITE,
-                MiscFlags:0,
-                StructureByteStride: 0,
-
-            };
-            let mut working_buffer = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.CreateBuffer(
-                    &desc,
-                    ptr::null_mut(),
-                    &mut working_buffer as *mut *mut _ as *mut *mut _
-                )
-            };
-
-            if !winerror::SUCCEEDED(hr) {
-                return Err(device::OutOfMemory);
-            }
-
-            Some(unsafe { ComPtr::from_raw(working_buffer) })
-        } else {
-            None
-        };
-
         Ok(Memory {
+            ty: self.memory_heap_flags[mem_type.0],
             properties: self.memory_properties.memory_types[mem_type.0].properties,
             size,
             mapped_ptr: RefCell::new(None),
             host_visible: Some(RefCell::new(Vec::with_capacity(size as usize))),
-            working_buffer,
-            working_buffer_size: working_buffer_size as u64,
             local_buffers: RefCell::new(Vec::new()),
             local_images: RefCell::new(Vec::new()),
         })
@@ -704,7 +763,7 @@ impl hal::Device<Backend> for Device {
             requirements: memory::Requirements {
                 size,
                 alignment: 1,
-                type_mask: 0x7,
+                type_mask: MemoryHeapFlags::all().bits(),
             }
         })
     }
@@ -719,8 +778,6 @@ impl hal::Device<Backend> for Device {
         offset: u64,
         unbound_buffer: UnboundBuffer,
     ) -> Result<Buffer, device::BindError> {
-        use memory::Properties;
-
         debug!("usage={:?}, props={:b}", unbound_buffer.usage, memory.properties);
 
         #[allow(non_snake_case)]
@@ -736,66 +793,68 @@ impl hal::Device<Backend> for Device {
             SysMemSlicePitch: 0
         });
 
-        let raw = if memory.properties == Properties::DEVICE_LOCAL {
-            // device local memory
-            let desc = d3d11::D3D11_BUFFER_DESC {
-                ByteWidth: unbound_buffer.size as _,
-                Usage: d3d11::D3D11_USAGE_DEFAULT,
-                BindFlags: unbound_buffer.bind,
-                CPUAccessFlags: 0,
-                MiscFlags,
-                StructureByteStride: if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
-            };
+        let raw = match memory.ty {
+            MemoryHeapFlags::DEVICE_LOCAL => {
+                // device local memory
+                let desc = d3d11::D3D11_BUFFER_DESC {
+                    ByteWidth: unbound_buffer.size as _,
+                    Usage: d3d11::D3D11_USAGE_DEFAULT,
+                    BindFlags: unbound_buffer.bind,
+                    CPUAccessFlags: 0,
+                    MiscFlags,
+                    StructureByteStride: if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
+                };
 
-            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.CreateBuffer(
-                    &desc,
-                    if let Some(data) = initial_data {
-                        &data
-                    } else {
-                        ptr::null_mut()
-                    },
-                    &mut buffer as *mut *mut _ as *mut *mut _
-                )
-            };
+                let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+                let hr = unsafe {
+                    self.raw.CreateBuffer(
+                        &desc,
+                        if let Some(data) = initial_data {
+                            &data
+                        } else {
+                            ptr::null_mut()
+                        },
+                        &mut buffer as *mut *mut _ as *mut *mut _
+                    )
+                };
 
-            if !winerror::SUCCEEDED(hr) {
-                return Err(device::BindError::WrongMemory);
-            }
+                if !winerror::SUCCEEDED(hr) {
+                    return Err(device::BindError::WrongMemory);
+                }
 
-            unsafe { ComPtr::from_raw(buffer) }
-        } else if memory.properties == (Properties::CPU_VISIBLE) {
-            let desc = d3d11::D3D11_BUFFER_DESC {
-                ByteWidth: unbound_buffer.size as _,
-                // TODO: dynamic?
-                Usage: d3d11::D3D11_USAGE_DEFAULT,
-                BindFlags: unbound_buffer.bind,
-                CPUAccessFlags: 0,
-                MiscFlags,
-                StructureByteStride: if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
-            };
+                unsafe { ComPtr::from_raw(buffer) }
+            },
+            MemoryHeapFlags::HOST_NONCOHERENT | MemoryHeapFlags::HOST_COHERENT => {
+                let desc = d3d11::D3D11_BUFFER_DESC {
+                    ByteWidth: unbound_buffer.size as _,
+                    // TODO: dynamic?
+                    Usage: d3d11::D3D11_USAGE_DEFAULT,
+                    BindFlags: unbound_buffer.bind,
+                    CPUAccessFlags: 0,
+                    MiscFlags,
+                    StructureByteStride: if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
+                };
 
-            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.CreateBuffer(
-                    &desc,
-                    if let Some(data) = initial_data {
-                        &data
-                    } else {
-                        ptr::null_mut()
-                    },
-                    &mut buffer as *mut *mut _ as *mut *mut _
-                )
-            };
+                let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+                let hr = unsafe {
+                    self.raw.CreateBuffer(
+                        &desc,
+                        if let Some(data) = initial_data {
+                            &data
+                        } else {
+                            ptr::null_mut()
+                        },
+                        &mut buffer as *mut *mut _ as *mut *mut _
+                    )
+                };
 
-            if !winerror::SUCCEEDED(hr) {
-                return Err(device::BindError::WrongMemory);
-            }
+                if !winerror::SUCCEEDED(hr) {
+                    return Err(device::BindError::WrongMemory);
+                }
 
-            unsafe { ComPtr::from_raw(buffer) }
-        } else {
-            unimplemented!()
+                unsafe { ComPtr::from_raw(buffer) }
+            },
+            _ => unimplemented!()
         };
 
         let srv = if unbound_buffer.bind & d3d11::D3D11_BIND_SHADER_RESOURCE != 0 {
@@ -870,10 +929,19 @@ impl hal::Device<Backend> for Device {
         };
         let range = offset..unbound_buffer.size;
 
-        memory.bind_buffer(range, buffer.clone());
+        memory.bind_buffer(range.clone(), buffer.clone());
+
+        let host_ptr = if let Some(vec) = &memory.host_visible {
+            vec.borrow_mut().as_mut_ptr()
+        } else {
+            ptr::null_mut()
+        };
 
         Ok(Buffer {
             internal: buffer,
+            ty: memory.ty,
+            host_ptr,
+            bound_range: range,
             size: unbound_buffer.size
         })
     }
@@ -933,7 +1001,7 @@ impl hal::Device<Backend> for Device {
             requirements: memory::Requirements {
                 size: size,
                 alignment: 1,
-                type_mask: 0x1,
+                type_mask: MemoryHeapFlags::DEVICE_LOCAL.bits(),
             },
         })
     }
@@ -975,10 +1043,8 @@ impl hal::Device<Backend> for Device {
         let dxgi_format = conv::map_format(image.format).unwrap();
         let (typeless_format, typed_raw_format) = conv::typeless_format(dxgi_format).unwrap();
 
-        let (resource, levels) = match image.kind {
+        let (view_kind, resource) = match image.kind {
             image::Kind::D2(width, height, layers, _) => {
-
-                debug!("{:b}", bind);
                 let desc = d3d11::D3D11_TEXTURE2D_DESC {
                     Width: width,
                     Height: height,
@@ -992,7 +1058,11 @@ impl hal::Device<Backend> for Device {
                     Usage: usage,
                     BindFlags: bind,
                     CPUAccessFlags: cpu,
-                    MiscFlags: 0
+                    MiscFlags: if image.flags.contains(image::StorageFlags::CUBE_VIEW) {
+                        d3d11::D3D11_RESOURCE_MISC_TEXTURECUBE
+                    } else {
+                        0
+                    }
                 };
 
                 let mut resource = ptr::null_mut();
@@ -1010,78 +1080,84 @@ impl hal::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                (resource, layers)
+                (image::ViewKind::D2Array, resource)
             },
+            image::Kind::D3(width, height, depth) => {
+                let desc = d3d11::D3D11_TEXTURE3D_DESC {
+                    Width: width,
+                    Height: height,
+                    Depth: depth,
+                    MipLevels: image.mip_levels as _,
+                    Format: typeless_format,
+                    Usage: usage,
+                    BindFlags: bind,
+                    CPUAccessFlags: cpu,
+                    MiscFlags: 0
+                };
+
+                let mut resource = ptr::null_mut();
+                let hr = unsafe {
+                    self.raw.CreateTexture3D(
+                        &desc,
+                        ptr::null_mut(),
+                        &mut resource as *mut *mut _ as *mut *mut _
+                    )
+                };
+
+                if !winerror::SUCCEEDED(hr) {
+                    error!("CreateTexture3D failed: 0x{:x}", hr);
+
+                    return Err(device::BindError::WrongMemory);
+                }
+
+                (image::ViewKind::D3, resource)
+            },
+
             _ => unimplemented!()
         };
 
         let mut unordered_access_views = Vec::new();
-        
-        if image.usage.contains(Usage::TRANSFER_DST) {
-            for layer in 0..image.kind.num_layers() {
-                for mip in 0..image.mip_levels {
-                    let view = ViewInfo {
-                        resource,
-                        kind: image.kind,
-                        flags: image::StorageFlags::empty(),
-                        view_kind: image::ViewKind::D2,
-                        format: typed_raw_format,
-                        range: image::SubresourceRange {
-                            aspects: format::Aspects::COLOR,
-                            levels: mip..(mip + 1),
-                            layers: layer..(layer + 1)
-                        }
-                    };
 
-                    unordered_access_views.push(self.view_image_as_unordered_access(&view).map_err(|_| device::BindError::WrongMemory)?);
-                }
+        if image.usage.contains(Usage::TRANSFER_DST) {
+            for mip in 0..image.mip_levels {
+                let view = ViewInfo {
+                    resource,
+                    kind: image.kind,
+                    flags: image::StorageFlags::empty(),
+                    view_kind,
+                    format: typed_raw_format,
+                    range: image::SubresourceRange {
+                        aspects: format::Aspects::COLOR,
+                        levels: mip..(mip + 1),
+                        layers: 0..image.kind.num_layers(),
+                    }
+                };
+
+                unordered_access_views.push(self.view_image_as_unordered_access(&view).map_err(|_| device::BindError::WrongMemory)?);
             }
         }
-        
 
         let (copy_srv, srv) = if image.usage.contains(image::Usage::TRANSFER_SRC) {
-            let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC>() };
-            desc.Format = typed_raw_format;
-            desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2D;
-            // TODO:
-            *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_SRV {
-                MostDetailedMip: 0,
-                MipLevels: image.mip_levels as _,
+            let mut view = ViewInfo {
+                resource,
+                kind: image.kind,
+                flags: image::StorageFlags::empty(),
+                view_kind,
+                format: typed_raw_format,
+                range: image::SubresourceRange {
+                    aspects: format::Aspects::COLOR,
+                    levels: 0..image.mip_levels,
+                    layers: 0..image.kind.num_layers(),
+                }
             };
 
-            let mut copy_srv = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.CreateShaderResourceView(
-                    resource,
-                    &desc,
-                    &mut copy_srv as *mut *mut _ as *mut *mut _
-                )
-            };
+            let copy_srv = self.view_image_as_shader_resource(&view).map_err(|_| device::BindError::WrongMemory)?;
 
-            if !winerror::SUCCEEDED(hr) {
-                error!("CreateShaderResourceView failed: 0x{:x}", hr);
+            view.format = dxgi_format;
 
-                return Err(device::BindError::WrongMemory);
-            }
+            let srv = self.view_image_as_shader_resource(&view).map_err(|_| device::BindError::WrongMemory)?;
 
-            desc.Format = dxgi_format;
-
-            let mut srv = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.CreateShaderResourceView(
-                    resource,
-                    &desc,
-                    &mut srv as *mut *mut _ as *mut *mut _
-                )
-            };
-
-            if !winerror::SUCCEEDED(hr) {
-                error!("CreateShaderResourceView failed: 0x{:x}", hr);
-
-                return Err(device::BindError::WrongMemory);
-            }
-
-            unsafe { (Some(ComPtr::from_raw(copy_srv)), Some(ComPtr::from_raw(srv))) }
+            (Some(copy_srv), Some(srv))
         } else {
             (None, None)
         };
@@ -1097,7 +1173,7 @@ impl hal::Device<Backend> for Device {
                         resource,
                         kind: image.kind,
                         flags: image::StorageFlags::empty(),
-                        view_kind: image::ViewKind::D2,
+                        view_kind,
                         format: dxgi_format,
                         range: image::SubresourceRange {
                             aspects: format::Aspects::COLOR,
@@ -1128,7 +1204,7 @@ impl hal::Device<Backend> for Device {
             typed_raw_format,
             bytes_per_block: bytes_per_block,
             block_dim: block_dim,
-            num_levels: levels as _,
+            num_levels: image.kind.num_levels(),
             num_mips: image.mip_levels as _,
             internal,
         })
@@ -1158,7 +1234,6 @@ impl hal::Device<Backend> for Device {
             } else {
                 None
             },
-            // TODO:
             rtv_handle: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
                 Some(self.view_image_as_render_target(&info)?)
             } else {
@@ -1319,9 +1394,22 @@ impl hal::Device<Backend> for Device {
                     pso::Descriptor::Buffer(buffer, ref _range) => {
                         match ty {
                             pso::DescriptorType::UniformBuffer => {
+                                if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
+                                    let old_buffer = unsafe { (*handle).0 } as *mut _;
+
+                                    write.set.flush_coherent(old_buffer, buffer);
+                                }
+
                                 unsafe { *handle = Descriptor(buffer.internal.raw as *mut _); }
                             },
                             pso::DescriptorType::StorageBuffer => {
+                                if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
+                                    let old_buffer = unsafe { (*handle).0 } as *mut _;
+
+                                    write.set.flush_coherent(old_buffer, buffer);
+                                    write.set.invalidate_coherent(old_buffer, buffer);
+                                }
+
                                 unsafe { *handle = Descriptor(buffer.internal.uav.unwrap() as *mut _); }
                             },
                             _ => unreachable!()
@@ -1432,7 +1520,12 @@ impl hal::Device<Backend> for Device {
             let &(memory, ref range) = range.borrow();
             let range = *range.start().unwrap_or(&0)..*range.end().unwrap_or(&memory.size);
 
-            memory.invalidate(&self.context, range);
+            memory.invalidate(
+                &self.context,
+                range,
+                self.internal.working_buffer.clone(),
+                self.internal.working_buffer_size
+            );
         }
     }
 
