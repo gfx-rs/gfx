@@ -2,9 +2,9 @@
 //!
 //! # Buffer
 //!
-//! Buffers interpret memory slices as linear continguous data array.
+//! Buffers interpret memory slices as linear contiguous data array.
 //! They can be used as shader resources, vertex buffers, index buffers or for
-//! specifying the action commands for indirect exection.
+//! specifying the action commands for indirect execution.
 
 use {format, IndexType, Backend};
 
@@ -126,7 +126,7 @@ bitflags!(
 
 /// Index buffer view for `bind_index_buffer`.
 ///
-/// Defines a buffer slice used for acquiring the indicies on draw commands.
+/// Defines a buffer slice used for acquiring the indices on draw commands.
 /// Indices are used to lookup vertex indices in the vertex buffers.
 pub struct IndexBufferView<'a, B: Backend> {
     /// The buffer to bind.
