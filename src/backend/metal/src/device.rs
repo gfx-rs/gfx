@@ -344,6 +344,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         hal::Limits {
             max_texture_size: 4096, // TODO: feature set
             max_patch_size: 0, // No tessellation
+
+            // Note: The maximum number of supported viewports and scissor rectangles varies by device.
+            // TODO: read from Metal Feature Sets.
             max_viewports: 1,
 
             min_buffer_copy_offset_alignment: self.private_caps.buffer_alignment,
