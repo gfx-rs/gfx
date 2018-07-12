@@ -150,6 +150,11 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
     use hal::pso::PolygonMode::*;
     use hal::pso::FrontFace::*;
 
+    let bias = match rasterizer.depth_bias { //TODO: support dynamic depth bias
+        Some(pso::State::Static(db)) => db,
+        Some(_) | None => pso::DepthBias::default(),
+    };
+
     D3D12_RASTERIZER_DESC {
         FillMode: match rasterizer.polygon_mode {
             Point => {
@@ -172,9 +177,9 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
             Clockwise => FALSE,
             CounterClockwise => TRUE,
         },
-        DepthBias: rasterizer.depth_bias.map_or(0, |bias| bias.const_factor as INT),
-        DepthBiasClamp: rasterizer.depth_bias.map_or(0.0, |bias| bias.clamp),
-        SlopeScaledDepthBias: rasterizer.depth_bias.map_or(0.0, |bias| bias.slope_factor),
+        DepthBias: bias.const_factor as INT,
+        DepthBiasClamp: bias.clamp,
+        SlopeScaledDepthBias: bias.slope_factor,
         DepthClipEnable: !rasterizer.depth_clamping as _,
         MultisampleEnable: FALSE, // TODO: currently not supported
         ForcedSampleCount: 0, // TODO: currently not supported

@@ -134,6 +134,7 @@ impl Swapchain {
             }
             hal::FrameSync::Fence(fence) => {
                 *fence.mutex.lock().unwrap() = true;
+                fence.condvar.notify_all();
             }
         }
     }

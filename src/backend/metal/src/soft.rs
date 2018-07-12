@@ -70,10 +70,7 @@ pub enum RenderCommand<R: Resources> {
         index: usize,
         sampler: Option<R::Sampler>,
     },
-    BindPipeline(
-        R::RenderPipeline,
-        Option<RasterizerState>,
-    ),
+    BindPipeline(R::RenderPipeline, Option<RasterizerState>),
     Draw {
         primitive_type: metal::MTLPrimitiveType,
         vertices: Range<hal::VertexCount>,

@@ -81,7 +81,6 @@ pub struct RasterizerState {
     pub front_winding: metal::MTLWinding,
     pub cull_mode: metal::MTLCullMode,
     pub depth_clip: metal::MTLDepthClipMode,
-    pub depth_bias: pso::DepthBias,
 }
 
 impl Default for RasterizerState {
@@ -90,7 +89,6 @@ impl Default for RasterizerState {
             front_winding: metal::MTLWinding::Clockwise,
             cull_mode: metal::MTLCullMode::None,
             depth_clip: metal::MTLDepthClipMode::Clip,
-            depth_bias: Default::default(),
         }
     }
 }
@@ -117,6 +115,7 @@ pub struct GraphicsPipeline {
     pub(crate) primitive_type: metal::MTLPrimitiveType,
     pub(crate) attribute_buffer_index: u32,
     pub(crate) rasterizer_state: Option<RasterizerState>,
+    pub(crate) depth_bias: pso::State<pso::DepthBias>,
     pub(crate) depth_stencil_desc: pso::DepthStencilDesc,
     pub(crate) baked_states: pso::BakedStates,
     /// The mapping of additional vertex buffer bindings over the original ones.

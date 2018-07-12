@@ -1,6 +1,6 @@
 use hal::format::{Format};
 use hal::pso::{
-    BlendDesc, BlendOp, BlendState, ColorBlendDesc, Comparison, DepthStencilDesc,
+    BlendDesc, BlendOp, BlendState, ColorBlendDesc, Comparison, DepthBias, DepthStencilDesc,
     DepthTest, Face, Factor, PolygonMode, Rasterizer, Rect, StencilFace, StencilOp, StencilTest,
     Viewport, Stage, State, StencilValue, FrontFace,
 };
@@ -271,6 +271,10 @@ fn map_cull_mode(mode: Face) -> D3D11_CULL_MODE {
 }
 
 pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
+    let bias = match desc.depth_bias { //TODO: support dynamic depth bias
+        Some(State::Static(db)) => db,
+        Some(_) | None => DepthBias::default(),
+    };
     D3D11_RASTERIZER_DESC {
         FillMode: map_fill_mode(desc.polygon_mode),
         CullMode: map_cull_mode(desc.cull_face),
@@ -278,9 +282,9 @@ pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
             FrontFace::Clockwise => FALSE,
             FrontFace::CounterClockwise => TRUE,
         },
-        DepthBias: desc.depth_bias.map_or(0, |bias| bias.const_factor as INT),
-        DepthBiasClamp: desc.depth_bias.map_or(0.0, |bias| bias.clamp),
-        SlopeScaledDepthBias: desc.depth_bias.map_or(0.0, |bias| bias.slope_factor),
+        DepthBias: bias.const_factor as INT,
+        DepthBiasClamp: bias.clamp,
+        SlopeScaledDepthBias: bias.slope_factor,
         DepthClipEnable: !desc.depth_clamping as _,
         // TODO:
         ScissorEnable: TRUE,

@@ -125,6 +125,8 @@ pub struct Device {
     pub(crate) shared: Arc<Shared>,
     pub(crate) private_caps: PrivateCapabilities,
     memory_types: [hal::MemoryType; 4],
+    /// Add a minimum descritpor count for any created pool,
+    /// only needed to work around a Dota bug.
     debug_min_descriptor_count: usize,
 }
 unsafe impl Send for Device {}
@@ -985,8 +987,9 @@ impl hal::Device<Backend> for Device {
             } else {
                 metal::MTLDepthClipMode::Clip
             },
-            depth_bias: pipeline_desc.rasterizer.depth_bias.unwrap_or_default(),
         });
+        let depth_bias = pipeline_desc.rasterizer.depth_bias
+            .unwrap_or(pso::State::Static(pso::DepthBias::default()));
 
         // prepare the depth-stencil state now
         self.shared.service_pipes
@@ -1009,6 +1012,7 @@ impl hal::Device<Backend> for Device {
                     primitive_type,
                     attribute_buffer_index: pipeline_layout.attribute_buffer_index,
                     rasterizer_state,
+                    depth_bias,
                     depth_stencil_desc: pipeline_desc.depth_stencil.clone(),
                     baked_states: pipeline_desc.baked_states.clone(),
                     vertex_buffer_map,
