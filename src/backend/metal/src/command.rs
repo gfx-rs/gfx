@@ -1229,10 +1229,16 @@ fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass])
     }
 }
 
+/// This is a hack around Metal System Trace logic that ignores empty command buffers entirely.
+fn record_empty(command_buf: &metal::CommandBufferRef) {
+    command_buf.new_blit_command_encoder().end_encoding();
+}
+
 #[derive(Default)]
 struct PerformanceCounters {
-    active_command_buffer_count: usize,
-    temporary_command_buffer_count: usize,
+    immediate_command_buffers: usize,
+    deferred_command_buffers: usize,
+    signal_command_buffers: usize,
     frame_wait_duration: time::Duration,
     frame_wait_count: usize,
     frame: usize,
@@ -1275,9 +1281,9 @@ impl CommandQueue {
             }
             if let Some(swap_image) = sem.image_ready.lock().unwrap().take() {
                 let start = time::Instant::now();
-                swap_image.wait_until_ready();
+                let count = swap_image.wait_until_ready();
                 if let Some(ref mut counters) = self.perf_counters {
-                    counters.frame_wait_count += 1;
+                    counters.frame_wait_count += count;
                     counters.frame_wait_duration += start.elapsed();
                 }
             }
@@ -1320,10 +1326,8 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 Some(CommandSink::Deferred { ref passes, .. }) => {
                     num_deferred += 1;
                     trace!("\tdeferred with {} passes", passes.len());
-                    if let Some(ref mut counters) = self.perf_counters {
-                        counters.temporary_command_buffer_count += 1;;
-                    }
                     let cmd_buffer = queue.spawn_temp();
+                    cmd_buffer.enqueue();
                     cmd_buffer.set_label("deferred");
                     record_commands(&*cmd_buffer, passes);
                     cmd_buffer.commit();
@@ -1333,6 +1337,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
 
         debug!("\t{} immediate, {} deferred command buffers", num_immediate, num_deferred);
+        if let Some(ref mut counters) = self.perf_counters {
+            counters.immediate_command_buffers += num_immediate;
+            counters.deferred_command_buffers += num_deferred;
+        }
 
         const BLOCK_BUCKET: usize = 4;
         let system_semaphores = submit.signal_semaphores
@@ -1369,10 +1377,11 @@ impl RawCommandQueue<Backend> for CommandQueue {
             }).copy();
 
             if let Some(ref mut counters) = self.perf_counters {
-                counters.temporary_command_buffer_count += 1;;
+                counters.signal_command_buffers += 1;
             }
             let cmd_buffer = queue.spawn_temp();
             cmd_buffer.set_label("signal");
+            record_empty(cmd_buffer);
             msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
             cmd_buffer.commit();
         }
@@ -1390,6 +1399,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         let queue = self.shared.queue.lock().unwrap();
         let command_buffer = queue.raw.new_command_buffer();
         command_buffer.set_label("present");
+        record_empty(command_buffer);
 
         for (swapchain, index) in swapchains {
             debug!("presenting frame {}", index);
@@ -1400,16 +1410,24 @@ impl RawCommandQueue<Backend> for CommandQueue {
         command_buffer.commit();
 
         if let Some(ref mut counters) = self.perf_counters {
-            counters.active_command_buffer_count += queue.reserve.start;
             counters.frame += 1;
             if counters.frame >= COUNTERS_REPORT_WINDOW {
                 let time = counters.frame_wait_duration / counters.frame as u32;
+                let total_submitted =
+                    counters.immediate_command_buffers +
+                    counters.deferred_command_buffers +
+                    counters.signal_command_buffers;
                 println!("Performance counters:");
-                println!("\tActive command buffers: {} plus {} temporaries",
-                    counters.active_command_buffer_count / counters.frame,
-                    counters.temporary_command_buffer_count / counters.frame,
+                println!("\tCommand buffers: {} immediate, {} deferred, {} signals",
+                    counters.immediate_command_buffers / counters.frame,
+                    counters.deferred_command_buffers / counters.frame,
+                    counters.signal_command_buffers / counters.frame,
                 );
-                println!("\tFrame wait time:{}ms over {} requests",
+                println!("\tEstimated pipeline length is {} frames, given the total active {} command buffers",
+                    counters.frame * queue.reserve.start / total_submitted.max(1),
+                    queue.reserve.start,
+                );
+                println!("\tFrame wait time is {}ms over {} requests",
                     time.as_secs() as u32 * 1000 + time.subsec_millis(),
                     counters.frame_wait_count as f32 / counters.frame as f32,
                 );

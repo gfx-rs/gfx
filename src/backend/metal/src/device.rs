@@ -125,9 +125,6 @@ pub struct Device {
     pub(crate) shared: Arc<Shared>,
     pub(crate) private_caps: PrivateCapabilities,
     memory_types: [hal::MemoryType; 4],
-    /// Add a minimum descritpor count for any created pool,
-    /// only needed to work around a Dota bug.
-    debug_min_descriptor_count: usize,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -261,7 +258,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             shared: self.shared.clone(),
             private_caps: self.private_caps.clone(),
             memory_types: self.memory_types,
-            debug_min_descriptor_count: 0,
         };
 
         Ok(hal::Gpu {
@@ -1295,9 +1291,7 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        let mut num_samplers = self.debug_min_descriptor_count;
-        let mut num_textures = self.debug_min_descriptor_count;
-        let mut num_buffers  = self.debug_min_descriptor_count;
+        let (mut num_samplers, mut num_textures, mut num_buffers) = (0, 0, 0);
 
         if self.private_caps.argument_buffers {
             let mut arguments = Vec::new();
