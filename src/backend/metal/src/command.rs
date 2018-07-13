@@ -388,7 +388,7 @@ impl State {
 
     fn sync_depth_stencil<F>(&self, shared: &Shared, mut fun: F)
     where
-        F : for<'a> FnMut(soft::RenderCommand<&'a soft::Own>),
+        F: for<'a> FnMut(soft::RenderCommand<&'a soft::Own>),
     {
         let mut desc = match self.render_pso {
             Some(ref ps) => ps.ds_desc.clone(),
@@ -1917,11 +1917,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         //  issue a PSO+color switch and a draw for each requested clear
         let service_lib = self.shared.service_pipes.library.lock().unwrap();
         let mut clear_pipes = self.shared.service_pipes.clears.lock().unwrap();
-        let ds_store = self.shared
-            .service_pipes
-            .depth_stencil_states
-            .read()
-            .unwrap();
 
         for clear in clears {
             let mut key = ClearKey {
@@ -1989,19 +1984,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let clear_pso = clear_pipes.get(key, &*service_lib, &self.shared.device);
             let com_pso = iter::once(soft::RenderCommand::BindPipeline(clear_pso, None));
 
-            let com_ds = if !aspects.contains(Aspects::COLOR) {
-                Some(soft::RenderCommand::SetDepthStencilState(
-                    ds_store.get_write(aspects)
-                ))
-            } else {
-                None
-            };
-
             let commands = com_clear
                 .into_iter()
                 .chain(com_vertex)
                 .chain(com_pso)
-                .chain(com_ds)
                 .chain(iter::once(soft::RenderCommand::Draw {
                     primitive_type: MTLPrimitiveType::Triangle,
                     vertices: 0 .. vertices.len() as _,
@@ -2009,6 +1995,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }));
 
             inner.sink().render_commands(commands);
+
+            if !aspects.contains(Aspects::COLOR) {
+                let ds_store = self.shared
+                    .service_pipes
+                    .depth_stencil_states
+                    .read()
+                    .unwrap();
+                let com = soft::RenderCommand::SetDepthStencilState(
+                    ds_store.get_write(aspects)
+                );
+                inner.sink().render_commands(iter::once(com));
+            }
         }
 
         // reset all the affected states
@@ -2090,11 +2088,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let service_lib = self.shared.service_pipes.library.lock().unwrap();
         let mut blit_pipes = self.shared.service_pipes.blits.lock().unwrap();
-        let ds_store = self.shared
-            .service_pipes
-            .depth_stencil_states
-            .read()
-            .unwrap();
+        let ds_store;
 
         for region in regions {
             let r = region.borrow();
@@ -2216,6 +2210,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         ];
 
         let com_ds = if src.format_desc.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
+            ds_store = self.shared
+                .service_pipes
+                .depth_stencil_states
+                .read()
+                .unwrap();
             Some(soft::RenderCommand::SetDepthStencilState(
                 ds_store.get_write(src.format_desc.aspects)
             ))
