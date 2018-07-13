@@ -78,8 +78,15 @@ pub struct PipelineLayout {
 #[derive(Clone, Debug)]
 pub struct RasterizerState {
     //TODO: more states
+    /// The vertex winding rule that determines a front-facing primitive.
     pub front_winding: metal::MTLWinding,
+    /// determines whether to perform culling and which type of primitive to cull.
     pub cull_mode: metal::MTLCullMode,
+    /// determines how to rasterize triangle and triangle strip primitives
+    // pub triangle_fill_mode: metal::MTLTriangleFillMode,
+    /// determines whether samples pass the depth and stencil tests and whether to monitor the samples that pass.
+    // pub visibility_result_mode: metal::MTLVisibilityResultMode,
+    /// determines how to deal with fragments outside of the near or far planes.
     pub depth_clip: metal::MTLDepthClipMode,
     pub depth_bias: pso::DepthBias,
 }
@@ -89,6 +96,8 @@ impl Default for RasterizerState {
         RasterizerState {
             front_winding: metal::MTLWinding::Clockwise,
             cull_mode: metal::MTLCullMode::None,
+            // triangle_fill_mode: metal::MTLTriangleFillMode::Fill,
+            // visibility_result_mode: metal::MTLVisibilityResultMode::Disabled,
             depth_clip: metal::MTLDepthClipMode::Clip,
             depth_bias: Default::default(),
         }

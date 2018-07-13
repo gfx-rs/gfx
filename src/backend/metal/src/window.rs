@@ -10,7 +10,7 @@ use hal::{Backbuffer, SwapchainConfig};
 use hal::window::Extent2D;
 
 use metal;
-use objc::runtime::Object;
+use objc::runtime::{Object, YES, BOOL};
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
@@ -242,8 +242,13 @@ impl Device {
             msg_send![render_layer, setPixelFormat: mtl_format];
             msg_send![render_layer, setFramebufferOnly: framebuffer_only];
             msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
-            //TODO: only set it where supported
-            msg_send![render_layer, setDisplaySyncEnabled: display_sync];
+            // determines whether the Metal layer
+            // and it's drawables are synchronized with the display's refresh rate.
+            let can_responds_to_display_sync_enabled: BOOL = msg_send![render_layer, respondsToSelector:sel!(setDisplaySyncEnabled:)];
+            if can_responds_to_display_sync_enabled == YES {
+                // `setDisplaySyncEnabled` currently only supported on macOS 10.13+
+                msg_send![render_layer, setDisplaySyncEnabled: display_sync];
+            }
 
             // Update render layer size
             let view_points_size: CGRect = msg_send![nsview, bounds];
