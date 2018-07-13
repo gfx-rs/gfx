@@ -833,8 +833,6 @@ impl hal::Device<Backend> for Device {
             return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(pso::Stage::Geometry)));
         }
 
-        let device = self.shared.device.lock().unwrap();
-
         // Copy color target info from Subpass
         for (i, attachment) in pass_descriptor.main_pass.attachments.iter().enumerate() {
             let format = attachment.format.expect("expected color format");
@@ -990,11 +988,13 @@ impl hal::Device<Backend> for Device {
         let depth_bias = pipeline_desc.rasterizer.depth_bias
             .unwrap_or(pso::State::Static(pso::DepthBias::default()));
 
+        let device = self.shared.device.lock().unwrap();
+
         // prepare the depth-stencil state now
         self.shared.service_pipes
-            .lock()
-            .unwrap()
             .depth_stencil_states
+            .write()
+            .unwrap()
             .prepare(&pipeline_desc.depth_stencil, &*device);
 
         let attachment_formats = pass_descriptor.main_pass.attachments
@@ -1181,9 +1181,9 @@ impl hal::Device<Backend> for Device {
 
         n::Sampler(
             self.shared.device
-            .lock()
-            .unwrap()
-            .new_sampler(&descriptor)
+                .lock()
+                .unwrap()
+                .new_sampler(&descriptor)
         )
     }
 
