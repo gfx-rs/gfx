@@ -539,34 +539,72 @@ impl Internal {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        let (shader, scale_x, scale_y) = self.find_buffer_to_image_shader(dst.typed_raw_format).unwrap();
+        // NOTE: we have two separate paths for Buffer -> Image transfers. we need to special case
+        //       uploads to compressed formats through `UpdateSubresource` since we cannot get a
+        //       UAV of any compressed format.
 
-        let srv = src.internal.srv.unwrap();
-
-        unsafe {
-            context.CSSetShader(shader, ptr::null_mut(), 0);
-            context.CSSetConstantBuffers(0, 1, &self.copy_info.as_raw());
-            context.CSSetShaderResources(0, 1, [srv].as_ptr());
-
-
+        let format_desc = dst.format.base_format().0.desc();
+        if format_desc.is_compressed() {
+            // we dont really care about non-4x4 block formats..
+            assert_eq!(format_desc.dim, (4, 4));
+            assert!(!src.host_ptr.is_null());
 
             for copy in regions {
                 let info = copy.borrow();
-                self.update_buffer_image(context, &info);
 
-                let uav = dst.get_uav(info.image_layers.level, 0).unwrap().as_raw();
-                context.CSSetUnorderedAccessViews(0, 1, [uav].as_ptr(), ptr::null_mut());
+                let bytes_per_texel  = format_desc.bits as u32 / 8;
 
-                context.Dispatch(
-                    (info.image_extent.width as f32 / scale_x) as u32,
-                    (info.image_extent.height as f32 / scale_y) as u32,
-                    1
-                );
+                let row_pitch = bytes_per_texel * info.image_extent.width / 4;
+                let depth_pitch = row_pitch * info.image_extent.height / 4;
+
+                unsafe {
+                    context.UpdateSubresource(
+                        dst.internal.raw,
+                        dst.calc_subresource(info.image_layers.level as _, info.image_layers.layers.start as _),
+                        &d3d11::D3D11_BOX {
+                            left: info.image_offset.x as _,
+                            top: info.image_offset.y as _,
+                            front: info.image_offset.z as _,
+                            right: info.image_extent.width,
+                            bottom: info.image_extent.height,
+                            back: info.image_extent.depth,
+                        },
+                        src.host_ptr.offset(src.bound_range.start as isize + info.buffer_offset as isize) as _,
+                        row_pitch,
+                        depth_pitch
+                    );
+                }
             }
+        } else {
+            let (shader, scale_x, scale_y) = self.find_buffer_to_image_shader(dst.typed_raw_format).unwrap();
 
-            // unbind external resources
-            context.CSSetShaderResources(0, 1, [ptr::null_mut(); 1].as_ptr());
-            context.CSSetUnorderedAccessViews(0, 1, [ptr::null_mut(); 1].as_ptr(), ptr::null_mut());
+            let srv = src.internal.srv.unwrap();
+
+            unsafe {
+                context.CSSetShader(shader, ptr::null_mut(), 0);
+                context.CSSetConstantBuffers(0, 1, &self.copy_info.as_raw());
+                context.CSSetShaderResources(0, 1, [srv].as_ptr());
+
+
+
+                for copy in regions {
+                    let info = copy.borrow();
+                    self.update_buffer_image(context, &info);
+
+                    let uav = dst.get_uav(info.image_layers.level, 0).unwrap().as_raw();
+                    context.CSSetUnorderedAccessViews(0, 1, [uav].as_ptr(), ptr::null_mut());
+
+                    context.Dispatch(
+                        (info.image_extent.width as f32 / scale_x) as u32,
+                        (info.image_extent.height as f32 / scale_y) as u32,
+                        1
+                    );
+                }
+
+                // unbind external resources
+                context.CSSetShaderResources(0, 1, [ptr::null_mut(); 1].as_ptr());
+                context.CSSetUnorderedAccessViews(0, 1, [ptr::null_mut(); 1].as_ptr(), ptr::null_mut());
+            }
         }
     }
 

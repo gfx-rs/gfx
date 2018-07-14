@@ -21,7 +21,8 @@ use {
     Backend, Buffer, BufferView, CommandPool, ComputePipeline, DescriptorPool, DescriptorSetLayout,
     Fence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer, InternalImage, Memory,
     PipelineLayout, QueryPool, RenderPass, Sampler, Semaphore, ShaderModule, Surface, Swapchain,
-    UnboundBuffer, UnboundImage, ViewInfo, PipelineBinding, Descriptor, MemoryHeapFlags
+    UnboundBuffer, UnboundImage, ViewInfo, PipelineBinding, Descriptor, MemoryHeapFlags, RegisterRemapping,
+    RegisterMapping,
 };
 
 use {conv, internal, shader};
@@ -280,6 +281,10 @@ impl Device {
     fn view_image_as_shader_resource(&self, info: &ViewInfo) -> Result<ComPtr<d3d11::ID3D11ShaderResourceView>, image::ViewError> {
         let mut desc: d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
+        if desc.Format == dxgiformat::DXGI_FORMAT_D32_FLOAT_S8X24_UINT {
+            desc.Format = dxgiformat::DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+        }
+
 
         #[allow(non_snake_case)]
         let MostDetailedMip = info.range.levels.start as _;
@@ -550,7 +555,38 @@ impl hal::Device<Backend> for Device {
         IR: IntoIterator,
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
     {
+        use pso::DescriptorType::*;
+
         let mut set_bindings = Vec::new();
+        let mut set_remapping = Vec::new();
+
+        // since we remapped the bindings in our descriptor set layouts to their own local space
+        // (starting from register 0), we need to combine all the registers when creating our
+        // pipeline layout. we do this by simply offsetting all the registers by the amount of
+        // registers in the previous descriptor set layout
+        let mut s_offset = 0;
+        let mut t_offset = 0;
+        let mut c_offset = 0;
+        let mut u_offset = 0;
+
+        fn get_descriptor_offset(ty: pso::DescriptorType, s: u32, t: u32, c: u32, u: u32) -> u32 {
+            match ty {
+                Sampler => {
+                    s
+                },
+                SampledImage | UniformTexelBuffer => {
+                    t
+                },
+                UniformBuffer | UniformBufferDynamic => {
+                    c
+                },
+                StorageTexelBuffer | StorageBuffer | InputAttachment |
+                StorageBufferDynamic | StorageImage => {
+                    u
+                },
+                CombinedImageSampler => unreachable!()
+            }
+        }
 
         for layout in set_layouts {
             let layout = layout.borrow();
@@ -593,10 +629,12 @@ impl hal::Device<Backend> for Device {
                                current_offset + 1 != binding.handle_offset ||
                                stage != binding.stage
                             {
+                                let register_offset = get_descriptor_offset(ty, s_offset, t_offset, c_offset, u_offset);
+
                                 optimized_bindings.push(PipelineBinding {
                                     stage,
                                     ty,
-                                    binding_range: start..end,
+                                    binding_range: (register_offset + start)..(register_offset + end),
                                     handle_offset: start_offset
                                 });
 
@@ -624,20 +662,46 @@ impl hal::Device<Backend> for Device {
 
                 // catch trailing descriptors
                 if let Some((ty, start, end, start_offset, _)) = state {
+                    let register_offset = get_descriptor_offset(ty, s_offset, t_offset, c_offset, u_offset);
+
                     optimized_bindings.push(PipelineBinding {
                         stage,
                         ty,
-                        binding_range: start..end,
+                        binding_range: (register_offset + start)..(register_offset + end),
                         handle_offset: start_offset
                     });
                 }
             }
 
+            let offset_mappings = layout.register_remap.mapping.iter().map(|register| {
+                let register_offset = get_descriptor_offset(register.ty, s_offset, t_offset, c_offset, u_offset);
+
+                RegisterMapping {
+                    ty: register.ty,
+                    spirv_binding: register.spirv_binding,
+                    hlsl_register: register.hlsl_register + register_offset as u8,
+                    combined: register.combined
+                }
+            }).collect();
+
             set_bindings.push(optimized_bindings);
+            set_remapping.push(RegisterRemapping {
+                mapping: offset_mappings,
+                num_s: layout.register_remap.num_s,
+                num_t: layout.register_remap.num_t,
+                num_c: layout.register_remap.num_c,
+                num_u: layout.register_remap.num_u,
+            });
+
+            s_offset += layout.register_remap.num_s as u32;
+            t_offset += layout.register_remap.num_t as u32;
+            c_offset += layout.register_remap.num_c as u32;
+            u_offset += layout.register_remap.num_u as u32;
         }
 
         PipelineLayout {
-            set_bindings
+            set_bindings,
+            set_remapping
         }
     }
 
@@ -751,15 +815,35 @@ impl hal::Device<Backend> for Device {
             bind |= d3d11::D3D11_BIND_SHADER_RESOURCE;
         }
 
-        // TODO: how to do buffer copies
         if usage.intersects(Usage::TRANSFER_DST | Usage::STORAGE) {
             bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS;
         }
+
+        // if `D3D11_BIND_CONSTANT_BUFFER` intersects with any other bind flag, we need to handle
+        // it by creating two buffers. one with `D3D11_BIND_CONSTANT_BUFFER` and one with the rest
+        let needs_disjoint_cb = bind & d3d11::D3D11_BIND_CONSTANT_BUFFER != 0 &&
+                                bind != d3d11::D3D11_BIND_CONSTANT_BUFFER;
+
+        if needs_disjoint_cb {
+            bind ^= d3d11::D3D11_BIND_CONSTANT_BUFFER;
+        }
+
+        fn up_align(x: u64, alignment: u64) -> u64 {
+            (x + alignment - 1) & !(alignment - 1)
+        }
+
+        // constant buffer size need to be divisible by 16
+        let size = if usage.contains(Usage::UNIFORM) {
+            up_align(size, 16)
+        } else {
+            up_align(size, 4)
+        };
 
         Ok(UnboundBuffer {
             usage,
             bind,
             size,
+            needs_disjoint_cb,
             requirements: memory::Requirements {
                 size,
                 alignment: 1,
@@ -781,7 +865,8 @@ impl hal::Device<Backend> for Device {
         debug!("usage={:?}, props={:b}", unbound_buffer.usage, memory.properties);
 
         #[allow(non_snake_case)]
-        let MiscFlags = if unbound_buffer.bind & (d3d11::D3D11_BIND_SHADER_RESOURCE | d3d11::D3D11_BIND_UNORDERED_ACCESS) != 0 {
+        let MiscFlags = if unbound_buffer.bind & (d3d11::D3D11_BIND_SHADER_RESOURCE |
+                                                  d3d11::D3D11_BIND_UNORDERED_ACCESS) != 0 {
             d3d11::D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS
         } else {
             0
@@ -857,6 +942,38 @@ impl hal::Device<Backend> for Device {
             _ => unimplemented!()
         };
 
+        let disjoint_cb = if unbound_buffer.needs_disjoint_cb {
+            let desc = d3d11::D3D11_BUFFER_DESC {
+                ByteWidth: unbound_buffer.size as _,
+                Usage: d3d11::D3D11_USAGE_DEFAULT,
+                BindFlags: d3d11::D3D11_BIND_CONSTANT_BUFFER,
+                CPUAccessFlags: 0,
+                MiscFlags: 0,
+                StructureByteStride: 0,
+            };
+
+            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+            let hr = unsafe {
+                self.raw.CreateBuffer(
+                    &desc,
+                    if let Some(data) = initial_data {
+                        &data
+                    } else {
+                        ptr::null_mut()
+                    },
+                    &mut buffer as *mut *mut _ as *mut *mut _
+                )
+            };
+
+            if !winerror::SUCCEEDED(hr) {
+                return Err(device::BindError::WrongMemory);
+            }
+
+            Some(buffer)
+        } else {
+            None
+        };
+
         let srv = if unbound_buffer.bind & d3d11::D3D11_BIND_SHADER_RESOURCE != 0 {
             let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC>() };
             desc.Format = dxgiformat::DXGI_FORMAT_R32_TYPELESS;
@@ -924,6 +1041,7 @@ impl hal::Device<Backend> for Device {
 
         let buffer = InternalBuffer {
             raw: raw.into_raw(),
+            disjoint_cb,
             srv,
             uav,
         };
@@ -972,20 +1090,29 @@ impl hal::Device<Backend> for Device {
         let bytes_per_texel  = surface_desc.bits / 8;
         let ext = kind.extent();
         let size = (ext.width * ext.height * ext.depth) as u64 * bytes_per_texel as u64;
+        let compressed = surface_desc.is_compressed();
+        let depth = format.is_depth();
 
         let mut bind = 0;
 
-        if usage.contains(Usage::TRANSFER_SRC) ||
-           usage.contains(Usage::SAMPLED) ||
-           usage.contains(Usage::STORAGE) { bind |= d3d11::D3D11_BIND_SHADER_RESOURCE; }
+        if usage.intersects(Usage::TRANSFER_SRC | Usage::SAMPLED | Usage::STORAGE) {
+            bind |= d3d11::D3D11_BIND_SHADER_RESOURCE;
+        }
 
-        if usage.contains(Usage::COLOR_ATTACHMENT) ||
-           usage.contains(Usage::TRANSFER_DST) { bind |= d3d11::D3D11_BIND_RENDER_TARGET; }
-        if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) { bind |= d3d11::D3D11_BIND_DEPTH_STENCIL; }
+        // we cant get RTVs or UAVs on compressed & depth formats
+        if !compressed && !depth {
+            if usage.intersects(Usage::COLOR_ATTACHMENT | Usage::TRANSFER_DST) {
+                bind |= d3d11::D3D11_BIND_RENDER_TARGET;
+            }
 
-        // TODO: how to do buffer copies
-        if usage.contains(Usage::TRANSFER_DST) ||
-           usage.contains(Usage::STORAGE) { bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS; }
+            if usage.intersects(Usage::TRANSFER_DST | Usage::STORAGE) {
+                bind |= d3d11::D3D11_BIND_UNORDERED_ACCESS;
+            }
+        }
+
+        if usage.contains(Usage::DEPTH_STENCIL_ATTACHMENT) {
+            bind |= d3d11::D3D11_BIND_DEPTH_STENCIL;
+        }
 
         debug!("{:b}", bind);
 
@@ -997,7 +1124,6 @@ impl hal::Device<Backend> for Device {
             usage,
             flags,
             bind,
-            // TODO:
             requirements: memory::Requirements {
                 size: size,
                 alignment: 1,
@@ -1027,8 +1153,10 @@ impl hal::Device<Backend> for Device {
 
         let base_format = image.format.base_format();
         let format_desc = base_format.0.desc();
-        let bytes_per_block = (format_desc.bits / 8) as _;
-        let block_dim = format_desc.dim;
+
+        let compressed = format_desc.is_compressed();
+        let depth = image.format.is_depth();
+        let stencil = image.format.is_stencil();
 
         let (bind, usage, cpu) = if memory.properties == Properties::DEVICE_LOCAL {
             (image.bind, d3d11::D3D11_USAGE_DEFAULT, 0)
@@ -1042,6 +1170,11 @@ impl hal::Device<Backend> for Device {
 
         let dxgi_format = conv::map_format(image.format).unwrap();
         let (typeless_format, typed_raw_format) = conv::typeless_format(dxgi_format).unwrap();
+
+        let dxgi_format = match dxgi_format {
+            dxgiformat::DXGI_FORMAT_D32_FLOAT_S8X24_UINT => dxgiformat::DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS,
+            _ => dxgi_format
+        };
 
         let (view_kind, resource) = match image.kind {
             image::Kind::D2(width, height, layers, _) => {
@@ -1118,7 +1251,7 @@ impl hal::Device<Backend> for Device {
 
         let mut unordered_access_views = Vec::new();
 
-        if image.usage.contains(Usage::TRANSFER_DST) {
+        if image.usage.contains(Usage::TRANSFER_DST) && !compressed && !depth {
             for mip in 0..image.mip_levels {
                 let view = ViewInfo {
                     resource,
@@ -1151,21 +1284,29 @@ impl hal::Device<Backend> for Device {
                 }
             };
 
-            let copy_srv = self.view_image_as_shader_resource(&view).map_err(|_| device::BindError::WrongMemory)?;
+            let copy_srv = if !compressed {
+                Some(self.view_image_as_shader_resource(&view).map_err(|_| device::BindError::WrongMemory)?)
+            } else {
+                None
+            };
 
             view.format = dxgi_format;
 
-            let srv = self.view_image_as_shader_resource(&view).map_err(|_| device::BindError::WrongMemory)?;
+            let srv = if !depth && !stencil {
+                Some(self.view_image_as_shader_resource(&view).map_err(|_| device::BindError::WrongMemory)?)
+            } else {
+                None
+            };
 
-            (Some(copy_srv), Some(srv))
+            (copy_srv, srv)
         } else {
             (None, None)
         };
 
         let mut render_target_views = Vec::new();
 
-        if image.usage.contains(image::Usage::COLOR_ATTACHMENT) ||
-           image.usage.contains(image::Usage::TRANSFER_DST)
+        if (image.usage.contains(image::Usage::COLOR_ATTACHMENT) ||
+            image.usage.contains(image::Usage::TRANSFER_DST)) && !compressed && !depth
         {
             for layer in 0..image.kind.num_layers() {
                 for mip in 0..image.mip_levels {
@@ -1202,8 +1343,6 @@ impl hal::Device<Backend> for Device {
             storage_flags: image.flags,
             dxgi_format,
             typed_raw_format,
-            bytes_per_block: bytes_per_block,
-            block_dim: block_dim,
             num_levels: image.kind.num_levels(),
             num_mips: image.mip_levels as _,
             internal,
@@ -1225,12 +1364,21 @@ impl hal::Device<Backend> for Device {
             view_kind,
             format: conv::map_format(format)
                 .ok_or(image::ViewError::BadFormat)?,
+            range: range.clone(),
+        };
+
+        let srv_info = ViewInfo {
+            resource: image.internal.raw,
+            kind: image.kind,
+            flags: image.storage_flags,
+            view_kind,
+            format: conv::viewable_format(info.format),
             range,
         };
 
         Ok(ImageView {
             srv_handle: if image.usage.contains(image::Usage::SAMPLED) {
-                Some(self.view_image_as_shader_resource(&info)?)
+                Some(self.view_image_as_shader_resource(&srv_info)?)
             } else {
                 None
             },
@@ -1320,50 +1468,156 @@ impl hal::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<Sampler>,
     {
-        let mut max_binding = 0;
+        use pso::DescriptorType::*;
+
         let mut bindings = Vec::new();
 
-        // convert from DescriptorSetLayoutBinding to our own PipelineBinding, and find the higher
-        // binding number in the layout
+        let mut mapping = Vec::new();
+        let mut num_t = 0;
+        let mut num_s = 0;
+        let mut num_c = 0;
+        let mut num_u = 0;
+
+        // we check how many hlsl registers we should use
         for binding in layout_bindings {
             let binding = binding.borrow();
 
-            max_binding = max_binding.max(binding.binding as u32);
+            let hlsl_reg = match binding.ty {
+                Sampler => {
+                    num_s += 1;
+                    num_s
+                }
+                CombinedImageSampler => {
+                    num_t += 1;
+                    num_s += 1;
+                    num_t
+                }
+                SampledImage | UniformTexelBuffer => {
+                    num_t += 1;
+                    num_t
+                }
+                UniformBuffer | UniformBufferDynamic => {
+                    num_c += 1;
+                    num_c
+                }
+                StorageTexelBuffer | StorageBuffer |
+                InputAttachment | StorageBufferDynamic |
+                StorageImage => {
+                    num_u += 1;
+                    num_u
+                }
+            } - 1;
 
-            bindings.push(PipelineBinding {
-                stage: binding.stage_flags,
-                ty: binding.ty,
-                binding_range: binding.binding..(binding.binding + 1),
-                handle_offset: 0
-            });
+            // we decompose combined image samplers into a separate sampler and image internally
+            if binding.ty == pso::DescriptorType::CombinedImageSampler {
+                // TODO: for now we have to make combined image samplers share registers since
+                //       spirv-cross doesn't support setting the register of the sampler/texture
+                //       pair to separate values (only one `DescriptorSet` decorator)
+                let shared_reg = num_s.max(num_t);
+
+                num_s = shared_reg;
+                num_t = shared_reg;
+
+                let sampler_reg = num_s - 1;
+                let image_reg = num_t - 1;
+
+                mapping.push(RegisterMapping {
+                    ty: pso::DescriptorType::Sampler,
+                    spirv_binding: binding.binding,
+                    hlsl_register: sampler_reg as u8,
+                    combined: true
+                });
+                mapping.push(RegisterMapping {
+                    ty: pso::DescriptorType::SampledImage,
+                    spirv_binding: binding.binding,
+                    hlsl_register: image_reg as u8,
+                    combined: true
+                });
+
+                bindings.push(PipelineBinding {
+                    stage: binding.stage_flags,
+                    ty: pso::DescriptorType::Sampler,
+                    binding_range: sampler_reg..(sampler_reg + 1),
+                    handle_offset: 0
+                });
+                bindings.push(PipelineBinding {
+                    stage: binding.stage_flags,
+                    ty: pso::DescriptorType::SampledImage,
+                    binding_range: image_reg..(image_reg + 1),
+                    handle_offset: 0
+                });
+            } else {
+                mapping.push(RegisterMapping {
+                    ty: binding.ty,
+                    spirv_binding: binding.binding,
+                    hlsl_register: hlsl_reg as u8,
+                    combined: false
+                });
+
+                bindings.push(PipelineBinding {
+                    stage: binding.stage_flags,
+                    ty: binding.ty,
+                    binding_range: hlsl_reg..(hlsl_reg + 1),
+                    handle_offset: 0
+                });
+            }
         }
 
         // we sort the internal descriptor's handle (the actual dx interface) by some categories to
         // make it easier to group api calls together
         bindings.sort_unstable_by(|a, b| {
             (b.ty as u32).cmp(&(a.ty as u32))
-            .then(b.binding_range.start.cmp(&a.binding_range.start))
+            .then(a.binding_range.start.cmp(&b.binding_range.start))
             .then(a.stage.cmp(&b.stage))
         });
 
-        // we also need to map a binding location to its handle
-        let mut offset_mapping = vec![(0u32, pso::DescriptorType::Sampler); (max_binding + 1) as usize];
-        let mut offset = 0;
+        // we assign the handle (interface ptr) offset according to what register type the
+        // descriptor is. the final layout of the handles should look like this:
+        //
+        //       0..num_s     num_s..num_t  num_t..num_c  num_c..handle_len
+        //   +----------+----------------+-------------+------------------+
+        //   |          |                |             |                  |
+        //   +----------+----------------+-------------+------------------+
+        //   0                                                   handle_len
+        //
+        let mut s = 0;
+        let mut t = 0;
+        let mut c = 0;
+        let mut u = 0;
         for mut binding in bindings.iter_mut() {
-            offset_mapping[binding.binding_range.start as usize] = (offset, binding.ty);
-
-            binding.handle_offset = offset;
-            
-            offset += match binding.ty {
-                pso::DescriptorType::CombinedImageSampler => 2,
-                _ => 1
-            };
+            match binding.ty {
+                Sampler => {
+                    binding.handle_offset = s;
+                    s += 1;
+                },
+                SampledImage | UniformTexelBuffer => {
+                    binding.handle_offset = num_s + t;
+                    t += 1;
+                },
+                UniformBuffer | UniformBufferDynamic => {
+                    binding.handle_offset = num_s + num_t + c;
+                    c += 1;
+                },
+                StorageTexelBuffer | StorageBuffer |
+                InputAttachment | StorageBufferDynamic |
+                StorageImage => {
+                    binding.handle_offset = num_s + num_t + num_u + u;
+                    u += 1;
+                },
+                CombinedImageSampler => unreachable!()
+            }
         }
 
         DescriptorSetLayout {
             bindings,
-            offset_mapping,
-            handle_count: offset
+            handle_count: num_s + num_t + num_c + num_u,
+            register_remap: RegisterRemapping {
+                mapping,
+                num_s: num_s as _,
+                num_t: num_t as _,
+                num_c: num_c as _,
+                num_u: num_u as _,
+            },
         }
     }
 
@@ -1374,33 +1628,28 @@ impl hal::Device<Backend> for Device {
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
         for write in write_iter {
-            let target_binding = write.binding as usize;
-            let (handle_offset, ty) = write.set.offset_mapping[target_binding];
-
+            let target_binding = write.binding;
+            let (ty, first_offset, second_offset) = write.set.get_handle_offset(target_binding);
 
             for descriptor in write.descriptors {
-                // spill over the writes onto the next binding
-                /*while offset >= bind_info.count {
-                    assert_eq!(offset, bind_info.count);
-                    target_binding += 1;
-                    handle_offset = write.set.offset_mapping[target_binding];
-                    offset = 0;
-                }*/
-
-                let handle = unsafe { write.set.handles.offset(handle_offset as isize) };
+                let handle = unsafe { write.set.handles.offset(first_offset as isize) };
+                let second_handle = unsafe { write.set.handles.offset(second_offset as isize) };
 
                 match *descriptor.borrow() {
-                    // TODO: binding range
                     pso::Descriptor::Buffer(buffer, ref _range) => {
                         match ty {
-                            pso::DescriptorType::UniformBuffer => {
+                            pso::DescriptorType::UniformBuffer | pso::DescriptorType::UniformBufferDynamic => {
                                 if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
                                     let old_buffer = unsafe { (*handle).0 } as *mut _;
 
                                     write.set.flush_coherent(old_buffer, buffer);
                                 }
 
-                                unsafe { *handle = Descriptor(buffer.internal.raw as *mut _); }
+                                if let Some(buffer) = buffer.internal.disjoint_cb {
+                                    unsafe { *handle = Descriptor(buffer as *mut _); }
+                                } else {
+                                    unsafe { *handle = Descriptor(buffer.internal.raw as *mut _); }
+                                }
                             },
                             pso::DescriptorType::StorageBuffer => {
                                 if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
@@ -1430,8 +1679,8 @@ impl hal::Device<Backend> for Device {
                         unsafe { *handle = Descriptor(sampler.sampler_handle.as_raw() as *mut _); }
                     }
                     pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
-                        unsafe { *handle = Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _); }
-                        unsafe { *(handle.offset(1)) = Descriptor(sampler.sampler_handle.as_raw() as *mut _); }
+                        unsafe { *handle = Descriptor(sampler.sampler_handle.as_raw() as *mut _); }
+                        unsafe { *second_handle = Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _); }
                     }
                     pso::Descriptor::UniformTexelBuffer(_buffer_view) => {
                     }
@@ -1451,8 +1700,8 @@ impl hal::Device<Backend> for Device {
             let copy = copy.borrow();
 
             for offset in 0..copy.count {
-                let (dst_handle_offset, dst_ty) = copy.dst_set.offset_mapping[copy.dst_binding as usize + offset];
-                let (src_handle_offset, src_ty) = copy.src_set.offset_mapping[copy.src_binding as usize + offset];
+                let (dst_ty, dst_handle_offset, dst_second_handle_offset) = copy.dst_set.get_handle_offset(copy.dst_binding + offset as u32);
+                let (src_ty, src_handle_offset, src_second_handle_offset) = copy.src_set.get_handle_offset(copy.src_binding + offset as u32);
                 assert_eq!(dst_ty, src_ty);
 
                 let dst_handle = unsafe { copy.dst_set.handles.offset(dst_handle_offset as isize) };
@@ -1460,8 +1709,11 @@ impl hal::Device<Backend> for Device {
 
                 match dst_ty {
                     pso::DescriptorType::CombinedImageSampler => {
+                        let dst_second_handle = unsafe { copy.dst_set.handles.offset(dst_second_handle_offset as isize) };
+                        let src_second_handle = unsafe { copy.dst_set.handles.offset(src_second_handle_offset as isize) };
+
                         unsafe { *dst_handle = *src_handle; }
-                        unsafe { *(dst_handle.offset(1)) = *(src_handle.offset(1)); }
+                        unsafe { *dst_second_handle = *src_second_handle; }
                     }
                     _ => {
                         unsafe { *dst_handle = *src_handle; }
@@ -1553,7 +1805,8 @@ impl hal::Device<Backend> for Device {
     }
 
     fn get_fence_status(&self, _fence: &Fence) -> bool {
-        unimplemented!()
+        true
+        //unimplemented!()
     }
 
     fn free_memory(&self, memory: Memory) {
@@ -1590,7 +1843,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_compute_pipeline(&self, _pipeline: ComputePipeline) {
-        unimplemented!()
+        // unimplemented!()
     }
 
     fn destroy_framebuffer(&self, _fb: Framebuffer) {
@@ -1695,22 +1948,20 @@ impl hal::Device<Backend> for Device {
                     &mut swapchain as *mut *mut _ as *mut *mut _
                 )
             };
-
-            if !winerror::SUCCEEDED(hr) {
-                // TODO: return error
-
-            }
+            assert_eq!(hr, winerror::S_OK);
 
             unsafe { ComPtr::from_raw(swapchain) }
         };
 
-        // TODO: for now we clamp to 1 buffer..
-        let images = (0..config.image_count.min(1)).map(|i| {
+        let images = (0..config.image_count).map(|_i| {
             let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
 
+            // returning the 0th buffer for all images seems like the right thing to do. we can
+            // only get write access to the first buffer in the case of `_SEQUENTIAL` flip model,
+            // and read access to the rest
             let hr = unsafe {
                 swapchain.GetBuffer(
-                    i as _,
+                    0 as _,
                     &d3d11::ID3D11Resource::uuidof(),
                     &mut resource as *mut *mut _ as *mut *mut _
                 )
@@ -1730,17 +1981,7 @@ impl hal::Device<Backend> for Device {
                     &mut rtv as *mut *mut _ as *mut *mut _
                 )
             };
-
-            if !winerror::SUCCEEDED(hr) {
-                // TODO: error
-            }
-
-            let format_desc = config
-                .color_format
-                .surface_desc();
-
-            let bytes_per_block = (format_desc.bits / 8) as _;
-            let block_dim = format_desc.dim;
+            assert_eq!(hr, winerror::S_OK);
 
             let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
 
@@ -1760,8 +2001,6 @@ impl hal::Device<Backend> for Device {
                 // NOTE: not the actual format of the backbuffer(s)
                 typed_raw_format: dxgiformat::DXGI_FORMAT_UNKNOWN,
                 dxgi_format: format,
-                bytes_per_block,
-                block_dim,
                 num_levels: 1,
                 num_mips: 1,
                 internal
@@ -1776,7 +2015,8 @@ impl hal::Device<Backend> for Device {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        unimplemented!()
+        Ok(())
+        // unimplemented!()
     }
 
 }
