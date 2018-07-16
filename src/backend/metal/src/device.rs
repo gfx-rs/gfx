@@ -583,26 +583,17 @@ impl Device {
 
 impl hal::Device<Backend> for Device {
     fn create_command_pool(
-        &self, _family: QueueFamilyId, flags: CommandPoolCreateFlags
+        &self, _family: QueueFamilyId, _flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
         command::CommandPool {
             shared: self.shared.clone(),
-            managed: if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
-                None
-            } else {
-                Some(Vec::new())
-            },
+            allocated: Vec::new(),
         }
     }
 
-    fn destroy_command_pool(&self, pool: command::CommandPool) {
-        if let Some(vec) = pool.managed {
-            for cmd_buf in vec {
-                cmd_buf
-                    .borrow_mut()
-                    .reset(&self.shared);
-            }
-        }
+    fn destroy_command_pool(&self, mut pool: command::CommandPool) {
+        use hal::pool::RawCommandPool;
+        pool.reset();
     }
 
     fn create_render_pass<'a, IA, IS, ID>(

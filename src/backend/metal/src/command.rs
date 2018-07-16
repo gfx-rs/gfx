@@ -115,7 +115,7 @@ type CommandBufferInnerPtr = Arc<RefCell<CommandBufferInner>>;
 
 pub struct CommandPool {
     pub(crate) shared: Arc<Shared>,
-    pub(crate) managed: Option<Vec<CommandBufferInnerPtr>>,
+    pub(crate) allocated: Vec<CommandBufferInnerPtr>,
 }
 
 unsafe impl Send for CommandPool {}
@@ -889,12 +889,9 @@ impl Drop for CommandBufferInner {
 
 impl CommandBufferInner {
     pub(crate) fn reset(&mut self, shared: &Shared) {
-        match self.sink.take() {
-            Some(CommandSink::Immediate { token, mut encoder_state, .. }) => {
-                encoder_state.end();
-                shared.queue.lock().unwrap().release(token);
-            }
-            _ => {}
+        if let Some(CommandSink::Immediate { token, mut encoder_state, .. }) = self.sink.take() {
+            encoder_state.end();
+            shared.queue.lock().unwrap().release(token);
         }
         self.retained_buffers.clear();
         self.retained_textures.clear();
@@ -1446,12 +1443,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
 impl pool::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
-        if let Some(ref mut managed) = self.managed {
-            for cmd_buffer in managed {
-                cmd_buffer
-                    .borrow_mut()
-                    .reset(&self.shared);
-            }
+        for cmd_buffer in &self.allocated {
+            cmd_buffer
+                .borrow_mut()
+                .reset(&self.shared);
         }
     }
 
@@ -1506,9 +1501,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             },
         }).collect();
 
-        if let Some(ref mut managed) = self.managed {
-            managed.extend(buffers.iter().map(|buf| buf.inner.clone()));
-        }
+        self.allocated.extend(buffers.iter().map(|buf| buf.inner.clone()));
         buffers
     }
 
@@ -1518,14 +1511,10 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         for buf in &mut buffers {
             buf.reset(true);
         }
-        let managed = match self.managed {
-            Some(ref mut vec) => vec,
-            None => return,
-        };
         for cmd_buf in buffers {
-            match managed.iter_mut().position(|b| Arc::ptr_eq(b, &cmd_buf.inner)) {
+            match self.allocated.iter_mut().position(|b| Arc::ptr_eq(b, &cmd_buf.inner)) {
                 Some(index) => {
-                    managed.swap_remove(index);
+                    self.allocated.swap_remove(index);
                 }
                 None => {
                     error!("Unable to free a command buffer!")
