@@ -115,7 +115,7 @@ type CommandBufferInnerPtr = Arc<RefCell<CommandBufferInner>>;
 
 pub struct CommandPool {
     pub(crate) shared: Arc<Shared>,
-    pub(crate) managed: Option<Vec<CommandBufferInnerPtr>>,
+    pub(crate) allocated: Vec<CommandBufferInnerPtr>,
 }
 
 unsafe impl Send for CommandPool {}
@@ -889,12 +889,9 @@ impl Drop for CommandBufferInner {
 
 impl CommandBufferInner {
     pub(crate) fn reset(&mut self, shared: &Shared) {
-        match self.sink.take() {
-            Some(CommandSink::Immediate { token, mut encoder_state, .. }) => {
-                encoder_state.end();
-                shared.queue.lock().unwrap().release(token);
-            }
-            _ => {}
+        if let Some(CommandSink::Immediate { token, mut encoder_state, .. }) = self.sink.take() {
+            encoder_state.end();
+            shared.queue.lock().unwrap().release(token);
         }
         self.retained_buffers.clear();
         self.retained_textures.clear();
@@ -1446,12 +1443,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
 impl pool::RawCommandPool<Backend> for CommandPool {
     fn reset(&mut self) {
-        if let Some(ref mut managed) = self.managed {
-            for cmd_buffer in managed {
-                cmd_buffer
-                    .borrow_mut()
-                    .reset(&self.shared);
-            }
+        for cmd_buffer in &self.allocated {
+            cmd_buffer
+                .borrow_mut()
+                .reset(&self.shared);
         }
     }
 
@@ -1506,9 +1501,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             },
         }).collect();
 
-        if let Some(ref mut managed) = self.managed {
-            managed.extend(buffers.iter().map(|buf| buf.inner.clone()));
-        }
+        self.allocated.extend(buffers.iter().map(|buf| buf.inner.clone()));
         buffers
     }
 
@@ -1518,14 +1511,10 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         for buf in &mut buffers {
             buf.reset(true);
         }
-        let managed = match self.managed {
-            Some(ref mut vec) => vec,
-            None => return,
-        };
         for cmd_buf in buffers {
-            match managed.iter_mut().position(|b| Arc::ptr_eq(b, &cmd_buf.inner)) {
+            match self.allocated.iter_mut().position(|b| Arc::ptr_eq(b, &cmd_buf.inner)) {
                 Some(index) => {
-                    managed.swap_remove(index);
+                    self.allocated.swap_remove(index);
                 }
                 None => {
                     error!("Unable to free a command buffer!")
@@ -2659,7 +2648,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
-                    let pool = pool.read().unwrap();
+                    let data = pool.read().unwrap();
                     let mut sampler_base = sampler_range.start as usize;
                     let mut texture_base = texture_range.start as usize;
                     let mut buffer_base = buffer_range.start as usize;
@@ -2673,7 +2662,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                         if buffer_base != bf_range.start {
                             dynamic_offsets.clear();
-                            for bref in &pool.buffers[bf_range.clone()] {
+                            for bref in &data.buffers[bf_range.clone()] {
                                 if bref.base.is_some() && bref.dynamic {
                                     dynamic_offsets.push(*offset_iter
                                         .next()
@@ -2711,7 +2700,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 debug_assert_eq!(sampler_base, sm_range.end);
                                 resources.set_samplers(
                                     pipe_layout.res_overrides[&loc].sampler_id as usize,
-                                    &pool.samplers[sm_range.clone()],
+                                    &data.samplers[sm_range.clone()],
                                     |index, sampler| {
                                         pre.issue(soft::RenderCommand::BindSampler { stage, index, sampler });
                                     },
@@ -2721,7 +2710,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 debug_assert_eq!(texture_base, tx_range.end);
                                 resources.set_textures(
                                     pipe_layout.res_overrides[&loc].texture_id as usize,
-                                    &pool.textures[tx_range.clone()],
+                                    &data.textures[tx_range.clone()],
                                     |index, texture| {
                                         pre.issue(soft::RenderCommand::BindTexture { stage, index, texture });
                                     },
@@ -2729,7 +2718,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             }
                             if buffer_base != bf_range.start {
                                 debug_assert_eq!(buffer_base, bf_range.end);
-                                let buffers = &pool.buffers[bf_range.clone()];
+                                let buffers = &data.buffers[bf_range.clone()];
                                 let start = pipe_layout.res_overrides[&loc].buffer_id as usize;
                                 let mut dynamic_index = 0;
                                 for (i, bref) in buffers.iter().enumerate() {
@@ -2835,7 +2824,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }];
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
-                    let pool = pool.read().unwrap();
+                    let data = pool.read().unwrap();
                     let mut sampler_base = sampler_range.start as usize;
                     let mut texture_base = texture_range.start as usize;
                     let mut buffer_base = buffer_range.start as usize;
@@ -2849,7 +2838,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                         if buffer_base != bf_range.start {
                             dynamic_offsets.clear();
-                            for bref in &pool.buffers[bf_range.clone()] {
+                            for bref in &data.buffers[bf_range.clone()] {
                                 if bref.base.is_some() && bref.dynamic {
                                     dynamic_offsets.push(*offset_iter
                                         .next()
@@ -2864,7 +2853,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             debug_assert_eq!(sampler_base, sm_range.end);
                             resources.set_samplers(
                                 res_override.sampler_id as usize,
-                                &pool.samplers[sm_range],
+                                &data.samplers[sm_range],
                                 |index, sampler| {
                                     pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
                                 },
@@ -2874,7 +2863,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             debug_assert_eq!(texture_base, tx_range.end);
                             resources.set_textures(
                                 res_override.texture_id as usize,
-                                &pool.textures[tx_range],
+                                &data.textures[tx_range],
                                 |index, texture| {
                                     pre.issue(soft::ComputeCommand::BindTexture { index, texture });
                                 },
@@ -2882,7 +2871,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
                         if buffer_base != bf_range.start {
                             debug_assert_eq!(buffer_base, bf_range.end);
-                            let buffers = &pool.buffers[bf_range];
+                            let buffers = &data.buffers[bf_range];
                             let start = res_override.buffer_id as usize;
                             let mut dynamic_index = 0;
                             for (i, bref) in buffers.iter().enumerate() {
