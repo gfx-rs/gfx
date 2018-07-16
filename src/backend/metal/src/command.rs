@@ -193,6 +193,20 @@ impl State {
         }
     }
 
+    fn make_pso_commands<'a>(
+        &'a self
+    ) -> (Option<soft::RenderCommand<&'a soft::Own>>, Option<soft::RenderCommand<&'a soft::Own>>){
+        if self.render_pso_is_compatible {
+            (
+                self.render_pso.as_ref().map(|ps| soft::RenderCommand::BindPipeline(&*ps.raw)),
+                self.rasterizer_state.clone().map(soft::RenderCommand::SetRasterizerState),
+            )
+        } else {
+            // Note: this is technically valid, we should not warn.
+            (None, None)
+        }
+    }
+
     fn make_render_commands<'a>(
         &'a self, aspects: Aspects
     ) -> impl Iterator<Item = soft::RenderCommand<&'a soft::Own>> {
@@ -211,14 +225,7 @@ impl State {
         } else {
             None
         };
-        let com_pso = if self.render_pso_is_compatible {
-            let rast = self.rasterizer_state.clone();
-            self.render_pso.as_ref().map(|ps| {
-                soft::RenderCommand::BindPipeline(&*ps.raw, rast)
-            })
-        } else {
-            None
-        };
+        let (com_pso, com_rast) = self.make_pso_commands();
 
         let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_fs));
         let push_constants = self.push_constants.as_slice();
@@ -272,6 +279,7 @@ impl State {
             .chain(com_blend)
             .chain(com_depth_bias)
             .chain(com_pso)
+            .chain(com_rast)
             //.chain(com_ds) // done outside
             .chain(com_resources)
     }
@@ -973,6 +981,11 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
         Cmd::SetStencilReferenceValues(front, back) => {
             encoder.set_stencil_front_back_reference_value(front, back);
         }
+        Cmd::SetRasterizerState(rs) => {
+            encoder.set_front_facing_winding(rs.front_winding);
+            encoder.set_cull_mode(rs.cull_mode);
+            encoder.set_depth_clip_mode(rs.depth_clip);
+        }
         Cmd::BindBuffer { stage, index, buffer, offset } => {
             let native = buffer.as_ref().map(|b| b.as_native());
             match stage {
@@ -1012,13 +1025,8 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
                 _ => unimplemented!()
             }
         }
-        Cmd::BindPipeline(pipeline_state, rasterizer) => {
+        Cmd::BindPipeline(pipeline_state) => {
             encoder.set_render_pipeline_state(pipeline_state);
-            if let Some(rs) = rasterizer {
-                encoder.set_front_facing_winding(rs.front_winding);
-                encoder.set_cull_mode(rs.cull_mode);
-                encoder.set_depth_clip_mode(rs.depth_clip);
-            }
         }
         Cmd::Draw { primitive_type, vertices, instances } =>  {
             /*if instances.start == 0 { //TODO: needs metal-rs breaking update
@@ -1979,7 +1987,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             } = *pipes;
 
             let clear_pso = clears.get(key, library, &self.shared.device);
-            let com_pso = iter::once(soft::RenderCommand::BindPipeline(clear_pso, None));
+            let com_pso = iter::once(soft::RenderCommand::BindPipeline(clear_pso));
+            let com_rast = iter::once(soft::RenderCommand::SetRasterizerState(native::RasterizerState::default()));
 
             let com_ds = if !aspects.contains(Aspects::COLOR) {
                 Some(soft::RenderCommand::SetDepthStencilState(
@@ -1988,33 +1997,25 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             } else {
                 None
             };
+            let com_draw = iter::once(soft::RenderCommand::Draw {
+                primitive_type: MTLPrimitiveType::Triangle,
+                vertices: 0 .. vertices.len() as _,
+                instances: 0 .. 1,
+            });
 
             let commands = com_clear
                 .into_iter()
                 .chain(com_vertex)
                 .chain(com_pso)
+                .chain(com_rast)
                 .chain(com_ds)
-                .chain(iter::once(soft::RenderCommand::Draw {
-                    primitive_type: MTLPrimitiveType::Triangle,
-                    vertices: 0 .. vertices.len() as _,
-                    instances: 0 .. 1,
-                }));
+                .chain(com_draw);
 
             inner.sink().render_commands(commands);
         }
 
         // reset all the affected states
-        let com_pso = if let Some(ref ps) = self.state.render_pso {
-            if self.state.render_pso_is_compatible {
-                Some(soft::RenderCommand::BindPipeline(&*ps.raw, None))
-            } else {
-                warn!("Not restoring the current PSO after clear_attachments because it's not compatible");
-                None
-            }
-        } else {
-            None
-        };
-
+        let (com_pso, com_rast) = self.state.make_pso_commands();
         let com_ds = self.state.sync_depth_stencil(&mut *pipes, &self.shared.device);
 
         let com_vs = if let Some(&Some((buffer, offset))) = self.state.resources_vs.buffers.first() {
@@ -2040,6 +2041,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let commands = com_pso
             .into_iter()
+            .chain(com_rast)
             .chain(com_ds)
             .chain(com_vs)
             .chain(com_fs);
@@ -2190,10 +2192,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let key = (dst.mtl_type, dst.mtl_format, src.format_desc.aspects, dst.shader_channel);
 
         let prelude = [
-            soft::RenderCommand::BindPipeline(
-                blits.get(key, library, &self.shared.device),
-                None,
-            ),
+            soft::RenderCommand::BindPipeline(blits.get(key, library, &self.shared.device)),
             soft::RenderCommand::BindSampler {
                 stage: pso::Stage::Fragment,
                 index: 0,
@@ -2584,10 +2583,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
-        pre.issue(soft::RenderCommand::BindPipeline(
-            &*pipeline.raw,
-            pipeline.rasterizer_state.clone(),
-        ));
+        pre.issue(soft::RenderCommand::BindPipeline(&*pipeline.raw));
+        if let Some(ref rs) = pipeline.rasterizer_state {
+            pre.issue(soft::RenderCommand::SetRasterizerState(rs.clone()))
+        }
 
         let mut pipes = self.shared.service_pipes.lock();
         pre.issue(self.state.sync_depth_stencil(&mut *pipes, &self.shared.device).unwrap());
