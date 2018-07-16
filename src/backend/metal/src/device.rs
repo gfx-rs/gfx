@@ -9,7 +9,7 @@ use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::path::Path;
-use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::sync::{Arc, Condvar, Mutex};
 use std::{cmp, mem, slice, time};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query, window};
@@ -1317,8 +1317,7 @@ impl hal::Device<Backend> for Device {
                 n::DescriptorPool::count_bindings(desc.ty, desc.count,
                     &mut num_samplers, &mut num_textures, &mut num_buffers);
             }
-            let inner = n::DescriptorPoolInner::new(num_samplers, num_textures, num_buffers);
-            n::DescriptorPool::Emulated(Arc::new(RwLock::new(inner)))
+            n::DescriptorPool::new_emulated(num_samplers, num_textures, num_buffers)
         }
     }
 
