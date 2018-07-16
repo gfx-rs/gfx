@@ -138,7 +138,7 @@ pub struct GraphicsPipeline {
     /// adjusted offsets to cover this use case.
     pub(crate) vertex_buffer_map: VertexBufferMap,
     /// Tracked attachment formats for figuring (roughly) renderpass compatibility.
-    pub(crate) attachment_formats: SmallVec<[Option<Format>; 8]>,
+    pub(crate) attachment_formats: Vec<Option<Format>>,
 }
 
 unsafe impl Send for GraphicsPipeline {}

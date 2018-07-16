@@ -144,7 +144,7 @@ struct RenderPipelineState {
     raw: metal::RenderPipelineState,
     ds_desc: pso::DepthStencilDesc,
     vbuf_map: native::VertexBufferMap,
-    at_formats: SmallVec<[Option<Format>; 8]>,
+    at_formats: Vec<Option<Format>>,
 }
 
 #[derive(Clone)]
@@ -2569,21 +2569,40 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        self.state.render_pso_is_compatible = true; //assume good intent :)
-        self.state.render_pso = Some(RenderPipelineState {
-            raw: pipeline.raw.to_owned(),
-            ds_desc: pipeline.depth_stencil_desc.clone(),
-            vbuf_map: pipeline.vertex_buffer_map.clone(),
-            at_formats: pipeline.attachment_formats.clone(),
-        });
-        self.state.rasterizer_state = pipeline.rasterizer_state.clone();
-        self.state.primitive_type = pipeline.primitive_type;
-        let vertex_mask = self.state.set_vertex_buffers();
-
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
-        pre.issue(soft::RenderCommand::BindPipeline(&*pipeline.raw));
+        self.state.render_pso_is_compatible = true; //assume good intent :)
+        let mut set_pipeline = false;
+        match self.state.render_pso {
+            Some(ref mut ps) => {
+                // try to avoid extra states or new heap allocations
+                if ps.raw.as_ptr() != pipeline.raw.as_ptr() {
+                    ps.raw = pipeline.raw.to_owned();
+                    set_pipeline = true;
+                }
+                ps.ds_desc = pipeline.depth_stencil_desc.clone();
+                ps.vbuf_map.clear();
+                ps.vbuf_map.extend(&pipeline.vertex_buffer_map);
+                ps.at_formats.clear();
+                ps.at_formats.extend_from_slice(&pipeline.attachment_formats);
+            }
+            None => {
+                set_pipeline = true;
+                self.state.render_pso = Some(RenderPipelineState {
+                    raw: pipeline.raw.to_owned(),
+                    ds_desc: pipeline.depth_stencil_desc.clone(),
+                    vbuf_map: pipeline.vertex_buffer_map.clone(),
+                    at_formats: pipeline.attachment_formats.clone(),
+                });
+            }
+        }
+        if set_pipeline {
+            pre.issue(soft::RenderCommand::BindPipeline(&*pipeline.raw));
+        }
+
+        self.state.rasterizer_state = pipeline.rasterizer_state.clone();
+        self.state.primitive_type = pipeline.primitive_type;
         if let Some(ref rs) = pipeline.rasterizer_state {
             pre.issue(soft::RenderCommand::SetRasterizerState(rs.clone()))
         }
@@ -2612,6 +2631,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         // re-bind vertex buffers
+        let vertex_mask = self.state.set_vertex_buffers();
         if vertex_mask != 0 {
             for command in self.state.iter_vertex_buffers(vertex_mask) {
                 pre.issue(command);
