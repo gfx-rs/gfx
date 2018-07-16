@@ -57,7 +57,7 @@ impl hal::QueueFamily for QueueFamily {
 struct Shared {
     device: Mutex<metal::Device>,
     queue: Mutex<command::QueueInner>,
-    service_pipes: Mutex<internal::ServicePipes>,
+    service_pipes: internal::ServicePipes,
     push_constants_buffer_id: u32,
     disabilities: PrivateDisabilities,
 }
@@ -70,7 +70,7 @@ impl Shared {
         let feature_macos_10_14: metal::MTLFeatureSet = unsafe { mem::transmute(10004u64) };
         Shared {
             queue: Mutex::new(command::QueueInner::new(&device, Some(MAX_ACTIVE_COMMAND_BUFFERS))),
-            service_pipes: Mutex::new(internal::ServicePipes::new(&device)),
+            service_pipes: internal::ServicePipes::new(&device),
             push_constants_buffer_id: 30,
             disabilities: PrivateDisabilities {
                 broken_viewport_near_depth: device.name().starts_with("Intel") &&

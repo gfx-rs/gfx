@@ -9,7 +9,7 @@ use hal::image::Filter;
 
 use std::mem;
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Mutex, RwLock};
 
 
 #[derive(Clone, Debug)]
@@ -170,20 +170,6 @@ impl DepthStencilStates {
             write_stencil,
             write_all,
         }
-    }
-
-    pub fn get(
-        &mut self,
-        desc: pso::DepthStencilDesc,
-        device: &Mutex<metal::Device>,
-    ) -> &metal::DepthStencilStateRef {
-        self.map
-            .entry(desc)
-            .or_insert_with(|| {
-                let raw_desc = Self::create_desc(&desc)
-                    .expect("Incomplete descriptor provided");
-                device.lock().unwrap().new_depth_stencil_state(&raw_desc)
-            })
     }
 
     pub fn get_write(&self, aspects: Aspects) -> &metal::DepthStencilStateRef {
@@ -357,7 +343,7 @@ impl ImageBlitPipes {
             .or_insert_with(|| Self::create(key, library, &*device.lock().unwrap()))
     }
 
-    fn create(
+    pub fn create(
         key: BlitKey, library: &metal::LibraryRef, device: &metal::DeviceRef,
     ) -> metal::RenderPipelineState {
         use metal::MTLTextureType as Tt;
@@ -429,13 +415,13 @@ impl ImageBlitPipes {
 
 
 pub struct ServicePipes {
-    pub library: metal::Library,
+    pub library: Mutex<metal::Library>,
     pub sampler_states: SamplerStates,
-    pub depth_stencil_states: DepthStencilStates,
-    pub clears: ImageClearPipes,
-    pub blits: ImageBlitPipes,
-    copy_buffer: metal::ComputePipelineState,
-    fill_buffer: metal::ComputePipelineState,
+    pub depth_stencil_states: RwLock<DepthStencilStates>,
+    pub clears: Mutex<ImageClearPipes>,
+    pub blits: Mutex<ImageBlitPipes>,
+    pub copy_buffer: metal::ComputePipelineState,
+    pub fill_buffer: metal::ComputePipelineState,
 }
 
 impl ServicePipes {
@@ -448,22 +434,18 @@ impl ServicePipes {
         let fill_buffer = Self::create_fill_buffer(&library, device);
 
         ServicePipes {
+            library: Mutex::new(library),
             sampler_states: SamplerStates::new(device),
-            depth_stencil_states: DepthStencilStates::new(device),
-            clears: ImageClearPipes {
+            depth_stencil_states: RwLock::new(DepthStencilStates::new(device)),
+            clears: Mutex::new(ImageClearPipes {
                 map: FastHashMap::default(),
-            },
-            blits: ImageBlitPipes {
+            }),
+            blits: Mutex::new(ImageBlitPipes {
                 map: FastHashMap::default(),
-            },
-            library,
+            }),
             copy_buffer,
             fill_buffer,
         }
-    }
-
-    pub fn get_copy_buffer(&self) -> &metal::ComputePipelineStateRef {
-        &self.copy_buffer
     }
 
     fn create_copy_buffer(
@@ -484,10 +466,6 @@ impl ServicePipes {
         device.new_compute_pipeline_state(&pipeline).unwrap()
     }
 
-    pub fn get_fill_buffer(&self) -> &metal::ComputePipelineStateRef {
-        &self.fill_buffer
-    }
-
     fn create_fill_buffer(
         library: &metal::LibraryRef, device: &metal::DeviceRef
     ) -> metal::ComputePipelineState {
@@ -503,5 +481,29 @@ impl ServicePipes {
         }
 
         device.new_compute_pipeline_state(&pipeline).unwrap()
+    }
+
+    pub fn with_depth_stencil<T, F: FnOnce(&metal::DepthStencilStateRef) -> T>(
+        &self,
+        desc: pso::DepthStencilDesc,
+        device: &Mutex<metal::Device>,
+        fun: F,
+    ) -> T {
+        if let Some(state) = self.depth_stencil_states.read().unwrap().map.get(&desc) {
+            return fun(state);
+        }
+        let raw_desc = DepthStencilStates::create_desc(&desc)
+            .expect("Incomplete descriptor provided");
+        let state = device
+            .lock()
+            .unwrap()
+            .new_depth_stencil_state(&raw_desc);
+        fun(self.depth_stencil_states
+            .write()
+            .unwrap()
+            .map
+            .entry(desc)
+            .or_insert(state)
+        )
     }
 }
