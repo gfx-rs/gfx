@@ -5,7 +5,7 @@ use hal::pso;
 use gl;
 use smallvec::SmallVec;
 
-pub fn bind_polygon_mode(gl: &gl::Gl, mode: pso::PolygonMode, bias: Option<pso::DepthBias>) {
+pub fn bind_polygon_mode(gl: &gl::Gl, mode: pso::PolygonMode, bias: Option<pso::State<pso::DepthBias>>) {
     use hal::pso::PolygonMode::*;
 
     let (gl_draw, gl_offset) = match mode {
@@ -20,11 +20,11 @@ pub fn bind_polygon_mode(gl: &gl::Gl, mode: pso::PolygonMode, bias: Option<pso::
     unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
 
     match bias {
-        Some(bias) => unsafe {
+        Some(pso::State::Static(bias)) => unsafe {
             gl.Enable(gl_offset);
             gl.PolygonOffset(bias.slope_factor as _, bias.const_factor as _);
         },
-        None => unsafe {
+        _ => unsafe {
             gl.Disable(gl_offset)
         },
     }

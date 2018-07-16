@@ -405,6 +405,14 @@ impl d::Device<B> for Device {
                 topology: conv::map_topology(desc.input_assembler.primitive),
                 primitive_restart_enable: vk::VK_FALSE,
             });
+            let depth_bias = match desc.rasterizer.depth_bias {
+                Some(pso::State::Static(db)) => db,
+                Some(pso::State::Dynamic) => {
+                    dynamic_states.push(vk::DynamicState::DepthBias);
+                    pso::DepthBias::default()
+                },
+                None => pso::DepthBias::default(),
+            };
 
             info_rasterization_states.push(vk::PipelineRasterizationStateCreateInfo {
                 s_type: vk::StructureType::PipelineRasterizationStateCreateInfo,
@@ -425,9 +433,9 @@ impl d::Device<B> for Device {
                 cull_mode: conv::map_cull_face(desc.rasterizer.cull_face),
                 front_face: conv::map_front_face(desc.rasterizer.front_face),
                 depth_bias_enable: if desc.rasterizer.depth_bias.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
-                depth_bias_constant_factor: desc.rasterizer.depth_bias.map_or(0.0, |off| off.const_factor),
-                depth_bias_clamp: desc.rasterizer.depth_bias.map_or(0.0, |off| off.clamp),
-                depth_bias_slope_factor: desc.rasterizer.depth_bias.map_or(0.0, |off| off.slope_factor),
+                depth_bias_constant_factor: depth_bias.const_factor,
+                depth_bias_clamp: depth_bias.clamp,
+                depth_bias_slope_factor: depth_bias.slope_factor,
                 line_width,
             });
 

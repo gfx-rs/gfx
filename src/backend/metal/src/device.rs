@@ -125,7 +125,6 @@ pub struct Device {
     pub(crate) shared: Arc<Shared>,
     pub(crate) private_caps: PrivateCapabilities,
     memory_types: [hal::MemoryType; 4],
-    debug_min_descriptor_count: usize,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -259,7 +258,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             shared: self.shared.clone(),
             private_caps: self.private_caps.clone(),
             memory_types: self.memory_types,
-            debug_min_descriptor_count: 0,
         };
 
         Ok(hal::Gpu {
@@ -988,8 +986,9 @@ impl hal::Device<Backend> for Device {
             } else {
                 metal::MTLDepthClipMode::Clip
             },
-            depth_bias: pipeline_desc.rasterizer.depth_bias.unwrap_or_default(),
         });
+        let depth_bias = pipeline_desc.rasterizer.depth_bias
+            .unwrap_or(pso::State::Static(pso::DepthBias::default()));
 
         // prepare the depth-stencil state now
         self.shared.service_pipes
@@ -1012,6 +1011,7 @@ impl hal::Device<Backend> for Device {
                     primitive_type,
                     attribute_buffer_index: pipeline_layout.attribute_buffer_index,
                     rasterizer_state,
+                    depth_bias,
                     depth_stencil_desc: pipeline_desc.depth_stencil.clone(),
                     baked_states: pipeline_desc.baked_states.clone(),
                     vertex_buffer_map,
@@ -1294,9 +1294,7 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        let mut num_samplers = self.debug_min_descriptor_count;
-        let mut num_textures = self.debug_min_descriptor_count;
-        let mut num_buffers  = self.debug_min_descriptor_count;
+        let (mut num_samplers, mut num_textures, mut num_buffers) = (0, 0, 0);
 
         if self.private_caps.argument_buffers {
             let mut arguments = Vec::new();

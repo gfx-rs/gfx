@@ -134,6 +134,7 @@ impl Swapchain {
             }
             hal::FrameSync::Fence(fence) => {
                 *fence.mutex.lock().unwrap() = true;
+                fence.condvar.notify_all();
             }
         }
     }
@@ -148,19 +149,23 @@ pub struct SwapchainImage {
 
 impl SwapchainImage {
     /// Waits until the specified swapchain index is available for rendering.
-    pub fn wait_until_ready(&self) {
+    /// Returns the number of frames it had to wait.
+    pub fn wait_until_ready(&self) -> usize {
         // check the target frame first
         {
             let frame = self.frames[self.index as usize].inner.lock().unwrap();
             assert!(!frame.available);
             if frame.drawable.is_some() {
-                return
+                return 0;
             }
         }
         // wait for new frames to come until we meet the chosen one
+        let mut count = 1;
         while self.surface.next_frame(&self.frames).0 != self.index as usize {
+            count += 1;
         }
-        debug!("Swapchain image is ready")
+        debug!("Swapchain image is ready after {} frames", count);
+        count
     }
 }
 

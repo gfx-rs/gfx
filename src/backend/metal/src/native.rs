@@ -2,6 +2,7 @@ use {Backend, BufferPtr, SamplerPtr, TexturePtr};
 use internal::Channel;
 use window::SwapchainImage;
 
+use std::fmt;
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
 use std::sync::{Arc, Condvar, Mutex, RwLock};
@@ -23,13 +24,25 @@ pub type EntryPointMap = FastHashMap<String, spirv::EntryPoint>;
 
 /// Shader module can be compiled in advance if it's resource bindings do not
 /// depend on pipeline layout, in which case the value would become `Compiled`.
-#[derive(Debug)]
 pub enum ShaderModule {
     Compiled {
         library: metal::Library,
         entry_point_map: EntryPointMap,
     },
     Raw(Vec<u8>),
+}
+
+impl fmt::Debug for ShaderModule {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            ShaderModule::Compiled { .. } => {
+                write!(formatter, "ShaderModule::Compiled(..)")
+            }
+            ShaderModule::Raw(ref vec) => {
+                write!(formatter, "ShaderModule::Raw(length = {})", vec.len())
+            }
+        }
+    }
 }
 
 unsafe impl Send for ShaderModule {}
@@ -81,7 +94,6 @@ pub struct RasterizerState {
     pub front_winding: metal::MTLWinding,
     pub cull_mode: metal::MTLCullMode,
     pub depth_clip: metal::MTLDepthClipMode,
-    pub depth_bias: pso::DepthBias,
 }
 
 impl Default for RasterizerState {
@@ -90,7 +102,6 @@ impl Default for RasterizerState {
             front_winding: metal::MTLWinding::Clockwise,
             cull_mode: metal::MTLCullMode::None,
             depth_clip: metal::MTLDepthClipMode::Clip,
-            depth_bias: Default::default(),
         }
     }
 }
@@ -117,6 +128,7 @@ pub struct GraphicsPipeline {
     pub(crate) primitive_type: metal::MTLPrimitiveType,
     pub(crate) attribute_buffer_index: u32,
     pub(crate) rasterizer_state: Option<RasterizerState>,
+    pub(crate) depth_bias: pso::State<pso::DepthBias>,
     pub(crate) depth_stencil_desc: pso::DepthStencilDesc,
     pub(crate) baked_states: pso::BakedStates,
     /// The mapping of additional vertex buffer bindings over the original ones.

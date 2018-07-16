@@ -34,8 +34,8 @@ const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
 /// with clear operations set up to implement our `clear_image`
 /// Note: currently doesn't work, needs a repro case for Apple
 const CLEAR_IMAGE_ARRAY: bool = false;
-/// Number of frames to average when reporting the frame wait times.
-const FRAME_WAIT_REPORT_WINDOW: usize = 0;
+/// Number of frames to average when reporting the performance counters.
+const COUNTERS_REPORT_WINDOW: usize = 0;
 
 pub struct QueueInner {
     raw: metal::CommandQueue,
@@ -61,13 +61,17 @@ impl QueueInner {
         device: &metal::DeviceRef,
         pool_size: Option<usize>,
     ) -> Self {
-        QueueInner {
-            raw: match pool_size {
-                Some(count) => device.new_command_queue_with_max_command_buffer_count(count as u64),
-                None => device.new_command_queue(),
+        match pool_size {
+            Some(count) => QueueInner {
+                raw: device.new_command_queue_with_max_command_buffer_count(count as u64),
+                reserve: 0 .. count,
+                debug_retain_references: false,
             },
-            reserve: 0 .. pool_size.unwrap_or(64),
-            debug_retain_references: false,
+            None => QueueInner {
+                raw: device.new_command_queue(),
+                reserve: 0 .. 64,
+                debug_retain_references: true,
+            },
         }
     }
 
@@ -159,6 +163,7 @@ struct State {
     resources_cs: StageResources,
     index_buffer: Option<IndexBuffer<BufferPtr>>,
     rasterizer_state: Option<native::RasterizerState>,
+    depth_bias: pso::DepthBias,
     stencil: native::StencilState<pso::StencilValue>,
     push_constants: Vec<u32>,
     vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
@@ -201,9 +206,7 @@ impl State {
             None
         };
         let com_depth_bias = if aspects.contains(Aspects::DEPTH) {
-            Some(soft::RenderCommand::SetDepthBias(
-                self.rasterizer_state.as_ref().map(|r| r.depth_bias).unwrap_or_default()
-            ))
+            Some(soft::RenderCommand::SetDepthBias(self.depth_bias))
         } else {
             None
         };
@@ -412,14 +415,7 @@ impl State {
     }
 
     fn set_depth_bias<'a>(&mut self, depth_bias: &pso::DepthBias) -> soft::RenderCommand<&'a soft::Own> {
-        if let Some(ref mut r) = self.rasterizer_state {
-            r.depth_bias = *depth_bias;
-        } else {
-            self.rasterizer_state = Some(native::RasterizerState {
-                depth_bias: *depth_bias,
-                ..Default::default()
-            });
-        }
+        self.depth_bias = *depth_bias;
         soft::RenderCommand::SetDepthBias(*depth_bias)
     }
 
@@ -1024,8 +1020,6 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
                 encoder.set_front_facing_winding(rs.front_winding);
                 encoder.set_cull_mode(rs.cull_mode);
                 encoder.set_depth_clip_mode(rs.depth_clip);
-                let db = rs.depth_bias;
-                encoder.set_depth_bias(db.const_factor, db.slope_factor, db.clamp);
             }
         }
         Cmd::Draw { primitive_type, vertices, instances } =>  {
@@ -1235,25 +1229,40 @@ fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass])
     }
 }
 
+/// This is a hack around Metal System Trace logic that ignores empty command buffers entirely.
+fn record_empty(command_buf: &metal::CommandBufferRef) {
+    command_buf.new_blit_command_encoder().end_encoding();
+}
+
 #[derive(Default)]
-struct FrameWaitReport {
-    duration: time::Duration,
-    count: usize,
+struct PerformanceCounters {
+    immediate_command_buffers: usize,
+    deferred_command_buffers: usize,
+    signal_command_buffers: usize,
+    frame_wait_duration: time::Duration,
+    frame_wait_count: usize,
     frame: usize,
 }
 
 
 pub struct CommandQueue {
     shared: Arc<Shared>,
-    frame_wait: Option<FrameWaitReport>,
+    retained_buffers: Vec<metal::Buffer>,
+    retained_textures: Vec<metal::Texture>,
+    perf_counters: Option<PerformanceCounters>,
 }
+
+unsafe impl Send for CommandQueue {}
+unsafe impl Sync for CommandQueue {}
 
 impl CommandQueue {
     pub(crate) fn new(shared: Arc<Shared>) -> Self {
         CommandQueue {
             shared,
-            frame_wait: if FRAME_WAIT_REPORT_WINDOW != 0 {
-                Some(FrameWaitReport::default())
+            retained_buffers: Vec::new(),
+            retained_textures: Vec::new(),
+            perf_counters: if COUNTERS_REPORT_WINDOW != 0 {
+                Some(PerformanceCounters::default())
             } else {
                 None
             },
@@ -1272,10 +1281,10 @@ impl CommandQueue {
             }
             if let Some(swap_image) = sem.image_ready.lock().unwrap().take() {
                 let start = time::Instant::now();
-                swap_image.wait_until_ready();
-                if let Some(ref mut wait) = self.frame_wait {
-                    wait.count += 1;
-                    wait.duration += start.elapsed();
+                let count = swap_image.wait_until_ready();
+                if let Some(ref mut counters) = self.perf_counters {
+                    counters.frame_wait_count += count;
+                    counters.frame_wait_duration += start.elapsed();
                 }
             }
         }
@@ -1295,23 +1304,6 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         self.wait(submit.wait_semaphores.iter().map(|&(s, _)| s));
 
-        let system_semaphores = submit.signal_semaphores
-            .into_iter()
-            .filter_map(|semaphore| {
-                semaphore.system.clone()
-            })
-            .collect::<Vec<_>>();
-        let signal_block = if !system_semaphores.is_empty() {
-            //Note: careful with those `ConcreteBlock::copy()` calls!
-            Some(ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                for semaphore in &system_semaphores {
-                    semaphore.signal();
-                }
-            }).copy())
-        } else {
-            None
-        };
-
         let queue = self.shared.queue.lock().unwrap();
         let (mut num_immediate, mut num_deferred) = (0, 0);
 
@@ -1323,52 +1315,75 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 ref mut retained_textures,
             } = *inner;
 
-            let temp_cmd_buffer;
-            let command_buffer: &metal::CommandBufferRef = match *sink {
+            match *sink {
                 Some(CommandSink::Immediate { ref cmd_buffer, ref token, .. }) => {
                     num_immediate += 1;
                     trace!("\timmediate {:?}", token);
-                    // schedule the retained buffers to release after the commands are done
-                    if !retained_buffers.is_empty() || !retained_textures.is_empty() {
-                        let free_buffers = mem::replace(retained_buffers, Vec::new());
-                        let free_textures = mem::replace(retained_textures, Vec::new());
-                        let release_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                            // move and auto-release
-                            let _ = free_buffers;
-                            let _ = free_textures;
-                        }).copy();
-                        msg_send![*cmd_buffer, addCompletedHandler: release_block.deref() as *const _];
-                    }
-                    cmd_buffer
+                    self.retained_buffers.extend(retained_buffers.drain(..));
+                    self.retained_textures.extend(retained_textures.drain(..));
+                    cmd_buffer.commit();
                 }
                 Some(CommandSink::Deferred { ref passes, .. }) => {
                     num_deferred += 1;
                     trace!("\tdeferred with {} passes", passes.len());
-                    temp_cmd_buffer = queue.spawn_temp();
-                    temp_cmd_buffer.set_label("deferred");
-                    record_commands(&*temp_cmd_buffer, passes);
-                    &*temp_cmd_buffer
+                    let cmd_buffer = queue.spawn_temp();
+                    cmd_buffer.enqueue();
+                    cmd_buffer.set_label("deferred");
+                    record_commands(&*cmd_buffer, passes);
+                    cmd_buffer.commit();
                  }
                  _ => panic!("Command buffer not recorded for submission")
-            };
-            if let Some(ref signal_block) = signal_block {
-                msg_send![command_buffer, addCompletedHandler: signal_block.deref() as *const _];
             }
-            command_buffer.commit();
         }
 
         debug!("\t{} immediate, {} deferred command buffers", num_immediate, num_deferred);
+        if let Some(ref mut counters) = self.perf_counters {
+            counters.immediate_command_buffers += num_immediate;
+            counters.deferred_command_buffers += num_deferred;
+        }
 
-        if let Some(ref fence) = fence {
-            let command_buffer = queue.spawn_temp();
-            command_buffer.set_label("fence");
-            let fence = Arc::clone(fence);
-            let fence_block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                *fence.mutex.lock().unwrap() = true;
-                fence.condvar.notify_all();
+        const BLOCK_BUCKET: usize = 4;
+        let system_semaphores = submit.signal_semaphores
+            .into_iter()
+            .filter_map(|semaphore| {
+                semaphore.system.clone()
+            })
+            .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+
+        // Note: completion handlers can stall the GPU, so we only make one
+        // when strictly required, and collect the retained resources otherwise.
+        if fence.is_some() || !system_semaphores.is_empty() {
+            let moved_fence = fence.map(Arc::clone);
+            let free_buffers = self.retained_buffers
+                .drain(..)
+                .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+            let free_textures = self.retained_textures
+                .drain(..)
+                .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+
+            let block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
+                // release the fence
+                if let Some(ref f) = moved_fence {
+                    *f.mutex.lock().unwrap() = true;
+                    f.condvar.notify_all();
+                }
+                // signal the semaphores
+                for semaphore in &system_semaphores {
+                    semaphore.signal();
+                }
+                // free all the manually retained resources
+                let _ = free_buffers;
+                let _ = free_textures;
             }).copy();
-            msg_send![command_buffer, addCompletedHandler: fence_block.deref() as *const _];
-            command_buffer.commit();
+
+            if let Some(ref mut counters) = self.perf_counters {
+                counters.signal_command_buffers += 1;
+            }
+            let cmd_buffer = queue.spawn_temp();
+            cmd_buffer.set_label("signal");
+            record_empty(cmd_buffer);
+            msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
+            cmd_buffer.commit();
         }
     }
 
@@ -1384,6 +1399,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         let queue = self.shared.queue.lock().unwrap();
         let command_buffer = queue.raw.new_command_buffer();
         command_buffer.set_label("present");
+        record_empty(command_buffer);
 
         for (swapchain, index) in swapchains {
             debug!("presenting frame {}", index);
@@ -1393,15 +1409,29 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         command_buffer.commit();
 
-        if let Some(ref mut wait) = self.frame_wait {
-            wait.frame += 1;
-            if wait.frame >= FRAME_WAIT_REPORT_WINDOW {
-                let time = wait.duration / wait.frame as u32;
-                println!("Frame wait time={}ms count={}",
-                    time.as_secs() as u32 * 1000 + time.subsec_millis(),
-                    wait.count as f32 / wait.frame as f32,
+        if let Some(ref mut counters) = self.perf_counters {
+            counters.frame += 1;
+            if counters.frame >= COUNTERS_REPORT_WINDOW {
+                let time = counters.frame_wait_duration / counters.frame as u32;
+                let total_submitted =
+                    counters.immediate_command_buffers +
+                    counters.deferred_command_buffers +
+                    counters.signal_command_buffers;
+                println!("Performance counters:");
+                println!("\tCommand buffers: {} immediate, {} deferred, {} signals",
+                    counters.immediate_command_buffers / counters.frame,
+                    counters.deferred_command_buffers / counters.frame,
+                    counters.signal_command_buffers / counters.frame,
                 );
-                *wait = FrameWaitReport::default();
+                println!("\tEstimated pipeline length is {} frames, given the total active {} command buffers",
+                    counters.frame * queue.reserve.start / total_submitted.max(1),
+                    queue.reserve.start,
+                );
+                println!("\tFrame wait time is {}ms over {} requests",
+                    time.as_secs() as u32 * 1000 + time.subsec_millis(),
+                    counters.frame_wait_count as f32 / counters.frame as f32,
+                );
+                *counters = PerformanceCounters::default();
             }
         }
 
@@ -1452,7 +1482,8 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 resources_cs: StageResources::new(),
                 index_buffer: None,
                 rasterizer_state: None,
-                stencil: native::StencilState::<pso::StencilValue> {
+                depth_bias: pso::DepthBias::default(),
+                stencil: native::StencilState {
                     front_reference: 0,
                     back_reference: 0,
                     front_read_mask: !0,
@@ -2582,6 +2613,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 self.state.stencil.front_reference,
                 self.state.stencil.back_reference,
             ));
+        }
+        if let pso::State::Static(value) = pipeline.depth_bias {
+            self.state.depth_bias = value;
+            pre.issue(soft::RenderCommand::SetDepthBias(value));
         }
 
         if let Some(ref vp) = pipeline.baked_states.viewport {

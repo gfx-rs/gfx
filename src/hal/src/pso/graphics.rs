@@ -1,7 +1,7 @@
 //! Graphics pipeline descriptor.
 
 use {image, pass, Backend, Primitive};
-use super::{BasePipeline, EntryPoint, PipelineCreationFlags};
+use super::{BasePipeline, EntryPoint, PipelineCreationFlags, State};
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorBlendDesc, DepthStencilDesc, Face};
 
@@ -213,7 +213,7 @@ pub struct Rasterizer {
     /// they will be clamped to the min or max z value.
     pub depth_clamping: bool,
     /// What depth bias, if any, to use for the drawn primitives.
-    pub depth_bias: Option<DepthBias>,
+    pub depth_bias: Option<State<DepthBias>>,
     /// Controls how triangles will be rasterized depending on their overlap with pixels.
     pub conservative: bool,
 }
