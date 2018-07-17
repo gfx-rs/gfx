@@ -118,9 +118,36 @@ where
         self.free_ranges.insert(i, range);
     }
 
+    /// Returns an iterator over allocated non-empty ranges
+    pub fn allocated_ranges<'a>(&'a self) -> impl 'a + Iterator<Item = Range<T>> {
+        let first = match self.free_ranges.first() {
+            Some(Range { ref start, .. }) if *start > self.initial_range.start => Some(self.initial_range.start .. *start),
+            _ => None,
+        };
+
+        let last = match self.free_ranges.last() {
+            Some(Range { end, .. }) if *end < self.initial_range.end => Some(*end .. self.initial_range.end),
+            _ => None,
+        };
+
+        let mid = self.free_ranges
+            .iter()
+            .zip(self.free_ranges.iter().skip(1))
+            .map(|(ra, rb)| ra.end .. rb.start);
+
+        first
+            .into_iter()
+            .chain(mid)
+            .chain(last)
+    }
+
     pub fn reset(&mut self) {
         self.free_ranges.clear();
         self.free_ranges.push(self.initial_range.clone());
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.free_ranges.len() == 1 && self.free_ranges[0] == self.initial_range
     }
 }
 
