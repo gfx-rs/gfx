@@ -2345,7 +2345,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let vp_borrowable = vps.next().expect("No viewport provided, Metal supports exactly one");
         let vp = vp_borrowable.borrow();
         if vps.next().is_some() {
-            // TODO should we panic here or set buffer in an erronous state?
+            // TODO should we panic here or set buffer in an erroneous state?
             panic!("More than one viewport set; Metal supports only one viewport");
         }
 

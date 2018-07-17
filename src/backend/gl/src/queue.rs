@@ -671,6 +671,7 @@ impl CommandQueue {
             panic!("Error {:?} executing command: {:?}", err, cmd)
         }
     }
+    
     fn signal_fence(&mut self, fence: &native::Fence) {
         if self.share.private_caps.sync {
             let gl = &self.share.context;

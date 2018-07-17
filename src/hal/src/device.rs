@@ -366,7 +366,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Create a descriptor pool.
     ///
     /// Descriptor pools allow allocation of descriptor sets.
-    /// Ihe pool can't be modified directly, only through updating descriptor sets.
+    /// The pool can't be modified directly, only through updating descriptor sets.
     fn create_descriptor_pool<I>(&self, max_sets: usize, descriptor_ranges: I) -> B::DescriptorPool
     where
         I: IntoIterator,

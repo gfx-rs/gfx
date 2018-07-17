@@ -213,7 +213,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     /// Set the viewport parameters for the rasterizer.
     ///
-    /// Each viewport passed corrosponds to the viewport with the same index,
+    /// Each viewport passed corresponds to the viewport with the same index,
     /// starting from an offset index `first_viewport`.
     ///
     /// # Errors
