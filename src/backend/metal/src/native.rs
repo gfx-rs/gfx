@@ -1,11 +1,12 @@
 use {Backend, BufferPtr, SamplerPtr, TexturePtr};
 use internal::Channel;
+use lock::{Condvar, Mutex, RwLock};
 use window::SwapchainImage;
 
 use std::fmt;
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
-use std::sync::{Arc, Condvar, Mutex, RwLock};
+use std::sync::Arc;
 
 use hal::{self, image, pso};
 use hal::backend::FastHashMap;
@@ -391,7 +392,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
 
                 // step[3]: fill out immutable samplers
                 if has_immutable_samplers {
-                    let mut data = inner.write().unwrap();
+                    let mut data = inner.write();
                     let mut immutable_sampler_offset = 0;
                     let mut sampler_offset = sampler_range.start as usize;
                     let (mut tx_temp, mut bf_temp) = (0, 0);
@@ -447,7 +448,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         match self {
             DescriptorPool::Emulated { ref inner, ref mut sampler_alloc, ref mut texture_alloc, ref mut buffer_alloc } => {
                 debug!("pool: free_sets");
-                let mut data = inner.write().unwrap();
+                let mut data = inner.write();
                 for descriptor_set in descriptor_sets {
                     match descriptor_set {
                         DescriptorSet::Emulated { sampler_range, texture_range, buffer_range, .. } => {
@@ -499,7 +500,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         match *self {
             DescriptorPool::Emulated { ref inner, ref mut sampler_alloc, ref mut texture_alloc, ref mut buffer_alloc } => {
                 debug!("pool: reset");
-                let mut data = inner.write().unwrap();
+                let mut data = inner.write();
 
                 sampler_alloc.reset();
                 texture_alloc.reset();

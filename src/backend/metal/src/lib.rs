@@ -1,4 +1,5 @@
 extern crate gfx_hal as hal;
+extern crate metal_rs as metal;
 #[macro_use] extern crate bitflags;
 extern crate cocoa;
 extern crate foreign_types;
@@ -10,8 +11,10 @@ extern crate block;
 extern crate smallvec;
 extern crate spirv_cross;
 
-extern crate metal_rs as metal;
-
+#[cfg(feature = "antidote")]
+extern crate antidote as lock;
+#[cfg(not(feature = "antidote"))]
+extern crate parking_lot as lock;
 #[cfg(feature = "winit")]
 extern crate winit;
 
@@ -32,8 +35,10 @@ pub use window::{Surface, Swapchain};
 pub type GraphicsCommandPool = CommandPool;
 
 use std::mem;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::os::raw::c_void;
+
+use lock::Mutex;
 
 use hal::queue::QueueFamilyId;
 
@@ -91,7 +96,7 @@ impl hal::Instance for Instance {
 
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
         // TODO: enumerate all devices
-        let name = self.shared.device.lock().unwrap().name().into();
+        let name = self.shared.device.lock().name().into();
 
         vec![
             hal::Adapter {

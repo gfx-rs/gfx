@@ -4,11 +4,12 @@ use {
 };
 use {conversions as conv, native, soft, window};
 use internal::{BlitVertex, Channel, ClearKey, ClearVertex, ServicePipes};
+use lock::Mutex;
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::ops::{Deref, Range};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{iter, mem, slice, time};
 
 use hal::{buffer, command as com, error, memory, pool, pso};
@@ -103,11 +104,11 @@ impl QueueInner {
         let _pool = AutoreleasePool::new();
         // note: we deliberately don't hold the Mutex lock while waiting,
         // since the completion handlers need to access it.
-        let (cmd_buf, token) = queue.lock().unwrap().spawn();
+        let (cmd_buf, token) = queue.lock().spawn();
         cmd_buf.set_label("empty");
         cmd_buf.commit();
         cmd_buf.wait_until_completed();
-        queue.lock().unwrap().release(token);
+        queue.lock().release(token);
     }
 }
 
@@ -891,7 +892,7 @@ impl CommandBufferInner {
     pub(crate) fn reset(&mut self, shared: &Shared) {
         if let Some(CommandSink::Immediate { token, mut encoder_state, .. }) = self.sink.take() {
             encoder_state.end();
-            shared.queue.lock().unwrap().release(token);
+            shared.queue.lock().release(token);
         }
         self.retained_buffers.clear();
         self.retained_textures.clear();
@@ -1276,7 +1277,7 @@ impl CommandQueue {
             if let Some(ref system) = sem.system {
                 system.wait(!0);
             }
-            if let Some(swap_image) = sem.image_ready.lock().unwrap().take() {
+            if let Some(swap_image) = sem.image_ready.lock().take() {
                 let start = time::Instant::now();
                 let count = swap_image.wait_until_ready();
                 if let Some(ref mut counters) = self.perf_counters {
@@ -1301,7 +1302,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         self.wait(submit.wait_semaphores.iter().map(|&(s, _)| s));
 
-        let queue = self.shared.queue.lock().unwrap();
+        let queue = self.shared.queue.lock();
         let (mut num_immediate, mut num_deferred) = (0, 0);
 
         for buffer in submit.cmd_buffers {
@@ -1361,7 +1362,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             let block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                 // release the fence
                 if let Some(ref f) = moved_fence {
-                    *f.mutex.lock().unwrap() = true;
+                    *f.mutex.lock() = true;
                     f.condvar.notify_all();
                 }
                 // signal the semaphores
@@ -1393,7 +1394,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
     {
         self.wait(wait_semaphores);
 
-        let queue = self.shared.queue.lock().unwrap();
+        let queue = self.shared.queue.lock();
         let command_buffer = queue.raw.new_command_buffer();
         command_buffer.set_label("present");
         record_empty(command_buffer);
@@ -1536,7 +1537,7 @@ impl CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
         if !pre.is_void() {
-            let mut pipes = self.shared.service_pipes.lock().unwrap();
+            let mut pipes = self.shared.service_pipes.lock();
             if let Some(com) = self.state.sync_depth_stencil(&mut *pipes, &self.shared.device) {
                 pre.issue(com)
             }
@@ -1549,7 +1550,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.reset(false);
         //TODO: Implement secondary command buffers
         let sink = if flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
-            let (cmd_buffer, token) = self.shared.queue.lock().unwrap().spawn();
+            let (cmd_buffer, token) = self.shared.queue.lock().spawn();
             CommandSink::Immediate {
                 cmd_buffer,
                 token,
@@ -1601,9 +1602,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         R: RangeArg<buffer::Offset>,
     {
         let mut inner = self.inner.borrow_mut();
-        let pipes = self.shared.service_pipes
-            .lock()
-            .unwrap();
+        let pipes = self.shared.service_pipes.lock();
         let pso = pipes.get_fill_buffer();
 
         let start = *range.start().unwrap_or(&0);
@@ -1669,7 +1668,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         let src = self.shared.device
             .lock()
-            .unwrap()
             .new_buffer_with_data(
                 data.as_ptr() as _,
                 data.len() as _,
@@ -1908,9 +1906,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
 
         //  issue a PSO+color switch and a draw for each requested clear
-        let mut pipes = self.shared.service_pipes
-            .lock()
-            .unwrap();
+        let mut pipes = self.shared.service_pipes.lock();
 
         for clear in clears {
             let mut key = ClearKey {
@@ -2182,9 +2178,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // Note: we don't bother to restore any render states here, since we are currently
         // outside of a render pass, and the state will be reset automatically once
         // we enter the next pass.
-        let mut pipes = self.shared.service_pipes
-            .lock()
-            .unwrap();
+        let mut pipes = self.shared.service_pipes.lock();
         let ServicePipes {
             ref library,
             ref sampler_states,
@@ -2468,7 +2462,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         // we are going to modify the RP descriptor here, so
         // locking to avoid data races.
-        let descriptor = framebuffer.descriptor.lock().unwrap();
+        let descriptor = framebuffer.descriptor.lock();
 
         let mut num_colors = 0;
         let mut full_aspects = Aspects::empty();
@@ -2525,7 +2519,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         self.state.framebuffer_inner = framebuffer.inner.clone();
-        let mut pipes = self.shared.service_pipes.lock().unwrap();
+        let mut pipes = self.shared.service_pipes.lock();
         let com_ds = if full_aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
             self.state.sync_depth_stencil(&mut *pipes, &self.shared.device)
         } else {
@@ -2595,7 +2589,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             pipeline.rasterizer_state.clone(),
         ));
 
-        let mut pipes = self.shared.service_pipes.lock().unwrap();
+        let mut pipes = self.shared.service_pipes.lock();
         pre.issue(self.state.sync_depth_stencil(&mut *pipes, &self.shared.device).unwrap());
         if set_stencil_references {
             pre.issue(soft::RenderCommand::SetStencilReferenceValues(
@@ -2648,7 +2642,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
-                    let data = pool.read().unwrap();
+                    let data = pool.read();
                     let mut sampler_base = sampler_range.start as usize;
                     let mut texture_base = texture_range.start as usize;
                     let mut buffer_base = buffer_range.start as usize;
@@ -2824,7 +2818,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }];
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
-                    let data = pool.read().unwrap();
+                    let data = pool.read();
                     let mut sampler_base = sampler_range.start as usize;
                     let mut texture_base = texture_range.start as usize;
                     let mut buffer_base = buffer_range.start as usize;
@@ -2960,9 +2954,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferCopy>,
     {
-        let pipes = self.shared.service_pipes
-            .lock()
-            .unwrap();
+        let pipes = self.shared.service_pipes.lock();
         let compute_pipe = pipes.get_copy_buffer();
         let wg_size = MTLSize {
             width: compute_pipe.thread_execution_width(),
