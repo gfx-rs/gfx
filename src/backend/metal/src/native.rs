@@ -138,7 +138,7 @@ pub struct GraphicsPipeline {
     /// adjusted offsets to cover this use case.
     pub(crate) vertex_buffer_map: VertexBufferMap,
     /// Tracked attachment formats for figuring (roughly) renderpass compatibility.
-    pub(crate) attachment_formats: SmallVec<[Option<Format>; 8]>,
+    pub(crate) attachment_formats: Vec<Option<Format>>,
 }
 
 unsafe impl Send for GraphicsPipeline {}
@@ -500,21 +500,30 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         match *self {
             DescriptorPool::Emulated { ref inner, ref mut sampler_alloc, ref mut texture_alloc, ref mut buffer_alloc } => {
                 debug!("pool: reset");
+                if sampler_alloc.is_empty() && texture_alloc.is_empty() && buffer_alloc.is_empty() {
+                    return // spare the locking
+                }
                 let mut data = inner.write();
+
+                for range in sampler_alloc.allocated_ranges() {
+                    for sampler in &mut data.samplers[range.start as usize .. range.end as usize] {
+                        *sampler = None;
+                    }
+                }
+                for range in texture_alloc.allocated_ranges() {
+                    for texture in &mut data.textures[range.start as usize .. range.end as usize] {
+                        *texture = None;
+                    }
+                }
+                for range in buffer_alloc.allocated_ranges() {
+                    for buffer in &mut data.buffers[range.start as usize .. range.end as usize] {
+                        buffer.base = None;
+                    }
+                }
 
                 sampler_alloc.reset();
                 texture_alloc.reset();
                 buffer_alloc.reset();
-
-                for sampler in &mut data.samplers {
-                    *sampler = None;
-                }
-                for texture in &mut data.textures {
-                    *texture = None;
-                }
-                for buffer in &mut data.buffers {
-                    buffer.base = None;
-                }
             }
             DescriptorPool::ArgumentBuffer { ref mut range_allocator, .. } => {
                 range_allocator.reset();

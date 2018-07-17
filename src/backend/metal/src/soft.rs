@@ -49,6 +49,7 @@ pub enum RenderCommand<R: Resources> {
     SetDepthBias(hal::pso::DepthBias),
     SetDepthStencilState(R::DepthStencil),
     SetStencilReferenceValues(hal::pso::StencilValue, hal::pso::StencilValue),
+    SetRasterizerState(RasterizerState),
     BindBuffer {
         stage: hal::pso::Stage,
         index: usize,
@@ -70,7 +71,7 @@ pub enum RenderCommand<R: Resources> {
         index: usize,
         sampler: Option<R::Sampler>,
     },
-    BindPipeline(R::RenderPipeline, Option<RasterizerState>),
+    BindPipeline(R::RenderPipeline),
     Draw {
         primitive_type: metal::MTLPrimitiveType,
         vertices: Range<hal::VertexCount>,
@@ -106,6 +107,7 @@ impl RenderCommand<Own> {
             SetDepthBias(bias) => SetDepthBias(bias),
             SetDepthStencilState(ref state) => SetDepthStencilState(&**state),
             SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
+            SetRasterizerState(ref state) => SetRasterizerState(state.clone()),
             BindBuffer { stage, index, buffer, offset } => BindBuffer {
                 stage,
                 index,
@@ -127,7 +129,7 @@ impl RenderCommand<Own> {
                 index,
                 sampler,
             },
-            BindPipeline(ref pso, ref state) => BindPipeline(&**pso, state.clone()),
+            BindPipeline(ref pso) => BindPipeline(&**pso),
             Draw { primitive_type, ref vertices, ref instances } => Draw {
                 primitive_type,
                 vertices: vertices.clone(),
@@ -165,6 +167,7 @@ impl<'a> RenderCommand<&'a Own> {
             SetDepthBias(bias) => SetDepthBias(bias),
             SetDepthStencilState(state) => SetDepthStencilState(state.to_owned()),
             SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
+            SetRasterizerState(ref state) => SetRasterizerState(state.clone()),
             BindBuffer { stage, index, buffer, offset } => BindBuffer {
                 stage,
                 index,
@@ -186,7 +189,7 @@ impl<'a> RenderCommand<&'a Own> {
                 index,
                 sampler,
             },
-            BindPipeline(pso, state) => BindPipeline(pso.to_owned(), state),
+            BindPipeline(pso) => BindPipeline(pso.to_owned()),
             Draw { primitive_type, vertices, instances } => Draw {
                 primitive_type,
                 vertices,
