@@ -1,9 +1,10 @@
 use {AutoreleasePool, Backend, QueueFamily};
 use internal::Channel;
+use lock::{Mutex, MutexGuard};
 use native;
 use device::{Device, PhysicalDevice};
 
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::Arc;
 
 use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
@@ -43,7 +44,7 @@ impl Drop for SurfaceInner {
 impl SurfaceInner {
     fn next_frame<'a>(&self, frames: &'a [Frame]) -> (usize, MutexGuard<'a, FrameInner>) {
         let _ap = AutoreleasePool::new();
-        let layer_ref = self.render_layer.lock().unwrap();
+        let layer_ref = self.render_layer.lock();
 
         let (drawable, texture_temp): (&metal::DrawableRef, &metal::TextureRef) = unsafe {
             let drawable = msg_send![*layer_ref, nextDrawable];
@@ -56,7 +57,7 @@ impl SurfaceInner {
             .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
             .expect("Surface lost?");
 
-        let mut frame = frames[index].inner.lock().unwrap();
+        let mut frame = frames[index].inner.lock();
         assert!(frame.drawable.is_none());
         frame.drawable = Some(drawable.to_owned());
 
@@ -102,7 +103,7 @@ impl Drop for Swapchain {
     fn drop(&mut self) {
         info!("dropping Swapchain");
         for ir in self.image_ready_callbacks.drain(..) {
-            if ir.lock().unwrap().take().is_some() {
+            if ir.lock().take().is_some() {
                 debug!("\twith a callback");
             }
         }
@@ -116,8 +117,7 @@ impl Swapchain {
         let mut frame = self
             .frames[index as usize]
             .inner
-            .lock()
-            .unwrap();
+            .lock();
         assert!(!frame.available);
         frame.available = true;
         frame.drawable
@@ -133,7 +133,7 @@ impl Swapchain {
                 }
             }
             hal::FrameSync::Fence(fence) => {
-                *fence.mutex.lock().unwrap() = true;
+                *fence.mutex.lock() = true;
                 fence.condvar.notify_all();
             }
         }
@@ -153,7 +153,7 @@ impl SwapchainImage {
     pub fn wait_until_ready(&self) -> usize {
         // check the target frame first
         {
-            let frame = self.frames[self.index as usize].inner.lock().unwrap();
+            let frame = self.frames[self.index as usize].inner.lock();
             assert!(!frame.available);
             if frame.drawable.is_some() {
                 return 0;
@@ -230,7 +230,7 @@ impl Device {
             .map_format(config.color_format)
             .expect("unsupported backbuffer format");
 
-        let render_layer_borrow = surface.inner.render_layer.lock().unwrap();
+        let render_layer_borrow = surface.inner.render_layer.lock();
         let render_layer = *render_layer_borrow;
         let nsview = surface.inner.nsview;
         let format_desc = config.color_format.surface_desc();
@@ -239,7 +239,7 @@ impl Device {
             hal::PresentMode::Immediate => false,
             _ => true,
         };
-        let device = self.shared.device.lock().unwrap();
+        let device = self.shared.device.lock();
         let device_raw: &metal::DeviceRef = &*device;
 
         let (view_size, scale_factor) = unsafe {
@@ -342,7 +342,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         let mut oldest_frame = self.last_frame;
 
         for (index, frame_arc) in self.frames.iter().enumerate() {
-            let mut frame = frame_arc.inner.lock().unwrap();
+            let mut frame = frame_arc.inner.lock();
             if !frame.available {
                 continue
             }
@@ -363,11 +363,11 @@ impl hal::Swapchain<Backend> for Swapchain {
         let (index, mut frame) = if blocking {
             self.surface.next_frame(&self.frames)
         } else {
-            self.image_ready_callbacks.retain(|ir| ir.lock().unwrap().is_some());
+            self.image_ready_callbacks.retain(|ir| ir.lock().is_some());
             match sync {
                 hal::FrameSync::Semaphore(semaphore) => {
                     self.image_ready_callbacks.push(Arc::clone(&semaphore.image_ready));
-                    let mut sw_image = semaphore.image_ready.lock().unwrap();
+                    let mut sw_image = semaphore.image_ready.lock();
                     assert!(sw_image.is_none());
                     *sw_image = Some(SwapchainImage {
                         frames: self.frames.clone(),
@@ -381,7 +381,7 @@ impl hal::Swapchain<Backend> for Swapchain {
                 }
             }
 
-            let frame = self.frames[oldest_index].inner.lock().unwrap();
+            let frame = self.frames[oldest_index].inner.lock();
             (oldest_index, frame)
         };
 

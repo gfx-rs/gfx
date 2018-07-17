@@ -1,6 +1,8 @@
 use conversions as conv;
+use lock::Mutex;
 
 use metal;
+
 use hal::pso;
 use hal::backend::FastHashMap;
 use hal::command::ClearColorRaw;
@@ -9,7 +11,6 @@ use hal::image::Filter;
 
 use std::mem;
 use std::path::Path;
-use std::sync::Mutex;
 
 
 #[derive(Clone, Debug)]
@@ -182,7 +183,7 @@ impl DepthStencilStates {
             .or_insert_with(|| {
                 let raw_desc = Self::create_desc(&desc)
                     .expect("Incomplete descriptor provided");
-                device.lock().unwrap().new_depth_stencil_state(&raw_desc)
+                device.lock().new_depth_stencil_state(&raw_desc)
             })
     }
 
@@ -276,7 +277,7 @@ impl ImageClearPipes {
     ) -> &metal::RenderPipelineStateRef {
         self.map
             .entry(key)
-            .or_insert_with(|| Self::create(key, library, &*device.lock().unwrap()))
+            .or_insert_with(|| Self::create(key, library, &*device.lock()))
     }
 
     fn create(
@@ -354,7 +355,7 @@ impl ImageBlitPipes {
     ) -> &metal::RenderPipelineStateRef {
         self.map
             .entry(key)
-            .or_insert_with(|| Self::create(key, library, &*device.lock().unwrap()))
+            .or_insert_with(|| Self::create(key, library, &*device.lock()))
     }
 
     fn create(

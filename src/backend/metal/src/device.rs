@@ -3,13 +3,14 @@ use {
     Shared, Surface, Swapchain, validate_line_width, BufferPtr, SamplerPtr, TexturePtr,
 };
 use {conversions as conv, command, native as n};
+use lock::{Condvar, Mutex};
 use native;
 
 use std::borrow::Borrow;
 use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::path::Path;
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::Arc;
 use std::{cmp, mem, slice, time};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query, window};
@@ -182,7 +183,7 @@ impl PhysicalDevice {
 
     pub(crate) fn new(shared: Arc<Shared>) -> Self {
         let private_caps = {
-            let device = &*shared.device.lock().unwrap();
+            let device = &*shared.device.lock();
             PrivateCapabilities {
                 exposed_queues: 1,
                 resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
@@ -241,7 +242,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         if cfg!(feature = "auto-capture") {
             info!("Metal capture start");
-            let device = self.shared.device.lock().unwrap();
+            let device = self.shared.device.lock();
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&*device);
             shared_capture_manager.set_default_capture_scope(default_capture_scope);
@@ -413,7 +414,6 @@ impl Device {
         });
         match self.shared.device
             .lock()
-            .unwrap()
             .new_library_with_source(source.as_ref(), &options)
         {
             Ok(library) => Ok(n::ShaderModule::Compiled {
@@ -507,7 +507,6 @@ impl Device {
 
         let library = self.shared.device
             .lock()
-            .unwrap()
             .new_library_with_source(shader_code.as_ref(), &options)
             .map_err(|err| ShaderError::CompilationFailed(err.into()))?;
 
@@ -824,7 +823,7 @@ impl hal::Device<Backend> for Device {
             return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(pso::Stage::Geometry)));
         }
 
-        let device = self.shared.device.lock().unwrap();
+        let device = self.shared.device.lock();
 
         // Copy color target info from Subpass
         for (i, attachment) in pass_descriptor.main_pass.attachments.iter().enumerate() {
@@ -984,7 +983,6 @@ impl hal::Device<Backend> for Device {
         // prepare the depth-stencil state now
         self.shared.service_pipes
             .lock()
-            .unwrap()
             .depth_stencil_states
             .prepare(&pipeline_desc.depth_stencil, &*device);
 
@@ -1030,7 +1028,6 @@ impl hal::Device<Backend> for Device {
 
         self.shared.device
             .lock()
-            .unwrap()
             .new_compute_pipeline_state(&pipeline)
             .map(|raw| {
                 n::ComputePipeline {
@@ -1173,7 +1170,6 @@ impl hal::Device<Backend> for Device {
         n::Sampler(
             self.shared.device
             .lock()
-            .unwrap()
             .new_sampler(&descriptor)
         )
     }
@@ -1237,7 +1233,7 @@ impl hal::Device<Backend> for Device {
 
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
-        let (cmd_buffer, token) = self.shared.queue.lock().unwrap().spawn();
+        let (cmd_buffer, token) = self.shared.queue.lock().spawn();
         let encoder = cmd_buffer.new_blit_command_encoder();
 
         for item in iter {
@@ -1264,7 +1260,7 @@ impl hal::Device<Backend> for Device {
             cmd_buffer.wait_until_completed();
         }
 
-        self.shared.queue.lock().unwrap().release(token);
+        self.shared.queue.lock().release(token);
     }
 
     fn create_semaphore(&self) -> n::Semaphore {
@@ -1303,7 +1299,7 @@ impl hal::Device<Backend> for Device {
                 arguments.push(arg_desc);
             }
 
-            let device = self.shared.device.lock().unwrap();
+            let device = self.shared.device.lock();
             let arg_array = metal::Array::from_owned_slice(&arguments);
             let encoder = device.new_argument_encoder(&arg_array);
 
@@ -1343,7 +1339,6 @@ impl hal::Device<Backend> for Device {
             let arg_array = metal::Array::from_owned_slice(&arguments);
             let encoder = self.shared.device
                 .lock()
-                .unwrap()
                 .new_argument_encoder(&arg_array);
 
             n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
@@ -1377,7 +1372,7 @@ impl hal::Device<Backend> for Device {
                 n::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
                     let mut array_offset = write.array_offset;
                     let mut binding = write.binding;
-                    let mut pool = pool.write().unwrap();
+                    let mut pool = pool.write();
 
                     for descriptor in write.descriptors {
                         let mut sampler_index;
@@ -1503,7 +1498,7 @@ impl hal::Device<Backend> for Device {
 
     fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
         let (storage, cache) = MemoryTypes::describe(memory_type.0);
-        let device = self.shared.device.lock().unwrap();
+        let device = self.shared.device.lock();
         debug!("allocate_memory type {:?} of size {}", memory_type, size);
 
         // Heaps cannot be used for CPU coherent resources
@@ -1556,7 +1551,6 @@ impl hal::Device<Backend> for Device {
                 let options = conv::resource_options_from_storage_and_cache(storage, cache);
                 let requirements = self.shared.device
                     .lock()
-                    .unwrap()
                     .heap_buffer_size_and_align(buffer.size, options);
                 max_size = cmp::max(max_size, requirements.size);
                 max_alignment = cmp::max(max_alignment, requirements.align);
@@ -1597,7 +1591,6 @@ impl hal::Device<Backend> for Device {
                         // TODO: disable hazard tracking?
                         self.shared.device
                             .lock()
-                            .unwrap()
                             .new_buffer(buffer.size, resource_options)
                     });
                 (raw, resource_options, 0 .. buffer.size) //TODO?
@@ -1614,7 +1607,6 @@ impl hal::Device<Backend> for Device {
                     MTLResourceOptions::CPUCacheModeDefaultCache;
                 let raw = self.shared.device
                     .lock()
-                    .unwrap()
                     .new_buffer(buffer.size, options);
                 (raw, options, 0 .. buffer.size)
             }
@@ -1783,7 +1775,6 @@ impl hal::Device<Backend> for Device {
 
                 let requirements = self.shared.device
                     .lock()
-                    .unwrap()
                     .heap_texture_size_and_align(&image.texture_desc);
                 max_size = cmp::max(max_size, requirements.size);
                 max_alignment = cmp::max(max_alignment, requirements.align);
@@ -1849,7 +1840,6 @@ impl hal::Device<Backend> for Device {
                         // TODO: disable hazard tracking?
                         self.shared.device
                             .lock()
-                            .unwrap()
                             .new_texture(&image.texture_desc)
                     })
             },
@@ -1867,7 +1857,6 @@ impl hal::Device<Backend> for Device {
                 image.texture_desc.set_storage_mode(MTLStorageMode::Private);
                 self.shared.device
                     .lock()
-                    .unwrap()
                     .new_texture(&image.texture_desc)
             }
         };
@@ -1959,16 +1948,16 @@ impl hal::Device<Backend> for Device {
         })
     }
     fn reset_fence(&self, fence: &n::Fence) {
-        *fence.mutex.lock().unwrap() = false;
+        *fence.mutex.lock() = false;
     }
     fn wait_for_fence(&self, fence: &n::Fence, timeout_ms: u32) -> bool {
         debug!("wait_for_fence {:?} for {} ms", fence, timeout_ms);
-        let mut guard = fence.mutex.lock().unwrap();
+        let mut guard = fence.mutex.lock();
         match timeout_ms {
             0 => *guard,
             0xFFFFFFFF => {
                 while !*guard {
-                    guard = fence.condvar.wait(guard).unwrap();
+                    fence.condvar.wait(&mut guard);
                 }
                 true
             }
@@ -1980,18 +1969,17 @@ impl hal::Device<Backend> for Device {
                         Some(dur) => dur,
                         None => return false,
                     };
-                    let result = fence.condvar.wait_timeout(guard, duration).unwrap();
-                    if result.1.timed_out() {
+                    let result = fence.condvar.wait_for(&mut guard, duration);
+                    if result.timed_out() {
                         return false;
                     }
-                    guard = result.0;
                 }
                 true
             }
         }
     }
     fn get_fence_status(&self, fence: &n::Fence) -> bool {
-        *fence.mutex.lock().unwrap()
+        *fence.mutex.lock()
     }
     #[cfg(not(feature = "native_fence"))]
     fn destroy_fence(&self, _fence: n::Fence) {
