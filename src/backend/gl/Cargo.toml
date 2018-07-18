@@ -19,7 +19,7 @@ default = ["glutin"]
 
 [dependencies]
 bitflags = "1"
-log = "0.4"
+log = { version = "0.4", features = ["release_max_level_error"] }
 gfx_gl = "0.5"
 gfx-hal = { path = "../../hal", version = "0.1" }
 smallvec = "0.6"
