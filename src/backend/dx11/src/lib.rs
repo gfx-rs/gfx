@@ -700,7 +700,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IW: IntoIterator,
         IW::Item: Borrow<Semaphore>,
     {
-        for (swapchain, _) in swapchains {
+        for (swapchain, _idx) in swapchains {
             unsafe { swapchain.borrow().dxgi_swapchain.Present(1, 0); }
         }
 
@@ -812,7 +812,7 @@ impl CommandBuffer {
             },
             UniformBuffer |
             UniformBufferDynamic => context.VSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _),
-            _ => unimplemented!()
+            _ => {}
         }
     }
 
@@ -832,7 +832,7 @@ impl CommandBuffer {
             },
             UniformBuffer |
             UniformBufferDynamic => context.PSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _),
-            _ => unimplemented!()
+            _ => {}
         }
     }
 
@@ -1012,7 +1012,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         U: IntoIterator,
         U::Item: Borrow<pso::ClearRect>,
     {
-        unimplemented!()
+        // unimplemented!()
     }
 
     fn resolve_image<T>(&mut self, _src: &Image, _src_layout: image::Layout, _dst: &Image, _dst_layout: image::Layout, _regions: T)
@@ -1054,7 +1054,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         for (i, (buf, offset)) in buffers.into_iter().enumerate() {
             let idx = i + first_binding as usize;
 
-            self.bound_bindings |= 1 << i as u32;
+            self.bound_bindings |= 1 << idx as u32;
 
             if idx >= self.vertex_buffers.len() {
                 self.vertex_buffers.push(buf.borrow().internal.raw);
@@ -1097,19 +1097,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn set_blend_constants(&mut self, _color: pso::ColorValue) {
-        unimplemented!()
+        // unimplemented!()
     }
 
     fn set_stencil_reference(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
-        unimplemented!()
+        // unimplemented!()
     }
 
     fn set_stencil_read_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
-        unimplemented!();
+        // unimplemented!();
     }
 
     fn set_stencil_write_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
-        unimplemented!();
+        // unimplemented!();
     }
 
     fn set_depth_bounds(&mut self, _bounds: Range<f32>) {
@@ -1121,7 +1121,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn set_depth_bias(&mut self, _depth_bias: pso::DepthBias) {
-        unimplemented!()
+        // TODO:
+        // unimplemented!()
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &GraphicsPipeline) {
@@ -1158,7 +1159,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                 let stencil_ref = if let pso::State::Static(reference) = reference {
                     reference
                 } else {
-                    unimplemented!()
+                    0
+                    // unimplemented!()
                 };
 
                 self.context.OMSetDepthStencilState(state.as_raw(), stencil_ref);
@@ -1663,12 +1665,15 @@ pub struct UnboundBuffer {
     usage: buffer::Usage,
     bind: d3d11::D3D11_BIND_FLAG,
     size: u64,
+    needs_disjoint_cb: bool,
     requirements: memory::Requirements,
 }
 
 #[derive(Debug, Clone)]
 pub struct InternalBuffer {
     raw: *mut d3d11::ID3D11Buffer,
+    // TODO: need to sync between `raw` and `disjoint_cb`, same way as we do with `MemorySync`
+    disjoint_cb: Option<*mut d3d11::ID3D11Buffer>,
     srv: Option<*mut d3d11::ID3D11ShaderResourceView>,
     uav: Option<*mut d3d11::ID3D11UnorderedAccessView>
 }
@@ -1710,8 +1715,6 @@ pub struct Image {
     dxgi_format: dxgiformat::DXGI_FORMAT,
 
     typed_raw_format: dxgiformat::DXGI_FORMAT,
-    bytes_per_block: u8,
-    block_dim: (u8, u8),
     num_levels: image::Level,
     num_mips: image::Level,
     internal: InternalImage,
@@ -1827,11 +1830,29 @@ struct PipelineBinding {
     handle_offset: u32,
 }
 
+#[derive(Clone, Debug)]
+struct RegisterMapping {
+    ty: pso::DescriptorType,
+    spirv_binding: u32,
+    hlsl_register: u8,
+    combined: bool
+}
+
+#[derive(Clone, Debug)]
+struct RegisterRemapping {
+    mapping: Vec<RegisterMapping>,
+    num_t: u8,
+    num_s: u8,
+    num_c: u8,
+    num_u: u8,
+}
+
 /// The pipeline layout holds optimized (less api calls) ranges of objects for all descriptor sets
 /// belonging to the pipeline object.
 #[derive(Debug)]
 pub struct PipelineLayout {
-    set_bindings: Vec<Vec<PipelineBinding>>
+    set_bindings: Vec<Vec<PipelineBinding>>,
+    set_remapping: Vec<RegisterRemapping>,
 }
 
 /// The descriptor set layout contains mappings from a given binding to the offset in our
@@ -1840,8 +1861,8 @@ pub struct PipelineLayout {
 #[derive(Debug)]
 pub struct DescriptorSetLayout {
     bindings: Vec<PipelineBinding>,
-    offset_mapping: Vec<(u32, pso::DescriptorType)>,
-    handle_count: u32
+    handle_count: u32,
+    register_remap: RegisterRemapping,
 }
 
 /// Newtype around a common interface that all bindable resources inherit from.
@@ -1855,7 +1876,7 @@ pub struct DescriptorSet {
     offset: usize,
     len: usize,
     handles: *mut Descriptor,
-    offset_mapping: Vec<(u32, pso::DescriptorType)>,
+    register_remap: RegisterRemapping,
     // descriptor set writes containing coherent resources go into these vecs and are added to the
     // command buffers own Vec on binding the set.
     flush_coherent_buffers: RefCell<Vec<(*mut d3d11::ID3D11Buffer, *mut u8, Range<u64>)>>,
@@ -1866,6 +1887,39 @@ unsafe impl Send for DescriptorSet {}
 unsafe impl Sync for DescriptorSet {}
 
 impl DescriptorSet {
+    fn get_handle_offset(&self, target_binding: u32) -> (pso::DescriptorType, u8, u8) {
+        use pso::DescriptorType::*;
+
+        let mapping = self.register_remap.mapping.iter().find(|&mapping| target_binding == mapping.spirv_binding).unwrap();
+
+        let (ty, register) = (mapping.ty, mapping.hlsl_register);
+
+        match ty {
+            Sampler => {
+                let (ty, t_reg) = if mapping.combined {
+                    let combined_mapping = self.register_remap.mapping.iter().find(|&mapping| mapping.ty == SampledImage && target_binding == mapping.spirv_binding).unwrap();
+                    (CombinedImageSampler, combined_mapping.hlsl_register)
+                } else {
+                    (ty, 0)
+                };
+
+                (ty, register, self.register_remap.num_s + t_reg)
+            },
+            SampledImage | UniformTexelBuffer => {
+
+                (ty, self.register_remap.num_s + register, 0)
+            },
+            UniformBuffer | UniformBufferDynamic => {
+                (ty, self.register_remap.num_s + self.register_remap.num_t + register, 0)
+            },
+            StorageTexelBuffer | StorageBuffer | InputAttachment | StorageBufferDynamic |
+            StorageImage => {
+                (ty, self.register_remap.num_s + self.register_remap.num_t + self.register_remap.num_c + register, 0)
+            },
+            CombinedImageSampler => unreachable!()
+        }
+    }
+
     fn flush_coherent(&self, old: *mut d3d11::ID3D11Buffer, buffer: &Buffer) {
         let new = buffer.internal.raw;
 
@@ -1924,11 +1978,15 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         let len = layout.handle_count.max(1) as _;
 
         self.allocator.allocate_range(len).map(|range| {
+			for i in range.clone() {
+				self.handles[i] = Descriptor(ptr::null_mut());
+			}
+
             DescriptorSet {
                 offset: range.start,
                 len,
                 handles: unsafe { self.handles.as_mut_ptr().offset(range.start as _) },
-                offset_mapping: layout.offset_mapping.clone(),
+                register_remap: layout.register_remap.clone(),
                 flush_coherent_buffers: RefCell::new(Vec::new()),
                 invalidate_coherent_buffers: RefCell::new(Vec::new()),
             }

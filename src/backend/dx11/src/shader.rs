@@ -64,7 +64,7 @@ pub(crate) fn compile_spirv_entrypoint(
         }
     }
 
-    patch_spirv_resources(&mut ast, Some(layout))?;
+    patch_spirv_resources(&mut ast, layout)?;
     let shader_model = hlsl::ShaderModel::V5_0;
     let shader_code = translate_spirv(&mut ast, shader_model, layout, stage)?;
 
@@ -143,6 +143,7 @@ pub(crate) fn compile_hlsl_shader(
             let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
             String::from_utf8_lossy(slice).into_owned()
         };
+
         Err(device::ShaderError::CompilationFailed(message))
     } else {
         Ok(blob)
@@ -173,53 +174,60 @@ fn parse_spirv(raw_data: &[u8]) -> Result<spirv::Ast<hlsl::Target>, device::Shad
 
 fn patch_spirv_resources(
     ast: &mut spirv::Ast<hlsl::Target>,
-    _layout: Option<&PipelineLayout>,
+    layout: &PipelineLayout,
 ) -> Result<(), device::ShaderError> {
-    // Patch descriptor sets due to the splitting of descriptor heaps into
-    // SrvCbvUav and sampler heap. Each set will have a new location to match
-    // the layout of the root signatures.
-
-    // TODO:
-    let space_offset = 1;
+    // we remap all `layout(binding = n, set = n)` to a flat space which we get from our
+    // `PipelineLayout` which knows of all descriptor set layouts
 
     let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
     for image in &shader_resources.separate_images {
-        let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-        ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + set)
-           .map_err(gen_unexpected_error)?;
+        let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)? as usize;
+        let binding = ast.get_decoration(image.id, spirv::Decoration::Binding).map_err(gen_query_error)?;
+        let mapping = layout.set_remapping[set].mapping.iter().find(|&mapping| binding == mapping.spirv_binding).unwrap();
+
+        ast.set_decoration(image.id, spirv::Decoration::Binding, mapping.hlsl_register as u32).map_err(gen_unexpected_error)?;
     }
 
     for uniform_buffer in &shader_resources.uniform_buffers {
-        let set = ast.get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-        ast.set_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet, space_offset + set)
-           .map_err(gen_unexpected_error)?;
+        let set = ast.get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)? as usize;
+        let binding = ast.get_decoration(uniform_buffer.id, spirv::Decoration::Binding).map_err(gen_query_error)?;
+        let mapping = layout.set_remapping[set].mapping.iter().find(|&mapping| binding == mapping.spirv_binding).unwrap();
+
+        ast.set_decoration(uniform_buffer.id, spirv::Decoration::Binding, mapping.hlsl_register as u32).map_err(gen_unexpected_error)?;
+
     }
 
     for storage_buffer in &shader_resources.storage_buffers {
-        let set = ast.get_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-        ast.set_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet, space_offset + set)
-           .map_err(gen_unexpected_error)?;
+        let set = ast.get_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)? as usize;
+        let binding = ast.get_decoration(storage_buffer.id, spirv::Decoration::Binding).map_err(gen_query_error)?;
+        let mapping = layout.set_remapping[set].mapping.iter().find(|&mapping| binding == mapping.spirv_binding).unwrap();
+
+        ast.set_decoration(storage_buffer.id, spirv::Decoration::Binding, mapping.hlsl_register as u32).map_err(gen_unexpected_error)?;
     }
 
     for image in &shader_resources.storage_images {
-        let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-        ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + set)
-           .map_err(gen_unexpected_error)?;
+        let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)? as usize;
+        let binding = ast.get_decoration(image.id, spirv::Decoration::Binding).map_err(gen_query_error)?;
+        let mapping = layout.set_remapping[set].mapping.iter().find(|&mapping| binding == mapping.spirv_binding).unwrap();
+
+        ast.set_decoration(image.id, spirv::Decoration::Binding, mapping.hlsl_register as u32).map_err(gen_unexpected_error)?;
     }
 
     for sampler in &shader_resources.separate_samplers {
-        let set = ast.get_decoration(sampler.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-        ast.set_decoration(sampler.id, spirv::Decoration::DescriptorSet, space_offset + set)
-           .map_err(gen_unexpected_error)?;
+        let set = ast.get_decoration(sampler.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)? as usize;
+        let binding = ast.get_decoration(sampler.id, spirv::Decoration::Binding).map_err(gen_query_error)?;
+        let mapping = layout.set_remapping[set].mapping.iter().find(|&mapping| binding == mapping.spirv_binding).unwrap();
+
+        ast.set_decoration(sampler.id, spirv::Decoration::Binding, mapping.hlsl_register as u32).map_err(gen_unexpected_error)?;
     }
 
     for image in &shader_resources.sampled_images {
-        let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-        ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + set)
-           .map_err(gen_unexpected_error)?;
-    }
+        let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)? as usize;
+        let binding = ast.get_decoration(image.id, spirv::Decoration::Binding).map_err(gen_query_error)?;
+        let mapping = layout.set_remapping[set].mapping.iter().find(|&mapping| binding == mapping.spirv_binding).unwrap();
 
-    // tODO: other resources
+        ast.set_decoration(image.id, spirv::Decoration::Binding, mapping.hlsl_register as u32).map_err(gen_unexpected_error)?;
+    }
 
     Ok(())
 }
