@@ -33,4 +33,5 @@ core-graphics = "0.14"
 smallvec = "0.6"
 spirv_cross = "0.9"
 antidote = { version = "1.0", optional = true }
-parking_lot = "0.6"
+parking_lot = "0.6.3"
+storage-map = "0.1"

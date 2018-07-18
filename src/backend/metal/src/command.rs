@@ -3,7 +3,7 @@ use {
     BufferPtr, TexturePtr, SamplerPtr,
 };
 use {conversions as conv, native, soft, window};
-use internal::{BlitVertex, Channel, ClearKey, ClearVertex, DepthStencilStates};
+use internal::{BlitVertex, Channel, ClearKey, ClearVertex};
 use lock::Mutex;
 
 use std::borrow::Borrow;
@@ -392,9 +392,7 @@ impl State {
             })
     }
 
-    fn sync_depth_stencil<'a>(
-        &'a self, ds_store: &'a mut DepthStencilStates, device: &Mutex<metal::Device>,
-    ) -> Option<soft::RenderCommand<&'a soft::Own>> {
+    fn build_depth_stencil(&self) -> Option<pso::DepthStencilDesc> {
         let mut desc = match self.render_pso {
             Some(ref ps) => ps.ds_desc.clone(),
             None => return None,
@@ -424,8 +422,7 @@ impl State {
             }
         }
 
-        let state = ds_store.get(desc, device);
-        Some(soft::RenderCommand::SetDepthStencilState(state))
+        Some(desc)
     }
 
     fn set_depth_bias<'a>(&mut self, depth_bias: &pso::DepthBias) -> soft::RenderCommand<&'a soft::Own> {
@@ -1550,9 +1547,10 @@ impl CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
         if !pre.is_void() {
-            let mut ds_store = self.shared.service_pipes.depth_stencil_states.lock();
-            if let Some(com) = self.state.sync_depth_stencil(&mut *ds_store, &self.shared.device) {
-                pre.issue(com)
+            let ds_store = &self.shared.service_pipes.depth_stencil_states;
+            if let Some(desc) = self.state.build_depth_stencil() {
+                let state = &**ds_store.get(desc, &self.shared.device);
+                pre.issue(soft::RenderCommand::SetDepthStencilState(state));
             }
         }
     }
@@ -1916,11 +1914,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let mut vertex_is_dirty = true;
         let mut inner = self.inner.borrow_mut();
+        let clear_pipes = &self.shared.service_pipes.clears;
+        let ds_store = &self.shared.service_pipes.depth_stencil_states;
+        let ds_state;
 
         //  issue a PSO+color switch and a draw for each requested clear
-        let mut clear_pipes = self.shared.service_pipes.clears.lock();
-        let mut ds_store = self.shared.service_pipes.depth_stencil_states.lock();
-
         let mut key = ClearKey {
             framebuffer_aspects: self.state.framebuffer_inner.aspects,
             color_formats: [metal::MTLPixelFormat::Invalid; 1],
@@ -1933,6 +1931,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         for clear in clears {
+            let pso; // has to live at least as long as all the commands
+            let depth_stencil;
+
             let (com_clear, target_index) = match *clear.borrow() {
                 com::AttachmentClear::Color { index, value } => {
                     let cat = &self.state.framebuffer_inner.colors[index];
@@ -1963,17 +1964,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         //TODO: soft::RenderCommand::SetStencilReference
                         aspects |= Aspects::STENCIL;
                     }
-                    let com = soft::RenderCommand::SetDepthStencilState(
-                        ds_store.get_write(aspects)
-                    );
+                    depth_stencil = ds_store.get_write(aspects);
+                    let com = soft::RenderCommand::SetDepthStencilState(&**depth_stencil);
                     (com, None)
                 }
             };
 
             key.target_index = target_index;
-            let pso = clear_pipes.get(key, &self.shared.service_pipes.library, &self.shared.device);
+            pso = clear_pipes.get(
+                key,
+                &self.shared.service_pipes.library,
+                &self.shared.device,
+            );
 
-            let com_pso = iter::once(soft::RenderCommand::BindPipeline(pso));
+            let com_pso = iter::once(soft::RenderCommand::BindPipeline(&**pso));
             let com_rast = iter::once(soft::RenderCommand::SetRasterizerState(native::RasterizerState::default()));
 
             let com_vertex = if vertex_is_dirty {
@@ -2008,7 +2012,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         // reset all the affected states
         let (com_pso, com_rast) = self.state.make_pso_commands();
-        let com_ds = self.state.sync_depth_stencil(&mut *ds_store, &self.shared.device);
+
+        let device_lock = &self.shared.device;
+        let com_ds = match self.state.build_depth_stencil() {
+            Some(desc) => {
+                ds_state = ds_store.get(desc, device_lock);
+                Some(soft::RenderCommand::SetDepthStencilState(&**ds_state))
+            }
+            None => None,
+        };
 
         let com_vs = if let Some(&Some((buffer, offset))) = self.state.resources_vs.buffers.first() {
             Some(soft::RenderCommand::BindBuffer {
@@ -2074,12 +2086,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let vertices = &mut self.temp.blit_vertices;
         vertices.clear();
 
-        let mut blit_pipes = self.shared.service_pipes.blits.lock();
-        let ds_store;
-
         let sampler = self.shared.service_pipes.sampler_states.get(filter);
+        let ds_state;
         let key = (dst.mtl_type, dst.mtl_format, src.format_desc.aspects, dst.shader_channel);
-        let pso = blit_pipes.get(key, &self.shared.service_pipes.library, &self.shared.device);
+        let pso = self.shared.service_pipes.blits.get(
+            key,
+            &self.shared.service_pipes.library,
+            &self.shared.device,
+        );
 
         for region in regions {
             let r = region.borrow();
@@ -2181,7 +2195,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // we enter the next pass.
 
         let prelude = [
-            soft::RenderCommand::BindPipeline(pso),
+            soft::RenderCommand::BindPipeline(&**pso),
             soft::RenderCommand::BindSampler {
                 stage: pso::Stage::Fragment,
                 index: 0,
@@ -2195,10 +2209,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         ];
 
         let com_ds = if src.format_desc.aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
-            ds_store = self.shared.service_pipes.depth_stencil_states.lock();
-            Some(soft::RenderCommand::SetDepthStencilState(
-                ds_store.get_write(src.format_desc.aspects)
-            ))
+            ds_state = self.shared.service_pipes.depth_stencil_states.get_write(src.format_desc.aspects);
+            Some(soft::RenderCommand::SetDepthStencilState(&**ds_state))
         } else {
             None
         };
@@ -2508,10 +2520,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         self.state.framebuffer_inner = framebuffer.inner.clone();
-        let mut ds_store;
+        let ds_store = &self.shared.service_pipes.depth_stencil_states;
+        let ds_state;
         let com_ds = if full_aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
-            ds_store = self.shared.service_pipes.depth_stencil_states.lock();
-            self.state.sync_depth_stencil(&mut *ds_store, &self.shared.device)
+            match self.state.build_depth_stencil() {
+                Some(desc) => {
+                    ds_state = ds_store.get(desc, &self.shared.device);
+                    Some(soft::RenderCommand::SetDepthStencilState(&**ds_state))
+                },
+                None => None,
+            }
         } else {
             None
         };
@@ -2598,8 +2616,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             pre.issue(soft::RenderCommand::SetRasterizerState(rs.clone()))
         }
 
-        let mut ds_store = self.shared.service_pipes.depth_stencil_states.lock();
-        pre.issue(self.state.sync_depth_stencil(&mut *ds_store, &self.shared.device).unwrap());
+        if let Some(desc) = self.state.build_depth_stencil() {
+            let ds_store = &self.shared.service_pipes.depth_stencil_states;
+            let state = &**ds_store.get(desc, &self.shared.device);
+            pre.issue(soft::RenderCommand::SetDepthStencilState(state));
+        }
+
         if set_stencil_references {
             pre.issue(soft::RenderCommand::SetStencilReferenceValues(
                 self.state.stencil.front_reference,

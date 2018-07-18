@@ -983,7 +983,6 @@ impl hal::Device<Backend> for Device {
         // prepare the depth-stencil state now
         self.shared.service_pipes
             .depth_stencil_states
-            .lock()
             .prepare(&pipeline_desc.depth_stencil, &*device);
 
         let attachment_formats = pass_descriptor.main_pass.attachments

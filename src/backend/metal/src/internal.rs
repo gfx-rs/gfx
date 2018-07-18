@@ -2,6 +2,8 @@ use conversions as conv;
 use lock::Mutex;
 
 use metal;
+use lock::RawRwLock;
+use storage_map::{StorageMap, StorageMapGuard};
 
 use hal::pso;
 use hal::backend::FastHashMap;
@@ -12,6 +14,9 @@ use hal::image::Filter;
 use std::mem;
 use std::path::Path;
 
+
+pub type FastStorageMap<K, V> = StorageMap<RawRwLock, FastHashMap<K, V>>;
+pub type FastStorageGuard<'a, V> = StorageMapGuard<'a, RawRwLock, V>;
 
 #[derive(Clone, Debug)]
 pub struct ClearVertex {
@@ -106,7 +111,7 @@ impl SamplerStates {
 }
 
 pub struct DepthStencilStates {
-    map: FastHashMap<pso::DepthStencilDesc, metal::DepthStencilState>,
+    map: FastStorageMap<pso::DepthStencilDesc, metal::DepthStencilState>,
     write_none: pso::DepthStencilDesc,
     write_depth: pso::DepthStencilDesc,
     write_stencil: pso::DepthStencilDesc,
@@ -157,11 +162,12 @@ impl DepthStencilStates {
             },
         };
 
-        let mut map = FastHashMap::default();
+        let map = FastStorageMap::default();
         for desc in &[&write_none, &write_depth, &write_stencil, &write_all] {
-            let raw_desc = Self::create_desc(desc).unwrap();
-            let raw = device.new_depth_stencil_state(&raw_desc);
-            map.insert(**desc, raw);
+            map.get_or_create_with(*desc, || {
+                let raw_desc = Self::create_desc(desc).unwrap();
+                device.new_depth_stencil_state(&raw_desc)
+            });
         }
 
         DepthStencilStates {
@@ -173,7 +179,7 @@ impl DepthStencilStates {
         }
     }
 
-    pub fn get_write(&self, aspects: Aspects) -> &metal::DepthStencilStateRef {
+    pub fn get_write(&self, aspects: Aspects) -> FastStorageGuard<metal::DepthStencilState> {
         let key = if aspects.contains(Aspects::DEPTH | Aspects::STENCIL) {
             &self.write_all
         } else if aspects.contains(Aspects::DEPTH) {
@@ -183,29 +189,26 @@ impl DepthStencilStates {
         } else {
             &self.write_none
         };
-        &self.map[key]
+        self.map.get_or_create_with(key, || unreachable!())
+    }
+
+    pub fn prepare(&self, desc: &pso::DepthStencilDesc, device: &metal::DeviceRef) {
+        self.map.prepare_maybe(desc, || {
+            Self::create_desc(desc)
+                .map(|raw_desc| {
+                    device.new_depth_stencil_state(&raw_desc)
+                })
+        });
     }
 
     // TODO: avoid locking for writes every time
-    pub fn prepare(&mut self, desc: &pso::DepthStencilDesc, device: &metal::DeviceRef) {
-        use std::collections::hash_map::Entry;
-
-        if let Entry::Vacant(e) = self.map.entry(*desc) {
-            if let Some(raw_desc) = Self::create_desc(desc) {
-                e.insert(device.new_depth_stencil_state(&raw_desc));
-            }
-        }
-    }
-
-    // TODO: avoid locking for writes every time
-    pub fn get(
-        &mut self,
+    pub fn get<'a>(
+        &'a self,
         desc: pso::DepthStencilDesc,
         device: &Mutex<metal::Device>,
-    ) -> &metal::DepthStencilStateRef {
+    ) -> FastStorageGuard<'a, metal::DepthStencilState> {
         self.map
-            .entry(desc)
-            .or_insert_with(|| {
+            .get_or_create_with(&desc, || {
                 let raw_desc = Self::create_desc(&desc)
                     .expect("Incomplete descriptor provided");
                 device.lock().new_depth_stencil_state(&raw_desc)
@@ -267,19 +270,20 @@ pub struct ClearKey {
 }
 
 pub struct ImageClearPipes {
-    map: FastHashMap<ClearKey, metal::RenderPipelineState>,
+    map: FastStorageMap<ClearKey, metal::RenderPipelineState>,
 }
 
 impl ImageClearPipes {
     pub fn get(
-        &mut self,
+        &self,
         key: ClearKey,
         library: &Mutex<metal::Library>,
         device: &Mutex<metal::Device>,
-    ) -> &metal::RenderPipelineStateRef {
+    ) -> FastStorageGuard<metal::RenderPipelineState> {
         self.map
-            .entry(key)
-            .or_insert_with(|| Self::create(key, &*library.lock(), &*device.lock()))
+            .get_or_create_with(&key, || {
+                Self::create(key, &*library.lock(), &*device.lock())
+            })
     }
 
     fn create(
@@ -345,19 +349,20 @@ impl ImageClearPipes {
 pub type BlitKey = (metal::MTLTextureType, metal::MTLPixelFormat, Aspects, Channel);
 
 pub struct ImageBlitPipes {
-    map: FastHashMap<BlitKey, metal::RenderPipelineState>,
+    map: FastStorageMap<BlitKey, metal::RenderPipelineState>,
 }
 
 impl ImageBlitPipes {
     pub fn get(
-        &mut self,
+        &self,
         key: BlitKey,
         library: &Mutex<metal::Library>,
         device: &Mutex<metal::Device>,
-    ) -> &metal::RenderPipelineStateRef {
+    ) -> FastStorageGuard<metal::RenderPipelineState> {
         self.map
-            .entry(key)
-            .or_insert_with(|| Self::create(key, &*library.lock(), &*device.lock()))
+            .get_or_create_with(&key, || {
+                Self::create(key, &*library.lock(), &*device.lock())
+            })
     }
 
     fn create(
@@ -435,9 +440,9 @@ pub struct ServicePipes {
     pub library: Mutex<metal::Library>,
     pub sampler_states: SamplerStates,
     //TODO: use something smarter than a mutex
-    pub depth_stencil_states: Mutex<DepthStencilStates>,
-    pub clears: Mutex<ImageClearPipes>,
-    pub blits: Mutex<ImageBlitPipes>,
+    pub depth_stencil_states: DepthStencilStates,
+    pub clears: ImageClearPipes,
+    pub blits: ImageBlitPipes,
     pub copy_buffer: metal::ComputePipelineState,
     pub fill_buffer: metal::ComputePipelineState,
 }
@@ -454,13 +459,13 @@ impl ServicePipes {
         ServicePipes {
             library: Mutex::new(library),
             sampler_states: SamplerStates::new(device),
-            depth_stencil_states: Mutex::new(DepthStencilStates::new(device)),
-            clears: Mutex::new(ImageClearPipes {
-                map: FastHashMap::default(),
-            }),
-            blits: Mutex::new(ImageBlitPipes {
-                map: FastHashMap::default(),
-            }),
+            depth_stencil_states: DepthStencilStates::new(device),
+            clears: ImageClearPipes {
+                map: FastStorageMap::default(),
+            },
+            blits: ImageBlitPipes {
+                map: FastStorageMap::default(),
+            },
             copy_buffer,
             fill_buffer,
         }
