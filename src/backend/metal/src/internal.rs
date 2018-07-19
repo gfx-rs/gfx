@@ -1,8 +1,7 @@
 use conversions as conv;
-use lock::Mutex;
 
 use metal;
-use lock::RawRwLock;
+use parking_lot::{Mutex, RawRwLock};
 use storage_map::{StorageMap, StorageMapGuard};
 
 use hal::pso;

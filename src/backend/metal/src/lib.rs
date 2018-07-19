@@ -8,14 +8,11 @@ extern crate core_foundation;
 extern crate core_graphics;
 #[macro_use] extern crate log;
 extern crate block;
+extern crate parking_lot;
 extern crate smallvec;
 extern crate spirv_cross;
 extern crate storage_map;
 
-#[cfg(feature = "antidote")]
-extern crate antidote as lock;
-#[cfg(not(feature = "antidote"))]
-extern crate parking_lot as lock;
 #[cfg(feature = "winit")]
 extern crate winit;
 
@@ -39,14 +36,13 @@ use std::mem;
 use std::sync::Arc;
 use std::os::raw::c_void;
 
-use lock::Mutex;
-
 use hal::queue::QueueFamilyId;
 
 use objc::runtime::{Class, Object};
 use cocoa::foundation::NSAutoreleasePool;
 use core_graphics::geometry::CGRect;
 use foreign_types::ForeignTypeRef;
+use parking_lot::Mutex;
 
 
 const MAX_ACTIVE_COMMAND_BUFFERS: usize = 1 << 14;

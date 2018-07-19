@@ -3,7 +3,6 @@ EXCLUDES:=
 FEATURES_EXTRA:=mint serialize
 FEATURES_HAL:=
 FEATURES_HAL2:=
-CHECK_SPECIAL:=-p gfx-backend-vulkan
 
 SDL2_DEST=$(HOME)/deps
 SDL2_CONFIG=$(SDL2_DEST)/usr/bin/sdl2-config
@@ -33,7 +32,6 @@ else
 	ifeq ($(UNAME_S),Darwin)
 		EXCLUDES+= --exclude gfx-backend-vulkan
 		FEATURES_HAL=metal
-		CHECK_SPECIAL=-p gfx-backend-metal --features antidote
 	endif
 endif
 
@@ -48,7 +46,6 @@ help:
 check:
 	@echo "Note: excluding \`warden\` here, since it depends on serialization"
 	cargo check --all $(EXCLUDES) --exclude gfx-warden
-	#cargo check $(CHECK_SPECIAL) # TODO: Condva API is different between antidote and parking_lot
 	cd examples && cargo check --features "gl"
 	cd examples && cargo check --features "$(FEATURES_HAL)"
 	cd examples && cargo check --features "$(FEATURES_HAL2)"

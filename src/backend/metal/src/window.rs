@@ -1,8 +1,7 @@
 use {AutoreleasePool, Backend, QueueFamily};
-use internal::Channel;
-use lock::{Mutex, MutexGuard};
-use native;
 use device::{Device, PhysicalDevice};
+use internal::Channel;
+use native;
 
 use std::sync::Arc;
 
@@ -10,12 +9,13 @@ use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
 use hal::window::Extent2D;
 
-use metal;
-use objc::runtime::Object;
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
 use foreign_types::{ForeignType, ForeignTypeRef};
+use parking_lot::{Mutex, MutexGuard};
+use metal;
+use objc::runtime::Object;
 
 
 pub type CAMetalLayer = *mut Object;

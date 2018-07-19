@@ -3,8 +3,8 @@ use {
     Shared, Surface, Swapchain, validate_line_width, BufferPtr, SamplerPtr, TexturePtr,
 };
 use {conversions as conv, command, native as n};
-use lock::Mutex;
 use native;
+use range_alloc::RangeAllocator;
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -22,17 +22,16 @@ use hal::queue::{QueueFamilyId, Queues};
 use hal::range::RangeArg;
 
 use cocoa::foundation::{NSRange, NSUInteger};
+use foreign_types::ForeignType;
 use metal::{self,
     MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass,
     MTLCPUCacheMode, MTLStorageMode, MTLResourceOptions,
     MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLTextureType,
     CaptureManager
 };
+use parking_lot::Mutex;
 use smallvec::SmallVec;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
-use foreign_types::ForeignType;
-
-use range_alloc::RangeAllocator;
 
 
 const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[

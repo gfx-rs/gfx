@@ -4,7 +4,6 @@ use {
 };
 use {conversions as conv, native, soft, window};
 use internal::{BlitVertex, Channel, ClearKey, ClearVertex};
-use lock::Mutex;
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -22,10 +21,11 @@ use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
 
+use block::ConcreteBlock;
+use cocoa::foundation::{NSUInteger, NSInteger, NSRange};
 use foreign_types::{ForeignType, ForeignTypeRef};
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize};
-use cocoa::foundation::{NSUInteger, NSInteger, NSRange};
-use block::{ConcreteBlock};
+use parking_lot::Mutex;
 use smallvec::SmallVec;
 
 
