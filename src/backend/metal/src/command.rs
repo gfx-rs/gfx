@@ -1336,9 +1336,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     trace!("\timmediate {:?} with {} passes", token, num_passes);
                     self.retained_buffers.extend(retained_buffers.drain(..));
                     self.retained_textures.extend(retained_textures.drain(..));
-                    if num_passes != 0 {
-                        cmd_buffer.commit();
-                    }
+                    cmd_buffer.commit();
                 }
                 Some(CommandSink::Deferred { ref passes, .. }) => {
                     num_deferred += 1;
@@ -1369,10 +1367,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             })
             .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
 
-        // Note: completion handlers can stall the GPU, so we only make one
-        // when strictly required, and collect the retained resources otherwise.
         if fence.is_some() || !system_semaphores.is_empty() {
-            let moved_fence = fence.map(Arc::clone);
             let free_buffers = self.retained_buffers
                 .drain(..)
                 .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
@@ -1381,11 +1376,6 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
 
             let block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                // release the fence
-                if let Some(ref f) = moved_fence {
-                    *f.mutex.lock() = true;
-                    f.condvar.notify_all();
-                }
                 // signal the semaphores
                 for semaphore in &system_semaphores {
                     semaphore.signal();
@@ -1403,6 +1393,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
             record_empty(cmd_buffer);
             msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
             cmd_buffer.commit();
+
+            if let Some(fence) = fence {
+                *fence.0.borrow_mut() = native::FenceInner::Pending(cmd_buffer.to_owned());
+            }
         }
     }
 

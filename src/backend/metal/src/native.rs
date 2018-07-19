@@ -1,8 +1,9 @@
 use {Backend, BufferPtr, SamplerPtr, TexturePtr};
 use internal::Channel;
-use lock::{Condvar, Mutex, RwLock};
+use lock::{Mutex, RwLock};
 use window::SwapchainImage;
 
+use std::cell::RefCell;
 use std::fmt;
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
@@ -609,12 +610,17 @@ unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}
 
 #[derive(Debug)]
-pub struct FenceInner {
-    pub(crate) mutex: Mutex<bool>,
-    pub(crate) condvar: Condvar,
+pub enum FenceInner {
+    Idle { signaled: bool },
+    Pending(metal::CommandBuffer),
 }
 
-pub type Fence = Arc<FenceInner>;
+#[derive(Debug)]
+pub struct Fence(pub(crate) RefCell<FenceInner>);
+
+unsafe impl Send for Fence {}
+unsafe impl Sync for Fence {}
+
 
 extern "C" {
     fn dispatch_semaphore_wait(

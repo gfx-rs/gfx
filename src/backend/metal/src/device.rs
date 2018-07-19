@@ -3,15 +3,16 @@ use {
     Shared, Surface, Swapchain, validate_line_width, BufferPtr, SamplerPtr, TexturePtr,
 };
 use {conversions as conv, command, native as n};
-use lock::{Condvar, Mutex};
+use lock::Mutex;
 use native;
 
 use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
-use std::{cmp, mem, slice, time};
+use std::{cmp, mem, slice, thread, time};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query, window};
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
@@ -1938,49 +1939,43 @@ impl hal::Device<Backend> for Device {
     fn destroy_image_view(&self, _view: n::ImageView) {
     }
 
-    // Emulated fence implementations
-    #[cfg(not(feature = "native_fence"))]
     fn create_fence(&self, signaled: bool) -> n::Fence {
-        Arc::new(n::FenceInner {
-            mutex: Mutex::new(signaled),
-            condvar: Condvar::new(),
-        })
+        n::Fence(RefCell::new(n::FenceInner::Idle { signaled }))
     }
     fn reset_fence(&self, fence: &n::Fence) {
-        *fence.mutex.lock() = false;
+        *fence.0.borrow_mut() = n::FenceInner::Idle { signaled: false };
     }
-    fn wait_for_fence(&self, fence: &n::Fence, timeout_ms: u32) -> bool {
+    fn wait_for_fence(&self, fence: &n::Fence, mut timeout_ms: u32) -> bool {
         debug!("wait_for_fence {:?} for {} ms", fence, timeout_ms);
-        let mut guard = fence.mutex.lock();
-        match timeout_ms {
-            0 => *guard,
-            0xFFFFFFFF => {
-                while !*guard {
-                    fence.condvar.wait(&mut guard);
-                }
-                true
+        let inner = fence.0.borrow();
+        let cmd_buf = match *inner {
+            native::FenceInner::Idle { signaled } => return signaled,
+            native::FenceInner::Pending(ref cmd_buf) => cmd_buf,
+        };
+        if timeout_ms == !0 {
+            cmd_buf.wait_until_completed();
+            return true
+        }
+        loop {
+            if let metal::MTLCommandBufferStatus::Completed = cmd_buf.status() {
+                return true
             }
-            _ => {
-                let total = time::Duration::from_millis(timeout_ms as u64);
-                let now = time::Instant::now();
-                while !*guard {
-                    let duration = match total.checked_sub(now.elapsed()) {
-                        Some(dur) => dur,
-                        None => return false,
-                    };
-                    let result = fence.condvar.wait_for(&mut guard, duration);
-                    if result.timed_out() {
-                        return false;
-                    }
-                }
-                true
+            if timeout_ms == 0 {
+                return false
             }
+            timeout_ms -= 1;
+            thread::sleep(time::Duration::from_millis(1));
         }
     }
     fn get_fence_status(&self, fence: &n::Fence) -> bool {
-        *fence.mutex.lock()
+        match *fence.0.borrow() {
+            native::FenceInner::Idle { signaled } => signaled,
+            native::FenceInner::Pending(ref cmd_buf) => match cmd_buf.status() {
+                metal::MTLCommandBufferStatus::Completed => true,
+                _ => false,
+            },
+        }
     }
-    #[cfg(not(feature = "native_fence"))]
     fn destroy_fence(&self, _fence: n::Fence) {
     }
 

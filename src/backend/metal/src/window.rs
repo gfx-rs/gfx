@@ -133,8 +133,7 @@ impl Swapchain {
                 }
             }
             hal::FrameSync::Fence(fence) => {
-                *fence.mutex.lock() = true;
-                fence.condvar.notify_all();
+                *fence.0.borrow_mut() = native::FenceInner::Idle { signaled: true };
             }
         }
     }
