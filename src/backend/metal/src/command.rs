@@ -595,6 +595,7 @@ enum CommandSink {
         cmd_buffer: metal::CommandBuffer,
         token: Token,
         encoder_state: EncoderState,
+        num_passes: usize,
     },
     Deferred {
         passes: Vec<soft::Pass>,
@@ -703,7 +704,7 @@ impl CommandSink {
         I: Iterator<Item = soft::BlitCommand<&'a soft::Own>>,
     {
         match *self {
-            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
                 let current = match mem::replace(encoder_state, EncoderState::None) {
                     EncoderState::None => None,
                     EncoderState::Render(enc) => {
@@ -716,9 +717,13 @@ impl CommandSink {
                         None
                     },
                 };
-                let encoder = current.unwrap_or_else(|| {
-                    cmd_buffer.new_blit_command_encoder().to_owned()
-                });
+                let encoder = match current {
+                    Some(enc) => enc,
+                    None => {
+                        *num_passes += 1;
+                        cmd_buffer.new_blit_command_encoder().to_owned()
+                    },
+                };
 
                 for command in commands {
                     exec_blit(&encoder, command);
@@ -804,7 +809,8 @@ impl CommandSink {
         self.stop_encoding();
 
         match *self {
-            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
+                *num_passes += 1;
                 let encoder = cmd_buffer.new_render_command_encoder(descriptor);
                 for command in init_commands {
                     exec_render(encoder, command);
@@ -848,8 +854,9 @@ impl CommandSink {
         self.stop_encoding();
 
         match *self {
-            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
                 let _ap = AutoreleasePool::new();
+                *num_passes += 1;
                 let encoder = cmd_buffer.new_compute_command_encoder();
                 for command in init_commands {
                     exec_compute(encoder, command);
@@ -1324,21 +1331,25 @@ impl RawCommandQueue<Backend> for CommandQueue {
             } = *inner;
 
             match *sink {
-                Some(CommandSink::Immediate { ref cmd_buffer, ref token, .. }) => {
+                Some(CommandSink::Immediate { ref cmd_buffer, ref token, num_passes, .. }) => {
                     num_immediate += 1;
-                    trace!("\timmediate {:?}", token);
+                    trace!("\timmediate {:?} with {} passes", token, num_passes);
                     self.retained_buffers.extend(retained_buffers.drain(..));
                     self.retained_textures.extend(retained_textures.drain(..));
-                    cmd_buffer.commit();
+                    if num_passes != 0 {
+                        cmd_buffer.commit();
+                    }
                 }
                 Some(CommandSink::Deferred { ref passes, .. }) => {
                     num_deferred += 1;
                     trace!("\tdeferred with {} passes", passes.len());
-                    let cmd_buffer = queue.spawn_temp();
-                    cmd_buffer.enqueue();
-                    cmd_buffer.set_label("deferred");
-                    record_commands(&*cmd_buffer, passes);
-                    cmd_buffer.commit();
+                    if !passes.is_empty() {
+                        let cmd_buffer = queue.spawn_temp();
+                        cmd_buffer.enqueue();
+                        cmd_buffer.set_label("deferred");
+                        record_commands(&*cmd_buffer, passes);
+                        cmd_buffer.commit();
+                    }
                  }
                  _ => panic!("Command buffer not recorded for submission")
             }
@@ -1566,6 +1577,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 cmd_buffer,
                 token,
                 encoder_state: EncoderState::None,
+                num_passes: 0,
             }
         } else {
             CommandSink::Deferred {
@@ -2722,10 +2734,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         };
 
                         for (stage, loc, resources) in bind_vs.into_iter().chain(bind_fs) {
+                            let res_override = &pipe_layout.res_overrides[&loc];
                             if sampler_base != sm_range.start {
                                 debug_assert_eq!(sampler_base, sm_range.end);
                                 resources.set_samplers(
-                                    pipe_layout.res_overrides[&loc].sampler_id as usize,
+                                    res_override.sampler_id as usize,
                                     &data.samplers[sm_range.clone()],
                                     |index, sampler| {
                                         pre.issue(soft::RenderCommand::BindSampler { stage, index, sampler });
@@ -2735,7 +2748,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             if texture_base != tx_range.start {
                                 debug_assert_eq!(texture_base, tx_range.end);
                                 resources.set_textures(
-                                    pipe_layout.res_overrides[&loc].texture_id as usize,
+                                    res_override.texture_id as usize,
                                     &data.textures[tx_range.clone()],
                                     |index, texture| {
                                         pre.issue(soft::RenderCommand::BindTexture { stage, index, texture });
@@ -2745,7 +2758,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             if buffer_base != bf_range.start {
                                 debug_assert_eq!(buffer_base, bf_range.end);
                                 let buffers = &data.buffers[bf_range.clone()];
-                                let start = pipe_layout.res_overrides[&loc].buffer_id as usize;
+                                let start = res_override.buffer_id as usize;
                                 let mut dynamic_index = 0;
                                 for (i, bref) in buffers.iter().enumerate() {
                                     let (buffer, offset) = match bref.base {
