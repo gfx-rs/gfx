@@ -598,6 +598,13 @@ struct Journal {
 }
 
 impl Journal {
+    fn clear(&mut self) {
+        self.passes.clear();
+        self.render_commands.clear();
+        self.compute_commands.clear();
+        self.blit_commands.clear();
+    }
+
     fn stop(&mut self) {
         match self.passes.last_mut() {
             None => {}
@@ -950,6 +957,7 @@ pub struct IndexBuffer<B> {
 
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
+    backup_journal: Option<Journal>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
 }
@@ -963,11 +971,20 @@ impl Drop for CommandBufferInner {
 }
 
 impl CommandBufferInner {
-    pub(crate) fn reset(&mut self, shared: &Shared) {
-        if let Some(CommandSink::Immediate { token, mut encoder_state, .. }) = self.sink.take() {
-            encoder_state.end();
-            shared.queue.lock().release(token);
-        }
+    pub(crate) fn reset(&mut self, shared: &Shared, release: bool) {
+        match self.sink.take() {
+            Some(CommandSink::Immediate { token, mut encoder_state, .. }) => {
+                encoder_state.end();
+                shared.queue.lock().release(token);
+            }
+            Some(CommandSink::Deferred { mut journal, .. }) => {
+                if !release {
+                    journal.clear();
+                    self.backup_journal = Some(journal);
+                }
+            }
+            None => {}
+        };
         self.retained_buffers.clear();
         self.retained_textures.clear();
     }
@@ -1357,6 +1374,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 ref sink,
                 ref mut retained_buffers,
                 ref mut retained_textures,
+                ..
             } = *inner;
 
             match *sink {
@@ -1509,7 +1527,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         for cmd_buffer in &self.allocated {
             cmd_buffer
                 .borrow_mut()
-                .reset(&self.shared);
+                .reset(&self.shared, false);
         }
     }
 
@@ -1522,6 +1540,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
             inner: Arc::new(RefCell::new(CommandBufferInner {
                 sink: None,
+                backup_journal: None,
                 retained_buffers: Vec::new(),
                 retained_textures: Vec::new(),
             })),
@@ -1611,6 +1630,7 @@ impl CommandBuffer {
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self, flags: com::CommandBufferFlags, _info: com::CommandBufferInheritanceInfo<Backend>) {
         self.reset(false);
+        let mut inner = self.inner.borrow_mut();
         //TODO: Implement secondary command buffers
         let sink = if flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
             let (cmd_buffer, token) = self.shared.queue.lock().spawn();
@@ -1623,11 +1643,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         } else {
             CommandSink::Deferred {
                 is_encoding: false,
-                journal: Journal::default(),
+                journal: inner.backup_journal.take().unwrap_or_default(),
             }
         };
-
-        self.inner.borrow_mut().sink = Some(sink);
+        inner.sink = Some(sink);
         self.state.reset_resources();
     }
 
@@ -1638,11 +1657,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .stop_encoding();
     }
 
-    fn reset(&mut self, _release_resources: bool) {
+    fn reset(&mut self, release_resources: bool) {
         self.state.reset_resources();
         self.inner
             .borrow_mut()
-            .reset(&self.shared);
+            .reset(&self.shared, release_resources);
     }
 
     fn pipeline_barrier<'a, T>(
