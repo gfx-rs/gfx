@@ -1321,6 +1321,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         let queue = self.shared.queue.lock();
         let (mut num_immediate, mut num_deferred) = (0, 0);
+        let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
 
         for buffer in submit.cmd_buffers {
             let mut inner = buffer.borrow().inner.borrow_mut();
@@ -1336,17 +1337,28 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     trace!("\timmediate {:?} with {} passes", token, num_passes);
                     self.retained_buffers.extend(retained_buffers.drain(..));
                     self.retained_textures.extend(retained_textures.drain(..));
-                    cmd_buffer.commit();
+                    if num_passes != 0 {
+                        // flush the deferred recording, if any
+                        if let Some(cb) = deferred_cmd_buffer.take() {
+                            cb.commit();
+                        }
+                        cmd_buffer.commit();
+                    }
                 }
                 Some(CommandSink::Deferred { ref passes, .. }) => {
                     num_deferred += 1;
                     trace!("\tdeferred with {} passes", passes.len());
                     if !passes.is_empty() {
-                        let cmd_buffer = queue.spawn_temp();
-                        cmd_buffer.enqueue();
-                        cmd_buffer.set_label("deferred");
+                        let cmd_buffer = deferred_cmd_buffer
+                            .take()
+                            .unwrap_or_else(|| {
+                                let cmd_buffer = queue.spawn_temp();
+                                cmd_buffer.enqueue();
+                                cmd_buffer.set_label("deferred");
+                                cmd_buffer
+                            });
                         record_commands(&*cmd_buffer, passes);
-                        cmd_buffer.commit();
+                        deferred_cmd_buffer = Some(cmd_buffer);
                     }
                  }
                  _ => panic!("Command buffer not recorded for submission")
@@ -1388,15 +1400,22 @@ impl RawCommandQueue<Backend> for CommandQueue {
             if let Some(ref mut counters) = self.perf_counters {
                 counters.signal_command_buffers += 1;
             }
-            let cmd_buffer = queue.spawn_temp();
-            cmd_buffer.set_label("signal");
-            record_empty(cmd_buffer);
+            let cmd_buffer = deferred_cmd_buffer
+                .take()
+                .unwrap_or_else(|| {
+                    let cmd_buffer = queue.spawn_temp();
+                    cmd_buffer.set_label("signal");
+                    record_empty(cmd_buffer);
+                    cmd_buffer
+                });
             msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
             cmd_buffer.commit();
 
             if let Some(fence) = fence {
                 *fence.0.borrow_mut() = native::FenceInner::Pending(cmd_buffer.to_owned());
             }
+        } else if let Some(cmd_buffer) = deferred_cmd_buffer {
+            cmd_buffer.commit();
         }
     }
 
