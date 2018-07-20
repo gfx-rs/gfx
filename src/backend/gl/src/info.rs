@@ -226,7 +226,7 @@ bitflags! {
         const SAMPLER_LOD_BIAS = 0x2000;
         /// Support setting border texel colors.
         const SAMPLER_BORDER_COLOR = 0x4000;
-        /// No explicit layouts in shader support
+        /// Support explicit layouts in shader.
         const EXPLICIT_LAYOUTS_IN_SHADER = 0x8000;
     }
 }
