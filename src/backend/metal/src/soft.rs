@@ -409,10 +409,7 @@ impl<'a> ComputeCommand<&'a Own> {
 
 #[derive(Debug)]
 pub enum Pass {
-    Render {
-        desc: metal::RenderPassDescriptor,
-        commands: Vec<RenderCommand<Own>>,
-    },
-    Blit(Vec<BlitCommand<Own>>),
-    Compute(Vec<ComputeCommand<Own>>),
+    Render(metal::RenderPassDescriptor),
+    Blit,
+    Compute,
 }

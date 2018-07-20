@@ -589,6 +589,60 @@ impl StageResources {
     }
 }
 
+#[derive(Debug, Default)]
+struct Journal {
+    passes: Vec<(soft::Pass, Range<usize>)>,
+    render_commands: Vec<soft::RenderCommand<soft::Own>>,
+    compute_commands: Vec<soft::ComputeCommand<soft::Own>>,
+    blit_commands: Vec<soft::BlitCommand<soft::Own>>,
+}
+
+impl Journal {
+    fn stop(&mut self) {
+        match self.passes.last_mut() {
+            None => {}
+            Some(&mut (soft::Pass::Render(_), ref mut range)) => {
+                range.end = self.render_commands.len();
+            }
+            Some(&mut (soft::Pass::Compute, ref mut range)) => {
+                range.end = self.compute_commands.len();
+            }
+            Some(&mut (soft::Pass::Blit, ref mut range)) => {
+                range.end = self.blit_commands.len();
+            }
+        };
+    }
+
+    fn record(&self, command_buf: &metal::CommandBufferRef) {
+        let _ap = AutoreleasePool::new(); // for encoder creation
+        for (ref pass, ref range) in &self.passes {
+            match *pass {
+                soft::Pass::Render(ref desc) => {
+                    let encoder = command_buf.new_render_command_encoder(desc);
+                    for command in &self.render_commands[range.clone()] {
+                        exec_render(&encoder, command.as_ref());
+                    }
+                    encoder.end_encoding();
+                }
+                soft::Pass::Blit => {
+                    let encoder = command_buf.new_blit_command_encoder();
+                    for command in &self.blit_commands[range.clone()] {
+                        exec_blit(&encoder, command.as_ref());
+                    }
+                    encoder.end_encoding();
+                }
+                soft::Pass::Compute => {
+                    let encoder = command_buf.new_compute_command_encoder();
+                    for command in &self.compute_commands[range.clone()] {
+                        exec_compute(&encoder, command.as_ref());
+                    }
+                    encoder.end_encoding();
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 enum CommandSink {
     Immediate {
@@ -598,8 +652,8 @@ enum CommandSink {
         num_passes: usize,
     },
     Deferred {
-        passes: Vec<soft::Pass>,
         is_encoding: bool,
+        journal: Journal,
     },
 }
 
@@ -659,9 +713,9 @@ impl CommandSink {
             CommandSink::Immediate { encoder_state: EncoderState::Render(ref encoder), .. } => {
                 PreRender::Immediate(encoder)
             }
-            CommandSink::Deferred { ref mut passes, is_encoding: true } => {
-                match passes.last_mut() {
-                    Some(&mut soft::Pass::Render { commands: ref mut list, .. }) => PreRender::Deferred(list),
+            CommandSink::Deferred { is_encoding: true, ref mut journal } => {
+                match journal.passes.last() {
+                    Some(&(soft::Pass::Render(_), _)) => PreRender::Deferred(&mut journal.render_commands),
                     _ => PreRender::Void,
                 }
             }
@@ -685,13 +739,13 @@ impl CommandSink {
                     _ => panic!("Expected to be in render encoding state!")
                 }
             }
-            CommandSink::Deferred { ref mut passes, is_encoding } => {
+            CommandSink::Deferred { is_encoding, ref mut journal } => {
                 assert!(is_encoding);
-                match passes.last_mut() {
-                    Some(&mut soft::Pass::Render { commands: ref mut list, .. }) => {
-                        list.extend(commands.into_iter().map(soft::RenderCommand::own));
+                match journal.passes.last() {
+                    Some(&(soft::Pass::Render(_), _)) => {
+                        journal.render_commands.extend(commands.into_iter().map(soft::RenderCommand::own));
                     }
-                    _ => panic!("Active pass is not a render pass")
+                    other => panic!("Active pass is not a render pass: {:?}", other),
                 }
             }
         }
@@ -731,13 +785,14 @@ impl CommandSink {
 
                 *encoder_state = EncoderState::Blit(encoder);
             }
-            CommandSink::Deferred { ref mut passes, .. } => {
-                let owned_commands = commands.into_iter().map(soft::BlitCommand::own);
-                if let Some(&mut soft::Pass::Blit(ref mut list)) = passes.last_mut() {
-                    list.extend(owned_commands);
-                    return;
+            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
+                *is_encoding = true;
+                if let Some(&(soft::Pass::Blit, _)) = journal.passes.last() {
+                } else {
+                    journal.stop();
+                    journal.passes.push((soft::Pass::Blit, journal.blit_commands.len() .. 0));
                 }
-                passes.push(soft::Pass::Blit(owned_commands.collect()));
+                journal.blit_commands.extend(commands.into_iter().map(soft::BlitCommand::own));
             }
         }
     }
@@ -749,9 +804,9 @@ impl CommandSink {
             CommandSink::Immediate { encoder_state: EncoderState::Compute(ref encoder), .. } => {
                 PreCompute::Immediate(encoder)
             }
-            CommandSink::Deferred { ref mut passes, is_encoding: true } => {
-                match passes.last_mut() {
-                    Some(&mut soft::Pass::Compute(ref mut list)) => PreCompute::Deferred(list),
+            CommandSink::Deferred { is_encoding: true, ref mut journal } => {
+                match journal.passes.last() {
+                    Some(&(soft::Pass::Compute, _)) => PreCompute::Deferred(&mut journal.compute_commands),
                     _ => PreCompute::Void,
                 }
             }
@@ -775,13 +830,14 @@ impl CommandSink {
                     _ => panic!("Expected to be in compute pass"),
                 }
             }
-            CommandSink::Deferred { ref mut passes, .. } => {
-                let owned_commands = commands.into_iter().map(soft::ComputeCommand::own);
-                if let Some(&mut soft::Pass::Compute(ref mut list)) = passes.last_mut() {
-                    list.extend(owned_commands);
-                    return;
+            CommandSink::Deferred { is_encoding, ref mut journal } => {
+                assert!(is_encoding);
+                match journal.passes.last() {
+                    Some(&(soft::Pass::Compute, _)) => {
+                        journal.compute_commands.extend(commands.into_iter().map(soft::ComputeCommand::own));
+                    }
+                    other => panic!("Active pass is not a compute pass: {:?}", other),
                 }
-                passes.push(soft::Pass::Compute(owned_commands.collect()));
             }
         }
     }
@@ -791,8 +847,9 @@ impl CommandSink {
             CommandSink::Immediate { ref mut encoder_state, .. } => {
                 encoder_state.end();
             }
-            CommandSink::Deferred { ref mut is_encoding, .. } => {
+            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
                 *is_encoding = false;
+                journal.stop();
             }
         }
     }
@@ -825,21 +882,21 @@ impl CommandSink {
                     }
                 }
             }
-            CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
-                *is_encoding = match door {
-                    PassDoor::Open => true,
-                    PassDoor::Closed {..} => false,
-                };
-                passes.push(soft::Pass::Render {
-                    //Note: the original descriptor belongs to the framebuffer,
-                    // and will me mutated afterwards.
-                    desc: unsafe {
-                        let desc: metal::RenderPassDescriptor = msg_send![descriptor, copy];
-                        msg_send![desc.as_ptr(), retain];
-                        desc
-                    },
-                    commands: init_commands.map(soft::RenderCommand::own).collect(),
+            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
+                //Note: the original descriptor belongs to the framebuffer,
+                // and will me mutated afterwards.
+                let pass = soft::Pass::Render( unsafe {
+                    let desc: metal::RenderPassDescriptor = msg_send![descriptor, copy];
+                    msg_send![desc.as_ptr(), retain];
+                    desc
                 });
+                let mut range = journal.render_commands.len() .. 0;
+                journal.render_commands.extend(init_commands.map(soft::RenderCommand::own));
+                match door {
+                    PassDoor::Open => *is_encoding = true,
+                    PassDoor::Closed {..} => range.end = journal.render_commands.len(),
+                }
+                journal.passes.push((pass, range))
             }
         }
     }
@@ -871,14 +928,14 @@ impl CommandSink {
                     }
                 }
             }
-            CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
-                *is_encoding = match door {
-                    PassDoor::Open => true,
-                    PassDoor::Closed {..} => false,
+            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
+                let mut range = journal.compute_commands.len() .. 0;
+                journal.compute_commands.extend(init_commands.map(soft::ComputeCommand::own));
+                match door {
+                    PassDoor::Open => *is_encoding = true,
+                    PassDoor::Closed {..} => range.end = journal.compute_commands.len(),
                 };
-                passes.push(soft::Pass::Compute(
-                    init_commands.map(soft::ComputeCommand::own).collect(),
-                ));
+                journal.passes.push((soft::Pass::Compute, range))
             }
         }
     }
@@ -1215,35 +1272,6 @@ fn exec_compute<'a>(encoder: &metal::ComputeCommandEncoderRef, command: soft::Co
     }
 }
 
-fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass]) {
-    let _ap = AutoreleasePool::new(); // for encoder creation
-    for pass in passes {
-        match *pass {
-            soft::Pass::Render { ref desc, ref commands } => {
-                let encoder = command_buf.new_render_command_encoder(desc);
-                for command in commands {
-                    exec_render(&encoder, command.as_ref());
-                }
-                encoder.end_encoding();
-            }
-            soft::Pass::Blit(ref commands) => {
-                let encoder = command_buf.new_blit_command_encoder();
-                for command in commands {
-                    exec_blit(&encoder, command.as_ref());
-                }
-                encoder.end_encoding();
-            }
-            soft::Pass::Compute(ref commands) => {
-                let encoder = command_buf.new_compute_command_encoder();
-                for command in commands {
-                    exec_compute(&encoder, command.as_ref());
-                }
-                encoder.end_encoding();
-            }
-        }
-    }
-}
-
 /// This is a hack around Metal System Trace logic that ignores empty command buffers entirely.
 fn record_empty(command_buf: &metal::CommandBufferRef) {
     command_buf.new_blit_command_encoder().end_encoding();
@@ -1345,10 +1373,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
                         cmd_buffer.commit();
                     }
                 }
-                Some(CommandSink::Deferred { ref passes, .. }) => {
+                Some(CommandSink::Deferred { ref journal, .. }) => {
                     num_deferred += 1;
-                    trace!("\tdeferred with {} passes", passes.len());
-                    if !passes.is_empty() {
+                    trace!("\tdeferred with {} passes", journal.passes.len());
+                    if !journal.passes.is_empty() {
                         let cmd_buffer = deferred_cmd_buffer
                             .take()
                             .unwrap_or_else(|| {
@@ -1357,7 +1385,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                                 cmd_buffer.set_label("deferred");
                                 cmd_buffer
                             });
-                        record_commands(&*cmd_buffer, passes);
+                        journal.record(&*cmd_buffer);
                         deferred_cmd_buffer = Some(cmd_buffer);
                     }
                  }
@@ -1594,8 +1622,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         } else {
             CommandSink::Deferred {
-                passes: Vec::new(),
                 is_encoding: false,
+                journal: Journal::default(),
             }
         };
 
