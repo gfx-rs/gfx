@@ -37,6 +37,12 @@ const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
 const CLEAR_IMAGE_ARRAY: bool = false;
 /// Number of frames to average when reporting the performance counters.
 const COUNTERS_REPORT_WINDOW: usize = 0;
+/// If true, we record one-time-submit command buffers immediately.
+/// Otherwise, everything gets actually recorded only at submission time.
+const ALLOW_IMMEDIATE_RECORDING: bool = true;
+/// If true, we combine deferred command buffers together into one giant
+/// command buffer per submission, including the signalling logic.
+const STITCH_DEFERRED_COMMAND_BUFFERS: bool = true;
 
 pub struct QueueInner {
     raw: metal::CommandQueue,
@@ -1404,7 +1410,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
                                 cmd_buffer
                             });
                         journal.record(&*cmd_buffer);
-                        deferred_cmd_buffer = Some(cmd_buffer);
+                        if STITCH_DEFERRED_COMMAND_BUFFERS {
+                            deferred_cmd_buffer = Some(cmd_buffer);
+                        }
                     }
                  }
                  _ => panic!("Command buffer not recorded for submission")
@@ -1632,7 +1640,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.reset(false);
         let mut inner = self.inner.borrow_mut();
         //TODO: Implement secondary command buffers
-        let sink = if flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
+        let sink = if ALLOW_IMMEDIATE_RECORDING && flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
             let (cmd_buffer, token) = self.shared.queue.lock().spawn();
             CommandSink::Immediate {
                 cmd_buffer,
