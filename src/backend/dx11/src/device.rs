@@ -7,19 +7,22 @@ use winapi::Interface;
 use winapi::shared::dxgi::{IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD};
 use winapi::shared::minwindef::{TRUE};
 use winapi::shared::{dxgiformat, dxgitype, winerror};
-use winapi::um::{d3d11, d3dcommon};
+use winapi::um::{d3d11, d3d11sdklayers, d3dcommon};
 
 use wio::com::ComPtr;
 
+use std::sync::Arc;
 use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::mem;
 use std::ops::Range;
 use std::ptr;
 
+use parking_lot::{Condvar, Mutex};
+
 use {
     Backend, Buffer, BufferView, CommandPool, ComputePipeline, DescriptorPool, DescriptorSetLayout,
-    Fence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer, InternalImage, Memory,
+    Fence, RawFence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer, InternalImage, Memory,
     PipelineLayout, QueryPool, RenderPass, Sampler, Semaphore, ShaderModule, Surface, Swapchain,
     UnboundBuffer, UnboundImage, ViewInfo, PipelineBinding, Descriptor, MemoryHeapFlags, RegisterRemapping,
     RegisterMapping,
@@ -40,7 +43,17 @@ pub struct Device {
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     memory_properties: hal::MemoryProperties,
     memory_heap_flags: [MemoryHeapFlags; 3],
-    pub(crate) internal: internal::Internal
+    pub(crate) internal: internal::Internal,
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        if let Ok(debug) = self.raw.cast::<d3d11sdklayers::ID3D11Debug>() {
+            unsafe {
+                debug.ReportLiveDeviceObjects(d3d11sdklayers::D3D11_RLDO_DETAIL);
+            }
+        }
+    }
 }
 
 unsafe impl Send for Device { }
@@ -61,7 +74,7 @@ impl Device {
                 MemoryHeapFlags::HOST_NONCOHERENT,
                 MemoryHeapFlags::HOST_COHERENT
             ],
-            internal: internal::Internal::new(&device)
+            internal: internal::Internal::new(&device),
         }
     }
 
@@ -1642,7 +1655,7 @@ impl hal::Device<Backend> for Device {
                                 if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
                                     let old_buffer = unsafe { (*handle).0 } as *mut _;
 
-                                    write.set.flush_coherent(old_buffer, buffer);
+                                    write.set.add_flush(old_buffer, buffer);
                                 }
 
                                 if let Some(buffer) = buffer.internal.disjoint_cb {
@@ -1655,8 +1668,8 @@ impl hal::Device<Backend> for Device {
                                 if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
                                     let old_buffer = unsafe { (*handle).0 } as *mut _;
 
-                                    write.set.flush_coherent(old_buffer, buffer);
-                                    write.set.invalidate_coherent(old_buffer, buffer);
+                                    write.set.add_flush(old_buffer, buffer);
+                                    write.set.add_invalidate(old_buffer, buffer);
                                 }
 
                                 unsafe { *handle = Descriptor(buffer.internal.uav.unwrap() as *mut _); }
@@ -1786,27 +1799,50 @@ impl hal::Device<Backend> for Device {
         Semaphore
     }
 
-    fn create_fence(&self, _signalled: bool) -> Fence {
-        // TODO:
-        Fence
+    fn create_fence(&self, signalled: bool) -> Fence {
+        Arc::new(RawFence {
+            mutex: Mutex::new(signalled),
+            condvar: Condvar::new()
+        })
     }
 
-    fn reset_fence(&self, _fence: &Fence) {
-        // TODO:
+    fn reset_fence(&self, fence: &Fence) {
+        *fence.mutex.lock() = false;
     }
 
-    fn wait_for_fences<I>(&self, _fences: I, _wait: device::WaitFor, _timeout_ns: u64) -> bool
-    where
-        I: IntoIterator,
-        I::Item: Borrow<Fence>,
-    {
-        // TODO:
-        true
+    fn wait_for_fence(&self, fence: &Fence, timeout_ns: u64) -> bool {
+        use std::time::{Duration, Instant};
+
+        debug!("wait_for_fence {:?} for {} ns", fence, timeout_ns);
+        let mut guard = fence.mutex.lock();
+        match timeout_ns {
+            0 => *guard,
+            0xFFFFFFFFFFFFFFFF => {
+                while !*guard {
+                    fence.condvar.wait(&mut guard);
+                }
+                true
+            }
+            _ => {
+                let total = Duration::from_nanos(timeout_ns as u64);
+                let now = Instant::now();
+                while !*guard {
+                    let duration = match total.checked_sub(now.elapsed()) {
+                        Some(dur) => dur,
+                        None => return false,
+                    };
+                    let result = fence.condvar.wait_for(&mut guard, duration);
+                    if result.timed_out() {
+                        return false;
+                    }
+                }
+                true
+            }
+        }
     }
 
-    fn get_fence_status(&self, _fence: &Fence) -> bool {
-        true
-        //unimplemented!()
+    fn get_fence_status(&self, fence: &Fence) -> bool {
+        *fence.mutex.lock()
     }
 
     fn free_memory(&self, memory: Memory) {

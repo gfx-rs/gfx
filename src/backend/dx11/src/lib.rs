@@ -9,6 +9,7 @@ extern crate gfx_hal as hal;
 extern crate log;
 extern crate smallvec;
 extern crate spirv_cross;
+extern crate parking_lot;
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
@@ -32,6 +33,9 @@ use winapi::um::{d3d11, d3dcommon};
 
 use wio::com::ComPtr;
 
+use parking_lot::{Condvar, Mutex};
+
+use std::sync::Arc;
 use std::ptr;
 use std::mem;
 use std::ops::Range;
@@ -240,7 +244,7 @@ impl hal::Instance for Instance {
                         adapter.as_raw() as *mut _,
                         d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
                         ptr::null_mut(),
-                        d3d11::D3D11_CREATE_DEVICE_DEBUG,
+                        0,
                         [feature_level].as_ptr(),
                         1,
                         d3d11::D3D11_SDK_VERSION,
@@ -668,14 +672,14 @@ impl hal::QueueFamily for QueueFamily {
 #[derivative(Debug)]
 pub struct CommandQueue {
     #[derivative(Debug="ignore")]
-    context: ComPtr<d3d11::ID3D11DeviceContext>
+    context: ComPtr<d3d11::ID3D11DeviceContext>,
 }
 
 unsafe impl Send for CommandQueue { }
 unsafe impl Sync for CommandQueue { }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(&mut self, submission: hal::queue::RawSubmission<Backend, IC>, _fence: Option<&Fence>)
+    unsafe fn submit_raw<IC>(&mut self, submission: hal::queue::RawSubmission<Backend, IC>, fence: Option<&Fence>)
     where
         IC: IntoIterator,
         IC::Item: Borrow<CommandBuffer>,
@@ -690,6 +694,11 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             for sync in &cmd_buf.invalidate_coherent_memory {
                 sync.invalidate(&self.context);
             }
+        }
+
+        if let Some(fence) = fence {
+            *fence.mutex.lock() = true;
+            fence.condvar.notify_all();
         }
     }
 
@@ -1187,30 +1196,31 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         for (set, bindings) in iter {
             let set = set.borrow();
 
-            for &(buffer, ptr, ref range) in set.flush_coherent_buffers.borrow().iter() {
-                if !self.flush_coherent_memory.iter().position(|m| m.buffer == buffer).is_some() {
+            let coherent_buffers = set.coherent_buffers.lock();
+            for sync in coherent_buffers.flush_coherent_buffers.borrow().iter() {
+                if !self.flush_coherent_memory.iter().position(|m| m.buffer == sync.device_buffer).is_some() {
                     self.flush_coherent_memory.push(MemorySync {
                         working_buffer: None,
                         working_buffer_size: 0,
 
-                        host_memory: ptr,
-                        sync_range: range.clone(),
+                        host_memory: sync.host_ptr,
+                        sync_range: sync.range.clone(),
 
-                        buffer: buffer
+                        buffer: sync.device_buffer
                     });
                 }
             }
 
-            for &(buffer, ptr, ref range) in set.invalidate_coherent_buffers.borrow().iter() {
-                if !self.invalidate_coherent_memory.iter().position(|m| m.buffer == buffer).is_some() {
+            for sync in coherent_buffers.invalidate_coherent_buffers.borrow().iter() {
+                if !self.invalidate_coherent_memory.iter().position(|m| m.buffer == sync.device_buffer).is_some() {
                     self.invalidate_coherent_memory.push(MemorySync {
                         working_buffer: None,
                         working_buffer_size: 0,
 
-                        host_memory: ptr,
-                        sync_range: range.clone(),
+                        host_memory: sync.host_ptr,
+                        sync_range: sync.range.clone(),
 
-                        buffer: buffer
+                        buffer: sync.device_buffer
                     });
                 }
             }
@@ -1244,6 +1254,35 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
         for (set, bindings) in iter {
             let set = set.borrow();
+
+            let coherent_buffers = set.coherent_buffers.lock();
+            for sync in coherent_buffers.flush_coherent_buffers.borrow().iter() {
+                if !self.flush_coherent_memory.iter().position(|m| m.buffer == sync.device_buffer).is_some() {
+                    self.flush_coherent_memory.push(MemorySync {
+                        working_buffer: None,
+                        working_buffer_size: 0,
+
+                        host_memory: sync.host_ptr,
+                        sync_range: sync.range.clone(),
+
+                        buffer: sync.device_buffer
+                    });
+                }
+            }
+
+            for sync in coherent_buffers.invalidate_coherent_buffers.borrow().iter() {
+                if !self.invalidate_coherent_memory.iter().position(|m| m.buffer == sync.device_buffer).is_some() {
+                    self.invalidate_coherent_memory.push(MemorySync {
+                        working_buffer: None,
+                        working_buffer_size: 0,
+
+                        host_memory: sync.host_ptr,
+                        sync_range: sync.range.clone(),
+
+                        buffer: sync.device_buffer
+                    });
+                }
+            }
 
             // TODO: offsets
             for binding in bindings.iter() {
@@ -1865,6 +1904,102 @@ pub struct DescriptorSetLayout {
     register_remap: RegisterRemapping,
 }
 
+#[derive(Debug)]
+struct CoherentBufferSyncRange {
+    device_buffer: *mut d3d11::ID3D11Buffer,
+    host_ptr: *mut u8,
+    range: Range<u64>,
+}
+
+#[derive(Debug)]
+struct CoherentBuffers {
+    // descriptor set writes containing coherent resources go into these vecs and are added to the
+    // command buffers own Vec on binding the set.
+    flush_coherent_buffers: RefCell<Vec<CoherentBufferSyncRange>>,
+    invalidate_coherent_buffers: RefCell<Vec<CoherentBufferSyncRange>>,
+}
+
+impl CoherentBuffers {
+    fn add_flush(&self, old: *mut d3d11::ID3D11Buffer, buffer: &Buffer) {
+        let new = buffer.internal.raw;
+
+        if old != new {
+            let mut buffers = self.flush_coherent_buffers.borrow_mut();
+
+            let pos = buffers.iter().position(|sync| old == sync.device_buffer);
+
+            let sync_range = CoherentBufferSyncRange {
+                device_buffer: new,
+                host_ptr: buffer.host_ptr,
+                range: buffer.bound_range.clone(),
+            };
+
+            if let Some(pos) = pos {
+                buffers[pos] = sync_range;
+            } else {
+                buffers.push(sync_range);
+            }
+
+
+            if let Some(disjoint) = buffer.internal.disjoint_cb {
+                let pos = buffers.iter().position(|sync| disjoint == sync.device_buffer);
+
+                let sync_range = CoherentBufferSyncRange {
+                    device_buffer: disjoint,
+                    host_ptr: buffer.host_ptr,
+                    range: buffer.bound_range.clone(),
+                };
+
+                if let Some(pos) = pos {
+                    buffers[pos] = sync_range;
+                } else {
+                    buffers.push(sync_range);
+                }
+            }
+        }
+    }
+
+    fn add_invalidate(&self, old: *mut d3d11::ID3D11Buffer, buffer: &Buffer) {
+        let new = buffer.internal.raw;
+
+        if old != new {
+            let mut buffers = self.invalidate_coherent_buffers.borrow_mut();
+
+            let pos = buffers.iter().position(|sync| old == sync.device_buffer);
+
+            let sync_range = CoherentBufferSyncRange {
+                device_buffer: new,
+                host_ptr: buffer.host_ptr,
+                range: buffer.bound_range.clone(),
+            };
+
+            if let Some(pos) = pos {
+                buffers[pos] = sync_range;
+            } else {
+                buffers.push(sync_range);
+            }
+
+
+            if let Some(disjoint) = buffer.internal.disjoint_cb {
+                let pos = buffers.iter().position(|sync| disjoint == sync.device_buffer);
+
+                let sync_range = CoherentBufferSyncRange {
+                    device_buffer: disjoint,
+                    host_ptr: buffer.host_ptr,
+                    range: buffer.bound_range.clone(),
+                };
+
+                if let Some(pos) = pos {
+                    buffers[pos] = sync_range;
+                } else {
+                    buffers.push(sync_range);
+                }
+            }
+        }
+    }
+
+}
+
 /// Newtype around a common interface that all bindable resources inherit from.
 #[derive(Debug, Copy, Clone)]
 #[repr(C)]
@@ -1877,10 +2012,7 @@ pub struct DescriptorSet {
     len: usize,
     handles: *mut Descriptor,
     register_remap: RegisterRemapping,
-    // descriptor set writes containing coherent resources go into these vecs and are added to the
-    // command buffers own Vec on binding the set.
-    flush_coherent_buffers: RefCell<Vec<(*mut d3d11::ID3D11Buffer, *mut u8, Range<u64>)>>,
-    invalidate_coherent_buffers: RefCell<Vec<(*mut d3d11::ID3D11Buffer, *mut u8, Range<u64>)>>,
+    coherent_buffers: Mutex<CoherentBuffers>,
 }
 
 unsafe impl Send for DescriptorSet {}
@@ -1920,35 +2052,19 @@ impl DescriptorSet {
         }
     }
 
-    fn flush_coherent(&self, old: *mut d3d11::ID3D11Buffer, buffer: &Buffer) {
+    fn add_flush(&self, old: *mut d3d11::ID3D11Buffer, buffer: &Buffer) {
         let new = buffer.internal.raw;
 
         if old != new {
-            let pos = self.flush_coherent_buffers.borrow().iter().position(|&(b, _, _)| old == b);
-            let ptr = buffer.host_ptr;
-            let range = buffer.bound_range.clone();
-
-            if let Some(pos) = pos {
-                self.flush_coherent_buffers.borrow_mut()[pos] = (new, ptr, range);
-            } else {
-                self.flush_coherent_buffers.borrow_mut().push((new, ptr, range));
-            }
+            self.coherent_buffers.lock().add_flush(old, buffer);
         }
     }
 
-    fn invalidate_coherent(&self, old: *mut d3d11::ID3D11Buffer, buffer: &Buffer) {
+    fn add_invalidate(&self, old: *mut d3d11::ID3D11Buffer, buffer: &Buffer) {
         let new = buffer.internal.raw;
 
         if old != new {
-            let pos = self.invalidate_coherent_buffers.borrow().iter().position(|&(b, _, _)| old == b);
-            let ptr = buffer.host_ptr;
-            let range = buffer.bound_range.clone();
-
-            if let Some(pos) = pos {
-                self.invalidate_coherent_buffers.borrow_mut()[pos] = (new, ptr, range);
-            } else {
-                self.invalidate_coherent_buffers.borrow_mut().push((new, ptr, range));
-            }
+            self.coherent_buffers.lock().add_invalidate(old, buffer);
         }
     }
 }
@@ -1978,17 +2094,19 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         let len = layout.handle_count.max(1) as _;
 
         self.allocator.allocate_range(len).map(|range| {
-			for i in range.clone() {
-				self.handles[i] = Descriptor(ptr::null_mut());
-			}
+            for handle in &mut self.handles[range.clone()] {
+                *handle = Descriptor(ptr::null_mut());
+            }
 
             DescriptorSet {
                 offset: range.start,
                 len,
                 handles: unsafe { self.handles.as_mut_ptr().offset(range.start as _) },
                 register_remap: layout.register_remap.clone(),
-                flush_coherent_buffers: RefCell::new(Vec::new()),
-                invalidate_coherent_buffers: RefCell::new(Vec::new()),
+                coherent_buffers: Mutex::new(CoherentBuffers {
+                    flush_coherent_buffers: RefCell::new(Vec::new()),
+                    invalidate_coherent_buffers: RefCell::new(Vec::new()),
+                })
             }
         }).map_err(|_| pso::AllocationError::OutOfPoolMemory)
     }
@@ -2008,7 +2126,13 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
 }
 
 #[derive(Debug)]
-pub struct Fence;
+pub struct RawFence {
+    mutex: Mutex<bool>,
+    condvar: Condvar,
+}
+
+pub type Fence = Arc<RawFence>;
+
 #[derive(Debug)]
 pub struct Semaphore;
 #[derive(Debug)]
