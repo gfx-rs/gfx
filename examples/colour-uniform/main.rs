@@ -23,7 +23,6 @@ extern crate env_logger;
 extern crate gfx_hal as hal;
 extern crate glsl_to_spirv;
 extern crate image;
-extern crate takeable_option;
 extern crate winit;
 
 struct Dimensions<T> {
@@ -46,7 +45,6 @@ use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
 use hal::pass::Subpass;
 use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
 use hal::queue::Submission;
-use takeable_option::Takeable;
 
 use std::fs;
 use std::io::Read;
@@ -94,9 +92,9 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 struct RendererState<B: Backend>
 where
     B::Surface: SurfaceTrait {
-    uniform_desc_pool: Takeable<B::DescriptorPool>,
-    img_desc_pool: Takeable<B::DescriptorPool>,
-    swapchain: Takeable<SwapchainState<B>>,
+    uniform_desc_pool: Option<B::DescriptorPool>,
+    img_desc_pool: Option<B::DescriptorPool>,
+    swapchain: Option<SwapchainState<B>>,
     device: Rc<RefCell<DeviceState<B>>>,
     backend: BackendState<B>,
     window: WindowState,
@@ -122,7 +120,7 @@ where
     B::Surface: SurfaceTrait {
     fn new(mut backend: BackendState<B>, window: WindowState) -> Self {
         let device = Rc::new(RefCell::new(DeviceState::new(
-            Takeable::take(&mut backend.adapter.adapter),
+            backend.adapter.adapter.take().unwrap(),
             &backend.surface,
         )));
 
@@ -157,7 +155,7 @@ where
             }],
         );
 
-        let mut img_desc_pool = Takeable::new(device.borrow().device.create_descriptor_pool(
+        let mut img_desc_pool = Some(device.borrow().device.create_descriptor_pool(
             1, // # of sets
             &[
                 pso::DescriptorRangeDesc {
@@ -171,7 +169,7 @@ where
             ],
         ));
 
-        let mut uniform_desc_pool = Takeable::new(device.borrow().device.create_descriptor_pool(
+        let mut uniform_desc_pool = Some(device.borrow().device.create_descriptor_pool(
             1, // # of sets
             &[pso::DescriptorRangeDesc {
                 ty: pso::DescriptorType::UniformBuffer,
@@ -179,8 +177,8 @@ where
             }],
         ));
 
-        let image_desc = image_desc.create_desc_set(&mut img_desc_pool);
-        let uniform_desc = uniform_desc.create_desc_set(&mut uniform_desc_pool);
+        let image_desc = image_desc.create_desc_set(img_desc_pool.as_mut().unwrap());
+        let uniform_desc = uniform_desc.create_desc_set(uniform_desc_pool.as_mut().unwrap());
 
         println!("Memory types: {:?}", backend.adapter.memory_types);
 
@@ -226,29 +224,29 @@ where
             .device
             .destroy_command_pool(staging_pool.into_raw());
 
-        let mut swapchain = Takeable::new(SwapchainState::new(
+        let mut swapchain = Some(SwapchainState::new(
             &mut backend,
             Rc::clone(&device),
         ));
 
         let render_pass = RenderPassState::new(
-            &swapchain,
+            swapchain.as_ref().unwrap(),
             Rc::clone(&device),
         );
 
         let framebuffer = FramebufferState::new(
             Rc::clone(&device),
             &render_pass,
-            &mut swapchain,
+            swapchain.as_mut().unwrap(),
         );
 
         let pipeline = PipelineState::new(
             vec![image.get_layout(), uniform.get_layout()],
-            &*render_pass.render_pass,
+            render_pass.render_pass.as_ref().unwrap(),
             Rc::clone(&device),
         );
 
-        let viewport = RendererState::create_viewport(&swapchain);
+        let viewport = RendererState::create_viewport(swapchain.as_ref().unwrap());
 
         RendererState {
             window,
@@ -270,31 +268,31 @@ where
     fn recreate_swapchain(&mut self) {
         self.device.borrow().device.wait_idle().unwrap();
 
-        Takeable::take(&mut self.swapchain);
+        self.swapchain.take().unwrap();
 
-        self.swapchain = Takeable::new(SwapchainState::new(
+        self.swapchain = Some(SwapchainState::new(
             &mut self.backend,
             Rc::clone(&self.device),
         ));
 
         self.render_pass = RenderPassState::new(
-            &self.swapchain,
+            self.swapchain.as_ref().unwrap(),
             Rc::clone(&self.device),
         );
 
         self.framebuffer = FramebufferState::new(
             Rc::clone(&self.device),
             &self.render_pass,
-            &mut self.swapchain,
+            self.swapchain.as_mut().unwrap(),
         );
 
         self.pipeline = PipelineState::new(
             vec![self.image.get_layout(), self.uniform.get_layout()],
-            &*self.render_pass.render_pass,
+            self.render_pass.render_pass.as_ref().unwrap(),
             Rc::clone(&self.device),
         );
 
-        self.viewport = RendererState::create_viewport(&self.swapchain);
+        self.viewport = RendererState::create_viewport(self.swapchain.as_ref().unwrap());
     }
 
     fn create_viewport(swapchain: &SwapchainState<B>) -> pso::Viewport {
@@ -429,7 +427,7 @@ where
                                                 Color::Blue => b = cur_value as f32 / 255.0,
                                                 Color::Alpha => a = cur_value as f32 / 255.0,
                                             }
-                                            uniform.buffer.update_data(0, &[r, g, b, a]);
+                                            uniform.buffer.as_mut().unwrap().update_data(0, &[r, g, b, a]);
                                             cur_value = 0;
 
                                             println!("Colour updated!");
@@ -479,7 +477,11 @@ where
                     .unwrap();
                 match self
                     .swapchain
+                    .as_mut()
+                    .unwrap()
                     .swapchain
+                    .as_mut()
+                    .unwrap()
                     .acquire_image(FrameSync::Semaphore(acquire_semaphore))
                 {
                     Ok(i) => i,
@@ -510,21 +512,21 @@ where
 
                 cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
                 cmd_buffer.set_scissors(0, &[self.viewport.rect]);
-                cmd_buffer.bind_graphics_pipeline(&*self.pipeline.pipeline);
+                cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
                 cmd_buffer.bind_vertex_buffers(
                     0,
                     Some((self.vertex_buffer.get_buffer(), 0)),
                 );
                 cmd_buffer.bind_graphics_descriptor_sets(
-                    &*self.pipeline.pipeline_layout,
+                    self.pipeline.pipeline_layout.as_ref().unwrap(),
                     0,
-                    vec![&*self.image.desc.set, &*self.uniform.desc.set],
+                    vec![self.image.desc.set.as_ref().unwrap(), self.uniform.desc.as_ref().unwrap().set.as_ref().unwrap()],
                     &[],
                 ); //TODO
 
                 {
                     let mut encoder = cmd_buffer.begin_render_pass_inline(
-                        &*self.render_pass.render_pass,
+                        self.render_pass.render_pass.as_ref().unwrap(),
                         framebuffer,
                         self.viewport.rect,
                         &[command::ClearValue::Color(command::ClearColor::Float([
@@ -544,7 +546,7 @@ where
             self.device.borrow_mut().queues.queues[0].submit(submission, Some(framebuffer_fence));
 
             // present frame
-            if let Err(_) = self.swapchain.swapchain.present(
+            if let Err(_) = self.swapchain.as_ref().unwrap().swapchain.as_ref().unwrap().present(
                 &mut self.device.borrow_mut().queues.queues[0],
                 frame,
                 Some(&*image_present),
@@ -564,18 +566,18 @@ where
         self.device
             .borrow()
             .device
-            .destroy_descriptor_pool(Takeable::take(&mut self.img_desc_pool));
+            .destroy_descriptor_pool(self.img_desc_pool.take().unwrap());
         self.device
             .borrow()
             .device
-            .destroy_descriptor_pool(Takeable::take(&mut self.uniform_desc_pool));
-        Takeable::take(&mut self.swapchain);
+            .destroy_descriptor_pool(self.uniform_desc_pool.take().unwrap());
+        self.swapchain.take();
     }
 }
 
 struct WindowState {
     events_loop: winit::EventsLoop,
-    wb: Takeable<winit::WindowBuilder>,
+    wb: Option<winit::WindowBuilder>,
 }
 
 impl WindowState {
@@ -591,7 +593,7 @@ impl WindowState {
 
         WindowState {
             events_loop,
-            wb: Takeable::new(wb),
+            wb: Some(wb),
         }
     }
 }
@@ -605,7 +607,7 @@ struct BackendState<B: Backend> {
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
 fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend>, back::Instance) {
-    let window = Takeable::take(&mut window_state.wb)
+    let window = window_state.wb.take().unwrap()
         .build(&window_state.events_loop)
         .unwrap();
     let instance = back::Instance::create("gfx-rs quad", 1);
@@ -632,7 +634,7 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
             )
             .with_vsync(true);
         back::glutin::GlWindow::new(
-            Takeable::take(&mut window_state.wb),
+            window_state.wb.take().unwrap(),
             builder,
             &window_state.events_loop,
         ).unwrap()
@@ -650,7 +652,7 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
 }
 
 struct AdapterState<B: Backend> {
-    adapter: Takeable<Adapter<B>>,
+    adapter: Option<Adapter<B>>,
     memory_types: Vec<MemoryType>,
     limits: Limits,
 }
@@ -672,7 +674,7 @@ impl<B: Backend> AdapterState<B> {
         println!("{:?}", limits);
 
         AdapterState {
-            adapter: Takeable::new(adapter),
+            adapter: Some(adapter),
             memory_types,
             limits,
         }
@@ -698,7 +700,7 @@ impl<B: Backend> DeviceState<B> {
 struct RenderPassState<B: Backend>
 where
     B::Surface: SurfaceTrait {
-    render_pass: Takeable<B::RenderPass>,
+    render_pass: Option<B::RenderPass>,
     device: Rc<RefCell<DeviceState<B>>>,
 }
 
@@ -741,7 +743,7 @@ where
         };
 
         RenderPassState {
-            render_pass: Takeable::new(render_pass),
+            render_pass: Some(render_pass),
             device,
         }
     }
@@ -752,20 +754,20 @@ where
     B::Surface: SurfaceTrait {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
-        device.destroy_render_pass(Takeable::take(&mut self.render_pass));
+        device.destroy_render_pass(self.render_pass.take().unwrap());
     }
 }
 
 struct BufferState<B: Backend> {
-    memory: Takeable<B::Memory>,
-    buffer: Takeable<B::Buffer>,
+    memory: Option<B::Memory>,
+    buffer: Option<B::Buffer>,
     device: Rc<RefCell<DeviceState<B>>>,
     size: u64,
 }
 
 impl<B: Backend> BufferState<B> {
     fn get_buffer(&self) -> &B::Buffer {
-        &self.buffer
+        self.buffer.as_ref().unwrap()
     }
 
     fn new<T>(
@@ -813,8 +815,8 @@ impl<B: Backend> BufferState<B> {
         }
 
         BufferState {
-            memory: Takeable::new(memory),
-            buffer: Takeable::new(buffer),
+            memory: Some(memory),
+            buffer: Some(buffer),
             device: device_ptr,
             size: upload_size,
         }
@@ -832,7 +834,7 @@ impl<B: Backend> BufferState<B> {
         assert!(offset + upload_size <= self.size);
 
         let mut data_target = device
-            .acquire_mapping_writer::<T>(&self.memory, offset..offset + upload_size)
+            .acquire_mapping_writer::<T>(self.memory.as_ref().unwrap(), offset..offset + upload_size)
             .unwrap();
         data_target.copy_from_slice(data_source);
         device.release_mapping_writer(data_target);
@@ -895,8 +897,8 @@ impl<B: Backend> BufferState<B> {
 
         (
             BufferState {
-                memory: Takeable::new(memory),
-                buffer: Takeable::new(buffer),
+                memory: Some(memory),
+                buffer: Some(buffer),
                 device: device_ptr,
                 size: upload_size,
             },
@@ -910,14 +912,14 @@ impl<B: Backend> BufferState<B> {
 impl<B: Backend> Drop for BufferState<B> {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
-        device.destroy_buffer(Takeable::take(&mut self.buffer));
-        device.free_memory(Takeable::take(&mut self.memory));
+        device.destroy_buffer(self.buffer.take().unwrap());
+        device.free_memory(self.memory.take().unwrap());
     }
 }
 
 struct Uniform<B: Backend> {
-    buffer: Takeable<BufferState<B>>,
-    desc: Takeable<DescSet<B>>,
+    buffer: Option<BufferState<B>>,
+    desc: Option<DescSet<B>>,
 }
 
 impl<B: Backend> Uniform<B> {
@@ -937,37 +939,30 @@ impl<B: Backend> Uniform<B> {
             buffer::Usage::UNIFORM,
             memory_types,
         );
-        let buffer = Takeable::new(buffer);
+        let buffer = Some(buffer);
 
         desc.write_to_state(
             vec![DescSetWrite {
                 binding,
                 array_offset: 0,
-                descriptors: Some(pso::Descriptor::Buffer(buffer.get_buffer(), None..None)),
+                descriptors: Some(pso::Descriptor::Buffer(buffer.as_ref().unwrap().get_buffer(), None..None)),
             }],
             &mut device.borrow_mut().device,
         );
 
         Uniform {
             buffer,
-            desc: Takeable::new(desc),
+            desc: Some(desc),
         }
     }
 
     fn get_layout(&self) -> &B::DescriptorSetLayout {
-        self.desc.get_layout()
-    }
-}
-
-impl<B: Backend> Drop for Uniform<B> {
-    fn drop(&mut self) {
-        Takeable::take(&mut self.desc);
-        Takeable::take(&mut self.buffer);
+        self.desc.as_ref().unwrap().get_layout()
     }
 }
 
 struct DescSetLayout<B: Backend> {
-    layout: Takeable<B::DescriptorSetLayout>,
+    layout: Option<B::DescriptorSetLayout>,
     device: Rc<RefCell<DeviceState<B>>>,
 }
 
@@ -982,16 +977,16 @@ impl<B: Backend> DescSetLayout<B> {
             .create_descriptor_set_layout(bindings, &[]);
 
         DescSetLayout {
-            layout: Takeable::new(desc_set_layout),
+            layout: Some(desc_set_layout),
             device,
         }
     }
 
     fn create_desc_set(self, desc_pool: &mut B::DescriptorPool) -> DescSet<B> {
-        let desc_set = desc_pool.allocate_set(&*self.layout).unwrap();
+        let desc_set = desc_pool.allocate_set(self.layout.as_ref().unwrap()).unwrap();
         DescSet {
             layout: self,
-            set: Takeable::new(desc_set),
+            set: Some(desc_set),
         }
     }
 }
@@ -999,12 +994,12 @@ impl<B: Backend> DescSetLayout<B> {
 impl<B: Backend> Drop for DescSetLayout<B> {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
-        device.destroy_descriptor_set_layout(Takeable::take(&mut self.layout));
+        device.destroy_descriptor_set_layout(self.layout.take().unwrap());
     }
 }
 
 struct DescSet<B: Backend> {
-    set: Takeable<B::DescriptorSet>,
+    set: Option<B::DescriptorSet>,
     layout: DescSetLayout<B>,
 }
 
@@ -1023,7 +1018,7 @@ impl<B: Backend> DescSet<B> {
         W: IntoIterator,
         W::Item: std::borrow::Borrow<pso::Descriptor<'a, B>>,
     {
-        let set = &*self.set;
+        let set = self.set.as_ref().unwrap();
         let write: Vec<_> = write
             .into_iter()
             .map(|d| pso::DescriptorSetWrite {
@@ -1037,18 +1032,18 @@ impl<B: Backend> DescSet<B> {
     }
 
     fn get_layout(&self) -> &B::DescriptorSetLayout {
-        &*self.layout.layout
+        self.layout.layout.as_ref().unwrap()
     }
 }
 
 struct ImageState<B: Backend> {
     desc: DescSet<B>,
-    buffer: Takeable<BufferState<B>>,
-    sampler: Takeable<B::Sampler>,
-    image_view: Takeable<B::ImageView>,
-    image: Takeable<B::Image>,
-    memory: Takeable<B::Memory>,
-    transfered_image_fence: Takeable<B::Fence>,
+    buffer: Option<BufferState<B>>,
+    sampler: Option<B::Sampler>,
+    image_view: Option<B::ImageView>,
+    image: Option<B::Image>,
+    memory: Option<B::Memory>,
+    transfered_image_fence: Option<B::Fence>,
 }
 
 impl<B: Backend> ImageState<B> {
@@ -1068,7 +1063,7 @@ impl<B: Backend> ImageState<B> {
             usage,
         );
 
-        let buffer = Takeable::new(buffer);
+        let buffer = Some(buffer);
         let device = &mut device_state.device;
 
         let kind = i::Kind::D2(dims.width as i::Size, dims.height as i::Size, 1, 1);
@@ -1148,7 +1143,7 @@ impl<B: Backend> ImageState<B> {
                 );
 
                 cmd_buffer.copy_buffer_to_image(
-                    buffer.get_buffer(),
+                    buffer.as_ref().unwrap().get_buffer(),
                     &image,
                     i::Layout::TransferDstOptimal,
                     &[command::BufferImageCopy {
@@ -1191,17 +1186,17 @@ impl<B: Backend> ImageState<B> {
         ImageState {
             desc: desc,
             buffer: buffer,
-            sampler: Takeable::new(sampler),
-            image_view: Takeable::new(image_view),
-            image: Takeable::new(image),
-            memory: Takeable::new(memory),
-            transfered_image_fence: Takeable::new(transfered_image_fence),
+            sampler: Some(sampler),
+            image_view: Some(image_view),
+            image: Some(image),
+            memory: Some(memory),
+            transfered_image_fence: Some(transfered_image_fence),
         }
     }
 
     fn wait_for_transfer_completion(&self) {
         let device = &self.desc.layout.device.borrow().device;
-        device.wait_for_fence(&*self.transfered_image_fence, !0);
+        device.wait_for_fence(self.transfered_image_fence.as_ref().unwrap(), !0);
     }
 
     fn get_layout(&self) -> &B::DescriptorSetLayout {
@@ -1214,23 +1209,23 @@ impl<B: Backend> Drop for ImageState<B> {
         {
             let device = &self.desc.layout.device.borrow().device;
 
-            let fence = Takeable::take(&mut self.transfered_image_fence);
+            let fence = self.transfered_image_fence.take().unwrap();
             device.wait_for_fence(&fence, !0);
             device.destroy_fence(fence);
 
-            device.destroy_sampler(Takeable::take(&mut self.sampler));
-            device.destroy_image_view(Takeable::take(&mut self.image_view));
-            device.destroy_image(Takeable::take(&mut self.image));
-            device.free_memory(Takeable::take(&mut self.memory));
+            device.destroy_sampler(self.sampler.take().unwrap());
+            device.destroy_image_view(self.image_view.take().unwrap());
+            device.destroy_image(self.image.take().unwrap());
+            device.free_memory(self.memory.take().unwrap());
         }
 
-        Takeable::take(&mut self.buffer);
+        self.buffer.take().unwrap();
     }
 }
 
 struct PipelineState<B: Backend> {
-    pipeline: Takeable<B::GraphicsPipeline>,
-    pipeline_layout: Takeable<B::PipelineLayout>,
+    pipeline: Option<B::GraphicsPipeline>,
+    pipeline_layout: Option<B::PipelineLayout>,
     device: Rc<RefCell<DeviceState<B>>>,
 }
 
@@ -1342,8 +1337,8 @@ impl<B: Backend> PipelineState<B> {
         };
 
         PipelineState {
-            pipeline: Takeable::new(pipeline),
-            pipeline_layout: Takeable::new(pipeline_layout),
+            pipeline: Some(pipeline),
+            pipeline_layout: Some(pipeline_layout),
             device: Rc::clone(&device_ptr),
         }
     }
@@ -1352,16 +1347,16 @@ impl<B: Backend> PipelineState<B> {
 impl<B: Backend> Drop for PipelineState<B> {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
-        device.destroy_graphics_pipeline(Takeable::take(&mut self.pipeline));
-        device.destroy_pipeline_layout(Takeable::take(&mut self.pipeline_layout));
+        device.destroy_graphics_pipeline(self.pipeline.take().unwrap());
+        device.destroy_pipeline_layout(self.pipeline_layout.take().unwrap());
     }
 }
 
 struct SwapchainState<B: Backend>
 where
     B::Surface: SurfaceTrait {
-    swapchain: Takeable<B::Swapchain>,
-    backbuffer: Takeable<Backbuffer<B>>,
+    swapchain: Option<B::Swapchain>,
+    backbuffer: Option<Backbuffer<B>>,
     device: Rc<RefCell<DeviceState<B>>>,
     extent: hal::window::Extent2D,
     format: f::Format,
@@ -1417,8 +1412,8 @@ where
         );
 
         let swapchain = SwapchainState {
-            swapchain: Takeable::new(swapchain),
-            backbuffer: Takeable::new(backbuffer),
+            swapchain: Some(swapchain),
+            backbuffer: Some(backbuffer),
             device,
             extent,
             format,
@@ -1434,19 +1429,19 @@ where
         self.device
             .borrow()
             .device
-            .destroy_swapchain(Takeable::take(&mut self.swapchain));
+            .destroy_swapchain(self.swapchain.take().unwrap());
     }
 }
 
 struct FramebufferState<B: Backend>
 where
     B::Surface: SurfaceTrait {
-    framebuffers: Takeable<Vec<B::Framebuffer>>,
-    framebuffer_fences: Takeable<Vec<B::Fence>>,
-    command_pools: Takeable<Vec<hal::CommandPool<B, hal::Graphics>>>,
-    frame_images: Takeable<Vec<(B::Image, B::ImageView)>>,
-    acquire_semaphores: Takeable<Vec<B::Semaphore>>,
-    present_semaphores: Takeable<Vec<B::Semaphore>>,
+    framebuffers: Option<Vec<B::Framebuffer>>,
+    framebuffer_fences: Option<Vec<B::Fence>>,
+    command_pools: Option<Vec<hal::CommandPool<B, hal::Graphics>>>,
+    frame_images: Option<Vec<(B::Image, B::ImageView)>>,
+    acquire_semaphores: Option<Vec<B::Semaphore>>,
+    present_semaphores: Option<Vec<B::Semaphore>>,
     last_ref: usize,
     device: Rc<RefCell<DeviceState<B>>>,
 }
@@ -1459,7 +1454,7 @@ where
         render_pass: &RenderPassState<B>,
         swapchain: &mut SwapchainState<B>,
     ) -> Self {
-        let (frame_images, framebuffers) = match Takeable::take(&mut swapchain.backbuffer) {
+        let (frame_images, framebuffers) = match swapchain.backbuffer.take().unwrap() {
             Backbuffer::Images(images) => {
                 let extent = i::Extent {
                     width: swapchain.extent.width as _,
@@ -1489,7 +1484,7 @@ where
                         device
                             .borrow()
                             .device
-                            .create_framebuffer(&*render_pass.render_pass, Some(rtv), extent)
+                            .create_framebuffer(render_pass.render_pass.as_ref().unwrap(), Some(rtv), extent)
                             .unwrap()
                     })
                     .collect();
@@ -1522,19 +1517,19 @@ where
         }
 
         FramebufferState {
-            frame_images: Takeable::new(frame_images),
-            framebuffers: Takeable::new(framebuffers),
-            framebuffer_fences: Takeable::new(fences),
-            command_pools: Takeable::new(command_pools),
-            present_semaphores: Takeable::new(present_semaphores),
-            acquire_semaphores: Takeable::new(acquire_semaphores),
+            frame_images: Some(frame_images),
+            framebuffers: Some(framebuffers),
+            framebuffer_fences: Some(fences),
+            command_pools: Some(command_pools),
+            present_semaphores: Some(present_semaphores),
+            acquire_semaphores: Some(acquire_semaphores),
             device,
             last_ref: 0,
         }
     }
 
     fn next_acq_pre_pair_index(&mut self) -> usize {
-        if self.last_ref >= self.acquire_semaphores.len() {
+        if self.last_ref >= self.acquire_semaphores.as_ref().unwrap().len() {
             self.last_ref = 0
         }
 
@@ -1558,17 +1553,17 @@ where
         (
             if let Some(fid) = frame_id {
                 Some((
-                    &mut self.framebuffer_fences[fid],
-                    &mut self.framebuffers[fid],
-                    &mut self.command_pools[fid],
+                    &mut self.framebuffer_fences.as_mut().unwrap()[fid],
+                    &mut self.framebuffers.as_mut().unwrap()[fid],
+                    &mut self.command_pools.as_mut().unwrap()[fid],
                 ))
             } else {
                 None
             },
             if let Some(sid) = sem_index {
                 Some((
-                    &mut self.acquire_semaphores[sid],
-                    &mut self.present_semaphores[sid],
+                    &mut self.acquire_semaphores.as_mut().unwrap()[sid],
+                    &mut self.present_semaphores.as_mut().unwrap()[sid],
                 ))
             } else {
                 None
@@ -1583,28 +1578,28 @@ where
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
 
-        for fence in Takeable::take(&mut self.framebuffer_fences) {
+        for fence in self.framebuffer_fences.take().unwrap() {
             device.wait_for_fence(&fence, !0);
             device.destroy_fence(fence);
         }
 
-        for command_pool in Takeable::take(&mut self.command_pools) {
+        for command_pool in self.command_pools.take().unwrap() {
             device.destroy_command_pool(command_pool.into_raw());
         }
 
-        for acquire_semaphore in Takeable::take(&mut self.acquire_semaphores) {
+        for acquire_semaphore in self.acquire_semaphores.take().unwrap() {
             device.destroy_semaphore(acquire_semaphore);
         }
 
-        for present_semaphore in Takeable::take(&mut self.present_semaphores) {
+        for present_semaphore in self.present_semaphores.take().unwrap() {
             device.destroy_semaphore(present_semaphore);
         }
 
-        for framebuffer in Takeable::take(&mut self.framebuffers) {
+        for framebuffer in self.framebuffers.take().unwrap() {
             device.destroy_framebuffer(framebuffer);
         }
 
-        for (_, rtv) in Takeable::take(&mut self.frame_images) {
+        for (_, rtv) in self.frame_images.take().unwrap() {
             device.destroy_image_view(rtv);
         }
     }
