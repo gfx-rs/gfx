@@ -1,8 +1,9 @@
 use {Backend, BufferPtr, SamplerPtr, TexturePtr};
 use internal::Channel;
-use lock::{Condvar, Mutex, RwLock};
+use range_alloc::RangeAllocator;
 use window::SwapchainImage;
 
+use std::cell::RefCell;
 use std::fmt;
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
@@ -13,12 +14,11 @@ use hal::backend::FastHashMap;
 use hal::format::{Aspects, Format, FormatDesc};
 
 use cocoa::foundation::{NSUInteger};
+use foreign_types::ForeignType;
 use metal;
+use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
 use spirv_cross::{msl, spirv};
-use foreign_types::ForeignType;
-
-use range_alloc::RangeAllocator;
 
 
 pub type EntryPointMap = FastHashMap<String, spirv::EntryPoint>;
@@ -609,12 +609,17 @@ unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}
 
 #[derive(Debug)]
-pub struct FenceInner {
-    pub(crate) mutex: Mutex<bool>,
-    pub(crate) condvar: Condvar,
+pub enum FenceInner {
+    Idle { signaled: bool },
+    Pending(metal::CommandBuffer),
 }
 
-pub type Fence = Arc<FenceInner>;
+#[derive(Debug)]
+pub struct Fence(pub(crate) RefCell<FenceInner>);
+
+unsafe impl Send for Fence {}
+unsafe impl Sync for Fence {}
+
 
 extern "C" {
     fn dispatch_semaphore_wait(

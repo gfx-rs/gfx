@@ -4,7 +4,6 @@ use {
 };
 use {conversions as conv, native, soft, window};
 use internal::{BlitVertex, Channel, ClearKey, ClearVertex};
-use lock::Mutex;
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -22,10 +21,11 @@ use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
 
+use block::ConcreteBlock;
+use cocoa::foundation::{NSUInteger, NSInteger, NSRange};
 use foreign_types::{ForeignType, ForeignTypeRef};
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize};
-use cocoa::foundation::{NSUInteger, NSInteger, NSRange};
-use block::{ConcreteBlock};
+use parking_lot::Mutex;
 use smallvec::SmallVec;
 
 
@@ -589,16 +589,78 @@ impl StageResources {
     }
 }
 
+#[derive(Debug, Default)]
+struct Journal {
+    passes: Vec<(soft::Pass, Range<usize>)>,
+    render_commands: Vec<soft::RenderCommand<soft::Own>>,
+    compute_commands: Vec<soft::ComputeCommand<soft::Own>>,
+    blit_commands: Vec<soft::BlitCommand<soft::Own>>,
+}
+
+impl Journal {
+    fn clear(&mut self) {
+        self.passes.clear();
+        self.render_commands.clear();
+        self.compute_commands.clear();
+        self.blit_commands.clear();
+    }
+
+    fn stop(&mut self) {
+        match self.passes.last_mut() {
+            None => {}
+            Some(&mut (soft::Pass::Render(_), ref mut range)) => {
+                range.end = self.render_commands.len();
+            }
+            Some(&mut (soft::Pass::Compute, ref mut range)) => {
+                range.end = self.compute_commands.len();
+            }
+            Some(&mut (soft::Pass::Blit, ref mut range)) => {
+                range.end = self.blit_commands.len();
+            }
+        };
+    }
+
+    fn record(&self, command_buf: &metal::CommandBufferRef) {
+        let _ap = AutoreleasePool::new(); // for encoder creation
+        for (ref pass, ref range) in &self.passes {
+            match *pass {
+                soft::Pass::Render(ref desc) => {
+                    let encoder = command_buf.new_render_command_encoder(desc);
+                    for command in &self.render_commands[range.clone()] {
+                        exec_render(&encoder, command.as_ref());
+                    }
+                    encoder.end_encoding();
+                }
+                soft::Pass::Blit => {
+                    let encoder = command_buf.new_blit_command_encoder();
+                    for command in &self.blit_commands[range.clone()] {
+                        exec_blit(&encoder, command.as_ref());
+                    }
+                    encoder.end_encoding();
+                }
+                soft::Pass::Compute => {
+                    let encoder = command_buf.new_compute_command_encoder();
+                    for command in &self.compute_commands[range.clone()] {
+                        exec_compute(&encoder, command.as_ref());
+                    }
+                    encoder.end_encoding();
+                }
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 enum CommandSink {
     Immediate {
         cmd_buffer: metal::CommandBuffer,
         token: Token,
         encoder_state: EncoderState,
+        num_passes: usize,
     },
     Deferred {
-        passes: Vec<soft::Pass>,
         is_encoding: bool,
+        journal: Journal,
     },
 }
 
@@ -658,9 +720,9 @@ impl CommandSink {
             CommandSink::Immediate { encoder_state: EncoderState::Render(ref encoder), .. } => {
                 PreRender::Immediate(encoder)
             }
-            CommandSink::Deferred { ref mut passes, is_encoding: true } => {
-                match passes.last_mut() {
-                    Some(&mut soft::Pass::Render { commands: ref mut list, .. }) => PreRender::Deferred(list),
+            CommandSink::Deferred { is_encoding: true, ref mut journal } => {
+                match journal.passes.last() {
+                    Some(&(soft::Pass::Render(_), _)) => PreRender::Deferred(&mut journal.render_commands),
                     _ => PreRender::Void,
                 }
             }
@@ -684,13 +746,13 @@ impl CommandSink {
                     _ => panic!("Expected to be in render encoding state!")
                 }
             }
-            CommandSink::Deferred { ref mut passes, is_encoding } => {
+            CommandSink::Deferred { is_encoding, ref mut journal } => {
                 assert!(is_encoding);
-                match passes.last_mut() {
-                    Some(&mut soft::Pass::Render { commands: ref mut list, .. }) => {
-                        list.extend(commands.into_iter().map(soft::RenderCommand::own));
+                match journal.passes.last() {
+                    Some(&(soft::Pass::Render(_), _)) => {
+                        journal.render_commands.extend(commands.into_iter().map(soft::RenderCommand::own));
                     }
-                    _ => panic!("Active pass is not a render pass")
+                    other => panic!("Active pass is not a render pass: {:?}", other),
                 }
             }
         }
@@ -703,7 +765,7 @@ impl CommandSink {
         I: Iterator<Item = soft::BlitCommand<&'a soft::Own>>,
     {
         match *self {
-            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
                 let current = match mem::replace(encoder_state, EncoderState::None) {
                     EncoderState::None => None,
                     EncoderState::Render(enc) => {
@@ -716,9 +778,13 @@ impl CommandSink {
                         None
                     },
                 };
-                let encoder = current.unwrap_or_else(|| {
-                    cmd_buffer.new_blit_command_encoder().to_owned()
-                });
+                let encoder = match current {
+                    Some(enc) => enc,
+                    None => {
+                        *num_passes += 1;
+                        cmd_buffer.new_blit_command_encoder().to_owned()
+                    },
+                };
 
                 for command in commands {
                     exec_blit(&encoder, command);
@@ -726,13 +792,14 @@ impl CommandSink {
 
                 *encoder_state = EncoderState::Blit(encoder);
             }
-            CommandSink::Deferred { ref mut passes, .. } => {
-                let owned_commands = commands.into_iter().map(soft::BlitCommand::own);
-                if let Some(&mut soft::Pass::Blit(ref mut list)) = passes.last_mut() {
-                    list.extend(owned_commands);
-                    return;
+            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
+                *is_encoding = true;
+                if let Some(&(soft::Pass::Blit, _)) = journal.passes.last() {
+                } else {
+                    journal.stop();
+                    journal.passes.push((soft::Pass::Blit, journal.blit_commands.len() .. 0));
                 }
-                passes.push(soft::Pass::Blit(owned_commands.collect()));
+                journal.blit_commands.extend(commands.into_iter().map(soft::BlitCommand::own));
             }
         }
     }
@@ -744,9 +811,9 @@ impl CommandSink {
             CommandSink::Immediate { encoder_state: EncoderState::Compute(ref encoder), .. } => {
                 PreCompute::Immediate(encoder)
             }
-            CommandSink::Deferred { ref mut passes, is_encoding: true } => {
-                match passes.last_mut() {
-                    Some(&mut soft::Pass::Compute(ref mut list)) => PreCompute::Deferred(list),
+            CommandSink::Deferred { is_encoding: true, ref mut journal } => {
+                match journal.passes.last() {
+                    Some(&(soft::Pass::Compute, _)) => PreCompute::Deferred(&mut journal.compute_commands),
                     _ => PreCompute::Void,
                 }
             }
@@ -770,13 +837,14 @@ impl CommandSink {
                     _ => panic!("Expected to be in compute pass"),
                 }
             }
-            CommandSink::Deferred { ref mut passes, .. } => {
-                let owned_commands = commands.into_iter().map(soft::ComputeCommand::own);
-                if let Some(&mut soft::Pass::Compute(ref mut list)) = passes.last_mut() {
-                    list.extend(owned_commands);
-                    return;
+            CommandSink::Deferred { is_encoding, ref mut journal } => {
+                assert!(is_encoding);
+                match journal.passes.last() {
+                    Some(&(soft::Pass::Compute, _)) => {
+                        journal.compute_commands.extend(commands.into_iter().map(soft::ComputeCommand::own));
+                    }
+                    other => panic!("Active pass is not a compute pass: {:?}", other),
                 }
-                passes.push(soft::Pass::Compute(owned_commands.collect()));
             }
         }
     }
@@ -786,8 +854,9 @@ impl CommandSink {
             CommandSink::Immediate { ref mut encoder_state, .. } => {
                 encoder_state.end();
             }
-            CommandSink::Deferred { ref mut is_encoding, .. } => {
+            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
                 *is_encoding = false;
+                journal.stop();
             }
         }
     }
@@ -804,7 +873,8 @@ impl CommandSink {
         self.stop_encoding();
 
         match *self {
-            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
+                *num_passes += 1;
                 let encoder = cmd_buffer.new_render_command_encoder(descriptor);
                 for command in init_commands {
                     exec_render(encoder, command);
@@ -819,21 +889,21 @@ impl CommandSink {
                     }
                 }
             }
-            CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
-                *is_encoding = match door {
-                    PassDoor::Open => true,
-                    PassDoor::Closed {..} => false,
-                };
-                passes.push(soft::Pass::Render {
-                    //Note: the original descriptor belongs to the framebuffer,
-                    // and will me mutated afterwards.
-                    desc: unsafe {
-                        let desc: metal::RenderPassDescriptor = msg_send![descriptor, copy];
-                        msg_send![desc.as_ptr(), retain];
-                        desc
-                    },
-                    commands: init_commands.map(soft::RenderCommand::own).collect(),
+            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
+                //Note: the original descriptor belongs to the framebuffer,
+                // and will me mutated afterwards.
+                let pass = soft::Pass::Render( unsafe {
+                    let desc: metal::RenderPassDescriptor = msg_send![descriptor, copy];
+                    msg_send![desc.as_ptr(), retain];
+                    desc
                 });
+                let mut range = journal.render_commands.len() .. 0;
+                journal.render_commands.extend(init_commands.map(soft::RenderCommand::own));
+                match door {
+                    PassDoor::Open => *is_encoding = true,
+                    PassDoor::Closed {..} => range.end = journal.render_commands.len(),
+                }
+                journal.passes.push((pass, range))
             }
         }
     }
@@ -848,8 +918,9 @@ impl CommandSink {
         self.stop_encoding();
 
         match *self {
-            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, .. } => {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
                 let _ap = AutoreleasePool::new();
+                *num_passes += 1;
                 let encoder = cmd_buffer.new_compute_command_encoder();
                 for command in init_commands {
                     exec_compute(encoder, command);
@@ -864,14 +935,14 @@ impl CommandSink {
                     }
                 }
             }
-            CommandSink::Deferred { ref mut passes, ref mut is_encoding } => {
-                *is_encoding = match door {
-                    PassDoor::Open => true,
-                    PassDoor::Closed {..} => false,
+            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
+                let mut range = journal.compute_commands.len() .. 0;
+                journal.compute_commands.extend(init_commands.map(soft::ComputeCommand::own));
+                match door {
+                    PassDoor::Open => *is_encoding = true,
+                    PassDoor::Closed {..} => range.end = journal.compute_commands.len(),
                 };
-                passes.push(soft::Pass::Compute(
-                    init_commands.map(soft::ComputeCommand::own).collect(),
-                ));
+                journal.passes.push((soft::Pass::Compute, range))
             }
         }
     }
@@ -886,6 +957,7 @@ pub struct IndexBuffer<B> {
 
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
+    backup_journal: Option<Journal>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
 }
@@ -899,11 +971,20 @@ impl Drop for CommandBufferInner {
 }
 
 impl CommandBufferInner {
-    pub(crate) fn reset(&mut self, shared: &Shared) {
-        if let Some(CommandSink::Immediate { token, mut encoder_state, .. }) = self.sink.take() {
-            encoder_state.end();
-            shared.queue.lock().release(token);
-        }
+    pub(crate) fn reset(&mut self, shared: &Shared, release: bool) {
+        match self.sink.take() {
+            Some(CommandSink::Immediate { token, mut encoder_state, .. }) => {
+                encoder_state.end();
+                shared.queue.lock().release(token);
+            }
+            Some(CommandSink::Deferred { mut journal, .. }) => {
+                if !release {
+                    journal.clear();
+                    self.backup_journal = Some(journal);
+                }
+            }
+            None => {}
+        };
         self.retained_buffers.clear();
         self.retained_textures.clear();
     }
@@ -1208,35 +1289,6 @@ fn exec_compute<'a>(encoder: &metal::ComputeCommandEncoderRef, command: soft::Co
     }
 }
 
-fn record_commands(command_buf: &metal::CommandBufferRef, passes: &[soft::Pass]) {
-    let _ap = AutoreleasePool::new(); // for encoder creation
-    for pass in passes {
-        match *pass {
-            soft::Pass::Render { ref desc, ref commands } => {
-                let encoder = command_buf.new_render_command_encoder(desc);
-                for command in commands {
-                    exec_render(&encoder, command.as_ref());
-                }
-                encoder.end_encoding();
-            }
-            soft::Pass::Blit(ref commands) => {
-                let encoder = command_buf.new_blit_command_encoder();
-                for command in commands {
-                    exec_blit(&encoder, command.as_ref());
-                }
-                encoder.end_encoding();
-            }
-            soft::Pass::Compute(ref commands) => {
-                let encoder = command_buf.new_compute_command_encoder();
-                for command in commands {
-                    exec_compute(&encoder, command.as_ref());
-                }
-                encoder.end_encoding();
-            }
-        }
-    }
-}
-
 /// This is a hack around Metal System Trace logic that ignores empty command buffers entirely.
 fn record_empty(command_buf: &metal::CommandBufferRef) {
     command_buf.new_blit_command_encoder().end_encoding();
@@ -1314,6 +1366,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         let queue = self.shared.queue.lock();
         let (mut num_immediate, mut num_deferred) = (0, 0);
+        let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
 
         for buffer in submit.cmd_buffers {
             let mut inner = buffer.borrow().inner.borrow_mut();
@@ -1321,24 +1374,38 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 ref sink,
                 ref mut retained_buffers,
                 ref mut retained_textures,
+                ..
             } = *inner;
 
             match *sink {
-                Some(CommandSink::Immediate { ref cmd_buffer, ref token, .. }) => {
+                Some(CommandSink::Immediate { ref cmd_buffer, ref token, num_passes, .. }) => {
                     num_immediate += 1;
-                    trace!("\timmediate {:?}", token);
+                    trace!("\timmediate {:?} with {} passes", token, num_passes);
                     self.retained_buffers.extend(retained_buffers.drain(..));
                     self.retained_textures.extend(retained_textures.drain(..));
-                    cmd_buffer.commit();
+                    if num_passes != 0 {
+                        // flush the deferred recording, if any
+                        if let Some(cb) = deferred_cmd_buffer.take() {
+                            cb.commit();
+                        }
+                        cmd_buffer.commit();
+                    }
                 }
-                Some(CommandSink::Deferred { ref passes, .. }) => {
+                Some(CommandSink::Deferred { ref journal, .. }) => {
                     num_deferred += 1;
-                    trace!("\tdeferred with {} passes", passes.len());
-                    let cmd_buffer = queue.spawn_temp();
-                    cmd_buffer.enqueue();
-                    cmd_buffer.set_label("deferred");
-                    record_commands(&*cmd_buffer, passes);
-                    cmd_buffer.commit();
+                    trace!("\tdeferred with {} passes", journal.passes.len());
+                    if !journal.passes.is_empty() {
+                        let cmd_buffer = deferred_cmd_buffer
+                            .take()
+                            .unwrap_or_else(|| {
+                                let cmd_buffer = queue.spawn_temp();
+                                cmd_buffer.enqueue();
+                                cmd_buffer.set_label("deferred");
+                                cmd_buffer
+                            });
+                        journal.record(&*cmd_buffer);
+                        deferred_cmd_buffer = Some(cmd_buffer);
+                    }
                  }
                  _ => panic!("Command buffer not recorded for submission")
             }
@@ -1358,10 +1425,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             })
             .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
 
-        // Note: completion handlers can stall the GPU, so we only make one
-        // when strictly required, and collect the retained resources otherwise.
         if fence.is_some() || !system_semaphores.is_empty() {
-            let moved_fence = fence.map(Arc::clone);
             let free_buffers = self.retained_buffers
                 .drain(..)
                 .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
@@ -1370,11 +1434,6 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
 
             let block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                // release the fence
-                if let Some(ref f) = moved_fence {
-                    *f.mutex.lock() = true;
-                    f.condvar.notify_all();
-                }
                 // signal the semaphores
                 for semaphore in &system_semaphores {
                     semaphore.signal();
@@ -1387,10 +1446,21 @@ impl RawCommandQueue<Backend> for CommandQueue {
             if let Some(ref mut counters) = self.perf_counters {
                 counters.signal_command_buffers += 1;
             }
-            let cmd_buffer = queue.spawn_temp();
-            cmd_buffer.set_label("signal");
-            record_empty(cmd_buffer);
+            let cmd_buffer = deferred_cmd_buffer
+                .take()
+                .unwrap_or_else(|| {
+                    let cmd_buffer = queue.spawn_temp();
+                    cmd_buffer.set_label("signal");
+                    record_empty(cmd_buffer);
+                    cmd_buffer
+                });
             msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
+            cmd_buffer.commit();
+
+            if let Some(fence) = fence {
+                *fence.0.borrow_mut() = native::FenceInner::Pending(cmd_buffer.to_owned());
+            }
+        } else if let Some(cmd_buffer) = deferred_cmd_buffer {
             cmd_buffer.commit();
         }
     }
@@ -1457,7 +1527,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         for cmd_buffer in &self.allocated {
             cmd_buffer
                 .borrow_mut()
-                .reset(&self.shared);
+                .reset(&self.shared, false);
         }
     }
 
@@ -1470,6 +1540,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
             inner: Arc::new(RefCell::new(CommandBufferInner {
                 sink: None,
+                backup_journal: None,
                 retained_buffers: Vec::new(),
                 retained_textures: Vec::new(),
             })),
@@ -1559,6 +1630,7 @@ impl CommandBuffer {
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self, flags: com::CommandBufferFlags, _info: com::CommandBufferInheritanceInfo<Backend>) {
         self.reset(false);
+        let mut inner = self.inner.borrow_mut();
         //TODO: Implement secondary command buffers
         let sink = if flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
             let (cmd_buffer, token) = self.shared.queue.lock().spawn();
@@ -1566,15 +1638,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 cmd_buffer,
                 token,
                 encoder_state: EncoderState::None,
+                num_passes: 0,
             }
         } else {
             CommandSink::Deferred {
-                passes: Vec::new(),
                 is_encoding: false,
+                journal: inner.backup_journal.take().unwrap_or_default(),
             }
         };
-
-        self.inner.borrow_mut().sink = Some(sink);
+        inner.sink = Some(sink);
         self.state.reset_resources();
     }
 
@@ -1585,11 +1657,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .stop_encoding();
     }
 
-    fn reset(&mut self, _release_resources: bool) {
+    fn reset(&mut self, release_resources: bool) {
         self.state.reset_resources();
         self.inner
             .borrow_mut()
-            .reset(&self.shared);
+            .reset(&self.shared, release_resources);
     }
 
     fn pipeline_barrier<'a, T>(
@@ -2722,10 +2794,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         };
 
                         for (stage, loc, resources) in bind_vs.into_iter().chain(bind_fs) {
+                            let res_override = &pipe_layout.res_overrides[&loc];
                             if sampler_base != sm_range.start {
                                 debug_assert_eq!(sampler_base, sm_range.end);
                                 resources.set_samplers(
-                                    pipe_layout.res_overrides[&loc].sampler_id as usize,
+                                    res_override.sampler_id as usize,
                                     &data.samplers[sm_range.clone()],
                                     |index, sampler| {
                                         pre.issue(soft::RenderCommand::BindSampler { stage, index, sampler });
@@ -2735,7 +2808,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             if texture_base != tx_range.start {
                                 debug_assert_eq!(texture_base, tx_range.end);
                                 resources.set_textures(
-                                    pipe_layout.res_overrides[&loc].texture_id as usize,
+                                    res_override.texture_id as usize,
                                     &data.textures[tx_range.clone()],
                                     |index, texture| {
                                         pre.issue(soft::RenderCommand::BindTexture { stage, index, texture });
@@ -2745,7 +2818,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             if buffer_base != bf_range.start {
                                 debug_assert_eq!(buffer_base, bf_range.end);
                                 let buffers = &data.buffers[bf_range.clone()];
-                                let start = pipe_layout.res_overrides[&loc].buffer_id as usize;
+                                let start = res_override.buffer_id as usize;
                                 let mut dynamic_index = 0;
                                 for (i, bref) in buffers.iter().enumerate() {
                                     let (buffer, offset) = match bref.base {
