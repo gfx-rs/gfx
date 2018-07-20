@@ -2333,6 +2333,7 @@ impl d::Device<B> for Device {
         let descriptor_pools = descriptor_pools.into_iter()
                                                .map(|desc| *desc.borrow())
                                                .collect::<Vec<_>>();
+        
         for desc in &descriptor_pools {
             match desc.ty {
                 pso::DescriptorType::Sampler => {
@@ -2354,10 +2355,14 @@ impl d::Device<B> for Device {
                 .lock()
                 .unwrap();
 
-            let range = heap_srv_cbv_uav
-                .range_allocator
-                .allocate_range(num_srv_cbv_uav as _)
-                .unwrap(); // TODO: error/resize
+            let range = match num_srv_cbv_uav {
+                0 => 0..0,
+                _ => heap_srv_cbv_uav
+                        .range_allocator
+                        .allocate_range(num_srv_cbv_uav as _)
+                        .unwrap(), // TODO: error/resize
+            };
+
             n::DescriptorHeapSlice {
                 heap: heap_srv_cbv_uav.raw.clone(),
                 handle_size: heap_srv_cbv_uav.handle_size as _,
@@ -2366,16 +2371,21 @@ impl d::Device<B> for Device {
             }
         };
 
+
         let heap_sampler = {
             let mut heap_sampler = self
                 .heap_sampler
                 .lock()
                 .unwrap();
 
-            let range = heap_sampler
-                .range_allocator
-                .allocate_range(num_samplers as _)
-                .unwrap(); // TODO: error/resize
+            let range = match num_samplers {
+                0 => 0..0,
+                _ => heap_sampler
+                        .range_allocator
+                        .allocate_range(num_samplers as _)
+                        .unwrap(), // TODO: error/resize
+            };
+
             n::DescriptorHeapSlice {
                 heap: heap_sampler.raw.clone(),
                 handle_size: heap_sampler.handle_size as _,
