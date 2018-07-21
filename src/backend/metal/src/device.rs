@@ -587,10 +587,7 @@ impl hal::Device<Backend> for Device {
     fn create_command_pool(
         &self, _family: QueueFamilyId, _flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
-        command::CommandPool {
-            shared: self.shared.clone(),
-            allocated: Vec::new(),
-        }
+        command::CommandPool::new(&self.shared)
     }
 
     fn destroy_command_pool(&self, mut pool: command::CommandPool) {
