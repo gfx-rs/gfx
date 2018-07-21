@@ -174,15 +174,11 @@ pub struct DescriptorSet {
 pub struct DescriptorPool {}
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets<I>(&mut self, layouts: I) -> Vec<Result<DescriptorSet, pso::AllocationError>>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<DescriptorSetLayout>,
-    {
-        layouts.into_iter().map(|layout| Ok(DescriptorSet {
-            layout: layout.borrow().clone(),
+    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
+        Ok(DescriptorSet {
+            layout: layout.clone(),
             bindings: Arc::new(Mutex::new(Vec::new())),
-        })).collect()
+        })
     }
 
     fn free_sets<I>(&mut self, _descriptor_sets: I)

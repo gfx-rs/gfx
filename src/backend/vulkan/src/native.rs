@@ -95,7 +95,9 @@ pub struct DescriptorPool {
 }
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets<I>(&mut self, layout_iter: I) -> Vec<Result<DescriptorSet, pso::AllocationError>>
+    fn allocate_sets<I>(
+        &mut self, layout_iter: I, output: &mut Vec<DescriptorSet>
+    ) -> Result<(), pso::AllocationError>
     where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSetLayout>,
@@ -117,27 +119,21 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
             p_set_layouts: raw_layouts.as_ptr(),
         };
 
-        let descriptor_sets = unsafe {
-            self.device.0.allocate_descriptor_sets(&info)
-        };
-
-        match descriptor_sets {
-            Ok(sets) => {
-                sets.into_iter()
-                    .zip(layout_bindinds.into_iter())
-                    .map(|(raw, bindings)| {
-                        Ok(DescriptorSet { raw, bindings })
-                    })
-                    .collect()
-            }
-            Err(err) => vec![Err(match err {
+        unsafe { self.device.0.allocate_descriptor_sets(&info) }
+            .map(|sets| {
+                output.extend(sets
+                    .into_iter()
+                    .zip(layout_bindinds)
+                    .map(|(raw, bindings)| DescriptorSet { raw, bindings })
+                )
+            })
+            .map_err(|err| match err {
                 vk::Result::ErrorOutOfHostMemory => pso::AllocationError::OutOfHostMemory,
                 vk::Result::ErrorOutOfDeviceMemory => pso::AllocationError::OutOfDeviceMemory,
                 // TODO: Uncomment when ash updates to include VK_ERROR_OUT_OF_POOL_MEMORY(_KHR)
                 // vk::Result::ErrorOutOfPoolMemory => pso::AllocationError::OutOfPoolMemory,
                 _ => pso::AllocationError::FragmentedPool,
-            })]
-        }
+            })
     }
 
     fn free_sets<I>(&mut self, descriptor_sets: I)
