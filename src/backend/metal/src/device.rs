@@ -629,15 +629,10 @@ impl hal::Device<Backend> for Device {
     {
         use hal::pso::ShaderStageFlags;
 
-        struct Counters {
-            buffers: usize,
-            textures: usize,
-            samplers: usize,
-        }
         let mut stage_infos = [
-            (ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,    Counters { buffers:0, textures:0, samplers:0 }),
-            (ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  Counters { buffers:0, textures:0, samplers:0 }),
-            (ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, Counters { buffers:0, textures:0, samplers:0 }),
+            (ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,    n::ResourceCounters::new()),
+            (ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  n::ResourceCounters::new()),
+            (ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, n::ResourceCounters::new()),
         ];
         let mut res_overrides = n::ResourceOverrideMap::default();
 
@@ -751,8 +746,10 @@ impl hal::Device<Backend> for Device {
         }
 
         n::PipelineLayout {
-            attribute_buffer_index: stage_infos[0].2.buffers as _,
             res_overrides,
+            vs_counters: stage_infos[0].2.clone(),
+            ps_counters: stage_infos[1].2.clone(),
+            cs_counters: stage_infos[2].2.clone(),
         }
     }
 
@@ -765,9 +762,9 @@ impl hal::Device<Backend> for Device {
         let pipeline_layout = &pipeline_desc.layout;
         let pass_descriptor = &pipeline_desc.subpass;
 
-        if pipeline_layout.attribute_buffer_index as usize + pipeline_desc.vertex_buffers.len() > self.private_caps.max_buffers_per_stage {
+        if pipeline_layout.attribute_buffer_index() as usize + pipeline_desc.vertex_buffers.len() > self.private_caps.max_buffers_per_stage {
             let msg = format!("Too many buffers inputs of the vertex stage: {} attributes + {} resources",
-                pipeline_desc.vertex_buffers.len(), pipeline_layout.attribute_buffer_index);
+                pipeline_desc.vertex_buffers.len(), pipeline_layout.attribute_buffer_index());
             return Err(pso::CreationError::Shader(ShaderError::InterfaceMismatch(msg)));
         }
         // FIXME: lots missing
@@ -873,7 +870,7 @@ impl hal::Device<Backend> for Device {
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();
         let mut vertex_buffer_map = n::VertexBufferMap::default();
-        let mut next_buffer_index = pipeline_layout.attribute_buffer_index;
+        let mut next_buffer_index = pipeline_layout.attribute_buffer_index();
         trace!("Vertex attribute remapping started");
 
         for (i, &pso::AttributeDesc { binding, element, ..}) in pipeline_desc.attributes.iter().enumerate() {
@@ -994,7 +991,7 @@ impl hal::Device<Backend> for Device {
                     fs_lib,
                     raw,
                     primitive_type,
-                    attribute_buffer_index: pipeline_layout.attribute_buffer_index,
+                    attribute_buffer_index: pipeline_layout.attribute_buffer_index(),
                     rasterizer_state,
                     depth_bias,
                     depth_stencil_desc: pipeline_desc.depth_stencil.clone(),

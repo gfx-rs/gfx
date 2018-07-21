@@ -82,11 +82,37 @@ unsafe impl Sync for Framebuffer {}
 
 pub type ResourceOverrideMap = FastHashMap<msl::ResourceBindingLocation, msl::ResourceBinding>;
 
+#[derive(Clone, Debug)]
+pub struct ResourceCounters {
+    pub buffers: usize,
+    pub textures: usize,
+    pub samplers: usize,
+}
+
+impl ResourceCounters {
+    pub fn new() -> Self {
+        ResourceCounters {
+            buffers: 0,
+            textures: 0,
+            samplers: 0,
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PipelineLayout {
-    // First vertex buffer index to be used by attributes
-    pub(crate) attribute_buffer_index: u32,
     pub(crate) res_overrides: ResourceOverrideMap,
+    pub(crate) vs_counters: ResourceCounters,
+    pub(crate) ps_counters: ResourceCounters,
+    pub(crate) cs_counters: ResourceCounters,
+}
+
+impl PipelineLayout {
+    /// Get the first vertex buffer index to be used by attributes.
+    #[inline(always)]
+    pub(crate) fn attribute_buffer_index(&self) -> u32 {
+        self.vs_counters.buffers as _
+    }
 }
 
 #[derive(Clone, Debug)]

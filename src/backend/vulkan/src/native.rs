@@ -105,10 +105,10 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         use std::ptr;
 
         let mut raw_layouts = Vec::new();
-        let mut layout_bindinds = Vec::new();
+        let mut layout_bindings = Vec::new();
         for layout in layout_iter {
             raw_layouts.push(layout.borrow().raw);
-            layout_bindinds.push(layout.borrow().bindings.clone());
+            layout_bindings.push(layout.borrow().bindings.clone());
         }
 
         let info = vk::DescriptorSetAllocateInfo {
@@ -123,7 +123,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
             .map(|sets| {
                 output.extend(sets
                     .into_iter()
-                    .zip(layout_bindinds)
+                    .zip(layout_bindings)
                     .map(|(raw, bindings)| DescriptorSet { raw, bindings })
                 )
             })

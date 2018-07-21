@@ -208,7 +208,7 @@ struct State {
     work_group_size: MTLSize,
     primitive_type: MTLPrimitiveType,
     resources_vs: StageResources,
-    resources_fs: StageResources,
+    resources_ps: StageResources,
     resources_cs: StageResources,
     index_buffer: Option<IndexBuffer<BufferPtr>>,
     rasterizer_state: Option<native::RasterizerState>,
@@ -222,7 +222,7 @@ struct State {
 impl State {
     fn reset_resources(&mut self) {
         self.resources_vs.clear();
-        self.resources_fs.clear();
+        self.resources_ps.clear();
         self.resources_cs.clear();
         self.push_constants.clear();
         self.vertex_buffers.clear();
@@ -275,7 +275,7 @@ impl State {
         };
         let (com_pso, com_rast) = self.make_pso_commands();
 
-        let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_fs));
+        let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_ps));
         let push_constants = self.push_constants.as_slice();
         let com_resources = [pso::Stage::Vertex, pso::Stage::Fragment]
             .iter()
@@ -483,7 +483,7 @@ impl State {
     }
 
     fn push_ps_constants<'a>(&'a mut self, id: u32) -> soft::RenderCommand<&'a soft::Own> {
-        self.resources_fs.push_constants_buffer_id = Some(id);
+        self.resources_ps.push_constants_buffer_id = Some(id);
         soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Fragment,
             index: id as usize,
@@ -575,10 +575,20 @@ impl StageResources {
         self.push_constants_buffer_id = None;
     }
 
-    fn set_buffer(&mut self, slot: usize, buffer: BufferPtr, offset: buffer::Offset) -> bool {
-        if self.buffers.len() <= slot {
-            self.buffers.resize(slot + 1, None);
+    fn pre_allocate(&mut self, counters: &native::ResourceCounters) {
+        if self.textures.len() < counters.textures {
+            self.textures.resize(counters.textures, None);
         }
+        if self.samplers.len() < counters.samplers {
+            self.samplers.resize(counters.samplers, None);
+        }
+        if self.buffers.len() < counters.buffers {
+            self.buffers.resize(counters.buffers, None);
+        }
+    }
+
+    fn set_buffer(&mut self, slot: usize, buffer: BufferPtr, offset: buffer::Offset) -> bool {
+        debug_assert!(self.buffers.len() > slot);
         let value = Some((buffer, offset));
         if self.buffers[slot] != value {
             self.buffers[slot] = value;
@@ -593,9 +603,7 @@ impl StageResources {
     ) where
         F: FnMut(usize, Option<TexturePtr>)
     {
-        if self.textures.len() < start + textures.len() {
-            self.textures.resize(start + textures.len(), None);
-        }
+        debug_assert!(self.textures.len() >= start + textures.len());
         for (i, (out, maybe)) in self
             .textures[start..]
             .iter_mut()
@@ -615,9 +623,7 @@ impl StageResources {
     ) where
         F: FnMut(usize, Option<SamplerPtr>)
     {
-        if self.samplers.len() < start + samplers.len() {
-            self.samplers.resize(start + samplers.len(), None);
-        }
+        debug_assert!(self.samplers.len() >= start + samplers.len());
         for (i, (out, &value)) in self
             .samplers[start..]
             .iter_mut()
@@ -1676,7 +1682,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 work_group_size: MTLSize { width: 0, height: 0, depth: 0 },
                 primitive_type: MTLPrimitiveType::Point,
                 resources_vs: StageResources::new(),
-                resources_fs: StageResources::new(),
+                resources_ps: StageResources::new(),
                 resources_cs: StageResources::new(),
                 index_buffer: None,
                 rasterizer_state: None,
@@ -2238,7 +2244,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         } else {
             None
         };
-        let com_fs = if let Some(&Some((buffer, offset))) = self.state.resources_fs.buffers.first() {
+        let com_fs = if let Some(&Some((buffer, offset))) = self.state.resources_ps.buffers.first() {
             Some(soft::RenderCommand::BindBuffer {
                 stage: pso::Stage::Fragment,
                 index: 0,
@@ -2879,8 +2885,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
-        //TODO: ensure that the current resource state has enough slots for all the bindings
-        // this should lighten up the hot loop over resources
+        self.state.resources_vs.pre_allocate(&pipe_layout.vs_counters);
+        self.state.resources_ps.pre_allocate(&pipe_layout.ps_counters);
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             match *desc_set.borrow() {
@@ -2927,7 +2933,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 desc_set: (first_set + set_index) as _,
                                 binding: layout.binding as _,
                             };
-                            Some((pso::Stage::Fragment, loc, &mut self.state.resources_fs))
+                            Some((pso::Stage::Fragment, loc, &mut self.state.resources_ps))
                         } else {
                             None
                         };
@@ -3008,7 +3014,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             binding: 0,
                         };
                         let slot = pipe_layout.res_overrides[&loc].buffer_id;
-                        if self.state.resources_fs.set_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _) {
+                        if self.state.resources_ps.set_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _) {
                             pre.issue(soft::RenderCommand::BindBuffer {
                                 stage: pso::Stage::Fragment,
                                 index: slot as _,
@@ -3052,6 +3058,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut dynamic_offsets = SmallVec::<[u64; 16]>::new();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
+
+        self.state.resources_cs.pre_allocate(&pipe_layout.cs_counters);
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             let resources = &mut self.state.resources_cs;
