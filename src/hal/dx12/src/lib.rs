@@ -12,7 +12,7 @@ extern crate winapi;
 extern crate winit;
 extern crate wio;
 
-#[path = "../../auxil/range_alloc.rs"]
+#[path = "../../../backend/auxil/range_alloc.rs"]
 mod range_alloc;
 mod command;
 mod conv;

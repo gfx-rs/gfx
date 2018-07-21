@@ -6,7 +6,7 @@
 extern crate env_logger;
 extern crate gfx_hal as hal;
 #[cfg(feature = "dx12")]
-extern crate gfx_backend_dx12 as back;
+extern crate gfx_hal_dx12 as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
 #[cfg(feature = "metal")]

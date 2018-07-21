@@ -1,26 +1,27 @@
 [package]
-name = "gfx-backend-dx12"
+name = "gfx-hal-dx12"
 version = "0.1.0"
-description = "DirectX-12 API backend for gfx-rs"
+description = "DirectX-12 API backend for gfx-hal"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "MIT OR Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 readme = "README.md"
-documentation = "https://docs.rs/gfx-backend-dx12"
+documentation = "https://docs.rs/gfx-hal-dx12"
 workspace = "../../.."
 
 [features]
 default = ["winit"]
 
 [lib]
-name = "gfx_backend_dx12"
+name = "gfx_hal_dx12"
 
 [dependencies]
 bitflags = "1"
 derivative = "1"
-gfx-hal = { path = "../../hal", version = "0.1" }
+gfx-hal = { path = "..", version = "0.1" }
+gfx-bal-dx12 = { path = "../../bal/dx12", version = "0.1" }
 log = { version = "0.4", features = ["release_max_level_error"] }
 smallvec = "0.6"
 spirv_cross = "0.9"

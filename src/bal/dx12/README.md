@@ -1,6 +1,6 @@
-# gfx-backend-dx12
+# gfx-bal-dx12
 
-DX12 backend for gfx.
+DX12 bal backend for gfx.
 
 ## Normalized Coordinates
 
