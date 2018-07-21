@@ -633,6 +633,7 @@ impl StageResources {
 }
 
 
+//TODO: make sure to recycle the heap allocation of these commands.
 enum EncodePass {
     Render(Vec<soft::RenderCommand<soft::Own>>, metal::RenderPassDescriptor),
     Compute(Vec<soft::ComputeCommand<soft::Own>>),
@@ -2666,8 +2667,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // FIXME: subpasses
         let _ap = AutoreleasePool::new();
 
-        // we are going to modify the RP descriptor here, so
+        // We are going to modify the RP descriptor here, so
         // locking to avoid data races.
+        //TODO: if we know that we aren't in the `Immediate` recording mode,
+        // we can copy here right away and void the lock entirely.
         let descriptor = framebuffer.descriptor.lock();
 
         let mut num_colors = 0;
@@ -2875,6 +2878,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut dynamic_offsets = SmallVec::<[u64; 16]>::new();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
+
+        //TODO: ensure that the current resource state has enough slots for all the bindings
+        // this should lighten up the hot loop over resources
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             match *desc_set.borrow() {
