@@ -147,13 +147,7 @@ impl CommandPool {
             dispatch_queue: match ONLINE_RECORDING {
                 OnlineRecording::Immediate |
                 OnlineRecording::Deferred => None,
-                OnlineRecording::Remote(priority) => Some(
-                    dispatch::Queue::with_target_queue(
-                        "gfx-metal",
-                        dispatch::QueueAttribute::Serial,
-                        &dispatch::Queue::global(priority),
-                    )
-                ),
+                OnlineRecording::Remote(priority) => Some(dispatch::Queue::global(priority)),
             }
         };
         CommandPool {
@@ -639,6 +633,13 @@ impl StageResources {
 }
 
 
+#[derive(Debug, Default)]
+struct Capacity {
+    render: usize,
+    compute: usize,
+    blit: usize,
+}
+
 //TODO: make sure to recycle the heap allocation of these commands.
 enum EncodePass {
     Render(Vec<soft::RenderCommand<soft::Own>>, metal::RenderPassDescriptor),
@@ -676,6 +677,14 @@ impl EncodePass {
                 encoder.end_encoding();
             }
         });
+    }
+
+    fn update(&self, capacity: &mut Capacity) {
+        match &self {
+            EncodePass::Render(ref list, _) => capacity.render = capacity.render.max(list.len()),
+            EncodePass::Compute(ref list) => capacity.compute = capacity.compute.max(list.len()),
+            EncodePass::Blit(ref list) => capacity.blit = capacity.blit.max(list.len()),
+        }
     }
 }
 
@@ -757,6 +766,7 @@ enum CommandSink {
         cmd_buffer: Arc<Mutex<metal::CommandBuffer>>,
         token: Token,
         pass: Option<EncodePass>,
+        capacity: Capacity,
     },
 }
 
@@ -882,12 +892,14 @@ impl CommandSink {
             CommandSink::Remote { pass: Some(EncodePass::Blit(ref mut list)), .. } => {
                 list.extend(commands.into_iter().map(soft::BlitCommand::own));
             }
-            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, .. } => {
+            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref mut capacity, .. } => {
                 if let Some(pass) = pass.take() {
+                    pass.update(capacity);
                     pass.schedule(queue, cmd_buffer);
                 }
-                let owned_commands = commands.into_iter().map(soft::BlitCommand::own).collect();
-                *pass = Some(EncodePass::Blit(owned_commands));
+                let mut list = Vec::with_capacity(capacity.blit);
+                list.extend(commands.into_iter().map(soft::BlitCommand::own));
+                *pass = Some(EncodePass::Blit(list));
             }
         }
     }
@@ -939,8 +951,9 @@ impl CommandSink {
                 *is_encoding = false;
                 journal.stop();
             }
-            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, .. } => {
+            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref mut capacity, .. } => {
                 if let Some(pass) = pass.take() {
+                    pass.update(capacity);
                     pass.schedule(queue, cmd_buffer);
                 }
             }
@@ -991,14 +1004,15 @@ impl CommandSink {
                 }
                 journal.passes.push((pass, range))
             }
-            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, .. } => {
+            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref capacity, .. } => {
                 let desc = unsafe {
                     let desc: metal::RenderPassDescriptor = msg_send![descriptor, copy];
                     msg_send![desc.as_ptr(), retain];
                     desc
                 };
-                let owned_commands = init_commands.map(soft::RenderCommand::own).collect();
-                let new_pass = EncodePass::Render(owned_commands, desc);
+                let mut list = Vec::with_capacity(capacity.render);
+                list.extend(init_commands.map(soft::RenderCommand::own));
+                let new_pass = EncodePass::Render(list, desc);
                 match door {
                     PassDoor::Open => *pass = Some(new_pass),
                     PassDoor::Closed { .. } => new_pass.schedule(queue, cmd_buffer),
@@ -1043,9 +1057,10 @@ impl CommandSink {
                 };
                 journal.passes.push((soft::Pass::Compute, range))
             }
-            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, .. } => {
-                let owned_commands = init_commands.map(soft::ComputeCommand::own).collect();
-                let new_pass = EncodePass::Compute(owned_commands);
+            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref capacity, .. } => {
+                let mut list = Vec::with_capacity(capacity.compute);
+                list.extend(init_commands.map(soft::ComputeCommand::own));
+                let new_pass = EncodePass::Compute(list);
                 match door {
                     PassDoor::Open => *pass = Some(new_pass),
                     PassDoor::Closed { .. } => new_pass.schedule(queue, cmd_buffer),
@@ -1065,6 +1080,7 @@ pub struct IndexBuffer<B> {
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
     backup_journal: Option<Journal>,
+    backup_capacity: Option<Capacity>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
 }
@@ -1090,8 +1106,11 @@ impl CommandBufferInner {
                     self.backup_journal = Some(journal);
                 }
             }
-            Some(CommandSink::Remote { token, .. }) => {
+            Some(CommandSink::Remote { token, capacity, .. }) => {
                 shared.queue.lock().release(token);
+                if !release {
+                    self.backup_capacity = Some(capacity);
+                }
             }
             None => {}
         };
@@ -1525,7 +1544,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     trace!("\tremote {:?}", token);
                     cmd_buffer.lock().enqueue();
                     let shared_cb = SharedCommandBuffer(Arc::clone(cmd_buffer));
-                    queue.async(move || {
+                    queue.sync(move || {
                         shared_cb.0.lock().commit();
                     });
                  }
@@ -1669,6 +1688,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             inner: Arc::new(RefCell::new(CommandBufferInner {
                 sink: None,
                 backup_journal: None,
+                backup_capacity: None,
                 retained_buffers: Vec::new(),
                 retained_textures: Vec::new(),
             })),
@@ -1773,10 +1793,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             OnlineRecording::Remote(_) if oneshot => {
                 let (cmd_buffer, token) = self.shared.queue.lock().spawn();
                 CommandSink::Remote {
-                    queue: self.pool_shared.borrow_mut().dispatch_queue.clone().unwrap(),
+                    queue: dispatch::Queue::with_target_queue(
+                        "gfx-metal",
+                        dispatch::QueueAttribute::Serial,
+                        self.pool_shared.borrow_mut().dispatch_queue.as_ref().unwrap(),
+                    ),
                     cmd_buffer: Arc::new(Mutex::new(cmd_buffer)),
                     token,
                     pass: None,
+                    capacity: inner.backup_capacity.take().unwrap_or_default(),
                 }
             }
             _ => {
