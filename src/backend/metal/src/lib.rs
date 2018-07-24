@@ -4,7 +4,6 @@ extern crate metal_rs as metal;
 extern crate cocoa;
 extern crate foreign_types;
 #[macro_use] extern crate objc;
-extern crate core_foundation;
 extern crate core_graphics;
 #[macro_use] extern crate log;
 extern crate block;
@@ -40,7 +39,6 @@ use std::os::raw::c_void;
 use hal::queue::QueueFamilyId;
 
 use objc::runtime::{Class, Object};
-use cocoa::foundation::NSAutoreleasePool;
 use core_graphics::geometry::CGRect;
 use foreign_types::ForeignTypeRef;
 use parking_lot::Mutex;
@@ -220,33 +218,6 @@ struct PrivateCapabilities {
 #[derive(Clone, Copy, Debug)]
 struct PrivateDisabilities {
     broken_viewport_near_depth: bool,
-}
-
-pub struct AutoreleasePool {
-    pool: cocoa::base::id,
-}
-
-impl Drop for AutoreleasePool {
-    fn drop(&mut self) {
-        unsafe {
-            msg_send![self.pool, release]
-        }
-    }
-}
-
-impl AutoreleasePool {
-    pub fn new() -> Self {
-        AutoreleasePool {
-            pool: unsafe {
-                NSAutoreleasePool::new(cocoa::base::nil)
-            },
-        }
-    }
-
-    pub unsafe fn reset(&mut self) {
-        self.pool.drain();
-        self.pool = NSAutoreleasePool::new(cocoa::base::nil);
-    }
 }
 
 fn validate_line_width(width: f32) {

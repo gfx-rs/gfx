@@ -1,5 +1,5 @@
 use {
-    AutoreleasePool, Backend, PrivateDisabilities, Shared, validate_line_width,
+    Backend, PrivateDisabilities, Shared, validate_line_width,
     BufferPtr, TexturePtr, SamplerPtr,
 };
 use {conversions as conv, native, soft, window};
@@ -26,6 +26,7 @@ use cocoa::foundation::{NSUInteger, NSInteger, NSRange};
 use dispatch;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize};
+use objc::rc::autoreleasepool;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 
@@ -91,13 +92,14 @@ impl QueueInner {
 
     /// Spawns a command buffer from a virtual pool.
     pub(crate) fn spawn(&mut self) -> (metal::CommandBuffer, Token) {
-        let _pool = AutoreleasePool::new();
         self.reserve.start += 1;
-        let cmd_buf = self.spawn_temp().to_owned();
+        let cmd_buf = autoreleasepool(|| {
+            self.spawn_temp().to_owned()
+        });
         (cmd_buf, Token { active: true })
     }
 
-    fn spawn_temp(&self) -> &metal::CommandBufferRef {
+    pub(crate) fn spawn_temp(&self) -> &metal::CommandBufferRef {
         if self.debug_retain_references {
             self.raw.new_command_buffer()
         } else {
@@ -114,7 +116,6 @@ impl QueueInner {
     /// Block until GPU is idle.
     pub(crate) fn wait_idle(queue: &Mutex<Self>) {
         debug!("waiting for idle");
-        let _pool = AutoreleasePool::new();
         // note: we deliberately don't hold the Mutex lock while waiting,
         // since the completion handlers need to access it.
         let (cmd_buf, token) = queue.lock().spawn();
@@ -721,7 +722,6 @@ impl Journal {
     }
 
     fn record(&self, command_buf: &metal::CommandBufferRef) {
-        let _ap = AutoreleasePool::new(); // for encoder creation
         for (ref pass, ref range) in &self.passes {
             match *pass {
                 soft::Pass::Render(ref desc) => {
@@ -1021,21 +1021,22 @@ impl CommandSink {
 
         match *self {
             CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
-                let _ap = AutoreleasePool::new();
                 *num_passes += 1;
-                let encoder = cmd_buffer.new_compute_command_encoder();
-                for command in init_commands {
-                    exec_compute(encoder, command);
-                }
-                match door {
-                    PassDoor::Open => {
-                        *encoder_state = EncoderState::Compute(encoder.to_owned());
+                autoreleasepool(|| {
+                    let encoder = cmd_buffer.new_compute_command_encoder();
+                    for command in init_commands {
+                        exec_compute(encoder, command);
                     }
-                    PassDoor::Closed { label } => {
-                        encoder.set_label(label);
-                        encoder.end_encoding();
+                    match door {
+                        PassDoor::Open => {
+                            *encoder_state = EncoderState::Compute(encoder.to_owned());
+                        }
+                        PassDoor::Closed { label } => {
+                            encoder.set_label(label);
+                            encoder.end_encoding();
+                        }
                     }
-                }
+                })
             }
             CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
                 let mut range = journal.compute_commands.len() .. 0;
@@ -1478,68 +1479,112 @@ impl RawCommandQueue<Backend> for CommandQueue {
         IC: IntoIterator,
         IC::Item: Borrow<CommandBuffer>,
     {
-        let _ap = AutoreleasePool::new();
         debug!("submitting with fence {:?}", fence);
-
         self.wait(submit.wait_semaphores.iter().map(|&(s, _)| s));
 
-        let cmd_queue = self.shared.queue.lock();
+        const BLOCK_BUCKET: usize = 4;
+        let system_semaphores = submit.signal_semaphores
+            .into_iter()
+            .filter_map(|sem| sem.system.clone())
+            .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+
         let (mut num_immediate, mut num_deferred, mut num_remote) = (0, 0, 0);
-        let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
+        let do_signal = fence.is_some() || !system_semaphores.is_empty();
 
-        for buffer in submit.cmd_buffers {
-            let mut inner = buffer.borrow().inner.borrow_mut();
-            let CommandBufferInner {
-                ref sink,
-                ref mut retained_buffers,
-                ref mut retained_textures,
-                ..
-            } = *inner;
+        autoreleasepool(|| { // for command buffers
+            let cmd_queue = self.shared.queue.lock();
+            let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
 
-            match *sink {
-                Some(CommandSink::Immediate { ref cmd_buffer, ref token, num_passes, .. }) => {
-                    num_immediate += 1;
-                    trace!("\timmediate {:?} with {} passes", token, num_passes);
-                    self.retained_buffers.extend(retained_buffers.drain(..));
-                    self.retained_textures.extend(retained_textures.drain(..));
-                    if num_passes != 0 {
-                        // flush the deferred recording, if any
-                        if let Some(cb) = deferred_cmd_buffer.take() {
-                            cb.commit();
+            for buffer in submit.cmd_buffers {
+                let mut inner = buffer.borrow().inner.borrow_mut();
+                let CommandBufferInner {
+                    ref sink,
+                    ref mut retained_buffers,
+                    ref mut retained_textures,
+                    ..
+                } = *inner;
+
+                match *sink {
+                    Some(CommandSink::Immediate { ref cmd_buffer, ref token, num_passes, .. }) => {
+                        num_immediate += 1;
+                        trace!("\timmediate {:?} with {} passes", token, num_passes);
+                        self.retained_buffers.extend(retained_buffers.drain(..));
+                        self.retained_textures.extend(retained_textures.drain(..));
+                        if num_passes != 0 {
+                            // flush the deferred recording, if any
+                            if let Some(cb) = deferred_cmd_buffer.take() {
+                                cb.commit();
+                            }
+                            cmd_buffer.commit();
                         }
-                        cmd_buffer.commit();
                     }
+                    Some(CommandSink::Deferred { ref journal, .. }) => {
+                        num_deferred += 1;
+                        trace!("\tdeferred with {} passes", journal.passes.len());
+                        if !journal.passes.is_empty() {
+                            let cmd_buffer = deferred_cmd_buffer
+                                .take()
+                                .unwrap_or_else(|| {
+                                    let cmd_buffer = cmd_queue.spawn_temp();
+                                    cmd_buffer.enqueue();
+                                    cmd_buffer.set_label("deferred");
+                                    cmd_buffer
+                                });
+                            journal.record(&*cmd_buffer);
+                            if STITCH_DEFERRED_COMMAND_BUFFERS {
+                                deferred_cmd_buffer = Some(cmd_buffer);
+                            }
+                        }
+                     }
+                     Some(CommandSink::Remote { ref queue, ref cmd_buffer, ref token, .. }) => {
+                        num_remote += 1;
+                        trace!("\tremote {:?}", token);
+                        cmd_buffer.lock().enqueue();
+                        let shared_cb = SharedCommandBuffer(Arc::clone(cmd_buffer));
+                        queue.sync(move || {
+                            shared_cb.0.lock().commit();
+                        });
+                     }
+                     None => panic!("Command buffer not recorded for submission")
                 }
-                Some(CommandSink::Deferred { ref journal, .. }) => {
-                    num_deferred += 1;
-                    trace!("\tdeferred with {} passes", journal.passes.len());
-                    if !journal.passes.is_empty() {
-                        let cmd_buffer = deferred_cmd_buffer
-                            .take()
-                            .unwrap_or_else(|| {
-                                let cmd_buffer = cmd_queue.spawn_temp();
-                                cmd_buffer.enqueue();
-                                cmd_buffer.set_label("deferred");
-                                cmd_buffer
-                            });
-                        journal.record(&*cmd_buffer);
-                        if STITCH_DEFERRED_COMMAND_BUFFERS {
-                            deferred_cmd_buffer = Some(cmd_buffer);
-                        }
-                    }
-                 }
-                 Some(CommandSink::Remote { ref queue, ref cmd_buffer, ref token, .. }) => {
-                    num_remote += 1;
-                    trace!("\tremote {:?}", token);
-                    cmd_buffer.lock().enqueue();
-                    let shared_cb = SharedCommandBuffer(Arc::clone(cmd_buffer));
-                    queue.sync(move || {
-                        shared_cb.0.lock().commit();
-                    });
-                 }
-                 None => panic!("Command buffer not recorded for submission")
             }
-        }
+
+            if do_signal {
+                let free_buffers = self.retained_buffers
+                    .drain(..)
+                    .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+                let free_textures = self.retained_textures
+                    .drain(..)
+                    .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+
+                let block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
+                    // signal the semaphores
+                    for semaphore in &system_semaphores {
+                        semaphore.signal();
+                    }
+                    // free all the manually retained resources
+                    let _ = free_buffers;
+                    let _ = free_textures;
+                }).copy();
+
+                let cmd_buffer = deferred_cmd_buffer
+                    .take()
+                    .unwrap_or_else(|| {
+                        let cmd_buffer = cmd_queue.spawn_temp();
+                        cmd_buffer.set_label("signal");
+                        record_empty(cmd_buffer);
+                        cmd_buffer
+                    });
+                msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
+                cmd_buffer.commit();
+
+                if let Some(fence) = fence {
+                    *fence.0.borrow_mut() = native::FenceInner::Pending(cmd_buffer.to_owned());
+                }
+            } else if let Some(cmd_buffer) = deferred_cmd_buffer {
+                cmd_buffer.commit();
+            }
+        });
 
         debug!("\t{} immediate, {} deferred, and {} remote command buffers",
             num_immediate, num_deferred, num_remote);
@@ -1547,53 +1592,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
             counters.immediate_command_buffers += num_immediate;
             counters.deferred_command_buffers += num_deferred;
             counters.remote_command_buffers += num_remote;
-        }
-
-        const BLOCK_BUCKET: usize = 4;
-        let system_semaphores = submit.signal_semaphores
-            .into_iter()
-            .filter_map(|semaphore| {
-                semaphore.system.clone()
-            })
-            .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
-
-        if fence.is_some() || !system_semaphores.is_empty() {
-            let free_buffers = self.retained_buffers
-                .drain(..)
-                .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
-            let free_textures = self.retained_textures
-                .drain(..)
-                .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
-
-            let block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
-                // signal the semaphores
-                for semaphore in &system_semaphores {
-                    semaphore.signal();
-                }
-                // free all the manually retained resources
-                let _ = free_buffers;
-                let _ = free_textures;
-            }).copy();
-
-            if let Some(ref mut counters) = self.perf_counters {
+            if do_signal {
                 counters.signal_command_buffers += 1;
             }
-            let cmd_buffer = deferred_cmd_buffer
-                .take()
-                .unwrap_or_else(|| {
-                    let cmd_buffer = cmd_queue.spawn_temp();
-                    cmd_buffer.set_label("signal");
-                    record_empty(cmd_buffer);
-                    cmd_buffer
-                });
-            msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
-            cmd_buffer.commit();
-
-            if let Some(fence) = fence {
-                *fence.0.borrow_mut() = native::FenceInner::Pending(cmd_buffer.to_owned());
-            }
-        } else if let Some(cmd_buffer) = deferred_cmd_buffer {
-            cmd_buffer.commit();
         }
     }
 
@@ -1942,8 +1943,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<SubresourceRange>,
     {
-        let _ap = AutoreleasePool::new();
-
         let CommandBufferInner {
             ref mut retained_textures,
             ref mut sink,
@@ -1953,134 +1952,136 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let clear_color = image.shader_channel.interpret(color);
         let base_extent = image.kind.extent();
 
-        for subresource_range in subresource_ranges {
-            let sub = subresource_range.borrow();
-            let descriptor = metal::RenderPassDescriptor::new();
+        autoreleasepool(|| {
+            for subresource_range in subresource_ranges {
+                let sub = subresource_range.borrow();
+                let descriptor = metal::RenderPassDescriptor::new();
 
-            let num_layers = (sub.layers.end - sub.layers.start) as u64;
-            let layers = if CLEAR_IMAGE_ARRAY {
-                0 .. 1
-            } else {
-                sub.layers.clone()
-            };
-            let texture = if CLEAR_IMAGE_ARRAY && sub.layers.start > 0 {
-                // aliasing is necessary for bulk-clearing all layers starting with 0
-                let tex = image.raw.new_texture_view_from_slice(
-                    image.mtl_format,
-                    image.mtl_type,
-                    NSRange {
-                        location: 0,
-                        length: image.raw.mipmap_level_count(),
-                    },
-                    NSRange {
-                        location: sub.layers.start as _,
-                        length: num_layers,
-                    },
-                );
-                retained_textures.push(tex);
-                retained_textures.last().unwrap()
-            } else {
-                &*image.raw
-            };
-
-            let color_attachment = if image.format_desc.aspects.contains(Aspects::COLOR) {
-                let attachment = descriptor
-                    .color_attachments()
-                    .object_at(0)
-                    .unwrap();
-                attachment.set_texture(Some(texture));
-                attachment.set_store_action(metal::MTLStoreAction::Store);
-                if sub.aspects.contains(Aspects::COLOR) {
-                    attachment.set_load_action(metal::MTLLoadAction::Clear);
-                    attachment.set_clear_color(clear_color.clone());
-                    Some(attachment)
+                let num_layers = (sub.layers.end - sub.layers.start) as u64;
+                let layers = if CLEAR_IMAGE_ARRAY {
+                    0 .. 1
                 } else {
-                    attachment.set_load_action(metal::MTLLoadAction::Load);
-                    None
-                }
-            } else {
-                assert!(!sub.aspects.contains(Aspects::COLOR));
-                None
-            };
-
-            let depth_attachment = if image.format_desc.aspects.contains(Aspects::DEPTH) {
-                let attachment = descriptor
-                    .depth_attachment()
-                    .unwrap();
-                attachment.set_texture(Some(texture));
-                attachment.set_store_action(metal::MTLStoreAction::Store);
-                if sub.aspects.contains(Aspects::DEPTH) {
-                    attachment.set_load_action(metal::MTLLoadAction::Clear);
-                    attachment.set_clear_depth(depth_stencil.depth as _);
-                    Some(attachment)
+                    sub.layers.clone()
+                };
+                let texture = if CLEAR_IMAGE_ARRAY && sub.layers.start > 0 {
+                    // aliasing is necessary for bulk-clearing all layers starting with 0
+                    let tex = image.raw.new_texture_view_from_slice(
+                        image.mtl_format,
+                        image.mtl_type,
+                        NSRange {
+                            location: 0,
+                            length: image.raw.mipmap_level_count(),
+                        },
+                        NSRange {
+                            location: sub.layers.start as _,
+                            length: num_layers,
+                        },
+                    );
+                    retained_textures.push(tex);
+                    retained_textures.last().unwrap()
                 } else {
-                    attachment.set_load_action(metal::MTLLoadAction::Load);
-                    None
-                }
-            } else {
-                assert!(!sub.aspects.contains(Aspects::DEPTH));
-                None
-            };
+                    &*image.raw
+                };
 
-            let stencil_attachment = if image.format_desc.aspects.contains(Aspects::STENCIL) {
-                let attachment = descriptor
-                    .stencil_attachment()
-                    .unwrap();
-                attachment.set_texture(Some(texture));
-                attachment.set_store_action(metal::MTLStoreAction::Store);
-                if sub.aspects.contains(Aspects::STENCIL) {
-                    attachment.set_load_action(metal::MTLLoadAction::Clear);
-                    attachment.set_clear_stencil(depth_stencil.stencil);
-                    Some(attachment)
+                let color_attachment = if image.format_desc.aspects.contains(Aspects::COLOR) {
+                    let attachment = descriptor
+                        .color_attachments()
+                        .object_at(0)
+                        .unwrap();
+                    attachment.set_texture(Some(texture));
+                    attachment.set_store_action(metal::MTLStoreAction::Store);
+                    if sub.aspects.contains(Aspects::COLOR) {
+                        attachment.set_load_action(metal::MTLLoadAction::Clear);
+                        attachment.set_clear_color(clear_color.clone());
+                        Some(attachment)
+                    } else {
+                        attachment.set_load_action(metal::MTLLoadAction::Load);
+                        None
+                    }
                 } else {
-                    attachment.set_load_action(metal::MTLLoadAction::Load);
+                    assert!(!sub.aspects.contains(Aspects::COLOR));
                     None
-                }
-            } else {
-                assert!(!sub.aspects.contains(Aspects::STENCIL));
-                None
-            };
+                };
 
-            for layer in layers {
-                for level in sub.levels.clone() {
-                    if base_extent.depth > 1 {
-                        assert_eq!(sub.layers.end, 1);
-                        let depth = base_extent.at_level(level).depth as u64;
-                        descriptor.set_render_target_array_length(depth);
-                    } else if CLEAR_IMAGE_ARRAY {
-                        descriptor.set_render_target_array_length(num_layers);
-                    };
+                let depth_attachment = if image.format_desc.aspects.contains(Aspects::DEPTH) {
+                    let attachment = descriptor
+                        .depth_attachment()
+                        .unwrap();
+                    attachment.set_texture(Some(texture));
+                    attachment.set_store_action(metal::MTLStoreAction::Store);
+                    if sub.aspects.contains(Aspects::DEPTH) {
+                        attachment.set_load_action(metal::MTLLoadAction::Clear);
+                        attachment.set_clear_depth(depth_stencil.depth as _);
+                        Some(attachment)
+                    } else {
+                        attachment.set_load_action(metal::MTLLoadAction::Load);
+                        None
+                    }
+                } else {
+                    assert!(!sub.aspects.contains(Aspects::DEPTH));
+                    None
+                };
 
-                    if let Some(attachment) = color_attachment {
-                        attachment.set_level(level as _);
-                        if !CLEAR_IMAGE_ARRAY {
-                            attachment.set_slice(layer as _);
-                        }
+                let stencil_attachment = if image.format_desc.aspects.contains(Aspects::STENCIL) {
+                    let attachment = descriptor
+                        .stencil_attachment()
+                        .unwrap();
+                    attachment.set_texture(Some(texture));
+                    attachment.set_store_action(metal::MTLStoreAction::Store);
+                    if sub.aspects.contains(Aspects::STENCIL) {
+                        attachment.set_load_action(metal::MTLLoadAction::Clear);
+                        attachment.set_clear_stencil(depth_stencil.stencil);
+                        Some(attachment)
+                    } else {
+                        attachment.set_load_action(metal::MTLLoadAction::Load);
+                        None
                     }
-                    if let Some(attachment) = depth_attachment {
-                        attachment.set_level(level as _);
-                        if !CLEAR_IMAGE_ARRAY {
-                            attachment.set_slice(layer as _);
-                        }
-                    }
-                    if let Some(attachment) = stencil_attachment {
-                        attachment.set_level(level as _);
-                        if !CLEAR_IMAGE_ARRAY {
-                            attachment.set_slice(layer as _);
-                        }
-                    }
+                } else {
+                    assert!(!sub.aspects.contains(Aspects::STENCIL));
+                    None
+                };
 
-                    sink.as_mut()
-                        .unwrap()
-                        .begin_render_pass(
-                            PassDoor::Closed { label: "clear_image" },
-                            descriptor,
-                            iter::empty(),
-                        );
-                    // no actual pass body - everything is in the attachment clear operations
+                for layer in layers {
+                    for level in sub.levels.clone() {
+                        if base_extent.depth > 1 {
+                            assert_eq!(sub.layers.end, 1);
+                            let depth = base_extent.at_level(level).depth as u64;
+                            descriptor.set_render_target_array_length(depth);
+                        } else if CLEAR_IMAGE_ARRAY {
+                            descriptor.set_render_target_array_length(num_layers);
+                        };
+
+                        if let Some(attachment) = color_attachment {
+                            attachment.set_level(level as _);
+                            if !CLEAR_IMAGE_ARRAY {
+                                attachment.set_slice(layer as _);
+                            }
+                        }
+                        if let Some(attachment) = depth_attachment {
+                            attachment.set_level(level as _);
+                            if !CLEAR_IMAGE_ARRAY {
+                                attachment.set_slice(layer as _);
+                            }
+                        }
+                        if let Some(attachment) = stencil_attachment {
+                            attachment.set_level(level as _);
+                            if !CLEAR_IMAGE_ARRAY {
+                                attachment.set_slice(layer as _);
+                            }
+                        }
+
+                        sink.as_mut()
+                            .unwrap()
+                            .begin_render_pass(
+                                PassDoor::Closed { label: "clear_image" },
+                                descriptor,
+                                iter::empty(),
+                            );
+                        // no actual pass body - everything is in the attachment clear operations
+                    }
                 }
             }
-        }
+        });
     }
 
     fn clear_attachments<T, U>(
@@ -2306,8 +2307,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
-        let _ap = AutoreleasePool::new();
-
         let mut inner = self.inner.borrow_mut();
         let vertices = &mut self.temp.blit_vertices;
         vertices.clear();
@@ -2395,27 +2394,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        let descriptor = metal::RenderPassDescriptor::new();
-        if src.format_desc.aspects.contains(Aspects::COLOR) {
-            descriptor
-                .color_attachments()
-                .object_at(0)
-                .unwrap()
-                .set_texture(Some(&dst.raw));
-        }
-        if src.format_desc.aspects.contains(Aspects::DEPTH) {
-            descriptor
-                .depth_attachment()
-                .unwrap()
-                .set_texture(Some(&dst.raw));
-        }
-        if src.format_desc.aspects.contains(Aspects::STENCIL) {
-            descriptor
-                .stencil_attachment()
-                .unwrap()
-                .set_texture(Some(&dst.raw));
-        }
-
         // Note: we don't bother to restore any render states here, since we are currently
         // outside of a render pass, and the state will be reset automatically once
         // we enter the next pass.
@@ -2441,77 +2419,100 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             None
         };
 
-        for ((aspects, level), list) in vertices.drain() {
-            let ext = dst.kind.extent().at_level(level);
-
-            let extra = [
-                //Note: flipping Y coordinate of the destination here
-                soft::RenderCommand::SetViewport(MTLViewport {
-                    originX: 0.0,
-                    originY: ext.height as _,
-                    width: ext.width as _,
-                    height: -(ext.height as f64),
-                    znear: 0.0,
-                    zfar: 1.0,
-                }),
-                soft::RenderCommand::SetScissor(MTLScissorRect {
-                    x: 0,
-                    y: 0,
-                    width: ext.width as _,
-                    height: ext.height as _,
-                }),
-                soft::RenderCommand::BindBufferData {
-                    stage: pso::Stage::Vertex,
-                    index: 0,
-                    words: unsafe {
-                        slice::from_raw_parts(
-                            list.as_ptr() as *const u32,
-                            list.len() * mem::size_of::<BlitVertex>() / WORD_SIZE
-                        )
-                    }
-                },
-                soft::RenderCommand::Draw {
-                    primitive_type: MTLPrimitiveType::Triangle,
-                    vertices: 0 .. list.len() as _,
-                    instances: 0 .. 1,
-                },
-            ];
-
-            descriptor.set_render_target_array_length(ext.depth as _);
-            if aspects.contains(Aspects::COLOR) {
+        autoreleasepool(|| {
+            let descriptor = metal::RenderPassDescriptor::new();
+            if src.format_desc.aspects.contains(Aspects::COLOR) {
                 descriptor
                     .color_attachments()
                     .object_at(0)
                     .unwrap()
-                    .set_level(level as _);
+                    .set_texture(Some(&dst.raw));
             }
-            if aspects.contains(Aspects::DEPTH) {
+            if src.format_desc.aspects.contains(Aspects::DEPTH) {
                 descriptor
                     .depth_attachment()
                     .unwrap()
-                    .set_level(level as _);
+                    .set_texture(Some(&dst.raw));
             }
-            if aspects.contains(Aspects::STENCIL) {
+            if src.format_desc.aspects.contains(Aspects::STENCIL) {
                 descriptor
                     .stencil_attachment()
                     .unwrap()
-                    .set_level(level as _);
+                    .set_texture(Some(&dst.raw));
             }
 
-            let commands = prelude
-                .iter()
-                .chain(&com_ds)
-                .chain(&extra)
-                .cloned();
+            for ((aspects, level), list) in vertices.drain() {
+                let ext = dst.kind.extent().at_level(level);
 
-            inner
-                .sink()
-                .begin_render_pass(
-                    PassDoor::Closed { label: "blit_image" },
-                    &descriptor,
-                    commands,
-                );
-        }
+                let extra = [
+                    //Note: flipping Y coordinate of the destination here
+                    soft::RenderCommand::SetViewport(MTLViewport {
+                        originX: 0.0,
+                        originY: ext.height as _,
+                        width: ext.width as _,
+                        height: -(ext.height as f64),
+                        znear: 0.0,
+                        zfar: 1.0,
+                    }),
+                    soft::RenderCommand::SetScissor(MTLScissorRect {
+                        x: 0,
+                        y: 0,
+                        width: ext.width as _,
+                        height: ext.height as _,
+                    }),
+                    soft::RenderCommand::BindBufferData {
+                        stage: pso::Stage::Vertex,
+                        index: 0,
+                        words: unsafe {
+                            slice::from_raw_parts(
+                                list.as_ptr() as *const u32,
+                                list.len() * mem::size_of::<BlitVertex>() / WORD_SIZE
+                            )
+                        }
+                    },
+                    soft::RenderCommand::Draw {
+                        primitive_type: MTLPrimitiveType::Triangle,
+                        vertices: 0 .. list.len() as _,
+                        instances: 0 .. 1,
+                    },
+                ];
+
+                descriptor.set_render_target_array_length(ext.depth as _);
+                if aspects.contains(Aspects::COLOR) {
+                    descriptor
+                        .color_attachments()
+                        .object_at(0)
+                        .unwrap()
+                        .set_level(level as _);
+                }
+                if aspects.contains(Aspects::DEPTH) {
+                    descriptor
+                        .depth_attachment()
+                        .unwrap()
+                        .set_level(level as _);
+                }
+                if aspects.contains(Aspects::STENCIL) {
+                    descriptor
+                        .stencil_attachment()
+                        .unwrap()
+                        .set_level(level as _);
+                }
+
+                let commands = prelude
+                    .iter()
+                    .chain(&com_ds)
+                    .chain(&extra)
+                    .cloned();
+
+                inner
+                    .sink()
+                    .begin_render_pass(
+                        PassDoor::Closed { label: "blit_image" },
+                        &descriptor,
+                        commands,
+                    );
+            }
+        });
     }
 
     fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
@@ -2714,8 +2715,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .chain(com_ds);
 
         desc_guard = framebuffer.desc_storage
-            .get_or_create_with(&rp_key, || {
-                let _ap = AutoreleasePool::new();
+            .get_or_create_with(&rp_key, || autoreleasepool(|| {
                 let mut clear_id = 0;
                 let mut num_colors = 0;
                 let rp_desc = unsafe {
@@ -2763,7 +2763,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
 
                 rp_desc
-            });
+            }));
 
         self.inner
             .borrow_mut()

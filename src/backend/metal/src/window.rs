@@ -1,4 +1,4 @@
-use {AutoreleasePool, Backend, QueueFamily};
+use {Backend, QueueFamily};
 use device::{Device, PhysicalDevice};
 use internal::Channel;
 use native;
@@ -15,6 +15,7 @@ use cocoa::foundation::{NSRect};
 use foreign_types::{ForeignType, ForeignTypeRef};
 use parking_lot::{Mutex, MutexGuard};
 use metal;
+use objc::rc::autoreleasepool;
 use objc::runtime::Object;
 
 
@@ -43,26 +44,26 @@ impl Drop for SurfaceInner {
 
 impl SurfaceInner {
     fn next_frame<'a>(&self, frames: &'a [Frame]) -> (usize, MutexGuard<'a, FrameInner>) {
-        let _ap = AutoreleasePool::new();
         let layer_ref = self.render_layer.lock();
+        autoreleasepool(|| { // for the drawable
+            let (drawable, texture_temp): (&metal::DrawableRef, &metal::TextureRef) = unsafe {
+                let drawable = msg_send![*layer_ref, nextDrawable];
+                (drawable, msg_send![drawable, texture])
+            };
 
-        let (drawable, texture_temp): (&metal::DrawableRef, &metal::TextureRef) = unsafe {
-            let drawable = msg_send![*layer_ref, nextDrawable];
-            (drawable, msg_send![drawable, texture])
-        };
+            trace!("looking for {:?}", texture_temp);
+            let index = frames
+                .iter()
+                .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
+                .expect("Surface lost?");
 
-        trace!("looking for {:?}", texture_temp);
-        let index = frames
-            .iter()
-            .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
-            .expect("Surface lost?");
+            let mut frame = frames[index].inner.lock();
+            assert!(frame.drawable.is_none());
+            frame.drawable = Some(drawable.to_owned());
 
-        let mut frame = frames[index].inner.lock();
-        assert!(frame.drawable.is_none());
-        frame.drawable = Some(drawable.to_owned());
-
-        debug!("next is frame[{}]", index);
-        (index, frame)
+            debug!("next is frame[{}]", index);
+            (index, frame)
+        })
     }
 }
 
@@ -271,8 +272,7 @@ impl Device {
         let pixel_height = (view_size.height * scale_factor) as image::Size;
 
         let frames = (0 .. config.image_count)
-            .map(|index| {
-                let _ap = AutoreleasePool::new(); // for the drawable & texture
+            .map(|index| autoreleasepool(|| { // for the drawable & texture
                 let (drawable, texture) = unsafe {
                     let drawable: &metal::DrawableRef = msg_send![render_layer, nextDrawable];
                     assert!(!drawable.as_ptr().is_null());
@@ -292,13 +292,13 @@ impl Device {
                 };
                 Frame {
                     inner: Mutex::new(FrameInner {
-                        drawable: drawable,
+                        drawable,
                         available: true,
                         last_frame: 0,
                     }),
                     texture: texture.to_owned(),
                 }
-            })
+            }))
             .collect::<Vec<_>>();
 
         let images = frames
