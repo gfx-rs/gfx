@@ -28,6 +28,8 @@ use {
     MemoryGroup, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES, QUEUE_FAMILIES,
 };
 
+use bal_dx12::pso::{PipelineStateSubobject, Subobject};
+
 // Register space used for root constants.
 const ROOT_CONSTANT_SPACE: u32 = 0;
 
@@ -175,23 +177,6 @@ pub(crate) fn compile_shader(
 }
 
 #[repr(C)]
-struct PipelineStateSubobject<T> {
-    subobject_align: [usize; 0], // Subobjects must have the same alignment as pointers.
-    subobject_type: d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE,
-    subobject: T,
-}
-
-impl<T> PipelineStateSubobject<T> {
-    fn new(subobject_type: d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE, subobject: T) -> Self {
-        PipelineStateSubobject {
-            subobject_align: [],
-            subobject_type,
-            subobject,
-        }
-    }
-}
-
-#[repr(C)]
 struct GraphicsPipelineStateSubobjectStream {
     root_signature: PipelineStateSubobject<*mut d3d12::ID3D12RootSignature>,
     vs: PipelineStateSubobject<d3d12::D3D12_SHADER_BYTECODE>,
@@ -222,47 +207,47 @@ impl GraphicsPipelineStateSubobjectStream {
     ) -> Self {
         GraphicsPipelineStateSubobjectStream {
             root_signature: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE,
+                Subobject::RootSignature,
                 pso_desc.pRootSignature,
             ),
             vs: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS,
+                Subobject::VS,
                 pso_desc.VS,
             ),
             ps: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS,
+                Subobject::PS,
                 pso_desc.PS,
             ),
             ds: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS,
+                Subobject::DS,
                 pso_desc.DS,
             ),
             hs: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS,
+                Subobject::HS,
                 pso_desc.HS,
             ),
             gs: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS,
+                Subobject::GS,
                 pso_desc.GS,
             ),
             stream_output: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT,
+                Subobject::StreamOutput,
                 pso_desc.StreamOutput,
             ),
             blend: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND,
+                Subobject::Blend,
                 pso_desc.BlendState,
             ),
             sample_mask: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK,
+                Subobject::SampleMask,
                 pso_desc.SampleMask,
             ),
             rasterizer: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER,
+                Subobject::Rasterizer,
                 pso_desc.RasterizerState,
             ),
             depth_stencil: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1,
+                Subobject::DepthStencil1,
                 d3d12::D3D12_DEPTH_STENCIL_DESC1 {
                     DepthEnable: pso_desc.DepthStencilState.DepthEnable,
                     DepthWriteMask: pso_desc.DepthStencilState.DepthWriteMask,
@@ -276,42 +261,42 @@ impl GraphicsPipelineStateSubobjectStream {
                 },
             ),
             input_layout: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT,
+                Subobject::InputLayout,
                 pso_desc.InputLayout,
             ),
             ib_strip_cut_value: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE,
+                Subobject::IBStripCut,
                 pso_desc.IBStripCutValue,
             ),
             primitive_topology: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY,
+                Subobject::PrimitiveTopology,
                 pso_desc.PrimitiveTopologyType,
             ),
             render_target_formats: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS,
+                Subobject::RTFormats,
                 d3d12::D3D12_RT_FORMAT_ARRAY {
                     RTFormats: pso_desc.RTVFormats,
                     NumRenderTargets: pso_desc.NumRenderTargets,
                 },
             ),
             depth_stencil_format: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT,
+                Subobject::DSFormat,
                 pso_desc.DSVFormat,
             ),
             sample_desc: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC,
+                Subobject::SampleDesc,
                 pso_desc.SampleDesc,
             ),
             node_mask: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK,
+                Subobject::NodeMask,
                 pso_desc.NodeMask,
             ),
             cached_pso: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO,
+                Subobject::CachedPSO,
                 pso_desc.CachedPSO,
             ),
             flags: PipelineStateSubobject::new(
-                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS,
+                Subobject::Flags,
                 pso_desc.Flags,
             ),
         }

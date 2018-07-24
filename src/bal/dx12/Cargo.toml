@@ -15,4 +15,5 @@ workspace = "../../.."
 name = "gfx_bal_dx12"
 
 [dependencies]
-
+winapi = { version = "0.3", features = ["d3d12"] }
+wio = "0.2"

@@ -3,6 +3,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate derivative;
 extern crate gfx_hal as hal;
+extern crate gfx_bal_dx12 as bal_dx12;
 #[macro_use]
 extern crate log;
 extern crate smallvec;
