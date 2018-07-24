@@ -8,6 +8,7 @@ extern crate core_foundation;
 extern crate core_graphics;
 #[macro_use] extern crate log;
 extern crate block;
+extern crate dispatch;
 extern crate parking_lot;
 extern crate smallvec;
 extern crate spirv_cross;

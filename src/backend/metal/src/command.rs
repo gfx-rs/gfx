@@ -23,11 +23,19 @@ use hal::range::RangeArg;
 
 use block::ConcreteBlock;
 use cocoa::foundation::{NSUInteger, NSInteger, NSRange};
+use dispatch;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 
+
+#[allow(dead_code)]
+enum OnlineRecording {
+    Immediate,
+    Deferred,
+    Remote(dispatch::QueuePriority),
+}
 
 const WORD_SIZE: usize = 4;
 const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
@@ -37,12 +45,11 @@ const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
 const CLEAR_IMAGE_ARRAY: bool = false;
 /// Number of frames to average when reporting the performance counters.
 const COUNTERS_REPORT_WINDOW: usize = 0;
-/// If true, we record one-time-submit command buffers immediately.
-/// Otherwise, everything gets actually recorded only at submission time.
-const ALLOW_IMMEDIATE_RECORDING: bool = true;
 /// If true, we combine deferred command buffers together into one giant
 /// command buffer per submission, including the signalling logic.
 const STITCH_DEFERRED_COMMAND_BUFFERS: bool = true;
+/// Method of recording one-time-submit command buffers
+const ONLINE_RECORDING: OnlineRecording = OnlineRecording::Immediate;
 
 pub struct QueueInner {
     raw: metal::CommandQueue,
@@ -118,20 +125,44 @@ impl QueueInner {
     }
 }
 
+struct PoolShared {
+    dispatch_queue: Option<dispatch::Queue>,
+}
+
 type CommandBufferInnerPtr = Arc<RefCell<CommandBufferInner>>;
+type PoolSharedPtr = Arc<RefCell<PoolShared>>;
 
 pub struct CommandPool {
-    pub(crate) shared: Arc<Shared>,
-    pub(crate) allocated: Vec<CommandBufferInnerPtr>,
+    shared: Arc<Shared>,
+    allocated: Vec<CommandBufferInnerPtr>,
+    pool_shared: PoolSharedPtr,
 }
 
 unsafe impl Send for CommandPool {}
 unsafe impl Sync for CommandPool {}
 
+impl CommandPool {
+    pub(crate) fn new(shared: &Arc<Shared>) -> Self {
+        let pool_shared = PoolShared {
+            dispatch_queue: match ONLINE_RECORDING {
+                OnlineRecording::Immediate |
+                OnlineRecording::Deferred => None,
+                OnlineRecording::Remote(priority) => Some(dispatch::Queue::global(priority)),
+            }
+        };
+        CommandPool {
+            shared: Arc::clone(shared),
+            allocated: Vec::new(),
+            pool_shared: Arc::new(RefCell::new(pool_shared)),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct CommandBuffer {
-    inner: CommandBufferInnerPtr,
     shared: Arc<Shared>,
+    pool_shared: PoolSharedPtr,
+    inner: CommandBufferInnerPtr,
     state: State,
     temp: Temp,
 }
@@ -171,7 +202,7 @@ struct State {
     work_group_size: MTLSize,
     primitive_type: MTLPrimitiveType,
     resources_vs: StageResources,
-    resources_fs: StageResources,
+    resources_ps: StageResources,
     resources_cs: StageResources,
     index_buffer: Option<IndexBuffer<BufferPtr>>,
     rasterizer_state: Option<native::RasterizerState>,
@@ -185,7 +216,7 @@ struct State {
 impl State {
     fn reset_resources(&mut self) {
         self.resources_vs.clear();
-        self.resources_fs.clear();
+        self.resources_ps.clear();
         self.resources_cs.clear();
         self.push_constants.clear();
         self.vertex_buffers.clear();
@@ -238,7 +269,7 @@ impl State {
         };
         let (com_pso, com_rast) = self.make_pso_commands();
 
-        let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_fs));
+        let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_ps));
         let push_constants = self.push_constants.as_slice();
         let com_resources = [pso::Stage::Vertex, pso::Stage::Fragment]
             .iter()
@@ -446,7 +477,7 @@ impl State {
     }
 
     fn push_ps_constants<'a>(&'a mut self, id: u32) -> soft::RenderCommand<&'a soft::Own> {
-        self.resources_fs.push_constants_buffer_id = Some(id);
+        self.resources_ps.push_constants_buffer_id = Some(id);
         soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Fragment,
             index: id as usize,
@@ -538,10 +569,20 @@ impl StageResources {
         self.push_constants_buffer_id = None;
     }
 
-    fn set_buffer(&mut self, slot: usize, buffer: BufferPtr, offset: buffer::Offset) -> bool {
-        if self.buffers.len() <= slot {
-            self.buffers.resize(slot + 1, None);
+    fn pre_allocate(&mut self, counters: &native::ResourceCounters) {
+        if self.textures.len() < counters.textures {
+            self.textures.resize(counters.textures, None);
         }
+        if self.samplers.len() < counters.samplers {
+            self.samplers.resize(counters.samplers, None);
+        }
+        if self.buffers.len() < counters.buffers {
+            self.buffers.resize(counters.buffers, None);
+        }
+    }
+
+    fn set_buffer(&mut self, slot: usize, buffer: BufferPtr, offset: buffer::Offset) -> bool {
+        debug_assert!(self.buffers.len() > slot);
         let value = Some((buffer, offset));
         if self.buffers[slot] != value {
             self.buffers[slot] = value;
@@ -556,9 +597,7 @@ impl StageResources {
     ) where
         F: FnMut(usize, Option<TexturePtr>)
     {
-        if self.textures.len() < start + textures.len() {
-            self.textures.resize(start + textures.len(), None);
-        }
+        debug_assert!(self.textures.len() >= start + textures.len());
         for (i, (out, maybe)) in self
             .textures[start..]
             .iter_mut()
@@ -578,9 +617,7 @@ impl StageResources {
     ) where
         F: FnMut(usize, Option<SamplerPtr>)
     {
-        if self.samplers.len() < start + samplers.len() {
-            self.samplers.resize(start + samplers.len(), None);
-        }
+        debug_assert!(self.samplers.len() >= start + samplers.len());
         for (i, (out, &value)) in self
             .samplers[start..]
             .iter_mut()
@@ -594,6 +631,63 @@ impl StageResources {
         }
     }
 }
+
+
+#[derive(Debug, Default)]
+struct Capacity {
+    render: usize,
+    compute: usize,
+    blit: usize,
+}
+
+//TODO: make sure to recycle the heap allocation of these commands.
+enum EncodePass {
+    Render(Vec<soft::RenderCommand<soft::Own>>, metal::RenderPassDescriptor),
+    Compute(Vec<soft::ComputeCommand<soft::Own>>),
+    Blit(Vec<soft::BlitCommand<soft::Own>>),
+}
+unsafe impl Send for EncodePass {}
+
+struct SharedCommandBuffer(Arc<Mutex<metal::CommandBuffer>>);
+unsafe impl Send for SharedCommandBuffer {}
+
+impl EncodePass {
+    fn schedule(self, queue: &dispatch::Queue, cmd_buffer_arc: &Arc<Mutex<metal::CommandBuffer>>) {
+        let cmd_buffer = SharedCommandBuffer(Arc::clone(cmd_buffer_arc));
+        queue.async(move|| match self {
+            EncodePass::Render(list, desc) => {
+                let encoder = cmd_buffer.0.lock().new_render_command_encoder(&desc).to_owned();
+                for command in list {
+                    exec_render(&encoder, command.as_ref());
+                }
+                encoder.end_encoding();
+            }
+            EncodePass::Compute(list) => {
+                let encoder = cmd_buffer.0.lock().new_compute_command_encoder().to_owned();
+                for command in list {
+                    exec_compute(&encoder, command.as_ref());
+                }
+                encoder.end_encoding();
+            }
+            EncodePass::Blit(list) => {
+                let encoder = cmd_buffer.0.lock().new_blit_command_encoder().to_owned();
+                for command in list {
+                    exec_blit(&encoder, command.as_ref());
+                }
+                encoder.end_encoding();
+            }
+        });
+    }
+
+    fn update(&self, capacity: &mut Capacity) {
+        match &self {
+            EncodePass::Render(ref list, _) => capacity.render = capacity.render.max(list.len()),
+            EncodePass::Compute(ref list) => capacity.compute = capacity.compute.max(list.len()),
+            EncodePass::Blit(ref list) => capacity.blit = capacity.blit.max(list.len()),
+        }
+    }
+}
+
 
 #[derive(Debug, Default)]
 struct Journal {
@@ -656,7 +750,6 @@ impl Journal {
     }
 }
 
-#[derive(Debug)]
 enum CommandSink {
     Immediate {
         cmd_buffer: metal::CommandBuffer,
@@ -667,6 +760,13 @@ enum CommandSink {
     Deferred {
         is_encoding: bool,
         journal: Journal,
+    },
+    Remote {
+        queue: dispatch::Queue,
+        cmd_buffer: Arc<Mutex<metal::CommandBuffer>>,
+        token: Token,
+        pass: Option<EncodePass>,
+        capacity: Capacity,
     },
 }
 
@@ -732,7 +832,10 @@ impl CommandSink {
                     _ => PreRender::Void,
                 }
             }
-            _ => PreRender::Void
+            CommandSink::Remote { pass: Some(EncodePass::Render(ref mut list, _)), .. } => {
+                PreRender::Deferred(list)
+            }
+            _ => PreRender::Void,
         }
     }
 
@@ -741,26 +844,16 @@ impl CommandSink {
     where
         I: Iterator<Item = soft::RenderCommand<&'a soft::Own>>,
     {
-        match *self {
-            CommandSink::Immediate { ref mut encoder_state, .. } => {
-                match *encoder_state {
-                    EncoderState::Render(ref encoder) => {
-                        for command in commands {
-                            exec_render(encoder, command);
-                        }
-                    }
-                    _ => panic!("Expected to be in render encoding state!")
+        match self.pre_render() {
+            PreRender::Immediate(encoder) => {
+                for command in commands {
+                    exec_render(encoder, command);
                 }
             }
-            CommandSink::Deferred { is_encoding, ref mut journal } => {
-                assert!(is_encoding);
-                match journal.passes.last() {
-                    Some(&(soft::Pass::Render(_), _)) => {
-                        journal.render_commands.extend(commands.into_iter().map(soft::RenderCommand::own));
-                    }
-                    other => panic!("Active pass is not a render pass: {:?}", other),
-                }
+            PreRender::Deferred(ref mut list) => {
+                list.extend(commands.into_iter().map(soft::RenderCommand::own))
             }
+            PreRender::Void => panic!("Not in render encoding state!"),
         }
     }
 
@@ -771,26 +864,15 @@ impl CommandSink {
         I: Iterator<Item = soft::BlitCommand<&'a soft::Own>>,
     {
         match *self {
+            CommandSink::Immediate { encoder_state: EncoderState::Blit(ref encoder), .. } => {
+                for command in commands {
+                    exec_blit(encoder, command);
+                }
+            }
             CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
-                let current = match mem::replace(encoder_state, EncoderState::None) {
-                    EncoderState::None => None,
-                    EncoderState::Render(enc) => {
-                        enc.end_encoding();
-                        None
-                    },
-                    EncoderState::Blit(enc) => Some(enc),
-                    EncoderState::Compute(enc) => {
-                        enc.end_encoding();
-                        None
-                    },
-                };
-                let encoder = match current {
-                    Some(enc) => enc,
-                    None => {
-                        *num_passes += 1;
-                        cmd_buffer.new_blit_command_encoder().to_owned()
-                    },
-                };
+                *num_passes += 1;
+                encoder_state.end();
+                let encoder = cmd_buffer.new_blit_command_encoder().to_owned();
 
                 for command in commands {
                     exec_blit(&encoder, command);
@@ -806,6 +888,18 @@ impl CommandSink {
                     journal.passes.push((soft::Pass::Blit, journal.blit_commands.len() .. 0));
                 }
                 journal.blit_commands.extend(commands.into_iter().map(soft::BlitCommand::own));
+            }
+            CommandSink::Remote { pass: Some(EncodePass::Blit(ref mut list)), .. } => {
+                list.extend(commands.into_iter().map(soft::BlitCommand::own));
+            }
+            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref mut capacity, .. } => {
+                if let Some(pass) = pass.take() {
+                    pass.update(capacity);
+                    pass.schedule(queue, cmd_buffer);
+                }
+                let mut list = Vec::with_capacity(capacity.blit);
+                list.extend(commands.into_iter().map(soft::BlitCommand::own));
+                *pass = Some(EncodePass::Blit(list));
             }
         }
     }
@@ -823,6 +917,9 @@ impl CommandSink {
                     _ => PreCompute::Void,
                 }
             }
+            CommandSink::Remote { pass: Some(EncodePass::Compute(ref mut list)), .. } => {
+                PreCompute::Deferred(list)
+            }
             _ => PreCompute::Void
         }
     }
@@ -832,26 +929,16 @@ impl CommandSink {
     where
         I: Iterator<Item = soft::ComputeCommand<&'a soft::Own>>,
     {
-        match *self {
-            CommandSink::Immediate { ref mut encoder_state, .. } => {
-                match *encoder_state {
-                    EncoderState::Compute(ref encoder) => {
-                        for command in commands {
-                            exec_compute(encoder, command);
-                        }
-                    }
-                    _ => panic!("Expected to be in compute pass"),
+        match self.pre_compute() {
+            PreCompute::Immediate(ref encoder) => {
+                for command in commands {
+                    exec_compute(encoder, command);
                 }
             }
-            CommandSink::Deferred { is_encoding, ref mut journal } => {
-                assert!(is_encoding);
-                match journal.passes.last() {
-                    Some(&(soft::Pass::Compute, _)) => {
-                        journal.compute_commands.extend(commands.into_iter().map(soft::ComputeCommand::own));
-                    }
-                    other => panic!("Active pass is not a compute pass: {:?}", other),
-                }
+            PreCompute::Deferred(ref mut list) => {
+                list.extend(commands.into_iter().map(soft::ComputeCommand::own));
             }
+            PreCompute::Void => panic!("Not in compute encoding state!"),
         }
     }
 
@@ -863,6 +950,12 @@ impl CommandSink {
             CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
                 *is_encoding = false;
                 journal.stop();
+            }
+            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref mut capacity, .. } => {
+                if let Some(pass) = pass.take() {
+                    pass.update(capacity);
+                    pass.schedule(queue, cmd_buffer);
+                }
             }
         }
     }
@@ -911,6 +1004,20 @@ impl CommandSink {
                 }
                 journal.passes.push((pass, range))
             }
+            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref capacity, .. } => {
+                let desc = unsafe {
+                    let desc: metal::RenderPassDescriptor = msg_send![descriptor, copy];
+                    msg_send![desc.as_ptr(), retain];
+                    desc
+                };
+                let mut list = Vec::with_capacity(capacity.render);
+                list.extend(init_commands.map(soft::RenderCommand::own));
+                let new_pass = EncodePass::Render(list, desc);
+                match door {
+                    PassDoor::Open => *pass = Some(new_pass),
+                    PassDoor::Closed { .. } => new_pass.schedule(queue, cmd_buffer),
+                }
+            }
         }
     }
 
@@ -950,6 +1057,15 @@ impl CommandSink {
                 };
                 journal.passes.push((soft::Pass::Compute, range))
             }
+            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref capacity, .. } => {
+                let mut list = Vec::with_capacity(capacity.compute);
+                list.extend(init_commands.map(soft::ComputeCommand::own));
+                let new_pass = EncodePass::Compute(list);
+                match door {
+                    PassDoor::Open => *pass = Some(new_pass),
+                    PassDoor::Closed { .. } => new_pass.schedule(queue, cmd_buffer),
+                }
+            }
         }
     }
 }
@@ -964,6 +1080,7 @@ pub struct IndexBuffer<B> {
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
     backup_journal: Option<Journal>,
+    backup_capacity: Option<Capacity>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
 }
@@ -987,6 +1104,12 @@ impl CommandBufferInner {
                 if !release {
                     journal.clear();
                     self.backup_journal = Some(journal);
+                }
+            }
+            Some(CommandSink::Remote { token, capacity, .. }) => {
+                shared.queue.lock().release(token);
+                if !release {
+                    self.backup_capacity = Some(capacity);
                 }
             }
             None => {}
@@ -1304,6 +1427,7 @@ fn record_empty(command_buf: &metal::CommandBufferRef) {
 struct PerformanceCounters {
     immediate_command_buffers: usize,
     deferred_command_buffers: usize,
+    remote_command_buffers: usize,
     signal_command_buffers: usize,
     frame_wait_duration: time::Duration,
     frame_wait_count: usize,
@@ -1370,8 +1494,8 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         self.wait(submit.wait_semaphores.iter().map(|&(s, _)| s));
 
-        let queue = self.shared.queue.lock();
-        let (mut num_immediate, mut num_deferred) = (0, 0);
+        let cmd_queue = self.shared.queue.lock();
+        let (mut num_immediate, mut num_deferred, mut num_remote) = (0, 0, 0);
         let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
 
         for buffer in submit.cmd_buffers {
@@ -1404,7 +1528,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                         let cmd_buffer = deferred_cmd_buffer
                             .take()
                             .unwrap_or_else(|| {
-                                let cmd_buffer = queue.spawn_temp();
+                                let cmd_buffer = cmd_queue.spawn_temp();
                                 cmd_buffer.enqueue();
                                 cmd_buffer.set_label("deferred");
                                 cmd_buffer
@@ -1415,14 +1539,25 @@ impl RawCommandQueue<Backend> for CommandQueue {
                         }
                     }
                  }
-                 _ => panic!("Command buffer not recorded for submission")
+                 Some(CommandSink::Remote { ref queue, ref cmd_buffer, ref token, .. }) => {
+                    num_remote += 1;
+                    trace!("\tremote {:?}", token);
+                    cmd_buffer.lock().enqueue();
+                    let shared_cb = SharedCommandBuffer(Arc::clone(cmd_buffer));
+                    queue.sync(move || {
+                        shared_cb.0.lock().commit();
+                    });
+                 }
+                 None => panic!("Command buffer not recorded for submission")
             }
         }
 
-        debug!("\t{} immediate, {} deferred command buffers", num_immediate, num_deferred);
+        debug!("\t{} immediate, {} deferred, and {} remote command buffers",
+            num_immediate, num_deferred, num_remote);
         if let Some(ref mut counters) = self.perf_counters {
             counters.immediate_command_buffers += num_immediate;
             counters.deferred_command_buffers += num_deferred;
+            counters.remote_command_buffers += num_remote;
         }
 
         const BLOCK_BUCKET: usize = 4;
@@ -1457,7 +1592,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             let cmd_buffer = deferred_cmd_buffer
                 .take()
                 .unwrap_or_else(|| {
-                    let cmd_buffer = queue.spawn_temp();
+                    let cmd_buffer = cmd_queue.spawn_temp();
                     cmd_buffer.set_label("signal");
                     record_empty(cmd_buffer);
                     cmd_buffer
@@ -1502,11 +1637,13 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 let total_submitted =
                     counters.immediate_command_buffers +
                     counters.deferred_command_buffers +
+                    counters.remote_command_buffers +
                     counters.signal_command_buffers;
                 println!("Performance counters:");
-                println!("\tCommand buffers: {} immediate, {} deferred, {} signals",
+                println!("\tCommand buffers: {} immediate, {} deferred, {} remote, {} signals",
                     counters.immediate_command_buffers / counters.frame,
                     counters.deferred_command_buffers / counters.frame,
+                    counters.remote_command_buffers / counters.frame,
                     counters.signal_command_buffers / counters.frame,
                 );
                 println!("\tEstimated pipeline length is {} frames, given the total active {} command buffers",
@@ -1546,13 +1683,15 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         // than our mega-queue supports.
         //TODO: Implement secondary buffers
         let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
+            shared: Arc::clone(&self.shared),
+            pool_shared: Arc::clone(&self.pool_shared),
             inner: Arc::new(RefCell::new(CommandBufferInner {
                 sink: None,
                 backup_journal: None,
+                backup_capacity: None,
                 retained_buffers: Vec::new(),
                 retained_textures: Vec::new(),
             })),
-            shared: self.shared.clone(),
             state: State {
                 viewport: None,
                 scissors: None,
@@ -1563,7 +1702,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 work_group_size: MTLSize { width: 0, height: 0, depth: 0 },
                 primitive_type: MTLPrimitiveType::Point,
                 resources_vs: StageResources::new(),
-                resources_fs: StageResources::new(),
+                resources_ps: StageResources::new(),
                 resources_cs: StageResources::new(),
                 index_buffer: None,
                 rasterizer_state: None,
@@ -1640,18 +1779,36 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.reset(false);
         let mut inner = self.inner.borrow_mut();
         //TODO: Implement secondary command buffers
-        let sink = if ALLOW_IMMEDIATE_RECORDING && flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT) {
-            let (cmd_buffer, token) = self.shared.queue.lock().spawn();
-            CommandSink::Immediate {
-                cmd_buffer,
-                token,
-                encoder_state: EncoderState::None,
-                num_passes: 0,
+        let oneshot = flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT);
+        let sink = match ONLINE_RECORDING {
+            OnlineRecording::Immediate if oneshot => {
+                let (cmd_buffer, token) = self.shared.queue.lock().spawn();
+                CommandSink::Immediate {
+                    cmd_buffer,
+                    token,
+                    encoder_state: EncoderState::None,
+                    num_passes: 0,
+                }
             }
-        } else {
-            CommandSink::Deferred {
-                is_encoding: false,
-                journal: inner.backup_journal.take().unwrap_or_default(),
+            OnlineRecording::Remote(_) if oneshot => {
+                let (cmd_buffer, token) = self.shared.queue.lock().spawn();
+                CommandSink::Remote {
+                    queue: dispatch::Queue::with_target_queue(
+                        "gfx-metal",
+                        dispatch::QueueAttribute::Serial,
+                        self.pool_shared.borrow_mut().dispatch_queue.as_ref().unwrap(),
+                    ),
+                    cmd_buffer: Arc::new(Mutex::new(cmd_buffer)),
+                    token,
+                    pass: None,
+                    capacity: inner.backup_capacity.take().unwrap_or_default(),
+                }
+            }
+            _ => {
+                CommandSink::Deferred {
+                    is_encoding: false,
+                    journal: inner.backup_journal.take().unwrap_or_default(),
+                }
             }
         };
         inner.sink = Some(sink);
@@ -2112,7 +2269,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         } else {
             None
         };
-        let com_fs = if let Some(&Some((buffer, offset))) = self.state.resources_fs.buffers.first() {
+        let com_fs = if let Some(&Some((buffer, offset))) = self.state.resources_ps.buffers.first() {
             Some(soft::RenderCommand::BindBuffer {
                 stage: pso::Stage::Fragment,
                 index: 0,
@@ -2541,8 +2698,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // FIXME: subpasses
         let _ap = AutoreleasePool::new();
 
-        // we are going to modify the RP descriptor here, so
+        // We are going to modify the RP descriptor here, so
         // locking to avoid data races.
+        //TODO: if we know that we aren't in the `Immediate` recording mode,
+        // we can copy here right away and void the lock entirely.
         let descriptor = framebuffer.descriptor.lock();
 
         let mut num_colors = 0;
@@ -2751,6 +2910,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
+        self.state.resources_vs.pre_allocate(&pipe_layout.vs_counters);
+        self.state.resources_ps.pre_allocate(&pipe_layout.ps_counters);
+
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
@@ -2796,7 +2958,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 desc_set: (first_set + set_index) as _,
                                 binding: layout.binding as _,
                             };
-                            Some((pso::Stage::Fragment, loc, &mut self.state.resources_fs))
+                            Some((pso::Stage::Fragment, loc, &mut self.state.resources_ps))
                         } else {
                             None
                         };
@@ -2877,7 +3039,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             binding: 0,
                         };
                         let slot = pipe_layout.res_overrides[&loc].buffer_id;
-                        if self.state.resources_fs.set_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _) {
+                        if self.state.resources_ps.set_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _) {
                             pre.issue(soft::RenderCommand::BindBuffer {
                                 stage: pso::Stage::Fragment,
                                 index: slot as _,
@@ -2921,6 +3083,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut dynamic_offsets = SmallVec::<[u64; 16]>::new();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
+
+        self.state.resources_cs.pre_allocate(&pipe_layout.cs_counters);
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             let resources = &mut self.state.resources_cs;

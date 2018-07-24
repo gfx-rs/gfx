@@ -119,7 +119,9 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// Descriptors will become invalid once the pool is reset. Usage of invalidated descriptor sets results
     /// in undefined behavior.
     fn allocate_set(&mut self, layout: &B::DescriptorSetLayout) -> Result<B::DescriptorSet, AllocationError> {
-        self.allocate_sets(Some(layout)).remove(0)
+        let mut sets = Vec::with_capacity(1);
+        self.allocate_sets(Some(layout), &mut sets)
+            .map(|_| sets.remove(0))
     }
 
     /// Allocate one or multiple descriptor sets from the pool.
@@ -127,15 +129,22 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// Each descriptor set will be allocated from the pool according to the corresponding set layout.
     /// Descriptors will become invalid once the pool is reset. Usage of invalidated descriptor sets results
     /// in undefined behavior.
-    fn allocate_sets<I>(&mut self, layouts: I) -> Vec<Result<B::DescriptorSet, AllocationError>>
+    fn allocate_sets<I>(&mut self, layouts: I, sets: &mut Vec<B::DescriptorSet>) -> Result<(), AllocationError>
     where
         I: IntoIterator,
         I::Item: Borrow<B::DescriptorSetLayout>,
     {
-        layouts
-            .into_iter()
-            .map(|layout| self.allocate_set(layout.borrow()))
-            .collect()
+        let base = sets.len();
+        for layout in layouts {
+            match self.allocate_set(layout.borrow()) {
+                Ok(set) => sets.push(set),
+                Err(e) => {
+                    self.free_sets(sets.drain(base ..));
+                    return Err(e)
+                }
+            }
+        }
+        Ok(())
     }
 
     /// Free the given descriptor sets provided as an iterator.
