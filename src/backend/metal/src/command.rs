@@ -3079,11 +3079,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             let resources = &mut self.state.resources_cs;
-            let res_override = &pipe_layout.res_overrides[&msl::ResourceBindingLocation {
-                stage: spirv::ExecutionModel::GlCompute,
-                desc_set: (first_set + set_index) as _,
-                binding: 0,
-            }];
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
                     let data = pool.read();
@@ -3092,6 +3087,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     let mut buffer_base = buffer_range.start as usize;
 
                     for layout in layouts.iter() {
+                        let res_override = &pipe_layout.res_overrides[&msl::ResourceBindingLocation {
+                            stage: spirv::ExecutionModel::GlCompute,
+                            desc_set: (first_set + set_index) as _,
+                            binding: layout.binding,
+                        }];
+
                         let sm_range = sampler_base .. sampler_base + layout.count;
                         let tx_range = texture_base .. texture_base + layout.count;
                         let bf_range = buffer_base .. buffer_base + layout.count;
@@ -3161,6 +3162,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
+                        let res_override = &pipe_layout.res_overrides[&msl::ResourceBindingLocation {
+                            stage: spirv::ExecutionModel::GlCompute,
+                            desc_set: (first_set + set_index) as _,
+                            binding: 0,
+                        }];
                         let index = res_override.buffer_id as usize;
                         let buffer = BufferPtr(raw.as_ptr());
                         if resources.set_buffer(index, buffer, offset as _) {
