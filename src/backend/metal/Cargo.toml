@@ -25,10 +25,9 @@ log = { version = "0.4", features = ["release_max_level_error"] }
 winit = { version = "0.16", optional = true }
 metal-rs = "0.10.1"
 foreign-types = "0.3"
-objc = "0.2"
+objc = "0.2.5"
 block = "0.1"
 cocoa = "0.15"
-core-foundation = "0.6"
 core-graphics = "0.14"
 dispatch = "0.1"
 smallvec = "0.6"

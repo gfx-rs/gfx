@@ -1,5 +1,5 @@
 use {
-    AutoreleasePool, Backend, PrivateCapabilities, QueueFamily,
+    Backend, PrivateCapabilities, QueueFamily,
     Shared, Surface, Swapchain, validate_line_width, BufferPtr, SamplerPtr, TexturePtr,
 };
 use {conversions as conv, command, native as n};
@@ -30,6 +30,7 @@ use metal::{self,
     MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLTextureType,
     CaptureManager
 };
+use objc::rc::autoreleasepool;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
@@ -1043,7 +1044,6 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<n::ImageView>
     {
-        let _ap = AutoreleasePool::new(); // for attachments
         let descriptor = metal::RenderPassDescriptor::new().to_owned();
         descriptor.set_render_target_array_length(extent.depth as NSUInteger);
 
@@ -1054,46 +1054,48 @@ impl hal::Device<Backend> for Device {
             depth_stencil: None,
         };
 
-        for (rat, attachment) in renderpass.attachments.iter().zip(attachments) {
-            let format = match rat.format {
-                Some(format) => format,
-                None => continue,
-            };
-            let aspects = format.surface_desc().aspects;
-            inner.aspects |= aspects;
+        autoreleasepool(|| { // for the attachments
+            for (rat, attachment) in renderpass.attachments.iter().zip(attachments) {
+                let format = match rat.format {
+                    Some(format) => format,
+                    None => continue,
+                };
+                let aspects = format.surface_desc().aspects;
+                inner.aspects |= aspects;
 
-            let at = attachment.borrow();
-            if aspects.contains(format::Aspects::COLOR) {
-                descriptor
-                    .color_attachments()
-                    .object_at(inner.colors.len())
-                    .expect("too many color attachments")
-                    .set_texture(Some(&at.raw));
-                inner.colors.push(native::ColorAttachment {
-                    mtl_format: at.mtl_format,
-                    channel: format.base_format().1.into(),
-                });
-            }
-            if aspects.contains(format::Aspects::DEPTH) {
-                assert_eq!(inner.depth_stencil, None);
-                inner.depth_stencil = Some(at.mtl_format);
-                descriptor
-                    .depth_attachment()
-                    .unwrap()
-                    .set_texture(Some(&at.raw));
-            }
-            if aspects.contains(format::Aspects::STENCIL) {
-                if let Some(old_format) = inner.depth_stencil {
-                    assert_eq!(old_format, at.mtl_format);
-                } else {
-                    inner.depth_stencil = Some(at.mtl_format);
+                let at = attachment.borrow();
+                if aspects.contains(format::Aspects::COLOR) {
+                    descriptor
+                        .color_attachments()
+                        .object_at(inner.colors.len())
+                        .expect("too many color attachments")
+                        .set_texture(Some(&at.raw));
+                    inner.colors.push(native::ColorAttachment {
+                        mtl_format: at.mtl_format,
+                        channel: format.base_format().1.into(),
+                    });
                 }
-                descriptor
-                    .stencil_attachment()
-                    .unwrap()
-                    .set_texture(Some(&at.raw));
+                if aspects.contains(format::Aspects::DEPTH) {
+                    assert_eq!(inner.depth_stencil, None);
+                    inner.depth_stencil = Some(at.mtl_format);
+                    descriptor
+                        .depth_attachment()
+                        .unwrap()
+                        .set_texture(Some(&at.raw));
+                }
+                if aspects.contains(format::Aspects::STENCIL) {
+                    if let Some(old_format) = inner.depth_stencil {
+                        assert_eq!(old_format, at.mtl_format);
+                    } else {
+                        inner.depth_stencil = Some(at.mtl_format);
+                    }
+                    descriptor
+                        .stencil_attachment()
+                        .unwrap()
+                        .set_texture(Some(&at.raw));
+                }
             }
-        }
+        });
 
         Ok(n::Framebuffer {
             descriptor,
@@ -1222,40 +1224,40 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
-        let _ap = AutoreleasePool::new(); // for the encoder
         let mut num_syncs = 0;
         debug!("invalidate_mapped_memory_ranges");
 
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
-        let (cmd_buffer, token) = self.shared.queue.lock().spawn();
-        let encoder = cmd_buffer.new_blit_command_encoder();
+        let cmd_queue = self.shared.queue.lock();
+        let cmd_buffer = cmd_queue.spawn_temp();
+        autoreleasepool(|| {
+            let encoder = cmd_buffer.new_blit_command_encoder();
 
-        for item in iter {
-            let (memory, ref generic_range) = *item.borrow();
-            let range = memory.resolve(generic_range);
-            debug!("\trange {:?}", range);
+            for item in iter {
+                let (memory, ref generic_range) = *item.borrow();
+                let range = memory.resolve(generic_range);
+                debug!("\trange {:?}", range);
 
-            match memory.heap {
-                n::MemoryHeap::Native(_) => unimplemented!(),
-                n::MemoryHeap::Public(mt, ref cpu_buffer) if 1<<mt.0 != MemoryTypes::SHARED.bits() as usize => {
-                    num_syncs += 1;
-                    encoder.synchronize_resource(cpu_buffer);
-                }
-                n::MemoryHeap::Public(..) => continue,
-                n::MemoryHeap::Private => panic!("Can't map private memory!"),
-            };
-        }
+                match memory.heap {
+                    n::MemoryHeap::Native(_) => unimplemented!(),
+                    n::MemoryHeap::Public(mt, ref cpu_buffer) if 1<<mt.0 != MemoryTypes::SHARED.bits() as usize => {
+                        num_syncs += 1;
+                        encoder.synchronize_resource(cpu_buffer);
+                    }
+                    n::MemoryHeap::Public(..) => continue,
+                    n::MemoryHeap::Private => panic!("Can't map private memory!"),
+                };
+            }
+            encoder.end_encoding();
+        });
 
-        encoder.end_encoding();
         if num_syncs != 0 {
             debug!("\twaiting...");
             cmd_buffer.set_label("invalidate_mapped_memory_ranges");
             cmd_buffer.commit();
             cmd_buffer.wait_until_completed();
         }
-
-        self.shared.queue.lock().release(token);
     }
 
     fn create_semaphore(&self) -> n::Semaphore {
