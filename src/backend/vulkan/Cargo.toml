@@ -13,7 +13,7 @@ workspace = "../../.."
 
 [features]
 default = ["winit"]
-use-rtld-next = ["shared_library"]
+use-rtld-default = ["shared_library"]
 
 [lib]
 name = "gfx_backend_vulkan"
