@@ -1,17 +1,20 @@
 use {Backend, BufferPtr, SamplerPtr, TexturePtr};
-use internal::Channel;
+use internal::{Channel, FastStorageMap};
 use range_alloc::RangeAllocator;
 use window::SwapchainImage;
 
+use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::fmt;
+use std::{fmt, iter};
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
 use std::sync::Arc;
 
 use hal::{self, image, pso};
 use hal::backend::FastHashMap;
+use hal::command::{ClearColorRaw, ClearValueRaw};
 use hal::format::{Aspects, Format, FormatDesc};
+use hal::pass::{Attachment, AttachmentLoadOp, AttachmentOps};
 
 use cocoa::foundation::{NSUInteger};
 use foreign_types::ForeignType;
@@ -49,13 +52,72 @@ impl fmt::Debug for ShaderModule {
 unsafe impl Send for ShaderModule {}
 unsafe impl Sync for ShaderModule {}
 
+#[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
+pub struct RenderPassKey {
+    // enough room for 4 color targets + depth/stencil
+    operations: SmallVec<[AttachmentOps; 5]>,
+    pub clear_data: SmallVec<[u32; 10]>,
+}
+
 #[derive(Debug)]
 pub struct RenderPass {
-    pub(crate) attachments: Vec<hal::pass::Attachment>,
+    pub(crate) attachments: Vec<Attachment>,
 }
 
 unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
+
+impl RenderPass {
+    pub fn build_key<T>(&self, clear_values: T) -> (RenderPassKey, Aspects)
+    where
+        T: IntoIterator,
+        T::Item: Borrow<ClearValueRaw>,
+    {
+        let mut key = RenderPassKey::default();
+        let mut full_aspects = Aspects::empty();
+
+        let dummy_value = ClearValueRaw {
+            color: ClearColorRaw {
+                int32: [0; 4],
+            },
+        };
+        let clear_values_iter = clear_values
+            .into_iter()
+            .map(|c| *c.borrow())
+            .chain(iter::repeat(dummy_value));
+
+        for (rat, clear_value) in self.attachments.iter().zip(clear_values_iter) {
+            //TODO: avoid calling `surface_desc` as often
+            let aspects = match rat.format {
+                Some(format) => format.surface_desc().aspects,
+                None => continue,
+            };
+            full_aspects |= aspects;
+            let cv = clear_value.borrow();
+
+            if aspects.contains(Aspects::COLOR) {
+                key.operations.push(rat.ops);
+                if rat.ops.load == AttachmentLoadOp::Clear {
+                    key.clear_data.extend_from_slice(unsafe { &cv.color.uint32 });
+                }
+            }
+            if aspects.contains(Aspects::DEPTH) {
+                key.operations.push(rat.ops);
+                if rat.ops.load == AttachmentLoadOp::Clear {
+                    key.clear_data.push(unsafe { *(&cv.depth_stencil.depth as *const _ as *const u32) });
+                }
+            }
+            if aspects.contains(Aspects::STENCIL) {
+                key.operations.push(rat.stencil_ops);
+                if rat.stencil_ops.load == AttachmentLoadOp::Clear {
+                    key.clear_data.push(unsafe { cv.depth_stencil.stencil });
+                }
+            }
+        }
+
+        (key, full_aspects)
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct ColorAttachment {
@@ -73,7 +135,8 @@ pub struct FramebufferInner {
 
 #[derive(Debug)]
 pub struct Framebuffer {
-    pub(crate) descriptor: Mutex<metal::RenderPassDescriptor>,
+    pub(crate) descriptor: metal::RenderPassDescriptor,
+    pub(crate) desc_storage: FastStorageMap<RenderPassKey, metal::RenderPassDescriptor>,
     pub(crate) inner: FramebufferInner,
 }
 
@@ -115,7 +178,7 @@ impl PipelineLayout {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RasterizerState {
     //TODO: more states
     pub front_winding: metal::MTLWinding,

@@ -989,13 +989,7 @@ impl CommandSink {
                 }
             }
             CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
-                //Note: the original descriptor belongs to the framebuffer,
-                // and will me mutated afterwards.
-                let pass = soft::Pass::Render( unsafe {
-                    let desc: metal::RenderPassDescriptor = msg_send![descriptor, copy];
-                    msg_send![desc.as_ptr(), retain];
-                    desc
-                });
+                let pass = soft::Pass::Render(descriptor.to_owned());
                 let mut range = journal.render_commands.len() .. 0;
                 journal.render_commands.extend(init_commands.map(soft::RenderCommand::own));
                 match door {
@@ -1005,14 +999,9 @@ impl CommandSink {
                 journal.passes.push((pass, range))
             }
             CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref capacity, .. } => {
-                let desc = unsafe {
-                    let desc: metal::RenderPassDescriptor = msg_send![descriptor, copy];
-                    msg_send![desc.as_ptr(), retain];
-                    desc
-                };
                 let mut list = Vec::with_capacity(capacity.render);
                 list.extend(init_commands.map(soft::RenderCommand::own));
-                let new_pass = EncodePass::Render(list, desc);
+                let new_pass = EncodePass::Render(list, descriptor.to_owned());
                 match door {
                     PassDoor::Open => *pass = Some(new_pass),
                     PassDoor::Closed { .. } => new_pass.schedule(queue, cmd_buffer),
@@ -2696,61 +2685,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::ClearValueRaw>,
     {
         // FIXME: subpasses
-        let _ap = AutoreleasePool::new();
-
-        // We are going to modify the RP descriptor here, so
-        // locking to avoid data races.
-        //TODO: if we know that we aren't in the `Immediate` recording mode,
-        // we can copy here right away and void the lock entirely.
-        let descriptor = framebuffer.descriptor.lock();
-
-        let mut num_colors = 0;
-        let mut full_aspects = Aspects::empty();
-        let mut inner = self.inner.borrow_mut();
-
-        let dummy_value = com::ClearValueRaw {
-            color: com:: ClearColorRaw {
-                int32: [0; 4],
-            },
-        };
-        let clear_values_iter = clear_values
-            .into_iter()
-            .map(|c| *c.borrow())
-            .chain(iter::repeat(dummy_value));
-
-        for (rat, clear_value) in render_pass.attachments.iter().zip(clear_values_iter) {
-            let (aspects, channel) = match rat.format {
-                Some(format) => (format.surface_desc().aspects, Channel::from(format.base_format().1)),
-                None => continue,
-            };
-            full_aspects |= aspects;
-            if aspects.contains(Aspects::COLOR) {
-                let color_desc = descriptor
-                    .color_attachments()
-                    .object_at(num_colors)
-                    .unwrap();
-                if set_operations(color_desc, rat.ops) == AttachmentLoadOp::Clear {
-                    let mtl_color = channel
-                        .interpret(unsafe { clear_value.color });
-                    color_desc.set_clear_color(mtl_color);
-                }
-                num_colors += 1;
-            }
-            if aspects.contains(Aspects::DEPTH) {
-                let depth_desc = descriptor.depth_attachment().unwrap();
-                if set_operations(depth_desc, rat.ops) == AttachmentLoadOp::Clear {
-                    let mtl_depth = unsafe { clear_value.depth_stencil.depth as f64 };
-                    depth_desc.set_clear_depth(mtl_depth);
-                }
-            }
-            if aspects.contains(Aspects::STENCIL) {
-                let stencil_desc = descriptor.stencil_attachment().unwrap();
-                if set_operations(stencil_desc, rat.stencil_ops) == AttachmentLoadOp::Clear {
-                    let mtl_stencil = unsafe { clear_value.depth_stencil.stencil };
-                    stencil_desc.set_clear_stencil(mtl_stencil);
-                }
-            }
-        }
+        let desc_guard;
+        let (rp_key, full_aspects) = render_pass.build_key(clear_values);
 
         self.state.render_pso_is_compatible = match self.state.render_pso {
             Some(ref ps) => ps.at_formats.len() == render_pass.attachments.len() &&
@@ -2759,6 +2695,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         self.state.framebuffer_inner = framebuffer.inner.clone();
+
         let ds_store = &self.shared.service_pipes.depth_stencil_states;
         let ds_state;
         let com_ds = if full_aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
@@ -2776,9 +2713,62 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .make_render_commands(full_aspects)
             .chain(com_ds);
 
-        inner
+        desc_guard = framebuffer.desc_storage
+            .get_or_create_with(&rp_key, || {
+                let _ap = AutoreleasePool::new();
+                let mut clear_id = 0;
+                let mut num_colors = 0;
+                let rp_desc = unsafe {
+                    let desc: metal::RenderPassDescriptor = msg_send![framebuffer.descriptor, copy];
+                    msg_send![desc.as_ptr(), retain];
+                    desc
+                };
+
+                for rat in &render_pass.attachments {
+                    let (aspects, channel) = match rat.format {
+                        Some(format) => (format.surface_desc().aspects, Channel::from(format.base_format().1)),
+                        None => continue,
+                    };
+                    if aspects.contains(Aspects::COLOR) {
+                        let color_desc = rp_desc
+                            .color_attachments()
+                            .object_at(num_colors)
+                            .unwrap();
+                        if set_operations(color_desc, rat.ops) == AttachmentLoadOp::Clear {
+                            let d = &rp_key.clear_data[clear_id .. clear_id + 4];
+                            clear_id += 4;
+                            let raw = com::ClearColorRaw {
+                                uint32: [d[0], d[1], d[2], d[3]],
+                            };
+                            color_desc.set_clear_color(channel.interpret(raw));
+                        }
+                        num_colors += 1;
+                    }
+                    if aspects.contains(Aspects::DEPTH) {
+                        let depth_desc = rp_desc.depth_attachment().unwrap();
+                        if set_operations(depth_desc, rat.ops) == AttachmentLoadOp::Clear {
+                            let raw = unsafe { *(&rp_key.clear_data[clear_id] as *const _ as *const f32) };
+                            clear_id += 1;
+                            depth_desc.set_clear_depth(raw as f64);
+                        }
+                    }
+                    if aspects.contains(Aspects::STENCIL) {
+                        let stencil_desc = rp_desc.stencil_attachment().unwrap();
+                        if set_operations(stencil_desc, rat.stencil_ops) == AttachmentLoadOp::Clear {
+                            let raw = rp_key.clear_data[clear_id];
+                            clear_id += 1;
+                            stencil_desc.set_clear_stencil(raw);
+                        }
+                    }
+                }
+
+                rp_desc
+            });
+
+        self.inner
+            .borrow_mut()
             .sink()
-            .begin_render_pass(PassDoor::Open, &*descriptor, init_commands);
+            .begin_render_pass(PassDoor::Open, &**desc_guard, init_commands);
     }
 
     fn next_subpass(&mut self, _contents: com::SubpassContents) {
@@ -2821,38 +2811,39 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut pre = inner.sink().pre_render();
 
         self.state.render_pso_is_compatible = true; //assume good intent :)
-        let mut set_pipeline = false;
-        match self.state.render_pso {
+        let set_pipeline = match self.state.render_pso {
+            Some(ref ps) if ps.raw.as_ptr() == pipeline.raw.as_ptr() => {
+                false // chill out
+            }
             Some(ref mut ps) => {
-                // try to avoid extra states or new heap allocations
-                if ps.raw.as_ptr() != pipeline.raw.as_ptr() {
-                    ps.raw = pipeline.raw.to_owned();
-                    set_pipeline = true;
-                }
-                ps.ds_desc = pipeline.depth_stencil_desc.clone();
+                ps.raw = pipeline.raw.to_owned();
                 ps.vbuf_map.clear();
                 ps.vbuf_map.extend(&pipeline.vertex_buffer_map);
+                ps.ds_desc = pipeline.depth_stencil_desc.clone();
                 ps.at_formats.clear();
                 ps.at_formats.extend_from_slice(&pipeline.attachment_formats);
+                true
             }
             None => {
-                set_pipeline = true;
                 self.state.render_pso = Some(RenderPipelineState {
                     raw: pipeline.raw.to_owned(),
                     ds_desc: pipeline.depth_stencil_desc.clone(),
                     vbuf_map: pipeline.vertex_buffer_map.clone(),
                     at_formats: pipeline.attachment_formats.clone(),
                 });
+                true
             }
-        }
+        };
         if set_pipeline {
             pre.issue(soft::RenderCommand::BindPipeline(&*pipeline.raw));
-        }
-
-        self.state.rasterizer_state = pipeline.rasterizer_state.clone();
-        self.state.primitive_type = pipeline.primitive_type;
-        if let Some(ref rs) = pipeline.rasterizer_state {
-            pre.issue(soft::RenderCommand::SetRasterizerState(rs.clone()))
+            self.state.rasterizer_state = pipeline.rasterizer_state.clone();
+            self.state.primitive_type = pipeline.primitive_type;
+            if let Some(ref rs) = pipeline.rasterizer_state {
+                pre.issue(soft::RenderCommand::SetRasterizerState(rs.clone()))
+            }
+        } else {
+            debug_assert_eq!(self.state.rasterizer_state, pipeline.rasterizer_state);
+            debug_assert_eq!(self.state.primitive_type, pipeline.primitive_type);
         }
 
         if let Some(desc) = self.state.build_depth_stencil() {

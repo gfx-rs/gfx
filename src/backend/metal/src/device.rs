@@ -3,6 +3,7 @@ use {
     Shared, Surface, Swapchain, validate_line_width, BufferPtr, SamplerPtr, TexturePtr,
 };
 use {conversions as conv, command, native as n};
+use internal::FastStorageMap;
 use native;
 use range_alloc::RangeAllocator;
 
@@ -1095,7 +1096,8 @@ impl hal::Device<Backend> for Device {
         }
 
         Ok(n::Framebuffer {
-            descriptor: Mutex::new(descriptor),
+            descriptor,
+            desc_storage: FastStorageMap::default(),
             inner,
         })
     }
