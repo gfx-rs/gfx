@@ -174,7 +174,7 @@ impl ResourceCounters {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct MultiStageResourceCounters {
     pub vs: ResourceCounters,
     pub ps: ResourceCounters,

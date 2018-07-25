@@ -2851,8 +2851,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        use spirv_cross::{msl, spirv};
-
         let mut offset_iter = offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
@@ -2860,18 +2858,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.resources_vs.pre_allocate(&pipe_layout.total.vs);
         self.state.resources_ps.pre_allocate(&pipe_layout.total.ps);
 
-        for (set_index, desc_set) in sets.into_iter().enumerate() {
+        for (res_offset, desc_set) in pipe_layout.offsets[first_set ..].iter().zip(sets) {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
                     let data = pool.read();
-                    let mut counters = native::ResourceCounters {
+                    let mut res_offset = res_offset.clone();
+                    let mut data_offset = native::ResourceCounters {
                         buffers: buffer_range.start as usize,
                         textures: texture_range.start as usize,
                         samplers: sampler_range.start as usize,
                     };
                     for layout in layouts.iter() {
                         let buf_value = if layout.content.contains(native::DescriptorContent::BUFFER) {
-                            let bref = &data.buffers[counters.buffers];
+                            let bref = &data.buffers[data_offset.buffers];
                             let mut value = bref.base.clone();
                             if bref.dynamic {
                                 if let Some((_, ref mut offset)) = value {
@@ -2888,51 +2887,39 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                         // collect the binding stages
                         let bind_vs = if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
-                            let loc = msl::ResourceBindingLocation {
-                                stage: spirv::ExecutionModel::Vertex,
-                                desc_set: (first_set + set_index) as _,
-                                binding: layout.binding,
-                            };
-                            Some((pso::Stage::Vertex, loc, &mut self.state.resources_vs))
+                            Some((pso::Stage::Vertex, &mut res_offset.vs, &mut self.state.resources_vs))
                         } else {
                             None
                         };
-                        let bind_fs = if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-                            let loc = msl::ResourceBindingLocation {
-                                stage: spirv::ExecutionModel::Fragment,
-                                desc_set: (first_set + set_index) as _,
-                                binding: layout.binding,
-                            };
-                            Some((pso::Stage::Fragment, loc, &mut self.state.resources_ps))
+                        let bind_ps = if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
+                            Some((pso::Stage::Fragment, &mut res_offset.ps, &mut self.state.resources_ps))
                         } else {
                             None
                         };
 
-                        for (stage, loc, resources) in bind_vs.into_iter().chain(bind_fs) {
-                            let res_override = &pipe_layout.res_overrides[&loc];
+                        for (stage, target_offset, resources) in bind_vs.into_iter().chain(bind_ps) {
                             if layout.content.contains(native::DescriptorContent::SAMPLER) {
-                                debug_assert_ne!(res_override.sampler_id, !0);
-                                let sampler = data.samplers[counters.samplers];
-                                let index = res_override.sampler_id as usize + layout.array_index;
+                                let sampler = data.samplers[data_offset.samplers];
+                                let index = target_offset.samplers;
                                 let out = &mut resources.samplers[index];
                                 if *out != sampler {
                                     *out = sampler;
                                     pre.issue(soft::RenderCommand::BindSampler { stage, index, sampler });
                                 }
+                                target_offset.samplers += 1;
                             }
                             if layout.content.contains(native::DescriptorContent::TEXTURE) {
-                                debug_assert_ne!(res_override.texture_id, !0);
-                                let texture = data.textures[counters.textures].map(|(t, _)| t);
-                                let index = res_override.texture_id as usize + layout.array_index;
+                                let texture = data.textures[data_offset.textures].map(|(t, _)| t);
+                                let index = target_offset.textures;
                                 let out = &mut resources.textures[index];
                                 if *out != texture {
                                     *out = texture;
                                     pre.issue(soft::RenderCommand::BindTexture { stage, index, texture });
                                 }
+                                target_offset.textures += 1;
                             }
                             if layout.content.contains(native::DescriptorContent::BUFFER) {
-                                debug_assert_ne!(res_override.buffer_id, !0);
-                                let index = res_override.buffer_id as usize + layout.array_index;
+                                let index = target_offset.buffers;
                                 let out = &mut resources.buffers[index];
                                 if *out != buf_value {
                                     *out = buf_value;
@@ -2942,39 +2929,30 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                         buffer: buf_value,
                                     });
                                 }
+                                target_offset.buffers += 1;
                             }
                         }
 
-                        counters.add(layout.content);
+                        data_offset.add(layout.content);
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
-                        let loc = msl::ResourceBindingLocation {
-                            stage: spirv::ExecutionModel::Vertex,
-                            desc_set: (first_set + set_index) as _,
-                            binding: 0,
-                        };
-                        let slot = pipe_layout.res_overrides[&loc].buffer_id;
-                        if self.state.resources_vs.set_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _) {
+                        let index = res_offset.vs.buffers;
+                        if self.state.resources_vs.set_buffer(index, BufferPtr(raw.as_ptr()), offset as _) {
                             pre.issue(soft::RenderCommand::BindBuffer {
                                 stage: pso::Stage::Vertex,
-                                index: slot as _,
+                                index,
                                 buffer: Some((BufferPtr(raw.as_ptr()), offset)),
                             });
                         }
                     }
                     if stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
-                        let loc = msl::ResourceBindingLocation {
-                            stage: spirv::ExecutionModel::Fragment,
-                            desc_set: (first_set + set_index) as _,
-                            binding: 0,
-                        };
-                        let slot = pipe_layout.res_overrides[&loc].buffer_id;
-                        if self.state.resources_ps.set_buffer(slot as _, BufferPtr(raw.as_ptr()), offset as _) {
+                        let index = res_offset.ps.buffers;
+                        if self.state.resources_ps.set_buffer(index, BufferPtr(raw.as_ptr()), offset as _) {
                             pre.issue(soft::RenderCommand::BindBuffer {
                                 stage: pso::Stage::Fragment,
-                                index: slot as _,
+                                index,
                                 buffer: Some((BufferPtr(raw.as_ptr()), offset)),
                             });
                         }
@@ -3008,20 +2986,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        use spirv_cross::{msl, spirv};
-
         let mut offset_iter = offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
 
         self.state.resources_cs.pre_allocate(&pipe_layout.total.cs);
 
-        for (set_index, desc_set) in sets.into_iter().enumerate() {
+        for (res_offset, desc_set) in pipe_layout.offsets[first_set ..].iter().zip(sets) {
+            let mut res_offset = res_offset.clone();
             let resources = &mut self.state.resources_cs;
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
                     let data = pool.read();
-                    let mut counters = native::ResourceCounters {
+                    let mut data_offset = native::ResourceCounters {
                         buffers: buffer_range.start as usize,
                         textures: texture_range.start as usize,
                         samplers: sampler_range.start as usize,
@@ -3029,38 +3006,32 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                     for layout in layouts.iter() {
                         if layout.stages.contains(pso::ShaderStageFlags::COMPUTE) {
-                            let res_override = &pipe_layout.res_overrides[&msl::ResourceBindingLocation {
-                                stage: spirv::ExecutionModel::GlCompute,
-                                desc_set: (first_set + set_index) as _,
-                                binding: layout.binding,
-                            }];
-
+                            let target_offset = &mut res_offset.cs;
                             if layout.content.contains(native::DescriptorContent::SAMPLER) {
-                                debug_assert_ne!(res_override.sampler_id, !0);
-                                let sampler = data.samplers[counters.samplers];
-                                let index = res_override.sampler_id as usize + layout.array_index;
+                                let sampler = data.samplers[data_offset.samplers];
+                                let index = target_offset.samplers;
                                 let out = &mut resources.samplers[index];
                                 if *out != sampler {
                                     *out = sampler;
                                     pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
                                 }
+                                target_offset.samplers += 1;
                             }
 
                             if layout.content.contains(native::DescriptorContent::TEXTURE) {
-                                debug_assert_ne!(res_override.texture_id, !0);
-                                let texture = data.textures[counters.textures].map(|(t, _)| t);
-                                let index = res_override.texture_id as usize + layout.array_index;
+                                let texture = data.textures[data_offset.textures].map(|(t, _)| t);
+                                let index = target_offset.textures;
                                 let out = &mut resources.textures[index];
                                 if *out != texture {
                                     *out = texture;
                                     pre.issue(soft::ComputeCommand::BindTexture { index, texture });
                                 }
+                                target_offset.textures += 1;
                             }
 
                             if layout.content.contains(native::DescriptorContent::BUFFER) {
-                                debug_assert_ne!(res_override.buffer_id, !0);
-                                let bref = &data.buffers[counters.buffers];
-                                let index = res_override.buffer_id as usize + layout.array_index;
+                                let bref = &data.buffers[data_offset.buffers];
+                                let index = target_offset.buffers;
 
                                 let mut buffer = bref.base.clone();
                                 if bref.dynamic {
@@ -3079,20 +3050,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                         buffer,
                                     });
                                 }
+
+                                target_offset.buffers += 1;
                             }
                         }
 
-                        counters.add(layout.content);
+                        data_offset.add(layout.content);
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
-                        let res_override = &pipe_layout.res_overrides[&msl::ResourceBindingLocation {
-                            stage: spirv::ExecutionModel::GlCompute,
-                            desc_set: (first_set + set_index) as _,
-                            binding: 0,
-                        }];
-                        let index = res_override.buffer_id as usize;
+                        let index = res_offset.cs.buffers;
                         let buffer = BufferPtr(raw.as_ptr());
                         if resources.set_buffer(index, buffer, offset as _) {
                             pre.issue(soft::ComputeCommand::BindBuffer {
