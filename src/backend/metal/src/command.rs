@@ -277,12 +277,11 @@ impl State {
             .zip(render_resources)
             .flat_map(move |(&stage, resources)| {
                 let com_buffers = resources.buffers.iter().enumerate().filter_map(move |(i, resource)| {
-                    resource.map(|(buffer, offset)| {
+                    resource.map(|buffer| {
                         soft::RenderCommand::BindBuffer {
                             stage,
                             index: i as _,
                             buffer: Some(buffer),
-                            offset,
                         }
                     })
                 });
@@ -335,11 +334,10 @@ impl State {
             .iter()
             .enumerate()
             .filter_map(|(i, resource)| {
-                resource.map(|(buffer, offset)| {
+                resource.map(|buffer| {
                     soft::ComputeCommand::BindBuffer {
                         index: i as _,
                         buffer: Some(buffer),
-                        offset,
                     }
                 })
             });
@@ -416,12 +414,11 @@ impl State {
             .enumerate()
             .filter_map(move |(index, maybe_buffer)| {
                 if mask & (1u64 << index) != 0 {
-                    maybe_buffer.map(|(buffer, offset)| {
+                    maybe_buffer.map(|buffer| {
                         soft::RenderCommand::BindBuffer {
                             stage: pso::Stage::Vertex,
                             index,
                             buffer: Some(buffer),
-                            offset,
                         }
                     })
                 } else {
@@ -1149,8 +1146,11 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
             encoder.set_cull_mode(rs.cull_mode);
             encoder.set_depth_clip_mode(rs.depth_clip);
         }
-        Cmd::BindBuffer { stage, index, buffer, offset } => {
-            let native = buffer.as_ref().map(|b| b.as_native());
+        Cmd::BindBuffer { stage, index, buffer } => {
+            let (native, offset) = match buffer {
+                Some((ref ptr, offset)) => (Some(ptr.as_native()), offset),
+                None => (None, 0),
+            };
             match stage {
                 pso::Stage::Vertex =>
                     encoder.set_vertex_buffer(index as _, offset as _, native),
@@ -1342,8 +1342,11 @@ fn exec_blit<'a>(encoder: &metal::BlitCommandEncoderRef, command: soft::BlitComm
 fn exec_compute<'a>(encoder: &metal::ComputeCommandEncoderRef, command: soft::ComputeCommand<&'a soft::Own>) {
     use soft::ComputeCommand as Cmd;
     match command {
-        Cmd::BindBuffer { index, ref buffer, offset } => {
-            let native = buffer.as_ref().map(|b| b.as_native());
+        Cmd::BindBuffer { index, buffer } => {
+            let (native, offset) = match buffer {
+                Some((ref ptr, offset)) => (Some(ptr.as_native()), offset),
+                None => (None, 0),
+            };
             encoder.set_buffer(index as _, offset, native);
         }
         Cmd::BindBufferData { words, index } => {
@@ -1839,8 +1842,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::ComputeCommand::BindPipeline(pso),
             soft::ComputeCommand::BindBuffer {
                 index: 0,
-                buffer: Some(BufferPtr(buffer.raw.as_ptr())),
-                offset: start,
+                buffer: Some((BufferPtr(buffer.raw.as_ptr()), start)),
             },
             soft::ComputeCommand::BindBufferData {
                 index: 1,
@@ -2210,26 +2212,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             None => None,
         };
 
-        let com_vs = if let Some(&Some((buffer, offset))) = self.state.resources_vs.buffers.first() {
-            Some(soft::RenderCommand::BindBuffer {
+        let com_vs = self.state.resources_vs.buffers
+            .first()
+            .map(|&buffer| soft::RenderCommand::BindBuffer {
                 stage: pso::Stage::Vertex,
                 index: 0,
-                buffer: Some(buffer),
-                offset,
-            })
-        } else {
-            None
-        };
-        let com_fs = if let Some(&Some((buffer, offset))) = self.state.resources_ps.buffers.first() {
-            Some(soft::RenderCommand::BindBuffer {
+                buffer,
+            });
+        let com_fs = self.state.resources_ps.buffers
+            .first()
+            .map(|&buffer| soft::RenderCommand::BindBuffer {
                 stage: pso::Stage::Fragment,
                 index: 0,
-                buffer: Some(buffer),
-                offset,
-            })
-        } else {
-            None
-        };
+                buffer,
+            });
 
         let commands = com_pso
             .into_iter()
@@ -2878,10 +2874,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let bref = &data.buffers[counters.buffers];
                             match bref.base {
                                 Some((buffer, mut offset)) => {
-                                    offset += *offset_iter
-                                        .next()
-                                        .expect("No dynamic offset provided!")
-                                        .borrow() as u64;
+                                    if bref.dynamic {
+                                        offset += *offset_iter
+                                            .next()
+                                            .expect("No dynamic offset provided!")
+                                            .borrow() as u64;
+                                    }
                                     Some((buffer, offset))
                                 },
                                 None => None,
@@ -2895,7 +2893,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let loc = msl::ResourceBindingLocation {
                                 stage: spirv::ExecutionModel::Vertex,
                                 desc_set: (first_set + set_index) as _,
-                                binding: layout.base as _,
+                                binding: layout.binding,
                             };
                             Some((pso::Stage::Vertex, loc, &mut self.state.resources_vs))
                         } else {
@@ -2905,7 +2903,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let loc = msl::ResourceBindingLocation {
                                 stage: spirv::ExecutionModel::Fragment,
                                 desc_set: (first_set + set_index) as _,
-                                binding: layout.base as _,
+                                binding: layout.binding,
                             };
                             Some((pso::Stage::Fragment, loc, &mut self.state.resources_ps))
                         } else {
@@ -2940,15 +2938,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 let out = &mut resources.buffers[index];
                                 if *out != buf_value {
                                     *out = buf_value;
-                                    let (buffer, offset) = match buf_value {
-                                        Some((buf, offset)) => (Some(buf), offset),
-                                        None => (None, 0),
-                                    };
                                     pre.issue(soft::RenderCommand::BindBuffer {
                                         stage,
                                         index,
-                                        buffer,
-                                        offset,
+                                        buffer: buf_value,
                                     });
                                 }
                             }
@@ -2977,8 +2970,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             pre.issue(soft::RenderCommand::BindBuffer {
                                 stage: pso::Stage::Vertex,
                                 index: slot as _,
-                                buffer: Some(BufferPtr(raw.as_ptr())),
-                                offset,
+                                buffer: Some((BufferPtr(raw.as_ptr()), offset)),
                             });
                         }
                     }
@@ -2993,8 +2985,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             pre.issue(soft::RenderCommand::BindBuffer {
                                 stage: pso::Stage::Fragment,
                                 index: slot as _,
-                                buffer: Some(BufferPtr(raw.as_ptr())),
-                                offset,
+                                buffer: Some((BufferPtr(raw.as_ptr()), offset)),
                             });
                         }
                     }
@@ -3050,7 +3041,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let res_override = &pipe_layout.res_overrides[&msl::ResourceBindingLocation {
                             stage: spirv::ExecutionModel::GlCompute,
                             desc_set: (first_set + set_index) as _,
-                            binding: layout.base,
+                            binding: layout.binding,
                         }];
 
                         if layout.content.contains(native::DescriptorContent::SAMPLER) {
@@ -3082,26 +3073,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let bref = &data.buffers[counters.buffers];
                             let index = res_override.buffer_id as usize + layout.array_index;
 
-                            let (buffer, offset) = match bref.base {
-                                Some((buffer, mut offset)) => {
-                                    if bref.dynamic {
-                                        offset += *offset_iter
-                                            .next()
-                                            .expect("No dynamic offset provided!")
-                                            .borrow() as u64
-                                    }
-                                    (Some(buffer), offset)
-                                },
-                                None => (None, 0),
-                            };
+                            let mut buffer = bref.base.clone();
+                            if let Some((_, ref mut offset)) = buffer {
+                                if bref.dynamic {
+                                    *offset += *offset_iter
+                                        .next()
+                                        .expect("No dynamic offset provided!")
+                                        .borrow() as u64
+                                }
+                            }
                             let out = &mut resources.buffers[index];
-                            let value = buffer.map(|b| (b, offset));
-                            if *out != value {
-                                *out = value;
+                            if *out != buffer {
+                                *out = buffer;
                                 pre.issue(soft::ComputeCommand::BindBuffer {
                                     index,
                                     buffer,
-                                    offset,
                                 });
                             }
 
@@ -3121,8 +3107,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         if resources.set_buffer(index, buffer, offset as _) {
                             pre.issue(soft::ComputeCommand::BindBuffer {
                                 index,
-                                buffer: Some(buffer),
-                                offset,
+                                buffer: Some((buffer, offset)),
                             });
                         }
                     }
@@ -3210,13 +3195,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 0,
-                    buffer: Some(BufferPtr(dst.raw.as_ptr())),
-                    offset: r.dst,
+                    buffer: Some((BufferPtr(dst.raw.as_ptr()), r.dst)),
                 });
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 1,
-                    buffer: Some(BufferPtr(src.raw.as_ptr())),
-                    offset: r.src,
+                    buffer: Some((BufferPtr(src.raw.as_ptr()), r.src)),
                 });
                 compute_commands.push(soft::ComputeCommand::BindBufferData {
                     index: 2,

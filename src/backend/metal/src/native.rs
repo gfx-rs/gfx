@@ -635,7 +635,7 @@ impl From<pso::DescriptorType> for DescriptorContent {
 pub struct DescriptorLayout {
     pub stages: pso::ShaderStageFlags,
     pub content: DescriptorContent,
-    pub base: pso::DescriptorBinding,
+    pub binding: pso::DescriptorBinding,
     pub array_index: pso::DescriptorArrayIndex,
 }
 

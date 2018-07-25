@@ -665,7 +665,7 @@ impl hal::Device<Backend> for Device {
                                 let location = msl::ResourceBindingLocation {
                                     stage,
                                     desc_set: set_index as _,
-                                    binding: layout.base,
+                                    binding: layout.binding,
                                 };
                                 res_overrides.insert(location, res);
                             }
@@ -1345,7 +1345,7 @@ impl hal::Device<Backend> for Device {
                         .map(move |array_index| native::DescriptorLayout {
                             stages: stage_flags,
                             content,
-                            base: binding,
+                            binding,
                             array_index,
                         })
                 })
@@ -1384,11 +1384,11 @@ impl hal::Device<Backend> for Device {
                         let mut exact_match = None;
                         //TODO: can pre-compute this
                         for layout in layouts.iter() {
-                            if layout.base == binding && layout.array_index == array_offset {
+                            if layout.binding == binding && layout.array_index == array_offset {
                                 exact_match = Some(layout.content);
                                 break
                             }
-                            if array_offset != 0 && layout.array_index == 0 && layout.base == binding + 1 {
+                            if array_offset != 0 && layout.array_index == 0 && layout.binding == binding + 1 {
                                 debug_assert!(next_binding_layout.is_none());
                                 next_binding_layout = Some((counters.clone(), layout.content));
                             }

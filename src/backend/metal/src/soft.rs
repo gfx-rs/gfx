@@ -53,8 +53,7 @@ pub enum RenderCommand<R: Resources> {
     BindBuffer {
         stage: hal::pso::Stage,
         index: usize,
-        buffer: Option<R::Buffer>,
-        offset: hal::buffer::Offset,
+        buffer: Option<(R::Buffer, hal::buffer::Offset)>,
     },
     BindBufferData {
         stage: hal::pso::Stage,
@@ -108,11 +107,10 @@ impl RenderCommand<Own> {
             SetDepthStencilState(ref state) => SetDepthStencilState(&**state),
             SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
             SetRasterizerState(ref state) => SetRasterizerState(state.clone()),
-            BindBuffer { stage, index, buffer, offset } => BindBuffer {
+            BindBuffer { stage, index, buffer } => BindBuffer {
                 stage,
                 index,
                 buffer,
-                offset,
             },
             BindBufferData { stage, index, ref words } => BindBufferData {
                 stage,
@@ -168,11 +166,10 @@ impl<'a> RenderCommand<&'a Own> {
             SetDepthStencilState(state) => SetDepthStencilState(state.to_owned()),
             SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
             SetRasterizerState(ref state) => SetRasterizerState(state.clone()),
-            BindBuffer { stage, index, buffer, offset } => BindBuffer {
+            BindBuffer { stage, index, buffer } => BindBuffer {
                 stage,
                 index,
                 buffer,
-                offset,
             },
             BindBufferData { stage, index, words } => BindBufferData {
                 stage,
@@ -309,8 +306,7 @@ impl<'a> BlitCommand<&'a Own> {
 pub enum ComputeCommand<R: Resources> {
     BindBuffer {
         index: usize,
-        buffer: Option<R::Buffer>,
-        offset: hal::buffer::Offset,
+        buffer: Option<(R::Buffer, hal::buffer::Offset)>,
     },
     BindBufferData {
         index: usize,
@@ -340,10 +336,9 @@ impl ComputeCommand<Own> {
     pub fn as_ref<'a>(&'a self) -> ComputeCommand<&'a Own> {
         use self::ComputeCommand::*;
         match *self {
-            BindBuffer { index, buffer, offset } => BindBuffer {
+            BindBuffer { index, buffer } => BindBuffer {
                 index,
                 buffer,
-                offset,
             },
             BindBufferData { index, ref words } => BindBufferData {
                 index,
@@ -375,10 +370,9 @@ impl<'a> ComputeCommand<&'a Own> {
     pub fn own(self) -> ComputeCommand<Own> {
         use self::ComputeCommand::*;
         match self {
-            BindBuffer { index, buffer, offset } => BindBuffer {
+            BindBuffer { index, buffer } => BindBuffer {
                 index,
                 buffer,
-                offset,
             },
             BindBufferData { index, words } => BindBufferData {
                 index,
