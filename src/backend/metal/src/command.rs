@@ -592,45 +592,6 @@ impl StageResources {
             false
         }
     }
-
-    fn set_textures<F>(
-        &mut self, start: usize, textures: &[Option<(TexturePtr, Layout)>], mut update: F
-    ) where
-        F: FnMut(usize, Option<TexturePtr>)
-    {
-        debug_assert!(self.textures.len() >= start + textures.len());
-        for (i, (out, maybe)) in self
-            .textures[start..]
-            .iter_mut()
-            .zip(textures)
-            .enumerate()
-        {
-            let value = maybe.map(|(t, _)| t);
-            if *out != value {
-                *out = value;
-                update(start + i, value);
-            }
-        }
-    }
-
-    fn set_samplers<F>(
-        &mut self, start: usize, samplers: &[Option<SamplerPtr>], mut update: F
-    ) where
-        F: FnMut(usize, Option<SamplerPtr>)
-    {
-        debug_assert!(self.samplers.len() >= start + samplers.len());
-        for (i, (out, &value)) in self
-            .samplers[start..]
-            .iter_mut()
-            .zip(samplers)
-            .enumerate()
-        {
-            if *out != value {
-                *out = value;
-                update(start + i, value);
-            }
-        }
-    }
 }
 
 
@@ -2897,7 +2858,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         use spirv_cross::{msl, spirv};
 
         let mut offset_iter = offsets.into_iter();
-        let mut dynamic_offsets = SmallVec::<[u64; 16]>::new();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
@@ -2908,46 +2868,44 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
                     let data = pool.read();
-                    let mut sampler_base = sampler_range.start as usize;
-                    let mut texture_base = texture_range.start as usize;
-                    let mut buffer_base = buffer_range.start as usize;
-
+                    let mut counters = native::ResourceCounters {
+                        buffers: buffer_range.start as usize,
+                        textures: texture_range.start as usize,
+                        samplers: sampler_range.start as usize,
+                    };
                     for layout in layouts.iter() {
-                        let sm_range = sampler_base .. sampler_base + layout.count;
-                        let tx_range = texture_base .. texture_base + layout.count;
-                        let bf_range = buffer_base .. buffer_base + layout.count;
-                        native::DescriptorPool::count_bindings(layout.ty, layout.count,
-                            &mut sampler_base, &mut texture_base, &mut buffer_base);
-
-                        if buffer_base != bf_range.start {
-                            dynamic_offsets.clear();
-                            for bref in &data.buffers[bf_range.clone()] {
-                                if bref.base.is_some() && bref.dynamic {
-                                    dynamic_offsets.push(*offset_iter
+                        let buf_value = if layout.content.contains(native::DescriptorContent::BUFFER) {
+                            let bref = &data.buffers[counters.buffers];
+                            match bref.base {
+                                Some((buffer, mut offset)) => {
+                                    offset += *offset_iter
                                         .next()
                                         .expect("No dynamic offset provided!")
-                                        .borrow() as u64
-                                    );
-                                }
+                                        .borrow() as u64;
+                                    Some((buffer, offset))
+                                },
+                                None => None,
                             }
-                        }
+                        } else {
+                            None
+                        };
 
                         // collect the binding stages
-                        let bind_vs = if layout.stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
+                        let bind_vs = if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
                             let loc = msl::ResourceBindingLocation {
                                 stage: spirv::ExecutionModel::Vertex,
                                 desc_set: (first_set + set_index) as _,
-                                binding: layout.binding as _,
+                                binding: layout.base as _,
                             };
                             Some((pso::Stage::Vertex, loc, &mut self.state.resources_vs))
                         } else {
                             None
                         };
-                        let bind_fs = if layout.stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
+                        let bind_fs = if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
                             let loc = msl::ResourceBindingLocation {
                                 stage: spirv::ExecutionModel::Fragment,
                                 desc_set: (first_set + set_index) as _,
-                                binding: layout.binding as _,
+                                binding: layout.base as _,
                             };
                             Some((pso::Stage::Fragment, loc, &mut self.state.resources_ps))
                         } else {
@@ -2956,53 +2914,54 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                         for (stage, loc, resources) in bind_vs.into_iter().chain(bind_fs) {
                             let res_override = &pipe_layout.res_overrides[&loc];
-                            if sampler_base != sm_range.start {
-                                debug_assert_eq!(sampler_base, sm_range.end);
-                                resources.set_samplers(
-                                    res_override.sampler_id as usize,
-                                    &data.samplers[sm_range.clone()],
-                                    |index, sampler| {
-                                        pre.issue(soft::RenderCommand::BindSampler { stage, index, sampler });
-                                    },
-                                );
+                            if layout.content.contains(native::DescriptorContent::SAMPLER) {
+                                debug_assert_ne!(res_override.sampler_id, !0);
+                                let sampler = data.samplers[counters.samplers];
+                                let index = res_override.sampler_id as usize + layout.array_index;
+                                let out = &mut resources.samplers[index];
+                                if *out != sampler {
+                                    *out = sampler;
+                                    pre.issue(soft::RenderCommand::BindSampler { stage, index, sampler });
+                                }
                             }
-                            if texture_base != tx_range.start {
-                                debug_assert_eq!(texture_base, tx_range.end);
-                                resources.set_textures(
-                                    res_override.texture_id as usize,
-                                    &data.textures[tx_range.clone()],
-                                    |index, texture| {
-                                        pre.issue(soft::RenderCommand::BindTexture { stage, index, texture });
-                                    },
-                                );
+                            if layout.content.contains(native::DescriptorContent::TEXTURE) {
+                                debug_assert_ne!(res_override.texture_id, !0);
+                                let texture = data.textures[counters.textures].map(|(t, _)| t);
+                                let index = res_override.texture_id as usize + layout.array_index;
+                                let out = &mut resources.textures[index];
+                                if *out != texture {
+                                    *out = texture;
+                                    pre.issue(soft::RenderCommand::BindTexture { stage, index, texture });
+                                }
                             }
-                            if buffer_base != bf_range.start {
-                                debug_assert_eq!(buffer_base, bf_range.end);
-                                let buffers = &data.buffers[bf_range.clone()];
-                                let start = res_override.buffer_id as usize;
-                                let mut dynamic_index = 0;
-                                for (i, bref) in buffers.iter().enumerate() {
-                                    let (buffer, offset) = match bref.base {
-                                        Some((buffer, mut offset)) => {
-                                            if bref.dynamic {
-                                                offset += dynamic_offsets[dynamic_index];
-                                                dynamic_index += 1;
-                                            }
-                                            if !resources.set_buffer(start + i, buffer, offset as _) {
-                                                continue
-                                            }
-                                            (Some(buffer), offset)
-                                        }
+                            if layout.content.contains(native::DescriptorContent::BUFFER) {
+                                debug_assert_ne!(res_override.buffer_id, !0);
+                                let index = res_override.buffer_id as usize + layout.array_index;
+                                let out = &mut resources.buffers[index];
+                                if *out != buf_value {
+                                    *out = buf_value;
+                                    let (buffer, offset) = match buf_value {
+                                        Some((buf, offset)) => (Some(buf), offset),
                                         None => (None, 0),
                                     };
                                     pre.issue(soft::RenderCommand::BindBuffer {
                                         stage,
-                                        index: start + i,
+                                        index,
                                         buffer,
                                         offset,
                                     });
                                 }
                             }
+                        }
+
+                        if layout.content.contains(native::DescriptorContent::BUFFER) {
+                            counters.buffers += 1;
+                        }
+                        if layout.content.contains(native::DescriptorContent::TEXTURE) {
+                            counters.textures += 1;
+                        }
+                        if layout.content.contains(native::DescriptorContent::SAMPLER) {
+                            counters.samplers += 1;
                         }
                     }
                 }
@@ -3071,7 +3030,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         use spirv_cross::{msl, spirv};
 
         let mut offset_iter = offsets.into_iter();
-        let mut dynamic_offsets = SmallVec::<[u64; 16]>::new();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
 
@@ -3082,81 +3040,72 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
                     let data = pool.read();
-                    let mut sampler_base = sampler_range.start as usize;
-                    let mut texture_base = texture_range.start as usize;
-                    let mut buffer_base = buffer_range.start as usize;
+                    let mut counters = native::ResourceCounters {
+                        buffers: buffer_range.start as usize,
+                        textures: texture_range.start as usize,
+                        samplers: sampler_range.start as usize,
+                    };
 
                     for layout in layouts.iter() {
                         let res_override = &pipe_layout.res_overrides[&msl::ResourceBindingLocation {
                             stage: spirv::ExecutionModel::GlCompute,
                             desc_set: (first_set + set_index) as _,
-                            binding: layout.binding,
+                            binding: layout.base,
                         }];
 
-                        let sm_range = sampler_base .. sampler_base + layout.count;
-                        let tx_range = texture_base .. texture_base + layout.count;
-                        let bf_range = buffer_base .. buffer_base + layout.count;
-                        native::DescriptorPool::count_bindings(layout.ty, layout.count,
-                            &mut sampler_base, &mut texture_base, &mut buffer_base);
-
-                        if buffer_base != bf_range.start {
-                            dynamic_offsets.clear();
-                            for bref in &data.buffers[bf_range.clone()] {
-                                if bref.base.is_some() && bref.dynamic {
-                                    dynamic_offsets.push(*offset_iter
-                                        .next()
-                                        .expect("No dynamic offset provided!")
-                                        .borrow() as u64
-                                    );
-                                }
+                        if layout.content.contains(native::DescriptorContent::SAMPLER) {
+                            debug_assert_ne!(res_override.sampler_id, !0);
+                            let sampler = data.samplers[counters.samplers];
+                            let index = res_override.sampler_id as usize + layout.array_index;
+                            let out = &mut resources.samplers[index];
+                            if *out != sampler {
+                                *out = sampler;
+                                pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
                             }
+                            counters.samplers += 1;
                         }
 
-                        if sampler_base != sm_range.start {
-                            debug_assert_eq!(sampler_base, sm_range.end);
-                            resources.set_samplers(
-                                res_override.sampler_id as usize,
-                                &data.samplers[sm_range],
-                                |index, sampler| {
-                                    pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
-                                },
-                            );
+                        if layout.content.contains(native::DescriptorContent::TEXTURE) {
+                            debug_assert_ne!(res_override.texture_id, !0);
+                            let texture = data.textures[counters.textures].map(|(t, _)| t);
+                            let index = res_override.texture_id as usize + layout.array_index;
+                            let out = &mut resources.textures[index];
+                            if *out != texture {
+                                *out = texture;
+                                pre.issue(soft::ComputeCommand::BindTexture { index, texture });
+                            }
+                            counters.textures += 1;
                         }
-                        if texture_base != tx_range.start {
-                            debug_assert_eq!(texture_base, tx_range.end);
-                            resources.set_textures(
-                                res_override.texture_id as usize,
-                                &data.textures[tx_range],
-                                |index, texture| {
-                                    pre.issue(soft::ComputeCommand::BindTexture { index, texture });
-                                },
-                            );
-                        }
-                        if buffer_base != bf_range.start {
-                            debug_assert_eq!(buffer_base, bf_range.end);
-                            let buffers = &data.buffers[bf_range];
-                            let start = res_override.buffer_id as usize;
-                            let mut dynamic_index = 0;
-                            for (i, bref) in buffers.iter().enumerate() {
-                                let (buffer, offset) = match bref.base {
-                                    Some((buffer, mut offset)) => {
-                                        if bref.dynamic {
-                                            offset += dynamic_offsets[dynamic_index];
-                                            dynamic_index += 1;
-                                        }
-                                        if !resources.set_buffer(start + i, buffer, offset as _) {
-                                            continue
-                                        }
-                                        (Some(buffer), offset)
+
+                        if layout.content.contains(native::DescriptorContent::BUFFER) {
+                            debug_assert_ne!(res_override.buffer_id, !0);
+                            let bref = &data.buffers[counters.buffers];
+                            let index = res_override.buffer_id as usize + layout.array_index;
+
+                            let (buffer, offset) = match bref.base {
+                                Some((buffer, mut offset)) => {
+                                    if bref.dynamic {
+                                        offset += *offset_iter
+                                            .next()
+                                            .expect("No dynamic offset provided!")
+                                            .borrow() as u64
                                     }
-                                    None => (None, 0),
-                                };
+                                    (Some(buffer), offset)
+                                },
+                                None => (None, 0),
+                            };
+                            let out = &mut resources.buffers[index];
+                            let value = buffer.map(|b| (b, offset));
+                            if *out != value {
+                                *out = value;
                                 pre.issue(soft::ComputeCommand::BindBuffer {
-                                    index: start + i,
+                                    index,
                                     buffer,
                                     offset,
                                 });
                             }
+
+                            counters.buffers += 1;
                         }
                     }
                 }
