@@ -635,12 +635,19 @@ impl hal::Device<Backend> for Device {
             (pso::ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, n::ResourceCounters::new()),
         ];
         let mut res_overrides = n::ResourceOverrideMap::default();
+        let mut offsets = Vec::new();
 
         for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
-            for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
-                match *set_layout.borrow() {
-                    n::DescriptorSetLayout::Emulated(ref desc_layouts, _) => {
-                        for layout in desc_layouts.iter() {
+            // remember where the resources for this set start at each shader stage
+            offsets.push(n::MultiStageResourceCounters {
+                vs: stage_infos[0].2.clone(),
+                ps: stage_infos[1].2.clone(),
+                cs: stage_infos[2].2.clone(),
+            });
+            match *set_layout.borrow() {
+                n::DescriptorSetLayout::Emulated(ref desc_layouts, _) => {
+                    for layout in desc_layouts.iter() {
+                        for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
                             if !layout.stages.contains(stage_bit) {
                                 continue
                             }
@@ -669,7 +676,9 @@ impl hal::Device<Backend> for Device {
                             }
                         }
                     }
-                    n::DescriptorSetLayout::ArgumentBuffer(_, stage_flags) => {
+                }
+                n::DescriptorSetLayout::ArgumentBuffer(_, stage_flags) => {
+                    for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
                         if !stage_flags.contains(stage_bit) {
                             continue
                         }
@@ -729,9 +738,12 @@ impl hal::Device<Backend> for Device {
 
         n::PipelineLayout {
             res_overrides,
-            vs_counters: stage_infos[0].2.clone(),
-            ps_counters: stage_infos[1].2.clone(),
-            cs_counters: stage_infos[2].2.clone(),
+            offsets,
+            total: n::MultiStageResourceCounters {
+                vs: stage_infos[0].2.clone(),
+                ps: stage_infos[1].2.clone(),
+                cs: stage_infos[2].2.clone(),
+            },
         }
     }
 

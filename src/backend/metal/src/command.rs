@@ -2857,8 +2857,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
-        self.state.resources_vs.pre_allocate(&pipe_layout.vs_counters);
-        self.state.resources_ps.pre_allocate(&pipe_layout.ps_counters);
+        self.state.resources_vs.pre_allocate(&pipe_layout.total.vs);
+        self.state.resources_ps.pre_allocate(&pipe_layout.total.ps);
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             match *desc_set.borrow() {
@@ -2945,15 +2945,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             }
                         }
 
-                        if layout.content.contains(native::DescriptorContent::BUFFER) {
-                            counters.buffers += 1;
-                        }
-                        if layout.content.contains(native::DescriptorContent::TEXTURE) {
-                            counters.textures += 1;
-                        }
-                        if layout.content.contains(native::DescriptorContent::SAMPLER) {
-                            counters.samplers += 1;
-                        }
+                        counters.add(layout.content);
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
@@ -3022,7 +3014,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
 
-        self.state.resources_cs.pre_allocate(&pipe_layout.cs_counters);
+        self.state.resources_cs.pre_allocate(&pipe_layout.total.cs);
 
         for (set_index, desc_set) in sets.into_iter().enumerate() {
             let resources = &mut self.state.resources_cs;
@@ -3090,15 +3082,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             }
                         }
 
-                        if layout.content.contains(native::DescriptorContent::BUFFER) {
-                            counters.buffers += 1;
-                        }
-                        if layout.content.contains(native::DescriptorContent::TEXTURE) {
-                            counters.textures += 1;
-                        }
-                        if layout.content.contains(native::DescriptorContent::SAMPLER) {
-                            counters.samplers += 1;
-                        }
+                        counters.add(layout.content);
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
