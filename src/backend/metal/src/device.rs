@@ -629,17 +629,15 @@ impl hal::Device<Backend> for Device {
         IR: IntoIterator,
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>
     {
-        use hal::pso::ShaderStageFlags;
-
         let mut stage_infos = [
-            (ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,    n::ResourceCounters::new()),
-            (ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  n::ResourceCounters::new()),
-            (ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, n::ResourceCounters::new()),
+            (pso::ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,    n::ResourceCounters::new()),
+            (pso::ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  n::ResourceCounters::new()),
+            (pso::ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, n::ResourceCounters::new()),
         ];
         let mut res_overrides = n::ResourceOverrideMap::default();
 
         for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
-            for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
+            for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
                 match *set_layout.borrow() {
                     n::DescriptorSetLayout::Emulated(ref desc_layouts, _) => {
                         for layout in desc_layouts.iter() {
@@ -1318,11 +1316,14 @@ impl hal::Device<Backend> for Device {
     {
         if self.private_caps.argument_buffers {
             let mut stage_flags = pso::ShaderStageFlags::empty();
-            let arguments = binding_iter.into_iter().map(|desc| {
-                let desc = desc.borrow();
-                stage_flags |= desc.stage_flags;
-                Self::describe_argument(desc.ty, desc.binding, desc.count)
-            }).collect::<Vec<_>>();
+            let arguments = binding_iter
+                .into_iter()
+                .map(|desc| {
+                    let desc = desc.borrow();
+                    stage_flags |= desc.stage_flags;
+                    Self::describe_argument(desc.ty, desc.binding, desc.count)
+                })
+                .collect::<Vec<_>>();
             let arg_array = metal::Array::from_owned_slice(&arguments);
             let encoder = self.shared.device
                 .lock()

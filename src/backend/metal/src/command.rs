@@ -2872,18 +2872,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     for layout in layouts.iter() {
                         let buf_value = if layout.content.contains(native::DescriptorContent::BUFFER) {
                             let bref = &data.buffers[counters.buffers];
-                            match bref.base {
-                                Some((buffer, mut offset)) => {
-                                    if bref.dynamic {
-                                        offset += *offset_iter
-                                            .next()
-                                            .expect("No dynamic offset provided!")
-                                            .borrow() as u64;
-                                    }
-                                    Some((buffer, offset))
-                                },
-                                None => None,
+                            let mut value = bref.base.clone();
+                            if bref.dynamic {
+                                if let Some((_, ref mut offset)) = value {
+                                    *offset += *offset_iter
+                                        .next()
+                                        .expect("No dynamic offset provided!")
+                                        .borrow() as u64;
+                                }
                             }
+                            value
                         } else {
                             None
                         };
@@ -3038,60 +3036,68 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     };
 
                     for layout in layouts.iter() {
-                        let res_override = &pipe_layout.res_overrides[&msl::ResourceBindingLocation {
-                            stage: spirv::ExecutionModel::GlCompute,
-                            desc_set: (first_set + set_index) as _,
-                            binding: layout.binding,
-                        }];
+                        if layout.stages.contains(pso::ShaderStageFlags::COMPUTE) {
+                            let res_override = &pipe_layout.res_overrides[&msl::ResourceBindingLocation {
+                                stage: spirv::ExecutionModel::GlCompute,
+                                desc_set: (first_set + set_index) as _,
+                                binding: layout.binding,
+                            }];
 
-                        if layout.content.contains(native::DescriptorContent::SAMPLER) {
-                            debug_assert_ne!(res_override.sampler_id, !0);
-                            let sampler = data.samplers[counters.samplers];
-                            let index = res_override.sampler_id as usize + layout.array_index;
-                            let out = &mut resources.samplers[index];
-                            if *out != sampler {
-                                *out = sampler;
-                                pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
+                            if layout.content.contains(native::DescriptorContent::SAMPLER) {
+                                debug_assert_ne!(res_override.sampler_id, !0);
+                                let sampler = data.samplers[counters.samplers];
+                                let index = res_override.sampler_id as usize + layout.array_index;
+                                let out = &mut resources.samplers[index];
+                                if *out != sampler {
+                                    *out = sampler;
+                                    pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
+                                }
                             }
-                            counters.samplers += 1;
-                        }
 
-                        if layout.content.contains(native::DescriptorContent::TEXTURE) {
-                            debug_assert_ne!(res_override.texture_id, !0);
-                            let texture = data.textures[counters.textures].map(|(t, _)| t);
-                            let index = res_override.texture_id as usize + layout.array_index;
-                            let out = &mut resources.textures[index];
-                            if *out != texture {
-                                *out = texture;
-                                pre.issue(soft::ComputeCommand::BindTexture { index, texture });
+                            if layout.content.contains(native::DescriptorContent::TEXTURE) {
+                                debug_assert_ne!(res_override.texture_id, !0);
+                                let texture = data.textures[counters.textures].map(|(t, _)| t);
+                                let index = res_override.texture_id as usize + layout.array_index;
+                                let out = &mut resources.textures[index];
+                                if *out != texture {
+                                    *out = texture;
+                                    pre.issue(soft::ComputeCommand::BindTexture { index, texture });
+                                }
                             }
-                            counters.textures += 1;
+
+                            if layout.content.contains(native::DescriptorContent::BUFFER) {
+                                debug_assert_ne!(res_override.buffer_id, !0);
+                                let bref = &data.buffers[counters.buffers];
+                                let index = res_override.buffer_id as usize + layout.array_index;
+
+                                let mut buffer = bref.base.clone();
+                                if bref.dynamic {
+                                    if let Some((_, ref mut offset)) = buffer {
+                                        *offset += *offset_iter
+                                            .next()
+                                            .expect("No dynamic offset provided!")
+                                            .borrow() as u64
+                                    }
+                                }
+                                let out = &mut resources.buffers[index];
+                                if *out != buffer {
+                                    *out = buffer;
+                                    pre.issue(soft::ComputeCommand::BindBuffer {
+                                        index,
+                                        buffer,
+                                    });
+                                }
+                            }
                         }
 
                         if layout.content.contains(native::DescriptorContent::BUFFER) {
-                            debug_assert_ne!(res_override.buffer_id, !0);
-                            let bref = &data.buffers[counters.buffers];
-                            let index = res_override.buffer_id as usize + layout.array_index;
-
-                            let mut buffer = bref.base.clone();
-                            if let Some((_, ref mut offset)) = buffer {
-                                if bref.dynamic {
-                                    *offset += *offset_iter
-                                        .next()
-                                        .expect("No dynamic offset provided!")
-                                        .borrow() as u64
-                                }
-                            }
-                            let out = &mut resources.buffers[index];
-                            if *out != buffer {
-                                *out = buffer;
-                                pre.issue(soft::ComputeCommand::BindBuffer {
-                                    index,
-                                    buffer,
-                                });
-                            }
-
                             counters.buffers += 1;
+                        }
+                        if layout.content.contains(native::DescriptorContent::TEXTURE) {
+                            counters.textures += 1;
+                        }
+                        if layout.content.contains(native::DescriptorContent::SAMPLER) {
+                            counters.samplers += 1;
                         }
                     }
                 }
