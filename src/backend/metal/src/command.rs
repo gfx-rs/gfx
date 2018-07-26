@@ -175,6 +175,7 @@ unsafe impl Sync for CommandBuffer {}
 struct Temp {
     clear_vertices: Vec<ClearVertex>,
     blit_vertices: FastHashMap<(Aspects, Level), Vec<BlitVertex>>,
+    dynamic_offsets: Vec<com::DescriptorSetOffset>,
 }
 
 #[derive(Clone)]
@@ -1681,6 +1682,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             temp: Temp {
                 clear_vertices: Vec::new(),
                 blit_vertices: FastHashMap::default(),
+                dynamic_offsets: Vec::new(),
             },
         }).collect();
 
@@ -2851,53 +2853,32 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        let mut dynamic_offset_iter = dynamic_offsets.into_iter();
-        let mut inner = self.inner.borrow_mut();
-        let mut pre = inner.sink().pre_render();
-
+        self.temp.dynamic_offsets.clear();
+        self.temp.dynamic_offsets.extend(dynamic_offsets.into_iter().map(|off| *off.borrow()));
         self.state.resources_vs.pre_allocate(&pipe_layout.total.vs);
         self.state.resources_ps.pre_allocate(&pipe_layout.total.ps);
+
+        let mut inner = self.inner.borrow_mut();
+        let mut pre = inner.sink().pre_render();
 
         for (res_offset, desc_set) in pipe_layout.offsets[first_set ..].iter().zip(sets) {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
                     let data = pool.read();
                     let mut res_offset = res_offset.clone();
-                    let mut data_offset = native::ResourceCounters {
-                        buffers: buffer_range.start as usize,
-                        textures: texture_range.start as usize,
-                        samplers: sampler_range.start as usize,
-                    };
-                    for layout in layouts.iter() {
-                        let buffer = if layout.content.contains(native::DescriptorContent::BUFFER) {
-                            let mut buffer = data.buffers[data_offset.buffers].clone();
-                            if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
-                                if let Some((_, ref mut offset)) = buffer {
-                                    *offset += *dynamic_offset_iter
-                                        .next()
-                                        .expect("No dynamic offset provided!")
-                                        .borrow() as u64;
-                                }
-                            }
-                            buffer
-                        } else {
-                            None
+                    let bind_vs = iter::once((pso::Stage::Vertex, &mut res_offset.vs, &mut self.state.resources_vs));
+                    let bind_ps = iter::once((pso::Stage::Fragment, &mut res_offset.ps, &mut self.state.resources_ps));
+
+                    for (stage, target_offset, resources) in bind_vs.into_iter().chain(bind_ps) {
+                        let mut data_offset = native::ResourceCounters {
+                            buffers: buffer_range.start as usize,
+                            textures: texture_range.start as usize,
+                            samplers: sampler_range.start as usize,
                         };
 
-                        // collect the binding stages
-                        let bind_vs = if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
-                            Some((pso::Stage::Vertex, &mut res_offset.vs, &mut self.state.resources_vs))
-                        } else {
-                            None
-                        };
-                        let bind_ps = if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-                            Some((pso::Stage::Fragment, &mut res_offset.ps, &mut self.state.resources_ps))
-                        } else {
-                            None
-                        };
-
-                        for (stage, target_offset, resources) in bind_vs.into_iter().chain(bind_ps) {
-                            if layout.content.contains(native::DescriptorContent::SAMPLER) {
+                        for layout in layouts.iter() {
+                            let has_stage = layout.stages.contains(stage.into());
+                            if has_stage && layout.content.contains(native::DescriptorContent::SAMPLER) {
                                 let sampler = data.samplers[data_offset.samplers];
                                 let index = target_offset.samplers;
                                 let out = &mut resources.samplers[index];
@@ -2907,7 +2888,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 }
                                 target_offset.samplers += 1;
                             }
-                            if layout.content.contains(native::DescriptorContent::TEXTURE) {
+                            if has_stage && layout.content.contains(native::DescriptorContent::TEXTURE) {
                                 let texture = data.textures[data_offset.textures].map(|(t, _)| t);
                                 let index = target_offset.textures;
                                 let out = &mut resources.textures[index];
@@ -2917,7 +2898,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 }
                                 target_offset.textures += 1;
                             }
-                            if layout.content.contains(native::DescriptorContent::BUFFER) {
+                            if has_stage && layout.content.contains(native::DescriptorContent::BUFFER) {
+                                let mut buffer = data.buffers[data_offset.buffers].clone();
+                                if let Some(offset_index) = layout.dynamic_offset_index {
+                                    if let Some((_, ref mut offset)) = buffer {
+                                        *offset += self.temp.dynamic_offsets[offset_index as usize] as u64;
+                                    }
+                                }
                                 let index = target_offset.buffers;
                                 let out = &mut resources.buffers[index];
                                 if *out != buffer {
@@ -2930,9 +2917,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 }
                                 target_offset.buffers += 1;
                             }
-                        }
 
-                        data_offset.add(layout.content);
+                            data_offset.add(layout.content);
+                        }
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
@@ -2985,11 +2972,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        let mut dynamic_offset_iter = dynamic_offsets.into_iter();
+        self.temp.dynamic_offsets.clear();
+        self.temp.dynamic_offsets.extend(dynamic_offsets.into_iter().map(|off| *off.borrow()));
+        self.state.resources_cs.pre_allocate(&pipe_layout.total.cs);
+
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
-
-        self.state.resources_cs.pre_allocate(&pipe_layout.total.cs);
 
         for (res_offset, desc_set) in pipe_layout.offsets[first_set ..].iter().zip(sets) {
             let mut res_offset = res_offset.clone();
@@ -3030,16 +3018,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                             if layout.content.contains(native::DescriptorContent::BUFFER) {
                                 let mut buffer = data.buffers[data_offset.buffers].clone();
-                                let index = target_offset.buffers;
-
-                                if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
+                                if let Some(offset_index) = layout.dynamic_offset_index {
                                     if let Some((_, ref mut offset)) = buffer {
-                                        *offset += *dynamic_offset_iter
-                                            .next()
-                                            .expect("No dynamic offset provided!")
-                                            .borrow() as u64
+                                        *offset += self.temp.dynamic_offsets[offset_index as usize] as u64;
                                     }
                                 }
+                                let index = target_offset.buffers;
                                 let out = &mut resources.buffers[index];
                                 if *out != buffer {
                                     *out = buffer;
@@ -3048,7 +3032,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                         buffer,
                                     });
                                 }
-
                                 target_offset.buffers += 1;
                             }
                         }

@@ -401,9 +401,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 let mut has_immutable_samplers = false;
                 for layout in layouts.iter() {
                     total.add(layout.content);
-                    if layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER) {
-                        has_immutable_samplers = true;
-                    }
+                    has_immutable_samplers |= layout.immutable_sampler_index.is_some();
                 }
                 debug!("\ttotal {:?}", total);
 
@@ -463,21 +461,17 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 // step[3]: fill out immutable samplers
                 if has_immutable_samplers {
                     let mut data = inner.write();
-                    let mut immutable_sampler_offset = 0;
                     let mut sampler_offset = sampler_range.start as usize;
 
                     for layout in layouts.iter() {
-                        if layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER) {
-                            let value = &immutable_samplers[immutable_sampler_offset];
+                        if let Some(index) = layout.immutable_sampler_index {
+                            let value = &immutable_samplers[index as usize];
                             data.samplers[sampler_offset] = Some(SamplerPtr(value.as_ptr()));
-                            immutable_sampler_offset += 1;
                         }
                         if layout.content.contains(DescriptorContent::SAMPLER) {
                             sampler_offset += 1;
                         }
                     }
-
-                    assert_eq!(immutable_sampler_offset, immutable_samplers.len());
                     debug!("\tassigning {} immutable_samplers", immutable_samplers.len());
                 }
 
@@ -602,10 +596,8 @@ bitflags! {
     /// Descriptor content flags.
     pub struct DescriptorContent: u8 {
         const BUFFER = 1<<0;
-        const DYNAMIC_BUFFER = 1<<1;
-        const TEXTURE = 1<<2;
-        const SAMPLER = 1<<3;
-        const IMMUTABLE_SAMPLER = 1<<4;
+        const TEXTURE = 1<<1;
+        const SAMPLER = 1<<2;
     }
 }
 
@@ -626,12 +618,10 @@ impl From<pso::DescriptorType> for DescriptorContent {
                 DescriptorContent::TEXTURE
             }
             pso::DescriptorType::UniformBuffer |
-            pso::DescriptorType::StorageBuffer => {
-                DescriptorContent::BUFFER
-            }
+            pso::DescriptorType::StorageBuffer |
             pso::DescriptorType::UniformBufferDynamic |
             pso::DescriptorType::StorageBufferDynamic => {
-                DescriptorContent::BUFFER | DescriptorContent::DYNAMIC_BUFFER
+                DescriptorContent::BUFFER
             }
         }
     }
@@ -641,6 +631,8 @@ impl From<pso::DescriptorType> for DescriptorContent {
 pub struct DescriptorLayout {
     pub stages: pso::ShaderStageFlags,
     pub content: DescriptorContent,
+    pub dynamic_offset_index: Option<u16>, // we can limit the count of dynamic buffers in Limits
+    pub immutable_sampler_index: Option<u16>,
     pub binding: pso::DescriptorBinding,
     pub array_index: pso::DescriptorArrayIndex,
 }
