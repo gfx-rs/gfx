@@ -1349,28 +1349,23 @@ impl hal::Device<Backend> for Device {
 
             for set_layout_binding in binding_iter {
                 let slb = set_layout_binding.borrow();
-                let content = native::DescriptorContent::from(slb.ty);
-                let is_dynamic = match slb.ty {
-                    pso::DescriptorType::UniformBufferDynamic |
-                    pso::DescriptorType::StorageBufferDynamic => true,
-                    _ => false,
-                };
+                let mut content = native::DescriptorContent::from(slb.ty);
+                if slb.immutable_samplers {
+                    content |= native::DescriptorContent::IMMUTABLE_SAMPLER;
+                }
                 for array_index in 0 .. slb.count {
                     desc_layouts.push(native::DescriptorLayout {
-                        stages: slb.stage_flags,
                         content,
-                        dynamic_offset_index: if is_dynamic {
-                            dynamic_offset_count += 1;
-                            Some(dynamic_offset_count - 1)
-                        } else {
-                            None
-                        },
-                        immutable_sampler_index: if slb.immutable_samplers {
+                        associated_data_index: if slb.immutable_samplers {
                             immutable_sampler_count += 1;
-                            Some(immutable_sampler_count - 1)
+                            immutable_sampler_count - 1
+                        } else if content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
+                            dynamic_offset_count += 1;
+                            dynamic_offset_count - 1
                         } else {
-                            None
+                            !0
                         },
+                        stages: slb.stage_flags,
                         binding: slb.binding,
                         array_index,
                     });
@@ -1417,14 +1412,14 @@ impl hal::Device<Backend> for Device {
                         trace!("\t{:?} at {:?}", layout, counters);
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
-                                debug_assert!(layout.immutable_sampler_index.is_none());
+                                debug_assert!(!layout.content.contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
                                 data.samplers[counters.samplers] = Some(SamplerPtr(sampler.0.as_ptr()));
                             }
                             pso::Descriptor::Image(image, il) => {
                                 data.textures[counters.textures] = Some((TexturePtr(image.raw.as_ptr()), il));
                             }
                             pso::Descriptor::CombinedImageSampler(image, il, sampler) => {
-                                if layout.immutable_sampler_index.is_none() {
+                                if !layout.content.contains(n::DescriptorContent::IMMUTABLE_SAMPLER) {
                                     data.samplers[counters.samplers] = Some(SamplerPtr(sampler.0.as_ptr()));
                                 }
                                 data.textures[counters.textures] = Some((TexturePtr(image.raw.as_ptr()), il));

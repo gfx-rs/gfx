@@ -2924,9 +2924,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                         if layout.content.contains(native::DescriptorContent::BUFFER) {
                             let mut buffer = data.buffers[data_offset.buffers].clone();
-                            if let Some(offset_index) = layout.dynamic_offset_index {
+                            if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
                                 if let Some((_, ref mut offset)) = buffer {
-                                    *offset += self.temp.dynamic_offsets[offset_index as usize] as u64;
+                                    *offset += self.temp.dynamic_offsets[layout.associated_data_index as usize] as u64;
                                 }
                             }
                             if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
@@ -3048,9 +3048,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                             if layout.content.contains(native::DescriptorContent::BUFFER) {
                                 let mut buffer = data.buffers[data_offset.buffers].clone();
-                                if let Some(offset_index) = layout.dynamic_offset_index {
+                                if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
                                     if let Some((_, ref mut offset)) = buffer {
-                                        *offset += self.temp.dynamic_offsets[offset_index as usize] as u64;
+                                        *offset += self.temp.dynamic_offsets[layout.associated_data_index as usize] as u64;
                                     }
                                 }
                                 let index = target_offset.buffers;

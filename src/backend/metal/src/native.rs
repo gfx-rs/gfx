@@ -401,7 +401,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 let mut has_immutable_samplers = false;
                 for layout in layouts.iter() {
                     total.add(layout.content);
-                    has_immutable_samplers |= layout.immutable_sampler_index.is_some();
+                    has_immutable_samplers |= layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER);
                 }
                 debug!("\ttotal {:?}", total);
 
@@ -464,11 +464,11 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                     let mut sampler_offset = sampler_range.start as usize;
 
                     for layout in layouts.iter() {
-                        if let Some(index) = layout.immutable_sampler_index {
-                            let value = &immutable_samplers[index as usize];
-                            data.samplers[sampler_offset] = Some(SamplerPtr(value.as_ptr()));
-                        }
                         if layout.content.contains(DescriptorContent::SAMPLER) {
+                            if layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER) {
+                                let value = &immutable_samplers[layout.associated_data_index as usize];
+                                data.samplers[sampler_offset] = Some(SamplerPtr(value.as_ptr()));
+                            }
                             sampler_offset += 1;
                         }
                     }
@@ -596,8 +596,10 @@ bitflags! {
     /// Descriptor content flags.
     pub struct DescriptorContent: u8 {
         const BUFFER = 1<<0;
-        const TEXTURE = 1<<1;
-        const SAMPLER = 1<<2;
+        const DYNAMIC_BUFFER = 1<<1;
+        const TEXTURE = 1<<2;
+        const SAMPLER = 1<<3;
+        const IMMUTABLE_SAMPLER = 1<<4;
     }
 }
 
@@ -618,21 +620,24 @@ impl From<pso::DescriptorType> for DescriptorContent {
                 DescriptorContent::TEXTURE
             }
             pso::DescriptorType::UniformBuffer |
-            pso::DescriptorType::StorageBuffer |
+            pso::DescriptorType::StorageBuffer => {
+                DescriptorContent::BUFFER
+            }
             pso::DescriptorType::UniformBufferDynamic |
             pso::DescriptorType::StorageBufferDynamic => {
-                DescriptorContent::BUFFER
+                DescriptorContent::BUFFER | DescriptorContent::DYNAMIC_BUFFER
             }
         }
     }
 }
 
+// Note: this structure is iterated often, so it makes sense to keep it dense
 #[derive(Debug)]
 pub struct DescriptorLayout {
-    pub stages: pso::ShaderStageFlags,
     pub content: DescriptorContent,
-    pub dynamic_offset_index: Option<u16>, // we can limit the count of dynamic buffers in Limits
-    pub immutable_sampler_index: Option<u16>,
+    /// Index of either an immutable sampler or a dynamic offset entry, if applicable
+    pub associated_data_index: u16,
+    pub stages: pso::ShaderStageFlags,
     pub binding: pso::DescriptorBinding,
     pub array_index: pso::DescriptorArrayIndex,
 }
