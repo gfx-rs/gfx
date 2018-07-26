@@ -55,8 +55,8 @@ unsafe impl Sync for ShaderModule {}
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
 pub struct RenderPassKey {
     // enough room for 4 color targets + depth/stencil
-    operations: SmallVec<[AttachmentOps; 5]>,
-    pub clear_data: SmallVec<[u32; 10]>,
+    pub clear_data: SmallVec<[u32; 20]>,
+    operations: SmallVec<[AttachmentOps; 6]>,
 }
 
 #[derive(Debug)]
@@ -160,21 +160,39 @@ impl ResourceCounters {
             samplers: 0,
         }
     }
+
+    pub fn add(&mut self, content: DescriptorContent) {
+        if content.contains(DescriptorContent::BUFFER) {
+            self.buffers += 1;
+        }
+        if content.contains(DescriptorContent::TEXTURE) {
+            self.textures += 1;
+        }
+        if content.contains(DescriptorContent::SAMPLER) {
+            self.samplers += 1;
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct MultiStageResourceCounters {
+    pub vs: ResourceCounters,
+    pub ps: ResourceCounters,
+    pub cs: ResourceCounters,
 }
 
 #[derive(Debug)]
 pub struct PipelineLayout {
     pub(crate) res_overrides: ResourceOverrideMap,
-    pub(crate) vs_counters: ResourceCounters,
-    pub(crate) ps_counters: ResourceCounters,
-    pub(crate) cs_counters: ResourceCounters,
+    pub(crate) offsets: Vec<MultiStageResourceCounters>,
+    pub(crate) total: MultiStageResourceCounters,
 }
 
 impl PipelineLayout {
     /// Get the first vertex buffer index to be used by attributes.
     #[inline(always)]
     pub(crate) fn attribute_buffer_index(&self) -> u32 {
-        self.vs_counters.buffers as _
+        self.total.vs.buffers as _
     }
 }
 
@@ -369,37 +387,6 @@ impl DescriptorPool {
             DescriptorPool::ArgumentBuffer { .. } => {}
         }
     }
-
-    pub(crate) fn count_bindings(
-        desc_type: pso::DescriptorType,
-        desc_count: usize,
-        num_samplers: &mut usize,
-        num_textures: &mut usize,
-        num_buffers: &mut usize,
-    ) {
-        match desc_type {
-            pso::DescriptorType::Sampler => {
-                *num_samplers += desc_count;
-            }
-            pso::DescriptorType::CombinedImageSampler => {
-                *num_samplers += desc_count;
-                *num_textures += desc_count;
-            }
-            pso::DescriptorType::SampledImage |
-            pso::DescriptorType::StorageImage |
-            pso::DescriptorType::UniformTexelBuffer |
-            pso::DescriptorType::StorageTexelBuffer |
-            pso::DescriptorType::InputAttachment => {
-                *num_textures += desc_count;
-            }
-            pso::DescriptorType::UniformBuffer |
-            pso::DescriptorType::StorageBuffer |
-            pso::DescriptorType::UniformBufferDynamic |
-            pso::DescriptorType::StorageBufferDynamic => {
-                *num_buffers += desc_count;
-            }
-        };
-    }
 }
 
 impl hal::DescriptorPool<Backend> for DescriptorPool {
@@ -408,30 +395,28 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         match *self {
             DescriptorPool::Emulated { ref inner, ref mut sampler_alloc, ref mut texture_alloc, ref mut buffer_alloc } => {
                 debug!("pool: allocate_set");
-                let (layout_bindings, immutable_samplers) = match set_layout {
-                    &DescriptorSetLayout::Emulated(ref bindings, ref samplers) => (bindings, samplers),
+                let (layouts, immutable_samplers) = match set_layout {
+                    &DescriptorSetLayout::Emulated(ref layouts, ref samplers) => (layouts, samplers),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
 
                 // step[1]: count the total number of descriptors needed
-                let mut total_samplers = 0;
-                let mut total_textures = 0;
-                let mut total_buffers = 0;
+                let mut total = ResourceCounters::new();
                 let mut has_immutable_samplers = false;
-                for layout in layout_bindings.iter() {
-                    has_immutable_samplers |= layout.immutable_samplers;
-                    Self::count_bindings(layout.ty, layout.count,
-                        &mut total_samplers, &mut total_textures, &mut total_buffers);
+                for layout in layouts.iter() {
+                    total.add(layout.content);
+                    if layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER) {
+                        has_immutable_samplers = true;
+                    }
                 }
-                debug!("\t{} sampler, {} texture, and {} buffer sets",
-                    total_samplers, total_textures, total_buffers);
+                debug!("\ttotal {:?}", total);
 
                 // step[2]: try to allocate the ranges from the pool
-                let sampler_range = if total_samplers != 0 {
-                    match sampler_alloc.allocate_range(total_samplers as _) {
+                let sampler_range = if total.samplers != 0 {
+                    match sampler_alloc.allocate_range(total.samplers as _) {
                         Ok(range) => range,
                         Err(e) => {
-                            return Err(if e.fragmented_free_length >= total_samplers as u32 {
+                            return Err(if e.fragmented_free_length >= total.samplers as u32 {
                                 pso::AllocationError::FragmentedPool
                             } else {
                                 pso::AllocationError::OutOfPoolMemory
@@ -441,14 +426,14 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 } else {
                     0 .. 0
                 };
-                let texture_range = if total_textures != 0 {
-                    match texture_alloc.allocate_range(total_textures as _) {
+                let texture_range = if total.textures != 0 {
+                    match texture_alloc.allocate_range(total.textures as _) {
                         Ok(range) => range,
                         Err(e) => {
                             if sampler_range.end != 0 {
                                 sampler_alloc.free_range(sampler_range);
                             }
-                            return Err(if e.fragmented_free_length >= total_samplers as u32 {
+                            return Err(if e.fragmented_free_length >= total.samplers as u32 {
                                 pso::AllocationError::FragmentedPool
                             } else {
                                 pso::AllocationError::OutOfPoolMemory
@@ -458,8 +443,8 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 } else {
                     0 .. 0
                 };
-                let buffer_range = if total_buffers != 0 {
-                    match buffer_alloc.allocate_range(total_buffers as _) {
+                let buffer_range = if total.buffers != 0 {
+                    match buffer_alloc.allocate_range(total.buffers as _) {
                         Ok(range) => range,
                         Err(e) => {
                             if sampler_range.end != 0 {
@@ -468,7 +453,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                             if texture_range.end != 0 {
                                 texture_alloc.free_range(texture_range);
                             }
-                            return Err(if e.fragmented_free_length >= total_samplers as u32 {
+                            return Err(if e.fragmented_free_length >= total.samplers as u32 {
                                 pso::AllocationError::FragmentedPool
                             } else {
                                 pso::AllocationError::OutOfPoolMemory
@@ -484,20 +469,16 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                     let mut data = inner.write();
                     let mut immutable_sampler_offset = 0;
                     let mut sampler_offset = sampler_range.start as usize;
-                    let (mut tx_temp, mut bf_temp) = (0, 0);
 
-                    for layout in layout_bindings.iter() {
-                        if layout.immutable_samplers {
-                            for (sampler, immutable) in data
-                                .samplers[sampler_offset .. sampler_offset + layout.count]
-                                .iter_mut()
-                                .zip(&immutable_samplers[immutable_sampler_offset..])
-                            {
-                                *sampler = Some(SamplerPtr(immutable.as_ptr()))
-                            }
-                            immutable_sampler_offset += layout.count;
+                    for layout in layouts.iter() {
+                        if layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER) {
+                            let value = &immutable_samplers[immutable_sampler_offset];
+                            data.samplers[sampler_offset] = Some(SamplerPtr(value.as_ptr()));
+                            immutable_sampler_offset += 1;
                         }
-                        Self::count_bindings(layout.ty, layout.count, &mut sampler_offset, &mut tx_temp, &mut bf_temp);
+                        if layout.content.contains(DescriptorContent::SAMPLER) {
+                            sampler_offset += 1;
+                        }
                     }
 
                     assert_eq!(immutable_sampler_offset, immutable_samplers.len());
@@ -506,7 +487,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
 
                 Ok(DescriptorSet::Emulated {
                     pool: Arc::clone(inner),
-                    layouts: Arc::clone(layout_bindings),
+                    layouts: Arc::clone(layouts),
                     sampler_range,
                     texture_range,
                     buffer_range,
@@ -621,19 +602,64 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
     }
 }
 
+bitflags! {
+    /// Descriptor content flags.
+    pub struct DescriptorContent: u8 {
+        const BUFFER = 1<<0;
+        const TEXTURE = 1<<1;
+        const SAMPLER = 1<<2;
+        const IMMUTABLE_SAMPLER = 1<<3;
+    }
+}
+
+impl From<pso::DescriptorType> for DescriptorContent {
+    fn from(ty: pso::DescriptorType) -> Self {
+        match ty {
+            pso::DescriptorType::Sampler => {
+                DescriptorContent::SAMPLER
+            }
+            pso::DescriptorType::CombinedImageSampler => {
+                DescriptorContent::TEXTURE | DescriptorContent::SAMPLER
+            }
+            pso::DescriptorType::SampledImage |
+            pso::DescriptorType::StorageImage |
+            pso::DescriptorType::UniformTexelBuffer |
+            pso::DescriptorType::StorageTexelBuffer |
+            pso::DescriptorType::InputAttachment => {
+                DescriptorContent::TEXTURE
+            }
+            pso::DescriptorType::UniformBuffer |
+            pso::DescriptorType::StorageBuffer |
+            pso::DescriptorType::UniformBufferDynamic |
+            pso::DescriptorType::StorageBufferDynamic => {
+                DescriptorContent::BUFFER
+            }
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct DescriptorLayout {
+    pub stages: pso::ShaderStageFlags,
+    pub content: DescriptorContent,
+    pub binding: pso::DescriptorBinding,
+    pub array_index: pso::DescriptorArrayIndex,
+}
+
 #[derive(Debug)]
 pub enum DescriptorSetLayout {
-    Emulated(Arc<Vec<pso::DescriptorSetLayoutBinding>>, Vec<metal::SamplerState>),
+    Emulated(Arc<Vec<DescriptorLayout>>, Vec<metal::SamplerState>),
     ArgumentBuffer(metal::ArgumentEncoder, pso::ShaderStageFlags),
 }
 unsafe impl Send for DescriptorSetLayout {}
 unsafe impl Sync for DescriptorSetLayout {}
 
-#[derive(Clone, Debug)]
+
+#[derive(Debug)]
 pub enum DescriptorSet {
     Emulated {
         pool: Arc<RwLock<DescriptorPoolInner>>,
-        layouts: Arc<Vec<pso::DescriptorSetLayoutBinding>>,
+        layouts: Arc<Vec<DescriptorLayout>>,
         sampler_range: Range<pso::DescriptorBinding>,
         texture_range: Range<pso::DescriptorBinding>,
         buffer_range: Range<pso::DescriptorBinding>

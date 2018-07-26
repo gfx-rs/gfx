@@ -123,11 +123,18 @@ fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: 
     Ok(mtl_function)
 }
 
+struct LinkedSampler {
+    sampler: metal::SamplerState,
+    binding: pso::DescriptorBinding,
+    array_index: pso::DescriptorArrayIndex,
+}
+
 //#[derive(Clone)]
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
     pub(crate) private_caps: PrivateCapabilities,
     memory_types: [hal::MemoryType; 4],
+    temp_samplers: Mutex<Vec<LinkedSampler>>,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -261,6 +268,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             shared: self.shared.clone(),
             private_caps: self.private_caps.clone(),
             memory_types: self.memory_types,
+            temp_samplers: Mutex::new(Vec::new()),
         };
 
         Ok(hal::Gpu {
@@ -629,67 +637,56 @@ impl hal::Device<Backend> for Device {
         IR: IntoIterator,
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>
     {
-        use hal::pso::ShaderStageFlags;
-
         let mut stage_infos = [
-            (ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,    n::ResourceCounters::new()),
-            (ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  n::ResourceCounters::new()),
-            (ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, n::ResourceCounters::new()),
+            (pso::ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,    n::ResourceCounters::new()),
+            (pso::ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  n::ResourceCounters::new()),
+            (pso::ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, n::ResourceCounters::new()),
         ];
         let mut res_overrides = n::ResourceOverrideMap::default();
+        let mut offsets = Vec::new();
 
         for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
-            match set_layout.borrow() {
-                &n::DescriptorSetLayout::Emulated(ref set_bindings, _) => {
-                    for set_binding in set_bindings.iter() {
-                        for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
-                            if !set_binding.stage_flags.contains(stage_bit) {
+            // remember where the resources for this set start at each shader stage
+            offsets.push(n::MultiStageResourceCounters {
+                vs: stage_infos[0].2.clone(),
+                ps: stage_infos[1].2.clone(),
+                cs: stage_infos[2].2.clone(),
+            });
+            match *set_layout.borrow() {
+                n::DescriptorSetLayout::Emulated(ref desc_layouts, _) => {
+                    for layout in desc_layouts.iter() {
+                        for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
+                            if !layout.stages.contains(stage_bit) {
                                 continue
                             }
-                            let mut res = msl::ResourceBinding {
-                                buffer_id: !0,
-                                texture_id: !0,
-                                sampler_id: !0,
+                            let res = msl::ResourceBinding {
+                                buffer_id: if layout.content.contains(n::DescriptorContent::BUFFER) {
+                                    counters.buffers += 1;
+                                    (counters.buffers - 1) as _
+                                } else { !0 },
+                                texture_id: if layout.content.contains(n::DescriptorContent::TEXTURE) {
+                                    counters.textures += 1;
+                                    (counters.textures - 1) as _
+                                } else { !0 },
+                                sampler_id: if layout.content.contains(n::DescriptorContent::SAMPLER) {
+                                    counters.samplers += 1;
+                                    (counters.samplers - 1) as _
+                                } else { !0 },
                                 force_used: false,
                             };
-                            match set_binding.ty {
-                                pso::DescriptorType::UniformBuffer |
-                                pso::DescriptorType::StorageBuffer |
-                                pso::DescriptorType::UniformBufferDynamic |
-                                pso::DescriptorType::StorageBufferDynamic => {
-                                    res.buffer_id = counters.buffers as _;
-                                    counters.buffers += set_binding.count;
-                                }
-                                pso::DescriptorType::SampledImage |
-                                pso::DescriptorType::StorageImage |
-                                pso::DescriptorType::UniformTexelBuffer |
-                                pso::DescriptorType::StorageTexelBuffer |
-                                pso::DescriptorType::InputAttachment => {
-                                    res.texture_id = counters.textures as _;
-                                    counters.textures += set_binding.count;
-                                }
-                                pso::DescriptorType::Sampler => {
-                                    res.sampler_id = counters.samplers as _;
-                                    counters.samplers += set_binding.count;
-                                }
-                                pso::DescriptorType::CombinedImageSampler => {
-                                    res.texture_id = counters.textures as _;
-                                    res.sampler_id = counters.samplers as _;
-                                    counters.textures += set_binding.count;
-                                    counters.samplers += set_binding.count;
-                                }
-                            };
-                            let location = msl::ResourceBindingLocation {
-                                stage,
-                                desc_set: set_index as _,
-                                binding: set_binding.binding as _,
-                            };
-                            res_overrides.insert(location, res);
+                            if layout.array_index == 0 {
+                                let location = msl::ResourceBindingLocation {
+                                    stage,
+                                    desc_set: set_index as _,
+                                    binding: layout.binding,
+                                };
+                                res_overrides.insert(location, res);
+                            }
                         }
                     }
                 }
-                &n::DescriptorSetLayout::ArgumentBuffer(_, stage_flags) => {
-                    for &mut(stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
+                n::DescriptorSetLayout::ArgumentBuffer(_, stage_flags) => {
+                    for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
                         if !stage_flags.contains(stage_bit) {
                             continue
                         }
@@ -749,9 +746,12 @@ impl hal::Device<Backend> for Device {
 
         n::PipelineLayout {
             res_overrides,
-            vs_counters: stage_infos[0].2.clone(),
-            ps_counters: stage_infos[1].2.clone(),
-            cs_counters: stage_infos[2].2.clone(),
+            offsets,
+            total: n::MultiStageResourceCounters {
+                vs: stage_infos[0].2.clone(),
+                ps: stage_infos[1].2.clone(),
+                cs: stage_infos[2].2.clone(),
+            },
         }
     }
 
@@ -1310,8 +1310,16 @@ impl hal::Device<Backend> for Device {
         } else {
             for desc_range in descriptor_ranges {
                 let desc = desc_range.borrow();
-                n::DescriptorPool::count_bindings(desc.ty, desc.count,
-                    &mut num_samplers, &mut num_textures, &mut num_buffers);
+                let content = n::DescriptorContent::from(desc.ty);
+                if content.contains(n::DescriptorContent::BUFFER) {
+                    num_buffers += desc.count;
+                }
+                if content.contains(n::DescriptorContent::TEXTURE) {
+                    num_textures += desc.count;
+                }
+                if content.contains(n::DescriptorContent::SAMPLER) {
+                    num_samplers += desc.count;
+                }
             }
             n::DescriptorPool::new_emulated(num_samplers, num_textures, num_buffers)
         }
@@ -1326,13 +1334,18 @@ impl hal::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<n::Sampler>,
     {
+        let mut immutable_samplers = immutable_sampler_iter.into_iter();
+
         if self.private_caps.argument_buffers {
             let mut stage_flags = pso::ShaderStageFlags::empty();
-            let arguments = binding_iter.into_iter().map(|desc| {
-                let desc = desc.borrow();
-                stage_flags |= desc.stage_flags;
-                Self::describe_argument(desc.ty, desc.binding, desc.count)
-            }).collect::<Vec<_>>();
+            let arguments = binding_iter
+                .into_iter()
+                .map(|desc| {
+                    let desc = desc.borrow();
+                    stage_flags |= desc.stage_flags;
+                    Self::describe_argument(desc.ty, desc.binding, desc.count)
+                })
+                .collect::<Vec<_>>();
             let arg_array = metal::Array::from_owned_slice(&arguments);
             let encoder = self.shared.device
                 .lock()
@@ -1340,20 +1353,45 @@ impl hal::Device<Backend> for Device {
 
             n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
         } else {
-            //TODO: if we always process the layout bindings in the order of binding points,
-            // the spill logic becomes trivial. Problem is - keeping track of immutable samplers.
-            n::DescriptorSetLayout::Emulated(
-                Arc::new(
-                    binding_iter
-                        .into_iter()
-                        .map(|b| b.borrow().clone())
-                        .collect()
-                ),
-                immutable_sampler_iter
-                    .into_iter()
-                    .map(|is| is.borrow().0.clone())
-                    .collect(),
-            )
+            let mut temp_samplers = self.temp_samplers.lock();
+            temp_samplers.clear();
+            let mut desc_layouts = Vec::new();
+
+            for set_layout_binding in binding_iter {
+                let slb = set_layout_binding.borrow();
+                let mut content = native::DescriptorContent::from(slb.ty);
+                if slb.immutable_samplers {
+                    content |= native::DescriptorContent::IMMUTABLE_SAMPLER;
+                    temp_samplers.extend(
+                        immutable_samplers
+                            .by_ref()
+                            .take(slb.count)
+                            .enumerate()
+                            .map(|(array_index, sampler)| LinkedSampler {
+                                sampler: sampler.borrow().0.clone(),
+                                binding: slb.binding,
+                                array_index,
+                            })
+                    );
+                }
+                for array_index in 0 .. slb.count {
+                    desc_layouts.push(native::DescriptorLayout {
+                        stages: slb.stage_flags,
+                        content,
+                        binding: slb.binding,
+                        array_index,
+                    });
+                }
+            }
+
+            desc_layouts .sort_by_key(|dl| (dl.binding, dl.array_index));
+            temp_samplers.sort_by_key(|ts| (ts.binding, ts.array_index));
+            let samplers = temp_samplers
+                .drain(..)
+                .map(|ts| ts.sampler)
+                .collect();
+
+            n::DescriptorSetLayout::Emulated(Arc::new(desc_layouts), samplers)
         }
     }
 
@@ -1367,65 +1405,50 @@ impl hal::Device<Backend> for Device {
         for write in write_iter {
             match *write.set {
                 n::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
-                    let mut array_offset = write.array_offset;
-                    let mut binding = write.binding;
-                    let mut pool = pool.write();
+                    let mut counters = n::ResourceCounters {
+                        buffers: buffer_range.start as usize,
+                        textures: texture_range.start as usize,
+                        samplers: sampler_range.start as usize,
+                    };
+                    let mut start = None; //TODO: can pre-compute this
+                    for (i, layout) in layouts.iter().enumerate() {
+                        if layout.binding == write.binding && layout.array_index == write.array_offset {
+                            start = Some(i);
+                            break;
+                        }
+                        counters.add(layout.content);
+                    }
+                    let mut data = pool.write();
 
-                    for descriptor in write.descriptors {
-                        let mut sampler_index;
-                        let mut texture_index;
-                        let mut buffer_index;
-                        let layout = loop {
-                            sampler_index = sampler_range.start as usize + array_offset;
-                            texture_index = texture_range.start as usize + array_offset;
-                            buffer_index = buffer_range.start as usize + array_offset;
-                            //TODO: can pre-compute this
-                            let layout = layouts.iter()
-                                .find(|layout| {
-                                    if layout.binding == binding {
-                                        true
-                                    } else {
-                                        n::DescriptorPool::count_bindings(layout.ty, layout.count,
-                                            &mut sampler_index, &mut texture_index, &mut buffer_index);
-                                        false
-                                    }
-                                })
-                                .expect("invalid descriptor set binding index");
-                            if array_offset < layout.count {
-                                break layout;
-                            }
-                            array_offset = 0;
-                            binding += 1;
-                        };
-                        trace!("\t{:?} at sampler {}, texture {}, buffer {}",
-                            layout.ty, sampler_index, texture_index, buffer_index);
-
+                    for (layout, descriptor) in layouts[start.unwrap() ..].iter().zip(write.descriptors) {
+                        trace!("\t{:?} at {:?}", layout, counters);
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
-                                assert!(!layout.immutable_samplers);
-                                pool.samplers[sampler_index] = Some(SamplerPtr(sampler.0.as_ptr()));
+                                debug_assert!(!layout.content.contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
+                                data.samplers[counters.samplers] = Some(SamplerPtr(sampler.0.as_ptr()));
                             }
                             pso::Descriptor::Image(image, il) => {
-                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), il));
+                                data.textures[counters.textures] = Some((TexturePtr(image.raw.as_ptr()), il));
                             }
                             pso::Descriptor::CombinedImageSampler(image, il, sampler) => {
-                                if !layout.immutable_samplers {
-                                    pool.samplers[sampler_index] = Some(SamplerPtr(sampler.0.as_ptr()));
+                                if !layout.content.contains(n::DescriptorContent::IMMUTABLE_SAMPLER) {
+                                    data.samplers[counters.samplers] = Some(SamplerPtr(sampler.0.as_ptr()));
                                 }
-                                pool.textures[texture_index] = Some((TexturePtr(image.raw.as_ptr()), il));
+                                data.textures[counters.textures] = Some((TexturePtr(image.raw.as_ptr()), il));
                             }
                             pso::Descriptor::UniformTexelBuffer(view) |
                             pso::Descriptor::StorageTexelBuffer(view) => {
-                                pool.textures[texture_index] = Some((TexturePtr(view.raw.as_ptr()), image::Layout::General));
+                                data.textures[counters.textures] = Some((TexturePtr(view.raw.as_ptr()), image::Layout::General));
                             }
                             pso::Descriptor::Buffer(buffer, ref range) => {
                                 let buf_length = buffer.raw.length();
                                 let start = range.start.unwrap_or(0);
                                 let end = range.end.unwrap_or(buf_length);
                                 assert!(end <= buf_length);
-                                pool.buffers[buffer_index].base = Some((BufferPtr(buffer.raw.as_ptr()), start));
+                                data.buffers[counters.buffers].base = Some((BufferPtr(buffer.raw.as_ptr()), start));
                             }
                         }
+                        counters.add(layout.content);
                     }
                 }
                 n::DescriptorSet::ArgumentBuffer { ref raw, offset, ref encoder, .. } => {
