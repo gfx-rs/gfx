@@ -2864,62 +2864,92 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         for (res_offset, desc_set) in pipe_layout.offsets[first_set ..].iter().zip(sets) {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
-                    let data = pool.read();
                     let mut res_offset = res_offset.clone();
-                    let bind_vs = iter::once((pso::Stage::Vertex, &mut res_offset.vs, &mut self.state.resources_vs));
-                    let bind_ps = iter::once((pso::Stage::Fragment, &mut res_offset.ps, &mut self.state.resources_ps));
+                    let data = pool.read();
+                    let mut data_offset = native::ResourceCounters {
+                        buffers: buffer_range.start as usize,
+                        textures: texture_range.start as usize,
+                        samplers: sampler_range.start as usize,
+                    };
 
-                    for (stage, target_offset, resources) in bind_vs.into_iter().chain(bind_ps) {
-                        let mut data_offset = native::ResourceCounters {
-                            buffers: buffer_range.start as usize,
-                            textures: texture_range.start as usize,
-                            samplers: sampler_range.start as usize,
-                        };
+                    for layout in layouts.iter() {
+                        //TODO: there is quite a bit code duplication happening below between vertex and fragment stages
+                        // I inlined everything as the most efficient code path I could see. Any abstraction from here
+                        // needs to ensure that the assembly code doesn't regress. Be my guess to give it a shot :)
+                        // The general idea is to only go through layouts once, and only fetch the data once.
 
-                        for layout in layouts.iter() {
-                            let has_stage = layout.stages.contains(stage.into());
-                            if has_stage && layout.content.contains(native::DescriptorContent::SAMPLER) {
-                                let sampler = data.samplers[data_offset.samplers];
-                                let index = target_offset.samplers;
-                                let out = &mut resources.samplers[index];
+                        if layout.content.contains(native::DescriptorContent::SAMPLER) {
+                            let sampler = data.samplers[data_offset.samplers];
+                            if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
+                                let index = res_offset.vs.samplers;
+                                res_offset.vs.samplers += 1;
+                                let out = &mut self.state.resources_vs.samplers[index];
                                 if *out != sampler {
                                     *out = sampler;
-                                    pre.issue(soft::RenderCommand::BindSampler { stage, index, sampler });
+                                    pre.issue(soft::RenderCommand::BindSampler { stage: pso::Stage::Vertex, index, sampler });
                                 }
-                                target_offset.samplers += 1;
                             }
-                            if has_stage && layout.content.contains(native::DescriptorContent::TEXTURE) {
-                                let texture = data.textures[data_offset.textures].map(|(t, _)| t);
-                                let index = target_offset.textures;
-                                let out = &mut resources.textures[index];
+                            if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
+                                let index = res_offset.ps.samplers;
+                                res_offset.ps.samplers += 1;
+                                let out = &mut self.state.resources_ps.samplers[index];
+                                if *out != sampler {
+                                    *out = sampler;
+                                    pre.issue(soft::RenderCommand::BindSampler { stage: pso::Stage::Fragment, index, sampler });
+                                }
+                            }
+                        }
+
+                        if layout.content.contains(native::DescriptorContent::TEXTURE) {
+                            let texture = data.textures[data_offset.textures].map(|(t, _)| t);
+                            if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
+                                let index = res_offset.vs.textures;
+                                res_offset.vs.textures += 1;
+                                let out = &mut self.state.resources_vs.textures[index];
                                 if *out != texture {
                                     *out = texture;
-                                    pre.issue(soft::RenderCommand::BindTexture { stage, index, texture });
+                                    pre.issue(soft::RenderCommand::BindTexture { stage: pso::Stage::Vertex, index, texture });
                                 }
-                                target_offset.textures += 1;
                             }
-                            if has_stage && layout.content.contains(native::DescriptorContent::BUFFER) {
-                                let mut buffer = data.buffers[data_offset.buffers].clone();
-                                if let Some(offset_index) = layout.dynamic_offset_index {
-                                    if let Some((_, ref mut offset)) = buffer {
-                                        *offset += self.temp.dynamic_offsets[offset_index as usize] as u64;
-                                    }
+                            if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
+                                let index = res_offset.ps.textures;
+                                res_offset.ps.textures += 1;
+                                let out = &mut self.state.resources_ps.textures[index];
+                                if *out != texture {
+                                    *out = texture;
+                                    pre.issue(soft::RenderCommand::BindTexture { stage: pso::Stage::Fragment, index, texture });
                                 }
-                                let index = target_offset.buffers;
-                                let out = &mut resources.buffers[index];
+                            }
+                        }
+
+                        if layout.content.contains(native::DescriptorContent::BUFFER) {
+                            let mut buffer = data.buffers[data_offset.buffers].clone();
+                            if let Some(offset_index) = layout.dynamic_offset_index {
+                                if let Some((_, ref mut offset)) = buffer {
+                                    *offset += self.temp.dynamic_offsets[offset_index as usize] as u64;
+                                }
+                            }
+                            if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
+                                let index = res_offset.vs.buffers;
+                                res_offset.vs.buffers += 1;
+                                let out = &mut self.state.resources_vs.buffers[index];
                                 if *out != buffer {
                                     *out = buffer;
-                                    pre.issue(soft::RenderCommand::BindBuffer {
-                                        stage,
-                                        index,
-                                        buffer,
-                                    });
+                                    pre.issue(soft::RenderCommand::BindBuffer { stage: pso::Stage::Vertex, index, buffer });
                                 }
-                                target_offset.buffers += 1;
                             }
-
-                            data_offset.add(layout.content);
+                            if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
+                                let index = res_offset.ps.buffers;
+                                res_offset.ps.buffers += 1;
+                                let out = &mut self.state.resources_ps.buffers[index];
+                                if *out != buffer {
+                                    *out = buffer;
+                                    pre.issue(soft::RenderCommand::BindBuffer { stage: pso::Stage::Fragment, index, buffer });
+                                }
+                            }
                         }
+
+                        data_offset.add(layout.content);
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
