@@ -55,8 +55,8 @@ unsafe impl Sync for ShaderModule {}
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
 pub struct RenderPassKey {
     // enough room for 4 color targets + depth/stencil
-    operations: SmallVec<[AttachmentOps; 5]>,
-    pub clear_data: SmallVec<[u32; 10]>,
+    pub clear_data: SmallVec<[u32; 20]>,
+    operations: SmallVec<[AttachmentOps; 6]>,
 }
 
 #[derive(Debug)]
