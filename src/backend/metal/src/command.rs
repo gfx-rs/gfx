@@ -2844,14 +2844,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         pipe_layout: &native::PipelineLayout,
         first_set: usize,
         sets: I,
-        offsets: J,
+        dynamic_offsets: J,
     ) where
         I: IntoIterator,
         I::Item: Borrow<native::DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        let mut offset_iter = offsets.into_iter();
+        let mut dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
@@ -2869,18 +2869,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         samplers: sampler_range.start as usize,
                     };
                     for layout in layouts.iter() {
-                        let buf_value = if layout.content.contains(native::DescriptorContent::BUFFER) {
-                            let bref = &data.buffers[data_offset.buffers];
-                            let mut value = bref.base.clone();
-                            if bref.dynamic {
-                                if let Some((_, ref mut offset)) = value {
-                                    *offset += *offset_iter
+                        let buffer = if layout.content.contains(native::DescriptorContent::BUFFER) {
+                            let mut buffer = data.buffers[data_offset.buffers].clone();
+                            if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
+                                if let Some((_, ref mut offset)) = buffer {
+                                    *offset += *dynamic_offset_iter
                                         .next()
                                         .expect("No dynamic offset provided!")
                                         .borrow() as u64;
                                 }
                             }
-                            value
+                            buffer
                         } else {
                             None
                         };
@@ -2921,12 +2920,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             if layout.content.contains(native::DescriptorContent::BUFFER) {
                                 let index = target_offset.buffers;
                                 let out = &mut resources.buffers[index];
-                                if *out != buf_value {
-                                    *out = buf_value;
+                                if *out != buffer {
+                                    *out = buffer;
                                     pre.issue(soft::RenderCommand::BindBuffer {
                                         stage,
                                         index,
-                                        buffer: buf_value,
+                                        buffer,
                                     });
                                 }
                                 target_offset.buffers += 1;
@@ -2979,14 +2978,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         pipe_layout: &native::PipelineLayout,
         first_set: usize,
         sets: I,
-        offsets: J,
+        dynamic_offsets: J,
     ) where
         I: IntoIterator,
         I::Item: Borrow<native::DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        let mut offset_iter = offsets.into_iter();
+        let mut dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
 
@@ -3030,13 +3029,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             }
 
                             if layout.content.contains(native::DescriptorContent::BUFFER) {
-                                let bref = &data.buffers[data_offset.buffers];
+                                let mut buffer = data.buffers[data_offset.buffers].clone();
                                 let index = target_offset.buffers;
 
-                                let mut buffer = bref.base.clone();
-                                if bref.dynamic {
+                                if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
                                     if let Some((_, ref mut offset)) = buffer {
-                                        *offset += *offset_iter
+                                        *offset += *dynamic_offset_iter
                                             .next()
                                             .expect("No dynamic offset provided!")
                                             .borrow() as u64

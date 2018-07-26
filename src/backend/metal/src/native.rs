@@ -10,11 +10,13 @@ use std::ops::Range;
 use std::os::raw::{c_void, c_long};
 use std::sync::Arc;
 
-use hal::{self, image, pso};
+use hal::{buffer, image, pso};
+use hal::{DescriptorPool as HalDescriptorPool, MemoryTypeId};
 use hal::backend::FastHashMap;
 use hal::command::{ClearColorRaw, ClearValueRaw};
 use hal::format::{Aspects, Format, FormatDesc};
 use hal::pass::{Attachment, AttachmentLoadOp, AttachmentOps};
+use hal::range::RangeArg;
 
 use cocoa::foundation::{NSUInteger};
 use foreign_types::ForeignType;
@@ -274,14 +276,14 @@ pub struct Image {
 impl Image {
     pub(crate) fn pitches_impl(
         extent: image::Extent, format_desc: FormatDesc
-    ) -> [hal::buffer::Offset; 3] {
+    ) -> [buffer::Offset; 3] {
         let bytes_per_texel = format_desc.bits as image::Size >> 3;
         let row_pitch = extent.width * bytes_per_texel;
         let depth_pitch = extent.height * row_pitch;
         let array_pitch = extent.depth * depth_pitch;
         [row_pitch as _, depth_pitch as _, array_pitch as _]
     }
-    pub(crate) fn pitches(&self, level: image::Level) -> [hal::buffer::Offset; 3] {
+    pub(crate) fn pitches(&self, level: image::Level) -> [buffer::Offset; 3] {
         let extent = self.kind.extent().at_level(level);
         Self::pitches_impl(extent, self.format_desc)
     }
@@ -347,17 +349,11 @@ pub enum DescriptorPool {
 unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
-#[derive(Clone, Debug)]
-pub struct BufferBinding {
-    pub base: Option<(BufferPtr, u64)>,
-    pub dynamic: bool,
-}
-
 #[derive(Debug)]
 pub struct DescriptorPoolInner {
     pub samplers: Vec<Option<SamplerPtr>>,
     pub textures: Vec<Option<(TexturePtr, image::Layout)>>,
-    pub buffers: Vec<BufferBinding>,
+    pub buffers: Vec<Option<(BufferPtr, buffer::Offset)>>,
 }
 
 impl DescriptorPool {
@@ -365,7 +361,7 @@ impl DescriptorPool {
         let inner = DescriptorPoolInner {
             samplers: vec![None; num_samplers],
             textures: vec![None; num_textures],
-            buffers: vec![BufferBinding { base: None, dynamic: false }; num_buffers],
+            buffers: vec![None; num_buffers],
         };
         DescriptorPool::Emulated {
             inner: Arc::new(RwLock::new(inner)),
@@ -389,7 +385,7 @@ impl DescriptorPool {
     }
 }
 
-impl hal::DescriptorPool<Backend> for DescriptorPool {
+impl HalDescriptorPool<Backend> for DescriptorPool {
     fn allocate_set(&mut self, set_layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
         self.report_available();
         match *self {
@@ -537,7 +533,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                                 texture_alloc.free_range(texture_range);
                             }
                             for buffer in &mut data.buffers[buffer_range.start as usize .. buffer_range.end as usize] {
-                                buffer.base = None;
+                                *buffer = None;
                             }
                             if buffer_range.start != buffer_range.end {
                                 buffer_alloc.free_range(buffer_range);
@@ -587,7 +583,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
                 }
                 for range in buffer_alloc.allocated_ranges() {
                     for buffer in &mut data.buffers[range.start as usize .. range.end as usize] {
-                        buffer.base = None;
+                        *buffer = None;
                     }
                 }
 
@@ -606,9 +602,10 @@ bitflags! {
     /// Descriptor content flags.
     pub struct DescriptorContent: u8 {
         const BUFFER = 1<<0;
-        const TEXTURE = 1<<1;
-        const SAMPLER = 1<<2;
-        const IMMUTABLE_SAMPLER = 1<<3;
+        const DYNAMIC_BUFFER = 1<<1;
+        const TEXTURE = 1<<2;
+        const SAMPLER = 1<<3;
+        const IMMUTABLE_SAMPLER = 1<<4;
     }
 }
 
@@ -629,10 +626,12 @@ impl From<pso::DescriptorType> for DescriptorContent {
                 DescriptorContent::TEXTURE
             }
             pso::DescriptorType::UniformBuffer |
-            pso::DescriptorType::StorageBuffer |
+            pso::DescriptorType::StorageBuffer => {
+                DescriptorContent::BUFFER
+            }
             pso::DescriptorType::UniformBufferDynamic |
             pso::DescriptorType::StorageBufferDynamic => {
-                DescriptorContent::BUFFER
+                DescriptorContent::BUFFER | DescriptorContent::DYNAMIC_BUFFER
             }
         }
     }
@@ -689,7 +688,7 @@ impl Memory {
         }
     }
 
-    pub(crate) fn resolve<R: hal::range::RangeArg<u64>>(&self, range: &R) -> Range<u64> {
+    pub(crate) fn resolve<R: RangeArg<u64>>(&self, range: &R) -> Range<u64> {
         *range.start().unwrap_or(&0) .. *range.end().unwrap_or(&self.size)
     }
 }
@@ -700,14 +699,14 @@ unsafe impl Sync for Memory {}
 #[derive(Debug)]
 pub(crate) enum MemoryHeap {
     Private,
-    Public(hal::MemoryTypeId, metal::Buffer),
+    Public(MemoryTypeId, metal::Buffer),
     Native(metal::Heap),
 }
 
 #[derive(Debug)]
 pub struct UnboundBuffer {
     pub(crate) size: u64,
-    pub(crate) usage: hal::buffer::Usage,
+    pub(crate) usage: buffer::Usage,
 }
 unsafe impl Send for UnboundBuffer {}
 unsafe impl Sync for UnboundBuffer {}
@@ -715,7 +714,7 @@ unsafe impl Sync for UnboundBuffer {}
 #[derive(Debug)]
 pub struct UnboundImage {
     pub(crate) texture_desc: metal::TextureDescriptor,
-    pub(crate) format: hal::format::Format,
+    pub(crate) format: Format,
     pub(crate) kind: image::Kind,
     pub(crate) mip_sizes: Vec<u64>,
     pub(crate) host_visible: bool,

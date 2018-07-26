@@ -1445,7 +1445,7 @@ impl hal::Device<Backend> for Device {
                                 let start = range.start.unwrap_or(0);
                                 let end = range.end.unwrap_or(buf_length);
                                 assert!(end <= buf_length);
-                                data.buffers[counters.buffers].base = Some((BufferPtr(buffer.raw.as_ptr()), start));
+                                data.buffers[counters.buffers] = Some((BufferPtr(buffer.raw.as_ptr()), start));
                             }
                         }
                         counters.add(layout.content);
