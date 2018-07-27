@@ -192,8 +192,9 @@ impl hal::Backend for Backend {
     type QueryPool = ();
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct PrivateCapabilities {
+    msl_version: metal::MTLLanguageVersion,
     exposed_queues: usize,
     resource_heaps: bool,
     argument_buffers: bool,

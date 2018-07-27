@@ -192,6 +192,14 @@ impl PhysicalDevice {
 
     pub(crate) fn new(device: metal::Device) -> Self {
         let private_caps = PrivateCapabilities {
+            //TODO: MSL versions only depend on the OS version, not feature sets
+            msl_version: if device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v3) {
+                MTLLanguageVersion::V2_0
+            } else if device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v2) {
+                MTLLanguageVersion::V1_2
+            } else {
+                MTLLanguageVersion::V1_1
+            },
             exposed_queues: 1,
             resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
             argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
@@ -415,23 +423,26 @@ impl Device {
         &self, source: S, version: LanguageVersion,
     ) -> Result<n::ShaderModule, ShaderError> where S: AsRef<str> {
         let options = metal::CompileOptions::new();
-        options.set_language_version(match version {
+        let msl_version = match version {
             LanguageVersion { major: 1, minor: 0 } => MTLLanguageVersion::V1_0,
             LanguageVersion { major: 1, minor: 1 } => MTLLanguageVersion::V1_1,
             LanguageVersion { major: 1, minor: 2 } => MTLLanguageVersion::V1_2,
             LanguageVersion { major: 2, minor: 0 } => MTLLanguageVersion::V2_0,
             _ => return Err(ShaderError::CompilationFailed("shader model not supported".into()))
-        });
-        match self.shared.device
+        };
+        if msl_version > self.private_caps.msl_version {
+            return Err(ShaderError::CompilationFailed("shader model too high".into()))
+        }
+        options.set_language_version(msl_version);
+
+        self.shared.device
             .lock()
             .new_library_with_source(source.as_ref(), &options)
-        {
-            Ok(library) => Ok(n::ShaderModule::Compiled {
+            .map(|library| n::ShaderModule::Compiled {
                 library,
                 entry_point_map: n::EntryPointMap::default(),
-            }),
-            Err(err) => Err(ShaderError::CompilationFailed(err.into())),
-        }
+            })
+            .map_err(|e| ShaderError::CompilationFailed(e.into()))
     }
 
     fn compile_shader_library(
@@ -513,7 +524,7 @@ impl Device {
         debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
         let options = metal::CompileOptions::new();
-        options.set_language_version(MTLLanguageVersion::V1_2);
+        options.set_language_version(self.private_caps.msl_version);
 
         let library = self.shared.device
             .lock()
