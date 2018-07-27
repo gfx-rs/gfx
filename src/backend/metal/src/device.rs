@@ -123,18 +123,11 @@ fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: 
     Ok(mtl_function)
 }
 
-struct LinkedSampler {
-    sampler: metal::SamplerState,
-    binding: pso::DescriptorBinding,
-    array_index: pso::DescriptorArrayIndex,
-}
-
 //#[derive(Clone)]
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
     pub(crate) private_caps: PrivateCapabilities,
     memory_types: [hal::MemoryType; 4],
-    temp_samplers: Mutex<Vec<LinkedSampler>>,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -276,7 +269,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             shared: self.shared.clone(),
             private_caps: self.private_caps.clone(),
             memory_types: self.memory_types,
-            temp_samplers: Mutex::new(Vec::new()),
         };
 
         Ok(hal::Gpu {
@@ -1345,8 +1337,6 @@ impl hal::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<n::Sampler>,
     {
-        let mut immutable_samplers = immutable_sampler_iter.into_iter();
-
         if self.private_caps.argument_buffers {
             let mut stage_flags = pso::ShaderStageFlags::empty();
             let arguments = binding_iter
@@ -1364,43 +1354,41 @@ impl hal::Device<Backend> for Device {
 
             n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
         } else {
-            let mut temp_samplers = self.temp_samplers.lock();
-            temp_samplers.clear();
             let mut desc_layouts = Vec::new();
+            let mut dynamic_offset_count = 0;
+            let mut immutable_sampler_count = 0;
 
             for set_layout_binding in binding_iter {
                 let slb = set_layout_binding.borrow();
                 let mut content = native::DescriptorContent::from(slb.ty);
                 if slb.immutable_samplers {
                     content |= native::DescriptorContent::IMMUTABLE_SAMPLER;
-                    temp_samplers.extend(
-                        immutable_samplers
-                            .by_ref()
-                            .take(slb.count)
-                            .enumerate()
-                            .map(|(array_index, sampler)| LinkedSampler {
-                                sampler: sampler.borrow().0.clone(),
-                                binding: slb.binding,
-                                array_index,
-                            })
-                    );
                 }
                 for array_index in 0 .. slb.count {
                     desc_layouts.push(native::DescriptorLayout {
-                        stages: slb.stage_flags,
                         content,
+                        associated_data_index: if slb.immutable_samplers {
+                            immutable_sampler_count += 1;
+                            immutable_sampler_count - 1
+                        } else if content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
+                            dynamic_offset_count += 1;
+                            dynamic_offset_count - 1
+                        } else {
+                            !0
+                        },
+                        stages: slb.stage_flags,
                         binding: slb.binding,
                         array_index,
                     });
                 }
             }
 
-            desc_layouts .sort_by_key(|dl| (dl.binding, dl.array_index));
-            temp_samplers.sort_by_key(|ts| (ts.binding, ts.array_index));
-            let samplers = temp_samplers
-                .drain(..)
-                .map(|ts| ts.sampler)
-                .collect();
+            desc_layouts.sort_by_key(|dl| (dl.binding, dl.array_index));
+            let samplers = immutable_sampler_iter
+                .into_iter()
+                .map(|s| s.borrow().0.clone())
+                .collect::<Vec<_>>();
+            assert_eq!(samplers.len(), immutable_sampler_count as usize);
 
             n::DescriptorSetLayout::Emulated(Arc::new(desc_layouts), samplers)
         }
@@ -1456,7 +1444,7 @@ impl hal::Device<Backend> for Device {
                                 let start = range.start.unwrap_or(0);
                                 let end = range.end.unwrap_or(buf_length);
                                 assert!(end <= buf_length);
-                                data.buffers[counters.buffers].base = Some((BufferPtr(buffer.raw.as_ptr()), start));
+                                data.buffers[counters.buffers] = Some((BufferPtr(buffer.raw.as_ptr()), start));
                             }
                         }
                         counters.add(layout.content);
