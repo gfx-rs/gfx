@@ -23,7 +23,7 @@ gfx-hal = { path = "../../hal", version = "0.1" }
 bitflags = "1.0"
 log = { version = "0.4", features = ["release_max_level_error"] }
 winit = { version = "0.16", optional = true }
-metal-rs = "0.10.1"
+metal-rs = "0.10.4"
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"

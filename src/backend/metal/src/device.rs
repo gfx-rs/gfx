@@ -190,31 +190,31 @@ impl PhysicalDevice {
         features_sets.iter().cloned().any(|x| raw.supports_feature_set(x))
     }
 
-    pub(crate) fn new(shared: Arc<Shared>) -> Self {
-        let private_caps = {
-            let device = &*shared.device.lock();
-            PrivateCapabilities {
-                exposed_queues: 1,
-                resource_heaps: Self::supports_any(device, RESOURCE_HEAP_SUPPORT),
-                argument_buffers: Self::supports_any(device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
-                shared_textures: !Self::is_mac(device),
-                base_instance: Self::supports_any(device, BASE_INSTANCE_SUPPORT),
-                format_depth24_stencil8: device.d24_s8_supported(),
-                format_depth32_stencil8: true, //TODO: crashing the Metal validation layer upon copying from buffer
-                format_min_srgb_channels: if Self::is_mac(&*device) {4} else {1},
-                format_b5: !Self::is_mac(device),
-                max_buffers_per_stage: 31,
-                max_textures_per_stage: if Self::is_mac(device) {128} else {31},
-                max_samplers_per_stage: 16,
-                buffer_alignment: if Self::is_mac(device) {256} else {64},
-                max_buffer_size: if Self::supports_any(device, &[MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]) {
-                    1 << 30 // 1GB on macOS 1.2 and up
-                } else {
-                    1 << 28 // 256MB otherwise
-                },
-            }
+    pub(crate) fn new(device: metal::Device) -> Self {
+        let private_caps = PrivateCapabilities {
+            exposed_queues: 1,
+            resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
+            argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
+            shared_textures: !Self::is_mac(&device),
+            base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
+            format_depth24_stencil8: device.d24_s8_supported(),
+            format_depth32_stencil8: true, //TODO: crashing the Metal validation layer upon copying from buffer
+            format_min_srgb_channels: if Self::is_mac(&device) {4} else {1},
+            format_b5: !Self::is_mac(&device),
+            max_buffers_per_stage: 31,
+            max_textures_per_stage: if Self::is_mac(&device) {128} else {31},
+            max_samplers_per_stage: 16,
+            buffer_alignment: if Self::is_mac(&device) {256} else {64},
+            max_buffer_size: if Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]) {
+                1 << 30 // 1GB on macOS 1.2 and up
+            } else {
+                1 << 28 // 256MB otherwise
+            },
         };
+
+        let shared = Arc::new(Shared::new(device));
         assert!((shared.push_constants_buffer_id as usize) < private_caps.max_buffers_per_stage);
+
         PhysicalDevice {
             shared,
             memory_types: [

@@ -83,38 +83,33 @@ impl Shared {
 }
 
 
-pub struct Instance {
-    shared: Arc<Shared>,
-}
+pub struct Instance;
 
 impl hal::Instance for Instance {
     type Backend = Backend;
 
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
-        // TODO: enumerate all devices
-        let name = self.shared.device.lock().name().into();
-
-        vec![
-            hal::Adapter {
+        let mut devices = metal::Device::all();
+        devices.sort_by_key(|dev| (dev.is_low_power(), dev.is_headless()));
+        devices
+            .into_iter()
+            .map(|dev| hal::Adapter {
                 info: hal::AdapterInfo {
-                    name,
+                    name: dev.name().into(),
                     vendor: 0,
                     device: 0,
                     software_rendering: false,
                 },
-                physical_device: device::PhysicalDevice::new(self.shared.clone()),
+                physical_device: device::PhysicalDevice::new(dev),
                 queue_families: vec![QueueFamily{}],
-            }
-        ]
+            })
+            .collect()
     }
 }
 
 impl Instance {
     pub fn create(_: &str, _: u32) -> Self {
-        let device = metal::Device::system_default();
-        Instance {
-            shared: Arc::new(Shared::new(device)),
-        }
+        Instance
     }
 
     fn create_from_nsview(&self, nsview: *mut c_void) -> window::SurfaceInner {
