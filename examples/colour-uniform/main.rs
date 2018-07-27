@@ -4,7 +4,7 @@
 )]
 
 #[cfg(feature = "dx12")]
-extern crate gfx_backend_dx12 as back;
+extern crate gfx_hal_dx12 as back;
 #[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")))]
 extern crate gfx_backend_empty as back;
 #[cfg(feature = "gl")]

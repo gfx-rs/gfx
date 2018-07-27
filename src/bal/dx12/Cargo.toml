@@ -1,0 +1,19 @@
+[package]
+name = "gfx-bal-dx12"
+version = "0.1.0"
+description = "DirectX-12 BAL API backend for gfx-rs"
+homepage = "https://github.com/gfx-rs/gfx"
+repository = "https://github.com/gfx-rs/gfx"
+keywords = ["graphics", "gamedev"]
+license = "MIT OR Apache-2.0"
+authors = ["The Gfx-rs Developers"]
+readme = "README.md"
+documentation = "https://docs.rs/gfx-bal-dx12"
+workspace = "../../.."
+
+[lib]
+name = "gfx_bal_dx12"
+
+[dependencies]
+winapi = { version = "0.3", features = ["d3d12"] }
+wio = "0.2"

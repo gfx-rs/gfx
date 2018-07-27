@@ -14,7 +14,7 @@ extern crate env_logger;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan;
 #[cfg(feature = "dx12")]
-extern crate gfx_backend_dx12;
+extern crate gfx_hal_dx12;
 #[cfg(feature = "metal")]
 extern crate gfx_backend_metal;
 #[cfg(any(feature = "gl", feature = "gl-headless"))]
@@ -218,7 +218,7 @@ fn main() {
     #[cfg(feature = "dx12")]
     {
         println!("Warding DX12:");
-        let instance = gfx_backend_dx12::Instance::create("warden", 1);
+        let instance = gfx_hal_dx12::Instance::create("warden", 1);
         num_failures += harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "metal")]
