@@ -1393,7 +1393,7 @@ impl d::Device<B> for Device {
         });
     }
 
-    fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ms: u32) -> bool
+    fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ns: u64) -> bool
     where
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
@@ -1404,7 +1404,7 @@ impl d::Device<B> for Device {
             d::WaitFor::All => true,
         };
         let result = unsafe {
-            self.raw.0.wait_for_fences(&fences, all, timeout_ms as u64 * 1000)
+            self.raw.0.wait_for_fences(&fences, all, timeout_ns)
         };
         match result {
             Ok(()) | Err(vk::Result::Success) => true,

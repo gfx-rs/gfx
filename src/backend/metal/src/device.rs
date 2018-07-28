@@ -1942,25 +1942,30 @@ impl hal::Device<Backend> for Device {
     fn reset_fence(&self, fence: &n::Fence) {
         *fence.0.borrow_mut() = n::FenceInner::Idle { signaled: false };
     }
-    fn wait_for_fence(&self, fence: &n::Fence, mut timeout_ms: u32) -> bool {
-        debug!("wait_for_fence {:?} for {} ms", fence, timeout_ms);
+    fn wait_for_fence(&self, fence: &n::Fence, mut timeout_ns: u64) -> bool {
+        fn to_ns(duration: time::Duration) -> u64 {
+            duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64
+        }
+
+        debug!("wait_for_fence {:?} for {} ms", fence, timeout_ns);
         let inner = fence.0.borrow();
         let cmd_buf = match *inner {
             native::FenceInner::Idle { signaled } => return signaled,
             native::FenceInner::Pending(ref cmd_buf) => cmd_buf,
         };
-        if timeout_ms == !0 {
+        if timeout_ns == !0 {
             cmd_buf.wait_until_completed();
             return true
         }
+
+        let start = time::Instant::now();
         loop {
             if let metal::MTLCommandBufferStatus::Completed = cmd_buf.status() {
                 return true
             }
-            if timeout_ms == 0 {
-                return false
+            if to_ns(start.elapsed()) >= timeout_ns {
+                return false;
             }
-            timeout_ms -= 1;
             thread::sleep(time::Duration::from_millis(1));
         }
     }

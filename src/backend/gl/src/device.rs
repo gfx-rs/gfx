@@ -1281,11 +1281,11 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn wait_for_fence(&self, fence: &n::Fence, timeout_ms: u32) -> bool {
+    fn wait_for_fence(&self, fence: &n::Fence, timeout_ns: u64) -> bool {
         if !self.share.private_caps.sync {
             return true;
         }
-        match wait_fence(fence, &self.share.context, timeout_ms) {
+        match wait_fence(fence, &self.share.context, timeout_ns) {
             gl::TIMEOUT_EXPIRED => false,
             gl::WAIT_FAILED => {
                 if let Err(err) = self.share.check() {
@@ -1409,11 +1409,10 @@ impl d::Device<B> for Device {
     }
 }
 
-pub fn wait_fence(fence: &n::Fence, gl: &gl::Gl, timeout_ms: u32) -> GLenum {
-    let timeout = timeout_ms as u64 * 1_000_000;
+pub fn wait_fence(fence: &n::Fence, gl: &gl::Gl, timeout_ns: u64) -> GLenum {
     // TODO:
     // This can be called by multiple objects wanting to ensure they have exclusive
     // access to a resource. How much does this call costs ? The status of the fence
     // could be cached to avoid calling this more than once (in core or in the backend ?).
-    unsafe { gl.ClientWaitSync(fence.0.get(), gl::SYNC_FLUSH_COMMANDS_BIT, timeout) }
+    unsafe { gl.ClientWaitSync(fence.0.get(), gl::SYNC_FLUSH_COMMANDS_BIT, timeout_ns) }
 }
