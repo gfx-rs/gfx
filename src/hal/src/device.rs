@@ -542,20 +542,20 @@ pub trait Device<B: Backend>: Any + Send + Sync {
 
     /// Blocks until the given fence is signaled.
     /// Returns true if the fence was signaled before the timeout.
-    fn wait_for_fence(&self, fence: &B::Fence, timeout_ms: u32) -> bool {
-        self.wait_for_fences(Some(fence), WaitFor::All, timeout_ms)
+    fn wait_for_fence(&self, fence: &B::Fence, timeout_ns: u64) -> bool {
+        self.wait_for_fences(Some(fence), WaitFor::All, timeout_ns)
     }
 
     /// Blocks until all or one of the given fences are signaled.
     /// Returns true if fences were signaled before the timeout.
-    fn wait_for_fences<I>(&self, fences: I, wait: WaitFor, timeout_ms: u32) -> bool
+    fn wait_for_fences<I>(&self, fences: I, wait: WaitFor, timeout_ns: u64) -> bool
     where
         I: IntoIterator,
         I::Item: Borrow<B::Fence>,
     {
         use std::{time, thread};
-        fn to_ms(duration: time::Duration) -> u32 {
-            duration.as_secs() as u32 * 1000 + duration.subsec_nanos() / 1_000_000
+        fn to_ns(duration: time::Duration) -> u64 {
+            duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64
         }
 
         let start = time::Instant::now();
@@ -563,11 +563,11 @@ pub trait Device<B: Backend>: Any + Send + Sync {
             WaitFor::All => {
                 for fence in fences {
                     if !self.wait_for_fence(fence.borrow(), 0) {
-                        let elapsed_ms = to_ms(start.elapsed());
-                        if elapsed_ms > timeout_ms {
+                        let elapsed_ns = to_ns(start.elapsed());
+                        if elapsed_ns > timeout_ns {
                             return false;
                         }
-                        if !self.wait_for_fence(fence.borrow(), timeout_ms - elapsed_ms) {
+                        if !self.wait_for_fence(fence.borrow(), timeout_ns - elapsed_ns) {
                             return false;
                         }
                     }
@@ -582,7 +582,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
                             return true;
                         }
                     }
-                    if to_ms(start.elapsed()) >= timeout_ms {
+                    if to_ns(start.elapsed()) >= timeout_ns {
                         return false;
                     }
                     thread::sleep(time::Duration::from_millis(1));

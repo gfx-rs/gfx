@@ -1795,7 +1795,7 @@ impl hal::Device<Backend> for Device {
         // TODO:
     }
 
-    fn wait_for_fences<I>(&self, _fences: I, _wait: device::WaitFor, _timeout_ms: u32) -> bool
+    fn wait_for_fences<I>(&self, _fences: I, _wait: device::WaitFor, _timeout_ns: u64) -> bool
     where
         I: IntoIterator,
         I::Item: Borrow<Fence>,

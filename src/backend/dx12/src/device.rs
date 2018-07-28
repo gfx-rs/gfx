@@ -2333,7 +2333,7 @@ impl d::Device<B> for Device {
         let descriptor_pools = descriptor_pools.into_iter()
                                                .map(|desc| *desc.borrow())
                                                .collect::<Vec<_>>();
-        
+
         for desc in &descriptor_pools {
             match desc.ty {
                 pso::DescriptorType::Sampler => {
@@ -2778,7 +2778,7 @@ impl d::Device<B> for Device {
         });
     }
 
-    fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ms: u32) -> bool
+    fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ns: u64) -> bool
     where
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
@@ -2808,6 +2808,16 @@ impl d::Device<B> for Device {
             d::WaitFor::All => TRUE,
         };
         let hr = unsafe {
+            // This block handles overflow when converting to u32 and always rounds up
+            // The Vulkan specification allows to wait more than specified
+            let timeout_ms = {
+                if timeout_ns > (<u32>::max_value() as u64) * 1_000_000 {
+                    <u32>::max_value()
+                } else {
+                    ((timeout_ns + 999_999) / 1_000_000) as u32
+                }
+            };
+
             synchapi::WaitForMultipleObjects(fences.len() as u32, events.as_ptr(), all, timeout_ms)
         };
 
