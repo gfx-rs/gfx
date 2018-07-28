@@ -497,6 +497,7 @@ impl Internal {
         unsafe {
             context.CSSetShader(shader, ptr::null_mut(), 0);
             context.CSSetConstantBuffers(0, 1, &self.copy_info.as_raw());
+
             context.CSSetShaderResources(0, 1, [srv].as_ptr());
             context.CSSetUnorderedAccessViews(0, 1, [uav].as_ptr(), ptr::null_mut());
 
@@ -584,7 +585,6 @@ impl Internal {
                 context.CSSetShader(shader, ptr::null_mut(), 0);
                 context.CSSetConstantBuffers(0, 1, &self.copy_info.as_raw());
                 context.CSSetShaderResources(0, 1, [srv].as_ptr());
-
 
 
                 for copy in regions {
