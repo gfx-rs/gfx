@@ -1964,7 +1964,7 @@ impl hal::Device<Backend> for Device {
     fn reset_fence(&self, fence: &n::Fence) {
         *fence.0.borrow_mut() = n::FenceInner::Idle { signaled: false };
     }
-    fn wait_for_fence(&self, fence: &n::Fence, mut timeout_ns: u64) -> bool {
+    fn wait_for_fence(&self, fence: &n::Fence, timeout_ns: u64) -> bool {
         fn to_ns(duration: time::Duration) -> u64 {
             duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64
         }

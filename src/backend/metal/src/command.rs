@@ -49,6 +49,8 @@ const COUNTERS_REPORT_WINDOW: usize = 0;
 /// If true, we combine deferred command buffers together into one giant
 /// command buffer per submission, including the signalling logic.
 const STITCH_DEFERRED_COMMAND_BUFFERS: bool = true;
+/// Hack around the Metal System Trace logic that ignores empty command buffers entirely.
+const INSERT_DUMMY_ENCODERS: bool = false;
 /// Method of recording one-time-submit command buffers
 const ONLINE_RECORDING: OnlineRecording = OnlineRecording::Immediate;
 
@@ -1395,7 +1397,9 @@ where
 
 /// This is a hack around Metal System Trace logic that ignores empty command buffers entirely.
 fn record_empty(command_buf: &metal::CommandBufferRef) {
-    command_buf.new_blit_command_encoder().end_encoding();
+    if INSERT_DUMMY_ENCODERS {
+        command_buf.new_blit_command_encoder().end_encoding();
+    }
 }
 
 #[derive(Default)]
