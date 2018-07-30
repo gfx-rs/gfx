@@ -17,10 +17,10 @@ mod conv;
 mod descriptors_cpu;
 mod device;
 mod internal;
-mod native;
 mod pool;
 #[path = "../../../backend/auxil/range_alloc.rs"]
 mod range_alloc;
+mod resource;
 mod root_constants;
 mod window;
 
@@ -417,7 +417,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit_raw<IC>(
         &mut self,
         submission: hal::queue::RawSubmission<Backend, IC>,
-        fence: Option<&native::Fence>,
+        fence: Option<&resource::Fence>,
     ) where
         IC: IntoIterator,
         IC::Item: Borrow<command::CommandBuffer>,
@@ -446,7 +446,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IS: IntoIterator<Item = (S, SwapImageIndex)>,
         S: Borrow<window::Swapchain>,
         IW: IntoIterator,
-        IW::Item: Borrow<native::Semaphore>,
+        IW::Item: Borrow<resource::Semaphore>,
     {
         // TODO: semaphores
         for (swapchain, _) in swapchains {
@@ -510,8 +510,8 @@ pub struct Device {
     sampler_pool: Mutex<DescriptorCpuPool>,
     descriptor_update_pools: Mutex<Vec<descriptors_cpu::HeapLinear>>,
     // CPU/GPU descriptor heaps
-    heap_srv_cbv_uav: Mutex<native::DescriptorHeap>,
-    heap_sampler: Mutex<native::DescriptorHeap>,
+    heap_srv_cbv_uav: Mutex<resource::DescriptorHeap>,
+    heap_sampler: Mutex<resource::DescriptorHeap>,
     events: Mutex<Vec<winnt::HANDLE>>,
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
@@ -1068,31 +1068,31 @@ impl hal::Backend for Backend {
     type CommandQueue = CommandQueue;
     type CommandBuffer = command::CommandBuffer;
 
-    type Memory = native::Memory;
+    type Memory = resource::Memory;
     type CommandPool = pool::RawCommandPool;
 
-    type ShaderModule = native::ShaderModule;
-    type RenderPass = native::RenderPass;
-    type Framebuffer = native::Framebuffer;
+    type ShaderModule = resource::ShaderModule;
+    type RenderPass = resource::RenderPass;
+    type Framebuffer = resource::Framebuffer;
 
     type UnboundBuffer = device::UnboundBuffer;
-    type Buffer = native::Buffer;
-    type BufferView = native::BufferView;
+    type Buffer = resource::Buffer;
+    type BufferView = resource::BufferView;
     type UnboundImage = device::UnboundImage;
-    type Image = native::Image;
-    type ImageView = native::ImageView;
-    type Sampler = native::Sampler;
+    type Image = resource::Image;
+    type ImageView = resource::ImageView;
+    type Sampler = resource::Sampler;
 
-    type ComputePipeline = native::ComputePipeline;
-    type GraphicsPipeline = native::GraphicsPipeline;
-    type PipelineLayout = native::PipelineLayout;
-    type DescriptorSetLayout = native::DescriptorSetLayout;
-    type DescriptorPool = native::DescriptorPool;
-    type DescriptorSet = native::DescriptorSet;
+    type ComputePipeline = resource::ComputePipeline;
+    type GraphicsPipeline = resource::GraphicsPipeline;
+    type PipelineLayout = resource::PipelineLayout;
+    type DescriptorSetLayout = resource::DescriptorSetLayout;
+    type DescriptorPool = resource::DescriptorPool;
+    type DescriptorSet = resource::DescriptorSet;
 
-    type Fence = native::Fence;
-    type Semaphore = native::Semaphore;
-    type QueryPool = native::QueryPool;
+    type Fence = resource::Fence;
+    type Semaphore = resource::Semaphore;
+    type QueryPool = resource::QueryPool;
 }
 
 fn validate_line_width(width: f32) {

@@ -20,7 +20,7 @@ use device::ViewInfo;
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 use {
-    conv, descriptors_cpu, device, internal, native as n, validate_line_width, Backend, Device,
+    conv, descriptors_cpu, device, internal, resource as r, validate_line_width, Backend, Device,
     Shared, MAX_VERTEX_BUFFERS,
 };
 
@@ -55,8 +55,8 @@ struct AttachmentClear {
 
 #[derive(Clone)]
 pub struct RenderPassCache {
-    render_pass: n::RenderPass,
-    framebuffer: n::Framebuffer,
+    render_pass: r::RenderPass,
+    framebuffer: r::Framebuffer,
     target_rect: d3d12::D3D12_RECT,
     attachment_clears: Vec<AttachmentClear>,
 }
@@ -168,14 +168,14 @@ impl PipelineCache {
 
     fn bind_descriptor_sets<'a, I, J>(
         &mut self,
-        layout: &n::PipelineLayout,
+        layout: &r::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
     ) -> [bal_dx12::native::DescriptorHeap; 2]
     where
         I: IntoIterator,
-        I::Item: Borrow<n::DescriptorSet>,
+        I::Item: Borrow<r::DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
@@ -199,10 +199,10 @@ impl PipelineCache {
 
         let mut table_id = 0;
         for table in &layout.tables[..first_set] {
-            if table.contains(n::SRV_CBV_UAV) {
+            if table.contains(r::SRV_CBV_UAV) {
                 table_id += 1;
             }
-            if table.contains(n::SAMPLERS) {
+            if table.contains(r::SAMPLERS) {
                 table_id += 1;
             }
         }
@@ -215,7 +215,7 @@ impl PipelineCache {
         for (set, table) in sets.zip(layout.tables[first_set..].iter()) {
             let set = set.borrow();
             set.first_gpu_view.map(|gpu| {
-                assert!(table.contains(n::SRV_CBV_UAV));
+                assert!(table.contains(r::SRV_CBV_UAV));
 
                 let root_offset = table_id + table_base_offset;
                 // Cast is safe as offset **must** be in u32 range. Unable to
@@ -227,7 +227,7 @@ impl PipelineCache {
                 table_id += 1;
             });
             set.first_gpu_sampler.map(|gpu| {
-                assert!(table.contains(n::SAMPLERS));
+                assert!(table.contains(r::SAMPLERS));
 
                 let root_offset = table_id + table_base_offset;
                 // Cast is safe as offset **must** be in u32 range. Unable to
@@ -289,7 +289,7 @@ pub struct CommandBuffer {
     // Cached vertex buffer views to bind.
     // `Stride` values are not known at `bind_vertex_buffers` time because they are only stored
     // inside the pipeline state.
-    vertex_bindings_remap: [Option<n::VertexBinding>; MAX_VERTEX_BUFFERS],
+    vertex_bindings_remap: [Option<r::VertexBinding>; MAX_VERTEX_BUFFERS],
     vertex_buffer_views: [d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
 
     // Re-using allocation for the image-buffer copies.
@@ -713,7 +713,7 @@ impl CommandBuffer {
 
     fn push_constants(
         user_data: &mut UserData,
-        layout: &n::PipelineLayout,
+        layout: &r::PipelineLayout,
         offset: u32,
         constants: &[u32],
     ) {
@@ -830,8 +830,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin_render_pass<T>(
         &mut self,
-        render_pass: &n::RenderPass,
-        framebuffer: &n::Framebuffer,
+        render_pass: &r::RenderPass,
+        framebuffer: &r::Framebuffer,
         target_rect: pso::Rect,
         clear_values: T,
         _first_subpass: com::SubpassContents,
@@ -1038,7 +1038,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn clear_image<T>(
         &mut self,
-        image: &n::Image,
+        image: &r::Image,
         _: image::Layout,
         color: com::ClearColorRaw,
         depth_stencil: com::ClearDepthStencilRaw,
@@ -1161,9 +1161,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn resolve_image<T>(
         &mut self,
-        src: &n::Image,
+        src: &r::Image,
         _src_layout: image::Layout,
-        dst: &n::Image,
+        dst: &r::Image,
         _dst_layout: image::Layout,
         regions: T,
     ) where
@@ -1225,9 +1225,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn blit_image<T>(
         &mut self,
-        src: &n::Image,
+        src: &r::Image,
         _src_layout: image::Layout,
-        dst: &n::Image,
+        dst: &r::Image,
         _dst_layout: image::Layout,
         filter: image::Filter,
         regions: T,
@@ -1470,7 +1470,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
-        T: Borrow<n::Buffer>,
+        T: Borrow<r::Buffer>,
     {
         // Only cache the vertex buffer views as we don't know the stride (PSO).
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
@@ -1588,7 +1588,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
+    fn bind_graphics_pipeline(&mut self, pipeline: &r::GraphicsPipeline) {
         unsafe {
             match self.gr_pipeline.pipeline {
                 Some((_, signature)) if signature == pipeline.signature => {
@@ -1627,13 +1627,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_graphics_descriptor_sets<'a, I, J>(
         &mut self,
-        layout: &n::PipelineLayout,
+        layout: &r::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
     ) where
         I: IntoIterator,
-        I::Item: Borrow<n::DescriptorSet>,
+        I::Item: Borrow<r::DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
@@ -1642,7 +1642,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.bind_descriptor_heaps();
     }
 
-    fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
+    fn bind_compute_pipeline(&mut self, pipeline: &r::ComputePipeline) {
         match self.comp_pipeline.pipeline {
             Some((_, signature)) if signature == pipeline.signature => {
                 // Same root signature, nothing to do
@@ -1663,13 +1663,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_compute_descriptor_sets<I, J>(
         &mut self,
-        layout: &n::PipelineLayout,
+        layout: &r::PipelineLayout,
         first_set: usize,
         sets: I,
         offsets: J,
     ) where
         I: IntoIterator,
-        I::Item: Borrow<n::DescriptorSet>,
+        I::Item: Borrow<r::DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
@@ -1683,7 +1683,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.raw.dispatch(count);
     }
 
-    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
+    fn dispatch_indirect(&mut self, buffer: &r::Buffer, offset: buffer::Offset) {
         self.set_compute_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
@@ -1697,7 +1697,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn fill_buffer<R>(&mut self, buffer: &n::Buffer, range: R, data: u32)
+    fn fill_buffer<R>(&mut self, buffer: &r::Buffer, range: R, data: u32)
     where
         R: RangeArg<buffer::Offset>,
     {
@@ -1754,11 +1754,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe { self.raw.ResourceBarrier(1, &post_barrier) };
     }
 
-    fn update_buffer(&mut self, _buffer: &n::Buffer, _offset: buffer::Offset, _data: &[u8]) {
+    fn update_buffer(&mut self, _buffer: &r::Buffer, _offset: buffer::Offset, _data: &[u8]) {
         unimplemented!()
     }
 
-    fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
+    fn copy_buffer<T>(&mut self, src: &r::Buffer, dst: &r::Buffer, regions: T)
     where
         T: IntoIterator,
         T::Item: Borrow<com::BufferCopy>,
@@ -1782,9 +1782,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_image<T>(
         &mut self,
-        src: &n::Image,
+        src: &r::Image,
         _: image::Layout,
-        dst: &n::Image,
+        dst: &r::Image,
         _: image::Layout,
         regions: T,
     ) where
@@ -1822,12 +1822,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 ..src.descriptor.clone()
             };
             let (heap_ptr, offset) = match src.place {
-                n::Place::SwapChain => {
+                r::Place::SwapChain => {
                     error!("Unable to copy from a swapchain image with format conversion: {:?} -> {:?}",
                         src.descriptor.Format, dst.descriptor.Format);
                     return;
                 }
-                n::Place::Heap { ref raw, offset } => (raw.as_mut_ptr(), offset),
+                r::Place::Heap { ref raw, offset } => (raw.as_mut_ptr(), offset),
             };
             assert_eq!(winerror::S_OK, unsafe {
                 device.CreatePlacedResource(
@@ -1917,8 +1917,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_buffer_to_image<T>(
         &mut self,
-        buffer: &n::Buffer,
-        image: &n::Image,
+        buffer: &r::Buffer,
+        image: &r::Image,
         _: image::Layout,
         regions: T,
     ) where
@@ -1999,9 +1999,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_image_to_buffer<T>(
         &mut self,
-        image: &n::Image,
+        image: &r::Image,
         _: image::Layout,
-        buffer: &n::Buffer,
+        buffer: &r::Buffer,
         regions: T,
     ) where
         T: IntoIterator,
@@ -2108,7 +2108,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn draw_indirect(
         &mut self,
-        buffer: &n::Buffer,
+        buffer: &r::Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
         stride: u32,
@@ -2129,7 +2129,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn draw_indexed_indirect(
         &mut self,
-        buffer: &n::Buffer,
+        buffer: &r::Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
         stride: u32,
@@ -2206,7 +2206,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn reset_query_pool(&mut self, _pool: &n::QueryPool, _queries: Range<query::QueryId>) {
+    fn reset_query_pool(&mut self, _pool: &r::QueryPool, _queries: Range<query::QueryId>) {
         // Nothing to do here
         // vkCmdResetQueryPool sets the queries to `unavailable` but the specification
         // doesn't state an affect on the `active` state. Every queries at the end of the command
@@ -2227,7 +2227,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn push_graphics_constants(
         &mut self,
-        layout: &n::PipelineLayout,
+        layout: &r::PipelineLayout,
         _stages: pso::ShaderStageFlags,
         offset: u32,
         constants: &[u32],
@@ -2237,7 +2237,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn push_compute_constants(
         &mut self,
-        layout: &n::PipelineLayout,
+        layout: &r::PipelineLayout,
         offset: u32,
         constants: &[u32],
     ) {

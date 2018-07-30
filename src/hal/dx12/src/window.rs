@@ -9,7 +9,7 @@ use winapi::shared::windef::{HWND, RECT};
 use winapi::um::winuser::GetClientRect;
 
 use hal::{self, format as f, image as i};
-use {native as n, Backend, Instance, PhysicalDevice, QueueFamily};
+use {resource as r, Backend, Instance, PhysicalDevice, QueueFamily};
 
 use bal_dx12;
 use bal_dx12::native::WeakPtr;
@@ -111,7 +111,7 @@ pub struct Swapchain {
     pub(crate) next_frame: usize,
     pub(crate) frame_queue: VecDeque<usize>,
     #[allow(dead_code)]
-    pub(crate) rtv_heap: n::DescriptorHeap,
+    pub(crate) rtv_heap: r::DescriptorHeap,
     // need to associate raw image pointers with the swapchain so they can be properly released
     // when the swapchain is destroyed
     pub(crate) resources: Vec<bal_dx12::native::Resource>,
