@@ -2,16 +2,16 @@ use std::any::Any;
 use std::borrow::Borrow;
 use std::ops::Range;
 
-use {buffer, pass, pso};
-use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use super::{
+    AttachmentClear, BufferCopy, BufferImageCopy, ImageBlit, ImageCopy, ImageResolve,
+    SubpassContents,
+};
 use image::{Filter, Layout, SubresourceRange};
 use memory::{Barrier, Dependencies};
 use query::{PipelineStatistic, Query, QueryControl, QueryId};
 use range::RangeArg;
-use super::{
-    AttachmentClear, BufferCopy, BufferImageCopy,
-    ImageBlit, ImageCopy, ImageResolve, SubpassContents,
-};
+use {buffer, pass, pso};
+use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 
 /// Unsafe variant of `ClearColor`.
 #[repr(C)]
@@ -110,7 +110,11 @@ impl<'a, B: Backend> Default for CommandBufferInheritanceInfo<'a, B> {
 /// provided by a `Backend`'s command buffer.
 pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// Begins recording commands to a command buffer.
-    fn begin(&mut self, flags: CommandBufferFlags, inheritance_info: CommandBufferInheritanceInfo<B>);
+    fn begin(
+        &mut self,
+        flags: CommandBufferFlags,
+        inheritance_info: CommandBufferInheritanceInfo<B>,
+    );
 
     /// Finish recording commands to a command buffer.
     fn finish(&mut self);
@@ -133,21 +137,12 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         T::Item: Borrow<Barrier<'a, B>>;
 
     /// Fill a buffer with the given `u32` value.
-    fn fill_buffer<R>(
-        &mut self,
-        buffer: &B::Buffer,
-        range: R,
-        data: u32,
-    ) where
+    fn fill_buffer<R>(&mut self, buffer: &B::Buffer, range: R, data: u32)
+    where
         R: RangeArg<buffer::Offset>;
 
     /// Copy data from the given slice into a buffer.
-    fn update_buffer(
-        &mut self,
-        buffer: &B::Buffer,
-        offset: buffer::Offset,
-        data: &[u8],
-    );
+    fn update_buffer(&mut self, buffer: &B::Buffer, offset: buffer::Offset, data: &[u8]);
 
     /// Clears an image to the given color/depth/stencil.
     fn clear_image<T>(
@@ -375,12 +370,8 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset);
 
     /// Adds a command to copy regions from the source to destination buffer.
-    fn copy_buffer<T>(
-        &mut self,
-        src: &B::Buffer,
-        dst: &B::Buffer,
-        regions: T,
-    ) where
+    fn copy_buffer<T>(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: T)
+    where
         T: IntoIterator,
         T::Item: Borrow<BufferCopy>;
 
@@ -426,11 +417,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// from the currently bound vertex buffers.  It performs instanced
     /// drawing, drawing `instances.len()`
     /// times with an `instanceIndex` starting with the start of the range.
-    fn draw(
-        &mut self,
-        vertices: Range<VertexCount>,
-        instances: Range<InstanceCount>,
-    );
+    fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>);
 
     /// Performs indexed drawing, drawing the range of indices
     /// given by the current index buffer and any bound vertex buffers.
@@ -513,10 +500,8 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     );
 
     /// Execute the given secondary command buffers.
-    fn execute_commands<I>(
-        &mut self,
-        buffers: I,
-    ) where
+    fn execute_commands<I>(&mut self, buffers: I)
+    where
         I: IntoIterator,
         I::Item: Borrow<B::CommandBuffer>;
 }

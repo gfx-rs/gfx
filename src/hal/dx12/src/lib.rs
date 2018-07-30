@@ -2,8 +2,8 @@
 extern crate bitflags;
 #[macro_use]
 extern crate derivative;
-extern crate gfx_hal as hal;
 extern crate gfx_bal_dx12 as bal_dx12;
+extern crate gfx_hal as hal;
 #[macro_use]
 extern crate log;
 extern crate smallvec;
@@ -11,10 +11,7 @@ extern crate spirv_cross;
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
-extern crate wio;
 
-#[path = "../../../backend/auxil/range_alloc.rs"]
-mod range_alloc;
 mod command;
 mod conv;
 mod descriptors_cpu;
@@ -22,24 +19,27 @@ mod device;
 mod internal;
 mod native;
 mod pool;
+#[path = "../../../backend/auxil/range_alloc.rs"]
+mod range_alloc;
 mod root_constants;
 mod window;
 
-use hal::{error, format as f, image, memory, Features, SwapImageIndex, Limits, QueueType};
-use hal::queue::{QueueFamilyId, Queues};
 use descriptors_cpu::DescriptorCpuPool;
+use hal::queue::{QueueFamilyId, Queues};
+use hal::{error, format as f, image, memory, Features, Limits, QueueType, SwapImageIndex};
 
-use winapi::Interface;
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::shared::minwindef::{FALSE, TRUE};
+use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::um::{d3d12, d3d12sdklayers, d3dcommon, handleapi, synchapi, winbase, winnt};
-use wio::com::ComPtr;
+use winapi::Interface;
 
-use std::{mem, ptr};
 use std::borrow::Borrow;
-use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
+use std::os::windows::ffi::OsStringExt;
 use std::sync::{Arc, Mutex};
+use std::{mem, ptr};
+
+use bal_dx12::native::descriptor;
 
 pub(crate) struct HeapProperties {
     pub page_property: d3d12::D3D12_CPU_PAGE_PROPERTY,
@@ -76,7 +76,6 @@ static HEAPS_NUMA: [HeapProperties; NUM_HEAP_PROPERTIES] = [
     HeapProperties {
         page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
         memory_pool: d3d12::D3D12_MEMORY_POOL_L0,
-
     },
     // READBACK
     HeapProperties {
@@ -158,13 +157,15 @@ impl hal::QueueFamily for QueueFamily {
 }
 
 impl QueueFamily {
-    fn native_type(&self) -> d3d12::D3D12_COMMAND_LIST_TYPE {
+    fn native_type(&self) -> bal_dx12::native::command_list::CmdListType {
+        use bal_dx12::native::command_list::CmdListType;
         use hal::QueueFamily;
+
         let queue_type = self.queue_type();
         match queue_type {
-            QueueType::General | QueueType::Graphics => d3d12::D3D12_COMMAND_LIST_TYPE_DIRECT,
-            QueueType::Compute => d3d12::D3D12_COMMAND_LIST_TYPE_COMPUTE,
-            QueueType::Transfer => d3d12::D3D12_COMMAND_LIST_TYPE_COPY,
+            QueueType::General | QueueType::Graphics => CmdListType::Direct,
+            QueueType::Compute => CmdListType::Compute,
+            QueueType::Transfer => CmdListType::Copy,
         }
     }
 }
@@ -177,7 +178,7 @@ static QUEUE_FAMILIES: [QueueFamily; 4] = [
 ];
 
 pub struct PhysicalDevice {
-    adapter: ComPtr<dxgi1_2::IDXGIAdapter2>,
+    adapter: bal_dx12::native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
     features: hal::Features,
     limits: hal::Limits,
     format_properties: Arc<[f::Properties; f::NUM_FORMATS]>,
@@ -189,12 +190,13 @@ pub struct PhysicalDevice {
     is_open: Arc<Mutex<bool>>,
 }
 
-unsafe impl Send for PhysicalDevice { }
-unsafe impl Sync for PhysicalDevice { }
+unsafe impl Send for PhysicalDevice {}
+unsafe impl Sync for PhysicalDevice {}
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        &self, families: &[(&QueueFamily, &[hal::QueuePriority])]
+        &self,
+        families: &[(&QueueFamily, &[hal::QueuePriority])],
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         let lock = self.is_open.try_lock();
         let mut open_guard = match lock {
@@ -203,53 +205,23 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         // Create D3D12 device
-        let device_raw = {
-            let mut device_raw = ptr::null_mut();
-            let hr = unsafe {
-                d3d12::D3D12CreateDevice(
-                    self.adapter.as_raw() as *mut _,
-                    d3dcommon::D3D_FEATURE_LEVEL_11_0, // Minimum required feature level
-                    &d3d12::ID3D12Device::uuidof(),
-                    &mut device_raw as *mut *mut _ as *mut *mut _,
-                )
-            };
-            if !winerror::SUCCEEDED(hr) {
-                error!("error on device creation: {:x}", hr);
-            }
-
-            unsafe { ComPtr::<d3d12::ID3D12Device>::from_raw(device_raw) }
-        };
+        let (device_raw, hr_device) =
+            bal_dx12::native::Device::create(self.adapter, bal_dx12::FeatureLevel::L11_0);
+        if !winerror::SUCCEEDED(hr_device) {
+            error!("error on device creation: {:x}", hr_device);
+        }
 
         // Always create the presentation queue in case we want to build a swapchain.
-        let present_queue = {
-            let queue_desc = d3d12::D3D12_COMMAND_QUEUE_DESC {
-                Type: QueueFamily::Present.native_type(),
-                Priority: 0,
-                Flags: d3d12::D3D12_COMMAND_QUEUE_FLAG_NONE,
-                NodeMask: 0,
-            };
-
-            let mut queue = ptr::null_mut();
-            let hr = unsafe {
-                device_raw.CreateCommandQueue(
-                    &queue_desc,
-                    &d3d12::ID3D12CommandQueue::uuidof(),
-                    &mut queue as *mut *mut _ as *mut *mut _,
-                )
-            };
-
-            if !winerror::SUCCEEDED(hr) {
-                error!("error on queue creation: {:x}", hr);
-            }
-
-            unsafe { ComPtr::<d3d12::ID3D12CommandQueue>::from_raw(queue) }
-        };
-
-        let mut device = Device::new(
-            device_raw,
-            &self,
-            present_queue,
+        let (present_queue, hr_queue) = device_raw.create_command_queue(
+            QueueFamily::Present.native_type(),
+            bal_dx12::native::queue::Priority::Normal,
+            bal_dx12::native::queue::CommandQueueFlags::empty(),
+            0,
         );
+        if !winerror::SUCCEEDED(hr_queue) {
+            error!("error on queue creation: {:x}", hr_queue);
+        }
+        let mut device = Device::new(device_raw, &self, present_queue);
 
         let queue_groups = families
             .into_iter()
@@ -279,33 +251,25 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                         group.add_queue(queue);
                     }
                     QueueFamily::Normal(_) => {
-                        let queue_desc = d3d12::D3D12_COMMAND_QUEUE_DESC {
-                            Type: family.native_type(),
-                            Priority: 0,
-                            Flags: d3d12::D3D12_COMMAND_QUEUE_FLAG_NONE,
-                            NodeMask: 0,
-                        };
+                        let list_type = family.native_type();
+                        for _ in 0..priorities.len() {
+                            let (queue, hr_queue) = device_raw.create_command_queue(
+                                list_type,
+                                bal_dx12::native::queue::Priority::Normal,
+                                bal_dx12::native::queue::CommandQueueFlags::empty(),
+                                0,
+                            );
 
-                        for _ in 0 .. priorities.len() {
-                            let mut queue = ptr::null_mut();
-                            let hr = unsafe {
-                                device.raw.CreateCommandQueue(
-                                    &queue_desc,
-                                    &d3d12::ID3D12CommandQueue::uuidof(),
-                                    &mut queue as *mut *mut _ as *mut *mut _,
-                                )
-                            };
-
-                            if winerror::SUCCEEDED(hr) {
+                            if winerror::SUCCEEDED(hr_queue) {
                                 let queue = CommandQueue {
-                                    raw: unsafe { ComPtr::from_raw(queue) },
+                                    raw: queue,
                                     idle_fence: device.create_raw_fence(false),
                                     idle_event: create_idle_event(),
                                 };
                                 device.append_queue(queue.clone());
                                 group.add_queue(queue);
                             } else {
-                                error!("error on queue creation: {:x}", hr);
+                                error!("error on queue creation: {:x}", hr_queue);
                             }
                         }
                     }
@@ -329,8 +293,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, format: f::Format, dimensions: u8, tiling: image::Tiling,
-        usage: image::Usage, storage_flags: image::StorageFlags,
+        &self,
+        format: f::Format,
+        dimensions: u8,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
         conv::map_format(format)?; //filter out unknown formats
 
@@ -367,7 +335,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             return None;
         }
 
-        let max_resource_size = (d3d12::D3D12_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20;
+        let max_resource_size =
+            (d3d12::D3D12_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20;
         Some(match tiling {
             image::Tiling::Optimal => image::FormatProperties {
                 max_extent: match dimensions {
@@ -394,8 +363,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     2 => d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
                     _ => return None,
                 },
-                sample_count_mask: if dimensions == 2 && !storage_flags.contains(image::StorageFlags::CUBE_VIEW) &&
-                    (usage.contains(image::Usage::COLOR_ATTACHMENT) | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
+                sample_count_mask: if dimensions == 2
+                    && !storage_flags.contains(image::StorageFlags::CUBE_VIEW)
+                    && (usage.contains(image::Usage::COLOR_ATTACHMENT)
+                        | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
                 {
                     0x3F //TODO: use D3D12_FEATURE_DATA_FORMAT_SUPPORT
                 } else {
@@ -424,13 +395,17 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         self.memory_properties.clone()
     }
 
-    fn features(&self) -> Features { self.features }
-    fn limits(&self) -> Limits { self.limits }
+    fn features(&self) -> Features {
+        self.features
+    }
+    fn limits(&self) -> Limits {
+        self.limits
+    }
 }
 
 #[derive(Clone)]
 pub struct CommandQueue {
-    pub(crate) raw: ComPtr<d3d12::ID3D12CommandQueue>,
+    pub(crate) raw: bal_dx12::native::CommandQueue,
     idle_fence: *mut d3d12::ID3D12Fence,
     idle_event: winnt::HANDLE,
 }
@@ -458,12 +433,11 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             .into_iter()
             .map(|buf| buf.borrow().as_raw_list())
             .collect::<Vec<_>>();
-        self.raw.ExecuteCommandLists(lists.len() as _, lists.as_mut_ptr());
+        self.raw
+            .ExecuteCommandLists(lists.len() as _, lists.as_mut_ptr());
 
         if let Some(fence) = fence {
-            assert_eq!(winerror::S_OK,
-                self.raw.Signal(fence.raw.as_raw(), 1)
-            );
+            assert_eq!(winerror::S_OK, self.raw.Signal(fence.raw.as_mut_ptr(), 1));
         }
     }
 
@@ -476,7 +450,9 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     {
         // TODO: semaphores
         for (swapchain, _) in swapchains {
-            unsafe { swapchain.borrow().inner.Present(1, 0); }
+            unsafe {
+                swapchain.borrow().inner.Present(1, 0);
+            }
         }
 
         Ok(())
@@ -485,7 +461,10 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unsafe {
             self.raw.Signal(self.idle_fence, 1);
-            assert_eq!(winerror::S_OK, (*self.idle_fence).SetEventOnCompletion(1, self.idle_event));
+            assert_eq!(
+                winerror::S_OK,
+                (*self.idle_fence).SetEventOnCompletion(1, self.idle_event)
+            );
             synchapi::WaitForSingleObject(self.idle_event, winbase::INFINITE);
         }
 
@@ -508,9 +487,9 @@ pub struct Capabilities {
 
 #[derive(Clone)]
 struct CmdSignatures {
-    draw: ComPtr<d3d12::ID3D12CommandSignature>,
-    draw_indexed: ComPtr<d3d12::ID3D12CommandSignature>,
-    dispatch: ComPtr<d3d12::ID3D12CommandSignature>,
+    draw: bal_dx12::native::CommandSignature,
+    draw_indexed: bal_dx12::native::CommandSignature,
+    dispatch: bal_dx12::native::CommandSignature,
 }
 
 // Shared objects between command buffers, owned by the device.
@@ -520,7 +499,7 @@ struct Shared {
 }
 
 pub struct Device {
-    raw: ComPtr<d3d12::ID3D12Device>,
+    raw: bal_dx12::native::Device,
     private_caps: Capabilities,
     format_properties: Arc<[f::Properties; f::NUM_FORMATS]>,
     heap_properties: &'static [HeapProperties],
@@ -537,7 +516,7 @@ pub struct Device {
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
     // Required for swapchain creation. Only a single queue supports presentation.
-    present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
+    present_queue: bal_dx12::native::CommandQueue,
     // List of all queues created from this device, including present queue.
     // Needed for `wait_idle`.
     queues: Vec<CommandQueue>,
@@ -549,51 +528,38 @@ unsafe impl Sync for Device {} //blocked by ComPtr
 
 impl Device {
     fn new(
-        mut device: ComPtr<d3d12::ID3D12Device>,
+        device: bal_dx12::native::Device,
         physical_device: &PhysicalDevice,
-        present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
+        present_queue: bal_dx12::native::CommandQueue,
     ) -> Self {
         // Allocate descriptor heaps
-        let rtv_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-        let dsv_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-        let srv_uav_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        let sampler_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+        let rtv_pool = DescriptorCpuPool::new(device, descriptor::HeapType::Rtv);
+        let dsv_pool = DescriptorCpuPool::new(device, descriptor::HeapType::Dsv);
+        let srv_uav_pool = DescriptorCpuPool::new(device, descriptor::HeapType::CbvSrvUav);
+        let sampler_pool = DescriptorCpuPool::new(device, descriptor::HeapType::Sampler);
 
         let heap_srv_cbv_uav = Self::create_descriptor_heap_impl(
-            &mut device,
-            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            device,
+            descriptor::HeapType::CbvSrvUav,
             true,
             1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
         );
 
-        let heap_sampler = Self::create_descriptor_heap_impl(
-            &mut device,
-            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-            true,
-            2_048,
-        );
+        let heap_sampler =
+            Self::create_descriptor_heap_impl(device, descriptor::HeapType::Sampler, true, 2_048);
 
-        let draw_signature = Self::create_command_signature(
-            &mut device,
-            device::CommandSignature::Draw,
-        );
-
-        let draw_indexed_signature = Self::create_command_signature(
-            &mut device,
-            device::CommandSignature::DrawIndexed,
-        );
-
-        let dispatch_signature = Self::create_command_signature(
-            &mut device,
-            device::CommandSignature::Dispatch,
-        );
+        let draw_signature = Self::create_command_signature(device, device::CommandSignature::Draw);
+        let draw_indexed_signature =
+            Self::create_command_signature(device, device::CommandSignature::DrawIndexed);
+        let dispatch_signature =
+            Self::create_command_signature(device, device::CommandSignature::Dispatch);
 
         let signatures = CmdSignatures {
             draw: draw_signature,
             draw_indexed: draw_indexed_signature,
             dispatch: dispatch_signature,
         };
-        let service_pipes = internal::ServicePipes::new(device.clone());
+        let service_pipes = internal::ServicePipes::new(device);
         let shared = Shared {
             signatures,
             service_pipes,
@@ -627,7 +593,7 @@ impl Device {
     ///
     /// Required for FFI with libraries like RenderDoc.
     pub unsafe fn as_raw(&self) -> *mut d3d12::ID3D12Device {
-        self.raw.as_raw()
+        self.raw.as_mut_ptr()
     }
 }
 
@@ -644,11 +610,17 @@ impl Drop for Device {
 }
 
 pub struct Instance {
-    pub(crate) factory: ComPtr<dxgi1_4::IDXGIFactory4>,
+    pub(crate) factory: bal_dx12::native::WeakPtr<dxgi1_4::IDXGIFactory4>,
 }
 
-unsafe impl Send for Instance { }
-unsafe impl Sync for Instance { }
+impl Drop for Instance {
+    fn drop(&mut self) {
+        self.factory.destroy();
+    }
+}
+
+unsafe impl Send for Instance {}
+unsafe impl Sync for Instance {}
 
 impl Instance {
     pub fn create(_: &str, _: u32) -> Instance {
@@ -659,12 +631,15 @@ impl Instance {
             let hr = unsafe {
                 d3d12::D3D12GetDebugInterface(
                     &d3d12sdklayers::ID3D12Debug::uuidof(),
-                    &mut debug_controller as *mut *mut _ as *mut *mut _)
+                    &mut debug_controller as *mut *mut _ as *mut *mut _,
+                )
             };
 
             if winerror::SUCCEEDED(hr) {
                 unsafe { (*debug_controller).EnableDebugLayer() };
-                unsafe { (*debug_controller).Release(); }
+                unsafe {
+                    (*debug_controller).Release();
+                }
             }
         }
 
@@ -675,7 +650,8 @@ impl Instance {
             dxgi1_3::CreateDXGIFactory2(
                 dxgi1_3::DXGI_CREATE_FACTORY_DEBUG,
                 &dxgi1_4::IDXGIFactory4::uuidof(),
-                &mut dxgi_factory as *mut *mut _ as *mut *mut _)
+                &mut dxgi_factory as *mut *mut _ as *mut *mut _,
+            )
         };
 
         if !winerror::SUCCEEDED(hr) {
@@ -683,7 +659,7 @@ impl Instance {
         }
 
         Instance {
-            factory: unsafe { ComPtr::from_raw(dxgi_factory) },
+            factory: bal_dx12::native::WeakPtr::from_raw(dxgi_factory),
         }
     }
 }
@@ -701,16 +677,15 @@ impl hal::Instance for Instance {
             let adapter = {
                 let mut adapter: *mut dxgi::IDXGIAdapter1 = ptr::null_mut();
                 let hr = unsafe {
-                    self.factory.EnumAdapters1(
-                        cur_index,
-                        &mut adapter as *mut *mut _)
+                    self.factory
+                        .EnumAdapters1(cur_index, &mut adapter as *mut *mut _)
                 };
 
                 if hr == winerror::DXGI_ERROR_NOT_FOUND {
                     break;
                 }
 
-                unsafe { ComPtr::from_raw(adapter as *mut dxgi1_2::IDXGIAdapter2) }
+                bal_dx12::native::WeakPtr::from_raw(adapter as *mut dxgi1_2::IDXGIAdapter2)
             };
 
             cur_index += 1;
@@ -718,26 +693,20 @@ impl hal::Instance for Instance {
             // Check for D3D12 support
             // Create temporaty device to get physical device information
             let device = {
-                let mut device = ptr::null_mut();
-                let hr = unsafe {
-                    d3d12::D3D12CreateDevice(
-                        adapter.as_raw() as *mut _,
-                        d3dcommon::D3D_FEATURE_LEVEL_11_0,
-                        &d3d12::ID3D12Device::uuidof(),
-                        &mut device as *mut *mut _ as *mut *mut _,
-                    )
-                };
+                let (device, hr) =
+                    bal_dx12::native::Device::create(adapter, bal_dx12::FeatureLevel::L11_0);
                 if !winerror::SUCCEEDED(hr) {
                     continue;
                 }
-
-                unsafe { ComPtr::<d3d12::ID3D12Device>::from_raw(device) }
+                device
             };
 
             // We have found a possible adapter
             // acquire the device information
             let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { mem::zeroed() };
-            unsafe { adapter.GetDesc2(&mut desc); }
+            unsafe {
+                adapter.GetDesc2(&mut desc);
+            }
 
             let device_name = {
                 let len = desc.Description.iter().take_while(|&&c| c != 0).count();
@@ -761,7 +730,8 @@ impl hal::Instance for Instance {
                 )
             });
 
-            let mut features_architecture: d3d12::D3D12_FEATURE_DATA_ARCHITECTURE = unsafe { mem::zeroed() };
+            let mut features_architecture: d3d12::D3D12_FEATURE_DATA_ARCHITECTURE =
+                unsafe { mem::zeroed() };
             assert_eq!(winerror::S_OK, unsafe {
                 device.CheckFeatureSupport(
                     d3d12::D3D12_FEATURE_ARCHITECTURE,
@@ -771,7 +741,8 @@ impl hal::Instance for Instance {
             });
 
             let depth_bounds_test_supported = {
-                let mut features2: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2 = unsafe { mem::zeroed() };
+                let mut features2: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2 =
+                    unsafe { mem::zeroed() };
                 let hr = unsafe {
                     device.CheckFeatureSupport(
                         d3d12::D3D12_FEATURE_D3D12_OPTIONS2,
@@ -779,7 +750,7 @@ impl hal::Instance for Instance {
                         mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2>() as _,
                     )
                 };
-                if hr == winerror::S_OK  {
+                if hr == winerror::S_OK {
                     features2.DepthBoundsTestSupported != 0
                 } else {
                     false
@@ -805,12 +776,11 @@ impl hal::Instance for Instance {
                     )
                 });
                 let can_buffer = 0 != data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BUFFER;
-                let can_image = 0 != data.Support1 & (
-                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D |
-                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D |
-                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D |
-                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE
-                );
+                let can_image = 0 != data.Support1
+                    & (d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D
+                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D
+                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
+                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE);
                 let can_linear = can_image && !format.surface_desc().is_compressed();
                 if can_image {
                     props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
@@ -825,9 +795,11 @@ impl hal::Instance for Instance {
                     props.optimal_tiling |= f::ImageFeature::SAMPLED_LINEAR;
                 }
                 if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET != 0 {
-                    props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+                    props.optimal_tiling |=
+                        f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
                     if can_linear {
-                        props.linear_tiling |= f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+                        props.linear_tiling |=
+                            f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
                     }
                 }
                 if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BLENDABLE != 0 {
@@ -862,71 +834,86 @@ impl hal::Instance for Instance {
                 //TODO: blits, linear tiling
             }
 
-            let heterogeneous_resource_heaps = features.ResourceHeapTier != d3d12::D3D12_RESOURCE_HEAP_TIER_1;
+            let heterogeneous_resource_heaps =
+                features.ResourceHeapTier != d3d12::D3D12_RESOURCE_HEAP_TIER_1;
 
             let uma = features_architecture.UMA == TRUE;
             let cc_uma = features_architecture.CacheCoherentUMA == TRUE;
 
             let (memory_architecture, heap_properties) = match (uma, cc_uma) {
-                (true, true)  => (MemoryArchitecture::CacheCoherentUMA, &HEAPS_CCUMA),
+                (true, true) => (MemoryArchitecture::CacheCoherentUMA, &HEAPS_CCUMA),
                 (true, false) => (MemoryArchitecture::UMA, &HEAPS_UMA),
-                (false, _)    => (MemoryArchitecture::NUMA, &HEAPS_NUMA),
+                (false, _) => (MemoryArchitecture::NUMA, &HEAPS_NUMA),
             };
 
             // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
-            let base_memory_types: [hal::MemoryType; NUM_HEAP_PROPERTIES] = match memory_architecture {
-                MemoryArchitecture::NUMA => [
-                    // DEFAULT
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL,
-                        heap_index: 0,
-                    },
-                    // UPLOAD
-                    hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE | Properties::COHERENT,
-                        heap_index: 1,
-                    },
-                    // READBACK
-                    hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                        heap_index: 1,
-                    },
-                ],
-                MemoryArchitecture::UMA => [
-                    // DEFAULT
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL,
-                        heap_index: 0,
-                    },
-                    // UPLOAD
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT,
-                        heap_index: 0,
-                    },
-                    // READBACK
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                        heap_index: 0,
-                    },
-                ],
-                MemoryArchitecture::CacheCoherentUMA => [
-                    // DEFAULT
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL,
-                        heap_index: 0,
-                    },
-                    // UPLOAD
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                        heap_index: 0,
-                    },
-                    // READBACK
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                        heap_index: 0,
-                    },
-                ],
-            };
+            let base_memory_types: [hal::MemoryType; NUM_HEAP_PROPERTIES] =
+                match memory_architecture {
+                    MemoryArchitecture::NUMA => [
+                        // DEFAULT
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL,
+                            heap_index: 0,
+                        },
+                        // UPLOAD
+                        hal::MemoryType {
+                            properties: Properties::CPU_VISIBLE | Properties::COHERENT,
+                            heap_index: 1,
+                        },
+                        // READBACK
+                        hal::MemoryType {
+                            properties: Properties::CPU_VISIBLE
+                                | Properties::COHERENT
+                                | Properties::CPU_CACHED,
+                            heap_index: 1,
+                        },
+                    ],
+                    MemoryArchitecture::UMA => [
+                        // DEFAULT
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL,
+                            heap_index: 0,
+                        },
+                        // UPLOAD
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL
+                                | Properties::CPU_VISIBLE
+                                | Properties::COHERENT,
+                            heap_index: 0,
+                        },
+                        // READBACK
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL
+                                | Properties::CPU_VISIBLE
+                                | Properties::COHERENT
+                                | Properties::CPU_CACHED,
+                            heap_index: 0,
+                        },
+                    ],
+                    MemoryArchitecture::CacheCoherentUMA => [
+                        // DEFAULT
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL,
+                            heap_index: 0,
+                        },
+                        // UPLOAD
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL
+                                | Properties::CPU_VISIBLE
+                                | Properties::COHERENT
+                                | Properties::CPU_CACHED,
+                            heap_index: 0,
+                        },
+                        // READBACK
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL
+                                | Properties::CPU_VISIBLE
+                                | Properties::COHERENT
+                                | Properties::CPU_CACHED,
+                            heap_index: 0,
+                        },
+                    ],
+                };
 
             let memory_types = if heterogeneous_resource_heaps {
                 base_memory_types.to_vec()
@@ -944,20 +931,17 @@ impl hal::Instance for Instance {
                 // `device::MEM_TYPE_IMAGE_SHIFT`, `device::MEM_TYPE_TARGET_SHIFT`)
                 // denote the usage group.
                 let mut types = Vec::new();
-                for i in 0 .. MemoryGroup::NumGroups as _ {
-                    types.extend(base_memory_types
-                        .iter()
-                        .map(|mem_type| {
-                            let mut ty = mem_type.clone();
+                for i in 0..MemoryGroup::NumGroups as _ {
+                    types.extend(base_memory_types.iter().map(|mem_type| {
+                        let mut ty = mem_type.clone();
 
-                            // Images and Targets are not host visible as we can't create
-                            // a corresponding buffer for mapping.
-                            if i == MemoryGroup::ImageOnly as _ || i == MemoryGroup::TargetOnly as _ {
-                                ty.properties.remove(Properties::CPU_VISIBLE);
-                            }
-                            ty
-                        })
-                    );
+                        // Images and Targets are not host visible as we can't create
+                        // a corresponding buffer for mapping.
+                        if i == MemoryGroup::ImageOnly as _ || i == MemoryGroup::TargetOnly as _ {
+                            ty.properties.remove(Properties::CPU_VISIBLE);
+                        }
+                        ty
+                    }));
                 }
                 types
             };
@@ -968,22 +952,24 @@ impl hal::Instance for Instance {
                 let adapter = {
                     let mut adapter: *mut dxgi1_4::IDXGIAdapter3 = ptr::null_mut();
                     unsafe {
-                        assert_eq!(winerror::S_OK, self.factory.EnumAdapterByLuid(
-                            adapter_id,
-                            &dxgi1_4::IDXGIAdapter3::uuidof(),
-                            &mut adapter as *mut *mut _ as *mut *mut _,
-                        ));
-                        ComPtr::from_raw(adapter)
+                        assert_eq!(
+                            winerror::S_OK,
+                            self.factory.EnumAdapterByLuid(
+                                adapter_id,
+                                &dxgi1_4::IDXGIAdapter3::uuidof(),
+                                &mut adapter as *mut *mut _ as *mut *mut _,
+                            )
+                        );
                     }
+                    bal_dx12::native::WeakPtr::from_raw(adapter)
                 };
 
                 let query_memory = |segment: dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP| unsafe {
                     let mut mem_info: dxgi1_4::DXGI_QUERY_VIDEO_MEMORY_INFO = mem::uninitialized();
-                    assert_eq!(winerror::S_OK, adapter.QueryVideoMemoryInfo(
-                        0,
-                        segment,
-                        &mut mem_info,
-                    ));
+                    assert_eq!(
+                        winerror::S_OK,
+                        adapter.QueryVideoMemoryInfo(0, segment, &mut mem_info,)
+                    );
                     mem_info.Budget
                 };
 
@@ -992,7 +978,7 @@ impl hal::Instance for Instance {
                     MemoryArchitecture::NUMA => {
                         let non_local = query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL);
                         vec![local, non_local]
-                    },
+                    }
                     _ => vec![local],
                 }
             };

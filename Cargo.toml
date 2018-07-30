@@ -6,6 +6,7 @@ members = [
     "src/backend/gl",
     "src/backend/metal",
     "src/backend/vulkan",
+    "src/bal",
     "src/bal/dx12",
     "src/hal",
     "src/hal/dx12",

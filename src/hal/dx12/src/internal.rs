@@ -1,22 +1,30 @@
 use hal::backend::FastHashMap;
 use hal::pso;
 use spirv_cross::hlsl;
-use std::{mem, ptr};
 use std::sync::Mutex;
+use std::{mem, ptr};
 
 use d3d12;
-use winapi::Interface;
-use winapi::shared::{dxgiformat, dxgitype, winerror};
 use winapi::shared::minwindef::{FALSE, TRUE};
+use winapi::shared::{dxgiformat, dxgitype, winerror};
 use winapi::um::d3d12::*;
-use wio::com::ComPtr;
+use winapi::Interface;
 
-use {device};
+use device;
+
+use bal_dx12;
 
 #[derive(Clone)]
 pub struct BlitPipe {
-    pub pipeline: ComPtr<d3d12::ID3D12PipelineState>,
-    pub signature: ComPtr<d3d12::ID3D12RootSignature>,
+    pub pipeline: bal_dx12::native::PipelineState,
+    pub signature: bal_dx12::native::RootSignature,
+}
+
+impl Drop for BlitPipe {
+    fn drop(&mut self) {
+        self.pipeline.destroy();
+        self.signature.destroy();
+    }
 }
 
 // Information to pass to the shader
@@ -32,12 +40,12 @@ pub type BlitKey = (dxgiformat::DXGI_FORMAT, d3d12::D3D12_FILTER);
 type BlitMap = FastHashMap<BlitKey, BlitPipe>;
 
 pub(crate) struct ServicePipes {
-    pub(crate) device: ComPtr<d3d12::ID3D12Device>,
+    pub(crate) device: bal_dx12::native::Device,
     blits_2d_color: Mutex<BlitMap>,
 }
 
 impl ServicePipes {
-    pub fn new(device: ComPtr<d3d12::ID3D12Device>) -> Self {
+    pub fn new(device: bal_dx12::native::Device) -> Self {
         ServicePipes {
             device,
             blits_2d_color: Mutex::new(FastHashMap::default()),
@@ -65,19 +73,20 @@ impl ServicePipes {
             d3d12::D3D12_ROOT_PARAMETER {
                 ParameterType: d3d12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
                 ShaderVisibility: d3d12::D3D12_SHADER_VISIBILITY_ALL,
-                .. unsafe { mem::zeroed() }
+                ..unsafe { mem::zeroed() }
             },
             d3d12::D3D12_ROOT_PARAMETER {
                 ParameterType: d3d12::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
                 ShaderVisibility: d3d12::D3D12_SHADER_VISIBILITY_VERTEX,
-                .. unsafe { mem::zeroed() }
+                ..unsafe { mem::zeroed() }
             },
         ];
 
-        *unsafe { root_parameters[0].u.DescriptorTable_mut() } = d3d12::D3D12_ROOT_DESCRIPTOR_TABLE {
-            NumDescriptorRanges: 1,
-            pDescriptorRanges: &descriptor_range,
-        };
+        *unsafe { root_parameters[0].u.DescriptorTable_mut() } =
+            d3d12::D3D12_ROOT_DESCRIPTOR_TABLE {
+                NumDescriptorRanges: 1,
+                pDescriptorRanges: &descriptor_range,
+            };
 
         *unsafe { root_parameters[1].u.Constants_mut() } = d3d12::D3D12_ROOT_CONSTANTS {
             ShaderRegister: 0,
@@ -126,7 +135,10 @@ impl ServicePipes {
                 // TODO
                 let error_output = (*error).GetBufferPointer();
                 let message = ::std::ffi::CStr::from_ptr(error_output as *const _ as *const _);
-                error!("D3D12SerializeRootSignature error: {:?}", message.to_str().unwrap());
+                error!(
+                    "D3D12SerializeRootSignature error: {:?}",
+                    message.to_str().unwrap()
+                );
                 (*error).Release();
             }
 
@@ -141,8 +153,18 @@ impl ServicePipes {
         }
 
         let shader_src = include_bytes!("../shaders/blit.hlsl");
-        let vs = device::compile_shader(pso::Stage::Vertex, hlsl::ShaderModel::V5_0, "vs_blit_2d", shader_src).unwrap();
-        let ps = device::compile_shader(pso::Stage::Fragment, hlsl::ShaderModel::V5_0, "ps_blit_2d", shader_src).unwrap();
+        let vs = device::compile_shader(
+            pso::Stage::Vertex,
+            hlsl::ShaderModel::V5_0,
+            "vs_blit_2d",
+            shader_src,
+        ).unwrap();
+        let ps = device::compile_shader(
+            pso::Stage::Fragment,
+            hlsl::ShaderModel::V5_0,
+            "ps_blit_2d",
+            shader_src,
+        ).unwrap();
 
         let mut rtvs = [dxgiformat::DXGI_FORMAT_UNKNOWN; 8];
         rtvs[0] = dst_format;
@@ -163,8 +185,8 @@ impl ServicePipes {
 
         let pso_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             pRootSignature: signature,
-            VS: device::shader_bytecode(vs),
-            PS: device::shader_bytecode(ps),
+            VS: device::shader_bytecode(vs.as_mut_ptr()),
+            PS: device::shader_bytecode(ps.as_mut_ptr()),
             GS: device::shader_bytecode(ptr::null_mut()),
             DS: device::shader_bytecode(ptr::null_mut()),
             HS: device::shader_bytecode(ptr::null_mut()),
@@ -221,13 +243,14 @@ impl ServicePipes {
             self.device.CreateGraphicsPipelineState(
                 &pso_desc,
                 &d3d12::ID3D12PipelineState::uuidof(),
-                &mut pipeline as *mut *mut _ as *mut *mut _)
+                &mut pipeline as *mut *mut _ as *mut *mut _,
+            )
         };
         assert_eq!(hr, winerror::S_OK);
 
         BlitPipe {
-            pipeline: unsafe { ComPtr::from_raw(pipeline) },
-            signature: unsafe { ComPtr::from_raw(signature) },
+            pipeline: bal_dx12::native::PipelineState::from_raw(pipeline),
+            signature: bal_dx12::native::RootSignature::from_raw(signature),
         }
     }
 }

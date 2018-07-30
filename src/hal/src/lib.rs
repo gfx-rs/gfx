@@ -3,12 +3,13 @@
 //! Low-level graphics abstraction for Rust. Mostly operates on data, not types.
 //! Designed for use by libraries and higher-level abstractions only.
 
+extern crate gfx_bal as bal;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate failure;
-extern crate smallvec;
 extern crate fxhash;
+extern crate smallvec;
 
 #[cfg(feature = "mint")]
 extern crate mint;
@@ -22,22 +23,23 @@ use std::error::Error;
 use std::fmt;
 use std::hash::Hash;
 
+pub use bal::{IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+
 //TODO: reconsider what is publicly exported
 
 pub use self::adapter::{
-    Adapter, AdapterInfo, MemoryProperties, MemoryType, MemoryTypeId,
-    PhysicalDevice, QueuePriority,
+    Adapter, AdapterInfo, MemoryProperties, MemoryType, MemoryTypeId, PhysicalDevice, QueuePriority,
 };
 pub use self::device::Device;
 pub use self::pool::CommandPool;
 pub use self::pso::DescriptorPool;
 pub use self::queue::{
-    CommandQueue, QueueGroup, QueueFamily, QueueType, Submission,
-    Capability, Supports, General, Graphics, Compute, Transfer,
+    Capability, CommandQueue, Compute, General, Graphics, QueueFamily, QueueGroup, QueueType,
+    Submission, Supports, Transfer,
 };
 pub use self::window::{
-    Backbuffer, SwapImageIndex, FrameSync, PresentMode,
-    Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,
+    Backbuffer, FrameSync, PresentMode, Surface, SurfaceCapabilities, SwapImageIndex, Swapchain,
+    SwapchainConfig,
 };
 
 pub mod adapter;
@@ -60,20 +62,10 @@ pub mod window;
 #[doc(hidden)]
 pub mod backend;
 
-/// Draw vertex count.
-pub type VertexCount = u32;
-/// Draw vertex base offset.
-pub type VertexOffset = i32;
-/// Draw number of indices.
-pub type IndexCount = u32;
-/// Draw number of instances.
-pub type InstanceCount = u32;
 /// Indirect draw calls count.
 pub type DrawCount = u32;
 /// Number of vertices in a patch
 pub type PatchSize = u8;
-/// Number of work groups.
-pub type WorkGroupCount = [u32; 3];
 
 /// Slot for an attribute.
 pub type AttributeSlot = u8;
@@ -344,41 +336,41 @@ pub trait Instance: Any + Send + Sync {
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send + Sync {
     //type Instance:          Instance<Self>;
-    type PhysicalDevice:      PhysicalDevice<Self>;
-    type Device:              Device<Self>;
+    type PhysicalDevice: PhysicalDevice<Self>;
+    type Device: Device<Self>;
 
-    type Surface:             Surface<Self>;
-    type Swapchain:           Swapchain<Self>;
+    type Surface: Surface<Self>;
+    type Swapchain: Swapchain<Self>;
 
-    type QueueFamily:         QueueFamily;
-    type CommandQueue:        queue::RawCommandQueue<Self>;
-    type CommandBuffer:       command::RawCommandBuffer<Self>;
+    type QueueFamily: QueueFamily;
+    type CommandQueue: queue::RawCommandQueue<Self>;
+    type CommandBuffer: command::RawCommandBuffer<Self>;
 
-    type ShaderModule:        fmt::Debug + Any + Send + Sync;
-    type RenderPass:          fmt::Debug + Any + Send + Sync;
-    type Framebuffer:         fmt::Debug + Any + Send + Sync;
+    type ShaderModule: fmt::Debug + Any + Send + Sync;
+    type RenderPass: fmt::Debug + Any + Send + Sync;
+    type Framebuffer: fmt::Debug + Any + Send + Sync;
 
-    type Memory:              fmt::Debug + Any + Send + Sync;
-    type CommandPool:         pool::RawCommandPool<Self>;
+    type Memory: fmt::Debug + Any + Send + Sync;
+    type CommandPool: pool::RawCommandPool<Self>;
 
-    type UnboundBuffer:       fmt::Debug + Any + Send + Sync;
-    type Buffer:              fmt::Debug + Any + Send + Sync;
-    type BufferView:          fmt::Debug + Any + Send + Sync;
-    type UnboundImage:        fmt::Debug + Any + Send + Sync;
-    type Image:               fmt::Debug + Any + Send + Sync;
-    type ImageView:           fmt::Debug + Any + Send + Sync;
-    type Sampler:             fmt::Debug + Any + Send + Sync;
+    type UnboundBuffer: fmt::Debug + Any + Send + Sync;
+    type Buffer: fmt::Debug + Any + Send + Sync;
+    type BufferView: fmt::Debug + Any + Send + Sync;
+    type UnboundImage: fmt::Debug + Any + Send + Sync;
+    type Image: fmt::Debug + Any + Send + Sync;
+    type ImageView: fmt::Debug + Any + Send + Sync;
+    type Sampler: fmt::Debug + Any + Send + Sync;
 
-    type ComputePipeline:     fmt::Debug + Any + Send + Sync;
-    type GraphicsPipeline:    fmt::Debug + Any + Send + Sync;
-    type PipelineLayout:      fmt::Debug + Any + Send + Sync;
-    type DescriptorPool:      pso::DescriptorPool<Self>;
-    type DescriptorSet:       fmt::Debug + Any + Send + Sync;
+    type ComputePipeline: fmt::Debug + Any + Send + Sync;
+    type GraphicsPipeline: fmt::Debug + Any + Send + Sync;
+    type PipelineLayout: fmt::Debug + Any + Send + Sync;
+    type DescriptorPool: pso::DescriptorPool<Self>;
+    type DescriptorSet: fmt::Debug + Any + Send + Sync;
     type DescriptorSetLayout: fmt::Debug + Any + Send + Sync;
 
-    type Fence:               fmt::Debug + Any + Send + Sync;
-    type Semaphore:           fmt::Debug + Any + Send + Sync;
-    type QueryPool:           fmt::Debug + Any + Send + Sync;
+    type Fence: fmt::Debug + Any + Send + Sync;
+    type Semaphore: fmt::Debug + Any + Send + Sync;
+    type QueryPool: fmt::Debug + Any + Send + Sync;
 }
 
 /// Marks that an error occured submitting a command to a command buffer.
@@ -400,7 +392,6 @@ impl Error for SubmissionError {
 
 /// Submission result for DX11 backend.  Currently mostly unused.
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
-
 
 /// Represents a combination of a logical device and the
 /// hardware queues it provides.

@@ -6,71 +6,16 @@ use std::error::Error;
 use std::fmt;
 use std::ops::Range;
 
-use format;
 use buffer::Offset as RawOffset;
+use format;
 use pso::Comparison;
 
+pub use bal::image::{Extent, Layer, Level, Offset, Size};
 
-/// Dimension size.
-pub type Size = u32;
 /// Number of MSAA samples.
 pub type NumSamples = u8;
-/// Image layer.
-pub type Layer = u16;
-/// Image mipmap level.
-pub type Level = u8;
 /// Maximum accessible mipmap level of an image.
 pub const MAX_LEVEL: Level = 15;
-
-/// Describes the size of an image, which may be up to three dimensional.
-#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Extent {
-    /// Image width
-    pub width: Size,
-    /// Image height
-    pub height: Size,
-    /// Image depth.
-    pub depth: Size,
-}
-
-impl Extent {
-    /// Get the extent at a particular mipmap level.
-    pub fn at_level(&self, level: Level) -> Self {
-        Extent {
-            width: 1.max(self.width >> level),
-            height: 1.max(self.height >> level),
-            depth: 1.max(self.depth >> level),
-        }
-    }
-}
-
-///
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Offset {
-    ///
-    pub x: i32,
-    ///
-    pub y: i32,
-    ///
-    pub z: i32,
-}
-
-impl Offset {
-    /// Zero offset shortcut.
-    pub const ZERO: Self = Offset { x: 0, y: 0, z: 0 };
-
-    /// Convert the offset into 2-sided bounds given the extent.
-    pub fn into_bounds(self, extent: &Extent) -> Range<Offset> {
-        let end = Offset {
-            x: self.x + extent.width as i32,
-            y: self.y + extent.height as i32,
-            z: self.z + extent.depth as i32,
-        };
-        self .. end
-    }
-}
 
 /// Image tiling modes.
 #[repr(u32)]
@@ -121,8 +66,12 @@ impl Error for CreationError {
             CreationError::Kind => "The kind doesn't support a particular operation",
             CreationError::Samples(_) => "Failed to map a given multisampled kind to the device",
             CreationError::Size(_) => "Unsupported size in one of the dimensions",
-            CreationError::Data(_) => "The given data has a different size than the target image slice",
-            CreationError::Usage(_) => "The expected image usage mode is not supported by a graphic API",
+            CreationError::Data(_) => {
+                "The given data has a different size than the target image slice"
+            }
+            CreationError::Usage(_) => {
+                "The expected image usage mode is not supported by a graphic API"
+            }
         }
     }
 }
@@ -151,7 +100,7 @@ impl fmt::Display for ViewError {
             ViewError::Usage(usage) => write!(f, "{}: {:?}", description, usage),
             ViewError::Level(level) => write!(f, "{}: {}", description, level),
             ViewError::Layer(ref layer) => write!(f, "{}: {}", description, layer),
-            _ => write!(f, "{}", description)
+            _ => write!(f, "{}", description),
         }
     }
 }
@@ -159,18 +108,12 @@ impl fmt::Display for ViewError {
 impl Error for ViewError {
     fn description(&self) -> &str {
         match *self {
-            ViewError::Usage(_) =>
-                "The required usage flag is not present in the image",
-            ViewError::Level(_) =>
-                "Selected mip level doesn't exist",
-            ViewError::Layer(_) =>
-                "Selected array layer doesn't exist",
-            ViewError::BadKind =>
-                "An incompatible kind was requested for the view",
-            ViewError::BadFormat =>
-                "An incompatible format was requested for the view",
-            ViewError::Unsupported =>
-                "The backend refused for some reason",
+            ViewError::Usage(_) => "The required usage flag is not present in the image",
+            ViewError::Level(_) => "Selected mip level doesn't exist",
+            ViewError::Layer(_) => "Selected array layer doesn't exist",
+            ViewError::BadKind => "An incompatible kind was requested for the view",
+            ViewError::BadFormat => "An incompatible format was requested for the view",
+            ViewError::Unsupported => "The backend refused for some reason",
         }
     }
 
@@ -181,7 +124,6 @@ impl Error for ViewError {
         }
     }
 }
-
 
 /// An error associated with selected image layer.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -209,7 +151,6 @@ impl Error for LayerError {
         }
     }
 }
-
 
 /// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
 /// image when sampling. They correspond to increasing levels of quality,
@@ -254,9 +195,12 @@ pub enum CubeFace {
 
 /// A constant array of cube faces in the order they map to the hardware.
 pub const CUBE_FACES: [CubeFace; 6] = [
-    CubeFace::PosX, CubeFace::NegX,
-    CubeFace::PosY, CubeFace::NegY,
-    CubeFace::PosZ, CubeFace::NegZ,
+    CubeFace::PosX,
+    CubeFace::NegX,
+    CubeFace::PosY,
+    CubeFace::NegY,
+    CubeFace::PosZ,
+    CubeFace::NegZ,
 ];
 
 /// Specifies the kind of an image to be allocated.
@@ -328,7 +272,7 @@ impl Kind {
             _ => {
                 let extent = self.extent();
                 let dominant = max(max(extent.width, extent.height), extent.depth);
-                (1..).find(|level| dominant>>level == 0).unwrap()
+                (1..).find(|level| dominant >> level == 0).unwrap()
             }
         }
     }
@@ -338,8 +282,7 @@ impl Kind {
     /// Each cube face counts as separate layer.
     pub fn num_layers(&self) -> Layer {
         match *self {
-            Kind::D1(_, a) |
-            Kind::D2(_, _, a, _) => a,
+            Kind::D1(_, a) | Kind::D2(_, _, a, _) => a,
             Kind::D3(..) => 1,
         }
     }
@@ -464,17 +407,19 @@ pub struct PackedColor(pub u32);
 
 impl From<[f32; 4]> for PackedColor {
     fn from(c: [f32; 4]) -> PackedColor {
-        PackedColor(c.iter().rev().fold(0, |u, &c| {
-            (u<<8) + (c * 255.0) as u32
-        }))
+        PackedColor(
+            c.iter()
+                .rev()
+                .fold(0, |u, &c| (u << 8) + (c * 255.0) as u32),
+        )
     }
 }
 
 impl Into<[f32; 4]> for PackedColor {
     fn into(self) -> [f32; 4] {
         let mut out = [0.0; 4];
-        for i in 0 .. 4 {
-            let byte = (self.0 >> (i<<3)) & 0xFF;
+        for i in 0..4 {
+            let byte = (self.0 >> (i << 3)) & 0xFF;
             out[i] = byte as f32 / 255.0;
         }
         out

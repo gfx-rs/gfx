@@ -6,11 +6,8 @@
 //! They can be used as shader resources, vertex buffers, index buffers or for
 //! specifying the action commands for indirect execution.
 
-use {format, IndexType, Backend};
-
-
-/// An offset inside a buffer, in bytes.
-pub type Offset = u64;
+pub use bal::buffer::Offset;
+use {format, Backend, IndexType};
 
 /// Buffer state.
 pub type State = Access;

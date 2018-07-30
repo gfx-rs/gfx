@@ -1,7 +1,7 @@
-use { validate_line_width };
+use validate_line_width;
 
-use std::mem;
 use spirv_cross::spirv;
+use std::mem;
 
 use winapi::shared::basetsd::UINT8;
 use winapi::shared::dxgiformat::*;
@@ -10,8 +10,10 @@ use winapi::um::d3d12::*;
 use winapi::um::d3dcommon::*;
 
 use hal::format::{Format, ImageFeature, SurfaceType};
-use hal::{buffer, image, pso, Primitive};
 use hal::pso::DescriptorSetLayoutBinding;
+use hal::{buffer, image, pso, Primitive};
+
+use bal_dx12::native::descriptor::{DescriptorRange, DescriptorRangeType};
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::Format::*;
@@ -19,11 +21,11 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     // Handling packed formats according to the platform endianness.
     let reverse = unsafe { 1 == *(&1u32 as *const _ as *const u8) };
     let format = match format {
-        Bgra4Unorm    if !reverse => DXGI_FORMAT_B4G4R4A4_UNORM,
-        R5g6b5Unorm    if reverse => DXGI_FORMAT_B5G6R5_UNORM,
-        B5g6r5Unorm   if !reverse => DXGI_FORMAT_B5G6R5_UNORM,
+        Bgra4Unorm if !reverse => DXGI_FORMAT_B4G4R4A4_UNORM,
+        R5g6b5Unorm if reverse => DXGI_FORMAT_B5G6R5_UNORM,
+        B5g6r5Unorm if !reverse => DXGI_FORMAT_B5G6R5_UNORM,
         B5g5r5a1Unorm if !reverse => DXGI_FORMAT_B5G5R5A1_UNORM,
-        A1r5g5b5Unorm if reverse  => DXGI_FORMAT_B5G5R5A1_UNORM,
+        A1r5g5b5Unorm if reverse => DXGI_FORMAT_B5G5R5A1_UNORM,
         R8Unorm => DXGI_FORMAT_R8_UNORM,
         R8Inorm => DXGI_FORMAT_R8_SNORM,
         R8Uint => DXGI_FORMAT_R8_UINT,
@@ -41,11 +43,11 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
         Bgra8Srgb => DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
         Abgr8Unorm if reverse => DXGI_FORMAT_R8G8B8A8_UNORM,
         Abgr8Inorm if reverse => DXGI_FORMAT_R8G8B8A8_SNORM,
-        Abgr8Uint  if reverse => DXGI_FORMAT_R8G8B8A8_UINT,
-        Abgr8Int   if reverse => DXGI_FORMAT_R8G8B8A8_SINT,
-        Abgr8Srgb  if reverse => DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        Abgr8Uint if reverse => DXGI_FORMAT_R8G8B8A8_UINT,
+        Abgr8Int if reverse => DXGI_FORMAT_R8G8B8A8_SINT,
+        Abgr8Srgb if reverse => DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
         A2b10g10r10Unorm if reverse => DXGI_FORMAT_R10G10B10A2_UNORM,
-        A2b10g10r10Uint  if reverse => DXGI_FORMAT_R10G10B10A2_UINT,
+        A2b10g10r10Uint if reverse => DXGI_FORMAT_R10G10B10A2_UINT,
         R16Unorm => DXGI_FORMAT_R16_UNORM,
         R16Inorm => DXGI_FORMAT_R16_SNORM,
         R16Uint => DXGI_FORMAT_R16_UINT,
@@ -74,7 +76,7 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
         Rgba32Int => DXGI_FORMAT_R32G32B32A32_SINT,
         Rgba32Float => DXGI_FORMAT_R32G32B32A32_FLOAT,
         B10g11r11Ufloat if reverse => DXGI_FORMAT_R11G11B10_FLOAT,
-        E5b9g9r9Ufloat  if reverse => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
+        E5b9g9r9Ufloat if reverse => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
         D16Unorm => DXGI_FORMAT_D16_UNORM,
         D24UnormS8Uint => DXGI_FORMAT_D24_UNORM_S8_UINT,
         X8D24Unorm if reverse => DXGI_FORMAT_D24_UNORM_S8_UINT,
@@ -103,10 +105,9 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
 
 pub fn map_format_dsv(surface: SurfaceType) -> Option<DXGI_FORMAT> {
     Some(match surface {
-        SurfaceType::D16    => DXGI_FORMAT_D16_UNORM,
-        SurfaceType::X8D24 |
-        SurfaceType::D24_S8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
-        SurfaceType::D32    => DXGI_FORMAT_D32_FLOAT,
+        SurfaceType::D16 => DXGI_FORMAT_D16_UNORM,
+        SurfaceType::X8D24 | SurfaceType::D24_S8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        SurfaceType::D32 => DXGI_FORMAT_D32_FLOAT,
         SurfaceType::D32_S8 => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
         _ => return None,
     })
@@ -115,15 +116,13 @@ pub fn map_format_dsv(surface: SurfaceType) -> Option<DXGI_FORMAT> {
 pub fn map_topology_type(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY_TYPE {
     use hal::Primitive::*;
     match primitive {
-        PointList  => D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
-        LineList |
-        LineStrip |
-        LineListAdjacency |
-        LineStripAdjacency => D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE,
-        TriangleList |
-        TriangleStrip |
-        TriangleListAdjacency |
-        TriangleStripAdjacency => D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        PointList => D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
+        LineList | LineStrip | LineListAdjacency | LineStripAdjacency => {
+            D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE
+        }
+        TriangleList | TriangleStrip | TriangleListAdjacency | TriangleStripAdjacency => {
+            D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
+        }
         PatchList(_) => D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH,
     }
 }
@@ -131,26 +130,28 @@ pub fn map_topology_type(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY_TYPE 
 pub fn map_topology(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY {
     use hal::Primitive::*;
     match primitive {
-        PointList              => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
-        LineList               => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
-        LineListAdjacency      => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
-        LineStrip              => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
-        LineStripAdjacency     => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
-        TriangleList           => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        TriangleListAdjacency  => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        TriangleStrip          => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        PointList => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
+        LineList => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+        LineListAdjacency => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
+        LineStrip => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
+        LineStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
+        TriangleList => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        TriangleListAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        TriangleStrip => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
         TriangleStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-        PatchList(num) => { assert!(num != 0);
+        PatchList(num) => {
+            assert!(num != 0);
             D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + (num as u32) - 1
-        },
+        }
     }
 }
 
 pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
-    use hal::pso::PolygonMode::*;
     use hal::pso::FrontFace::*;
+    use hal::pso::PolygonMode::*;
 
-    let bias = match rasterizer.depth_bias { //TODO: support dynamic depth bias
+    let bias = match rasterizer.depth_bias {
+        //TODO: support dynamic depth bias
         Some(pso::State::Static(db)) => db,
         Some(_) | None => pso::DepthBias::default(),
     };
@@ -160,11 +161,11 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
             Point => {
                 error!("Point rasterization is not supported");
                 D3D12_FILL_MODE_WIREFRAME
-            },
+            }
             Line(width) => {
                 validate_line_width(width);
                 D3D12_FILL_MODE_WIREFRAME
-            },
+            }
             Fill => D3D12_FILL_MODE_SOLID,
         },
         CullMode: match rasterizer.cull_face {
@@ -181,10 +182,11 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
         DepthBiasClamp: bias.clamp,
         SlopeScaledDepthBias: bias.slope_factor,
         DepthClipEnable: !rasterizer.depth_clamping as _,
-        MultisampleEnable: FALSE, // TODO: currently not supported
-        ForcedSampleCount: 0, // TODO: currently not supported
+        MultisampleEnable: FALSE,     // TODO: currently not supported
+        ForcedSampleCount: 0,         // TODO: currently not supported
         AntialiasedLineEnable: FALSE, // TODO: currently not supported
-        ConservativeRaster: if rasterizer.conservative { // TODO: check support
+        ConservativeRaster: if rasterizer.conservative {
+            // TODO: check support
             D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON
         } else {
             D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
@@ -218,14 +220,17 @@ fn map_factor(factor: pso::Factor) -> D3D12_BLEND {
 fn map_blend_op(operation: pso::BlendOp) -> (D3D12_BLEND_OP, D3D12_BLEND, D3D12_BLEND) {
     use hal::pso::BlendOp::*;
     match operation {
-        Add    { src, dst } => (D3D12_BLEND_OP_ADD,          map_factor(src), map_factor(dst)),
-        Sub    { src, dst } => (D3D12_BLEND_OP_SUBTRACT,     map_factor(src), map_factor(dst)),
-        RevSub { src, dst } => (D3D12_BLEND_OP_REV_SUBTRACT, map_factor(src), map_factor(dst)),
+        Add { src, dst } => (D3D12_BLEND_OP_ADD, map_factor(src), map_factor(dst)),
+        Sub { src, dst } => (D3D12_BLEND_OP_SUBTRACT, map_factor(src), map_factor(dst)),
+        RevSub { src, dst } => (
+            D3D12_BLEND_OP_REV_SUBTRACT,
+            map_factor(src),
+            map_factor(dst),
+        ),
         Min => (D3D12_BLEND_OP_MIN, D3D12_BLEND_ZERO, D3D12_BLEND_ZERO),
         Max => (D3D12_BLEND_OP_MAX, D3D12_BLEND_ZERO, D3D12_BLEND_ZERO),
     }
 }
-
 
 pub fn map_render_targets(
     color_targets: &[pso::ColorBlendDesc],
@@ -244,7 +249,8 @@ pub fn map_render_targets(
     };
     let mut targets = [dummy_target; 8];
 
-    for (target, &pso::ColorBlendDesc(mask, blend)) in targets.iter_mut().zip(color_targets.iter()) {
+    for (target, &pso::ColorBlendDesc(mask, blend)) in targets.iter_mut().zip(color_targets.iter())
+    {
         target.RenderTargetWriteMask = mask.bits() as UINT8;
         if let pso::BlendState::On { color, alpha } = blend {
             let (color_op, color_src, color_dst) = map_blend_op(color);
@@ -269,18 +275,34 @@ pub fn map_depth_stencil(dsi: &pso::DepthStencilDesc) -> D3D12_DEPTH_STENCIL_DES
     };
 
     let (stencil_on, front, back, read_mask, write_mask) = match dsi.stencil {
-        pso::StencilTest::On { ref front, ref back } => {
+        pso::StencilTest::On {
+            ref front,
+            ref back,
+        } => {
             if front.mask_read != back.mask_read || front.mask_write != back.mask_write {
-                error!("Different masks on stencil front ({:?}) and back ({:?}) are not supported", front, back);
+                error!(
+                    "Different masks on stencil front ({:?}) and back ({:?}) are not supported",
+                    front, back
+                );
             }
-            (TRUE, map_stencil_side(front), map_stencil_side(back), front.mask_read, front.mask_write)
-        },
+            (
+                TRUE,
+                map_stencil_side(front),
+                map_stencil_side(back),
+                front.mask_read,
+                front.mask_write,
+            )
+        }
         pso::StencilTest::Off => unsafe { mem::zeroed() },
     };
 
     D3D12_DEPTH_STENCIL_DESC {
         DepthEnable: depth_on,
-        DepthWriteMask: if depth_write {D3D12_DEPTH_WRITE_MASK_ALL} else {D3D12_DEPTH_WRITE_MASK_ZERO},
+        DepthWriteMask: if depth_write {
+            D3D12_DEPTH_WRITE_MASK_ALL
+        } else {
+            D3D12_DEPTH_WRITE_MASK_ZERO
+        },
         DepthFunc: depth_func,
         StencilEnable: stencil_on,
         StencilReadMask: match read_mask {
@@ -336,9 +358,9 @@ fn map_stencil_side(side: &pso::StencilFace) -> D3D12_DEPTH_STENCILOP_DESC {
 pub fn map_wrap(wrap: image::WrapMode) -> D3D12_TEXTURE_ADDRESS_MODE {
     use hal::image::WrapMode::*;
     match wrap {
-        Tile   => D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        Tile => D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         Mirror => D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
-        Clamp  => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        Clamp => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         Border => D3D12_TEXTURE_ADDRESS_MODE_BORDER,
     }
 }
@@ -368,11 +390,11 @@ pub fn map_filter(
     let min = map_filter_type(min_filter);
     let mip = map_filter_type(mip_filter);
 
-    (min & D3D12_FILTER_TYPE_MASK) << D3D12_MIN_FILTER_SHIFT |
-    (mag & D3D12_FILTER_TYPE_MASK) << D3D12_MAG_FILTER_SHIFT |
-    (mip & D3D12_FILTER_TYPE_MASK) << D3D12_MIP_FILTER_SHIFT |
-    (reduction & D3D12_FILTER_REDUCTION_TYPE_MASK) << D3D12_FILTER_REDUCTION_TYPE_SHIFT |
-    map_anisotropic(anisotropic)
+    (min & D3D12_FILTER_TYPE_MASK) << D3D12_MIN_FILTER_SHIFT
+        | (mag & D3D12_FILTER_TYPE_MASK) << D3D12_MAG_FILTER_SHIFT
+        | (mip & D3D12_FILTER_TYPE_MASK) << D3D12_MIP_FILTER_SHIFT
+        | (reduction & D3D12_FILTER_REDUCTION_TYPE_MASK) << D3D12_FILTER_REDUCTION_TYPE_SHIFT
+        | map_anisotropic(anisotropic)
 }
 
 pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATES {
@@ -395,7 +417,8 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
     if access.contains(Access::INDEX_BUFFER_READ) {
         state |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
     }
-    if access.contains(Access::VERTEX_BUFFER_READ) || access.contains(Access::CONSTANT_BUFFER_READ) {
+    if access.contains(Access::VERTEX_BUFFER_READ) || access.contains(Access::CONSTANT_BUFFER_READ)
+    {
         state |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
     if access.contains(Access::INDIRECT_COMMAND_READ) {
@@ -403,13 +426,17 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
     }
     if access.contains(Access::SHADER_READ) {
         // SHADER_READ only allows SRV access
-        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+            | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
 
     state
 }
 
-pub fn map_image_resource_state(access: image::Access, layout: image::Layout) -> D3D12_RESOURCE_STATES {
+pub fn map_image_resource_state(
+    access: image::Access,
+    layout: image::Layout,
+) -> D3D12_RESOURCE_STATES {
     use self::image::Access;
     // `D3D12_RESOURCE_STATE_PRESENT` is the same as COMMON (general state)
     if layout == image::Layout::Present {
@@ -423,7 +450,9 @@ pub fn map_image_resource_state(access: image::Access, layout: image::Layout) ->
     if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_WRITE) {
         return D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
-    if access.contains(Access::COLOR_ATTACHMENT_READ) || access.contains(Access::COLOR_ATTACHMENT_WRITE) {
+    if access.contains(Access::COLOR_ATTACHMENT_READ)
+        || access.contains(Access::COLOR_ATTACHMENT_WRITE)
+    {
         return D3D12_RESOURCE_STATE_RENDER_TARGET;
     }
 
@@ -452,36 +481,42 @@ pub fn map_image_resource_state(access: image::Access, layout: image::Layout) ->
         // SHADER_READ only allows SRV access
         // Already handled the `SHADER_WRITE` write case above.
         assert!(!access.contains(Access::SHADER_WRITE));
-        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+            | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
 
     state
 }
 
-pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u32, sampler: bool) -> D3D12_DESCRIPTOR_RANGE {
-    D3D12_DESCRIPTOR_RANGE {
-        RangeType: match bind.ty {
-            pso::DescriptorType::Sampler => D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
-            pso::DescriptorType::SampledImage |
-            pso::DescriptorType::InputAttachment |
-            pso::DescriptorType::UniformTexelBuffer => D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-            pso::DescriptorType::StorageBuffer |
-            pso::DescriptorType::StorageBufferDynamic |
-            pso::DescriptorType::StorageTexelBuffer |
-            pso::DescriptorType::StorageImage => D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-            pso::DescriptorType::UniformBuffer |
-            pso::DescriptorType::UniformBufferDynamic => D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-            pso::DescriptorType::CombinedImageSampler => if sampler {
-                D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER
-            } else {
-                D3D12_DESCRIPTOR_RANGE_TYPE_SRV
+pub fn map_descriptor_range(
+    bind: &DescriptorSetLayoutBinding,
+    register_space: u32,
+    sampler: bool,
+) -> DescriptorRange {
+    DescriptorRange::new(
+        match bind.ty {
+            pso::DescriptorType::Sampler => DescriptorRangeType::Sampler,
+            pso::DescriptorType::SampledImage
+            | pso::DescriptorType::InputAttachment
+            | pso::DescriptorType::UniformTexelBuffer => DescriptorRangeType::SRV,
+            pso::DescriptorType::StorageBuffer
+            | pso::DescriptorType::StorageBufferDynamic
+            | pso::DescriptorType::StorageTexelBuffer
+            | pso::DescriptorType::StorageImage => DescriptorRangeType::UAV,
+            pso::DescriptorType::UniformBuffer | pso::DescriptorType::UniformBufferDynamic => {
+                DescriptorRangeType::CBV
             }
+            pso::DescriptorType::CombinedImageSampler => if sampler {
+                DescriptorRangeType::Sampler
+            } else {
+                DescriptorRangeType::SRV
+            },
         },
-        NumDescriptors: bind.count as _,
-        BaseShaderRegister: bind.binding as _,
-        RegisterSpace: register_space,
-        OffsetInDescriptorsFromTableStart: D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
-    }
+        bind.count as _,
+        bind.binding as _,
+        register_space,
+        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+    )
 }
 
 pub fn map_buffer_flags(usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {

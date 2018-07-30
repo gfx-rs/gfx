@@ -7,11 +7,12 @@ use winit;
 use winapi::shared::dxgi1_4;
 use winapi::shared::windef::{HWND, RECT};
 use winapi::um::winuser::GetClientRect;
-use winapi::um::d3d12;
-use wio::com::ComPtr;
 
 use hal::{self, format as f, image as i};
 use {native as n, Backend, Instance, PhysicalDevice, QueueFamily};
+
+use bal_dx12;
+use bal_dx12::native::WeakPtr;
 
 use std::os::raw::c_void;
 
@@ -22,7 +23,10 @@ impl Instance {
             if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
                 panic!("GetClientRect failed");
             }
-            ((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32)
+            (
+                (rect.right - rect.left) as u32,
+                (rect.bottom - rect.top) as u32,
+            )
         };
 
         Surface {
@@ -41,20 +45,20 @@ impl Instance {
 }
 
 pub struct Surface {
-    pub(crate) factory: ComPtr<dxgi1_4::IDXGIFactory4>,
+    pub(crate) factory: WeakPtr<dxgi1_4::IDXGIFactory4>,
     pub(crate) wnd_handle: HWND,
     pub(crate) width: i::Size,
     pub(crate) height: i::Size,
 }
 
-unsafe impl Send for Surface { }
-unsafe impl Sync for Surface { }
+unsafe impl Send for Surface {}
+unsafe impl Sync for Surface {}
 
 impl hal::Surface<Backend> for Surface {
     fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
         match queue_family {
             &QueueFamily::Present => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -63,8 +67,13 @@ impl hal::Surface<Backend> for Surface {
     }
 
     fn compatibility(
-        &self, _: &PhysicalDevice,
-    ) -> (hal::SurfaceCapabilities, Option<Vec<f::Format>>, Vec<hal::PresentMode>) {
+        &self,
+        _: &PhysicalDevice,
+    ) -> (
+        hal::SurfaceCapabilities,
+        Option<Vec<f::Format>>,
+        Vec<hal::PresentMode>,
+    ) {
         let extent = hal::window::Extent2D {
             width: self.width,
             height: self.height,
@@ -90,7 +99,7 @@ impl hal::Surface<Backend> for Surface {
         ];
 
         let present_modes = vec![
-            hal::PresentMode::Fifo //TODO
+            hal::PresentMode::Fifo, //TODO
         ];
 
         (capabilities, Some(formats), present_modes)
@@ -98,14 +107,14 @@ impl hal::Surface<Backend> for Surface {
 }
 
 pub struct Swapchain {
-    pub(crate) inner: ComPtr<dxgi1_4::IDXGISwapChain3>,
+    pub(crate) inner: WeakPtr<dxgi1_4::IDXGISwapChain3>,
     pub(crate) next_frame: usize,
     pub(crate) frame_queue: VecDeque<usize>,
     #[allow(dead_code)]
     pub(crate) rtv_heap: n::DescriptorHeap,
     // need to associate raw image pointers with the swapchain so they can be properly released
     // when the swapchain is destroyed
-    pub(crate) _resources: Vec<ComPtr<d3d12::ID3D12Resource>>,
+    pub(crate) resources: Vec<bal_dx12::native::Resource>,
 }
 
 impl hal::Swapchain<Backend> for Swapchain {
@@ -126,5 +135,5 @@ impl hal::Swapchain<Backend> for Swapchain {
     }
 }
 
-unsafe impl Send for Swapchain { }
-unsafe impl Sync for Swapchain { }
+unsafe impl Send for Swapchain {}
+unsafe impl Sync for Swapchain {}
