@@ -30,7 +30,7 @@ use hal::{error, format as f, image, memory, Features, Limits, QueueType, SwapIm
 
 use winapi::shared::minwindef::{FALSE, TRUE};
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
-use winapi::um::{d3d12, d3d12sdklayers, d3dcommon, handleapi, synchapi, winbase, winnt};
+use winapi::um::{d3d12, d3d12sdklayers, handleapi, synchapi, winbase, winnt};
 use winapi::Interface;
 
 use std::borrow::Borrow;
@@ -410,6 +410,16 @@ pub struct CommandQueue {
     idle_event: winnt::HANDLE,
 }
 
+impl CommandQueue {
+    fn destroy(&self) {
+        unsafe {
+            (*self.idle_fence).Release();
+            handleapi::CloseHandle(self.idle_event);
+        }
+        self.raw.destroy();
+    }
+}
+
 unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
@@ -492,10 +502,25 @@ struct CmdSignatures {
     dispatch: bal_dx12::native::CommandSignature,
 }
 
+impl CmdSignatures {
+    fn destroy(&self) {
+        self.draw.destroy();
+        self.draw_indexed.destroy();
+        self.dispatch.destroy();
+    }
+}
+
 // Shared objects between command buffers, owned by the device.
 struct Shared {
     pub signatures: CmdSignatures,
     pub service_pipes: internal::ServicePipes,
+}
+
+impl Shared {
+    fn destroy(&self) {
+        self.signatures.destroy();
+        self.service_pipes.destroy();
+    }
 }
 
 pub struct Device {
@@ -601,11 +626,31 @@ impl Drop for Device {
     fn drop(&mut self) {
         *self.open.lock().unwrap() = false;
         for queue in &mut self.queues {
-            unsafe {
-                (*queue.idle_fence).Release();
-                handleapi::CloseHandle(queue.idle_event);
-            }
+            queue.destroy();
         }
+
+        self.shared.destroy();
+        self.heap_srv_cbv_uav.lock().unwrap().destroy();
+        self.heap_sampler.lock().unwrap().destroy();
+        self.rtv_pool.lock().unwrap().destroy();
+        self.dsv_pool.lock().unwrap().destroy();
+        self.srv_uav_pool.lock().unwrap().destroy();
+        self.sampler_pool.lock().unwrap().destroy();
+
+        for pool in &*self.descriptor_update_pools.lock().unwrap() {
+            pool.destroy();
+        }
+
+        // Debug tracking alive objects
+        let (debug_device, hr_debug) = self.raw.cast::<d3d12sdklayers::ID3D12DebugDevice>();
+        if winerror::SUCCEEDED(hr_debug) {
+            unsafe {
+                debug_device.ReportLiveDeviceObjects(d3d12sdklayers::D3D12_RLDO_DETAIL);
+            }
+            debug_device.destroy();
+        }
+
+        self.raw.destroy();
     }
 }
 
@@ -636,8 +681,8 @@ impl Instance {
             };
 
             if winerror::SUCCEEDED(hr) {
-                unsafe { (*debug_controller).EnableDebugLayer() };
                 unsafe {
+                    (*debug_controller).EnableDebugLayer();
                     (*debug_controller).Release();
                 }
             }
@@ -982,6 +1027,8 @@ impl hal::Instance for Instance {
                     _ => vec![local],
                 }
             };
+
+            device.destroy();
 
             let physical_device = PhysicalDevice {
                 adapter,

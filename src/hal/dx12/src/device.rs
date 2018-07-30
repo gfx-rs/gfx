@@ -27,7 +27,6 @@ use {
     MemoryGroup, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES, QUEUE_FAMILIES,
 };
 
-use bal_dx12;
 use bal_dx12::native;
 use bal_dx12::native::descriptor;
 use bal_dx12::native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
@@ -147,8 +146,8 @@ pub(crate) fn compile_shader(
         format!("{}_{}\0", stage, model)
     };
 
-    let shader_data = Blob::null();
-    let error = Blob::null();
+    let mut shader_data = Blob::null();
+    let mut error = Blob::null();
     let entry = ffi::CString::new(entry).unwrap();
     let hr = unsafe {
         d3dcompiler::D3DCompile(
@@ -161,8 +160,8 @@ pub(crate) fn compile_shader(
             stage_to_str(stage, shader_model).as_ptr() as *const i8,
             1,
             0,
-            &mut shader_data.as_mut_ptr() as *mut *mut _,
-            &mut error.as_mut_ptr() as *mut *mut _,
+            shader_data.mut_void() as *mut *mut _,
+            error.mut_void() as *mut *mut _,
         )
     };
     if !winerror::SUCCEEDED(hr) {
@@ -510,8 +509,6 @@ impl Device {
         device: native::Device,
         ty: CommandSignature,
     ) -> native::CommandSignature {
-        let mut signature = ptr::null_mut();
-
         let (arg_ty, stride) = match ty {
             CommandSignature::Draw => (d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW, 16),
             CommandSignature::DrawIndexed => (d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED, 20),
@@ -530,19 +527,20 @@ impl Device {
             NodeMask: 0,
         };
 
+        let mut signature = native::CommandSignature::null();
         let hr = unsafe {
             device.CreateCommandSignature(
                 &desc,
                 ptr::null_mut(),
                 &d3d12::ID3D12CommandSignature::uuidof(),
-                &mut signature as *mut *mut _ as *mut *mut _,
+                signature.mut_void(),
             )
         };
 
         if !winerror::SUCCEEDED(hr) {
             error!("error on command signature creation: {:x}", hr);
         }
-        native::CommandSignature::from_raw(signature)
+        signature
     }
 
     pub(crate) fn create_descriptor_heap_impl(
@@ -1043,7 +1041,7 @@ impl d::Device<B> for Device {
 
         // Create a buffer resource covering the whole memory slice to be able to map the whole memory.
         let resource = if is_mapable {
-            let resource = native::Resource::null();
+            let mut resource = native::Resource::null();
             let desc = d3d12::D3D12_RESOURCE_DESC {
                 Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
                 Alignment: 0,
@@ -1068,7 +1066,7 @@ impl d::Device<B> for Device {
                     d3d12::D3D12_RESOURCE_STATE_COMMON,
                     ptr::null(),
                     &d3d12::ID3D12Resource::uuidof(),
-                    &mut resource.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                    resource.mut_void(),
                 )
             });
 
@@ -1105,8 +1103,8 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_command_pool(&self, _pool: RawCommandPool) {
-        self.raw.destroy();
+    fn destroy_command_pool(&self, pool: RawCommandPool) {
+        pool.raw.destroy();
     }
 
     fn create_render_pass<'a, IA, IS, ID>(
@@ -1671,7 +1669,7 @@ impl d::Device<B> for Device {
         let topology = conv::map_topology(desc.input_assembler.primitive);
 
         // Create PSO
-        let mut pipeline = ptr::null_mut();
+        let mut pipeline = native::PipelineState::null();
         let hr = if desc.depth_stencil.depth_bounds {
             // The DepthBoundsTestEnable option isn't available in the original D3D12_GRAPHICS_PIPELINE_STATE_DESC struct.
             // Instead, we must use the newer subobject stream method.
@@ -1686,7 +1684,7 @@ impl d::Device<B> for Device {
                     device2.CreatePipelineState(
                         &pss_desc,
                         &d3d12::ID3D12PipelineState::uuidof(),
-                        &mut pipeline as *mut *mut _ as *mut *mut _,
+                        pipeline.mut_void(),
                     )
                 }
             } else {
@@ -1697,7 +1695,7 @@ impl d::Device<B> for Device {
                 self.raw.clone().CreateGraphicsPipelineState(
                     &pso_desc,
                     &d3d12::ID3D12PipelineState::uuidof(),
-                    &mut pipeline as *mut *mut _ as *mut *mut _,
+                    pipeline.mut_void(),
                 )
             }
         };
@@ -1721,7 +1719,7 @@ impl d::Device<B> for Device {
             }
 
             Ok(r::GraphicsPipeline {
-                raw: native::PipelineState::from_raw(pipeline),
+                raw: pipeline,
                 signature: desc.layout.raw,
                 num_parameter_slots: desc.layout.num_parameter_slots,
                 topology,
@@ -2141,7 +2139,7 @@ impl d::Device<B> for Device {
             return Err(d::BindError::OutOfBounds);
         }
 
-        let resource = native::Resource::null();
+        let mut resource = native::Resource::null();
         let num_layers = image.kind.num_layers();
 
         assert_eq!(winerror::S_OK, unsafe {
@@ -2152,7 +2150,7 @@ impl d::Device<B> for Device {
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
                 &d3d12::ID3D12Resource::uuidof(),
-                &mut resource.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                resource.mut_void(),
             )
         });
 
@@ -2826,6 +2824,7 @@ impl d::Device<B> for Device {
     }
 
     fn free_memory(&self, memory: r::Memory) {
+        memory.heap.destroy();
         if let Some(buffer) = memory.resource {
             buffer.destroy();
         }
@@ -2853,8 +2852,8 @@ impl d::Device<B> for Device {
 
     fn destroy_shader_module(&self, shader_lib: r::ShaderModule) {
         if let r::ShaderModule::Compiled(shaders) = shader_lib {
-            for (_, _blob) in shaders {
-                //unsafe { blob.Release(); } //TODO
+            for (_, blob) in shaders {
+                blob.destroy();
             }
         }
     }
@@ -2991,12 +2990,12 @@ impl d::Device<B> for Device {
         let mut resources: Vec<native::Resource> = Vec::new();
         let images = (0..config.image_count)
             .map(|i| {
-                let resource = native::Resource::null();
+                let mut resource = native::Resource::null();
                 unsafe {
                     swap_chain.GetBuffer(
                         i as _,
                         &d3d12::ID3D12Resource::uuidof(),
-                        &mut resource.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                        resource.mut_void(),
                     );
                 }
 
@@ -3057,6 +3056,8 @@ impl d::Device<B> for Device {
         for resource in &swapchain.resources {
             resource.destroy();
         }
+        swapchain.inner.destroy();
+        swapchain.rtv_heap.destroy();
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {

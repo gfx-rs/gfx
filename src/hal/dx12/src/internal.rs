@@ -20,8 +20,8 @@ pub struct BlitPipe {
     pub signature: bal_dx12::native::RootSignature,
 }
 
-impl Drop for BlitPipe {
-    fn drop(&mut self) {
+impl BlitPipe {
+    fn destroy(&self) {
         self.pipeline.destroy();
         self.signature.destroy();
     }
@@ -49,6 +49,13 @@ impl ServicePipes {
         ServicePipes {
             device,
             blits_2d_color: Mutex::new(FastHashMap::default()),
+        }
+    }
+
+    pub fn destroy(&self) {
+        let blits = self.blits_2d_color.lock().unwrap();
+        for (_, pipe) in &*blits {
+            pipe.destroy();
         }
     }
 

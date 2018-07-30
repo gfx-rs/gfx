@@ -1118,6 +1118,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         Device::view_image_as_render_target_impl(device, rtv, view_info).unwrap();
                         self.clear_render_target_view(rtv, value.into(), &rect);
                     }
+
+                    rtv_pool.destroy();
                 }
                 com::AttachmentClear::DepthStencil { depth, stencil } => {
                     let attachment = {
@@ -1158,6 +1160,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         Device::view_image_as_depth_stencil_impl(device, dsv, view_info).unwrap();
                         self.clear_depth_stencil_view(dsv, depth, stencil, &rect);
                     }
+
+                    dsv_pool.destroy();
                 }
             }
         }

@@ -2,6 +2,7 @@ use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::ops::Deref;
 use std::ptr;
+use winapi::ctypes::c_void;
 use winapi::um::unknwnbase::IUnknown;
 use winapi::Interface;
 use D3DResult;
@@ -28,6 +29,10 @@ impl<T> WeakPtr<T> {
     pub fn as_mut_ptr(&self) -> *mut T {
         self.0
     }
+
+    pub fn mut_void(&mut self) -> *mut *mut c_void {
+        &mut self.0 as *mut *mut _ as *mut *mut _
+    }
 }
 
 impl<T: Interface> WeakPtr<T> {
@@ -41,12 +46,10 @@ impl<T: Interface> WeakPtr<T> {
     where
         U: Interface,
     {
-        let obj = WeakPtr::<U>::null();
+        let mut obj = WeakPtr::<U>::null();
         let hr = unsafe {
-            self.as_unknown().QueryInterface(
-                &U::uuidof(),
-                &mut obj.as_mut_ptr() as *mut *mut _ as *mut *mut _,
-            )
+            self.as_unknown()
+                .QueryInterface(&U::uuidof(), obj.mut_void())
         };
         (obj, hr)
     }

@@ -23,13 +23,13 @@ impl Device {
         adapter: WeakPtr<I>,
         feature_level: FeatureLevel,
     ) -> D3DResult<Self> {
-        let device = Device::null();
+        let mut device = Device::null();
         let hr = unsafe {
             d3d12::D3D12CreateDevice(
                 adapter.as_unknown() as *const _ as *mut _,
                 feature_level as _,
                 &d3d12::ID3D12Device::uuidof(),
-                &mut device.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                device.mut_void(),
             )
         };
 
@@ -37,12 +37,12 @@ impl Device {
     }
 
     pub fn create_command_allocator(&self, list_type: CmdListType) -> D3DResult<CommandAllocator> {
-        let allocator = CommandAllocator::null();
+        let mut allocator = CommandAllocator::null();
         let hr = unsafe {
             self.CreateCommandAllocator(
                 list_type as _,
                 &d3d12::ID3D12CommandAllocator::uuidof(),
-                &mut allocator.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                allocator.mut_void(),
             )
         };
 
@@ -63,12 +63,12 @@ impl Device {
             NodeMask: node_mask,
         };
 
-        let queue = CommandQueue::null();
+        let mut queue = CommandQueue::null();
         let hr = unsafe {
             self.CreateCommandQueue(
                 &desc,
                 &d3d12::ID3D12CommandQueue::uuidof(),
-                &mut queue.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                queue.mut_void(),
             )
         };
 
@@ -89,12 +89,12 @@ impl Device {
             NodeMask: node_mask,
         };
 
-        let heap = DescriptorHeap::null();
+        let mut heap = DescriptorHeap::null();
         let hr = unsafe {
             self.CreateDescriptorHeap(
                 &desc,
                 &d3d12::ID3D12DescriptorHeap::uuidof(),
-                &mut heap.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                heap.mut_void(),
             )
         };
 
@@ -112,7 +112,7 @@ impl Device {
         initial: PipelineState,
         node_mask: NodeMask,
     ) -> D3DResult<GraphicsCommandList> {
-        let command_list = GraphicsCommandList::null();
+        let mut command_list = GraphicsCommandList::null();
         let hr = unsafe {
             self.CreateCommandList(
                 node_mask,
@@ -120,7 +120,7 @@ impl Device {
                 allocator.as_mut_ptr(),
                 initial.as_mut_ptr(),
                 &d3d12::ID3D12GraphicsCommandList::uuidof(),
-                &mut command_list.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                command_list.mut_void(),
             )
         };
 
@@ -139,12 +139,12 @@ impl Device {
             NodeMask: node_mask,
         };
 
-        let query_heap = QueryHeap::null();
+        let mut query_heap = QueryHeap::null();
         let hr = unsafe {
             self.CreateQueryHeap(
                 &desc,
                 &d3d12::ID3D12QueryHeap::uuidof(),
-                &mut query_heap.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                query_heap.mut_void(),
             )
         };
 
@@ -174,7 +174,7 @@ impl Device {
         cached_pso: CachedPSO,
         flags: pso::PipelineStateFlags,
     ) -> D3DResult<PipelineState> {
-        let pipeline = PipelineState::null();
+        let mut pipeline = PipelineState::null();
         let desc = d3d12::D3D12_COMPUTE_PIPELINE_STATE_DESC {
             pRootSignature: root_signature.as_mut_ptr(),
             CS: *cs,
@@ -187,7 +187,7 @@ impl Device {
             self.CreateComputePipelineState(
                 &desc,
                 &d3d12::ID3D12PipelineState::uuidof(),
-                &mut pipeline.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                pipeline.mut_void(),
             )
         };
 
@@ -228,14 +228,14 @@ impl Device {
         blob: Blob,
         node_mask: NodeMask,
     ) -> D3DResult<RootSignature> {
-        let signature = RootSignature::null();
+        let mut signature = RootSignature::null();
         let hr = unsafe {
             self.CreateRootSignature(
                 node_mask,
                 blob.GetBufferPointer(),
                 blob.GetBufferSize(),
                 &d3d12::ID3D12RootSignature::uuidof(),
-                &mut signature.as_mut_ptr() as *mut *mut _ as *mut *mut _,
+                signature.mut_void(),
             )
         };
 

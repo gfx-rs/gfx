@@ -42,6 +42,10 @@ impl HeapLinear {
     pub fn clear(&mut self) {
         self.num = 0;
     }
+
+    pub fn destroy(&self) {
+        self.raw.destroy();
+    }
 }
 
 const HEAP_SIZE_FIXED: usize = 64;
@@ -86,6 +90,10 @@ impl Heap {
     pub fn is_full(&self) -> bool {
         self.availability == 0
     }
+
+    pub fn destroy(&self) {
+        self.raw.destroy();
+    }
 }
 
 pub struct DescriptorCpuPool {
@@ -124,4 +132,10 @@ impl DescriptorCpuPool {
     }
 
     // TODO: free handles
+
+    pub fn destroy(&self) {
+        for heap in &self.heaps {
+            heap.destroy();
+        }
+    }
 }

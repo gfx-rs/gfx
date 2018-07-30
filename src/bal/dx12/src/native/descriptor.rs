@@ -145,8 +145,8 @@ impl RootSignature {
         assert_eq_size!(RootParameter, d3d12::D3D12_ROOT_PARAMETER);
         assert_eq_size!(StaticSampler, d3d12::D3D12_STATIC_SAMPLER_DESC);
 
-        let blob = Blob::null();
-        let error = Error::null();
+        let mut blob = Blob::null();
+        let mut error = Error::null();
 
         let desc = d3d12::D3D12_ROOT_SIGNATURE_DESC {
             NumParameters: parameters.len() as _,
@@ -160,8 +160,8 @@ impl RootSignature {
             d3d12::D3D12SerializeRootSignature(
                 &desc,
                 version as _,
-                &mut blob.as_mut_ptr(),
-                &mut error.as_mut_ptr(),
+                blob.mut_void() as *mut *mut _,
+                error.mut_void() as *mut *mut _,
             )
         };
 

@@ -385,15 +385,17 @@ impl DescriptorHeap {
             size,
         }
     }
+
+    pub(crate) fn destroy(&self) {
+        self.raw.destroy();
+    }
 }
 
 /// Slice of an descriptor heap, which is allocated for a pool.
 /// Pools will create descriptor sets inside this slice.
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct DescriptorHeapSlice {
-    #[derivative(Debug = "ignore")]
-    pub(crate) heap: bal_dx12::native::DescriptorHeap,
+    pub(crate) heap: bal_dx12::native::DescriptorHeap, // Weak reference, owned by descriptor heap.
     pub(crate) start: DualHandle,
     pub(crate) handle_size: u64,
     pub(crate) range_allocator: RangeAllocator<u64>,

@@ -20,7 +20,7 @@ pub struct RawCommandPool {
 impl RawCommandPool {
     fn create_command_list(&mut self) -> GraphicsCommandList {
         let (command_list, hr) = self.device.create_graphics_command_list(
-            CmdListType::Direct,
+            self.list_type,
             self.raw,
             bal_dx12::native::PipelineState::null(),
             0,
@@ -56,7 +56,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             .collect()
     }
 
-    unsafe fn free(&mut self, mut cbufs: Vec<CommandBuffer>) {
+    unsafe fn free(&mut self, cbufs: Vec<CommandBuffer>) {
         for mut cbuf in cbufs {
             cbuf.destroy();
         }
