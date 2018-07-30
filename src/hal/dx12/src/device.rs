@@ -28,6 +28,7 @@ use {
 };
 
 use bal_dx12;
+use bal_dx12::native;
 use bal_dx12::native::descriptor;
 use bal_dx12::native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
 use bal_dx12::native::query;
@@ -82,7 +83,7 @@ pub(crate) fn shader_bytecode(shader: *mut d3dcommon::ID3DBlob) -> d3d12::D3D12_
 
 #[derive(Clone, Debug)]
 pub(crate) struct ViewInfo {
-    pub(crate) resource: bal_dx12::native::Resource,
+    pub(crate) resource: native::Resource,
     pub(crate) kind: image::Kind,
     pub(crate) flags: image::StorageFlags,
     pub(crate) view_kind: image::ViewKind,
@@ -506,9 +507,9 @@ impl Device {
     }
 
     pub(crate) fn create_command_signature(
-        device: bal_dx12::native::Device,
+        device: native::Device,
         ty: CommandSignature,
-    ) -> bal_dx12::native::CommandSignature {
+    ) -> native::CommandSignature {
         let mut signature = ptr::null_mut();
 
         let (arg_ty, stride) = match ty {
@@ -541,11 +542,11 @@ impl Device {
         if !winerror::SUCCEEDED(hr) {
             error!("error on command signature creation: {:x}", hr);
         }
-        bal_dx12::native::CommandSignature::from_raw(signature)
+        native::CommandSignature::from_raw(signature)
     }
 
     pub(crate) fn create_descriptor_heap_impl(
-        device: bal_dx12::native::Device,
+        device: native::Device,
         heap_type: descriptor::HeapType,
         shader_visible: bool,
         capacity: usize,
@@ -583,7 +584,7 @@ impl Device {
     }
 
     pub(crate) fn view_image_as_render_target_impl(
-        device: bal_dx12::native::Device,
+        device: native::Device,
         handle: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
         info: ViewInfo,
     ) -> Result<(), image::ViewError> {
@@ -680,7 +681,7 @@ impl Device {
     }
 
     pub(crate) fn view_image_as_depth_stencil_impl(
-        device: bal_dx12::native::Device,
+        device: native::Device,
         handle: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
         info: ViewInfo,
     ) -> Result<(), image::ViewError> {
@@ -1042,7 +1043,7 @@ impl d::Device<B> for Device {
 
         // Create a buffer resource covering the whole memory slice to be able to map the whole memory.
         let resource = if is_mapable {
-            let resource = bal_dx12::native::Resource::null();
+            let resource = native::Resource::null();
             let desc = d3d12::D3D12_RESOURCE_DESC {
                 Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
                 Alignment: 0,
@@ -1077,7 +1078,7 @@ impl d::Device<B> for Device {
         };
 
         Ok(r::Memory {
-            heap: bal_dx12::native::WeakPtr::from_raw(heap as _),
+            heap: native::WeakPtr::from_raw(heap as _),
             type_id: mem_type,
             size,
             resource,
@@ -1346,8 +1347,8 @@ impl d::Device<B> for Device {
         let mut parameters = Vec::with_capacity(root_constants.len() + sets.len() * 2);
 
         for root_constant in root_constants.iter() {
-            parameters.push(bal_dx12::native::descriptor::RootParameter::constants(
-                bal_dx12::native::descriptor::ShaderVisibility::All, // TODO
+            parameters.push(native::descriptor::RootParameter::constants(
+                native::descriptor::ShaderVisibility::All, // TODO
                 root_constant.range.start as _,
                 ROOT_CONSTANT_SPACE,
                 (root_constant.range.end - root_constant.range.start) as _,
@@ -1395,12 +1396,10 @@ impl d::Device<B> for Device {
             );
 
             if ranges.len() > range_base {
-                parameters.push(
-                    bal_dx12::native::descriptor::RootParameter::descriptor_table(
-                        bal_dx12::native::descriptor::ShaderVisibility::All, // TODO
-                        &ranges[range_base..],
-                    ),
-                );
+                parameters.push(native::descriptor::RootParameter::descriptor_table(
+                    native::descriptor::ShaderVisibility::All, // TODO
+                    &ranges[range_base..],
+                ));
                 table_type |= r::SRV_CBV_UAV;
             }
 
@@ -1418,12 +1417,10 @@ impl d::Device<B> for Device {
             );
 
             if ranges.len() > range_base {
-                parameters.push(
-                    bal_dx12::native::descriptor::RootParameter::descriptor_table(
-                        bal_dx12::native::descriptor::ShaderVisibility::All, // TODO
-                        &ranges[range_base..],
-                    ),
-                );
+                parameters.push(native::descriptor::RootParameter::descriptor_table(
+                    native::descriptor::ShaderVisibility::All, // TODO
+                    &ranges[range_base..],
+                ));
                 table_type |= r::SAMPLERS;
             }
 
@@ -1434,11 +1431,11 @@ impl d::Device<B> for Device {
         debug_assert_eq!(ranges.len(), total);
 
         // TODO: error handling
-        let ((signature_raw, error), _hr) = bal_dx12::native::RootSignature::serialize(
-            bal_dx12::native::descriptor::RootSignatureVersion::V1_0,
+        let ((signature_raw, error), _hr) = native::RootSignature::serialize(
+            native::descriptor::RootSignatureVersion::V1_0,
             &parameters,
             &[],
-            bal_dx12::native::descriptor::RootSignatureFlags::ALLOW_IA_INPUT_LAYOUT,
+            native::descriptor::RootSignatureFlags::ALLOW_IA_INPUT_LAYOUT,
         );
 
         if !error.is_null() {
@@ -1465,17 +1462,17 @@ impl d::Device<B> for Device {
         desc: &pso::GraphicsPipelineDesc<'a, B>,
     ) -> Result<r::GraphicsPipeline, pso::CreationError> {
         enum ShaderBc {
-            Owned(bal_dx12::native::Blob),
-            Borrowed(bal_dx12::native::Blob),
+            Owned(native::Blob),
+            Borrowed(native::Blob),
             None,
         }
         impl ShaderBc {
-            pub fn shader(&self) -> bal_dx12::native::Shader {
+            pub fn shader(&self) -> native::Shader {
                 match *self {
                     ShaderBc::Owned(ref bc) | ShaderBc::Borrowed(ref bc) => {
-                        bal_dx12::native::Shader::from_blob(*bc)
+                        native::Shader::from_blob(*bc)
                     }
-                    ShaderBc::None => bal_dx12::native::Shader::null(),
+                    ShaderBc::None => native::Shader::null(),
                 }
             }
         }
@@ -1724,7 +1721,7 @@ impl d::Device<B> for Device {
             }
 
             Ok(r::GraphicsPipeline {
-                raw: bal_dx12::native::PipelineState::from_raw(pipeline),
+                raw: native::PipelineState::from_raw(pipeline),
                 signature: desc.layout.raw,
                 num_parameter_slots: desc.layout.num_parameter_slots,
                 topology,
@@ -1747,7 +1744,7 @@ impl d::Device<B> for Device {
 
         let (pipeline, hr) = self.raw.create_compute_pipeline_state(
             desc.layout.raw,
-            bal_dx12::native::Shader::from_blob(cs),
+            native::Shader::from_blob(cs),
             0,
             CachedPSO::null(),
             PipelineStateFlags::empty(),
@@ -1903,7 +1900,7 @@ impl d::Device<B> for Device {
         };
 
         Ok(r::Buffer {
-            resource: bal_dx12::native::Resource::from_raw(resource as *mut _),
+            resource: native::Resource::from_raw(resource as *mut _),
             size_in_bytes: buffer.requirements.size as _,
             clear_uav,
         })
@@ -2144,7 +2141,7 @@ impl d::Device<B> for Device {
             return Err(d::BindError::OutOfBounds);
         }
 
-        let resource = bal_dx12::native::Resource::null();
+        let resource = native::Resource::null();
         let num_layers = image.kind.num_layers();
 
         assert_eq!(winerror::S_OK, unsafe {
@@ -2778,7 +2775,7 @@ impl d::Device<B> for Device {
 
     fn create_fence(&self, signalled: bool) -> r::Fence {
         r::Fence {
-            raw: bal_dx12::native::Fence::from_raw(self.create_raw_fence(signalled)),
+            raw: native::Fence::from_raw(self.create_raw_fence(signalled)),
         }
     }
 
@@ -2988,14 +2985,13 @@ impl d::Device<B> for Device {
             error!("error on swapchain creation 0x{:x}", hr);
         }
 
-        let swap_chain =
-            bal_dx12::native::WeakPtr::<dxgi1_4::IDXGISwapChain3>::from_raw(swap_chain as _);
+        let swap_chain = native::WeakPtr::<dxgi1_4::IDXGISwapChain3>::from_raw(swap_chain as _);
 
         // Get backbuffer images
-        let mut resources: Vec<bal_dx12::native::Resource> = Vec::new();
+        let mut resources: Vec<native::Resource> = Vec::new();
         let images = (0..config.image_count)
             .map(|i| {
-                let resource = bal_dx12::native::Resource::null();
+                let resource = native::Resource::null();
                 unsafe {
                     swap_chain.GetBuffer(
                         i as _,

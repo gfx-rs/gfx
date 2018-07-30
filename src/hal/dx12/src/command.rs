@@ -25,7 +25,8 @@ use {
 };
 
 use bal_dx12;
-use bal_dx12::native::descriptor::{HeapFlags, HeapType};
+use bal_dx12::native;
+use bal_dx12::native::descriptor;
 
 // Fixed size of the root signature.
 // Limited by D3D12.
@@ -138,10 +139,7 @@ impl UserData {
 struct PipelineCache {
     // Bound pipeline and root signature.
     // Changed on bind pipeline calls.
-    pipeline: Option<(
-        bal_dx12::native::PipelineState,
-        bal_dx12::native::RootSignature,
-    )>,
+    pipeline: Option<(native::PipelineState, native::RootSignature)>,
     // Paramter slots of the current root signature.
     num_parameter_slots: usize,
     //
@@ -172,7 +170,7 @@ impl PipelineCache {
         first_set: usize,
         sets: I,
         offsets: J,
-    ) -> [bal_dx12::native::DescriptorHeap; 2]
+    ) -> [native::DescriptorHeap; 2]
     where
         I: IntoIterator,
         I::Item: Borrow<r::DescriptorSet>,
@@ -191,7 +189,7 @@ impl PipelineCache {
                     set_0.heap_samplers,
                 )
             } else {
-                return [bal_dx12::native::DescriptorHeap::null(); 2];
+                return [native::DescriptorHeap::null(); 2];
             };
 
         self.srv_cbv_uav_start = srv_cbv_uav_start;
@@ -255,8 +253,8 @@ enum BindPoint {
 
 #[derive(Clone)]
 pub struct CommandBuffer {
-    raw: bal_dx12::native::GraphicsCommandList,
-    allocator: bal_dx12::native::CommandAllocator,
+    raw: native::GraphicsCommandList,
+    allocator: native::CommandAllocator,
     shared: Arc<Shared>,
 
     // Cache renderpasses for graphics operations
@@ -276,7 +274,7 @@ pub struct CommandBuffer {
     active_bindpoint: BindPoint,
     // Current descriptor heaps heaps (CBV/SRV/UAV and Sampler).
     // Required for resetting due to internal descriptor heaps.
-    active_descriptor_heaps: [bal_dx12::native::DescriptorHeap; 2],
+    active_descriptor_heaps: [native::DescriptorHeap; 2],
 
     // Active queries in the command buffer.
     // Queries must begin and end in the same command buffer, which allows us to track them.
@@ -307,11 +305,11 @@ pub struct CommandBuffer {
     >,
 
     // HACK: renderdoc workaround for temporary RTVs
-    rtv_pools: Vec<bal_dx12::native::DescriptorHeap>,
+    rtv_pools: Vec<native::DescriptorHeap>,
     // Temporary gpu descriptor heaps (internal).
-    temporary_gpu_heaps: Vec<bal_dx12::native::DescriptorHeap>,
+    temporary_gpu_heaps: Vec<native::DescriptorHeap>,
     // Resources that need to be alive till the end of the GPU execution.
-    retained_resources: Vec<bal_dx12::native::Resource>,
+    retained_resources: Vec<native::Resource>,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -327,8 +325,8 @@ enum BarrierPoint {
 
 impl CommandBuffer {
     pub(crate) fn new(
-        raw: bal_dx12::native::GraphicsCommandList,
-        allocator: bal_dx12::native::CommandAllocator,
+        raw: native::GraphicsCommandList,
+        allocator: native::CommandAllocator,
         shared: Arc<Shared>,
     ) -> Self {
         CommandBuffer {
@@ -341,7 +339,7 @@ impl CommandBuffer {
             primitive_topology: d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED,
             comp_pipeline: PipelineCache::new(),
             active_bindpoint: BindPoint::Graphics { internal: false },
-            active_descriptor_heaps: [bal_dx12::native::DescriptorHeap::null(); 2],
+            active_descriptor_heaps: [native::DescriptorHeap::null(); 2],
             occlusion_query: None,
             pipeline_stats_query: None,
             vertex_bindings_remap: [None; MAX_VERTEX_BUFFERS],
@@ -374,14 +372,14 @@ impl CommandBuffer {
 
     fn reset(&mut self) {
         self.raw
-            .reset(self.allocator, bal_dx12::native::PipelineState::null());
+            .reset(self.allocator, native::PipelineState::null());
         self.pass_cache = None;
         self.cur_subpass = !0;
         self.gr_pipeline = PipelineCache::new();
         self.primitive_topology = d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
         self.comp_pipeline = PipelineCache::new();
         self.active_bindpoint = BindPoint::Graphics { internal: false };
-        self.active_descriptor_heaps = [bal_dx12::native::DescriptorHeap::null(); 2];
+        self.active_descriptor_heaps = [native::DescriptorHeap::null(); 2];
         self.occlusion_query = None;
         self.pipeline_stats_query = None;
         self.vertex_bindings_remap = [None; MAX_VERTEX_BUFFERS];
@@ -569,12 +567,12 @@ impl CommandBuffer {
         stencil: Option<u32>,
         rects: &[d3d12::D3D12_RECT],
     ) {
-        let mut flags = bal_dx12::native::command_list::ClearFlags::empty();
+        let mut flags = native::command_list::ClearFlags::empty();
         if depth.is_some() {
-            flags |= bal_dx12::native::command_list::ClearFlags::DEPTH;
+            flags |= native::command_list::ClearFlags::DEPTH;
         }
         if stencil.is_some() {
-            flags |= bal_dx12::native::command_list::ClearFlags::STENCIL;
+            flags |= native::command_list::ClearFlags::STENCIL;
         }
 
         self.raw.clear_depth_stencil_view(
@@ -1095,8 +1093,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         pass_cache.framebuffer.attachments[rtv_id.0]
                     };
 
-                    let mut rtv_pool =
-                        descriptors_cpu::HeapLinear::new(device, HeapType::Rtv, clear_rects.len());
+                    let mut rtv_pool = descriptors_cpu::HeapLinear::new(
+                        device,
+                        descriptor::HeapType::Rtv,
+                        clear_rects.len(),
+                    );
 
                     for clear_rect in &clear_rects {
                         let rect = [get_rect(&clear_rect.rect)];
@@ -1124,8 +1125,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         pass_cache.framebuffer.attachments[dsv_id.0]
                     };
 
-                    let mut dsv_pool =
-                        descriptors_cpu::HeapLinear::new(device, HeapType::Dsv, clear_rects.len());
+                    let mut dsv_pool = descriptors_cpu::HeapLinear::new(
+                        device,
+                        descriptor::HeapType::Dsv,
+                        clear_rects.len(),
+                    );
 
                     for clear_rect in &clear_rects {
                         let rect = [get_rect(&clear_rect.rect)];
@@ -1247,8 +1251,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         // Descriptor heap for the current blit, only storing the src image
-        let (srv_heap, _) =
-            device.create_descriptor_heap(1, HeapType::CbvSrvUav, HeapFlags::SHADER_VISIBLE, 0);
+        let (srv_heap, _) = device.create_descriptor_heap(
+            1,
+            descriptor::HeapType::CbvSrvUav,
+            descriptor::HeapFlags::SHADER_VISIBLE,
+            0,
+        );
         let srv_desc = Device::build_image_as_shader_resource_desc(&ViewInfo {
             resource: src.resource,
             kind: src.kind,
@@ -1291,8 +1299,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let num_layers = r.dst_subresource.layers.end - first_layer;
 
             // WORKAROUND: renderdoc crashes if we destroy the pool too early
-            let rtv_pool =
-                Device::create_descriptor_heap_impl(device, HeapType::Rtv, false, num_layers as _);
+            let rtv_pool = Device::create_descriptor_heap_impl(
+                device,
+                descriptor::HeapType::Rtv,
+                false,
+                num_layers as _,
+            );
             self.rtv_pools.push(rtv_pool.raw.clone());
 
             let key = match r.dst_subresource.aspects {
@@ -1842,7 +1854,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             });
             src_image.pResource = alias as _;
             self.retained_resources
-                .push(bal_dx12::native::Resource::from_raw(alias as _));
+                .push(native::Resource::from_raw(alias as _));
 
             // signal the aliasing transition
             let sub_barrier = d3d12::D3D12_RESOURCE_ALIASING_BARRIER {
@@ -2150,7 +2162,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin_query(&mut self, query: query::Query<Backend>, flags: query::QueryControl) {
         let query_ty = match query.pool.ty {
-            bal_dx12::native::query::HeapType::Occlusion => {
+            native::query::HeapType::Occlusion => {
                 if flags.contains(query::QueryControl::PRECISE) {
                     self.occlusion_query = Some(OcclusionQuery::Precise(query.id));
                     d3d12::D3D12_QUERY_TYPE_OCCLUSION
@@ -2161,10 +2173,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION
                 }
             }
-            bal_dx12::native::query::HeapType::Timestamp => {
-                panic!("Timestap queries are issued via ")
-            }
-            bal_dx12::native::query::HeapType::PipelineStatistics => {
+            native::query::HeapType::Timestamp => panic!("Timestap queries are issued via "),
+            native::query::HeapType::PipelineStatistics => {
                 self.pipeline_stats_query = Some(query.id);
                 d3d12::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
             }
@@ -2180,19 +2190,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn end_query(&mut self, query: query::Query<Backend>) {
         let id = query.id;
         let query_ty = match query.pool.ty {
-            bal_dx12::native::query::HeapType::Occlusion
+            native::query::HeapType::Occlusion
                 if self.occlusion_query == Some(OcclusionQuery::Precise(id)) =>
             {
                 self.occlusion_query = None;
                 d3d12::D3D12_QUERY_TYPE_OCCLUSION
             }
-            bal_dx12::native::query::HeapType::Occlusion
+            native::query::HeapType::Occlusion
                 if self.occlusion_query == Some(OcclusionQuery::Binary(id)) =>
             {
                 self.occlusion_query = None;
                 d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION
             }
-            bal_dx12::native::query::HeapType::PipelineStatistics
+            native::query::HeapType::PipelineStatistics
                 if self.pipeline_stats_query == Some(id) =>
             {
                 self.pipeline_stats_query = None;
