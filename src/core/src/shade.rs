@@ -283,6 +283,7 @@ impl_base_type! {
     i32 = I32,
     u32 = U32,
     f32 = F32,
+    f64 = F64,
     bool = Bool,
 }
 
@@ -328,7 +329,6 @@ bitflags!(
         const HULL     = 0x8;
         /// Used by the pixel shader
         const DOMAIN   = 0x16;
-
     }
 );
 
