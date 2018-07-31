@@ -116,6 +116,11 @@ uint Uint8x2ToUint16(uint2 data)
     return dot(min(data, 0xFF), 1 << uint2(0, 8));
 }
 
+uint4 Float4ToUint8x4(float4 data)
+{
+    return uint4(data * 255 + .5f);
+}
+
 // Buffers are always R32-aligned
 ByteAddressBuffer   BufferCopySrc : register(t0);
 RWByteAddressBuffer BufferCopyDst : register(u0);
@@ -124,6 +129,8 @@ Texture2DArray<uint4>   ImageCopySrc     : register(t0);
 RWTexture2DArray<uint>  ImageCopyDstR    : register(u0);
 RWTexture2DArray<uint2> ImageCopyDstRg   : register(u0);
 RWTexture2DArray<uint4> ImageCopyDstRgba : register(u0);
+
+Texture2DArray<float4>  ImageCopySrcBgra : register(t0);
 
 // Image<->Image copies
 [numthreads(1, 1, 1)]
@@ -323,6 +330,15 @@ void cs_copy_image2d_r8g8b8a8_buffer(uint3 dispatch_thread_id : SV_DispatchThrea
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
 
     BufferCopyDst.Store(dst_idx, Uint8x4ToUint32(ImageCopySrc[src_idx]));
+}
+
+// B8G8R8A8
+[numthreads(1, 1, 1)]
+void cs_copy_image2d_b8g8r8a8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
+    uint dst_idx = GetBufferDst32(dispatch_thread_id);
+    uint3 src_idx = GetImageSrc(dispatch_thread_id);
+
+    BufferCopyDst.Store(dst_idx, Uint8x4ToUint32(Float4ToUint8x4(ImageCopySrcBgra[src_idx])));
 }
 
 // R16

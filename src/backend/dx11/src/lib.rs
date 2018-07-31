@@ -10,12 +10,13 @@ extern crate log;
 extern crate smallvec;
 extern crate spirv_cross;
 extern crate parking_lot;
+#[macro_use]
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
 extern crate wio;
 
-use hal::{buffer, command, error, format, image, memory, query, pso, Features, Limits, QueueType};
+use hal::{buffer, command, error, format, image, memory, query, pass, pso, Features, Limits, QueueType};
 use hal::{DrawCount, SwapImageIndex, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::queue::{QueueFamilyId, Queues};
 use hal::backend::RawQueueGroup;
@@ -44,9 +45,39 @@ use std::borrow::Borrow;
 
 use std::os::raw::c_void;
 
+macro_rules! debug_scope {
+    ($context:expr, $($arg:tt)+) => ({
+        #[cfg(debug_assertions)]
+        {
+            $crate::debug::DebugScope::with_name(
+                $context,
+                format_args!($($arg)+),
+            )
+        }
+        #[cfg(not(debug_assertions))]
+        {
+            ()
+        }
+    });
+}
+
+macro_rules! debug_marker {
+    ($context:expr, $($arg:tt)+) => ({
+        #[cfg(debug_assertions)]
+        {
+            $crate::debug::debug_marker(
+                $context,
+                format_args!($($arg)+),
+            );
+        }
+    });
+}
+
 #[path = "../../auxil/range_alloc.rs"]
 mod range_alloc;
 mod conv;
+#[cfg(debug_assertions)]
+mod debug;
 mod dxgi;
 mod shader;
 mod internal;
@@ -268,11 +299,11 @@ impl hal::Instance for Instance {
                         heap_index: 0,
                     },
                     hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE,
+                        properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
                         heap_index: 1,
                     },
                     hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE | Properties::COHERENT,
+                        properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                         heap_index: 1,
                     },
                 ],
@@ -309,7 +340,7 @@ impl hal::Instance for Instance {
                 framebuffer_depth_samples_count: 1,     // TODO
                 framebuffer_stencil_samples_count: 1,   // TODO
                 max_color_attachments: 1,               // TODO
-                non_coherent_atom_size: 0,              // TODO
+                non_coherent_atom_size: 1,              // TODO
             };
 
             let features = get_features(device.clone(), feature_level);
@@ -418,6 +449,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             let feature_level = get_feature_level(self.adapter.as_raw());
             let mut returned_level = d3dcommon::D3D_FEATURE_LEVEL_9_1;
 
+            #[cfg(debug_assertions)]
+            let create_flags = d3d11::D3D11_CREATE_DEVICE_DEBUG;
+            #[cfg(not(debug_assertions))]
+            let create_flags = 0;
+
             // TODO: request debug device only on debug config?
             let mut device = ptr::null_mut();
             let mut cxt = ptr::null_mut();
@@ -426,7 +462,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     self.adapter.as_raw() as *mut _,
                     d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
                     ptr::null_mut(),
-                    d3d11::D3D11_CREATE_DEVICE_DEBUG,
+                    create_flags,
                     [feature_level].as_ptr(),
                     1,
                     d3d11::D3D11_SDK_VERSION,
@@ -684,16 +720,31 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IC: IntoIterator,
         IC::Item: Borrow<CommandBuffer>,
     {
+        let _scope = debug_scope!(&self.context, "Submit(fence={:?})", fence);
         for cmd_buf in submission.cmd_buffers {
             let cmd_buf = cmd_buf.borrow();
 
-            for sync in &cmd_buf.flush_coherent_memory {
-                sync.flush(&self.context);
+            let _scope = debug_scope!(
+                &self.context,
+                "CommandBuffer ({}/{})",
+                cmd_buf.flush_coherent_memory.len(),
+                cmd_buf.invalidate_coherent_memory.len()
+            );
+
+            {
+                let _scope = debug_scope!(&self.context, "Pre-Exec: Flush");
+                for sync in &cmd_buf.flush_coherent_memory {
+                    sync.do_flush(&self.context);
+                }
             }
             self.context.ExecuteCommandList(cmd_buf.as_raw_list().as_raw(), FALSE);
-            for sync in &cmd_buf.invalidate_coherent_memory {
-                sync.invalidate(&self.context);
+            {
+                let _scope = debug_scope!(&self.context, "Post-Exec: Invalidate");
+                for sync in &cmd_buf.invalidate_coherent_memory {
+                    sync.do_invalidate(&self.context);
+                }
             }
+
         }
 
         if let Some(fence) = fence {
@@ -725,6 +776,85 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
+struct AttachmentClear {
+    subpass_id: Option<pass::SubpassId>,
+    value: Option<command::ClearValueRaw>,
+    stencil_value: Option<u32>,
+}
+
+#[derive(Debug, Clone)]
+struct RenderPassCache {
+    render_pass: RenderPass,
+    framebuffer: Framebuffer,
+    attachment_clear_values: Vec<AttachmentClear>,
+    current_subpass: usize,
+}
+
+impl RenderPassCache {
+    pub fn advance_subpass(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        let subpass = &self.render_pass.subpasses[self.current_subpass];
+
+        let color_views = subpass.color_attachments
+            .iter()
+            .map(|&(id, _)| self.framebuffer.attachments[id].rtv_handle.clone().unwrap().as_raw())
+            .collect::<Vec<_>>();
+        let ds_view = match subpass.depth_stencil_attachment {
+            Some((id, _)) => self.framebuffer.attachments[id].dsv_handle.clone().unwrap().as_raw(),
+            None => ptr::null_mut(),
+        };
+
+        unsafe {
+            context.OMSetRenderTargets(
+                color_views.len() as UINT,
+                color_views.as_ptr(),
+                ds_view,
+            );
+        }
+
+        // performs clears for all the attachments first used in this subpass
+        for (view, clear) in self.framebuffer.attachments.iter().zip(self.attachment_clear_values.iter()) {
+            if clear.subpass_id != Some(self.current_subpass) {
+                continue;
+            }
+
+
+            if let (Some(ref handle), Some(cv)) = (&view.rtv_handle, clear.value) {
+                unsafe {
+                    context.ClearRenderTargetView(handle.as_raw(), &cv.color.float32);
+                }
+            }
+
+            if let Some(ref handle) = view.dsv_handle {
+                let mut flags = 0;
+
+                let depth = clear.value.map(|cv| unsafe { cv.depth_stencil.depth });
+
+                let depth = if let Some(value) = depth {
+                    flags |= d3d11::D3D11_CLEAR_DEPTH;
+                    value
+                } else {
+                    0f32
+                };
+
+                let stencil = if let Some(value) = clear.stencil_value {
+                    flags |= d3d11::D3D11_CLEAR_STENCIL;
+                    value as u8
+                } else {
+                    0
+                };
+
+                unsafe {
+                    context.ClearDepthStencilView(handle.as_raw(), flags, depth, stencil);
+                }
+            }
+        }
+
+        self.current_subpass += 1;
+    }
+}
+
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
 pub struct CommandBuffer {
     // TODO: better way of sharing
     #[derivative(Debug="ignore")]
@@ -737,11 +867,14 @@ pub struct CommandBuffer {
     // since coherent memory needs to be synchronized at submission, we need to gather up all
     // coherent resources that are used in the command buffer and flush/invalidate them accordingly
     // before executing.
-    flush_coherent_memory: Vec<MemorySync>,
-    invalidate_coherent_memory: Vec<MemorySync>,
+    flush_coherent_memory: Vec<MemoryFlush>,
+    invalidate_coherent_memory: Vec<MemoryInvalidate>,
 
     // TODO: clearly mark these as runtime state, eg. `State` struct
     // TODO: reset state
+
+    // holds information about the active render pass
+    render_pass_cache: Option<RenderPassCache>,
 
     // a bitmask that keeps track of what vertex buffer bindings have been "bound" into
     // our vec
@@ -773,6 +906,7 @@ impl CommandBuffer {
             list: None,
             flush_coherent_memory: Vec::new(),
             invalidate_coherent_memory: Vec::new(),
+            render_pass_cache: None,
             bound_bindings: 0,
             required_bindings: None,
             max_bindings: None,
@@ -814,7 +948,7 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.VSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            SampledImage => context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
+            SampledImage | InputAttachment => context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
             CombinedImageSampler => {
                 context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
                 context.VSSetSamplers(start, len, handles.offset(1) as *const *mut _ as *const *mut _);
@@ -834,7 +968,7 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.PSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            SampledImage => context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
+            SampledImage | InputAttachment => context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
             CombinedImageSampler => {
                 context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
                 context.PSSetSamplers(start, len, handles.offset(1) as *const *mut _ as *const *mut _);
@@ -854,7 +988,7 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.CSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            SampledImage => context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
+            SampledImage | InputAttachment => context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
             CombinedImageSampler => {
                 context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
                 context.CSSetSamplers(start, len, handles.offset(1) as *const *mut _ as *const *mut _);
@@ -886,19 +1020,16 @@ impl CommandBuffer {
     }
 
     fn defer_coherent_flush(&mut self, buffer: &Buffer) {
-        self.flush_coherent_memory.push(MemorySync {
-            working_buffer: None,
-            working_buffer_size: 0,
-
+        self.flush_coherent_memory.push(MemoryFlush {
             host_memory: buffer.host_ptr,
-            sync_range: buffer.bound_range.clone(),
+            sync_range: SyncRange::Whole,
 
             buffer: buffer.internal.raw
         });
     }
 
     fn defer_coherent_invalidate(&mut self, buffer: &Buffer) {
-        self.invalidate_coherent_memory.push(MemorySync {
+        self.invalidate_coherent_memory.push(MemoryInvalidate {
             working_buffer: Some(self.internal.working_buffer.clone()),
             working_buffer_size: self.internal.working_buffer_size,
 
@@ -928,6 +1059,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     fn reset(&mut self, _release_resources: bool) {
         self.flush_coherent_memory.clear();
         self.invalidate_coherent_memory.clear();
+        self.render_pass_cache = None;
         self.bound_bindings = 0;
         self.required_bindings = None;
         self.max_bindings = None;
@@ -936,56 +1068,59 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         self.vertex_strides.clear();
     }
 
-    fn begin_render_pass<T>(&mut self, _render_pass: &RenderPass, framebuffer: &Framebuffer, _target_rect: pso::Rect, clear_values: T, _first_subpass: command::SubpassContents)
+    fn begin_render_pass<T>(&mut self, render_pass: &RenderPass, framebuffer: &Framebuffer, _target_rect: pso::Rect, clear_values: T, _first_subpass: command::SubpassContents)
     where
         T: IntoIterator,
         T::Item: Borrow<command::ClearValueRaw>,
     {
-        // TODO: very temp
-
-        let color_views = framebuffer.attachments.iter()
-            .filter(|a| a.rtv_handle.is_some())
-            .map(|a| a.rtv_handle.clone().unwrap().as_raw())
-            .collect::<Vec<_>>();
-
-        let depth_view = framebuffer.attachments.iter().find(|a| a.dsv_handle.is_some());
-
-
-        unsafe {
-            for (clear, view) in clear_values.into_iter().zip(framebuffer.attachments.iter()) {
-                let clear = clear.borrow();
-
-                if let Some(ref handle) = view.rtv_handle {
-                    self.context.ClearRenderTargetView(handle.clone().as_raw(), &clear.color.float32);
-                }
-
-                if let Some(ref handle) = view.dsv_handle {
-                    self.context.ClearDepthStencilView(handle.clone().as_raw(), d3d11::D3D11_CLEAR_DEPTH, clear.depth_stencil.depth, 0);
-                }
-            }
-
-            self.context.OMSetRenderTargets(
-                color_views.len() as _,
-                color_views.as_ptr(),
-                if let Some(depth_attachment) = depth_view {
-                    depth_attachment.dsv_handle.clone().unwrap().as_raw()
+        let mut clear_iter = clear_values.into_iter();
+        let attachment_clears = render_pass.attachments
+            .iter()
+            .enumerate()
+            .map(|(i, attachment)| {
+                let cv = if attachment.ops.load == pass::AttachmentLoadOp::Clear || attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                    Some(*clear_iter.next().unwrap().borrow())
                 } else {
-                    ptr::null_mut()
-                },
-            );
+                    None
+                };
+
+                AttachmentClear {
+                    subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
+                    value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
+                        assert!(cv.is_some());
+                        cv
+                    } else {
+                        None
+                    },
+                    stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                        Some(unsafe { cv.unwrap().depth_stencil.stencil })
+                    } else {
+                        None
+                    },
+                }
+            }).collect();
+
+        self.render_pass_cache = Some(RenderPassCache {
+            render_pass: render_pass.clone(),
+            framebuffer: framebuffer.clone(),
+            attachment_clear_values: attachment_clears,
+            current_subpass: 0,
+        });
+
+        if let Some(ref mut current_render_pass) = self.render_pass_cache {
+            current_render_pass.advance_subpass(&self.context);
         }
-        // TODO: begin render pass
-        //unimplemented!()
     }
 
     fn next_subpass(&mut self, _contents: command::SubpassContents) {
-        unimplemented!()
+        if let Some(ref mut current_render_pass) = self.render_pass_cache {
+            // TODO: resolve msaa
+            current_render_pass.advance_subpass(&self.context);
+        }
     }
 
     fn end_render_pass(&mut self) {
-        unsafe {
-            self.context.OMSetRenderTargets(8, [ptr::null_mut(); 8].as_ptr(), ptr::null_mut());
-        }
+        self.render_pass_cache = None;
     }
 
     fn pipeline_barrier<'a, T>(&mut self, _stages: Range<pso::PipelineStage>, _dependencies: memory::Dependencies, _barriers: T)
@@ -997,19 +1132,49 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         // unimplemented!()
     }
 
-    fn clear_image<T>(&mut self, image: &Image, _: image::Layout, color: command::ClearColorRaw, _depth_stencil: command::ClearDepthStencilRaw, subresource_ranges: T)
+    fn clear_image<T>(&mut self, image: &Image, _: image::Layout, color: command::ClearColorRaw, depth_stencil: command::ClearDepthStencilRaw, subresource_ranges: T)
     where
         T: IntoIterator,
         T::Item: Borrow<image::SubresourceRange>,
     {
-        // TODO: use a internal program to clear for subregions in the image
-        for subresource_range in subresource_ranges {
-            let _sub = subresource_range.borrow();
-            unsafe {
-                self.context.ClearRenderTargetView(
-                    image.get_rtv(0, 0).unwrap().as_raw(),
-                    &color.float32
-                );
+        for range in subresource_ranges {
+            let range = range.borrow();
+
+            if range.aspects.contains(format::Aspects::COLOR) {
+                for layer in range.layers.clone() {
+                    for level in range.levels.clone() {
+                        unsafe {
+                            self.context.ClearRenderTargetView(
+                                image.get_rtv(level, layer).unwrap().as_raw(),
+                                &color.float32
+                            );
+                        }
+                    }
+                }
+            }
+
+            let mut depth_stencil_flags = 0;
+            if range.aspects.contains(format::Aspects::DEPTH) {
+                depth_stencil_flags |= d3d11::D3D11_CLEAR_DEPTH;
+            }
+
+            if range.aspects.contains(format::Aspects::STENCIL) {
+                depth_stencil_flags |= d3d11::D3D11_CLEAR_STENCIL;
+            }
+
+            if depth_stencil_flags != 0 {
+                for layer in range.layers.clone() {
+                    for level in range.levels.clone() {
+                        unsafe {
+                            self.context.ClearDepthStencilView(
+                                image.get_dsv(level, layer).unwrap().as_raw(),
+                                depth_stencil_flags,
+                                depth_stencil.depth,
+                                depth_stencil.stencil as _,
+                            );
+                        }
+                    }
+                }
             }
         }
     }
@@ -1062,14 +1227,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
         for (i, (buf, offset)) in buffers.into_iter().enumerate() {
             let idx = i + first_binding as usize;
+            let buf = buf.borrow();
 
             self.bound_bindings |= 1 << idx as u32;
 
+            if buf.ty == MemoryHeapFlags::HOST_COHERENT {
+                self.defer_coherent_flush(buf);
+            }
+
             if idx >= self.vertex_buffers.len() {
-                self.vertex_buffers.push(buf.borrow().internal.raw);
+                self.vertex_buffers.push(buf.internal.raw);
                 self.vertex_offsets.push(offset as u32);
             } else {
-                self.vertex_buffers[idx] = buf.borrow().internal.raw;
+                self.vertex_buffers[idx] = buf.internal.raw;
                 self.vertex_offsets[idx] = offset as u32;
             }
         }
@@ -1184,6 +1354,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
+        let _scope = debug_scope!(&self.context, "BindGraphicsDescriptorSets");
+
         // TODO: find a better solution to invalidating old bindings..
         unsafe {
             self.context.CSSetUnorderedAccessViews(0, 16, [ptr::null_mut(); 16].as_ptr(), ptr::null_mut());
@@ -1196,32 +1368,29 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         for (set, bindings) in iter {
             let set = set.borrow();
 
-            let coherent_buffers = set.coherent_buffers.lock();
-            for sync in coherent_buffers.flush_coherent_buffers.borrow().iter() {
-                if !self.flush_coherent_memory.iter().position(|m| m.buffer == sync.device_buffer).is_some() {
-                    self.flush_coherent_memory.push(MemorySync {
-                        working_buffer: None,
-                        working_buffer_size: 0,
-
-                        host_memory: sync.host_ptr,
-                        sync_range: sync.range.clone(),
-
-                        buffer: sync.device_buffer
-                    });
+            {
+                let coherent_buffers = set.coherent_buffers.lock();
+                for sync in coherent_buffers.flush_coherent_buffers.borrow().iter() {
+                    // TODO: merge sync range if a flush already exists
+                    if !self.flush_coherent_memory.iter().any(|m| m.buffer == sync.device_buffer) {
+                        self.flush_coherent_memory.push(MemoryFlush {
+                            host_memory: sync.host_ptr,
+                            sync_range: sync.range.clone(),
+                            buffer: sync.device_buffer
+                        });
+                    }
                 }
-            }
 
-            for sync in coherent_buffers.invalidate_coherent_buffers.borrow().iter() {
-                if !self.invalidate_coherent_memory.iter().position(|m| m.buffer == sync.device_buffer).is_some() {
-                    self.invalidate_coherent_memory.push(MemorySync {
-                        working_buffer: None,
-                        working_buffer_size: 0,
-
-                        host_memory: sync.host_ptr,
-                        sync_range: sync.range.clone(),
-
-                        buffer: sync.device_buffer
-                    });
+                for sync in coherent_buffers.invalidate_coherent_buffers.borrow().iter() {
+                    if !self.invalidate_coherent_memory.iter().any(|m| m.buffer == sync.device_buffer) {
+                        self.invalidate_coherent_memory.push(MemoryInvalidate {
+                            working_buffer: Some(self.internal.working_buffer.clone()),
+                            working_buffer_size: self.internal.working_buffer_size,
+                            host_memory: sync.host_ptr,
+                            sync_range: sync.range.clone(),
+                            buffer: sync.device_buffer
+                        });
+                    }
                 }
             }
 
@@ -1247,6 +1416,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
+        let _scope = debug_scope!(&self.context, "BindComputeDescriptorSets");
+
         unsafe {
             self.context.CSSetUnorderedAccessViews(0, 16, [ptr::null_mut(); 16].as_ptr(), ptr::null_mut());
         }
@@ -1255,32 +1426,28 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         for (set, bindings) in iter {
             let set = set.borrow();
 
-            let coherent_buffers = set.coherent_buffers.lock();
-            for sync in coherent_buffers.flush_coherent_buffers.borrow().iter() {
-                if !self.flush_coherent_memory.iter().position(|m| m.buffer == sync.device_buffer).is_some() {
-                    self.flush_coherent_memory.push(MemorySync {
-                        working_buffer: None,
-                        working_buffer_size: 0,
-
-                        host_memory: sync.host_ptr,
-                        sync_range: sync.range.clone(),
-
-                        buffer: sync.device_buffer
-                    });
+            {
+                let coherent_buffers = set.coherent_buffers.lock();
+                for sync in coherent_buffers.flush_coherent_buffers.borrow().iter() {
+                    if !self.flush_coherent_memory.iter().any(|m| m.buffer == sync.device_buffer) {
+                        self.flush_coherent_memory.push(MemoryFlush {
+                            host_memory: sync.host_ptr,
+                            sync_range: sync.range.clone(),
+                            buffer: sync.device_buffer
+                        });
+                    }
                 }
-            }
 
-            for sync in coherent_buffers.invalidate_coherent_buffers.borrow().iter() {
-                if !self.invalidate_coherent_memory.iter().position(|m| m.buffer == sync.device_buffer).is_some() {
-                    self.invalidate_coherent_memory.push(MemorySync {
-                        working_buffer: None,
-                        working_buffer_size: 0,
-
-                        host_memory: sync.host_ptr,
-                        sync_range: sync.range.clone(),
-
-                        buffer: sync.device_buffer
-                    });
+                for sync in coherent_buffers.invalidate_coherent_buffers.borrow().iter() {
+                    if !self.invalidate_coherent_memory.iter().any(|m| m.buffer == sync.device_buffer) {
+                        self.invalidate_coherent_memory.push(MemoryInvalidate {
+                            working_buffer: Some(self.internal.working_buffer.clone()),
+                            working_buffer_size: self.internal.working_buffer_size,
+                            host_memory: sync.host_ptr,
+                            sync_range: sync.range.clone(),
+                            buffer: sync.device_buffer
+                        });
+                    }
                 }
             }
 
@@ -1454,16 +1621,27 @@ bitflags! {
     }
 }
 
+#[derive(Debug, Clone)]
+enum SyncRange {
+    Whole,
+    Partial(Range<u64>)
+}
+
+#[derive(Debug, Clone)]
+pub struct MemoryFlush {
+    host_memory: *mut u8,
+    sync_range: SyncRange,
+    buffer: *mut d3d11::ID3D11Buffer
+}
+
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
-pub struct MemorySync {
+pub struct MemoryInvalidate {
     #[derivative(Debug="ignore")]
     working_buffer: Option<ComPtr<d3d11::ID3D11Buffer>>,
     working_buffer_size: u64,
-
     host_memory: *mut u8,
     sync_range: Range<u64>,
-
     buffer: *mut d3d11::ID3D11Buffer
 }
 
@@ -1475,26 +1653,46 @@ fn intersection(a: &Range<u64>, b: &Range<u64>) -> Option<Range<u64>> {
         None
     } else {
         let end = if min.end < max.end { min.end } else { max.end };
-        Some(max.start..end) 
+        Some(max.start..end)
     }
 }
 
-impl MemorySync {
-    fn flush(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+impl MemoryFlush {
+    fn do_flush(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
         let src = self.host_memory;
+
+        debug_marker!(context, "Flush({:?})", self.sync_range);
+        let region = if let SyncRange::Partial(range) = &self.sync_range {
+            Some(d3d11::D3D11_BOX {
+                left: range.start as _,
+                top: 0,
+                front: 0,
+                right: range.end as _,
+                bottom: 1,
+                back: 1,
+            })
+        } else {
+            None
+        };
 
         unsafe {
             context.UpdateSubresource(
                 self.buffer as _,
                 0,
-                ptr::null_mut(),
-                src.offset(self.sync_range.start as isize) as _,
+                if let Some(region) = region {
+                    &region
+                } else {
+                    ptr::null_mut()
+                },
+                src as _,
                 0,
                 0
             );
         }
     }
+}
 
+impl MemoryInvalidate {
     fn download(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, buffer: *mut d3d11::ID3D11Buffer, range: Range<u64>) {
         unsafe {
             context.CopySubresourceRegion(
@@ -1524,7 +1722,7 @@ impl MemorySync {
 
     }
 
-    fn invalidate(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+    fn do_invalidate(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
         let stride = self.working_buffer_size;
         let range = &self.sync_range;
         let len = range.end - range.start;
@@ -1615,17 +1813,55 @@ impl Memory {
     }
 
     pub fn flush(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, range: Range<u64>) {
+        use buffer::Usage;
+
         for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
             if let Some(range) = intersection(&range, &buffer_range) {
-                MemorySync {
-                    working_buffer: None,
-                    working_buffer_size: 0,
+                let ptr = self.mapped_ptr.borrow().unwrap();
 
-                    host_memory: self.mapped_ptr.borrow().unwrap(),
-                    sync_range: range.clone(),
+                // we need to handle 3 cases for updating buffers:
+                //
+                //   1. if our buffer was created as a `UNIFORM` buffer *and* other usage flags, we
+                //      also have a disjoint buffer which only has `D3D11_BIND_CONSTANT_BUFFER` due
+                //      to DX11 limitation. we then need to update both the original buffer and the
+                //      disjoint one with the *whole* range (TODO: allow for partial updates)
+                //
+                //   2. if our buffer was created with *only* `UNIFORM` usage we need to upload
+                //      the whole range (TODO: allow for partial updates)
+                //
+                //   3. the general case, without any `UNIFORM` usage has no restrictions on
+                //      partial updates, so we upload the specified range
+                //
+                if buffer.usage.contains(Usage::UNIFORM) && buffer.usage != Usage::UNIFORM {
+                    MemoryFlush {
+                        host_memory: unsafe { ptr.offset(buffer_range.start as _) },
+                        sync_range: SyncRange::Whole,
+                        buffer: buffer.raw
+                    }.do_flush(&context);
 
-                    buffer: buffer.raw
-                }.flush(&context);
+                    if let Some(disjoint) = buffer.disjoint_cb {
+                        MemoryFlush {
+                            host_memory: unsafe { ptr.offset(buffer_range.start as _) },
+                            sync_range: SyncRange::Whole,
+                            buffer: disjoint
+                        }.do_flush(&context);
+                    }
+                } else if buffer.usage == Usage::UNIFORM {
+                    MemoryFlush {
+                        host_memory: unsafe { ptr.offset(buffer_range.start as _) },
+                        sync_range: SyncRange::Whole,
+                        buffer: buffer.raw
+                    }.do_flush(&context);
+                } else {
+                    let local_start = range.start - buffer_range.start;
+                    let local_len = range.end - range.start;
+
+                    MemoryFlush {
+                        host_memory: unsafe { ptr.offset(range.start as _) },
+                        sync_range: SyncRange::Partial(local_start..(local_start + local_len)),
+                        buffer: buffer.raw
+                    }.do_flush(&context);
+                }
             }
         }
     }
@@ -1633,15 +1869,13 @@ impl Memory {
     pub fn invalidate(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, range: Range<u64>, working_buffer: ComPtr<d3d11::ID3D11Buffer>, working_buffer_size: u64) {
         for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
             if let Some(range) = intersection(&range, &buffer_range) {
-                MemorySync {
+                MemoryInvalidate {
                     working_buffer: Some(working_buffer.clone()),
                     working_buffer_size,
-
                     host_memory: self.mapped_ptr.borrow().unwrap(),
                     sync_range: range.clone(),
-
                     buffer: buffer.raw
-                }.invalidate(&context);
+                }.do_invalidate(&context);
             }
         }
     }
@@ -1691,9 +1925,31 @@ impl ::std::fmt::Debug for ShaderModule {
 unsafe impl Send for ShaderModule { }
 unsafe impl Sync for ShaderModule { }
 
-#[derive(Debug)]
-pub struct RenderPass;
-#[derive(Debug)]
+#[derive(Debug, Clone)]
+pub struct SubpassDesc {
+    pub color_attachments: Vec<pass::AttachmentRef>,
+    pub depth_stencil_attachment: Option<pass::AttachmentRef>,
+    pub input_attachments: Vec<pass::AttachmentRef>,
+    pub resolve_attachments: Vec<pass::AttachmentRef>,
+}
+
+impl SubpassDesc {
+    pub(crate) fn is_using(&self, at_id: pass::AttachmentId) -> bool {
+        self.color_attachments.iter()
+            .chain(self.depth_stencil_attachment.iter())
+            .chain(self.input_attachments.iter())
+            .chain(self.resolve_attachments.iter())
+            .any(|&(id, _)| id == at_id)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct RenderPass {
+    pub attachments: Vec<pass::Attachment>,
+    pub subpasses: Vec<SubpassDesc>,
+}
+
+#[derive(Debug, Clone)]
 pub struct Framebuffer {
     attachments: Vec<ImageView>,
     layers: image::Layer,
@@ -1711,10 +1967,12 @@ pub struct UnboundBuffer {
 #[derive(Debug, Clone)]
 pub struct InternalBuffer {
     raw: *mut d3d11::ID3D11Buffer,
-    // TODO: need to sync between `raw` and `disjoint_cb`, same way as we do with `MemorySync`
+    // TODO: need to sync between `raw` and `disjoint_cb`, same way as we do with
+    // `MemoryFlush/Invalidate`
     disjoint_cb: Option<*mut d3d11::ID3D11Buffer>,
     srv: Option<*mut d3d11::ID3D11ShaderResourceView>,
-    uav: Option<*mut d3d11::ID3D11UnorderedAccessView>
+    uav: Option<*mut d3d11::ID3D11UnorderedAccessView>,
+    usage: buffer::Usage,
 }
 
 #[derive(Derivative)]
@@ -1751,9 +2009,7 @@ pub struct Image {
     usage: image::Usage,
     format: format::Format,
     storage_flags: image::StorageFlags,
-    dxgi_format: dxgiformat::DXGI_FORMAT,
-
-    typed_raw_format: dxgiformat::DXGI_FORMAT,
+    decomposed_format: conv::DecomposedDxgiFormat,
     num_levels: image::Level,
     num_mips: image::Level,
     internal: InternalImage,
@@ -1768,9 +2024,15 @@ pub struct InternalImage {
     copy_srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
     #[derivative(Debug="ignore")]
     srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
+
     /// Contains UAVs for all subresources
     #[derivative(Debug="ignore")]
     unordered_access_views: Vec<ComPtr<d3d11::ID3D11UnorderedAccessView>>,
+
+    /// Contains DSVs for all subresources
+    #[derivative(Debug="ignore")]
+    depth_stencil_views: Vec<ComPtr<d3d11::ID3D11DepthStencilView>>,
+
     /// Contains RTVs for all subresources
     #[derivative(Debug="ignore")]
     render_target_views: Vec<ComPtr<d3d11::ID3D11RenderTargetView>>,
@@ -1786,6 +2048,10 @@ impl Image {
 
     pub fn get_uav(&self, mip_level: image::Level, _layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11UnorderedAccessView>> {
         self.internal.unordered_access_views.get(self.calc_subresource(mip_level as _, 0) as usize)
+    }
+
+    pub fn get_dsv(&self, mip_level: image::Level, layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11DepthStencilView>> {
+        self.internal.depth_stencil_views.get(self.calc_subresource(mip_level as _, layer as _) as usize)
     }
 
     pub fn get_rtv(&self, mip_level: image::Level, layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11RenderTargetView>> {
@@ -1905,7 +2171,14 @@ pub struct DescriptorSetLayout {
 }
 
 #[derive(Debug)]
-struct CoherentBufferSyncRange {
+struct CoherentBufferFlushRange {
+    device_buffer: *mut d3d11::ID3D11Buffer,
+    host_ptr: *mut u8,
+    range: SyncRange,
+}
+
+#[derive(Debug)]
+struct CoherentBufferInvalidateRange {
     device_buffer: *mut d3d11::ID3D11Buffer,
     host_ptr: *mut u8,
     range: Range<u64>,
@@ -1915,8 +2188,8 @@ struct CoherentBufferSyncRange {
 struct CoherentBuffers {
     // descriptor set writes containing coherent resources go into these vecs and are added to the
     // command buffers own Vec on binding the set.
-    flush_coherent_buffers: RefCell<Vec<CoherentBufferSyncRange>>,
-    invalidate_coherent_buffers: RefCell<Vec<CoherentBufferSyncRange>>,
+    flush_coherent_buffers: RefCell<Vec<CoherentBufferFlushRange>>,
+    invalidate_coherent_buffers: RefCell<Vec<CoherentBufferInvalidateRange>>,
 }
 
 impl CoherentBuffers {
@@ -1928,10 +2201,10 @@ impl CoherentBuffers {
 
             let pos = buffers.iter().position(|sync| old == sync.device_buffer);
 
-            let sync_range = CoherentBufferSyncRange {
+            let sync_range = CoherentBufferFlushRange {
                 device_buffer: new,
                 host_ptr: buffer.host_ptr,
-                range: buffer.bound_range.clone(),
+                range: SyncRange::Whole,
             };
 
             if let Some(pos) = pos {
@@ -1944,10 +2217,10 @@ impl CoherentBuffers {
             if let Some(disjoint) = buffer.internal.disjoint_cb {
                 let pos = buffers.iter().position(|sync| disjoint == sync.device_buffer);
 
-                let sync_range = CoherentBufferSyncRange {
+                let sync_range = CoherentBufferFlushRange {
                     device_buffer: disjoint,
                     host_ptr: buffer.host_ptr,
-                    range: buffer.bound_range.clone(),
+                    range: SyncRange::Whole,
                 };
 
                 if let Some(pos) = pos {
@@ -1967,7 +2240,7 @@ impl CoherentBuffers {
 
             let pos = buffers.iter().position(|sync| old == sync.device_buffer);
 
-            let sync_range = CoherentBufferSyncRange {
+            let sync_range = CoherentBufferInvalidateRange {
                 device_buffer: new,
                 host_ptr: buffer.host_ptr,
                 range: buffer.bound_range.clone(),
@@ -1977,23 +2250,6 @@ impl CoherentBuffers {
                 buffers[pos] = sync_range;
             } else {
                 buffers.push(sync_range);
-            }
-
-
-            if let Some(disjoint) = buffer.internal.disjoint_cb {
-                let pos = buffers.iter().position(|sync| disjoint == sync.device_buffer);
-
-                let sync_range = CoherentBufferSyncRange {
-                    device_buffer: disjoint,
-                    host_ptr: buffer.host_ptr,
-                    range: buffer.bound_range.clone(),
-                };
-
-                if let Some(pos) = pos {
-                    buffers[pos] = sync_range;
-                } else {
-                    buffers.push(sync_range);
-                }
             }
         }
     }
