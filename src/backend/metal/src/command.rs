@@ -49,6 +49,8 @@ const COUNTERS_REPORT_WINDOW: usize = 0;
 /// If true, we combine deferred command buffers together into one giant
 /// command buffer per submission, including the signalling logic.
 const STITCH_DEFERRED_COMMAND_BUFFERS: bool = true;
+/// Hack around the Metal System Trace logic that ignores empty command buffers entirely.
+const INSERT_DUMMY_ENCODERS: bool = false;
 /// Method of recording one-time-submit command buffers
 const ONLINE_RECORDING: OnlineRecording = OnlineRecording::Immediate;
 
@@ -604,7 +606,7 @@ struct Capacity {
 enum EncodePass {
     Render(Vec<soft::RenderCommand<soft::Own>>, metal::RenderPassDescriptor),
     Compute(Vec<soft::ComputeCommand<soft::Own>>),
-    Blit(Vec<soft::BlitCommand<soft::Own>>),
+    Blit(Vec<soft::BlitCommand>),
 }
 unsafe impl Send for EncodePass {}
 
@@ -618,21 +620,21 @@ impl EncodePass {
             EncodePass::Render(list, desc) => {
                 let encoder = cmd_buffer.0.lock().new_render_command_encoder(&desc).to_owned();
                 for command in list {
-                    exec_render(&encoder, command.as_ref());
+                    exec_render(&encoder, command);
                 }
                 encoder.end_encoding();
             }
             EncodePass::Compute(list) => {
                 let encoder = cmd_buffer.0.lock().new_compute_command_encoder().to_owned();
                 for command in list {
-                    exec_compute(&encoder, command.as_ref());
+                    exec_compute(&encoder, command);
                 }
                 encoder.end_encoding();
             }
             EncodePass::Blit(list) => {
                 let encoder = cmd_buffer.0.lock().new_blit_command_encoder().to_owned();
                 for command in list {
-                    exec_blit(&encoder, command.as_ref());
+                    exec_blit(&encoder, command);
                 }
                 encoder.end_encoding();
             }
@@ -654,7 +656,7 @@ struct Journal {
     passes: Vec<(soft::Pass, Range<usize>)>,
     render_commands: Vec<soft::RenderCommand<soft::Own>>,
     compute_commands: Vec<soft::ComputeCommand<soft::Own>>,
-    blit_commands: Vec<soft::BlitCommand<soft::Own>>,
+    blit_commands: Vec<soft::BlitCommand>,
 }
 
 impl Journal {
@@ -686,21 +688,21 @@ impl Journal {
                 soft::Pass::Render(ref desc) => {
                     let encoder = command_buf.new_render_command_encoder(desc);
                     for command in &self.render_commands[range.clone()] {
-                        exec_render(&encoder, command.as_ref());
+                        exec_render(&encoder, command);
                     }
                     encoder.end_encoding();
                 }
                 soft::Pass::Blit => {
                     let encoder = command_buf.new_blit_command_encoder();
                     for command in &self.blit_commands[range.clone()] {
-                        exec_blit(&encoder, command.as_ref());
+                        exec_blit(&encoder, command);
                     }
                     encoder.end_encoding();
                 }
                 soft::Pass::Compute => {
                     let encoder = command_buf.new_compute_command_encoder();
                     for command in &self.compute_commands[range.clone()] {
-                        exec_compute(&encoder, command.as_ref());
+                        exec_compute(&encoder, command);
                     }
                     encoder.end_encoding();
                 }
@@ -820,7 +822,7 @@ impl CommandSink {
     /// it will automatically start one when needed.
     fn blit_commands<'a, I>(&mut self, commands: I)
     where
-        I: Iterator<Item = soft::BlitCommand<&'a soft::Own>>,
+        I: Iterator<Item = soft::BlitCommand>,
     {
         match *self {
             CommandSink::Immediate { encoder_state: EncoderState::Blit(ref encoder), .. } => {
@@ -846,10 +848,10 @@ impl CommandSink {
                     journal.stop();
                     journal.passes.push((soft::Pass::Blit, journal.blit_commands.len() .. 0));
                 }
-                journal.blit_commands.extend(commands.into_iter().map(soft::BlitCommand::own));
+                journal.blit_commands.extend(commands);
             }
             CommandSink::Remote { pass: Some(EncodePass::Blit(ref mut list)), .. } => {
-                list.extend(commands.into_iter().map(soft::BlitCommand::own));
+                list.extend(commands);
             }
             CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref mut capacity, .. } => {
                 if let Some(pass) = pass.take() {
@@ -857,7 +859,7 @@ impl CommandSink {
                     pass.schedule(queue, cmd_buffer);
                 }
                 let mut list = Vec::with_capacity(capacity.blit);
-                list.extend(commands.into_iter().map(soft::BlitCommand::own));
+                list.extend(commands);
                 *pass = Some(EncodePass::Blit(list));
             }
         }
@@ -1121,9 +1123,16 @@ fn compute_pitches(
     (row_pitch, slice_pitch)
 }
 
-fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::RenderCommand<&'a soft::Own>) {
+fn exec_render<R, C>(encoder: &metal::RenderCommandEncoderRef, command: C)
+where
+    R: soft::Resources,
+    R::Data: Borrow<[u32]>,
+    R::DepthStencil: Borrow<metal::DepthStencilStateRef>,
+    R::RenderPipeline: Borrow<metal::RenderPipelineStateRef>,
+    C: Borrow<soft::RenderCommand<R>>,
+{
     use soft::RenderCommand as Cmd;
-    match command {
+    match *command.borrow() {
         Cmd::SetViewport(viewport) => {
             encoder.set_viewport(viewport);
         }
@@ -1136,13 +1145,13 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
         Cmd::SetDepthBias(depth_bias) => {
             encoder.set_depth_bias(depth_bias.const_factor, depth_bias.slope_factor, depth_bias.clamp);
         }
-        Cmd::SetDepthStencilState(depth_stencil) => {
-            encoder.set_depth_stencil_state(depth_stencil);
+        Cmd::SetDepthStencilState(ref depth_stencil) => {
+            encoder.set_depth_stencil_state(depth_stencil.borrow());
         }
         Cmd::SetStencilReferenceValues(front, back) => {
             encoder.set_stencil_front_back_reference_value(front, back);
         }
-        Cmd::SetRasterizerState(rs) => {
+        Cmd::SetRasterizerState(ref rs) => {
             encoder.set_front_facing_winding(rs.front_winding);
             encoder.set_cull_mode(rs.cull_mode);
             encoder.set_depth_clip_mode(rs.depth_clip);
@@ -1160,12 +1169,13 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
                 _ => unimplemented!()
             }
         }
-        Cmd::BindBufferData { stage, index, words } => {
+        Cmd::BindBufferData { stage, index, ref words } => {
+            let slice = words.borrow();
             match stage {
                 pso::Stage::Vertex =>
-                    encoder.set_vertex_bytes(index as _, (words.len() * WORD_SIZE) as u64, words.as_ptr() as _),
+                    encoder.set_vertex_bytes(index as _, (slice.len() * WORD_SIZE) as u64, slice.as_ptr() as _),
                 pso::Stage::Fragment =>
-                    encoder.set_fragment_bytes(index as _, (words.len() * WORD_SIZE) as u64, words.as_ptr() as _),
+                    encoder.set_fragment_bytes(index as _, (slice.len() * WORD_SIZE) as u64, slice.as_ptr() as _),
                 _ => unimplemented!()
             }
         }
@@ -1189,10 +1199,10 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
                 _ => unimplemented!()
             }
         }
-        Cmd::BindPipeline(pipeline_state) => {
-            encoder.set_render_pipeline_state(pipeline_state);
+        Cmd::BindPipeline(ref pipeline_state) => {
+            encoder.set_render_pipeline_state(pipeline_state.borrow());
         }
-        Cmd::Draw { primitive_type, vertices, instances } =>  {
+        Cmd::Draw { primitive_type, ref vertices, ref instances } =>  {
             /*if instances.start == 0 { //TODO: needs metal-rs breaking update
                 encoder.draw_primitives_instanced(
                     primitive_type,
@@ -1210,7 +1220,7 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
                 );
             }
         }
-        Cmd::DrawIndexed { primitive_type, index, indices, base_vertex, instances } => {
+        Cmd::DrawIndexed { primitive_type, index, ref indices, base_vertex, ref instances } => {
             let index_size = match index.index_type {
                 MTLIndexType::UInt16 => 2,
                 MTLIndexType::UInt32 => 4,
@@ -1262,9 +1272,12 @@ fn exec_render<'a>(encoder: &metal::RenderCommandEncoderRef, command: soft::Rend
     }
 }
 
-fn exec_blit<'a>(encoder: &metal::BlitCommandEncoderRef, command: soft::BlitCommand<&'a soft::Own>) {
+fn exec_blit<C>(encoder: &metal::BlitCommandEncoderRef, command: C)
+where
+    C: Borrow<soft::BlitCommand>,
+{
     use soft::BlitCommand as Cmd;
-    match command {
+    match *command.borrow() {
         Cmd::CopyBuffer { src, dst, region } => {
             encoder.copy_from_buffer(
                 src.as_native(),
@@ -1274,11 +1287,13 @@ fn exec_blit<'a>(encoder: &metal::BlitCommandEncoderRef, command: soft::BlitComm
                 region.size as NSUInteger
             );
         }
-        Cmd::CopyImage { src, dst, region } => {
+        Cmd::CopyImage { src, dst, ref region } => {
             let size = conv::map_extent(region.extent);
             let src_offset = conv::map_offset(region.src_offset);
             let dst_offset = conv::map_offset(region.dst_offset);
-            let layers = region.src_subresource.layers.zip(region.dst_subresource.layers);
+            let layers = region.src_subresource.layers
+                .clone()
+                .zip(region.dst_subresource.layers.clone());
             for (src_layer, dst_layer) in layers {
                 encoder.copy_from_texture(
                     src.as_native(),
@@ -1293,7 +1308,7 @@ fn exec_blit<'a>(encoder: &metal::BlitCommandEncoderRef, command: soft::BlitComm
                 );
             }
         }
-        Cmd::CopyBufferToImage { src, dst, dst_desc, region } => {
+        Cmd::CopyBufferToImage { src, dst, dst_desc, ref region } => {
             let extent = conv::map_extent(region.image_extent);
             let origin = conv::map_offset(region.image_offset);
             let (row_pitch, slice_pitch) = compute_pitches(&region, &dst_desc, &extent);
@@ -1315,7 +1330,7 @@ fn exec_blit<'a>(encoder: &metal::BlitCommandEncoderRef, command: soft::BlitComm
                 );
             }
         }
-        Cmd::CopyImageToBuffer { src, src_desc, dst, region } => {
+        Cmd::CopyImageToBuffer { src, src_desc, dst, ref region } => {
             let extent = conv::map_extent(region.image_extent);
             let origin = conv::map_offset(region.image_offset);
             let (row_pitch, slice_pitch) = compute_pitches(&region, &src_desc, &extent);
@@ -1340,9 +1355,15 @@ fn exec_blit<'a>(encoder: &metal::BlitCommandEncoderRef, command: soft::BlitComm
     }
 }
 
-fn exec_compute<'a>(encoder: &metal::ComputeCommandEncoderRef, command: soft::ComputeCommand<&'a soft::Own>) {
+fn exec_compute<R, C>(encoder: &metal::ComputeCommandEncoderRef, command: C)
+where
+    R: soft::Resources,
+    R::Data: Borrow<[u32]>,
+    R::ComputePipeline: Borrow<metal::ComputePipelineStateRef>,
+    C: Borrow<soft::ComputeCommand<R>>,
+{
     use soft::ComputeCommand as Cmd;
-    match command {
+    match *command.borrow() {
         Cmd::BindBuffer { index, buffer } => {
             let (native, offset) = match buffer {
                 Some((ref ptr, offset)) => (Some(ptr.as_native()), offset),
@@ -1350,8 +1371,9 @@ fn exec_compute<'a>(encoder: &metal::ComputeCommandEncoderRef, command: soft::Co
             };
             encoder.set_buffer(index as _, offset, native);
         }
-        Cmd::BindBufferData { words, index } => {
-            encoder.set_bytes(index as _, (words.len() * WORD_SIZE) as u64, words.as_ptr() as _);
+        Cmd::BindBufferData { ref words, index } => {
+            let slice = words.borrow();
+            encoder.set_bytes(index as _, (slice.len() * WORD_SIZE) as u64, slice.as_ptr() as _);
         }
         Cmd::BindTexture { index, texture } => {
             let native = texture.as_ref().map(|t| t.as_native());
@@ -1361,8 +1383,8 @@ fn exec_compute<'a>(encoder: &metal::ComputeCommandEncoderRef, command: soft::Co
             let native = sampler.as_ref().map(|s| s.as_native());
             encoder.set_sampler_state(index as _, native);
         }
-        Cmd::BindPipeline(pipeline) => {
-            encoder.set_compute_pipeline_state(pipeline);
+        Cmd::BindPipeline(ref pipeline) => {
+            encoder.set_compute_pipeline_state(pipeline.borrow());
         }
         Cmd::Dispatch { wg_size, wg_count } => {
             encoder.dispatch_thread_groups(wg_count, wg_size);
@@ -1375,7 +1397,9 @@ fn exec_compute<'a>(encoder: &metal::ComputeCommandEncoderRef, command: soft::Co
 
 /// This is a hack around Metal System Trace logic that ignores empty command buffers entirely.
 fn record_empty(command_buf: &metal::CommandBufferRef) {
-    command_buf.new_blit_command_encoder().end_encoding();
+    if INSERT_DUMMY_ENCODERS {
+        command_buf.new_blit_command_encoder().end_encoding();
+    }
 }
 
 #[derive(Default)]
