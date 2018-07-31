@@ -14,10 +14,6 @@ impl<T> WeakPtr<T> {
         WeakPtr(ptr::null_mut())
     }
 
-    pub fn from_raw(ptr: *mut T) -> WeakPtr<T> {
-        WeakPtr(ptr)
-    }
-
     pub fn is_null(&self) -> bool {
         self.0.is_null()
     }
@@ -30,33 +26,31 @@ impl<T> WeakPtr<T> {
         self.0
     }
 
-    pub fn mut_void(&mut self) -> *mut *mut c_void {
+    pub unsafe fn mut_void(&mut self) -> *mut *mut c_void {
         &mut self.0 as *mut *mut _ as *mut *mut _
     }
 }
 
 impl<T: Interface> WeakPtr<T> {
-    pub fn as_unknown(&self) -> &IUnknown {
+    pub unsafe fn as_unknown(&self) -> &IUnknown {
         debug_assert!(!self.is_null());
-        unsafe { &*(self.0 as *mut IUnknown) }
+        &*(self.0 as *mut IUnknown)
     }
 
     // Cast creates a new WeakPtr requiring explicit destroy call.
-    pub fn cast<U>(&self) -> D3DResult<WeakPtr<U>>
+    pub unsafe fn cast<U>(&self) -> D3DResult<WeakPtr<U>>
     where
         U: Interface,
     {
         let mut obj = WeakPtr::<U>::null();
-        let hr = unsafe {
-            self.as_unknown()
-                .QueryInterface(&U::uuidof(), obj.mut_void())
-        };
+        let hr = self.as_unknown()
+            .QueryInterface(&U::uuidof(), obj.mut_void());
         (obj, hr)
     }
 
     // Destroying one instance of the WeakPtr will invalidate all
     // copies and clones.
-    pub fn destroy(&self) {
+    pub unsafe fn destroy(&self) {
         unsafe {
             self.as_unknown().Release();
         }

@@ -12,16 +12,16 @@ use winapi::Interface;
 
 use device;
 
-use bal_dx12;
+use bal_dx12::native;
 
 #[derive(Clone)]
 pub struct BlitPipe {
-    pub pipeline: bal_dx12::native::PipelineState,
-    pub signature: bal_dx12::native::RootSignature,
+    pub pipeline: native::PipelineState,
+    pub signature: native::RootSignature,
 }
 
 impl BlitPipe {
-    fn destroy(&self) {
+    unsafe fn destroy(&self) {
         self.pipeline.destroy();
         self.signature.destroy();
     }
@@ -40,19 +40,19 @@ pub type BlitKey = (dxgiformat::DXGI_FORMAT, d3d12::D3D12_FILTER);
 type BlitMap = FastHashMap<BlitKey, BlitPipe>;
 
 pub(crate) struct ServicePipes {
-    pub(crate) device: bal_dx12::native::Device,
+    pub(crate) device: native::Device,
     blits_2d_color: Mutex<BlitMap>,
 }
 
 impl ServicePipes {
-    pub fn new(device: bal_dx12::native::Device) -> Self {
+    pub fn new(device: native::Device) -> Self {
         ServicePipes {
             device,
             blits_2d_color: Mutex::new(FastHashMap::default()),
         }
     }
 
-    pub fn destroy(&self) {
+    pub unsafe fn destroy(&self) {
         let blits = self.blits_2d_color.lock().unwrap();
         for (_, pipe) in &*blits {
             pipe.destroy();
@@ -125,7 +125,7 @@ impl ServicePipes {
             Flags: d3d12::D3D12_ROOT_SIGNATURE_FLAG_NONE,
         };
 
-        let mut signature = ptr::null_mut();
+        let mut signature = native::RootSignature::null();
         let mut signature_raw = ptr::null_mut();
         let mut error = ptr::null_mut();
 
@@ -154,7 +154,7 @@ impl ServicePipes {
                 (*signature_raw).GetBufferPointer(),
                 (*signature_raw).GetBufferSize(),
                 &d3d12::ID3D12RootSignature::uuidof(),
-                &mut signature as *mut *mut _ as *mut *mut _,
+                signature.mut_void(),
             );
             (*signature_raw).Release();
         }
@@ -191,7 +191,7 @@ impl ServicePipes {
         let render_targets = [dummy_target; 8];
 
         let pso_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-            pRootSignature: signature,
+            pRootSignature: signature.as_mut_ptr(),
             VS: device::shader_bytecode(vs.as_mut_ptr()),
             PS: device::shader_bytecode(ps.as_mut_ptr()),
             GS: device::shader_bytecode(ptr::null_mut()),
@@ -245,19 +245,19 @@ impl ServicePipes {
             Flags: d3d12::D3D12_PIPELINE_STATE_FLAG_NONE,
         };
 
-        let mut pipeline = ptr::null_mut();
+        let mut pipeline = native::PipelineState::null();
         let hr = unsafe {
             self.device.CreateGraphicsPipelineState(
                 &pso_desc,
                 &d3d12::ID3D12PipelineState::uuidof(),
-                &mut pipeline as *mut *mut _ as *mut *mut _,
+                pipeline.mut_void(),
             )
         };
         assert_eq!(hr, winerror::S_OK);
 
         BlitPipe {
-            pipeline: bal_dx12::native::PipelineState::from_raw(pipeline),
-            signature: bal_dx12::native::RootSignature::from_raw(signature),
+            pipeline,
+            signature,
         }
     }
 }

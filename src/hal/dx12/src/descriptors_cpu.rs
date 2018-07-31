@@ -43,7 +43,7 @@ impl HeapLinear {
         self.num = 0;
     }
 
-    pub fn destroy(&self) {
+    pub unsafe fn destroy(&self) {
         self.raw.destroy();
     }
 }
@@ -91,7 +91,7 @@ impl Heap {
         self.availability == 0
     }
 
-    pub fn destroy(&self) {
+    pub unsafe fn destroy(&self) {
         self.raw.destroy();
     }
 }
@@ -133,7 +133,7 @@ impl DescriptorCpuPool {
 
     // TODO: free handles
 
-    pub fn destroy(&self) {
+    pub unsafe fn destroy(&self) {
         for heap in &self.heaps {
             heap.destroy();
         }

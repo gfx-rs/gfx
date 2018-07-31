@@ -28,9 +28,7 @@ pub type Error = com::WeakPtr<d3dcommon::ID3DBlob>;
 impl Error {
     pub unsafe fn as_c_str(&self) -> &CStr {
         debug_assert!(!self.is_null());
-        unsafe {
-            let data = self.GetBufferPointer();
-            CStr::from_ptr(data as *const _ as *const _)
-        }
+        let data = self.GetBufferPointer();
+        CStr::from_ptr(data as *const _ as *const _)
     }
 }

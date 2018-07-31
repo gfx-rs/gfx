@@ -39,6 +39,7 @@ use std::os::windows::ffi::OsStringExt;
 use std::sync::{Arc, Mutex};
 use std::{mem, ptr};
 
+use bal_dx12::native;
 use bal_dx12::native::descriptor;
 
 pub(crate) struct HeapProperties {
@@ -405,17 +406,17 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
 #[derive(Clone)]
 pub struct CommandQueue {
-    pub(crate) raw: bal_dx12::native::CommandQueue,
-    idle_fence: *mut d3d12::ID3D12Fence,
+    pub(crate) raw: native::CommandQueue,
+    idle_fence: native::Fence,
     idle_event: winnt::HANDLE,
 }
 
 impl CommandQueue {
-    fn destroy(&self) {
+    unsafe fn destroy(&self) {
         unsafe {
-            (*self.idle_fence).Release();
             handleapi::CloseHandle(self.idle_event);
         }
+        self.idle_fence.destroy();
         self.raw.destroy();
     }
 }
@@ -434,7 +435,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     {
         // Reset idle fence and event
         // That's safe here due to exclusive access to the queue
-        (*self.idle_fence).Signal(0);
+        self.idle_fence.signal(0);
         synchapi::ResetEvent(self.idle_event);
 
         // TODO: semaphores
@@ -469,12 +470,13 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        self.raw.signal(self.idle_fence, 1);
+        assert_eq!(
+            winerror::S_OK,
+            self.idle_fence.set_event_on_completion(self.idle_event, 1)
+        );
+
         unsafe {
-            self.raw.Signal(self.idle_fence, 1);
-            assert_eq!(
-                winerror::S_OK,
-                (*self.idle_fence).SetEventOnCompletion(1, self.idle_event)
-            );
             synchapi::WaitForSingleObject(self.idle_event, winbase::INFINITE);
         }
 
@@ -503,7 +505,7 @@ struct CmdSignatures {
 }
 
 impl CmdSignatures {
-    fn destroy(&self) {
+    unsafe fn destroy(&self) {
         self.draw.destroy();
         self.draw_indexed.destroy();
         self.dispatch.destroy();
@@ -517,7 +519,7 @@ struct Shared {
 }
 
 impl Shared {
-    fn destroy(&self) {
+    unsafe fn destroy(&self) {
         self.signatures.destroy();
         self.service_pipes.destroy();
     }
@@ -625,32 +627,33 @@ impl Device {
 impl Drop for Device {
     fn drop(&mut self) {
         *self.open.lock().unwrap() = false;
-        for queue in &mut self.queues {
-            queue.destroy();
-        }
 
-        self.shared.destroy();
-        self.heap_srv_cbv_uav.lock().unwrap().destroy();
-        self.heap_sampler.lock().unwrap().destroy();
-        self.rtv_pool.lock().unwrap().destroy();
-        self.dsv_pool.lock().unwrap().destroy();
-        self.srv_uav_pool.lock().unwrap().destroy();
-        self.sampler_pool.lock().unwrap().destroy();
-
-        for pool in &*self.descriptor_update_pools.lock().unwrap() {
-            pool.destroy();
-        }
-
-        // Debug tracking alive objects
-        let (debug_device, hr_debug) = self.raw.cast::<d3d12sdklayers::ID3D12DebugDevice>();
-        if winerror::SUCCEEDED(hr_debug) {
-            unsafe {
-                debug_device.ReportLiveDeviceObjects(d3d12sdklayers::D3D12_RLDO_DETAIL);
+        unsafe {
+            for queue in &mut self.queues {
+                queue.destroy();
             }
-            debug_device.destroy();
-        }
 
-        self.raw.destroy();
+            self.shared.destroy();
+            self.heap_srv_cbv_uav.lock().unwrap().destroy();
+            self.heap_sampler.lock().unwrap().destroy();
+            self.rtv_pool.lock().unwrap().destroy();
+            self.dsv_pool.lock().unwrap().destroy();
+            self.srv_uav_pool.lock().unwrap().destroy();
+            self.sampler_pool.lock().unwrap().destroy();
+
+            for pool in &*self.descriptor_update_pools.lock().unwrap() {
+                pool.destroy();
+            }
+
+            // Debug tracking alive objects
+            let (debug_device, hr_debug) = self.raw.cast::<d3d12sdklayers::ID3D12DebugDevice>();
+            if winerror::SUCCEEDED(hr_debug) {
+                debug_device.ReportLiveDeviceObjects(d3d12sdklayers::D3D12_RLDO_DETAIL);
+                debug_device.destroy();
+            }
+
+            self.raw.destroy();
+        }
     }
 }
 
@@ -660,7 +663,9 @@ pub struct Instance {
 
 impl Drop for Instance {
     fn drop(&mut self) {
-        self.factory.destroy();
+        unsafe {
+            self.factory.destroy();
+        }
     }
 }
 
@@ -689,13 +694,13 @@ impl Instance {
         }
 
         // Create DXGI factory
-        let mut dxgi_factory: *mut dxgi1_4::IDXGIFactory4 = ptr::null_mut();
+        let mut dxgi_factory = bal_dx12::native::WeakPtr::<dxgi1_4::IDXGIFactory4>::null();
 
         let hr = unsafe {
             dxgi1_3::CreateDXGIFactory2(
                 dxgi1_3::DXGI_CREATE_FACTORY_DEBUG,
                 &dxgi1_4::IDXGIFactory4::uuidof(),
-                &mut dxgi_factory as *mut *mut _ as *mut *mut _,
+                dxgi_factory.mut_void(),
             )
         };
 
@@ -704,7 +709,7 @@ impl Instance {
         }
 
         Instance {
-            factory: bal_dx12::native::WeakPtr::from_raw(dxgi_factory),
+            factory: dxgi_factory,
         }
     }
 }
@@ -720,17 +725,26 @@ impl hal::Instance for Instance {
         let mut adapters = Vec::new();
         loop {
             let adapter = {
-                let mut adapter: *mut dxgi::IDXGIAdapter1 = ptr::null_mut();
-                let hr = unsafe {
+                let mut adapter1 = bal_dx12::native::WeakPtr::<dxgi::IDXGIAdapter1>::null();
+                let hr1 = unsafe {
                     self.factory
-                        .EnumAdapters1(cur_index, &mut adapter as *mut *mut _)
+                        .EnumAdapters1(cur_index, adapter1.mut_void() as *mut *mut _)
                 };
 
-                if hr == winerror::DXGI_ERROR_NOT_FOUND {
+                if hr1 == winerror::DXGI_ERROR_NOT_FOUND {
                     break;
                 }
 
-                bal_dx12::native::WeakPtr::from_raw(adapter as *mut dxgi1_2::IDXGIAdapter2)
+                let (adapter2, hr2) = unsafe { adapter1.cast::<dxgi1_2::IDXGIAdapter2>() };
+                if !winerror::SUCCEEDED(hr2) {
+                    error!("Failed casting to Adapter2");
+                    break;
+                }
+
+                unsafe {
+                    adapter1.destroy();
+                }
+                adapter2
             };
 
             cur_index += 1;
@@ -995,18 +1009,18 @@ impl hal::Instance for Instance {
                 // Get the IDXGIAdapter3 from the created device to query video memory information.
                 let adapter_id = unsafe { device.GetAdapterLuid() };
                 let adapter = {
-                    let mut adapter: *mut dxgi1_4::IDXGIAdapter3 = ptr::null_mut();
+                    let mut adapter = bal_dx12::native::WeakPtr::<dxgi1_4::IDXGIAdapter3>::null();
                     unsafe {
                         assert_eq!(
                             winerror::S_OK,
                             self.factory.EnumAdapterByLuid(
                                 adapter_id,
                                 &dxgi1_4::IDXGIAdapter3::uuidof(),
-                                &mut adapter as *mut *mut _ as *mut *mut _,
+                                adapter.mut_void(),
                             )
                         );
                     }
-                    bal_dx12::native::WeakPtr::from_raw(adapter)
+                    adapter
                 };
 
                 let query_memory = |segment: dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP| unsafe {
@@ -1028,7 +1042,10 @@ impl hal::Instance for Instance {
                 }
             };
 
-            device.destroy();
+            unsafe {
+                adapter.destroy();
+                device.destroy();
+            }
 
             let physical_device = PhysicalDevice {
                 adapter,

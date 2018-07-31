@@ -172,7 +172,9 @@ pub(crate) fn compile_shader(
             let slice = slice::from_raw_parts(pointer as *const u8, size as usize);
             String::from_utf8_lossy(slice).into_owned()
         };
-        error.destroy();
+        unsafe {
+            error.destroy();
+        }
         Err(d::ShaderError::CompilationFailed(message))
     } else {
         Ok(shader_data)
@@ -971,17 +973,17 @@ impl Device {
         Ok(handle)
     }
 
-    pub(crate) fn create_raw_fence(&self, signalled: bool) -> *mut d3d12::ID3D12Fence {
-        let mut handle = ptr::null_mut();
+    pub(crate) fn create_raw_fence(&self, signalled: bool) -> native::Fence {
+        let mut handle = native::Fence::null();
         assert_eq!(winerror::S_OK, unsafe {
             self.raw.CreateFence(
                 if signalled { 1 } else { 0 },
                 d3d12::D3D12_FENCE_FLAG_NONE,
                 &d3d12::ID3D12Fence::uuidof(),
-                &mut handle,
+                handle.mut_void(),
             )
         });
-        handle as *mut _
+        handle
     }
 }
 
@@ -1020,11 +1022,11 @@ impl d::Device<B> for Device {
             },
         };
 
-        let mut heap = ptr::null_mut();
+        let mut heap = native::Heap::null();
         let hr = unsafe {
             self.raw
                 .clone()
-                .CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), &mut heap)
+                .CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), heap.mut_void())
         };
         if hr == winerror::E_OUTOFMEMORY {
             return Err(d::OutOfMemory);
@@ -1060,7 +1062,7 @@ impl d::Device<B> for Device {
 
             assert_eq!(winerror::S_OK, unsafe {
                 self.raw.clone().CreatePlacedResource(
-                    heap as _,
+                    heap.as_mut_ptr(),
                     0,
                     &desc,
                     d3d12::D3D12_RESOURCE_STATE_COMMON,
@@ -1076,7 +1078,7 @@ impl d::Device<B> for Device {
         };
 
         Ok(r::Memory {
-            heap: native::WeakPtr::from_raw(heap as _),
+            heap,
             type_id: mem_type,
             size,
             resource,
@@ -1104,7 +1106,9 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_command_pool(&self, pool: RawCommandPool) {
-        pool.raw.destroy();
+        unsafe {
+            pool.raw.destroy();
+        }
     }
 
     fn create_render_pass<'a, IA, IS, ID>(
@@ -1440,12 +1444,16 @@ impl d::Device<B> for Device {
             error!("Root signature serialization error: {:?}", unsafe {
                 error.as_c_str().to_str().unwrap()
             });
-            error.destroy();
+            unsafe {
+                error.destroy();
+            }
         }
 
         // TODO: error handling
         let (signature, _hr) = self.raw.create_root_signature(signature_raw, 0);
-        signature_raw.destroy();
+        unsafe {
+            signature_raw.destroy();
+        }
 
         r::PipelineLayout {
             raw: signature,
@@ -1673,7 +1681,7 @@ impl d::Device<B> for Device {
         let hr = if desc.depth_stencil.depth_bounds {
             // The DepthBoundsTestEnable option isn't available in the original D3D12_GRAPHICS_PIPELINE_STATE_DESC struct.
             // Instead, we must use the newer subobject stream method.
-            let (device2, hr) = self.raw.cast::<d3d12::ID3D12Device2>();
+            let (device2, hr) = unsafe { self.raw.cast::<d3d12::ID3D12Device2>() };
             if winerror::SUCCEEDED(hr) {
                 let mut pss_stream = GraphicsPipelineStateSubobjectStream::new(&pso_desc, true);
                 let pss_desc = d3d12::D3D12_PIPELINE_STATE_STREAM_DESC {
@@ -1702,7 +1710,9 @@ impl d::Device<B> for Device {
 
         let destroy_shader = |shader: ShaderBc| {
             if let ShaderBc::Owned(bc) = shader {
-                bc.destroy();
+                unsafe {
+                    bc.destroy();
+                }
             }
         };
 
@@ -1749,7 +1759,9 @@ impl d::Device<B> for Device {
         );
 
         if cs_destroy {
-            cs.destroy();
+            unsafe {
+                cs.destroy();
+            }
         }
 
         if winerror::SUCCEEDED(hr) {
@@ -1839,7 +1851,7 @@ impl d::Device<B> for Device {
             return Err(d::BindError::OutOfBounds);
         }
 
-        let mut resource = ptr::null_mut();
+        let mut resource = native::Resource::null();
         let desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
             Alignment: 0,
@@ -1864,7 +1876,7 @@ impl d::Device<B> for Device {
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
                 &d3d12::ID3D12Resource::uuidof(),
-                &mut resource,
+                resource.mut_void(),
             )
         });
 
@@ -1885,8 +1897,8 @@ impl d::Device<B> for Device {
             };
 
             unsafe {
-                self.raw.clone().CreateUnorderedAccessView(
-                    resource as *mut _,
+                self.raw.CreateUnorderedAccessView(
+                    resource.as_mut_ptr(),
                     ptr::null_mut(),
                     &view_desc,
                     handle,
@@ -1898,7 +1910,7 @@ impl d::Device<B> for Device {
         };
 
         Ok(r::Buffer {
-            resource: native::Resource::from_raw(resource as *mut _),
+            resource,
             size_in_bytes: buffer.requirements.size as _,
             clear_uav,
         })
@@ -2773,7 +2785,7 @@ impl d::Device<B> for Device {
 
     fn create_fence(&self, signalled: bool) -> r::Fence {
         r::Fence {
-            raw: native::Fence::from_raw(self.create_raw_fence(signalled)),
+            raw: self.create_raw_fence(signalled),
         }
     }
 
@@ -2824,9 +2836,11 @@ impl d::Device<B> for Device {
     }
 
     fn free_memory(&self, memory: r::Memory) {
-        memory.heap.destroy();
-        if let Some(buffer) = memory.resource {
-            buffer.destroy();
+        unsafe {
+            memory.heap.destroy();
+            if let Some(buffer) = memory.resource {
+                buffer.destroy();
+            }
         }
     }
 
@@ -2847,13 +2861,17 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_query_pool(&self, pool: r::QueryPool) {
-        pool.raw.destroy();
+        unsafe {
+            pool.raw.destroy();
+        }
     }
 
     fn destroy_shader_module(&self, shader_lib: r::ShaderModule) {
         if let r::ShaderModule::Compiled(shaders) = shader_lib {
             for (_, blob) in shaders {
-                blob.destroy();
+                unsafe {
+                    blob.destroy();
+                }
             }
         }
     }
@@ -2863,15 +2881,21 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_pipeline_layout(&self, layout: r::PipelineLayout) {
-        layout.raw.destroy();
+        unsafe {
+            layout.raw.destroy();
+        }
     }
 
     fn destroy_graphics_pipeline(&self, pipeline: r::GraphicsPipeline) {
-        pipeline.raw.destroy();
+        unsafe {
+            pipeline.raw.destroy();
+        }
     }
 
     fn destroy_compute_pipeline(&self, pipeline: r::ComputePipeline) {
-        pipeline.raw.destroy();
+        unsafe {
+            pipeline.raw.destroy();
+        }
     }
 
     fn destroy_framebuffer(&self, _fb: r::Framebuffer) {
@@ -2879,7 +2903,9 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_buffer(&self, buffer: r::Buffer) {
-        buffer.resource.destroy();
+        unsafe {
+            buffer.resource.destroy();
+        }
     }
 
     fn destroy_buffer_view(&self, _view: r::BufferView) {
@@ -2887,7 +2913,9 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_image(&self, image: r::Image) {
-        image.resource.destroy();
+        unsafe {
+            image.resource.destroy();
+        }
     }
 
     fn destroy_image_view(&self, _view: r::ImageView) {
@@ -2908,11 +2936,15 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_fence(&self, fence: r::Fence) {
-        fence.raw.destroy();
+        unsafe {
+            fence.raw.destroy();
+        }
     }
 
     fn destroy_semaphore(&self, semaphore: r::Semaphore) {
-        semaphore.raw.destroy();
+        unsafe {
+            semaphore.raw.destroy();
+        }
     }
 
     fn create_swapchain(
@@ -2922,7 +2954,7 @@ impl d::Device<B> for Device {
         _old_swapchain: Option<w::Swapchain>,
         _extent: &window::Extent2D,
     ) -> (w::Swapchain, hal::Backbuffer<B>) {
-        let mut swap_chain: *mut dxgi1_2::IDXGISwapChain1 = ptr::null_mut();
+        let mut swap_chain1 = native::WeakPtr::<dxgi1_2::IDXGISwapChain1>::null();
 
         let format = match config.color_format {
             // Apparently, swap chain doesn't like sRGB, but the RTV can still have some:
@@ -2976,7 +3008,7 @@ impl d::Device<B> for Device {
                 &desc,
                 ptr::null(),
                 ptr::null_mut(),
-                &mut swap_chain as *mut *mut _,
+                swap_chain1.mut_void() as *mut *mut _,
             )
         };
 
@@ -2984,7 +3016,14 @@ impl d::Device<B> for Device {
             error!("error on swapchain creation 0x{:x}", hr);
         }
 
-        let swap_chain = native::WeakPtr::<dxgi1_4::IDXGISwapChain3>::from_raw(swap_chain as _);
+        let (swap_chain3, hr3) = unsafe { swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>() };
+        if !winerror::SUCCEEDED(hr3) {
+            error!("error on swapchain cast 0x{:x}", hr3);
+        }
+
+        unsafe {
+            swap_chain1.destroy();
+        }
 
         // Get backbuffer images
         let mut resources: Vec<native::Resource> = Vec::new();
@@ -2992,7 +3031,7 @@ impl d::Device<B> for Device {
             .map(|i| {
                 let mut resource = native::Resource::null();
                 unsafe {
-                    swap_chain.GetBuffer(
+                    swap_chain3.GetBuffer(
                         i as _,
                         &d3d12::ID3D12Resource::uuidof(),
                         resource.mut_void(),
@@ -3042,7 +3081,7 @@ impl d::Device<B> for Device {
             .collect();
 
         let swapchain = w::Swapchain {
-            inner: swap_chain,
+            inner: swap_chain3,
             next_frame: 0,
             frame_queue: VecDeque::new(),
             rtv_heap,
@@ -3053,11 +3092,13 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_swapchain(&self, swapchain: w::Swapchain) {
-        for resource in &swapchain.resources {
-            resource.destroy();
+        unsafe {
+            for resource in &swapchain.resources {
+                resource.destroy();
+            }
+            swapchain.inner.destroy();
+            swapchain.rtv_heap.destroy();
         }
-        swapchain.inner.destroy();
-        swapchain.rtv_heap.destroy();
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {

@@ -353,7 +353,7 @@ impl CommandBuffer {
         }
     }
 
-    pub(crate) fn destroy(&mut self) {
+    pub(crate) unsafe fn destroy(&mut self) {
         self.raw.destroy();
         for heap in &self.rtv_pools {
             heap.destroy();
@@ -385,13 +385,19 @@ impl CommandBuffer {
         self.vertex_bindings_remap = [None; MAX_VERTEX_BUFFERS];
         self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
         for heap in self.rtv_pools.drain(..) {
-            heap.destroy();
+            unsafe {
+                heap.destroy();
+            }
         }
         for heap in self.temporary_gpu_heaps.drain(..) {
-            heap.destroy();
+            unsafe {
+                heap.destroy();
+            }
         }
         for resource in self.retained_resources.drain(..) {
-            resource.destroy();
+            unsafe {
+                resource.destroy();
+            }
         }
     }
 
@@ -1119,7 +1125,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         self.clear_render_target_view(rtv, value.into(), &rect);
                     }
 
-                    rtv_pool.destroy();
+                    unsafe {
+                        rtv_pool.destroy();
+                    }
                 }
                 com::AttachmentClear::DepthStencil { depth, stencil } => {
                     let attachment = {
@@ -1161,7 +1169,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         self.clear_depth_stencil_view(dsv, depth, stencil, &rect);
                     }
 
-                    dsv_pool.destroy();
+                    unsafe {
+                        dsv_pool.destroy();
+                    }
                 }
             }
         }
@@ -1585,12 +1595,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn set_depth_bounds(&mut self, bounds: Range<f32>) {
-        let (cmd_list1, hr) = self.raw.cast::<d3d12::ID3D12GraphicsCommandList1>();
+        let (cmd_list1, hr) = unsafe { self.raw.cast::<d3d12::ID3D12GraphicsCommandList1>() };
         if winerror::SUCCEEDED(hr) {
             unsafe {
                 cmd_list1.OMSetDepthBounds(bounds.start, bounds.end);
+                cmd_list1.destroy();
             }
-            cmd_list1.destroy();
         } else {
             warn!("Depth bounds test is not supported");
         }
@@ -1832,7 +1842,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // similarly to how it allows the views to be created.
 
             // create an aliased resource to the source
-            let mut alias = ptr::null_mut();
+            let mut alias = native::Resource::null();
             let desc = d3d12::D3D12_RESOURCE_DESC {
                 Format: dst.descriptor.Format,
                 ..src.descriptor.clone()
@@ -1853,12 +1863,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     d3d12::D3D12_RESOURCE_STATE_COMMON,
                     ptr::null(),
                     &d3d12::ID3D12Resource::uuidof(),
-                    &mut alias,
+                    alias.mut_void(),
                 )
             });
-            src_image.pResource = alias as _;
-            self.retained_resources
-                .push(native::Resource::from_raw(alias as _));
+            src_image.pResource = alias.as_mut_ptr();
+            self.retained_resources.push(alias);
 
             // signal the aliasing transition
             let sub_barrier = d3d12::D3D12_RESOURCE_ALIASING_BARRIER {

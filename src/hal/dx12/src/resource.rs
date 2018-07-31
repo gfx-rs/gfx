@@ -386,7 +386,7 @@ impl DescriptorHeap {
         }
     }
 
-    pub(crate) fn destroy(&self) {
+    pub(crate) unsafe fn destroy(&self) {
         self.raw.destroy();
     }
 }

@@ -1,5 +1,7 @@
 use super::com::WeakPtr;
+use super::sync::Fence;
 use winapi::um::d3d12;
+use HRESULT;
 
 #[repr(u32)]
 pub enum Priority {
@@ -16,4 +18,8 @@ bitflags! {
 
 pub type CommandQueue = WeakPtr<d3d12::ID3D12CommandQueue>;
 
-impl CommandQueue {}
+impl CommandQueue {
+    pub fn signal(&self, fence: Fence, value: u64) -> HRESULT {
+        unsafe { self.Signal(fence.as_mut_ptr(), value) }
+    }
+}
