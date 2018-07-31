@@ -413,9 +413,7 @@ pub struct CommandQueue {
 
 impl CommandQueue {
     unsafe fn destroy(&self) {
-        unsafe {
-            handleapi::CloseHandle(self.idle_event);
-        }
+        handleapi::CloseHandle(self.idle_event);
         self.idle_fence.destroy();
         self.raw.destroy();
     }

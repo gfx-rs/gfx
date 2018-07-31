@@ -1,8 +1,9 @@
 use super::com::WeakPtr;
 use super::{Blob, Error};
 use std::mem;
+use std::ops::Range;
 use winapi::um::d3d12;
-use D3DResult;
+use {D3DResult, TextureAddressMode};
 
 pub type CpuDescriptor = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE;
 pub type GpuDescriptor = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE;
@@ -113,7 +114,45 @@ impl RootParameter {
     }
 }
 
+#[repr(u32)]
+pub enum StaticBorderColor {
+    TransparentBlack = d3d12::D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
+    OpaqueBlack = d3d12::D3D12_STATIC_BORDER_COLOR_OPAQUE_BLACK,
+    OpaqueWhite = d3d12::D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
+}
+
 pub struct StaticSampler(d3d12::D3D12_STATIC_SAMPLER_DESC);
+impl StaticSampler {
+    pub fn new(
+        visibility: ShaderVisibility,
+        register: u32,
+        register_space: u32,
+
+        filter: d3d12::D3D12_FILTER,
+        address_mode: TextureAddressMode,
+        mip_lod_bias: f32,
+        max_anisotropy: u32,
+        comparison_op: d3d12::D3D12_COMPARISON_FUNC,
+        border_color: StaticBorderColor,
+        lod: Range<f32>,
+    ) -> Self {
+        StaticSampler(d3d12::D3D12_STATIC_SAMPLER_DESC {
+            Filter: filter,
+            AddressU: address_mode[0],
+            AddressV: address_mode[1],
+            AddressW: address_mode[2],
+            MipLODBias: mip_lod_bias,
+            MaxAnisotropy: max_anisotropy,
+            ComparisonFunc: comparison_op,
+            BorderColor: border_color as _,
+            MinLOD: lod.start,
+            MaxLOD: lod.end,
+            ShaderRegister: register,
+            RegisterSpace: register_space,
+            ShaderVisibility: visibility as _,
+        })
+    }
+}
 
 #[repr(u32)]
 pub enum RootSignatureVersion {

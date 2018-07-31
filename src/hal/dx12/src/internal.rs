@@ -13,6 +13,7 @@ use winapi::Interface;
 use device;
 
 use bal_dx12::native;
+use bal_dx12::native::descriptor;
 
 #[derive(Clone)]
 pub struct BlitPipe {
@@ -68,96 +69,60 @@ impl ServicePipes {
     }
 
     fn create_blit_2d_color(&self, (dst_format, filter): BlitKey) -> BlitPipe {
-        let descriptor_range = d3d12::D3D12_DESCRIPTOR_RANGE {
-            RangeType: d3d12::D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-            NumDescriptors: 1,
-            BaseShaderRegister: 0,
-            RegisterSpace: 0,
-            OffsetInDescriptorsFromTableStart: 0,
-        };
+        let descriptor_range = [descriptor::DescriptorRange::new(
+            descriptor::DescriptorRangeType::SRV,
+            1,
+            0,
+            0,
+            0,
+        )];
 
-        let mut root_parameters = [
-            d3d12::D3D12_ROOT_PARAMETER {
-                ParameterType: d3d12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
-                ShaderVisibility: d3d12::D3D12_SHADER_VISIBILITY_ALL,
-                ..unsafe { mem::zeroed() }
-            },
-            d3d12::D3D12_ROOT_PARAMETER {
-                ParameterType: d3d12::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
-                ShaderVisibility: d3d12::D3D12_SHADER_VISIBILITY_VERTEX,
-                ..unsafe { mem::zeroed() }
-            },
+        let root_parameters = [
+            descriptor::RootParameter::descriptor_table(
+                descriptor::ShaderVisibility::All,
+                &descriptor_range,
+            ),
+            descriptor::RootParameter::constants(
+                descriptor::ShaderVisibility::All,
+                0,
+                0,
+                (mem::size_of::<BlitData>() / 4) as _,
+            ),
         ];
 
-        *unsafe { root_parameters[0].u.DescriptorTable_mut() } =
-            d3d12::D3D12_ROOT_DESCRIPTOR_TABLE {
-                NumDescriptorRanges: 1,
-                pDescriptorRanges: &descriptor_range,
-            };
+        let static_samplers = [descriptor::StaticSampler::new(
+            descriptor::ShaderVisibility::PS,
+            0,
+            0,
+            filter,
+            [
+                d3d12::D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+                d3d12::D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+                d3d12::D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+            ],
+            0.0,
+            0,
+            d3d12::D3D12_COMPARISON_FUNC_ALWAYS,
+            descriptor::StaticBorderColor::TransparentBlack,
+            0.0..d3d12::D3D12_FLOAT32_MAX,
+        )];
 
-        *unsafe { root_parameters[1].u.Constants_mut() } = d3d12::D3D12_ROOT_CONSTANTS {
-            ShaderRegister: 0,
-            RegisterSpace: 0,
-            Num32BitValues: (mem::size_of::<BlitData>() / 4) as _,
-        };
+        let ((signature_raw, error), _hr) = native::RootSignature::serialize(
+            descriptor::RootSignatureVersion::V1_0,
+            &root_parameters,
+            &static_samplers,
+            descriptor::RootSignatureFlags::empty(),
+        );
 
-        let static_samplers = d3d12::D3D12_STATIC_SAMPLER_DESC {
-            Filter: filter,
-            AddressU: d3d12::D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-            AddressV: d3d12::D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-            AddressW: d3d12::D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-            MipLODBias: 0.0,
-            MaxAnisotropy: 0,
-            ComparisonFunc: d3d12::D3D12_COMPARISON_FUNC_ALWAYS,
-            BorderColor: d3d12::D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK,
-            MinLOD: 0.0,
-            MaxLOD: d3d12::D3D12_FLOAT32_MAX,
-            ShaderRegister: 0,
-            RegisterSpace: 0,
-            ShaderVisibility: d3d12::D3D12_SHADER_VISIBILITY_PIXEL,
-        };
-
-        let root_signature_desc = d3d12::D3D12_ROOT_SIGNATURE_DESC {
-            NumParameters: root_parameters.len() as _,
-            pParameters: root_parameters.as_ptr(),
-            NumStaticSamplers: 1,
-            pStaticSamplers: &static_samplers,
-            Flags: d3d12::D3D12_ROOT_SIGNATURE_FLAG_NONE,
-        };
-
-        let mut signature = native::RootSignature::null();
-        let mut signature_raw = ptr::null_mut();
-        let mut error = ptr::null_mut();
-
-        // TODO: error handling
-        unsafe {
-            let _hr = d3d12::D3D12SerializeRootSignature(
-                &root_signature_desc,
-                d3d12::D3D_ROOT_SIGNATURE_VERSION_1,
-                &mut signature_raw,
-                &mut error,
-            );
-
-            if !error.is_null() {
-                // TODO
-                let error_output = (*error).GetBufferPointer();
-                let message = ::std::ffi::CStr::from_ptr(error_output as *const _ as *const _);
-                error!(
-                    "D3D12SerializeRootSignature error: {:?}",
-                    message.to_str().unwrap()
-                );
-                (*error).Release();
-            }
-
-            self.device.CreateRootSignature(
-                0,
-                (*signature_raw).GetBufferPointer(),
-                (*signature_raw).GetBufferSize(),
-                &d3d12::ID3D12RootSignature::uuidof(),
-                signature.mut_void(),
-            );
-            (*signature_raw).Release();
+        if !error.is_null() {
+            error!("D3D12SerializeRootSignature error: {:?}", unsafe {
+                error.as_c_str().to_str().unwrap()
+            });
+            unsafe { error.destroy() };
         }
+
+        let (signature, _hr) = self.device.create_root_signature(signature_raw, 0);
+        unsafe { signature_raw.destroy() };
 
         let shader_src = include_bytes!("../shaders/blit.hlsl");
         let vs = device::compile_shader(
