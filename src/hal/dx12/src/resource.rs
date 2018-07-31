@@ -227,6 +227,17 @@ impl Image {
     }
 }
 
+impl<'a> Into<bal_dx12::copy::Image> for &'a Image {
+    fn into(self) -> bal_dx12::copy::Image {
+        bal_dx12::copy::Image {
+            levels: self.kind.num_levels(),
+            layers: self.kind.num_layers(),
+            bytes_per_block: self.bytes_per_block as _,
+            block_dim: (self.block_dim.0 as _, self.block_dim.1 as _),
+        }
+    }
+}
+
 #[derive(Copy, Derivative, Clone)]
 #[derivative(Debug)]
 pub struct ImageView {

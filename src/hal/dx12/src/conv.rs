@@ -11,8 +11,9 @@ use winapi::um::d3dcommon::*;
 
 use hal::format::{Format, ImageFeature, SurfaceType};
 use hal::pso::DescriptorSetLayoutBinding;
-use hal::{buffer, image, pso, Primitive};
+use hal::{buffer, command, image, pso, Primitive};
 
+use bal_dx12::copy;
 use bal_dx12::native::descriptor::{DescriptorRange, DescriptorRangeType};
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
@@ -582,5 +583,17 @@ pub fn map_stage(stage: pso::Stage) -> spirv::ExecutionModel {
         pso::Stage::Compute => spirv::ExecutionModel::GlCompute,
         pso::Stage::Hull => spirv::ExecutionModel::TessellationControl,
         pso::Stage::Domain => spirv::ExecutionModel::TessellationEvaluation,
+    }
+}
+
+pub fn map_split_copy_region(r: &command::BufferImageCopy) -> copy::BufferImageCopy {
+    copy::BufferImageCopy {
+        buffer_offset: r.buffer_offset,
+        buffer_width: r.buffer_width,
+        buffer_height: r.buffer_height,
+        image_offset: r.image_offset,
+        image_extent: r.image_extent,
+        image_level: r.image_layers.level,
+        image_layers: r.image_layers.layers.clone(),
     }
 }

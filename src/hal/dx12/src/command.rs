@@ -27,10 +27,7 @@ use {
 use bal_dx12;
 use bal_dx12::native;
 use bal_dx12::native::descriptor;
-
-// Fixed size of the root signature.
-// Limited by D3D12.
-const ROOT_SIGNATURE_SIZE: usize = 64;
+use bal_dx12::pso::{RootElement, UserData};
 
 const NULL_VERTEX_BUFFER_VIEW: d3d12::D3D12_VERTEX_BUFFER_VIEW = d3d12::D3D12_VERTEX_BUFFER_VIEW {
     BufferLocation: 0,
@@ -66,73 +63,6 @@ pub struct RenderPassCache {
 enum OcclusionQuery {
     Binary(UINT),
     Precise(UINT),
-}
-
-/// Strongly-typed root signature element
-///
-/// Could be removed for an unsafer variant to occupy less memory
-#[derive(Debug, Copy, Clone)]
-enum RootElement {
-    /// Root constant in the signature
-    Constant(u32),
-    /// Descriptor table, storing table offset for the current descriptor heap
-    TableSrvCbvUav(u32),
-    /// Descriptor table, storing table offset for the current descriptor heap
-    TableSampler(u32),
-    /// Undefined value, implementation specific
-    Undefined,
-}
-
-/// Virtual data storage for the current root signature memory.
-#[derive(Clone)]
-struct UserData {
-    data: [RootElement; ROOT_SIGNATURE_SIZE],
-    dirty_mask: u64,
-}
-
-impl UserData {
-    fn new() -> Self {
-        UserData {
-            data: [RootElement::Undefined; ROOT_SIGNATURE_SIZE],
-            dirty_mask: 0,
-        }
-    }
-
-    /// Update root constant values. Changes are marked as dirty.
-    fn set_constants(&mut self, offset: usize, data: &[u32]) {
-        assert!(offset + data.len() <= ROOT_SIGNATURE_SIZE);
-        // Each root constant occupies one DWORD
-        for (i, val) in data.iter().enumerate() {
-            self.data[offset + i] = RootElement::Constant(*val);
-            self.dirty_mask |= 1u64 << (offset + i);
-        }
-    }
-
-    /// Update descriptor table. Changes are marked as dirty.
-    fn set_srv_cbv_uav_table(&mut self, offset: usize, table_start: u32) {
-        assert!(offset < ROOT_SIGNATURE_SIZE);
-        // A descriptor table occupies one DWORD
-        self.data[offset] = RootElement::TableSrvCbvUav(table_start);
-        self.dirty_mask |= 1u64 << offset;
-    }
-
-    /// Update descriptor table. Changes are marked as dirty.
-    fn set_sampler_table(&mut self, offset: usize, table_start: u32) {
-        assert!(offset < ROOT_SIGNATURE_SIZE);
-        // A descriptor table occupies one DWORD
-        self.data[offset] = RootElement::TableSampler(table_start);
-        self.dirty_mask |= 1u64 << offset;
-    }
-
-    /// Clear dirty flag.
-    fn clear_dirty(&mut self, i: usize) {
-        self.dirty_mask &= !(1 << i);
-    }
-
-    /// Mark all entries as dirty.
-    fn dirty_all(&mut self) {
-        self.dirty_mask = !0;
-    }
 }
 
 #[derive(Clone)]
@@ -291,7 +221,7 @@ pub struct CommandBuffer {
     vertex_buffer_views: [d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
 
     // Re-using allocation for the image-buffer copies.
-    copies: Vec<bal_dx12::copy::Copy>,
+    copies: Vec<bal_dx12::copy::CopyRegion>,
 
     // D3D12 only allows setting all viewports or all scissors at once, not partial updates.
     // So we must cache the implied state for these partial updates.
@@ -1951,26 +1881,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::BufferImageCopy>,
     {
         assert!(self.copies.is_empty());
-
-        let dst_image = bal_dx12::copy::Image {
-            levels: image.kind.num_levels(),
-            layers: image.kind.num_layers(),
-            bytes_per_block: image.bytes_per_block as _,
-            block_dim: (image.block_dim.0 as _, image.block_dim.1 as _),
-        };
-
         for region in regions {
-            let r = region.borrow();
-            let image_copy = bal_dx12::copy::BufferImageCopy {
-                buffer_offset: r.buffer_offset,
-                buffer_width: r.buffer_width,
-                buffer_height: r.buffer_height,
-                image_offset: r.image_offset,
-                image_extent: r.image_extent,
-                image_level: r.image_layers.level,
-                image_layers: r.image_layers.layers.clone(),
-            };
-            bal_dx12::copy::split_buffer_copy(&mut self.copies, &image_copy, dst_image);
+            bal_dx12::copy::split_buffer_copy(
+                &mut self.copies,
+                &conv::map_split_copy_region(region.borrow()),
+                image.into(),
+            );
         }
 
         if self.copies.is_empty() {
@@ -2035,25 +1951,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         assert!(self.copies.is_empty());
 
         // TODO: function for these
-        let dst_image = bal_dx12::copy::Image {
-            levels: image.kind.num_levels(),
-            layers: image.kind.num_layers(),
-            bytes_per_block: image.bytes_per_block as _,
-            block_dim: (image.block_dim.0 as _, image.block_dim.1 as _),
-        };
-
         for region in regions {
             let r = region.borrow();
-            let image_copy = bal_dx12::copy::BufferImageCopy {
-                buffer_offset: r.buffer_offset,
-                buffer_width: r.buffer_width,
-                buffer_height: r.buffer_height,
-                image_offset: r.image_offset,
-                image_extent: r.image_extent,
-                image_level: r.image_layers.level,
-                image_layers: r.image_layers.layers.clone(),
-            };
-            bal_dx12::copy::split_buffer_copy(&mut self.copies, &image_copy, dst_image);
+
+            bal_dx12::copy::split_buffer_copy(
+                &mut self.copies,
+                &conv::map_split_copy_region(r),
+                image.into(),
+            );
         }
 
         if self.copies.is_empty() {

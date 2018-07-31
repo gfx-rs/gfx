@@ -19,7 +19,7 @@ impl Image {
 }
 
 #[derive(Clone)]
-pub struct Copy {
+pub struct CopyRegion {
     pub footprint_offset: u64,
     pub footprint: image::Extent,
     pub row_pitch: u32,
@@ -57,7 +57,7 @@ fn up_align(x: u32, alignment: u32) -> u32 {
     (x + alignment - 1) & !(alignment - 1)
 }
 
-pub fn split_buffer_copy(copies: &mut Vec<Copy>, r: &BufferImageCopy, image: Image) {
+pub fn split_buffer_copy(copies: &mut Vec<CopyRegion>, r: &BufferImageCopy, image: Image) {
     let buffer_width = if r.buffer_width == 0 {
         r.image_extent.width
     } else {
@@ -86,7 +86,7 @@ pub fn split_buffer_copy(copies: &mut Vec<Copy>, r: &BufferImageCopy, image: Ima
             layer_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
         if layer_offset == aligned_offset && is_pitch_aligned {
             // trivial case: everything is aligned, ready for copying
-            copies.push(Copy {
+            copies.push(CopyRegion {
                 footprint_offset: aligned_offset,
                 footprint: image_extent_aligned,
                 row_pitch,
@@ -112,7 +112,7 @@ pub fn split_buffer_copy(copies: &mut Vec<Copy>, r: &BufferImageCopy, image: Ima
             };
             if r.image_extent.width + buf_offset.x as u32 <= row_pitch_texels {
                 // we can map it to the aligned one and adjust the offsets accordingly
-                copies.push(Copy {
+                copies.push(CopyRegion {
                     footprint_offset: aligned_offset,
                     footprint,
                     row_pitch,
@@ -127,7 +127,7 @@ pub fn split_buffer_copy(copies: &mut Vec<Copy>, r: &BufferImageCopy, image: Ima
                 let half = row_pitch_texels - buf_offset.x as u32;
                 assert!(half <= r.image_extent.width);
 
-                copies.push(Copy {
+                copies.push(CopyRegion {
                     footprint_offset: aligned_offset,
                     footprint: image::Extent {
                         width: row_pitch_texels,
@@ -142,7 +142,7 @@ pub fn split_buffer_copy(copies: &mut Vec<Copy>, r: &BufferImageCopy, image: Ima
                         ..r.image_extent
                     },
                 });
-                copies.push(Copy {
+                copies.push(CopyRegion {
                     footprint_offset: aligned_offset,
                     footprint: image::Extent {
                         width: image_extent_aligned.width - half,
@@ -191,7 +191,7 @@ pub fn split_buffer_copy(copies: &mut Vec<Copy>, r: &BufferImageCopy, image: Ima
                     let row_pitch =
                         (max_unaligned_pitch | (d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1)) + 1;
 
-                    copies.push(Copy {
+                    copies.push(CopyRegion {
                         footprint_offset: aligned_offset,
                         footprint: image::Extent {
                             width: cut_width + gap_texels,
@@ -223,7 +223,7 @@ pub fn split_buffer_copy(copies: &mut Vec<Copy>, r: &BufferImageCopy, image: Ima
                     }
                     let leftover = image_extent_aligned.width - cut_width;
 
-                    copies.push(Copy {
+                    copies.push(CopyRegion {
                         footprint_offset: next_aligned_offset,
                         footprint: image::Extent {
                             width: leftover,

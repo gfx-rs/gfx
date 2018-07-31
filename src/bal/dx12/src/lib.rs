@@ -15,6 +15,7 @@ pub use winapi::shared::winerror::HRESULT;
 pub mod barrier;
 pub mod copy;
 pub mod native;
+pub mod pso;
 pub mod spirv;
 
 pub type D3DResult<T> = (T, HRESULT);
