@@ -25,7 +25,7 @@ use {
     Fence, RawFence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer, InternalImage, Memory,
     PipelineLayout, QueryPool, RenderPass, Sampler, Semaphore, ShaderModule, Surface, Swapchain,
     UnboundBuffer, UnboundImage, ViewInfo, PipelineBinding, Descriptor, MemoryHeapFlags, RegisterRemapping,
-    RegisterMapping,
+    RegisterMapping, SubpassDesc
 };
 
 use {conv, internal, shader};
@@ -540,8 +540,8 @@ impl hal::Device<Backend> for Device {
 
     fn create_render_pass<'a, IA, IS, ID>(
         &self,
-        _attachments: IA,
-        _subpasses: IS,
+        attachments: IA,
+        subpasses: IS,
         _dependencies: ID,
     ) -> RenderPass
     where
@@ -552,9 +552,18 @@ impl hal::Device<Backend> for Device {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
     {
-        // TODO: renderpass
-
-        RenderPass
+        RenderPass {
+            attachments: attachments.into_iter().map(|attachment| attachment.borrow().clone()).collect(),
+            subpasses: subpasses.into_iter().map(|desc| {
+                let desc = desc.borrow();
+                SubpassDesc {
+                    color_attachments: desc.colors.iter().map(|color| color.borrow().clone()).collect(),
+                    depth_stencil_attachment: desc.depth_stencil.map(|d| *d),
+                    input_attachments: desc.inputs.iter().map(|input| input.borrow().clone()).collect(),
+                    resolve_attachments: desc.resolves.iter().map(|resolve| resolve.borrow().clone()).collect()
+                }
+            }).collect(),
+        }
     }
 
     fn create_pipeline_layout<IS, IR>(
@@ -1057,6 +1066,7 @@ impl hal::Device<Backend> for Device {
             disjoint_cb,
             srv,
             uav,
+            usage: unbound_buffer.usage,
         };
         let range = offset..unbound_buffer.size;
 
@@ -1182,12 +1192,7 @@ impl hal::Device<Backend> for Device {
         };
 
         let dxgi_format = conv::map_format(image.format).unwrap();
-        let (typeless_format, typed_raw_format) = conv::typeless_format(dxgi_format).unwrap();
-
-        let dxgi_format = match dxgi_format {
-            dxgiformat::DXGI_FORMAT_D32_FLOAT_S8X24_UINT => dxgiformat::DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS,
-            _ => dxgi_format
-        };
+        let decomposed = conv::DecomposedDxgiFormat::from_dxgi_format(dxgi_format);
 
         let (view_kind, resource) = match image.kind {
             image::Kind::D2(width, height, layers, _) => {
@@ -1196,7 +1201,7 @@ impl hal::Device<Backend> for Device {
                     Height: height,
                     MipLevels: image.mip_levels as _,
                     ArraySize: layers as _,
-                    Format: typeless_format,
+                    Format: decomposed.typeless,
                     SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                         Count: 1,
                         Quality: 0
@@ -1234,7 +1239,7 @@ impl hal::Device<Backend> for Device {
                     Height: height,
                     Depth: depth,
                     MipLevels: image.mip_levels as _,
-                    Format: typeless_format,
+                    Format: decomposed.typeless,
                     Usage: usage,
                     BindFlags: bind,
                     CPUAccessFlags: cpu,
@@ -1271,7 +1276,9 @@ impl hal::Device<Backend> for Device {
                     kind: image.kind,
                     flags: image::StorageFlags::empty(),
                     view_kind,
-                    format: typed_raw_format,
+                    // TODO: we should be using `uav_format` rather than `copy_uav_format`, and share
+                    //       the UAVs when the formats are identical
+                    format: decomposed.copy_uav.unwrap(),
                     range: image::SubresourceRange {
                         aspects: format::Aspects::COLOR,
                         levels: mip..(mip + 1),
@@ -1279,7 +1286,10 @@ impl hal::Device<Backend> for Device {
                     }
                 };
 
-                unordered_access_views.push(self.view_image_as_unordered_access(&view).map_err(|_| device::BindError::WrongMemory)?);
+                unordered_access_views.push(
+                    self.view_image_as_unordered_access(&view)
+                        .map_err(|_| device::BindError::WrongMemory)?
+                );
             }
         }
 
@@ -1289,7 +1299,7 @@ impl hal::Device<Backend> for Device {
                 kind: image.kind,
                 flags: image::StorageFlags::empty(),
                 view_kind,
-                format: typed_raw_format,
+                format: decomposed.copy_srv.unwrap(),
                 range: image::SubresourceRange {
                     aspects: format::Aspects::COLOR,
                     levels: 0..image.mip_levels,
@@ -1303,7 +1313,7 @@ impl hal::Device<Backend> for Device {
                 None
             };
 
-            view.format = dxgi_format;
+            view.format = decomposed.srv.unwrap();
 
             let srv = if !depth && !stencil {
                 Some(self.view_image_as_shader_resource(&view).map_err(|_| device::BindError::WrongMemory)?)
@@ -1328,7 +1338,7 @@ impl hal::Device<Backend> for Device {
                         kind: image.kind,
                         flags: image::StorageFlags::empty(),
                         view_kind,
-                        format: dxgi_format,
+                        format: decomposed.rtv.unwrap(),
                         range: image::SubresourceRange {
                             aspects: format::Aspects::COLOR,
                             levels: mip..(mip + 1),
@@ -1341,11 +1351,38 @@ impl hal::Device<Backend> for Device {
             }
         };
 
+        let mut depth_stencil_views = Vec::new();
+
+        if depth {
+            for layer in 0..image.kind.num_layers() {
+                for mip in 0..image.mip_levels {
+                    let view = ViewInfo {
+                        resource,
+                        kind: image.kind,
+                        flags: image::StorageFlags::empty(),
+                        view_kind: image::ViewKind::D2,
+                        format: decomposed.dsv.unwrap(),
+                        range: image::SubresourceRange {
+                            aspects: format::Aspects::COLOR,
+                            levels: mip..(mip + 1),
+                            layers: layer..(layer + 1)
+                        }
+                    };
+
+                    depth_stencil_views.push(
+                        self.view_image_as_depth_stencil(&view)
+                            .map_err(|_| device::BindError::WrongMemory)?
+                    );
+                }
+            }
+        }
+
         let internal = InternalImage {
             raw: resource,
             copy_srv,
             srv,
             unordered_access_views,
+            depth_stencil_views,
             render_target_views,
         };
 
@@ -1353,9 +1390,8 @@ impl hal::Device<Backend> for Device {
             kind: image.kind,
             usage: image.usage,
             format: image.format,
+            decomposed_format: decomposed,
             storage_flags: image.flags,
-            dxgi_format,
-            typed_raw_format,
             num_levels: image.kind.num_levels(),
             num_mips: image.mip_levels as _,
             internal,
@@ -1614,7 +1650,7 @@ impl hal::Device<Backend> for Device {
                 StorageTexelBuffer | StorageBuffer |
                 InputAttachment | StorageBufferDynamic |
                 StorageImage => {
-                    binding.handle_offset = num_s + num_t + num_u + u;
+                    binding.handle_offset = num_s + num_t + num_c + u;
                     u += 1;
                 },
                 CombinedImageSampler => unreachable!()
@@ -1685,6 +1721,9 @@ impl hal::Device<Backend> for Device {
                             pso::DescriptorType::StorageImage => {
                                 unsafe { *handle = Descriptor(image.uav_handle.clone().unwrap().as_raw() as *mut _); }
                             },
+                            pso::DescriptorType::InputAttachment => {
+                                unsafe { *handle = Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _); }
+                            }
                             _ => unreachable!()
                         }
                     }
@@ -1764,12 +1803,15 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a Memory, R)>,
         R: RangeArg<u64>,
     {
+        let _scope = debug_scope!(&self.context, "FlushMappedRanges");
 
         // go through every range we wrote to
         for range in ranges.into_iter() {
             let &(memory, ref range) = range.borrow();
             let range = memory.resolve(range);
 
+
+            let _scope = debug_scope!(&self.context, "Range({:?})", range);
             memory.flush(&self.context, range);
         }
     }
@@ -1780,11 +1822,14 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<(&'a Memory, R)>,
         R: RangeArg<u64>,
     {
+        let _scope = debug_scope!(&self.context, "InvalidateMappedRanges");
+
         // go through every range we want to read from
         for range in ranges.into_iter() {
             let &(memory, ref range) = range.borrow();
             let range = *range.start().unwrap_or(&0)..*range.end().unwrap_or(&memory.size);
 
+            let _scope = debug_scope!(&self.context, "Range({:?})", range);
             memory.invalidate(
                 &self.context,
                 range,
@@ -1946,6 +1991,7 @@ impl hal::Device<Backend> for Device {
 
             (map_format(format).unwrap(), map_format(config.color_format).unwrap())
         };
+        let decomposed = conv::DecomposedDxgiFormat::from_dxgi_format(format);
 
         let mut desc = DXGI_SWAP_CHAIN_DESC {
             BufferDesc: dxgitype::DXGI_MODE_DESC {
@@ -1966,7 +2012,7 @@ impl hal::Device<Backend> for Device {
                 Count: 1,
                 Quality: 0
             },
-            BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+            BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT | dxgitype::DXGI_USAGE_SHADER_INPUT,
             BufferCount: config.image_count,
             OutputWindow: surface.wnd_handle,
             // TODO:
@@ -1989,12 +2035,9 @@ impl hal::Device<Backend> for Device {
             unsafe { ComPtr::from_raw(swapchain) }
         };
 
-        let images = (0..config.image_count).map(|_i| {
+        let resource = {
             let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
 
-            // returning the 0th buffer for all images seems like the right thing to do. we can
-            // only get write access to the first buffer in the case of `_SEQUENTIAL` flip model,
-            // and read access to the rest
             let hr = unsafe {
                 swapchain.GetBuffer(
                     0 as _,
@@ -2004,29 +2047,42 @@ impl hal::Device<Backend> for Device {
             };
             assert_eq!(hr, winerror::S_OK);
 
-            let mut desc: d3d11::D3D11_RENDER_TARGET_VIEW_DESC = unsafe { mem::zeroed() };
-            desc.Format = format;
-            desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
-            // NOTE: the rest of the desc should be fine (zeroed)
+            resource
+        };
 
-            let mut rtv = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.CreateRenderTargetView(
-                    resource,
-                    &desc,
-                    &mut rtv as *mut *mut _ as *mut *mut _
-                )
-            };
-            assert_eq!(hr, winerror::S_OK);
+        let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
 
-            let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
+        let mut view_info = ViewInfo {
+            resource,
+            kind,
+            flags: image::StorageFlags::empty(),
+            view_kind: image::ViewKind::D2,
+            format: decomposed.rtv.unwrap(),
+            // TODO: can these ever differ for backbuffer?
+            range: image::SubresourceRange {
+                aspects: format::Aspects::COLOR,
+                levels: 0..1,
+                layers: 0..1,
+            }
+        };
+        let rtv = self.view_image_as_render_target(&view_info).unwrap();
 
+        view_info.format = non_srgb_format;
+        view_info.view_kind = image::ViewKind::D2Array;
+        let copy_srv = self.view_image_as_shader_resource(&view_info).unwrap();
+
+
+        let images = (0..config.image_count).map(|_i| {
+            // returning the 0th buffer for all images seems like the right thing to do. we can
+            // only get write access to the first buffer in the case of `_SEQUENTIAL` flip model,
+            // and read access to the rest
             let internal = InternalImage {
                 raw: resource,
-                copy_srv: None,
+                copy_srv: Some(copy_srv.clone()),
                 srv: None,
                 unordered_access_views: Vec::new(),
-                render_target_views: vec![unsafe { ComPtr::from_raw(rtv) }]
+                depth_stencil_views: Vec::new(),
+                render_target_views: vec![rtv.clone()]
             };
 
             Image {
@@ -2035,8 +2091,7 @@ impl hal::Device<Backend> for Device {
                 format: config.color_format,
                 storage_flags: image::StorageFlags::empty(),
                 // NOTE: not the actual format of the backbuffer(s)
-                typed_raw_format: dxgiformat::DXGI_FORMAT_UNKNOWN,
-                dxgi_format: format,
+                decomposed_format: decomposed.clone(),
                 num_levels: 1,
                 num_mips: 1,
                 internal

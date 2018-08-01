@@ -1,6 +1,7 @@
 use std::any::Any;
 use std::borrow::Borrow;
 use std::ops::Range;
+use std::fmt;
 
 use {buffer, pass, pso};
 use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
@@ -46,6 +47,15 @@ pub union ClearValueRaw {
     /// Clear depth and stencil
     pub depth_stencil: ClearDepthStencilRaw,
     _align: [u32; 4],
+}
+
+impl fmt::Debug for ClearValueRaw {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.debug_struct("ClearValueRaw")
+            .field("color", unsafe { &self.color.uint32 })
+            .field("depth_stencil", unsafe { &self.depth_stencil })
+            .finish()
+    }
 }
 
 /// Offset for dynamic descriptors.

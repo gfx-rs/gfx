@@ -5,13 +5,14 @@ use winapi::shared::dxgiformat;
 use winapi::shared::winerror;
 use winapi::um::d3d11;
 use winapi::um::d3dcommon;
+
 use wio::com::ComPtr;
 
 use std::{mem, ptr};
 use std::borrow::Borrow;
 
 use spirv_cross;
-use shader;
+use {shader};
 
 use {Buffer, Image};
 
@@ -85,6 +86,7 @@ pub struct Internal {
     cs_copy_image2d_r16_buffer: ComPtr<d3d11::ID3D11ComputeShader>,
     cs_copy_image2d_r8g8_buffer: ComPtr<d3d11::ID3D11ComputeShader>,
     cs_copy_image2d_r8_buffer: ComPtr<d3d11::ID3D11ComputeShader>,
+    cs_copy_image2d_b8g8r8a8_buffer: ComPtr<d3d11::ID3D11ComputeShader>,
 
     cs_copy_buffer_image2d_r32g32b32a32: ComPtr<d3d11::ID3D11ComputeShader>,
     cs_copy_buffer_image2d_r32g32: ComPtr<d3d11::ID3D11ComputeShader>,
@@ -279,6 +281,7 @@ impl Internal {
             cs_copy_image2d_r16_buffer: compile_cs(device, copy_shaders, "cs_copy_image2d_r16_buffer"),
             cs_copy_image2d_r8g8_buffer: compile_cs(device, copy_shaders, "cs_copy_image2d_r8g8_buffer"),
             cs_copy_image2d_r8_buffer: compile_cs(device, copy_shaders, "cs_copy_image2d_r8_buffer"),
+            cs_copy_image2d_b8g8r8a8_buffer: compile_cs(device, copy_shaders, "cs_copy_image2d_b8g8r8a8_buffer"),
 
             cs_copy_buffer_image2d_r32g32b32a32: compile_cs(device, copy_shaders, "cs_copy_buffer_image2d_r32g32b32a32"),
             cs_copy_buffer_image2d_r32g32: compile_cs(device, copy_shaders, "cs_copy_buffer_image2d_r32g32"),
@@ -340,7 +343,7 @@ impl Internal {
                 buffer_offset: info.buffer_offset as _,
                 buffer_size: [info.buffer_width, info.buffer_height],
                 _padding: 0,
-                image_offset: [info.image_offset.x as _, info.image_offset.y as _, info.image_offset.z as _, 0],
+                image_offset: [info.image_offset.x as _, info.image_offset.y as _, (info.image_offset.z + info.image_layers.layers.start as i32) as _, 0],
                 image_extent: [info.image_extent.width, info.image_extent.height, info.image_extent.depth, 0],
             },
             .. mem::zeroed()
@@ -387,7 +390,10 @@ impl Internal {
     fn find_image_copy_shader(&self, src: &Image, dst: &Image) -> Option<*mut d3d11::ID3D11ComputeShader> {
         use dxgiformat::*;
 
-        match (src.typed_raw_format, dst.typed_raw_format) {
+        let src_format = src.decomposed_format.copy_srv.unwrap();
+        let dst_format = dst.decomposed_format.copy_uav.unwrap();
+
+        match (src_format, dst_format) {
             (DXGI_FORMAT_R8G8_UINT, DXGI_FORMAT_R16_UINT) => Some(self.cs_copy_image2d_r8g8_image2d_r16.as_raw()),
             (DXGI_FORMAT_R16_UINT, DXGI_FORMAT_R8G8_UINT) => Some(self.cs_copy_image2d_r16_image2d_r8g8.as_raw()),
             (DXGI_FORMAT_R8G8B8A8_UINT, DXGI_FORMAT_R32_UINT) => Some(self.cs_copy_image2d_r8g8b8a8_image2d_r32.as_raw()),
@@ -480,6 +486,7 @@ impl Internal {
             DXGI_FORMAT_R16_UINT =>          Some((self.cs_copy_image2d_r16_buffer.as_raw(), 2f32, 1f32)),
             DXGI_FORMAT_R8G8_UINT =>         Some((self.cs_copy_image2d_r8g8_buffer.as_raw(), 2f32, 1f32)),
             DXGI_FORMAT_R8_UINT =>           Some((self.cs_copy_image2d_r8_buffer.as_raw(), 4f32, 1f32)),
+            DXGI_FORMAT_B8G8R8A8_UNORM =>    Some((self.cs_copy_image2d_b8g8r8a8_buffer.as_raw(), 1f32, 1f32)),
             _ => None
         }
     }
@@ -489,7 +496,10 @@ impl Internal {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        let (shader, scale_x, scale_y) = self.find_image_to_buffer_shader(src.typed_raw_format).unwrap();
+        let _scope = debug_scope!(context, "Image (format={:?},kind={:?}) => Buffer", src.format, src.kind);
+        let (shader, scale_x, scale_y) = self.find_image_to_buffer_shader(
+            src.decomposed_format.copy_srv.unwrap()
+        ).unwrap();
 
         let srv = src.internal.copy_srv.clone().unwrap().as_raw();
         let uav = dst.internal.uav.unwrap();
@@ -504,6 +514,8 @@ impl Internal {
             for copy in regions {
                 let copy = copy.borrow();
                 self.update_buffer_image(context, &copy);
+
+                debug_marker!(context, "{:?}", copy);
 
                 context.Dispatch(
                     (copy.image_extent.width as f32 / scale_x) as u32,
@@ -540,6 +552,7 @@ impl Internal {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
+        let _scope = debug_scope!(context, "Buffer => Image (format={:?},kind={:?})", dst.format, dst.kind);
         // NOTE: we have two separate paths for Buffer -> Image transfers. we need to special case
         //       uploads to compressed formats through `UpdateSubresource` since we cannot get a
         //       UAV of any compressed format.
@@ -577,7 +590,9 @@ impl Internal {
                 }
             }
         } else {
-            let (shader, scale_x, scale_y) = self.find_buffer_to_image_shader(dst.typed_raw_format).unwrap();
+            let (shader, scale_x, scale_y) = self.find_buffer_to_image_shader(
+                dst.decomposed_format.copy_uav.unwrap()
+            ).unwrap();
 
             let srv = src.internal.srv.unwrap();
 
@@ -591,7 +606,14 @@ impl Internal {
                     let info = copy.borrow();
                     self.update_buffer_image(context, &info);
 
-                    let uav = dst.get_uav(info.image_layers.level, 0).unwrap().as_raw();
+                    debug_marker!(context, "{:?}", info);
+
+                    // TODO: multiple layers? do we introduce a stride and do multiple dispatch
+                    //       calls or handle this in the shader? (use z component in dispatch call
+                    //
+                    // NOTE: right now our copy UAV is a 2D array, and we set the layer in the
+                    //       `update_buffer_image` call above
+                    let uav = dst.get_uav(info.image_layers.level, 0 /*info.image_layers.layers.start*/).unwrap().as_raw();
                     context.CSSetUnorderedAccessViews(0, 1, [uav].as_ptr(), ptr::null_mut());
 
                     context.Dispatch(
@@ -626,6 +648,8 @@ impl Internal {
     {
 
         use std::cmp;
+
+        let _scope = debug_scope!(context, "Blit: Image (format={:?},kind={:?}) => Image (format={:?},kind={:?})", src.format, src.kind, dst.format, dst.kind);
 
         let shader = self.find_blit_shader(src).unwrap();
 

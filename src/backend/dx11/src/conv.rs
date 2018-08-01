@@ -34,120 +34,6 @@ pub fn viewable_format(format: DXGI_FORMAT) -> DXGI_FORMAT {
     }
 }
 
-pub fn typeless_format(format: DXGI_FORMAT) -> Option<(DXGI_FORMAT, DXGI_FORMAT)> {
-    match format {
-        DXGI_FORMAT_R8G8B8A8_UNORM |
-        DXGI_FORMAT_R8G8B8A8_SNORM |
-        DXGI_FORMAT_R8G8B8A8_UINT |
-        DXGI_FORMAT_R8G8B8A8_SINT |
-        DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => Some((DXGI_FORMAT_R8G8B8A8_TYPELESS, DXGI_FORMAT_R8G8B8A8_UINT)),
-
-        // ?`
-        DXGI_FORMAT_B8G8R8A8_UNORM |
-        DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => Some((DXGI_FORMAT_B8G8R8A8_TYPELESS, DXGI_FORMAT_B8G8R8A8_UNORM)),
-
-        DXGI_FORMAT_R8_UNORM |
-        DXGI_FORMAT_R8_SNORM |
-        DXGI_FORMAT_R8_UINT |
-        DXGI_FORMAT_R8_SINT => Some((DXGI_FORMAT_R8_TYPELESS, DXGI_FORMAT_R8_UINT)),
-
-        DXGI_FORMAT_R8G8_UNORM |
-        DXGI_FORMAT_R8G8_SNORM |
-        DXGI_FORMAT_R8G8_UINT |
-        DXGI_FORMAT_R8G8_SINT => Some((DXGI_FORMAT_R8G8_TYPELESS, DXGI_FORMAT_R8G8_UINT)),
-
-        DXGI_FORMAT_D16_UNORM |
-        DXGI_FORMAT_R16_UNORM |
-        DXGI_FORMAT_R16_SNORM |
-        DXGI_FORMAT_R16_UINT |
-        DXGI_FORMAT_R16_SINT |
-        DXGI_FORMAT_R16_FLOAT => Some((DXGI_FORMAT_R16_TYPELESS, DXGI_FORMAT_R16_UINT)),
-
-        DXGI_FORMAT_R16G16_UNORM |
-        DXGI_FORMAT_R16G16_SNORM |
-        DXGI_FORMAT_R16G16_UINT |
-        DXGI_FORMAT_R16G16_SINT |
-        DXGI_FORMAT_R16G16_FLOAT => Some((DXGI_FORMAT_R16G16_TYPELESS, DXGI_FORMAT_R16G16_UINT)),
-
-        DXGI_FORMAT_R16G16B16A16_UNORM |
-        DXGI_FORMAT_R16G16B16A16_SNORM |
-        DXGI_FORMAT_R16G16B16A16_UINT |
-        DXGI_FORMAT_R16G16B16A16_SINT |
-        DXGI_FORMAT_R16G16B16A16_FLOAT => Some((DXGI_FORMAT_R16G16B16A16_TYPELESS, DXGI_FORMAT_R16G16B16A16_UINT)),
-
-        DXGI_FORMAT_D32_FLOAT_S8X24_UINT => Some((DXGI_FORMAT_R32G8X24_TYPELESS, DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS)),
-
-        DXGI_FORMAT_D32_FLOAT |
-        DXGI_FORMAT_R32_UINT |
-        DXGI_FORMAT_R32_SINT |
-        DXGI_FORMAT_R32_FLOAT => Some((DXGI_FORMAT_R32_TYPELESS, DXGI_FORMAT_R32_UINT)),
-
-        DXGI_FORMAT_R32G32_UINT |
-        DXGI_FORMAT_R32G32_SINT |
-        DXGI_FORMAT_R32G32_FLOAT => Some((DXGI_FORMAT_R32G32_TYPELESS, DXGI_FORMAT_R32G32_UINT)),
-
-        DXGI_FORMAT_R32G32B32_UINT |
-        DXGI_FORMAT_R32G32B32_SINT |
-        DXGI_FORMAT_R32G32B32_FLOAT => Some((DXGI_FORMAT_R32G32B32_TYPELESS, DXGI_FORMAT_R32G32B32_UINT)),
-
-        DXGI_FORMAT_R32G32B32A32_UINT |
-        DXGI_FORMAT_R32G32B32A32_SINT |
-        DXGI_FORMAT_R32G32B32A32_FLOAT => Some((DXGI_FORMAT_R32G32B32A32_TYPELESS, DXGI_FORMAT_R32G32B32A32_UINT)),
-
-        DXGI_FORMAT_R10G10B10A2_UNORM |
-        DXGI_FORMAT_R10G10B10A2_UINT => Some((DXGI_FORMAT_R10G10B10A2_TYPELESS, DXGI_FORMAT_R10G10B10A2_UINT)),
-
-        DXGI_FORMAT_BC1_UNORM |
-        DXGI_FORMAT_BC1_UNORM_SRGB => Some((DXGI_FORMAT_BC1_TYPELESS, DXGI_FORMAT_R32_UINT)),
-
-        DXGI_FORMAT_BC2_UNORM |
-        DXGI_FORMAT_BC2_UNORM_SRGB => Some((DXGI_FORMAT_BC2_TYPELESS, DXGI_FORMAT_R32_UINT)),
-
-        DXGI_FORMAT_BC3_UNORM |
-        DXGI_FORMAT_BC3_UNORM_SRGB => Some((DXGI_FORMAT_BC3_TYPELESS, DXGI_FORMAT_R32_UINT)),
-
-        DXGI_FORMAT_BC4_UNORM |
-        DXGI_FORMAT_BC4_SNORM => Some((DXGI_FORMAT_BC4_TYPELESS, DXGI_FORMAT_R32_UINT)),
-
-        DXGI_FORMAT_BC5_UNORM |
-        DXGI_FORMAT_BC5_SNORM => Some((DXGI_FORMAT_BC5_TYPELESS, DXGI_FORMAT_R32_UINT)),
-
-        DXGI_FORMAT_BC6H_UF16 |
-        DXGI_FORMAT_BC6H_SF16 => Some((DXGI_FORMAT_BC6H_TYPELESS, DXGI_FORMAT_R32_UINT)),
-
-        // TODO: srgb craziness
-        DXGI_FORMAT_BC7_UNORM |
-        DXGI_FORMAT_BC7_UNORM_SRGB => Some((DXGI_FORMAT_BC7_TYPELESS, DXGI_FORMAT_BC7_UNORM)),
-
-
-        /*R5g6b5Unorm => DXGI_FORMAT_B5G6R5_UNORM,
-        R5g5b5a1Unorm => DXGI_FORMAT_B5G5R5A1_UNORM,
-        A2b10g10r10Unorm => DXGI_FORMAT_R10G10B10A2_UNORM,
-        A2b10g10r10Uint => DXGI_FORMAT_R10G10B10A2_UINT,
-        B10g11r11Ufloat => DXGI_FORMAT_R11G11B10_FLOAT,
-        E5b9g9r9Ufloat => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
-        D16Unorm => DXGI_FORMAT_D16_UNORM,
-        D32Float => DXGI_FORMAT_D32_FLOAT,
-        D32FloatS8Uint => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
-        Bc1RgbUnorm => DXGI_FORMAT_BC1_UNORM,
-        Bc1RgbSrgb => DXGI_FORMAT_BC1_UNORM_SRGB,
-        Bc2Unorm => DXGI_FORMAT_BC2_UNORM,
-        Bc2Srgb => DXGI_FORMAT_BC2_UNORM_SRGB,
-        Bc3Unorm => DXGI_FORMAT_BC3_UNORM,
-        Bc3Srgb => DXGI_FORMAT_BC3_UNORM_SRGB,
-        Bc4Unorm => DXGI_FORMAT_BC4_UNORM,
-        Bc4Inorm => DXGI_FORMAT_BC4_SNORM,
-        Bc5Unorm => DXGI_FORMAT_BC5_UNORM,
-        Bc5Inorm => DXGI_FORMAT_BC5_SNORM,
-        Bc6hUfloat => DXGI_FORMAT_BC6H_UF16,
-        Bc6hFloat => DXGI_FORMAT_BC6H_SF16,
-        Bc7Unorm => DXGI_FORMAT_BC7_UNORM,
-        Bc7Srgb => DXGI_FORMAT_BC7_UNORM_SRGB,*/
-
-        _ => None,
-    }
-}
-
 // TODO: stolen from d3d12 backend, maybe share function somehow?
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::Format::*;
@@ -223,6 +109,322 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     };
 
     Some(format)
+}
+
+#[derive(Debug, Clone)]
+pub struct DecomposedDxgiFormat {
+    pub typeless: DXGI_FORMAT,
+    pub srv: Option<DXGI_FORMAT>,
+    pub rtv: Option<DXGI_FORMAT>,
+    pub uav: Option<DXGI_FORMAT>,
+    pub dsv: Option<DXGI_FORMAT>,
+    // the format we use internally for operating on textures (eg. Rgba8 uses R32 internally for
+    // copies)
+    pub copy_uav: Option<DXGI_FORMAT>,
+    pub copy_srv: Option<DXGI_FORMAT>,
+}
+
+impl DecomposedDxgiFormat {
+    // TODO: we probably want to pass in usage flags or similar to allow for our `typeless_format`
+    //       field to only contain the input format (eg. depth only rather than typeless likely
+    //       improves perf since the driver doesn't need to expose internals)
+    //
+    // TODO: we also want aspect for determining depth/stencil
+    pub fn from_dxgi_format(format: DXGI_FORMAT) -> DecomposedDxgiFormat {
+        match format {
+            DXGI_FORMAT_R8G8B8A8_UNORM |
+            DXGI_FORMAT_R8G8B8A8_SNORM |
+            DXGI_FORMAT_R8G8B8A8_UINT |
+            DXGI_FORMAT_R8G8B8A8_SINT |
+            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R8G8B8A8_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: None,
+                copy_uav: Some(DXGI_FORMAT_R32_UINT),
+                copy_srv: Some(DXGI_FORMAT_R8G8B8A8_UINT),
+            },
+
+            DXGI_FORMAT_B8G8R8A8_UNORM |
+            DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_B8G8R8A8_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(DXGI_FORMAT_B8G8R8A8_UNORM),
+                dsv: None,
+                copy_uav: Some(DXGI_FORMAT_R32_UINT),
+                copy_srv: Some(DXGI_FORMAT_B8G8R8A8_UNORM),
+            },
+
+            DXGI_FORMAT_R8_UNORM |
+            DXGI_FORMAT_R8_SNORM |
+            DXGI_FORMAT_R8_UINT |
+            DXGI_FORMAT_R8_SINT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R8_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: None,
+                copy_uav: Some(DXGI_FORMAT_R8_UINT),
+                copy_srv: Some(DXGI_FORMAT_R8_UINT),
+            },
+
+            DXGI_FORMAT_R8G8_UNORM |
+            DXGI_FORMAT_R8G8_SNORM |
+            DXGI_FORMAT_R8G8_UINT |
+            DXGI_FORMAT_R8G8_SINT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R8G8_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: None,
+                copy_uav: Some(DXGI_FORMAT_R8G8_UINT),
+                copy_srv: Some(DXGI_FORMAT_R8G8_UINT),
+            },
+
+            DXGI_FORMAT_D16_UNORM => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R16_TYPELESS,
+                srv: Some(DXGI_FORMAT_R16_FLOAT),
+                rtv: Some(DXGI_FORMAT_R16_FLOAT),
+                uav: Some(DXGI_FORMAT_R16_FLOAT),
+                dsv: Some(format),
+                copy_uav: Some(DXGI_FORMAT_R16_UINT),
+                copy_srv: Some(DXGI_FORMAT_R16_UINT),
+            },
+
+            DXGI_FORMAT_R16_UNORM |
+            DXGI_FORMAT_R16_SNORM |
+            DXGI_FORMAT_R16_UINT |
+            DXGI_FORMAT_R16_SINT |
+            DXGI_FORMAT_R16_FLOAT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R16_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: Some(DXGI_FORMAT_D16_UNORM),
+                copy_uav: Some(DXGI_FORMAT_R16_UINT),
+                copy_srv: Some(DXGI_FORMAT_R16_UINT),
+            },
+
+            DXGI_FORMAT_R16G16_UNORM |
+            DXGI_FORMAT_R16G16_SNORM |
+            DXGI_FORMAT_R16G16_UINT |
+            DXGI_FORMAT_R16G16_SINT |
+            DXGI_FORMAT_R16G16_FLOAT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R16G16_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: None,
+                copy_uav: Some(DXGI_FORMAT_R32_UINT),
+                copy_srv: Some(DXGI_FORMAT_R16G16_UINT),
+            },
+
+            DXGI_FORMAT_R16G16B16A16_UNORM |
+            DXGI_FORMAT_R16G16B16A16_SNORM |
+            DXGI_FORMAT_R16G16B16A16_UINT |
+            DXGI_FORMAT_R16G16B16A16_SINT |
+            DXGI_FORMAT_R16G16B16A16_FLOAT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R16G16B16A16_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: None,
+                copy_uav: Some(DXGI_FORMAT_R16G16B16A16_UINT),
+                copy_srv: Some(DXGI_FORMAT_R16G16B16A16_UINT),
+            },
+
+            DXGI_FORMAT_D32_FLOAT_S8X24_UINT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R32G8X24_TYPELESS,
+                // TODO: depth or stencil?
+                srv: Some(DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS),
+                rtv: None,
+                uav: None,
+                dsv: Some(format),
+                copy_uav: None,
+                copy_srv: Some(DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS),
+            },
+
+            DXGI_FORMAT_D32_FLOAT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R32_TYPELESS,
+                srv: Some(DXGI_FORMAT_R32_FLOAT),
+                rtv: None,
+                uav: None,
+                dsv: Some(format),
+                copy_uav: Some(DXGI_FORMAT_R32_UINT),
+                copy_srv: Some(DXGI_FORMAT_R32_UINT),
+            },
+
+            DXGI_FORMAT_R32_UINT |
+            DXGI_FORMAT_R32_SINT |
+            DXGI_FORMAT_R32_FLOAT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R32_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: Some(DXGI_FORMAT_D32_FLOAT),
+                copy_uav: Some(DXGI_FORMAT_R32_UINT),
+                copy_srv: Some(DXGI_FORMAT_R32_UINT),
+            },
+
+            DXGI_FORMAT_R32G32_UINT |
+            DXGI_FORMAT_R32G32_SINT |
+            DXGI_FORMAT_R32G32_FLOAT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R32G32_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: None,
+                copy_uav: Some(DXGI_FORMAT_R32G32_UINT),
+                copy_srv: Some(DXGI_FORMAT_R32G32_UINT),
+            },
+
+            // TODO: should we just convert to Rgba32 internally?
+            DXGI_FORMAT_R32G32B32_UINT |
+            DXGI_FORMAT_R32G32B32_SINT |
+            DXGI_FORMAT_R32G32B32_FLOAT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R32G32_TYPELESS,
+                srv: Some(format),
+                rtv: None,
+                uav: None,
+                dsv: None,
+                copy_uav: Some(DXGI_FORMAT_R32G32B32_UINT),
+                copy_srv: Some(DXGI_FORMAT_R32G32B32_UINT),
+            },
+
+            DXGI_FORMAT_R32G32B32A32_UINT |
+            DXGI_FORMAT_R32G32B32A32_SINT |
+            DXGI_FORMAT_R32G32B32A32_FLOAT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R32G32B32A32_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: None,
+                copy_uav: Some(DXGI_FORMAT_R32G32B32A32_UINT),
+                copy_srv: Some(DXGI_FORMAT_R32G32B32A32_UINT),
+            },
+
+            DXGI_FORMAT_R10G10B10A2_UNORM |
+            DXGI_FORMAT_R10G10B10A2_UINT => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_R10G10B10A2_TYPELESS,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: None,
+                copy_uav: Some(DXGI_FORMAT_R32_UINT),
+                copy_srv: Some(DXGI_FORMAT_R10G10B10A2_UINT),
+            },
+
+            DXGI_FORMAT_R11G11B10_FLOAT => DecomposedDxgiFormat {
+                typeless: format,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: None,
+                copy_uav: Some(format),
+                copy_srv: Some(format),
+            },
+
+            DXGI_FORMAT_R9G9B9E5_SHAREDEXP => DecomposedDxgiFormat {
+                typeless: format,
+                srv: Some(format),
+                rtv: None,
+                uav: None,
+                dsv: None,
+                // NOTE: read only
+                copy_uav: None,
+                copy_srv: Some(format),
+            },
+
+            DXGI_FORMAT_BC1_UNORM |
+            DXGI_FORMAT_BC1_UNORM_SRGB => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_BC1_TYPELESS,
+                srv: Some(format),
+                rtv: None,
+                uav: None,
+                dsv: None,
+                // NOTE: read only
+                copy_uav: None,
+                copy_srv: Some(format),
+            },
+
+            DXGI_FORMAT_BC2_UNORM |
+            DXGI_FORMAT_BC2_UNORM_SRGB => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_BC2_TYPELESS,
+                srv: Some(format),
+                rtv: None,
+                uav: None,
+                dsv: None,
+                // NOTE: read only
+                copy_uav: None,
+                copy_srv: Some(format),
+            },
+
+            DXGI_FORMAT_BC3_UNORM |
+            DXGI_FORMAT_BC3_UNORM_SRGB => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_BC3_TYPELESS,
+                srv: Some(format),
+                rtv: None,
+                uav: None,
+                dsv: None,
+                // NOTE: read only
+                copy_uav: None,
+                copy_srv: Some(format),
+            },
+
+            DXGI_FORMAT_BC4_UNORM |
+            DXGI_FORMAT_BC4_SNORM => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_BC4_TYPELESS,
+                srv: Some(format),
+                rtv: None,
+                uav: None,
+                dsv: None,
+                // NOTE: read only
+                copy_uav: None,
+                copy_srv: Some(format),
+            },
+
+            DXGI_FORMAT_BC5_UNORM |
+            DXGI_FORMAT_BC5_SNORM => DecomposedDxgiFormat {
+                typeless: format,
+                srv: Some(format),
+                rtv: None,
+                uav: None,
+                dsv: None,
+                // NOTE: read only
+                copy_uav: None,
+                copy_srv: Some(format),
+            },
+
+            DXGI_FORMAT_BC6H_UF16 |
+            DXGI_FORMAT_BC6H_SF16 => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_BC6H_TYPELESS,
+                srv: Some(format),
+                rtv: None,
+                uav: None,
+                dsv: None,
+                // NOTE: read only
+                copy_uav: None,
+                copy_srv: Some(format),
+            },
+
+            // TODO: srgb craziness
+            DXGI_FORMAT_BC7_UNORM |
+            DXGI_FORMAT_BC7_UNORM_SRGB => DecomposedDxgiFormat {
+                typeless: DXGI_FORMAT_BC7_TYPELESS,
+                srv: Some(format),
+                rtv: None,
+                uav: None,
+                dsv: None,
+                // NOTE: read only
+                copy_uav: None,
+                copy_srv: Some(format),
+            },
+
+            _ => unimplemented!(),
+        }
+    }
 }
 
 pub fn map_viewport(viewport: &Viewport) -> D3D11_VIEWPORT {
