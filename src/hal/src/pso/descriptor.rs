@@ -1,9 +1,20 @@
 //! Descriptor sets and layouts.
-//! A descriptor is an object that describes the connection between a resource, such as
+//! 
+//! A [`Descriptor`] is an object that describes the connection between a resource, such as
 //! an `Image` or `Buffer`, and a variable in a shader. Descriptors are organized into
-//! sets, each of which contains multiple descriptors that are bound and unbound to
-//! shaders as a single unit. Each descriptor set may contain descriptors to multiple
-//! different sorts of resources, and a shader may use multiple descriptor sets at a time.
+//! `DescriptorSet`s, each of which contains multiple descriptors that are bound and unbound to
+//! shaders as a single unit. The contents of each descriptor in a set is defined by a
+//! `DescriptorSetLayout` which is in turn built of [`DescriptorSetLayoutBinding`]s. A `DescriptorSet`
+//! is then allocated from a [`DescriptorPool`] using the `DescriptorSetLayout`, and specific [`Descriptor`]s are
+//! then bound to each binding point in the set using a [`DescriptorSetWrite`] and/or [`DescriptorSetCopy`]. 
+//! Each descriptor set may contain descriptors to multiple different sorts of resources, and a shader may 
+//! use multiple descriptor sets at a time.
+//! 
+//! [`Descriptor`]: enum.Descriptor.html
+//! [`DescriptorSetLayoutBinding`]: struct.DescriptorSetLayoutBinding.html
+//! [`DescriptorPool`]: trait.DescriptorPool.html
+//! [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
+//! [`DescriptorSetCopy`]: struct.DescriptorSetWrite.html
 
 use std::borrow::Borrow;
 use std::fmt;
@@ -45,7 +56,9 @@ pub enum DescriptorType {
     UniformBuffer = 6,
     /// Read-Write, structured buffer.
     StorageBuffer = 7,
-    ///
+    /// A uniform buffer that can be bound with an offset into its memory with minimal performance impact,
+    /// usually used to store pieces of "uniform" data that change per draw call rather than
+    /// per render pass.
     UniformBufferDynamic = 8,
     ///
     StorageBufferDynamic = 9,
@@ -53,13 +66,18 @@ pub enum DescriptorType {
     InputAttachment = 10,
 }
 
-/// Binding description of a descriptor set
+/// Information about the contents of and in which stages descriptors may be bound to a descriptor
+/// set at a certain binding point. Multiple `DescriptorSetLayoutBinding`s are assembled into
+/// a `DescriptorSetLayout`, which is then allocated into a `DescriptorSet` using a
+/// [`DescriptorPool`].
 ///
 /// A descriptor set consists of multiple binding points.
 /// Each binding point contains one or multiple descriptors of a certain type.
 /// The binding point is only valid for the pipelines stages specified.
 ///
 /// The binding _must_ match with the corresponding shader interface.
+/// 
+/// [`DescriptorPool`]: trait.DescriptorPool.html
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DescriptorSetLayoutBinding {
@@ -115,9 +133,15 @@ pub enum AllocationError {
 pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// Allocate a descriptor set from the pool.
     ///
-    /// The descriptor set will be allocated from the pool according to the corresponding set layout.
+    /// The descriptor set will be allocated from the pool according to the corresponding set layout. However,
+    /// specific descriptors must still be written to the set before use using a [`DescriptorSetWrite`] or
+    /// [`DescriptorSetCopy`].
+    /// 
     /// Descriptors will become invalid once the pool is reset. Usage of invalidated descriptor sets results
     /// in undefined behavior.
+    /// 
+    /// [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
+    /// [`DescriptorSetCopy`]: struct.DescriptorSetCopy.html
     fn allocate_set(&mut self, layout: &B::DescriptorSetLayout) -> Result<B::DescriptorSet, AllocationError> {
         let mut sets = Vec::with_capacity(1);
         self.allocate_sets(Some(layout), &mut sets)
@@ -126,9 +150,16 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 
     /// Allocate one or multiple descriptor sets from the pool.
     ///
+    /// The descriptor set will be allocated from the pool according to the corresponding set layout. However,
+    /// specific descriptors must still be written to the set before use using a [`DescriptorSetWrite`] or
+    /// [`DescriptorSetCopy`].
+    /// 
     /// Each descriptor set will be allocated from the pool according to the corresponding set layout.
     /// Descriptors will become invalid once the pool is reset. Usage of invalidated descriptor sets results
     /// in undefined behavior.
+    /// 
+    /// [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
+    /// [`DescriptorSetCopy`]: struct.DescriptorSetCopy.html
     fn allocate_sets<I>(&mut self, layouts: I, sets: &mut Vec<B::DescriptorSet>) -> Result<(), AllocationError>
     where
         I: IntoIterator,
@@ -159,9 +190,13 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     fn reset(&mut self);
 }
 
-/// DOC TODO
+/// Writes the actual descriptors to be bound into a descriptor set. Should be provided
+/// to the `write_descriptor_sets` method of a `Device`.
 #[allow(missing_docs)]
-pub struct DescriptorSetWrite<'a, B: Backend, W> {
+pub struct DescriptorSetWrite<'a, B: Backend, WI>
+    where WI: IntoIterator,
+          WI::Item: Borrow<Descriptor<'a, B>>
+{
     pub set: &'a B::DescriptorSet,
     /// *Note*: when there is more descriptors provided than
     /// array elements left in the specified binding starting
@@ -169,10 +204,13 @@ pub struct DescriptorSetWrite<'a, B: Backend, W> {
     /// the next binding (starting with offset 0), and so on.
     pub binding: DescriptorBinding,
     pub array_offset: DescriptorArrayIndex,
-    pub descriptors: W,
+    pub descriptors: WI,
 }
 
-/// DOC TODO
+/// A handle to a specific shader resource that can be bound for use in a `DescriptorSet`.
+/// Usually provided in a [`DescriptorSetWrite`]
+/// 
+/// [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
 #[allow(missing_docs)]
 #[derive(Clone)]
 pub enum Descriptor<'a, B: Backend> {
@@ -185,7 +223,8 @@ pub enum Descriptor<'a, B: Backend> {
 }
 
 
-/// DOC TODO
+/// Copies a range of descriptors to be bound from one descriptor set to another Should be
+/// provided to the `copy_descriptor_sets` method of a `Device`. 
 #[allow(missing_docs)]
 #[derive(Clone, Copy)]
 pub struct DescriptorSetCopy<'a, B: Backend> {

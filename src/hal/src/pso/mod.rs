@@ -1,8 +1,6 @@
 //! Raw Pipeline State Objects
 //!
-//! This module contains items used to create and manage a raw pipeline state object. Most users
-//! will want to use the typed and safe `PipelineState`. See the `pso` module inside the `gfx`
-//! crate.
+//! This module contains items used to create and manage Pipelines. 
 
 use {device, pass};
 use std::error::Error;
