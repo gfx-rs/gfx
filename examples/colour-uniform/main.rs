@@ -781,6 +781,7 @@ impl<B: Backend> BufferState<B> {
     {
         let memory: B::Memory;
         let buffer: B::Buffer;
+        let size: u64;
 
         let stride = size_of::<T>() as u64;
         let upload_size = data_source.len() as u64 * stride;
@@ -791,6 +792,11 @@ impl<B: Backend> BufferState<B> {
             let unbound = device.create_buffer(upload_size, usage).unwrap();
             let mem_req = device.get_buffer_requirements(&unbound);
 
+            // A note about performance: Using CPU_VISIBLE memory is convenient because it can be
+            // directly memory mapped and easily updated by the CPU, but it is very slow and so should
+            // only be used for small pieces of data that need to be updated very frequently. For something like
+            // a vertex buffer that may be much larger and should not change frequently, you should instead
+            // use a DEVICE_LOCAL buffer that gets filled by copying data from a CPU_VISIBLE staging buffer.
             let upload_type = memory_types
                 .iter()
                 .enumerate()
@@ -803,13 +809,14 @@ impl<B: Backend> BufferState<B> {
 
             memory = device.allocate_memory(upload_type, mem_req.size).unwrap();
             buffer = device.bind_buffer_memory(&memory, 0, unbound).unwrap();
+            size = mem_req.size;
 
             // TODO: check transitions: read/write mapping and vertex buffer read
             {
                 let mut data_target = device
-                    .acquire_mapping_writer::<T>(&memory, 0..upload_size)
+                    .acquire_mapping_writer::<T>(&memory, 0..size)
                     .unwrap();
-                data_target.copy_from_slice(data_source);
+                data_target[0..data_source.len()].copy_from_slice(data_source);
                 device.release_mapping_writer(data_target);
             }
         }
@@ -818,7 +825,7 @@ impl<B: Backend> BufferState<B> {
             memory: Some(memory),
             buffer: Some(buffer),
             device: device_ptr,
-            size: upload_size,
+            size,
         }
     }
 
@@ -834,9 +841,9 @@ impl<B: Backend> BufferState<B> {
         assert!(offset + upload_size <= self.size);
 
         let mut data_target = device
-            .acquire_mapping_writer::<T>(self.memory.as_ref().unwrap(), offset..offset + upload_size)
+            .acquire_mapping_writer::<T>(self.memory.as_ref().unwrap(), offset..self.size)
             .unwrap();
-        data_target.copy_from_slice(data_source);
+        data_target[0..data_source.len()].copy_from_slice(data_source);
         device.release_mapping_writer(data_target);
     }
 
@@ -857,6 +864,7 @@ impl<B: Backend> BufferState<B> {
 
         let memory: B::Memory;
         let buffer: B::Buffer;
+        let size: u64;
 
         {
             let unbound = device.create_buffer(upload_size, usage).unwrap();
@@ -875,11 +883,12 @@ impl<B: Backend> BufferState<B> {
 
             memory = device.allocate_memory(upload_type, mem_reqs.size).unwrap();
             buffer = device.bind_buffer_memory(&memory, 0, unbound).unwrap();
+            size = mem_reqs.size;
 
             // copy image data into staging buffer
             {
                 let mut data_target = device
-                    .acquire_mapping_writer::<u8>(&memory, 0..upload_size)
+                    .acquire_mapping_writer::<u8>(&memory, 0..size)
                     .unwrap();
 
                 for y in 0..height as usize {
@@ -900,7 +909,7 @@ impl<B: Backend> BufferState<B> {
                 memory: Some(memory),
                 buffer: Some(buffer),
                 device: device_ptr,
-                size: upload_size,
+                size,
             },
             Dimensions { width, height },
             row_pitch,
