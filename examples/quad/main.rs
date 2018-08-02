@@ -181,9 +181,9 @@ fn main() {
     // TODO: check transitions: read/write mapping and vertex buffer read
     {
         let mut vertices = device
-            .acquire_mapping_writer::<Vertex>(&buffer_memory, 0..buffer_len)
+            .acquire_mapping_writer::<Vertex>(&buffer_memory, 0..buffer_req.size)
             .unwrap();
-        vertices.copy_from_slice(&QUAD);
+        vertices[0..QUAD.len()].copy_from_slice(&QUAD);
         device.release_mapping_writer(vertices);
     }
 
@@ -214,7 +214,7 @@ fn main() {
     // copy image data into staging buffer
     {
         let mut data = device
-            .acquire_mapping_writer::<u8>(&image_upload_memory, 0..upload_size)
+            .acquire_mapping_writer::<u8>(&image_upload_memory, 0..image_mem_reqs.size)
             .unwrap();
         for y in 0..height as usize {
             let row = &(*img)
