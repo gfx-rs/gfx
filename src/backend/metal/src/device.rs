@@ -1329,7 +1329,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_descriptor_set_layout<I, J>(
-        &self, binding_iter: I, immutable_sampler_iter: J
+        &self, binding_iter: I, immutable_samplers: J
     ) -> n::DescriptorSetLayout
     where
         I: IntoIterator,
@@ -1354,43 +1354,48 @@ impl hal::Device<Backend> for Device {
 
             n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
         } else {
+            struct TempSampler {
+                sampler: metal::SamplerState,
+                binding: pso::DescriptorBinding,
+                array_index: pso::DescriptorArrayIndex,
+            };
+            let mut immutable_sampler_iter = immutable_samplers.into_iter();
+            let mut tmp_samplers = Vec::new();
             let mut desc_layouts = Vec::new();
-            let mut dynamic_offset_count = 0;
-            let mut immutable_sampler_count = 0;
 
             for set_layout_binding in binding_iter {
                 let slb = set_layout_binding.borrow();
                 let mut content = native::DescriptorContent::from(slb.ty);
                 if slb.immutable_samplers {
                     content |= native::DescriptorContent::IMMUTABLE_SAMPLER;
+                    tmp_samplers.extend(immutable_sampler_iter
+                        .by_ref()
+                        .take(slb.count)
+                        .enumerate()
+                        .map(|(array_index, sm)| TempSampler {
+                            sampler: sm.borrow().0.clone(),
+                            binding: slb.binding,
+                            array_index,
+                        })
+                    );
                 }
-                for array_index in 0 .. slb.count {
-                    desc_layouts.push(native::DescriptorLayout {
+                desc_layouts.extend((0 .. slb.count)
+                    .map(|array_index| native::DescriptorLayout {
                         content,
-                        associated_data_index: if slb.immutable_samplers {
-                            immutable_sampler_count += 1;
-                            immutable_sampler_count - 1
-                        } else if content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
-                            dynamic_offset_count += 1;
-                            dynamic_offset_count - 1
-                        } else {
-                            !0
-                        },
                         stages: slb.stage_flags,
                         binding: slb.binding,
                         array_index,
-                    });
-                }
+                    })
+                );
             }
 
             desc_layouts.sort_by_key(|dl| (dl.binding, dl.array_index));
-            let samplers = immutable_sampler_iter
-                .into_iter()
-                .map(|s| s.borrow().0.clone())
-                .collect::<Vec<_>>();
-            assert_eq!(samplers.len(), immutable_sampler_count as usize);
+            tmp_samplers.sort_by_key(|ts| (ts.binding, ts.array_index));
 
-            n::DescriptorSetLayout::Emulated(Arc::new(desc_layouts), samplers)
+            n::DescriptorSetLayout::Emulated(
+                Arc::new(desc_layouts),
+                tmp_samplers.into_iter().map(|ts| ts.sampler).collect()
+            )
         }
     }
 

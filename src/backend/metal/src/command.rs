@@ -177,7 +177,6 @@ unsafe impl Sync for CommandBuffer {}
 struct Temp {
     clear_vertices: Vec<ClearVertex>,
     blit_vertices: FastHashMap<(Aspects, Level), Vec<BlitVertex>>,
-    dynamic_offsets: Vec<com::DescriptorSetOffset>,
 }
 
 #[derive(Clone)]
@@ -1706,7 +1705,6 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             temp: Temp {
                 clear_vertices: Vec::new(),
                 blit_vertices: FastHashMap::default(),
-                dynamic_offsets: Vec::new(),
             },
         }).collect();
 
@@ -2877,11 +2875,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        self.temp.dynamic_offsets.clear();
-        self.temp.dynamic_offsets.extend(dynamic_offsets.into_iter().map(|off| *off.borrow()));
         self.state.resources_vs.pre_allocate(&pipe_layout.total.vs);
         self.state.resources_ps.pre_allocate(&pipe_layout.total.ps);
 
+        let mut dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
@@ -2950,7 +2947,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let mut buffer = data.buffers[data_offset.buffers].clone();
                             if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
                                 if let Some((_, ref mut offset)) = buffer {
-                                    *offset += self.temp.dynamic_offsets[layout.associated_data_index as usize] as u64;
+                                    *offset += *dynamic_offset_iter.next().unwrap().borrow() as u64;
                                 }
                             }
                             if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
@@ -3026,10 +3023,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        self.temp.dynamic_offsets.clear();
-        self.temp.dynamic_offsets.extend(dynamic_offsets.into_iter().map(|off| *off.borrow()));
         self.state.resources_cs.pre_allocate(&pipe_layout.total.cs);
 
+        let mut dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
 
@@ -3074,7 +3070,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 let mut buffer = data.buffers[data_offset.buffers].clone();
                                 if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
                                     if let Some((_, ref mut offset)) = buffer {
-                                        *offset += self.temp.dynamic_offsets[layout.associated_data_index as usize] as u64;
+                                        *offset += *dynamic_offset_iter.next().unwrap().borrow() as u64;
                                     }
                                 }
                                 let index = target_offset.buffers;
@@ -3088,6 +3084,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 }
                                 target_offset.buffers += 1;
                             }
+                        } else if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
+                            dynamic_offset_iter.next();
                         }
 
                         data_offset.add(layout.content);
