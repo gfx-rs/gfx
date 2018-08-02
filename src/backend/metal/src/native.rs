@@ -398,10 +398,8 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
 
                 // step[1]: count the total number of descriptors needed
                 let mut total = ResourceCounters::new();
-                let mut has_immutable_samplers = false;
                 for layout in layouts.iter() {
                     total.add(layout.content);
-                    has_immutable_samplers |= layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER);
                 }
                 debug!("\ttotal {:?}", total);
 
@@ -459,17 +457,18 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 };
 
                 // step[3]: fill out immutable samplers
-                if has_immutable_samplers {
+                if !immutable_samplers.is_empty() {
                     let mut data = inner.write();
-                    let mut sampler_offset = sampler_range.start as usize;
+                    let mut data_index = sampler_range.start as usize;
+                    let mut sampler_iter = immutable_samplers.iter();
 
                     for layout in layouts.iter() {
                         if layout.content.contains(DescriptorContent::SAMPLER) {
                             if layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER) {
-                                let value = &immutable_samplers[layout.associated_data_index as usize];
-                                data.samplers[sampler_offset] = Some(SamplerPtr(value.as_ptr()));
+                                let value = sampler_iter.next().unwrap().as_ptr();
+                                data.samplers[data_index] = Some(SamplerPtr(value));
                             }
-                            sampler_offset += 1;
+                            data_index += 1;
                         }
                     }
                     debug!("\tassigning {} immutable_samplers", immutable_samplers.len());
@@ -635,8 +634,6 @@ impl From<pso::DescriptorType> for DescriptorContent {
 #[derive(Debug)]
 pub struct DescriptorLayout {
     pub content: DescriptorContent,
-    /// Index of either an immutable sampler or a dynamic offset entry, if applicable
-    pub associated_data_index: u16,
     pub stages: pso::ShaderStageFlags,
     pub binding: pso::DescriptorBinding,
     pub array_index: pso::DescriptorArrayIndex,
@@ -658,7 +655,7 @@ pub enum DescriptorSet {
         layouts: Arc<Vec<DescriptorLayout>>,
         sampler_range: Range<pso::DescriptorBinding>,
         texture_range: Range<pso::DescriptorBinding>,
-        buffer_range: Range<pso::DescriptorBinding>
+        buffer_range: Range<pso::DescriptorBinding>,
     },
     ArgumentBuffer {
         raw: metal::Buffer,
