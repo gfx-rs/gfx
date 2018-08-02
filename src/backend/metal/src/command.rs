@@ -731,11 +731,6 @@ enum CommandSink {
     },
 }
 
-enum PassDoor<'a> {
-    Open,
-    Closed { label: &'a str },
-}
-
 /// A helper temporary object that consumes state-setting commands only
 /// applicable to a render pass currently encoded.
 enum PreRender<'a> {
@@ -814,6 +809,24 @@ impl<'a> PreCompute<'a> {
 }
 
 impl CommandSink {
+    fn stop_encoding(&mut self) {
+        match *self {
+            CommandSink::Immediate { ref mut encoder_state, .. } => {
+                encoder_state.end();
+            }
+            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
+                *is_encoding = false;
+                journal.stop();
+            }
+            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref mut capacity, .. } => {
+                if let Some(pass) = pass.take() {
+                    pass.update(capacity);
+                    pass.schedule(queue, cmd_buffer);
+                }
+            }
+        }
+    }
+
     /// Start issuing pre-render commands. Those can be rejected, so the caller is responsible
     /// for updating the state cache accordingly, so that it's set upon the start of a next pass.
     fn pre_render(&mut self) -> PreRender {
@@ -834,14 +847,55 @@ impl CommandSink {
         }
     }
 
-    /// Issue provided render commands, expecting that we are encoding a render pass.
-    fn render_commands<'a, I>(&mut self, commands: I)
+    /// Switch the active encoder to render by starting a render pass.
+    fn switch_render<'a>(
+        &'a mut self,
+        descriptor: &'a metal::RenderPassDescriptorRef,
+    ) -> PreRender<'a> {
+        //assert!(AutoReleasePool::is_active());
+        self.stop_encoding();
+
+        match *self {
+            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
+                *num_passes += 1;
+                let encoder = cmd_buffer.new_render_command_encoder(descriptor);
+                *encoder_state = EncoderState::Render(encoder.to_owned());
+                PreRender::Immediate(encoder)
+            }
+            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
+                let pass = soft::Pass::Render(descriptor.to_owned());
+                *is_encoding = true;
+                journal.passes.push((pass, journal.render_commands.len() .. 0));
+                PreRender::Deferred(&mut journal.render_commands)
+            }
+            CommandSink::Remote { ref mut pass, ref capacity, .. } => {
+                let mut list = Vec::with_capacity(capacity.render);
+                *pass = Some(EncodePass::Render(list, descriptor.to_owned()));
+                match *pass {
+                    Some(EncodePass::Render(ref mut list, _)) => PreRender::Deferred(list),
+                    _ => unreachable!()
+                }
+            }
+        }
+    }
+
+    fn quick_render<'a, I>(
+        &mut self,
+        label: &str,
+        descriptor: &'a metal::RenderPassDescriptorRef,
+        commands: I,
+    )
     where
         I: Iterator<Item = soft::RenderCommand<&'a soft::Own>>,
     {
-        let mut pre = self.pre_render();
-        debug_assert!(!pre.is_void());
-        pre.issue_many(commands);
+        {
+            let mut pre = self.switch_render(descriptor);
+            if let PreRender::Immediate(encoder) = pre {
+                encoder.set_label(label);
+            }
+            pre.issue_many(commands);
+        }
+        self.stop_encoding();
     }
 
     /// Issue provided blit commands. This function doesn't expect an active blit pass,
@@ -967,24 +1021,6 @@ impl CommandSink {
         }
     }
 
-    fn stop_encoding(&mut self) {
-        match *self {
-            CommandSink::Immediate { ref mut encoder_state, .. } => {
-                encoder_state.end();
-            }
-            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
-                *is_encoding = false;
-                journal.stop();
-            }
-            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref mut capacity, .. } => {
-                if let Some(pass) = pass.take() {
-                    pass.update(capacity);
-                    pass.schedule(queue, cmd_buffer);
-                }
-            }
-        }
-    }
-
     fn quick_compute<'a, I>(&mut self, label: &str, commands: I)
     where
         I: Iterator<Item = soft::ComputeCommand<&'a soft::Own>>
@@ -999,56 +1035,6 @@ impl CommandSink {
             }
         }
         self.stop_encoding();
-    }
-
-    fn begin_render_pass<'a, I>(
-        &mut self,
-        door: PassDoor,
-        descriptor: &'a metal::RenderPassDescriptorRef,
-        init_commands: I,
-    ) where
-        I: Iterator<Item = soft::RenderCommand<&'a soft::Own>>,
-    {
-        //assert!(AutoReleasePool::is_active());
-        self.stop_encoding();
-
-        match *self {
-            CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
-                *num_passes += 1;
-                let encoder = cmd_buffer.new_render_command_encoder(descriptor);
-                for command in init_commands {
-                    exec_render(encoder, command);
-                }
-                match door {
-                    PassDoor::Open => {
-                        *encoder_state = EncoderState::Render(encoder.to_owned())
-                    }
-                    PassDoor::Closed { label } => {
-                        encoder.set_label(label);
-                        encoder.end_encoding();
-                    }
-                }
-            }
-            CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
-                let pass = soft::Pass::Render(descriptor.to_owned());
-                let mut range = journal.render_commands.len() .. 0;
-                journal.render_commands.extend(init_commands.map(soft::RenderCommand::own));
-                match door {
-                    PassDoor::Open => *is_encoding = true,
-                    PassDoor::Closed {..} => range.end = journal.render_commands.len(),
-                }
-                journal.passes.push((pass, range))
-            }
-            CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref capacity, .. } => {
-                let mut list = Vec::with_capacity(capacity.render);
-                list.extend(init_commands.map(soft::RenderCommand::own));
-                let new_pass = EncodePass::Render(list, descriptor.to_owned());
-                match door {
-                    PassDoor::Open => *pass = Some(new_pass),
-                    PassDoor::Closed { .. } => new_pass.schedule(queue, cmd_buffer),
-                }
-            }
-        }
     }
 }
 
@@ -2089,12 +2075,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                         sink.as_mut()
                             .unwrap()
-                            .begin_render_pass(
-                                PassDoor::Closed { label: "clear_image" },
-                                descriptor,
-                                iter::empty(),
-                            );
-                        // no actual pass body - everything is in the attachment clear operations
+                            .quick_render("clear_image", descriptor, iter::empty());
                     }
                 }
             }
@@ -2251,7 +2232,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .chain(com_vertex)
                 .chain(com_draw);
 
-            inner.sink().render_commands(commands);
+            inner
+                .sink()
+                .pre_render()
+                .issue_many(commands);
         }
 
         // reset all the affected states
@@ -2287,7 +2271,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .chain(com_ds)
             .chain(com_vs)
             .chain(com_fs);
-        inner.sink().render_commands(commands);
+
+        inner
+            .sink()
+            .pre_render()
+            .issue_many(commands);
 
         vertices.clear();
     }
@@ -2517,11 +2505,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                 inner
                     .sink()
-                    .begin_render_pass(
-                        PassDoor::Closed { label: "blit_image" },
-                        &descriptor,
-                        commands,
-                    );
+                    .quick_render("blit_image", &descriptor, commands);
             }
         });
     }
@@ -2779,7 +2763,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .begin_render_pass(PassDoor::Open, &**desc_guard, init_commands);
+            .switch_render(&**desc_guard)
+            .issue_many(init_commands);
     }
 
     fn next_subpass(&mut self, _contents: com::SubpassContents) {
@@ -3344,7 +3329,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .render_commands(iter::once(command));
+            .pre_render()
+            .issue(command);
     }
 
     fn draw_indexed(
@@ -3367,7 +3353,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .render_commands(iter::once(command));
+            .pre_render()
+            .issue(command);
     }
 
     fn draw_indirect(
@@ -3390,7 +3377,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .render_commands(commands);
+            .pre_render()
+            .issue_many(commands);
     }
 
     fn draw_indexed_indirect(
@@ -3414,7 +3402,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .render_commands(commands);
+            .pre_render()
+            .issue_many(commands);
     }
 
     fn begin_query(
