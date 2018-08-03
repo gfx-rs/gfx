@@ -7,7 +7,6 @@ extern crate foreign_types;
 extern crate core_graphics;
 #[macro_use] extern crate log;
 extern crate block;
-extern crate dispatch;
 extern crate parking_lot;
 extern crate smallvec;
 extern crate spirv_cross;
@@ -15,6 +14,8 @@ extern crate storage_map;
 
 #[cfg(feature = "winit")]
 extern crate winit;
+#[cfg(feature = "dispatch")]
+extern crate dispatch;
 
 #[path = "../../auxil/range_alloc.rs"]
 mod range_alloc;
@@ -43,6 +44,24 @@ use core_graphics::geometry::CGRect;
 use foreign_types::ForeignTypeRef;
 use parking_lot::Mutex;
 
+
+/// Method of recording one-time-submit command buffers.
+#[derive(Clone, Debug, Hash, PartialEq)]
+pub enum OnlineRecording {
+    /// Record natively on-the-fly.
+    Immediate,
+    /// Store commands and only start recording at submission time.
+    Deferred,
+    #[cfg(feature = "dispatch")]
+    /// Start recording asynchronously upon finishing each pass.
+    Remote(dispatch::QueuePriority),
+}
+
+impl Default for OnlineRecording {
+    fn default() -> Self {
+        OnlineRecording::Immediate
+    }
+}
 
 const MAX_ACTIVE_COMMAND_BUFFERS: usize = 1 << 14;
 
