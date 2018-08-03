@@ -1258,14 +1258,14 @@ impl d::Device<B> for Device {
                     raw.p_texel_buffer_view = texel_buffer_views[base..].as_ptr();
                 }
                 Dt::UniformBuffer |
-                Dt::StorageBuffer => {
+                Dt::StorageBuffer |
+                Dt::StorageBufferDynamic |
+                Dt::UniformBufferDynamic => {
                     raw.p_image_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
                     let base = raw.p_buffer_info as usize - raw.descriptor_count as usize;
                     raw.p_buffer_info = buffer_infos[base..].as_ptr();
                 }
-                Dt::StorageBufferDynamic |
-                Dt::UniformBufferDynamic => unimplemented!()
             }
         }
 
