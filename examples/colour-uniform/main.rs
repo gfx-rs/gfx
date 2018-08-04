@@ -1336,7 +1336,7 @@ impl<B: Backend> PipelineState<B> {
                     },
                 });
 
-                device.create_graphics_pipeline(&pipeline_desc)
+                device.create_graphics_pipeline(&pipeline_desc, None)
             };
 
             device.destroy_shader_module(vs_module);

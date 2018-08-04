@@ -7,7 +7,7 @@ use hal::backend::FastHashMap;
 
 use gl;
 use Backend;
-use std::borrow::Borrow;
+
 
 pub type RawBuffer   = gl::types::GLuint;
 pub type Shader      = gl::types::GLuint;

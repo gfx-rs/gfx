@@ -260,15 +260,54 @@ impl d::Device<B> for Device {
         };
 
         let raw = unsafe {
-            self.raw.0.create_pipeline_layout(&info, None)
+            self.raw.0
+                .create_pipeline_layout(&info, None)
                 .expect("Error on pipeline signature creation") // TODO: handle this better
         };
 
         n::PipelineLayout { raw }
     }
 
+    fn create_pipeline_cache(&self) -> n::PipelineCache {
+        let info = vk::PipelineCacheCreateInfo {
+            s_type: vk::StructureType::PipelineCacheCreateInfo,
+            p_next: ptr::null(),
+            flags: vk::PipelineCacheCreateFlags::empty(),
+            initial_data_size: 0, //TODO
+            p_initial_data: ptr::null(),
+        };
+
+        let raw = unsafe {
+            self.raw.0
+                .create_pipeline_cache(&info, None)
+                .expect("Error on pipeline cache creation")
+        };
+
+        n::PipelineCache {
+            raw
+        }
+    }
+
+    fn destroy_pipeline_cache(&self, cache: n::PipelineCache) {
+        unsafe {
+            self.raw.0.destroy_pipeline_cache(cache.raw, None)
+        };
+    }
+
+    fn merge_pipeline_caches<I>(&self, target: &n::PipelineCache, sources: I)
+    where
+        I: IntoIterator<Item = n::PipelineCache>
+    {
+        let caches = sources.into_iter().map(|s| s.raw).collect::<Vec<_>>();
+        unsafe  {
+            self.raw.0
+                .fp_v1_0()
+                .merge_pipeline_caches(self.raw.0.handle(), target.raw, caches.len() as u32, caches.as_ptr())
+        };
+    }
+
     fn create_graphics_pipelines<'a, T>(
-        &self, descs: T
+        &self, descs: T, cache: Option<&n::PipelineCache>
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>>
     where
         T: IntoIterator,
@@ -652,7 +691,10 @@ impl d::Device<B> for Device {
         } else {
             unsafe {
                 self.raw.0.create_graphics_pipelines(
-                    vk::PipelineCache::null(),
+                    match cache {
+                        Some(cache) => cache.raw,
+                        None => vk::PipelineCache::null(),
+                    },
                     &valid_infos,
                     None,
                 )
@@ -679,7 +721,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_compute_pipelines<'a, T>(
-        &self, descs: T
+        &self, descs: T, cache: Option<&n::PipelineCache>
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>>
     where
         T: IntoIterator,
@@ -758,7 +800,10 @@ impl d::Device<B> for Device {
         } else {
             unsafe {
                 self.raw.0.create_compute_pipelines(
-                    vk::PipelineCache::null(),
+                    match cache {
+                        Some(cache) => cache.raw,
+                        None => vk::PipelineCache::null(),
+                    },
                     &valid_infos,
                     None,
                 )

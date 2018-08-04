@@ -1470,9 +1470,24 @@ impl d::Device<B> for Device {
         }
     }
 
+    fn create_pipeline_cache(&self) -> () {
+        ()
+    }
+
+    fn destroy_pipeline_cache(&self, _: ()) {
+        //empty
+    }
+
+    fn merge_pipeline_caches<I>(&self, _: &(), _: I)
+    where
+        I: IntoIterator<Item = ()>
+    {
+        //empty
+    }
+
     fn create_graphics_pipeline<'a>(
         &self,
-        desc: &pso::GraphicsPipelineDesc<'a, B>,
+        desc: &pso::GraphicsPipelineDesc<'a, B>, _cache: Option<&()>
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         let build_shader =
             |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, B>>| {
@@ -1720,8 +1735,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_compute_pipeline<'a>(
-        &self,
-        desc: &pso::ComputePipelineDesc<'a, B>,
+        &self, desc: &pso::ComputePipelineDesc<'a, B>, _cache: Option<&()>
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         let (cs, cs_destroy) =
             Self::extract_entry_point(

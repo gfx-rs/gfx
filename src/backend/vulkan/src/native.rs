@@ -81,6 +81,11 @@ pub struct PipelineLayout {
     pub(crate) raw: vk::PipelineLayout,
 }
 
+#[derive(Debug)]
+pub struct PipelineCache {
+    pub(crate) raw: vk::PipelineCache,
+}
+
 #[derive(Debug, Eq, Hash, PartialEq)]
 pub struct ShaderModule {
     pub(crate) raw: vk::ShaderModule,

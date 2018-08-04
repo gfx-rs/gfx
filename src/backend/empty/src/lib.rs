@@ -42,6 +42,7 @@ impl hal::Backend for Backend {
 
     type ComputePipeline = ();
     type GraphicsPipeline = ();
+    type PipelineCache = ();
     type PipelineLayout = ();
     type DescriptorSetLayout = ();
     type DescriptorPool = DescriptorPool;
@@ -144,6 +145,21 @@ impl hal::Device<Backend> for Device {
         IS::Item: Borrow<()>,
         IR: IntoIterator,
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+    {
+        unimplemented!()
+    }
+
+    fn create_pipeline_cache(&self) -> () {
+        unimplemented!()
+    }
+
+    fn destroy_pipeline_cache(&self, _: ()) {
+        unimplemented!()
+    }
+
+    fn merge_pipeline_caches<I>(&self, _: &(), _: I)
+    where
+        I: IntoIterator<Item = ()>
     {
         unimplemented!()
     }

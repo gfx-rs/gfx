@@ -541,8 +541,23 @@ impl d::Device<B> for Device {
         }
     }
 
+    fn create_pipeline_cache(&self) -> () {
+        ()
+    }
+
+    fn destroy_pipeline_cache(&self, _: ()) {
+        //empty
+    }
+
+    fn merge_pipeline_caches<I>(&self, _: &(), _: I)
+    where
+        I: IntoIterator<Item = ()>
+    {
+        //empty
+    }
+
     fn create_graphics_pipeline<'a>(
-        &self, desc: &pso::GraphicsPipelineDesc<'a, B>
+        &self, desc: &pso::GraphicsPipelineDesc<'a, B>, _cache: Option<&()>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         let gl = &self.share.context;
         let share = &self.share;
@@ -667,8 +682,7 @@ impl d::Device<B> for Device {
     }
 
     fn create_compute_pipeline<'a>(
-        &self,
-        desc: &pso::ComputePipelineDesc<'a, B>,
+        &self, desc: &pso::ComputePipelineDesc<'a, B>, _cache: Option<&()>
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         let gl = &self.share.context;
         let share = &self.share;
@@ -770,7 +784,7 @@ impl d::Device<B> for Device {
         unsafe {
             assert!(pass.attachments.len() <= att_points.len());
             gl.DrawBuffers(attachments_len as _, att_points.as_ptr());
-            let status = gl.CheckFramebufferStatus(target);
+            let _status = gl.CheckFramebufferStatus(target); //TODO: check status
             gl.BindFramebuffer(target, 0);
         }
         if let Err(err) = self.share.check() {

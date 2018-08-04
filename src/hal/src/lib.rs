@@ -371,6 +371,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
 
     type ComputePipeline:     fmt::Debug + Any + Send + Sync;
     type GraphicsPipeline:    fmt::Debug + Any + Send + Sync;
+    type PipelineCache:       fmt::Debug + Any + Send + Sync;
     type PipelineLayout:      fmt::Debug + Any + Send + Sync;
     type DescriptorPool:      pso::DescriptorPool<Self>;
     type DescriptorSet:       fmt::Debug + Any + Send + Sync;

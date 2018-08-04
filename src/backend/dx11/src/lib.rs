@@ -2426,6 +2426,7 @@ impl hal::Backend for Backend {
     type ComputePipeline = ComputePipeline;
     type GraphicsPipeline = GraphicsPipeline;
     type PipelineLayout = PipelineLayout;
+    type PipelineCache = ();
     type DescriptorSetLayout = DescriptorSetLayout;
     type DescriptorPool = DescriptorPool;
     type DescriptorSet = DescriptorSet;

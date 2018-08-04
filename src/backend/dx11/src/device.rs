@@ -727,9 +727,24 @@ impl hal::Device<Backend> for Device {
         }
     }
 
+    fn create_pipeline_cache(&self) -> () {
+        ()
+    }
+
+    fn destroy_pipeline_cache(&self, _: ()) {
+        //empty
+    }
+
+    fn merge_pipeline_caches<I>(&self, _: &(), _: I)
+    where
+        I: IntoIterator<Item = ()>
+    {
+        //empty
+    }
+
     fn create_graphics_pipeline<'a>(
         &self,
-        desc: &pso::GraphicsPipelineDesc<'a, Backend>,
+        desc: &pso::GraphicsPipelineDesc<'a, Backend>, _cache: Option<&()>
     ) -> Result<GraphicsPipeline, pso::CreationError> {
         let build_shader =
             |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, Backend>>| {
@@ -777,8 +792,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_compute_pipeline<'a>(
-        &self,
-        desc: &pso::ComputePipelineDesc<'a, Backend>,
+        &self, desc: &pso::ComputePipelineDesc<'a, Backend>,  _cache: Option<&()>
     ) -> Result<ComputePipeline, pso::CreationError> {
         let build_shader =
             |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, Backend>>| {

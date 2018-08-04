@@ -11,7 +11,7 @@
 //! handle to that physical device that has the requested capabilities
 //! and is used to actually do things.
 
-use std::{fmt, mem, slice};
+use std::{fmt, iter, mem, slice};
 use std::any::Any;
 use std::borrow::Borrow;
 use std::error::Error;
@@ -218,17 +218,30 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Destroy a pipeline layout object
     fn destroy_pipeline_layout(&self, layout: B::PipelineLayout);
 
+    /// Create a pipeline cache object.
+    //TODO: allow loading from disk
+    fn create_pipeline_cache(&self) -> B::PipelineCache;
+
+    /// Merge a number of source pipeline caches into the target one.
+    fn merge_pipeline_caches<I>(&self, target: &B::PipelineCache, sources: I)
+    where
+        I: IntoIterator<Item = B::PipelineCache>;
+
+    /// Destroy a pipeline cache object.
+    fn destroy_pipeline_cache(&self, cache: B::PipelineCache);
+
     /// Create a graphics pipeline.
     fn create_graphics_pipeline<'a>(
         &self,
-        desc: &pso::GraphicsPipelineDesc<'a, B>
+        desc: &pso::GraphicsPipelineDesc<'a, B>,
+        cache: Option<&B::PipelineCache>,
     ) -> Result<B::GraphicsPipeline, pso::CreationError> {
-        self.create_graphics_pipelines(Some(desc)).remove(0)
+        self.create_graphics_pipelines(iter::once(desc), cache).remove(0)
     }
 
     /// Create graphics pipelines.
     fn create_graphics_pipelines<'a, I>(
-        &self, descs: I
+        &self, descs: I, cache: Option<&B::PipelineCache>
     ) -> Vec<Result<B::GraphicsPipeline, pso::CreationError>>
     where
         I: IntoIterator,
@@ -236,7 +249,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     {
         descs
             .into_iter()
-            .map(|desc| self.create_graphics_pipeline(desc.borrow()))
+            .map(|desc| self.create_graphics_pipeline(desc.borrow(), cache))
             .collect()
     }
 
@@ -249,14 +262,15 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Create a compute pipeline.
     fn create_compute_pipeline<'a>(
         &self,
-        desc: &pso::ComputePipelineDesc<'a, B>
+        desc: &pso::ComputePipelineDesc<'a, B>,
+        cache: Option<&B::PipelineCache>,
     ) -> Result<B::ComputePipeline, pso::CreationError> {
-        self.create_compute_pipelines(Some(desc)).remove(0)
+        self.create_compute_pipelines(iter::once(desc), cache).remove(0)
     }
 
     /// Create compute pipelines.
     fn create_compute_pipelines<'a, I>(
-        &self, descs: I
+        &self, descs: I, cache: Option<&B::PipelineCache>
     ) -> Vec<Result<B::ComputePipeline, pso::CreationError>>
     where
         I: IntoIterator,
@@ -264,7 +278,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     {
         descs
             .into_iter()
-            .map(|desc| self.create_compute_pipeline(desc.borrow()))
+            .map(|desc| self.create_compute_pipeline(desc.borrow(), cache))
             .collect()
     }
 
@@ -465,7 +479,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         self.map_memory(memory, range.clone())
             .map(|ptr| unsafe {
                 let start_ptr = ptr as *const _;
-                self.invalidate_mapped_memory_ranges(Some((memory, range.clone())));
+                self.invalidate_mapped_memory_ranges(iter::once((memory, range.clone())));
 
                 mapping::Reader {
                     slice: slice::from_raw_parts(start_ptr, count),
@@ -505,7 +519,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Release a mapping Writer.
     fn release_mapping_writer<'a, T>(&self, mut writer: mapping::Writer<'a, B, T>) {
         writer.released = true;
-        self.flush_mapped_memory_ranges(Some((writer.memory, writer.range.clone())));
+        self.flush_mapped_memory_ranges(iter::once((writer.memory, writer.range.clone())));
         self.unmap_memory(writer.memory);
     }
 
@@ -526,7 +540,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
 
     ///
     fn reset_fence(&self, fence: &B::Fence) {
-        self.reset_fences(Some(fence));
+        self.reset_fences(iter::once(fence));
     }
 
     ///
@@ -543,7 +557,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Blocks until the given fence is signaled.
     /// Returns true if the fence was signaled before the timeout.
     fn wait_for_fence(&self, fence: &B::Fence, timeout_ns: u64) -> bool {
-        self.wait_for_fences(Some(fence), WaitFor::All, timeout_ns)
+        self.wait_for_fences(iter::once(fence), WaitFor::All, timeout_ns)
     }
 
     /// Blocks until all or one of the given fences are signaled.
