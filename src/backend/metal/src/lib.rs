@@ -1,5 +1,5 @@
 extern crate gfx_hal as hal;
-extern crate metal_rs as metal;
+extern crate metal;
 #[macro_use] extern crate bitflags;
 extern crate cocoa;
 extern crate foreign_types;
