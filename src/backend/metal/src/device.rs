@@ -1,6 +1,7 @@
 use {
-    Backend, PrivateCapabilities, QueueFamily,
-    Shared, Surface, Swapchain, validate_line_width, BufferPtr, SamplerPtr, TexturePtr,
+    Backend, PrivateCapabilities, QueueFamily, OnlineRecording,
+    Shared, Surface, Swapchain,
+    validate_line_width, BufferPtr, SamplerPtr, TexturePtr,
 };
 use {conversions as conv, command, native as n};
 use internal::FastStorageMap;
@@ -128,6 +129,7 @@ pub struct Device {
     pub(crate) shared: Arc<Shared>,
     pub(crate) private_caps: PrivateCapabilities,
     memory_types: [hal::MemoryType; 4],
+    pub online_recording: OnlineRecording,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -269,6 +271,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             shared: self.shared.clone(),
             private_caps: self.private_caps.clone(),
             memory_types: self.memory_types,
+            online_recording: OnlineRecording::default(),
         };
 
         Ok(hal::Gpu {
@@ -600,7 +603,7 @@ impl hal::Device<Backend> for Device {
     fn create_command_pool(
         &self, _family: QueueFamilyId, _flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
-        command::CommandPool::new(&self.shared)
+        command::CommandPool::new(&self.shared, self.online_recording.clone())
     }
 
     fn destroy_command_pool(&self, mut pool: command::CommandPool) {

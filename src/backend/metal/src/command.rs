@@ -1,5 +1,6 @@
 use {
-    Backend, PrivateDisabilities, Shared, validate_line_width,
+    Backend, PrivateDisabilities, OnlineRecording, Shared,
+    validate_line_width,
     BufferPtr, TexturePtr, SamplerPtr,
 };
 use {conversions as conv, native, soft, window};
@@ -23,20 +24,15 @@ use hal::range::RangeArg;
 
 use block::ConcreteBlock;
 use cocoa::foundation::{NSUInteger, NSInteger, NSRange};
-use dispatch;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize};
 use objc::rc::autoreleasepool;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 
+#[cfg(feature = "dispatch")]
+use dispatch;
 
-#[allow(dead_code)]
-enum OnlineRecording {
-    Immediate,
-    Deferred,
-    Remote(dispatch::QueuePriority),
-}
 
 const WORD_SIZE: usize = 4;
 const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
@@ -51,8 +47,6 @@ const COUNTERS_REPORT_WINDOW: usize = 0;
 const STITCH_DEFERRED_COMMAND_BUFFERS: bool = true;
 /// Hack around the Metal System Trace logic that ignores empty command buffers entirely.
 const INSERT_DUMMY_ENCODERS: bool = false;
-/// Method of recording one-time-submit command buffers
-const ONLINE_RECORDING: OnlineRecording = OnlineRecording::Immediate;
 
 pub struct QueueInner {
     raw: metal::CommandQueue,
@@ -129,6 +123,8 @@ impl QueueInner {
 }
 
 struct PoolShared {
+    online_recording: OnlineRecording,
+    #[cfg(feature = "dispatch")]
     dispatch_queue: Option<dispatch::Queue>,
 }
 
@@ -145,13 +141,15 @@ unsafe impl Send for CommandPool {}
 unsafe impl Sync for CommandPool {}
 
 impl CommandPool {
-    pub(crate) fn new(shared: &Arc<Shared>) -> Self {
+    pub(crate) fn new(shared: &Arc<Shared>, online_recording: OnlineRecording) -> Self {
         let pool_shared = PoolShared {
-            dispatch_queue: match ONLINE_RECORDING {
+            #[cfg(feature = "dispatch")]
+            dispatch_queue: match online_recording {
                 OnlineRecording::Immediate |
                 OnlineRecording::Deferred => None,
-                OnlineRecording::Remote(priority) => Some(dispatch::Queue::global(priority)),
-            }
+                OnlineRecording::Remote(priority) => Some(dispatch::Queue::global(priority.clone())),
+            },
+            online_recording,
         };
         CommandPool {
             shared: Arc::clone(shared),
@@ -594,6 +592,7 @@ impl StageResources {
 }
 
 
+#[cfg(feature = "dispatch")]
 #[derive(Debug, Default)]
 struct Capacity {
     render: usize,
@@ -602,16 +601,21 @@ struct Capacity {
 }
 
 //TODO: make sure to recycle the heap allocation of these commands.
+#[cfg(feature = "dispatch")]
 enum EncodePass {
     Render(Vec<soft::RenderCommand<soft::Own>>, metal::RenderPassDescriptor),
     Compute(Vec<soft::ComputeCommand<soft::Own>>),
     Blit(Vec<soft::BlitCommand>),
 }
+#[cfg(feature = "dispatch")]
 unsafe impl Send for EncodePass {}
 
+#[cfg(feature = "dispatch")]
 struct SharedCommandBuffer(Arc<Mutex<metal::CommandBuffer>>);
+#[cfg(feature = "dispatch")]
 unsafe impl Send for SharedCommandBuffer {}
 
+#[cfg(feature = "dispatch")]
 impl EncodePass {
     fn schedule(self, queue: &dispatch::Queue, cmd_buffer_arc: &Arc<Mutex<metal::CommandBuffer>>) {
         let cmd_buffer = SharedCommandBuffer(Arc::clone(cmd_buffer_arc));
@@ -721,6 +725,7 @@ enum CommandSink {
         is_encoding: bool,
         journal: Journal,
     },
+    #[cfg(feature = "dispatch")]
     Remote {
         queue: dispatch::Queue,
         cmd_buffer: Arc<Mutex<metal::CommandBuffer>>,
@@ -817,6 +822,7 @@ impl CommandSink {
                 *is_encoding = false;
                 journal.stop();
             }
+            #[cfg(feature = "dispatch")]
             CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref mut capacity, .. } => {
                 if let Some(pass) = pass.take() {
                     pass.update(capacity);
@@ -839,6 +845,7 @@ impl CommandSink {
                     _ => PreRender::Void,
                 }
             }
+            #[cfg(feature = "dispatch")]
             CommandSink::Remote { pass: Some(EncodePass::Render(ref mut list, _)), .. } => {
                 PreRender::Deferred(list)
             }
@@ -867,6 +874,7 @@ impl CommandSink {
                 journal.passes.push((pass, journal.render_commands.len() .. 0));
                 PreRender::Deferred(&mut journal.render_commands)
             }
+            #[cfg(feature = "dispatch")]
             CommandSink::Remote { ref mut pass, ref capacity, .. } => {
                 let mut list = Vec::with_capacity(capacity.render);
                 *pass = Some(EncodePass::Render(list, descriptor.to_owned()));
@@ -928,9 +936,11 @@ impl CommandSink {
                 }
                 PreBlit::Deferred(&mut journal.blit_commands)
             }
+            #[cfg(feature = "dispatch")]
             CommandSink::Remote { pass: Some(EncodePass::Blit(ref mut list)), .. } => {
                 PreBlit::Deferred(list)
             }
+            #[cfg(feature = "dispatch")]
             CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref mut capacity, .. } => {
                 if let Some(pass) = pass.take() {
                     pass.update(capacity);
@@ -970,6 +980,7 @@ impl CommandSink {
                     _ => PreCompute::Void,
                 }
             }
+            #[cfg(feature = "dispatch")]
             CommandSink::Remote { pass: Some(EncodePass::Compute(ref mut list)), .. } => {
                 PreCompute::Deferred(list)
             }
@@ -1002,9 +1013,11 @@ impl CommandSink {
                 };
                 (PreCompute::Deferred(&mut journal.compute_commands), switch)
             }
+            #[cfg(feature = "dispatch")]
             CommandSink::Remote { pass: Some(EncodePass::Compute(ref mut list)), .. } => {
                 (PreCompute::Deferred(list), false)
             }
+            #[cfg(feature = "dispatch")]
             CommandSink::Remote { ref queue, ref cmd_buffer, ref mut pass, ref mut capacity, .. } => {
                 if let Some(pass) = pass.take() {
                     pass.update(capacity);
@@ -1047,6 +1060,7 @@ pub struct IndexBuffer<B> {
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
     backup_journal: Option<Journal>,
+    #[cfg(feature = "dispatch")]
     backup_capacity: Option<Capacity>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
@@ -1073,6 +1087,7 @@ impl CommandBufferInner {
                     self.backup_journal = Some(journal);
                 }
             }
+            #[cfg(feature = "dispatch")]
             Some(CommandSink::Remote { token, capacity, .. }) => {
                 shared.queue.lock().release(token);
                 if !release {
@@ -1493,6 +1508,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             .filter_map(|sem| sem.system.clone())
             .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
 
+        #[allow(unused_mut)]
         let (mut num_immediate, mut num_deferred, mut num_remote) = (0, 0, 0);
         let do_signal = fence.is_some() || !system_semaphores.is_empty();
 
@@ -1541,6 +1557,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                             }
                         }
                      }
+                     #[cfg(feature = "dispatch")]
                      Some(CommandSink::Remote { ref queue, ref cmd_buffer, ref token, .. }) => {
                         num_remote += 1;
                         trace!("\tremote {:?}", token);
@@ -1683,6 +1700,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             inner: Arc::new(RefCell::new(CommandBufferInner {
                 sink: None,
                 backup_journal: None,
+                #[cfg(feature = "dispatch")]
                 backup_capacity: None,
                 retained_buffers: Vec::new(),
                 retained_textures: Vec::new(),
@@ -1775,7 +1793,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         //TODO: Implement secondary command buffers
         let oneshot = flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT);
-        let sink = match ONLINE_RECORDING {
+        let sink = match self.pool_shared.borrow_mut().online_recording {
             OnlineRecording::Immediate if oneshot => {
                 let (cmd_buffer, token) = self.shared.queue.lock().spawn();
                 CommandSink::Immediate {
@@ -1785,6 +1803,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     num_passes: 0,
                 }
             }
+            #[cfg(feature = "dispatch")]
             OnlineRecording::Remote(_) if oneshot => {
                 let (cmd_buffer, token) = self.shared.queue.lock().spawn();
                 CommandSink::Remote {
