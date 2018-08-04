@@ -23,7 +23,7 @@ use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
 
 use block::ConcreteBlock;
-use cocoa::foundation::{NSUInteger, NSInteger, NSRange};
+use cocoa::foundation::{NSUInteger, NSRange};
 use foreign_types::{ForeignType, ForeignTypeRef};
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize};
 use objc::rc::autoreleasepool;
@@ -1234,20 +1234,26 @@ where
             encoder.set_render_pipeline_state(pipeline_state.borrow());
         }
         Cmd::Draw { primitive_type, ref vertices, ref instances } =>  {
-            /*if instances.start == 0 { //TODO: needs metal-rs breaking update
+            if instances.end == 1 {
+                encoder.draw_primitives(
+                    primitive_type,
+                    vertices.start as _,
+                    (vertices.end - vertices.start) as _,
+                );
+            } else if instances.start == 0 {
                 encoder.draw_primitives_instanced(
                     primitive_type,
-                    vertices.start as NSUInteger,
-                    (vertices.end - vertices.start) as NSUInteger,
-                    instances.end as NSUInteger,
+                    vertices.start as _,
+                    (vertices.end - vertices.start) as _,
+                    instances.end as _,
                 );
-            } else*/ {
+            } else {
                 encoder.draw_primitives_instanced_base_instance(
                     primitive_type,
-                    vertices.start as NSUInteger,
-                    (vertices.end - vertices.start) as NSUInteger,
-                    (instances.end - instances.start) as NSUInteger,
-                    instances.start as NSUInteger,
+                    vertices.start as _,
+                    (vertices.end - vertices.start) as _,
+                    (instances.end - instances.start) as _,
+                    instances.start as _,
                 );
             }
         }
@@ -1256,30 +1262,39 @@ where
                 MTLIndexType::UInt16 => 2,
                 MTLIndexType::UInt32 => 4,
             };
+            let index_count = (indices.end - indices.start) as _;
             let index_offset = index.offset + indices.start as buffer::Offset * index_size;
             let index_buffer = index.buffer.as_native();
-            // Metal requires `indexBufferOffset` alignment of 4
-            if base_vertex == 0 && instances.start == 0 {
-                //Note: for a strange reason, index alignment is not enforced here
-                encoder.draw_indexed_primitives_instanced(
+            if base_vertex == 0 && instances.end == 1 {
+                encoder.draw_indexed_primitives(
                     primitive_type,
-                    (indices.end - indices.start) as NSUInteger,
+                    index_count,
                     index.index_type,
                     index_buffer,
                     index_offset,
-                    instances.end as NSUInteger,
+                );
+            } else if base_vertex == 0 && instances.start == 0 {
+                encoder.draw_indexed_primitives_instanced(
+                    primitive_type,
+                    index_count,
+                    index.index_type,
+                    index_buffer,
+                    index_offset,
+                    instances.end as _,
                 );
             } else {
+                // Metal requires `indexBufferOffset` alignment of 4, but only for base instance
+                // variant of the call for some weird reason.
                 assert_eq!(index_offset % WORD_ALIGNMENT, 0);
                 encoder.draw_indexed_primitives_instanced_base_instance(
                     primitive_type,
-                    (indices.end - indices.start) as NSUInteger,
+                    index_count,
                     index.index_type,
                     index_buffer,
                     index_offset,
-                    (instances.end - instances.start) as NSUInteger,
-                    base_vertex as NSInteger,
-                    instances.start as NSUInteger,
+                    (instances.end - instances.start) as _,
+                    base_vertex as _,
+                    instances.start as _,
                 );
             }
         }
