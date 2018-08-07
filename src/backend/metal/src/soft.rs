@@ -33,7 +33,7 @@ impl<'a> Resources for &'a Own {
 
 #[derive(Clone, Debug)]
 pub enum RenderCommand<R: Resources> {
-    SetViewport(metal::MTLViewport),
+    SetViewport(hal::pso::Rect, Range<f32>),
     SetScissor(metal::MTLScissorRect),
     SetBlendColor(hal::pso::ColorValue),
     SetDepthBias(hal::pso::DepthBias),
@@ -90,7 +90,7 @@ impl<'a> RenderCommand<&'a Own> {
     pub fn own(self) -> RenderCommand<Own> {
         use self::RenderCommand::*;
         match self {
-            SetViewport(vp) => SetViewport(vp),
+            SetViewport(rect, depth) => SetViewport(rect, depth),
             SetScissor(rect) => SetScissor(rect),
             SetBlendColor(color) => SetBlendColor(color),
             SetDepthBias(bias) => SetDepthBias(bias),
@@ -244,7 +244,8 @@ pub enum Pass {
     Compute,
 }
 
-fn _test_render_command_size(com: RenderCommand<Own>) -> [usize; 7] {
+
+fn _test_render_command_size(com: RenderCommand<Own>) -> [usize; 6] {
     use std::mem;
     unsafe { mem::transmute(com) }
 }

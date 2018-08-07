@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::{iter, mem, slice, time};
 
 use hal::{buffer, command as com, error, memory, pool, pso};
-use hal::{DrawCount, SwapImageIndex, VertexCount, VertexOffset, InstanceCount, IndexCount, WorkGroupCount};
+use hal::{DrawCount, SwapImageIndex, VertexCount, VertexOffset, InstanceCount, IndexCount, IndexType, WorkGroupCount};
 use hal::backend::FastHashMap;
 use hal::format::{Aspects, Format, FormatDesc};
 use hal::image::{Extent, Filter, Layout, Level, SubresourceRange};
@@ -192,7 +192,8 @@ struct RenderPipelineState {
 /// spaces (1 - Vulkan, 2 - Metal), so be careful not to confuse them.
 #[derive(Clone)]
 struct State {
-    viewport: Option<MTLViewport>,
+    // Note: this could be `MTLViewport` but we have to patch the depth separately.
+    viewport: Option<(pso::Rect, Range<f32>)>,
     scissors: Option<MTLScissorRect>,
     blend_color: Option<pso::ColorValue>,
     render_pso: Option<RenderPipelineState>,
@@ -254,7 +255,9 @@ impl State {
         &'a self, aspects: Aspects
     ) -> impl Iterator<Item = soft::RenderCommand<&'a soft::Own>> {
         // Apply previously bound values for this command buffer
-        let com_vp = self.viewport.map(soft::RenderCommand::SetViewport);
+        let com_vp = self.viewport.as_ref().map(|&(rect, ref depth)| {
+            soft::RenderCommand::SetViewport(rect, depth.clone())
+        });
         let com_scissor = self.scissors.map(|sr| soft::RenderCommand::SetScissor(
             Self::clamp_scissor(sr, self.framebuffer_inner.extent)
         ));
@@ -494,20 +497,13 @@ impl State {
     fn set_viewport<'a>(
         &mut self, vp: &'a pso::Viewport, disabilities: &PrivateDisabilities
     ) -> soft::RenderCommand<&'a soft::Own> {
-        let viewport = MTLViewport {
-            originX: vp.rect.x as _,
-            originY: vp.rect.y as _,
-            width: vp.rect.w as _,
-            height: vp.rect.h as _,
-            znear: vp.depth.start as _,
-            zfar: if disabilities.broken_viewport_near_depth {
-                (vp.depth.end - vp.depth.start) as _
-            } else {
-                vp.depth.end as _
-            },
+        let depth = vp.depth.start .. if disabilities.broken_viewport_near_depth {
+            (vp.depth.end - vp.depth.start)
+        } else {
+            vp.depth.end
         };
-        self.viewport = Some(viewport);
-        soft::RenderCommand::SetViewport(viewport)
+        self.viewport = Some((vp.rect, depth.clone()));
+        soft::RenderCommand::SetViewport(vp.rect, depth)
     }
 
     fn set_scissor<'a>(&mut self, rect: &'a pso::Rect) -> soft::RenderCommand<&'a soft::Own> {
@@ -1050,11 +1046,12 @@ impl CommandSink {
     }
 }
 
+
 #[derive(Clone, Copy, Debug)]
 pub struct IndexBuffer<B> {
     buffer: B,
-    offset: buffer::Offset,
-    index_type: MTLIndexType,
+    offset: u32,
+    stride: u32,
 }
 
 pub struct CommandBufferInner {
@@ -1164,8 +1161,15 @@ where
 {
     use soft::RenderCommand as Cmd;
     match *command.borrow() {
-        Cmd::SetViewport(viewport) => {
-            encoder.set_viewport(viewport);
+        Cmd::SetViewport(ref rect, ref depth) => {
+            encoder.set_viewport(MTLViewport {
+                originX: rect.x as _,
+                originY: rect.y as _,
+                width: rect.w as _,
+                height: rect.h as _,
+                znear: depth.start as _,
+                zfar: depth.end as _,
+            });
         }
         Cmd::SetScissor(scissor) => {
             encoder.set_scissor_rect(scissor);
@@ -1258,40 +1262,41 @@ where
             }
         }
         Cmd::DrawIndexed { primitive_type, index, ref indices, base_vertex, ref instances } => {
-            let index_size = match index.index_type {
-                MTLIndexType::UInt16 => 2,
-                MTLIndexType::UInt32 => 4,
-            };
             let index_count = (indices.end - indices.start) as _;
-            let index_offset = index.offset + indices.start as buffer::Offset * index_size;
+            let index_type = match index.stride {
+                2 => MTLIndexType::UInt16,
+                4 => MTLIndexType::UInt32,
+                _ => unreachable!(),
+            };
+            let offset = (index.offset + indices.start * index.stride) as u64;
             let index_buffer = index.buffer.as_native();
             if base_vertex == 0 && instances.end == 1 {
                 encoder.draw_indexed_primitives(
                     primitive_type,
                     index_count,
-                    index.index_type,
+                    index_type,
                     index_buffer,
-                    index_offset,
+                    offset,
                 );
             } else if base_vertex == 0 && instances.start == 0 {
                 encoder.draw_indexed_primitives_instanced(
                     primitive_type,
                     index_count,
-                    index.index_type,
+                    index_type,
                     index_buffer,
-                    index_offset,
+                    offset,
                     instances.end as _,
                 );
             } else {
                 // Metal requires `indexBufferOffset` alignment of 4, but only for base instance
                 // variant of the call for some weird reason.
-                assert_eq!(index_offset % WORD_ALIGNMENT, 0);
+                assert_eq!(offset % WORD_ALIGNMENT, 0);
                 encoder.draw_indexed_primitives_instanced_base_instance(
                     primitive_type,
                     index_count,
-                    index.index_type,
+                    index_type,
                     index_buffer,
-                    index_offset,
+                    offset,
                     (instances.end - instances.start) as _,
                     base_vertex as _,
                     instances.start as _,
@@ -1306,11 +1311,16 @@ where
             );
         }
         Cmd::DrawIndexedIndirect { primitive_type, index, buffer, offset } => {
+            let index_type = match index.stride {
+                2 => MTLIndexType::UInt16,
+                4 => MTLIndexType::UInt32,
+                _ => unreachable!(),
+            };
             encoder.draw_indexed_primitives_indirect(
                 primitive_type,
-                index.index_type,
+                index_type,
                 index.buffer.as_native(),
-                index.offset,
+                index.offset as u64,
                 buffer.as_native(),
                 offset,
             );
@@ -2474,17 +2484,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             for ((aspects, level), list) in vertices.drain() {
                 let ext = dst.kind.extent().at_level(level);
+                //Note: flipping Y coordinate of the destination here
+                let rect = pso::Rect {
+                    x: 0,
+                    y: ext.height as _,
+                    w: ext.width as _,
+                    h: -(ext.height as i16),
+                };
 
                 let extra = [
-                    //Note: flipping Y coordinate of the destination here
-                    soft::RenderCommand::SetViewport(MTLViewport {
-                        originX: 0.0,
-                        originY: ext.height as _,
-                        width: ext.width as _,
-                        height: -(ext.height as f64),
-                        znear: 0.0,
-                        zfar: 1.0,
-                    }),
+                    soft::RenderCommand::SetViewport(rect, 0.0 .. 1.0),
                     soft::RenderCommand::SetScissor(MTLScissorRect {
                         x: 0,
                         y: 0,
@@ -2544,12 +2553,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
         let buffer = view.buffer.raw.clone();
-        let offset = view.offset;
-        let index_type = conv::map_index_type(view.index_type);
         self.state.index_buffer = Some(IndexBuffer {
             buffer: AsNative::from(buffer.as_ref()),
-            offset,
-            index_type,
+            offset: view.offset as _,
+            stride: match view.index_type {
+                IndexType::U16 => 2,
+                IndexType::U32 => 4,
+            },
         });
     }
 
