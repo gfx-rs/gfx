@@ -1,5 +1,5 @@
 use {
-    Backend, PrivateDisabilities, OnlineRecording, Shared,
+    Backend, PrivateDisabilities, OnlineRecording, ResourceIndex, Shared,
     validate_line_width,
     BufferPtr, TexturePtr, SamplerPtr,
 };
@@ -417,7 +417,7 @@ impl State {
                     maybe_buffer.map(|buffer| {
                         soft::RenderCommand::BindBuffer {
                             stage: pso::Stage::Vertex,
-                            index,
+                            index: index as _,
                             buffer: Some(buffer),
                         }
                     })
@@ -465,28 +465,28 @@ impl State {
         soft::RenderCommand::SetDepthBias(*depth_bias)
     }
 
-    fn push_vs_constants<'a>(&'a mut self, id: u32) -> soft::RenderCommand<&'a soft::Own>{
-        self.resources_vs.push_constants_buffer_id = Some(id);
+    fn push_vs_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::RenderCommand<&'a soft::Own>{
+        self.resources_vs.push_constants_buffer_id = Some(index);
         soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Vertex,
-            index: id as usize,
+            index,
             words: &self.push_constants,
         }
     }
 
-    fn push_ps_constants<'a>(&'a mut self, id: u32) -> soft::RenderCommand<&'a soft::Own> {
-        self.resources_ps.push_constants_buffer_id = Some(id);
+    fn push_ps_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::RenderCommand<&'a soft::Own> {
+        self.resources_ps.push_constants_buffer_id = Some(index);
         soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Fragment,
-            index: id as usize,
+            index,
             words: &self.push_constants,
         }
     }
 
-    fn push_cs_constants<'a>(&'a mut self, id: u32) -> soft::ComputeCommand<&'a soft::Own> {
-        self.resources_cs.push_constants_buffer_id = Some(id);
+    fn push_cs_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::ComputeCommand<&'a soft::Own> {
+        self.resources_cs.push_constants_buffer_id = Some(index);
         soft::ComputeCommand::BindBufferData {
-            index: id as usize,
+            index,
             words: &self.push_constants,
         }
     }
@@ -547,7 +547,7 @@ struct StageResources {
     buffers: Vec<Option<(BufferPtr, buffer::Offset)>>,
     textures: Vec<Option<TexturePtr>>,
     samplers: Vec<Option<SamplerPtr>>,
-    push_constants_buffer_id: Option<u32>,
+    push_constants_buffer_id: Option<ResourceIndex>,
 }
 
 impl StageResources {
@@ -567,23 +567,23 @@ impl StageResources {
         self.push_constants_buffer_id = None;
     }
 
-    fn pre_allocate(&mut self, counters: &native::ResourceCounters) {
-        if self.textures.len() < counters.textures {
-            self.textures.resize(counters.textures, None);
+    fn pre_allocate(&mut self, counters: &native::ResourceCounters<ResourceIndex>) {
+        if self.textures.len() < counters.textures as usize {
+            self.textures.resize(counters.textures as usize, None);
         }
-        if self.samplers.len() < counters.samplers {
-            self.samplers.resize(counters.samplers, None);
+        if self.samplers.len() < counters.samplers as usize {
+            self.samplers.resize(counters.samplers as usize, None);
         }
-        if self.buffers.len() < counters.buffers {
-            self.buffers.resize(counters.buffers, None);
+        if self.buffers.len() < counters.buffers as usize {
+            self.buffers.resize(counters.buffers as usize, None);
         }
     }
 
-    fn set_buffer(&mut self, slot: usize, buffer: BufferPtr, offset: buffer::Offset) -> bool {
-        debug_assert!(self.buffers.len() > slot);
+    fn set_buffer(&mut self, slot: ResourceIndex, buffer: BufferPtr, offset: buffer::Offset) -> bool {
+        debug_assert!(self.buffers.len() > slot as usize);
         let value = Some((buffer, offset));
-        if self.buffers[slot] != value {
-            self.buffers[slot] = value;
+        if self.buffers[slot as usize] != value {
+            self.buffers[slot as usize] = value;
             true
         } else {
             false
@@ -2935,9 +2935,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     let mut res_offset = res_offset.clone();
                     let data = pool.read();
                     let mut data_offset = native::ResourceCounters {
-                        buffers: buffer_range.start as usize,
-                        textures: texture_range.start as usize,
-                        samplers: sampler_range.start as usize,
+                        buffers: buffer_range.start,
+                        textures: texture_range.start,
+                        samplers: sampler_range.start,
                     };
 
                     for layout in layouts.iter() {
@@ -2947,11 +2947,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         // The general idea is to only go through layouts once, and only fetch the data once.
 
                         if layout.content.contains(native::DescriptorContent::SAMPLER) {
-                            let sampler = data.samplers[data_offset.samplers];
+                            let sampler = data.samplers[data_offset.samplers as usize];
                             if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
                                 let index = res_offset.vs.samplers;
                                 res_offset.vs.samplers += 1;
-                                let out = &mut self.state.resources_vs.samplers[index];
+                                let out = &mut self.state.resources_vs.samplers[index as usize];
                                 if *out != sampler {
                                     *out = sampler;
                                     pre.issue(soft::RenderCommand::BindSampler { stage: pso::Stage::Vertex, index, sampler });
@@ -2960,7 +2960,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
                                 let index = res_offset.ps.samplers;
                                 res_offset.ps.samplers += 1;
-                                let out = &mut self.state.resources_ps.samplers[index];
+                                let out = &mut self.state.resources_ps.samplers[index as usize];
                                 if *out != sampler {
                                     *out = sampler;
                                     pre.issue(soft::RenderCommand::BindSampler { stage: pso::Stage::Fragment, index, sampler });
@@ -2969,11 +2969,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
 
                         if layout.content.contains(native::DescriptorContent::TEXTURE) {
-                            let texture = data.textures[data_offset.textures].map(|(t, _)| t);
+                            let texture = data.textures[data_offset.textures as usize].map(|(t, _)| t);
                             if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
                                 let index = res_offset.vs.textures;
                                 res_offset.vs.textures += 1;
-                                let out = &mut self.state.resources_vs.textures[index];
+                                let out = &mut self.state.resources_vs.textures[index as usize];
                                 if *out != texture {
                                     *out = texture;
                                     pre.issue(soft::RenderCommand::BindTexture { stage: pso::Stage::Vertex, index, texture });
@@ -2982,7 +2982,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
                                 let index = res_offset.ps.textures;
                                 res_offset.ps.textures += 1;
-                                let out = &mut self.state.resources_ps.textures[index];
+                                let out = &mut self.state.resources_ps.textures[index as usize];
                                 if *out != texture {
                                     *out = texture;
                                     pre.issue(soft::RenderCommand::BindTexture { stage: pso::Stage::Fragment, index, texture });
@@ -2991,7 +2991,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
 
                         if layout.content.contains(native::DescriptorContent::BUFFER) {
-                            let mut buffer = data.buffers[data_offset.buffers].clone();
+                            let mut buffer = data.buffers[data_offset.buffers as usize].clone();
                             if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
                                 if let Some((_, ref mut offset)) = buffer {
                                     *offset += *dynamic_offset_iter.next().unwrap().borrow() as u64;
@@ -3000,7 +3000,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
                                 let index = res_offset.vs.buffers;
                                 res_offset.vs.buffers += 1;
-                                let out = &mut self.state.resources_vs.buffers[index];
+                                let out = &mut self.state.resources_vs.buffers[index as usize];
                                 if *out != buffer {
                                     *out = buffer;
                                     pre.issue(soft::RenderCommand::BindBuffer { stage: pso::Stage::Vertex, index, buffer });
@@ -3009,7 +3009,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
                                 let index = res_offset.ps.buffers;
                                 res_offset.ps.buffers += 1;
-                                let out = &mut self.state.resources_ps.buffers[index];
+                                let out = &mut self.state.resources_ps.buffers[index as usize];
                                 if *out != buffer {
                                     *out = buffer;
                                     pre.issue(soft::RenderCommand::BindBuffer { stage: pso::Stage::Fragment, index, buffer });
@@ -3083,18 +3083,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
                     let data = pool.read();
                     let mut data_offset = native::ResourceCounters {
-                        buffers: buffer_range.start as usize,
-                        textures: texture_range.start as usize,
-                        samplers: sampler_range.start as usize,
+                        buffers: buffer_range.start,
+                        textures: texture_range.start,
+                        samplers: sampler_range.start,
                     };
 
                     for layout in layouts.iter() {
                         if layout.stages.contains(pso::ShaderStageFlags::COMPUTE) {
                             let target_offset = &mut res_offset.cs;
                             if layout.content.contains(native::DescriptorContent::SAMPLER) {
-                                let sampler = data.samplers[data_offset.samplers];
+                                let sampler = data.samplers[data_offset.samplers as usize];
                                 let index = target_offset.samplers;
-                                let out = &mut resources.samplers[index];
+                                let out = &mut resources.samplers[index as usize];
                                 if *out != sampler {
                                     *out = sampler;
                                     pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
@@ -3103,9 +3103,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             }
 
                             if layout.content.contains(native::DescriptorContent::TEXTURE) {
-                                let texture = data.textures[data_offset.textures].map(|(t, _)| t);
+                                let texture = data.textures[data_offset.textures as usize].map(|(t, _)| t);
                                 let index = target_offset.textures;
-                                let out = &mut resources.textures[index];
+                                let out = &mut resources.textures[index as usize];
                                 if *out != texture {
                                     *out = texture;
                                     pre.issue(soft::ComputeCommand::BindTexture { index, texture });
@@ -3114,14 +3114,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             }
 
                             if layout.content.contains(native::DescriptorContent::BUFFER) {
-                                let mut buffer = data.buffers[data_offset.buffers].clone();
+                                let mut buffer = data.buffers[data_offset.buffers as usize].clone();
                                 if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
                                     if let Some((_, ref mut offset)) = buffer {
                                         *offset += *dynamic_offset_iter.next().unwrap().borrow() as u64;
                                     }
                                 }
                                 let index = target_offset.buffers;
-                                let out = &mut resources.buffers[index];
+                                let out = &mut resources.buffers[index as usize];
                                 if *out != buffer {
                                     *out = buffer;
                                     pre.issue(soft::ComputeCommand::BindBuffer {

@@ -45,6 +45,10 @@ use foreign_types::ForeignTypeRef;
 use parking_lot::Mutex;
 
 
+//TODO: investigate why exactly using `u8` here is slower (~5% total).
+/// A type representing Metal binding's resource index.
+type ResourceIndex = u32;
+
 /// Method of recording one-time-submit command buffers.
 #[derive(Clone, Debug, Hash, PartialEq)]
 pub enum OnlineRecording {
@@ -78,7 +82,7 @@ struct Shared {
     device: Mutex<metal::Device>,
     queue: Mutex<command::QueueInner>,
     service_pipes: internal::ServicePipes,
-    push_constants_buffer_id: u32,
+    push_constants_buffer_id: ResourceIndex,
     disabilities: PrivateDisabilities,
 }
 
@@ -224,9 +228,9 @@ struct PrivateCapabilities {
     format_depth32_stencil8: bool,
     format_min_srgb_channels: u8,
     format_b5: bool,
-    max_buffers_per_stage: usize,
-    max_textures_per_stage: usize,
-    max_samplers_per_stage: usize,
+    max_buffers_per_stage: ResourceIndex,
+    max_textures_per_stage: ResourceIndex,
+    max_samplers_per_stage: ResourceIndex,
     buffer_alignment: u64,
     max_buffer_size: u64,
 }
