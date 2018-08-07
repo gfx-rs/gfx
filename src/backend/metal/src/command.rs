@@ -1,5 +1,5 @@
 use {
-    Backend, PrivateDisabilities, OnlineRecording, ResourceIndex, Shared,
+    AsNative, Backend, PrivateDisabilities, OnlineRecording, ResourceIndex, Shared,
     validate_line_width,
     BufferPtr, TexturePtr, SamplerPtr,
 };
@@ -24,7 +24,7 @@ use hal::range::RangeArg;
 
 use block::ConcreteBlock;
 use cocoa::foundation::{NSUInteger, NSRange};
-use foreign_types::{ForeignType, ForeignTypeRef};
+use foreign_types::ForeignType;
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize};
 use objc::rc::autoreleasepool;
 use parking_lot::Mutex;
@@ -1917,7 +1917,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::ComputeCommand::BindPipeline(pso),
             soft::ComputeCommand::BindBuffer {
                 index: 0,
-                buffer: Some((BufferPtr(buffer.raw.as_ptr()), start)),
+                buffer: Some((AsNative::from(buffer.raw.as_ref()), start)),
             },
             soft::ComputeCommand::BindBufferData {
                 index: 1,
@@ -1950,8 +1950,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         {
             let command = soft::BlitCommand::CopyBuffer {
-                src: BufferPtr(src.as_ptr()),
-                dst: BufferPtr(dst.raw.as_ptr()),
+                src: AsNative::from(src.as_ref()),
+                dst: AsNative::from(dst.raw.as_ref()),
                 region: com::BufferCopy {
                     src: 0,
                     dst: offset,
@@ -2434,12 +2434,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::RenderCommand::BindSampler {
                 stage: pso::Stage::Fragment,
                 index: 0,
-                sampler: Some(SamplerPtr(sampler.as_ptr())),
+                sampler: Some(AsNative::from(sampler)),
             },
             soft::RenderCommand::BindTexture {
                 stage: pso::Stage::Fragment,
                 index: 0,
-                texture: Some(TexturePtr(src.raw.as_ptr()))
+                texture: Some(AsNative::from(src.raw.as_ref()))
             },
         ];
 
@@ -2547,7 +2547,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let offset = view.offset;
         let index_type = conv::map_index_type(view.index_type);
         self.state.index_buffer = Some(IndexBuffer {
-            buffer: BufferPtr(buffer.as_ptr()),
+            buffer: AsNative::from(buffer.as_ref()),
             offset,
             index_type,
         });
@@ -2564,7 +2564,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
         for (i, (buffer, offset)) in buffers.into_iter().enumerate() {
             let b = buffer.borrow();
-            let buffer_ptr = BufferPtr(b.raw.as_ptr());
+            let buffer_ptr = AsNative::from(b.raw.as_ref());
             let index = first_binding as usize + i;
             let value = Some((buffer_ptr, b.range.start + offset));
             if index >= self.state.vertex_buffers.len() {
@@ -3023,21 +3023,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
                         let index = res_offset.vs.buffers;
-                        if self.state.resources_vs.set_buffer(index, BufferPtr(raw.as_ptr()), offset as _) {
+                        if self.state.resources_vs.set_buffer(index, AsNative::from(raw.as_ref()), offset as _) {
                             pre.issue(soft::RenderCommand::BindBuffer {
                                 stage: pso::Stage::Vertex,
                                 index,
-                                buffer: Some((BufferPtr(raw.as_ptr()), offset)),
+                                buffer: Some((AsNative::from(raw.as_ref()), offset)),
                             });
                         }
                     }
                     if stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
                         let index = res_offset.ps.buffers;
-                        if self.state.resources_ps.set_buffer(index, BufferPtr(raw.as_ptr()), offset as _) {
+                        if self.state.resources_ps.set_buffer(index, AsNative::from(raw.as_ref()), offset as _) {
                             pre.issue(soft::RenderCommand::BindBuffer {
                                 stage: pso::Stage::Fragment,
                                 index,
-                                buffer: Some((BufferPtr(raw.as_ptr()), offset)),
+                                buffer: Some((AsNative::from(raw.as_ref()), offset)),
                             });
                         }
                     }
@@ -3141,7 +3141,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
                         let index = res_offset.cs.buffers;
-                        let buffer = BufferPtr(raw.as_ptr());
+                        let buffer = AsNative::from(raw.as_ref());
                         if resources.set_buffer(index, buffer, offset as _) {
                             pre.issue(soft::ComputeCommand::BindBuffer {
                                 index,
@@ -3180,7 +3180,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         pre.issue(soft::ComputeCommand::DispatchIndirect {
             wg_size: self.state.work_group_size,
-            buffer: BufferPtr(buffer.raw.as_ptr()),
+            buffer: AsNative::from(buffer.raw.as_ref()),
             offset,
         });
     }
@@ -3211,8 +3211,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let r = region.borrow();
             if r.size % WORD_SIZE as u64 == 0 {
                 blit_commands.push(soft::BlitCommand::CopyBuffer {
-                    src: BufferPtr(src.raw.as_ptr()),
-                    dst: BufferPtr(dst.raw.as_ptr()),
+                    src: AsNative::from(src.raw.as_ref()),
+                    dst: AsNative::from(dst.raw.as_ref()),
                     region: r.clone(),
                 });
             } else {
@@ -3227,11 +3227,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 0,
-                    buffer: Some((BufferPtr(dst.raw.as_ptr()), r.dst)),
+                    buffer: Some((AsNative::from(dst.raw.as_ref()), r.dst)),
                 });
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 1,
-                    buffer: Some((BufferPtr(src.raw.as_ptr()), r.src)),
+                    buffer: Some((AsNative::from(src.raw.as_ref()), r.src)),
                 });
                 compute_commands.push(soft::ComputeCommand::BindBufferData {
                     index: 2,
@@ -3284,8 +3284,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyImage {
-                src: TexturePtr(new_src.as_ptr()),
-                dst: TexturePtr(dst.raw.as_ptr()),
+                src: AsNative::from(new_src),
+                dst: AsNative::from(dst.raw.as_ref()),
                 region: region.borrow().clone(),
             }
         });
@@ -3307,8 +3307,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // FIXME: layout
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyBufferToImage {
-                src: BufferPtr(src.raw.as_ptr()),
-                dst: TexturePtr(dst.raw.as_ptr()),
+                src: AsNative::from(src.raw.as_ref()),
+                dst: AsNative::from(dst.raw.as_ref()),
                 dst_desc: dst.format_desc,
                 region: region.borrow().clone(),
             }
@@ -3332,9 +3332,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // FIXME: layout
         let commands = regions.into_iter().map(|region| {
             soft::BlitCommand::CopyImageToBuffer {
-                src: TexturePtr(src.raw.as_ptr()),
+                src: AsNative::from(src.raw.as_ref()),
                 src_desc: src.format_desc,
-                dst: BufferPtr(dst.raw.as_ptr()),
+                dst: AsNative::from(dst.raw.as_ref()),
                 region: region.borrow().clone(),
             }
         });
@@ -3402,7 +3402,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let commands = (0 .. count)
             .map(|i| soft::RenderCommand::DrawIndirect {
                 primitive_type: self.state.primitive_type,
-                buffer: BufferPtr(buffer.raw.as_ptr()),
+                buffer: AsNative::from(buffer.raw.as_ref()),
                 offset: offset + (i * stride) as buffer::Offset,
             });
 
@@ -3427,7 +3427,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .map(|i| soft::RenderCommand::DrawIndexedIndirect {
                 primitive_type: self.state.primitive_type,
                 index: self.state.index_buffer.expect("must bind index buffer"),
-                buffer: BufferPtr(buffer.raw.as_ptr()),
+                buffer: AsNative::from(buffer.raw.as_ref()),
                 offset: offset + (i * stride) as buffer::Offset,
             });
 

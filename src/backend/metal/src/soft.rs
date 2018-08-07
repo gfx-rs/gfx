@@ -243,3 +243,8 @@ pub enum Pass {
     Blit,
     Compute,
 }
+
+fn _test_render_command_size(com: RenderCommand<Own>) -> [usize; 7] {
+    use std::mem;
+    unsafe { mem::transmute(com) }
+}

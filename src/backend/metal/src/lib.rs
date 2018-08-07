@@ -34,8 +34,9 @@ pub use window::{Surface, Swapchain};
 pub type GraphicsCommandPool = CommandPool;
 
 use std::mem;
-use std::sync::Arc;
+use std::ptr::NonNull;
 use std::os::raw::c_void;
+use std::sync::Arc;
 
 use hal::queue::QueueFamilyId;
 
@@ -247,53 +248,61 @@ fn validate_line_width(width: f32) {
     assert_eq!(width, 1.0);
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct BufferPtr(*mut metal::MTLBuffer);
 
-impl BufferPtr {
+trait AsNative {
+    type Native;
+    fn from(&Self::Native) -> Self;
+    fn as_native(&self) -> &Self::Native;
+}
+
+pub type BufferPtr = NonNull<metal::MTLBuffer>;
+pub type TexturePtr = NonNull<metal::MTLTexture>;
+pub type SamplerPtr = NonNull<metal::MTLSamplerState>;
+
+impl AsNative for BufferPtr {
+    type Native = metal::BufferRef;
     #[inline]
-    pub fn as_native(&self) -> &metal::BufferRef {
+    fn from(native: &metal::BufferRef) -> Self {
         unsafe {
-            metal::BufferRef::from_ptr(self.0)
+            NonNull::new_unchecked(native.as_ptr())
         }
     }
-
     #[inline]
-    pub fn as_ptr(&self) -> *mut metal::MTLBuffer {
-        self.0
+    fn as_native(&self) -> &metal::BufferRef {
+        unsafe {
+            metal::BufferRef::from_ptr(self.as_ptr())
+        }
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct TexturePtr(*mut metal::MTLTexture);
-
-impl TexturePtr {
+impl AsNative for TexturePtr {
+    type Native = metal::TextureRef;
     #[inline]
-    pub fn as_native(&self) -> &metal::TextureRef {
+    fn from(native: &metal::TextureRef) -> Self {
         unsafe {
-            metal::TextureRef::from_ptr(self.0)
+            NonNull::new_unchecked(native.as_ptr())
         }
     }
-
     #[inline]
-    pub fn as_ptr(&self) -> *mut metal::MTLTexture {
-        self.0
+    fn as_native(&self) -> &metal::TextureRef {
+        unsafe {
+            metal::TextureRef::from_ptr(self.as_ptr())
+        }
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct SamplerPtr(*mut metal::MTLSamplerState);
-
-impl SamplerPtr {
+impl AsNative for SamplerPtr {
+    type Native = metal::SamplerStateRef;
     #[inline]
-    pub fn as_native(&self) -> &metal::SamplerStateRef {
+    fn from(native: &metal::SamplerStateRef) -> Self {
         unsafe {
-            metal::SamplerStateRef::from_ptr(self.0)
+            NonNull::new_unchecked(native.as_ptr())
         }
     }
-
     #[inline]
-    pub fn as_ptr(&self) -> *mut metal::MTLSamplerState {
-        self.0
+    fn as_native(&self) -> &metal::SamplerStateRef {
+        unsafe {
+            metal::SamplerStateRef::from_ptr(self.as_ptr())
+        }
     }
 }

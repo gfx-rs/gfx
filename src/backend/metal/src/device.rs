@@ -1,7 +1,7 @@
 use {
-    Backend, PrivateCapabilities, QueueFamily, ResourceIndex, OnlineRecording,
+    AsNative, Backend, PrivateCapabilities, QueueFamily, ResourceIndex, OnlineRecording,
     Shared, Surface, Swapchain,
-    validate_line_width, BufferPtr, SamplerPtr, TexturePtr,
+    validate_line_width,
 };
 use {conversions as conv, command, native as n};
 use internal::FastStorageMap;
@@ -1487,27 +1487,27 @@ impl hal::Device<Backend> for Device {
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
                                 debug_assert!(!layout.content.contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
-                                data.samplers[counters.samplers as usize] = Some(SamplerPtr(sampler.0.as_ptr()));
+                                data.samplers[counters.samplers as usize] = Some(AsNative::from(sampler.0.as_ref()));
                             }
                             pso::Descriptor::Image(image, il) => {
-                                data.textures[counters.textures as usize] = Some((TexturePtr(image.raw.as_ptr()), il));
+                                data.textures[counters.textures as usize] = Some((AsNative::from(image.raw.as_ref()), il));
                             }
                             pso::Descriptor::CombinedImageSampler(image, il, sampler) => {
                                 if !layout.content.contains(n::DescriptorContent::IMMUTABLE_SAMPLER) {
-                                    data.samplers[counters.samplers as usize] = Some(SamplerPtr(sampler.0.as_ptr()));
+                                    data.samplers[counters.samplers as usize] = Some(AsNative::from(sampler.0.as_ref()));
                                 }
-                                data.textures[counters.textures as usize] = Some((TexturePtr(image.raw.as_ptr()), il));
+                                data.textures[counters.textures as usize] = Some((AsNative::from(image.raw.as_ref()), il));
                             }
                             pso::Descriptor::UniformTexelBuffer(view) |
                             pso::Descriptor::StorageTexelBuffer(view) => {
-                                data.textures[counters.textures as usize] = Some((TexturePtr(view.raw.as_ptr()), image::Layout::General));
+                                data.textures[counters.textures as usize] = Some((AsNative::from(view.raw.as_ref()), image::Layout::General));
                             }
                             pso::Descriptor::Buffer(buffer, ref range) => {
                                 let buf_length = buffer.raw.length();
                                 let start = range.start.unwrap_or(0);
                                 let end = range.end.unwrap_or(buf_length);
                                 assert!(end <= buf_length);
-                                data.buffers[counters.buffers as usize] = Some((BufferPtr(buffer.raw.as_ptr()), start));
+                                data.buffers[counters.buffers as usize] = Some((AsNative::from(buffer.raw.as_ref()), start));
                             }
                         }
                         counters.add(layout.content);

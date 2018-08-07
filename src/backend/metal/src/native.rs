@@ -1,4 +1,4 @@
-use {Backend, ResourceIndex, BufferPtr, SamplerPtr, TexturePtr};
+use {AsNative, Backend, ResourceIndex, BufferPtr, SamplerPtr, TexturePtr};
 use internal::{Channel, FastStorageMap};
 use range_alloc::RangeAllocator;
 use window::SwapchainImage;
@@ -19,7 +19,6 @@ use hal::pass::{Attachment, AttachmentLoadOp, AttachmentOps};
 use hal::range::RangeArg;
 
 use cocoa::foundation::{NSUInteger};
-use foreign_types::ForeignType;
 use metal;
 use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
@@ -496,8 +495,8 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                     for layout in layouts.iter() {
                         if layout.content.contains(DescriptorContent::SAMPLER) {
                             if layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER) {
-                                let value = sampler_iter.next().unwrap().as_ptr();
-                                data.samplers[data_index] = Some(SamplerPtr(value));
+                                let value = sampler_iter.next().unwrap().as_ref();
+                                data.samplers[data_index] = Some(AsNative::from(value));
                             }
                             data_index += 1;
                         }
