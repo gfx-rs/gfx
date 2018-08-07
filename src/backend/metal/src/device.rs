@@ -10,6 +10,7 @@ use range_alloc::RangeAllocator;
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
+use std::collections::BTreeMap;
 use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::path::Path;
@@ -433,19 +434,19 @@ impl Device {
         self.shared.device
             .lock()
             .new_library_with_source(source.as_ref(), &options)
-            .map(|library| n::ShaderModule::Compiled {
+            .map(|library| n::ShaderModule::Compiled(n::ModuleInfo {
                 library,
                 entry_point_map: n::EntryPointMap::default(),
-            })
+            }))
             .map_err(|e| ShaderError::CompilationFailed(e.into()))
     }
 
     fn compile_shader_library(
-        &self,
+        device: &Mutex<metal::Device>,
         raw_data: &[u8],
-        primitive_class: MTLPrimitiveTopologyClass,
-        overrides: &n::ResourceOverrideMap,
-    ) -> Result<(metal::Library, n::EntryPointMap), ShaderError> {
+        compiler_options: &msl::CompilerOptions,
+        msl_version: MTLLanguageVersion,
+    ) -> Result<n::ModuleInfo, ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
 
@@ -460,42 +461,28 @@ impl Device {
         let mut ast = spirv::Ast::<msl::Target>::parse(&module)
             .map_err(gen_parse_error)?;
 
-        // compile with options
-        let mut compiler_options = msl::CompilerOptions::default();
-        compiler_options.enable_point_size_builtin = primitive_class == MTLPrimitiveTopologyClass::Point;
-        compiler_options.resolve_specialized_array_lengths = true;
-        compiler_options.vertex.invert_y = true;
-        // fill the overrides
-        compiler_options.resource_binding_overrides = overrides
-            .iter()
-            .map(|(key, value)| (key.clone(), value.clone()))
-            .collect();
-
-        ast.set_compiler_options(&compiler_options)
+        ast.set_compiler_options(compiler_options)
             .map_err(|err| {
-                let msg = match err {
+                ShaderError::CompilationFailed(match err {
                     SpirvErrorCode::CompilationError(msg) => msg,
                     SpirvErrorCode::Unhandled => "Unexpected error".into(),
-                };
-                ShaderError::CompilationFailed(msg)
+                })
             })?;
 
         let entry_points = ast.get_entry_points()
             .map_err(|err| {
-                let msg = match err {
+                ShaderError::CompilationFailed(match err {
                     SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unexpected error".into(),
-                };
-                ShaderError::CompilationFailed(msg)
+                    SpirvErrorCode::Unhandled => "Unexpected entry point error".into(),
+                })
             })?;
 
         let shader_code = ast.compile()
             .map_err(|err| {
-                let msg = match err {
+                ShaderError::CompilationFailed(match err {
                     SpirvErrorCode::CompilationError(msg) => msg,
                     SpirvErrorCode::Unhandled => "Unknown compile error".into(),
-                };
-                ShaderError::CompilationFailed(msg)
+                })
             })?;
 
         let mut entry_point_map = n::EntryPointMap::default();
@@ -503,11 +490,10 @@ impl Device {
             info!("Entry point {:?}", entry_point);
             let cleansed = ast.get_cleansed_entry_point_name(&entry_point.name, entry_point.execution_model)
                 .map_err(|err| {
-                    let msg = match err {
+                    ShaderError::CompilationFailed(match err {
                         SpirvErrorCode::CompilationError(msg) => msg,
                         SpirvErrorCode::Unhandled => "Unknown compile error".into(),
-                    };
-                    ShaderError::CompilationFailed(msg)
+                    })
                 })?;
             entry_point_map.insert(entry_point.name, spirv::EntryPoint {
                 name: cleansed,
@@ -519,14 +505,17 @@ impl Device {
         debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
         let options = metal::CompileOptions::new();
-        options.set_language_version(self.private_caps.msl_version);
+        options.set_language_version(msl_version);
 
-        let library = self.shared.device
+        let library = device
             .lock()
             .new_library_with_source(shader_code.as_ref(), &options)
             .map_err(|err| ShaderError::CompilationFailed(err.into()))?;
 
-        Ok((library, entry_point_map))
+        Ok(n::ModuleInfo {
+            library,
+            entry_point_map,
+        })
     }
 
     fn load_shader(
@@ -534,20 +523,45 @@ impl Device {
         ep: &pso::EntryPoint<Backend>,
         layout: &n::PipelineLayout,
         primitive_class: MTLPrimitiveTopologyClass,
+        pipeline_cache: Option<&n::PipelineCache>,
     ) -> Result<(metal::Library, metal::Function, metal::MTLSize), pso::CreationError> {
-        let entries_owned;
-        let (lib, entry_point_map) = match *ep.module {
-            n::ShaderModule::Compiled {ref library, ref entry_point_map} => {
-                (library.to_owned(), entry_point_map)
-            }
+        let device = &self.shared.device;
+        let msl_version = self.private_caps.msl_version;
+        let module_map;
+        let (info_owned, info_guard);
+
+        let info = match *ep.module {
+            n::ShaderModule::Compiled(ref info) => info,
             n::ShaderModule::Raw(ref data) => {
-                let raw = self.compile_shader_library(data, primitive_class, &layout.res_overrides).unwrap();
-                entries_owned = raw.1;
-                (raw.0, &entries_owned)
+                let compiler_options = match primitive_class {
+                    MTLPrimitiveTopologyClass::Point => &layout.shader_compiler_options_point,
+                    _ => &layout.shader_compiler_options,
+                };
+                match pipeline_cache {
+                    Some(cache) => {
+                        module_map = cache.modules.get_or_create_with(compiler_options, || {
+                            FastStorageMap::default()
+                        });
+                        info_guard = module_map.get_or_create_with(data, || {
+                            Self::compile_shader_library(device, data, compiler_options, msl_version)
+                                .unwrap()
+                        });
+                        &*info_guard
+                    }
+                    None => {
+                        info_owned = Self::compile_shader_library(device, data, compiler_options, msl_version)
+                            .map_err(|e| {
+                                error!("Error compiling the shader {:?}", e);
+                                pso::CreationError::Other
+                            })?;
+                        &info_owned
+                    }
+                }
             }
         };
 
-        let (name, wg_size) = match entry_point_map.get(ep.entry) {
+        let lib = info.library.clone();
+        let (name, wg_size) = match info.entry_point_map.get(ep.entry) {
             Some(p) => (p.name.as_str(), metal::MTLSize {
                 width : p.work_group_size.x as _,
                 height: p.work_group_size.y as _,
@@ -648,7 +662,7 @@ impl hal::Device<Backend> for Device {
             (pso::ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  n::ResourceCounters::new()),
             (pso::ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, n::ResourceCounters::new()),
         ];
-        let mut res_overrides = n::ResourceOverrideMap::default();
+        let mut res_overrides = BTreeMap::new();
         let mut offsets = Vec::new();
 
         for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
@@ -750,8 +764,17 @@ impl hal::Device<Backend> for Device {
             assert!(counters.samplers <= self.private_caps.max_samplers_per_stage);
         }
 
+        let mut shader_compiler_options = msl::CompilerOptions::default();
+        shader_compiler_options.enable_point_size_builtin = false;
+        shader_compiler_options.resolve_specialized_array_lengths = true;
+        shader_compiler_options.vertex.invert_y = true;
+        shader_compiler_options.resource_binding_overrides = res_overrides;
+        let mut shader_compiler_options_point = shader_compiler_options.clone();
+        shader_compiler_options_point.enable_point_size_builtin = true;
+
         n::PipelineLayout {
-            res_overrides,
+            shader_compiler_options,
+            shader_compiler_options_point,
             offsets,
             total: n::MultiStageResourceCounters {
                 vs: stage_infos[0].2.clone(),
@@ -761,9 +784,52 @@ impl hal::Device<Backend> for Device {
         }
     }
 
+    fn create_pipeline_cache(&self) -> n::PipelineCache {
+        n::PipelineCache {
+            modules: FastStorageMap::default(),
+        }
+    }
+
+    fn destroy_pipeline_cache(&self, _cache: n::PipelineCache) {
+        //drop
+    }
+
+    fn merge_pipeline_caches<I>(&self, target: &n::PipelineCache, sources: I)
+    where
+        I: IntoIterator<Item = n::PipelineCache>
+    {
+        let mut dst = target.modules.whole_write();
+        for source in sources {
+            let mut src = source.modules.whole_write();
+            for (key, value) in src.drain() {
+                match dst.entry(key) {
+                    Entry::Vacant(e) => {
+                        e.insert(value);
+                    }
+                    Entry::Occupied(mut e) => {
+                        let mut dst_module = e.get_mut().whole_write();
+                        let mut src_module = value.whole_write();
+                        for (key_module, value_module) in src_module.drain() {
+                            match dst_module.entry(key_module) {
+                                Entry::Vacant(em) => {
+                                    em.insert(value_module);
+                                }
+                                Entry::Occupied(em) => {
+                                    assert_eq!(em.get().library.as_ptr(), value_module.library.as_ptr());
+                                    assert_eq!(em.get().entry_point_map, value_module.entry_point_map);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     fn create_graphics_pipeline<'a>(
         &self,
         pipeline_desc: &pso::GraphicsPipelineDesc<'a, Backend>,
+        cache: Option<&n::PipelineCache>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         debug!("create_graphics_pipeline {:?}", pipeline_desc);
         let pipeline = metal::RenderPipelineDescriptor::new();
@@ -792,6 +858,7 @@ impl hal::Device<Backend> for Device {
             &pipeline_desc.shaders.vertex,
             pipeline_layout,
             primitive_class,
+            cache,
         )?;
         pipeline.set_vertex_function(Some(&vs_function));
 
@@ -799,7 +866,7 @@ impl hal::Device<Backend> for Device {
         let fs_function;
         let fs_lib = match pipeline_desc.shaders.fragment {
             Some(ref ep) => {
-                let (lib, fun, _) = self.load_shader(ep, pipeline_layout, primitive_class)?;
+                let (lib, fun, _) = self.load_shader(ep, pipeline_layout, primitive_class, cache)?;
                 fs_function = fun;
                 pipeline.set_fragment_function(Some(&fs_function));
                 Some(lib)
@@ -1016,6 +1083,7 @@ impl hal::Device<Backend> for Device {
     fn create_compute_pipeline<'a>(
         &self,
         pipeline_desc: &pso::ComputePipelineDesc<'a, Backend>,
+        cache: Option<&n::PipelineCache>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         debug!("create_compute_pipeline {:?}", pipeline_desc);
         let pipeline = metal::ComputePipelineDescriptor::new();
@@ -1024,6 +1092,7 @@ impl hal::Device<Backend> for Device {
             &pipeline_desc.shader,
             &pipeline_desc.layout,
             MTLPrimitiveTopologyClass::Unspecified,
+            cache,
         )?;
         pipeline.set_compute_function(Some(&cs_function));
 
@@ -1116,15 +1185,12 @@ impl hal::Device<Backend> for Device {
         Ok(if depends_on_pipeline_layout {
             n::ShaderModule::Raw(raw_data.to_vec())
         } else {
-            let (library, entry_point_map) = self.compile_shader_library(
-                raw_data,
-                MTLPrimitiveTopologyClass::Unspecified,
-                &n::ResourceOverrideMap::default(),
-            )?;
-            n::ShaderModule::Compiled {
-                library,
-                entry_point_map,
-            }
+            let mut options = msl::CompilerOptions::default();
+            options.enable_point_size_builtin = false;
+            options.resolve_specialized_array_lengths = true;
+            options.vertex.invert_y = true;
+            let info = Self::compile_shader_library(&self.shared.device, raw_data, &options, self.private_caps.msl_version)?;
+            n::ShaderModule::Compiled(info)
         })
     }
 

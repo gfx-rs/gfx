@@ -76,7 +76,7 @@ fn main() {
         let pipeline_layout = device.create_pipeline_layout(Some(&set_layout), &[]);
         let entry_point = pso::EntryPoint { entry: "main", module: &shader, specialization: &[] };
         let pipeline = device
-            .create_compute_pipeline(&pso::ComputePipelineDesc::new(entry_point, &pipeline_layout))
+            .create_compute_pipeline(&pso::ComputePipelineDesc::new(entry_point, &pipeline_layout), None)
             .expect("Error creating compute pipeline!");
 
         let desc_pool = device.create_descriptor_pool(

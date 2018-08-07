@@ -31,17 +31,14 @@ pub type EntryPointMap = FastHashMap<String, spirv::EntryPoint>;
 /// Shader module can be compiled in advance if it's resource bindings do not
 /// depend on pipeline layout, in which case the value would become `Compiled`.
 pub enum ShaderModule {
-    Compiled {
-        library: metal::Library,
-        entry_point_map: EntryPointMap,
-    },
+    Compiled(ModuleInfo),
     Raw(Vec<u8>),
 }
 
 impl fmt::Debug for ShaderModule {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            ShaderModule::Compiled { .. } => {
+            ShaderModule::Compiled(_) => {
                 write!(formatter, "ShaderModule::Compiled(..)")
             }
             ShaderModule::Raw(ref vec) => {
@@ -145,7 +142,6 @@ pub struct Framebuffer {
 unsafe impl Send for Framebuffer {}
 unsafe impl Sync for Framebuffer {}
 
-pub type ResourceOverrideMap = FastHashMap<msl::ResourceBindingLocation, msl::ResourceBinding>;
 
 #[derive(Clone, Debug)]
 pub struct ResourceCounters {
@@ -185,7 +181,8 @@ pub struct MultiStageResourceCounters {
 
 #[derive(Debug)]
 pub struct PipelineLayout {
-    pub(crate) res_overrides: ResourceOverrideMap,
+    pub(crate) shader_compiler_options: msl::CompilerOptions,
+    pub(crate) shader_compiler_options_point: msl::CompilerOptions,
     pub(crate) offsets: Vec<MultiStageResourceCounters>,
     pub(crate) total: MultiStageResourceCounters,
 }
@@ -197,6 +194,22 @@ impl PipelineLayout {
         self.total.vs.buffers as _
     }
 }
+
+pub struct ModuleInfo {
+    pub library: metal::Library,
+    pub entry_point_map: EntryPointMap,
+}
+
+pub struct PipelineCache {
+    pub(crate) modules: FastStorageMap<msl::CompilerOptions, FastStorageMap<Vec<u8>, ModuleInfo>>,
+}
+
+impl fmt::Debug for PipelineCache {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "PipelineCache")
+    }
+}
+
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct RasterizerState {
