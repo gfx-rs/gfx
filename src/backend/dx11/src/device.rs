@@ -737,7 +737,8 @@ impl hal::Device<Backend> for Device {
 
     fn merge_pipeline_caches<I>(&self, _: &(), _: I)
     where
-        I: IntoIterator<Item = ()>
+        I: IntoIterator,
+        I::Item: Borrow<()>,
     {
         //empty
     }

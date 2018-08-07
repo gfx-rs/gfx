@@ -195,6 +195,7 @@ impl PipelineLayout {
     }
 }
 
+#[derive(Clone)]
 pub struct ModuleInfo {
     pub library: metal::Library,
     pub entry_point_map: EntryPointMap,
