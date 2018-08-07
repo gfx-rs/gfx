@@ -225,7 +225,8 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Merge a number of source pipeline caches into the target one.
     fn merge_pipeline_caches<I>(&self, target: &B::PipelineCache, sources: I)
     where
-        I: IntoIterator<Item = B::PipelineCache>;
+        I: IntoIterator,
+        I::Item: Borrow<B::PipelineCache>;
 
     /// Destroy a pipeline cache object.
     fn destroy_pipeline_cache(&self, cache: B::PipelineCache);

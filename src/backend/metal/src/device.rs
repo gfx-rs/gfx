@@ -796,29 +796,27 @@ impl hal::Device<Backend> for Device {
 
     fn merge_pipeline_caches<I>(&self, target: &n::PipelineCache, sources: I)
     where
-        I: IntoIterator<Item = n::PipelineCache>
+        I: IntoIterator,
+        I::Item: Borrow<n::PipelineCache>,
     {
         let mut dst = target.modules.whole_write();
         for source in sources {
-            let mut src = source.modules.whole_write();
-            for (key, value) in src.drain() {
-                match dst.entry(key) {
-                    Entry::Vacant(e) => {
-                        e.insert(value);
-                    }
-                    Entry::Occupied(mut e) => {
-                        let mut dst_module = e.get_mut().whole_write();
-                        let mut src_module = value.whole_write();
-                        for (key_module, value_module) in src_module.drain() {
-                            match dst_module.entry(key_module) {
-                                Entry::Vacant(em) => {
-                                    em.insert(value_module);
-                                }
-                                Entry::Occupied(em) => {
-                                    assert_eq!(em.get().library.as_ptr(), value_module.library.as_ptr());
-                                    assert_eq!(em.get().entry_point_map, value_module.entry_point_map);
-                                }
-                            }
+            let mut src = source.borrow().modules.whole_write();
+            for (key, value) in src.iter() {
+                let storage = match dst.entry(key.clone()) {
+                    Entry::Vacant(e) => e.insert(FastStorageMap::default()),
+                    Entry::Occupied(mut e) => e.into_mut(),
+                };
+                let mut dst_module = storage.whole_write();
+                let mut src_module = value.whole_write();
+                for (key_module, value_module) in src_module.iter() {
+                    match dst_module.entry(key_module.clone()) {
+                        Entry::Vacant(em) => {
+                            em.insert(value_module.clone());
+                        }
+                        Entry::Occupied(em) => {
+                            assert_eq!(em.get().library.as_ptr(), value_module.library.as_ptr());
+                            assert_eq!(em.get().entry_point_map, value_module.entry_point_map);
                         }
                     }
                 }

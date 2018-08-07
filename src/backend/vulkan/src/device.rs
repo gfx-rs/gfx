@@ -296,9 +296,10 @@ impl d::Device<B> for Device {
 
     fn merge_pipeline_caches<I>(&self, target: &n::PipelineCache, sources: I)
     where
-        I: IntoIterator<Item = n::PipelineCache>
+        I: IntoIterator,
+        I::Item: Borrow<n::PipelineCache>,
     {
-        let caches = sources.into_iter().map(|s| s.raw).collect::<Vec<_>>();
+        let caches = sources.into_iter().map(|s| s.borrow().raw).collect::<Vec<_>>();
         unsafe  {
             self.raw.0
                 .fp_v1_0()
