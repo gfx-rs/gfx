@@ -777,6 +777,13 @@ enum PreCompute<'a> {
 }
 
 impl<'a> PreCompute<'a> {
+    fn is_void(&self) -> bool {
+        match *self {
+            PreCompute::Void => true,
+            _ => false,
+        }
+    }
+
     fn issue<'b>(&mut self, command: soft::ComputeCommand<&'b soft::Own>) {
         match *self {
             PreCompute::Immediate(encoder) => exec_compute(encoder, command),
@@ -2940,7 +2947,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.resources_vs.pre_allocate(&pipe_layout.total.vs);
         self.state.resources_ps.pre_allocate(&pipe_layout.total.ps);
 
-        let mut _dynamic_offset_iter = dynamic_offsets.into_iter();
+        let mut dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
@@ -2977,15 +2984,24 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         for (index, &buffer) in (res_offset.buffers .. )
                             .zip(&data.buffers[pool_offset.buffers.start as usize .. pool_offset.buffers.end as usize])
                         {
-                            //TODO: properly handle dynamic offsets
-                            /*if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
-                                if let Some((_, ref mut offset)) = buffer {
-                                    *offset += *dynamic_offset_iter.next().unwrap().borrow() as u64;
-                                }
-                            }*/
-                            let out = &mut cache.buffers[index as usize];
-                            if *out != buffer {
-                                *out = buffer;
+                            cache.buffers[index as usize] = buffer;
+                        }
+                    }
+
+                    for (dyn_data, offset) in info.dynamic_buffers.iter().zip(dynamic_offset_iter.by_ref()) {
+                        if dyn_data.vs != !0 {
+                            stages[0].1.buffers[dyn_data.vs as usize].as_mut().unwrap().1 += *offset.borrow() as buffer::Offset;
+                        }
+                        if dyn_data.ps != !0 {
+                            stages[1].1.buffers[dyn_data.ps as usize].as_mut().unwrap().1 += *offset.borrow() as buffer::Offset;
+                        }
+                    }
+
+                    if !pre.is_void() {
+                        for &(stage, ref cache, res_offset, pool_offset) in stages.iter() {
+                            let count = (pool_offset.buffers.end - pool_offset.buffers.start) as ResourceIndex;
+                            for index in res_offset.buffers .. res_offset.buffers + count {
+                                let buffer = cache.buffers[index as usize];
                                 pre.issue(soft::RenderCommand::BindBuffer { stage, index, buffer });
                             }
                         }
@@ -3043,7 +3059,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         self.state.resources_cs.pre_allocate(&pipe_layout.total.cs);
 
-        let mut _dynamic_offset_iter = dynamic_offsets.into_iter();
+        let mut dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
 
@@ -3077,15 +3093,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     for (index, &buffer) in (res_offset.buffers .. )
                         .zip(&data.buffers[pool_offset.buffers.start as usize .. pool_offset.buffers.end as usize])
                     {
-                        //TODO: properly handle dynamic offsets
-                        /*if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
-                            if let Some((_, ref mut offset)) = buffer {
-                                *offset += *dynamic_offset_iter.next().unwrap().borrow() as u64;
-                            }
-                        }*/
-                        let out = &mut cache.buffers[index as usize];
-                        if *out != buffer {
-                            *out = buffer;
+                        cache.buffers[index as usize] = buffer;
+                    }
+
+                    for (dyn_data, offset) in info.dynamic_buffers.iter().zip(dynamic_offset_iter.by_ref()) {
+                        if dyn_data.cs != !0 {
+                            cache.buffers[dyn_data.cs as usize].as_mut().unwrap().1 += *offset.borrow() as buffer::Offset;
+                        }
+                    }
+
+                    if !pre.is_void() {
+                        let count = (pool_offset.buffers.end - pool_offset.buffers.start) as ResourceIndex;
+                        for index in res_offset.buffers .. res_offset.buffers + count {
+                            let buffer = cache.buffers[index as usize];
                             pre.issue(soft::ComputeCommand::BindBuffer { index, buffer });
                         }
                     }

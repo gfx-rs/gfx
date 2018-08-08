@@ -667,16 +667,34 @@ impl hal::Device<Backend> for Device {
 
         for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
             // remember where the resources for this set start at each shader stage
-            infos.push(n::DescriptorSetInfo {
-                offsets: n::MultiStageResourceCounters {
-                    vs: stage_infos[0].2.clone(),
-                    ps: stage_infos[1].2.clone(),
-                    cs: stage_infos[2].2.clone(),
-                },
-            });
+            let mut dynamic_buffers = Vec::new();
+            let offsets = n::MultiStageResourceCounters {
+                vs: stage_infos[0].2.clone(),
+                ps: stage_infos[1].2.clone(),
+                cs: stage_infos[2].2.clone(),
+            };
             match *set_layout.borrow() {
                 n::DescriptorSetLayout::Emulated(ref desc_layouts, _) => {
                     for layout in desc_layouts.iter() {
+                        if layout.content.contains(n::DescriptorContent::DYNAMIC_BUFFER) {
+                            dynamic_buffers.push(n::MultiStageData {
+                                vs: if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
+                                    stage_infos[0].2.buffers
+                                } else {
+                                    !0
+                                },
+                                ps: if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
+                                    stage_infos[1].2.buffers
+                                } else {
+                                    !0
+                                },
+                                cs: if layout.stages.contains(pso::ShaderStageFlags::COMPUTE) {
+                                    stage_infos[2].2.buffers
+                                } else {
+                                    !0
+                                },
+                            });
+                        }
                         for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
                             if !layout.stages.contains(stage_bit) {
                                 continue
@@ -728,6 +746,11 @@ impl hal::Device<Backend> for Device {
                     }
                 }
             }
+
+            infos.push(n::DescriptorSetInfo {
+                offsets,
+                dynamic_buffers,
+            });
         }
 
         let mut pc_limits = [0u32; 3];

@@ -202,13 +202,13 @@ impl ResourceData<PoolResourceIndex> {
 
 
 #[derive(Clone, Debug)]
-pub struct MultiStageResourceData<T> {
-    pub vs: ResourceData<T>,
-    pub ps: ResourceData<T>,
-    pub cs: ResourceData<T>,
+pub struct MultiStageData<T> {
+    pub vs: T,
+    pub ps: T,
+    pub cs: T,
 }
 
-pub type MultiStageResourceCounters = MultiStageResourceData<ResourceIndex>;
+pub type MultiStageResourceCounters = MultiStageData<ResourceData<ResourceIndex>>;
 
 impl MultiStageResourceCounters {
     pub fn add(&mut self, stages: pso::ShaderStageFlags, content: DescriptorContent) {
@@ -227,6 +227,7 @@ impl MultiStageResourceCounters {
 #[derive(Debug)]
 pub struct DescriptorSetInfo {
     pub offsets: MultiStageResourceCounters,
+    pub dynamic_buffers: Vec<MultiStageData<PoolResourceIndex>>,
 }
 
 #[derive(Debug)]
@@ -577,7 +578,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                         textures: ps.textures.end .. texture_range.end,
                         samplers: ps.samplers.end .. sampler_range.end,
                     };
-                    MultiStageResourceData { vs, ps, cs }
+                    MultiStageData { vs, ps, cs }
                 };
 
                 Ok(DescriptorSet::Emulated {
@@ -758,7 +759,7 @@ pub enum DescriptorSet {
     Emulated {
         pool: Arc<RwLock<DescriptorPoolInner>>,
         layouts: Arc<Vec<DescriptorLayout>>,
-        resources: MultiStageResourceData<Range<PoolResourceIndex>>,
+        resources: MultiStageData<ResourceData<Range<PoolResourceIndex>>>,
     },
     ArgumentBuffer {
         raw: metal::Buffer,
