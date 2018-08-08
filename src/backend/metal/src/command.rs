@@ -558,7 +558,7 @@ impl StageResources {
         self.push_constants_buffer_id = None;
     }
 
-    fn pre_allocate(&mut self, counters: &native::ResourceCounters<ResourceIndex>) {
+    fn pre_allocate(&mut self, counters: &native::ResourceData<ResourceIndex>) {
         if self.textures.len() < counters.textures as usize {
             self.textures.resize(counters.textures as usize, None);
         }
@@ -2940,104 +2940,60 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.resources_vs.pre_allocate(&pipe_layout.total.vs);
         self.state.resources_ps.pre_allocate(&pipe_layout.total.ps);
 
-        let mut dynamic_offset_iter = dynamic_offsets.into_iter();
+        let mut _dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
-        for (res_offset, desc_set) in pipe_layout.offsets[first_set ..].iter().zip(sets) {
+        for (info, desc_set) in pipe_layout.infos[first_set ..].iter().zip(sets) {
             match *desc_set.borrow() {
-                native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
-                    let mut res_offset = res_offset.clone();
+                native::DescriptorSet::Emulated { ref pool, ref resources, .. } => {
                     let data = pool.read();
-                    let mut data_offset = native::ResourceCounters {
-                        buffers: buffer_range.start,
-                        textures: texture_range.start,
-                        samplers: sampler_range.start,
-                    };
 
-                    for layout in layouts.iter() {
-                        //TODO: there is quite a bit code duplication happening below between vertex and fragment stages
-                        // I inlined everything as the most efficient code path I could see. Any abstraction from here
-                        // needs to ensure that the assembly code doesn't regress. Be my guess to give it a shot :)
-                        // The general idea is to only go through layouts once, and only fetch the data once.
-
-                        if layout.content.contains(native::DescriptorContent::SAMPLER) {
-                            let sampler = data.samplers[data_offset.samplers as usize];
-                            if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
-                                let index = res_offset.vs.samplers;
-                                res_offset.vs.samplers += 1;
-                                let out = &mut self.state.resources_vs.samplers[index as usize];
-                                if *out != sampler {
-                                    *out = sampler;
-                                    pre.issue(soft::RenderCommand::BindSampler { stage: pso::Stage::Vertex, index, sampler });
-                                }
-                            }
-                            if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-                                let index = res_offset.ps.samplers;
-                                res_offset.ps.samplers += 1;
-                                let out = &mut self.state.resources_ps.samplers[index as usize];
-                                if *out != sampler {
-                                    *out = sampler;
-                                    pre.issue(soft::RenderCommand::BindSampler { stage: pso::Stage::Fragment, index, sampler });
-                                }
+                    let mut stages = [
+                        (pso::Stage::Vertex,   &mut self.state.resources_vs, &info.offsets.vs, &resources.vs),
+                        (pso::Stage::Fragment, &mut self.state.resources_ps, &info.offsets.ps, &resources.ps),
+                    ];
+                    //TODO: remove the checks?
+                    for &mut (stage, ref mut cache, res_offset, pool_offset) in stages.iter_mut() {
+                        for (index, &sampler) in (res_offset.samplers .. )
+                            .zip(&data.samplers[pool_offset.samplers.start as usize .. pool_offset.samplers.end as usize])
+                        {
+                            let out = &mut cache.samplers[index as usize];
+                            if *out != sampler {
+                                *out = sampler;
+                                pre.issue(soft::RenderCommand::BindSampler { stage, index, sampler });
                             }
                         }
-
-                        if layout.content.contains(native::DescriptorContent::TEXTURE) {
-                            let texture = data.textures[data_offset.textures as usize].map(|(t, _)| t);
-                            if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
-                                let index = res_offset.vs.textures;
-                                res_offset.vs.textures += 1;
-                                let out = &mut self.state.resources_vs.textures[index as usize];
-                                if *out != texture {
-                                    *out = texture;
-                                    pre.issue(soft::RenderCommand::BindTexture { stage: pso::Stage::Vertex, index, texture });
-                                }
-                            }
-                            if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-                                let index = res_offset.ps.textures;
-                                res_offset.ps.textures += 1;
-                                let out = &mut self.state.resources_ps.textures[index as usize];
-                                if *out != texture {
-                                    *out = texture;
-                                    pre.issue(soft::RenderCommand::BindTexture { stage: pso::Stage::Fragment, index, texture });
-                                }
+                        for (index, texture) in (res_offset.textures .. )
+                            .zip(&data.textures[pool_offset.textures.start as usize .. pool_offset.textures.end as usize])
+                        {
+                            let texture = texture.map(|(t, _)| t);
+                            let out = &mut cache.textures[index as usize];
+                            if *out != texture {
+                                *out = texture;
+                                pre.issue(soft::RenderCommand::BindTexture { stage, index, texture });
                             }
                         }
-
-                        if layout.content.contains(native::DescriptorContent::BUFFER) {
-                            let mut buffer = data.buffers[data_offset.buffers as usize].clone();
-                            if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
+                        for (index, &buffer) in (res_offset.buffers .. )
+                            .zip(&data.buffers[pool_offset.buffers.start as usize .. pool_offset.buffers.end as usize])
+                        {
+                            //TODO: properly handle dynamic offsets
+                            /*if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
                                 if let Some((_, ref mut offset)) = buffer {
                                     *offset += *dynamic_offset_iter.next().unwrap().borrow() as u64;
                                 }
-                            }
-                            if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
-                                let index = res_offset.vs.buffers;
-                                res_offset.vs.buffers += 1;
-                                let out = &mut self.state.resources_vs.buffers[index as usize];
-                                if *out != buffer {
-                                    *out = buffer;
-                                    pre.issue(soft::RenderCommand::BindBuffer { stage: pso::Stage::Vertex, index, buffer });
-                                }
-                            }
-                            if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-                                let index = res_offset.ps.buffers;
-                                res_offset.ps.buffers += 1;
-                                let out = &mut self.state.resources_ps.buffers[index as usize];
-                                if *out != buffer {
-                                    *out = buffer;
-                                    pre.issue(soft::RenderCommand::BindBuffer { stage: pso::Stage::Fragment, index, buffer });
-                                }
+                            }*/
+                            let out = &mut cache.buffers[index as usize];
+                            if *out != buffer {
+                                *out = buffer;
+                                pre.issue(soft::RenderCommand::BindBuffer { stage, index, buffer });
                             }
                         }
-
-                        data_offset.add(layout.content);
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
-                        let index = res_offset.vs.buffers;
+                        let index = info.offsets.vs.buffers;
                         if self.state.resources_vs.set_buffer(index, AsNative::from(raw.as_ref()), offset as _) {
                             pre.issue(soft::RenderCommand::BindBuffer {
                                 stage: pso::Stage::Vertex,
@@ -3047,7 +3003,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
                     }
                     if stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
-                        let index = res_offset.ps.buffers;
+                        let index = info.offsets.ps.buffers;
                         if self.state.resources_ps.set_buffer(index, AsNative::from(raw.as_ref()), offset as _) {
                             pre.issue(soft::RenderCommand::BindBuffer {
                                 stage: pso::Stage::Fragment,
@@ -3087,77 +3043,58 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         self.state.resources_cs.pre_allocate(&pipe_layout.total.cs);
 
-        let mut dynamic_offset_iter = dynamic_offsets.into_iter();
+        let mut _dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
 
-        for (res_offset, desc_set) in pipe_layout.offsets[first_set ..].iter().zip(sets) {
-            let mut res_offset = res_offset.clone();
-            let resources = &mut self.state.resources_cs;
+        for (info, desc_set) in pipe_layout.infos[first_set ..].iter().zip(sets) {
+            let res_offset = &info.offsets.cs;
+            let cache = &mut self.state.resources_cs;
             match *desc_set.borrow() {
-                native::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
+                native::DescriptorSet::Emulated { ref pool, ref resources, .. } => {
+                    let pool_offset = &resources.cs;
                     let data = pool.read();
-                    let mut data_offset = native::ResourceCounters {
-                        buffers: buffer_range.start,
-                        textures: texture_range.start,
-                        samplers: sampler_range.start,
-                    };
 
-                    for layout in layouts.iter() {
-                        if layout.stages.contains(pso::ShaderStageFlags::COMPUTE) {
-                            let target_offset = &mut res_offset.cs;
-                            if layout.content.contains(native::DescriptorContent::SAMPLER) {
-                                let sampler = data.samplers[data_offset.samplers as usize];
-                                let index = target_offset.samplers;
-                                let out = &mut resources.samplers[index as usize];
-                                if *out != sampler {
-                                    *out = sampler;
-                                    pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
-                                }
-                                target_offset.samplers += 1;
-                            }
-
-                            if layout.content.contains(native::DescriptorContent::TEXTURE) {
-                                let texture = data.textures[data_offset.textures as usize].map(|(t, _)| t);
-                                let index = target_offset.textures;
-                                let out = &mut resources.textures[index as usize];
-                                if *out != texture {
-                                    *out = texture;
-                                    pre.issue(soft::ComputeCommand::BindTexture { index, texture });
-                                }
-                                target_offset.textures += 1;
-                            }
-
-                            if layout.content.contains(native::DescriptorContent::BUFFER) {
-                                let mut buffer = data.buffers[data_offset.buffers as usize].clone();
-                                if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
-                                    if let Some((_, ref mut offset)) = buffer {
-                                        *offset += *dynamic_offset_iter.next().unwrap().borrow() as u64;
-                                    }
-                                }
-                                let index = target_offset.buffers;
-                                let out = &mut resources.buffers[index as usize];
-                                if *out != buffer {
-                                    *out = buffer;
-                                    pre.issue(soft::ComputeCommand::BindBuffer {
-                                        index,
-                                        buffer,
-                                    });
-                                }
-                                target_offset.buffers += 1;
-                            }
-                        } else if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
-                            dynamic_offset_iter.next();
+                    for (index, &sampler) in (res_offset.samplers .. )
+                        .zip(&data.samplers[pool_offset.samplers.start as usize .. pool_offset.samplers.end as usize])
+                    {
+                        let out = &mut cache.samplers[index as usize];
+                        if *out != sampler {
+                            *out = sampler;
+                            pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
                         }
-
-                        data_offset.add(layout.content);
+                    }
+                    for (index, texture) in (res_offset.textures .. )
+                        .zip(&data.textures[pool_offset.textures.start as usize .. pool_offset.textures.end as usize])
+                    {
+                        let texture = texture.map(|(t, _)| t);
+                        let out = &mut cache.textures[index as usize];
+                        if *out != texture {
+                            *out = texture;
+                            pre.issue(soft::ComputeCommand::BindTexture { index, texture });
+                        }
+                    }
+                    for (index, &buffer) in (res_offset.buffers .. )
+                        .zip(&data.buffers[pool_offset.buffers.start as usize .. pool_offset.buffers.end as usize])
+                    {
+                        //TODO: properly handle dynamic offsets
+                        /*if layout.content.contains(native::DescriptorContent::DYNAMIC_BUFFER) {
+                            if let Some((_, ref mut offset)) = buffer {
+                                *offset += *dynamic_offset_iter.next().unwrap().borrow() as u64;
+                            }
+                        }*/
+                        let out = &mut cache.buffers[index as usize];
+                        if *out != buffer {
+                            *out = buffer;
+                            pre.issue(soft::ComputeCommand::BindBuffer { index, buffer });
+                        }
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
-                        let index = res_offset.cs.buffers;
+                        let index = res_offset.buffers;
                         let buffer = AsNative::from(raw.as_ref());
-                        if resources.set_buffer(index, buffer, offset as _) {
+                        if cache.set_buffer(index, buffer, offset as _) {
                             pre.issue(soft::ComputeCommand::BindBuffer {
                                 index,
                                 buffer: Some((buffer, offset)),
