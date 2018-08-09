@@ -42,11 +42,6 @@ const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
 const CLEAR_IMAGE_ARRAY: bool = false;
 /// Number of frames to average when reporting the performance counters.
 const COUNTERS_REPORT_WINDOW: usize = 0;
-/// If true, we combine deferred command buffers together into one giant
-/// command buffer per submission, including the signalling logic.
-const STITCH_DEFERRED_COMMAND_BUFFERS: bool = true;
-/// Hack around the Metal System Trace logic that ignores empty command buffers entirely.
-const INSERT_DUMMY_ENCODERS: bool = false;
 
 pub struct QueueInner {
     raw: metal::CommandQueue,
@@ -1451,12 +1446,6 @@ where
     }
 }
 
-/// This is a hack around Metal System Trace logic that ignores empty command buffers entirely.
-fn record_empty(command_buf: &metal::CommandBufferRef) {
-    if INSERT_DUMMY_ENCODERS {
-        command_buf.new_blit_command_encoder().end_encoding();
-    }
-}
 
 #[derive(Default)]
 struct PerformanceCounters {
@@ -1475,6 +1464,11 @@ pub struct CommandQueue {
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
     perf_counters: Option<PerformanceCounters>,
+    /// If true, we combine deferred command buffers together into one giant
+    /// command buffer per submission, including the signalling logic.
+    pub stitch_deferred: bool,
+    /// Hack around the Metal System Trace logic that ignores empty command buffers entirely.
+    pub insert_dummy_encoders: bool,
 }
 
 unsafe impl Send for CommandQueue {}
@@ -1491,6 +1485,15 @@ impl CommandQueue {
             } else {
                 None
             },
+            stitch_deferred: true,
+            insert_dummy_encoders: false,
+        }
+    }
+
+    /// This is a hack around Metal System Trace logic that ignores empty command buffers entirely.
+    fn record_empty(&self, command_buf: &metal::CommandBufferRef) {
+        if self.insert_dummy_encoders {
+            command_buf.new_blit_command_encoder().end_encoding();
         }
     }
 
@@ -1577,8 +1580,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
                                     cmd_buffer
                                 });
                             journal.record(&*cmd_buffer);
-                            if STITCH_DEFERRED_COMMAND_BUFFERS {
+                            if self.stitch_deferred {
                                 deferred_cmd_buffer = Some(cmd_buffer);
+                            } else {
+                                cmd_buffer.commit();
                             }
                         }
                      }
@@ -1619,7 +1624,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     .unwrap_or_else(|| {
                         let cmd_buffer = cmd_queue.spawn_temp();
                         cmd_buffer.set_label("signal");
-                        record_empty(cmd_buffer);
+                        self.record_empty(cmd_buffer);
                         cmd_buffer
                     });
                 msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
@@ -1657,7 +1662,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         let queue = self.shared.queue.lock();
         let command_buffer = queue.raw.new_command_buffer();
         command_buffer.set_label("present");
-        record_empty(command_buffer);
+        self.record_empty(command_buffer);
 
         for (swapchain, index) in swapchains {
             debug!("presenting frame {}", index);
