@@ -1,7 +1,7 @@
 use {
-    Backend, PrivateCapabilities, QueueFamily, OnlineRecording,
+    AsNative, Backend, PrivateCapabilities, QueueFamily, ResourceIndex, OnlineRecording,
     Shared, Surface, Swapchain,
-    validate_line_width, BufferPtr, SamplerPtr, TexturePtr,
+    validate_line_width,
 };
 use {conversions as conv, command, native as n};
 use internal::FastStorageMap;
@@ -217,7 +217,7 @@ impl PhysicalDevice {
         };
 
         let shared = Arc::new(Shared::new(device));
-        assert!((shared.push_constants_buffer_id as usize) < private_caps.max_buffers_per_stage);
+        assert!(shared.push_constants_buffer_id < private_caps.max_buffers_per_stage);
 
         PhysicalDevice {
             shared,
@@ -658,9 +658,9 @@ impl hal::Device<Backend> for Device {
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>
     {
         let mut stage_infos = [
-            (pso::ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,    n::ResourceCounters::new()),
-            (pso::ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  n::ResourceCounters::new()),
-            (pso::ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, n::ResourceCounters::new()),
+            (pso::ShaderStageFlags::VERTEX,   spirv::ExecutionModel::Vertex,    n::ResourceCounters::<ResourceIndex>::new()),
+            (pso::ShaderStageFlags::FRAGMENT, spirv::ExecutionModel::Fragment,  n::ResourceCounters::<ResourceIndex>::new()),
+            (pso::ShaderStageFlags::COMPUTE,  spirv::ExecutionModel::GlCompute, n::ResourceCounters::<ResourceIndex>::new()),
         ];
         let mut res_overrides = BTreeMap::new();
         let mut offsets = Vec::new();
@@ -741,7 +741,7 @@ impl hal::Device<Backend> for Device {
         for (limit, &mut (_, stage, ref mut counters)) in pc_limits.iter().zip(&mut stage_infos) {
             // handle the push constant buffer assignment and shader overrides
             if *limit != 0 {
-                let buffer_id = self.shared.push_constants_buffer_id;
+                let index = self.shared.push_constants_buffer_id;
                 res_overrides.insert(
                     msl::ResourceBindingLocation {
                         stage,
@@ -749,13 +749,13 @@ impl hal::Device<Backend> for Device {
                         binding: PUSH_CONSTANTS_DESC_BINDING,
                     },
                     msl::ResourceBinding {
-                        buffer_id,
+                        buffer_id: index as _,
                         texture_id: !0,
                         sampler_id: !0,
                         force_used: false,
                     },
                 );
-                assert!(counters.buffers < buffer_id as usize);
+                assert!(counters.buffers < index);
             } else {
                 assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
             }
@@ -834,7 +834,7 @@ impl hal::Device<Backend> for Device {
         let pipeline_layout = &pipeline_desc.layout;
         let pass_descriptor = &pipeline_desc.subpass;
 
-        if pipeline_layout.attribute_buffer_index() as usize + pipeline_desc.vertex_buffers.len() > self.private_caps.max_buffers_per_stage {
+        if pipeline_layout.attribute_buffer_index() + pipeline_desc.vertex_buffers.len() as ResourceIndex > self.private_caps.max_buffers_per_stage {
             let msg = format!("Too many buffers inputs of the vertex stage: {} attributes + {} resources",
                 pipeline_desc.vertex_buffers.len(), pipeline_layout.attribute_buffer_index());
             return Err(pso::CreationError::Shader(ShaderError::InterfaceMismatch(msg)));
@@ -971,12 +971,12 @@ impl hal::Device<Backend> for Device {
                 }
                 Entry::Vacant(e) => {
                     e.insert(pso::VertexBufferDesc {
-                        binding: next_buffer_index,
+                        binding: next_buffer_index as _,
                         stride: original.stride,
                         rate: original.rate,
                     });
                     next_buffer_index += 1;
-                    next_buffer_index - 1
+                    next_buffer_index as u32 - 1
                 }
                 Entry::Occupied(e) => e.get().binding,
             };
@@ -1348,20 +1348,20 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        let (mut num_samplers, mut num_textures, mut num_buffers) = (0, 0, 0);
+        let mut counters = n::ResourceCounters::<pso::DescriptorBinding>::new();
 
         if self.private_caps.argument_buffers {
             let mut arguments = Vec::new();
             for desc_range in descriptor_ranges {
                 let desc = desc_range.borrow();
                 let offset_ref = match desc.ty {
-                    pso::DescriptorType::Sampler => &mut num_samplers,
-                    pso::DescriptorType::SampledImage => &mut num_textures,
-                    pso::DescriptorType::UniformBuffer | pso::DescriptorType::StorageBuffer => &mut num_buffers,
+                    pso::DescriptorType::Sampler => &mut counters.samplers,
+                    pso::DescriptorType::SampledImage => &mut counters.textures,
+                    pso::DescriptorType::UniformBuffer | pso::DescriptorType::StorageBuffer => &mut counters.buffers,
                     _ => unimplemented!()
                 };
                 let index = *offset_ref;
-                *offset_ref += desc.count;
+                *offset_ref += desc.count as pso::DescriptorBinding;
                 let arg_desc = Self::describe_argument(desc.ty, index as _, desc.count);
                 arguments.push(arg_desc);
             }
@@ -1379,19 +1379,10 @@ impl hal::Device<Backend> for Device {
             }
         } else {
             for desc_range in descriptor_ranges {
-                let desc = desc_range.borrow();
-                let content = n::DescriptorContent::from(desc.ty);
-                if content.contains(n::DescriptorContent::BUFFER) {
-                    num_buffers += desc.count;
-                }
-                if content.contains(n::DescriptorContent::TEXTURE) {
-                    num_textures += desc.count;
-                }
-                if content.contains(n::DescriptorContent::SAMPLER) {
-                    num_samplers += desc.count;
-                }
+                let dr = desc_range.borrow();
+                counters.add_many(n::DescriptorContent::from(dr.ty), dr.count as pso::DescriptorBinding);
             }
-            n::DescriptorPool::new_emulated(num_samplers, num_textures, num_buffers)
+            n::DescriptorPool::new_emulated(counters)
         }
     }
 
@@ -1477,9 +1468,9 @@ impl hal::Device<Backend> for Device {
             match *write.set {
                 n::DescriptorSet::Emulated { ref pool, ref layouts, ref sampler_range, ref texture_range, ref buffer_range } => {
                     let mut counters = n::ResourceCounters {
-                        buffers: buffer_range.start as usize,
-                        textures: texture_range.start as usize,
-                        samplers: sampler_range.start as usize,
+                        buffers: buffer_range.start,
+                        textures: texture_range.start,
+                        samplers: sampler_range.start,
                     };
                     let mut start = None; //TODO: can pre-compute this
                     for (i, layout) in layouts.iter().enumerate() {
@@ -1496,27 +1487,27 @@ impl hal::Device<Backend> for Device {
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
                                 debug_assert!(!layout.content.contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
-                                data.samplers[counters.samplers] = Some(SamplerPtr(sampler.0.as_ptr()));
+                                data.samplers[counters.samplers as usize] = Some(AsNative::from(sampler.0.as_ref()));
                             }
                             pso::Descriptor::Image(image, il) => {
-                                data.textures[counters.textures] = Some((TexturePtr(image.raw.as_ptr()), il));
+                                data.textures[counters.textures as usize] = Some((AsNative::from(image.raw.as_ref()), il));
                             }
                             pso::Descriptor::CombinedImageSampler(image, il, sampler) => {
                                 if !layout.content.contains(n::DescriptorContent::IMMUTABLE_SAMPLER) {
-                                    data.samplers[counters.samplers] = Some(SamplerPtr(sampler.0.as_ptr()));
+                                    data.samplers[counters.samplers as usize] = Some(AsNative::from(sampler.0.as_ref()));
                                 }
-                                data.textures[counters.textures] = Some((TexturePtr(image.raw.as_ptr()), il));
+                                data.textures[counters.textures as usize] = Some((AsNative::from(image.raw.as_ref()), il));
                             }
                             pso::Descriptor::UniformTexelBuffer(view) |
                             pso::Descriptor::StorageTexelBuffer(view) => {
-                                data.textures[counters.textures] = Some((TexturePtr(view.raw.as_ptr()), image::Layout::General));
+                                data.textures[counters.textures as usize] = Some((AsNative::from(view.raw.as_ref()), image::Layout::General));
                             }
                             pso::Descriptor::Buffer(buffer, ref range) => {
                                 let buf_length = buffer.raw.length();
                                 let start = range.start.unwrap_or(0);
                                 let end = range.end.unwrap_or(buf_length);
                                 assert!(end <= buf_length);
-                                data.buffers[counters.buffers] = Some((BufferPtr(buffer.raw.as_ptr()), start));
+                                data.buffers[counters.buffers as usize] = Some((AsNative::from(buffer.raw.as_ref()), start));
                             }
                         }
                         counters.add(layout.content);

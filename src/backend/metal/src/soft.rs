@@ -1,4 +1,4 @@
-use {BufferPtr, SamplerPtr, TexturePtr};
+use {ResourceIndex, BufferPtr, SamplerPtr, TexturePtr};
 use command::IndexBuffer;
 use native::RasterizerState;
 
@@ -33,7 +33,7 @@ impl<'a> Resources for &'a Own {
 
 #[derive(Clone, Debug)]
 pub enum RenderCommand<R: Resources> {
-    SetViewport(metal::MTLViewport),
+    SetViewport(hal::pso::Rect, Range<f32>),
     SetScissor(metal::MTLScissorRect),
     SetBlendColor(hal::pso::ColorValue),
     SetDepthBias(hal::pso::DepthBias),
@@ -42,22 +42,22 @@ pub enum RenderCommand<R: Resources> {
     SetRasterizerState(RasterizerState),
     BindBuffer {
         stage: hal::pso::Stage,
-        index: usize,
+        index: ResourceIndex,
         buffer: Option<(BufferPtr, hal::buffer::Offset)>,
     },
     BindBufferData {
         stage: hal::pso::Stage,
-        index: usize,
+        index: ResourceIndex,
         words: R::Data,
     },
     BindTexture {
         stage: hal::pso::Stage,
-        index: usize,
+        index: ResourceIndex,
         texture: Option<TexturePtr>,
     },
     BindSampler {
         stage: hal::pso::Stage,
-        index: usize,
+        index: ResourceIndex,
         sampler: Option<SamplerPtr>,
     },
     BindPipeline(R::RenderPipeline),
@@ -90,7 +90,7 @@ impl<'a> RenderCommand<&'a Own> {
     pub fn own(self) -> RenderCommand<Own> {
         use self::RenderCommand::*;
         match self {
-            SetViewport(vp) => SetViewport(vp),
+            SetViewport(rect, depth) => SetViewport(rect, depth),
             SetScissor(rect) => SetScissor(rect),
             SetBlendColor(color) => SetBlendColor(color),
             SetDepthBias(bias) => SetDepthBias(bias),
@@ -175,19 +175,19 @@ pub enum BlitCommand {
 #[derive(Clone, Debug)]
 pub enum ComputeCommand<R: Resources> {
     BindBuffer {
-        index: usize,
+        index: ResourceIndex,
         buffer: Option<(BufferPtr, hal::buffer::Offset)>,
     },
     BindBufferData {
-        index: usize,
+        index: ResourceIndex,
         words: R::Data,
     },
     BindTexture {
-        index: usize,
+        index: ResourceIndex,
         texture: Option<TexturePtr>,
     },
     BindSampler {
-        index: usize,
+        index: ResourceIndex,
         sampler: Option<SamplerPtr>,
     },
     BindPipeline(R::ComputePipeline),
@@ -242,4 +242,10 @@ pub enum Pass {
     Render(metal::RenderPassDescriptor),
     Blit,
     Compute,
+}
+
+
+fn _test_render_command_size(com: RenderCommand<Own>) -> [usize; 6] {
+    use std::mem;
+    unsafe { mem::transmute(com) }
 }

@@ -317,7 +317,7 @@ pub fn map_texture_type(view_kind: image::ViewKind) -> MTLTextureType {
     }
 }
 
-pub fn map_index_type(index_type: IndexType) -> MTLIndexType {
+pub fn _map_index_type(index_type: IndexType) -> MTLIndexType {
     match index_type {
         IndexType::U16 => MTLIndexType::UInt16,
         IndexType::U32 => MTLIndexType::UInt32,
