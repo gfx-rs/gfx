@@ -13,6 +13,8 @@ pub type CacheResourceIndex = u32;
 pub trait Resources {
     type Data;
     type BufferArray;
+    type TextureArray;
+    type SamplerArray;
     type DepthStencil;
     type RenderPipeline;
     type ComputePipeline;
@@ -29,6 +31,8 @@ pub struct Own {
 impl Resources for Own {
     type Data = Vec<u32>;
     type BufferArray = Range<CacheResourceIndex>;
+    type TextureArray = Range<CacheResourceIndex>;
+    type SamplerArray = Range<CacheResourceIndex>;
     type DepthStencil = metal::DepthStencilState;
     type RenderPipeline = metal::RenderPipelineState;
     type ComputePipeline = metal::ComputePipelineState;
@@ -39,6 +43,8 @@ pub struct Ref;
 impl<'a> Resources for &'a Ref {
     type Data = &'a [u32];
     type BufferArray = (&'a [Option<BufferPtr>], &'a [hal::buffer::Offset]);
+    type TextureArray = &'a [Option<TexturePtr>];
+    type SamplerArray = &'a [Option<SamplerPtr>];
     type DepthStencil = &'a metal::DepthStencilStateRef;
     type RenderPipeline = &'a metal::RenderPipelineStateRef;
     type ComputePipeline = &'a metal::ComputePipelineStateRef;
@@ -73,10 +79,20 @@ pub enum RenderCommand<R: Resources> {
         index: ResourceIndex,
         texture: Option<TexturePtr>,
     },
+    BindTextures {
+        stage: hal::pso::Stage,
+        index: ResourceIndex,
+        textures: R::TextureArray,
+    },
     BindSampler {
         stage: hal::pso::Stage,
         index: ResourceIndex,
         sampler: Option<SamplerPtr>,
+    },
+    BindSamplers {
+        stage: hal::pso::Stage,
+        index: ResourceIndex,
+        samplers: R::SamplerArray,
     },
     BindPipeline(R::RenderPipeline),
     Draw {
@@ -148,9 +164,17 @@ pub enum ComputeCommand<R: Resources> {
         index: ResourceIndex,
         texture: Option<TexturePtr>,
     },
+    BindTextures {
+        index: ResourceIndex,
+        textures: R::TextureArray,
+    },
     BindSampler {
         index: ResourceIndex,
         sampler: Option<SamplerPtr>,
+    },
+    BindSamplers {
+        index: ResourceIndex,
+        samplers: R::SamplerArray,
     },
     BindPipeline(R::ComputePipeline),
     Dispatch {
@@ -199,10 +223,10 @@ impl Own {
                 stage,
                 index,
                 buffers: {
-                    let buf_start = self.buffers.len() as CacheResourceIndex;
+                    let start = self.buffers.len() as CacheResourceIndex;
                     self.buffers.extend_from_slice(buffers);
                     self.buffer_offsets.extend_from_slice(offsets);
-                    buf_start .. self.buffers.len() as CacheResourceIndex
+                    start .. self.buffers.len() as CacheResourceIndex
                 },
             },
             BindBufferData { stage, index, words } => BindBufferData {
@@ -215,10 +239,28 @@ impl Own {
                 index,
                 texture,
             },
+            BindTextures { stage, index, textures } => BindTextures {
+                stage,
+                index,
+                textures: {
+                    let start = self.textures.len() as CacheResourceIndex;
+                    self.textures.extend_from_slice(textures);
+                    start .. self.textures.len() as CacheResourceIndex
+                },
+            },
             BindSampler { stage, index, sampler } => BindSampler {
                 stage,
                 index,
                 sampler,
+            },
+            BindSamplers { stage, index, samplers } => BindSamplers {
+                stage,
+                index,
+                samplers: {
+                    let start = self.samplers.len() as CacheResourceIndex;
+                    self.samplers.extend_from_slice(samplers);
+                    start .. self.samplers.len() as CacheResourceIndex
+                },
             },
             BindPipeline(pso) => BindPipeline(pso.to_owned()),
             Draw { primitive_type, vertices, instances } => Draw {
@@ -257,10 +299,10 @@ impl Own {
             BindBuffers { index, buffers: (buffers, offsets) } => BindBuffers {
                 index,
                 buffers: {
-                    let buf_start = self.buffers.len() as CacheResourceIndex;
+                    let start = self.buffers.len() as CacheResourceIndex;
                     self.buffers.extend_from_slice(buffers);
                     self.buffer_offsets.extend_from_slice(offsets);
-                    buf_start .. self.buffers.len() as CacheResourceIndex
+                    start .. self.buffers.len() as CacheResourceIndex
                 },
             },
             BindBufferData { index, words } => BindBufferData {
@@ -271,9 +313,25 @@ impl Own {
                 index,
                 texture,
             },
+            BindTextures { index, textures } => BindTextures {
+                index,
+                textures: {
+                    let start = self.textures.len() as CacheResourceIndex;
+                    self.textures.extend_from_slice(textures);
+                    start .. self.textures.len() as CacheResourceIndex
+                },
+            },
             BindSampler { index, sampler } => BindSampler {
                 index,
                 sampler,
+            },
+            BindSamplers { index, samplers } => BindSamplers {
+                index,
+                samplers: {
+                    let start = self.samplers.len() as CacheResourceIndex;
+                    self.samplers.extend_from_slice(samplers);
+                    start .. self.samplers.len() as CacheResourceIndex
+                },
             },
             BindPipeline(pso) => BindPipeline(pso.to_owned()),
             Dispatch { wg_size, wg_count } => Dispatch {
@@ -294,7 +352,7 @@ impl Own {
 pub trait AsSlice<T, R> {
     fn as_slice<'a>(&'a self, resources: &'a R) -> &'a [T];
 }
-impl<'b, T> AsSlice<Option<T>, &'b Ref> for [Option<T>] {
+impl<'b, T> AsSlice<Option<T>, &'b Ref> for &'b [Option<T>] {
     #[inline(always)]
     fn as_slice<'a>(&'a self, _: &'a &'b Ref) -> &'a [Option<T>] {
         self

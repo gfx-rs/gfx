@@ -1156,8 +1156,10 @@ fn compute_pitches(
 fn exec_render<R, C>(encoder: &metal::RenderCommandEncoderRef, command: C, resources: &R)
 where
     R: soft::Resources,
-    R::BufferArray: soft::AsSlice<Option<BufferPtr>, R> + soft::AsSlice<buffer::Offset, R>,
     R::Data: Borrow<[u32]>,
+    R::BufferArray: soft::AsSlice<Option<BufferPtr>, R> + soft::AsSlice<buffer::Offset, R>,
+    R::TextureArray: soft::AsSlice<Option<TexturePtr>, R>,
+    R::SamplerArray: soft::AsSlice<Option<SamplerPtr>, R>,
     R::DepthStencil: Borrow<metal::DepthStencilStateRef>,
     R::RenderPipeline: Borrow<metal::RenderPipelineStateRef>,
     C: Borrow<soft::RenderCommand<R>>,
@@ -1210,17 +1212,19 @@ where
         Cmd::BindBuffers { stage, index, ref buffers } => {
             use soft::AsSlice;
             let values: &[Option<BufferPtr>] = buffers.as_slice(resources);
-            let data = unsafe {
-                // convert `BufferPtr` -> `&metal::BufferRef`
-                mem::transmute(values)
-            };
-            let offsets = buffers.as_slice(resources);
-            match stage {
-                pso::Stage::Vertex =>
-                    encoder.set_vertex_buffers(index as _, data, offsets),
-                pso::Stage::Fragment =>
-                    encoder.set_fragment_buffers(index as _, data, offsets),
-                _ => unreachable!()
+            if !values.is_empty() {
+                let data = unsafe {
+                    // convert `BufferPtr` -> `&metal::BufferRef`
+                    mem::transmute(values)
+                };
+                let offsets = buffers.as_slice(resources);
+                match stage {
+                    pso::Stage::Vertex =>
+                        encoder.set_vertex_buffers(index as _, data, offsets),
+                    pso::Stage::Fragment =>
+                        encoder.set_fragment_buffers(index as _, data, offsets),
+                    _ => unreachable!()
+                }
             }
         }
         Cmd::BindBufferData { stage, index, ref words } => {
@@ -1243,6 +1247,23 @@ where
                 _ => unreachable!()
             }
         }
+        Cmd::BindTextures { stage, index, ref textures } => {
+            use soft::AsSlice;
+            let values = textures.as_slice(resources);
+            if !values.is_empty() {
+                let data = unsafe {
+                    // convert `TexturePtr` -> `&metal::TextureRef`
+                    mem::transmute(values)
+                };
+                match stage {
+                    pso::Stage::Vertex =>
+                        encoder.set_vertex_textures(index as _, data),
+                    pso::Stage::Fragment =>
+                        encoder.set_fragment_textures(index as _, data),
+                    _ => unreachable!()
+                }
+            }
+        }
         Cmd::BindSampler { stage, index, sampler } => {
             let native = sampler.as_ref().map(|s| s.as_native());
             match stage {
@@ -1251,6 +1272,23 @@ where
                 pso::Stage::Fragment =>
                     encoder.set_fragment_sampler_state(index as _, native),
                 _ => unreachable!()
+            }
+        }
+        Cmd::BindSamplers { stage, index, ref samplers } => {
+            use soft::AsSlice;
+            let values = samplers.as_slice(resources);
+            if !values.is_empty() {
+                let data = unsafe {
+                    // convert `SamplerPtr` -> `&metal::SamplerStateRef`
+                    mem::transmute(values)
+                };
+                match stage {
+                    pso::Stage::Vertex =>
+                        encoder.set_vertex_sampler_states(index as _, data),
+                    pso::Stage::Fragment =>
+                        encoder.set_fragment_sampler_states(index as _, data),
+                    _ => unreachable!()
+                }
             }
         }
         Cmd::BindPipeline(ref pipeline_state) => {
@@ -1433,8 +1471,10 @@ where
 fn exec_compute<R, C>(encoder: &metal::ComputeCommandEncoderRef, command: C, resources: &R)
 where
     R: soft::Resources,
-    R::BufferArray: soft::AsSlice<Option<BufferPtr>, R> + soft::AsSlice<buffer::Offset, R>,
     R::Data: Borrow<[u32]>,
+    R::BufferArray: soft::AsSlice<Option<BufferPtr>, R> + soft::AsSlice<buffer::Offset, R>,
+    R::TextureArray: soft::AsSlice<Option<TexturePtr>, R>,
+    R::SamplerArray: soft::AsSlice<Option<SamplerPtr>, R>,
     R::ComputePipeline: Borrow<metal::ComputePipelineStateRef>,
     C: Borrow<soft::ComputeCommand<R>>,
 {
@@ -1450,12 +1490,14 @@ where
         Cmd::BindBuffers { index, ref buffers } => {
             use soft::AsSlice;
             let values: &[Option<BufferPtr>] = buffers.as_slice(resources);
-            let data = unsafe {
-                // convert `BufferPtr` -> `&metal::BufferRef`
-                mem::transmute(values)
-            };
-            let offsets = buffers.as_slice(resources);
-            encoder.set_buffers(index as _, data, offsets);
+            if !values.is_empty() {
+                let data = unsafe {
+                    // convert `BufferPtr` -> `&metal::BufferRef`
+                    mem::transmute(values)
+                };
+                let offsets = buffers.as_slice(resources);
+                encoder.set_buffers(index as _, data, offsets);
+            }
         }
         Cmd::BindBufferData { ref words, index } => {
             let slice = words.borrow();
@@ -1465,9 +1507,31 @@ where
             let native = texture.as_ref().map(|t| t.as_native());
             encoder.set_texture(index as _,  native);
         }
+        Cmd::BindTextures { index, ref textures } => {
+            use soft::AsSlice;
+            let values = textures.as_slice(resources);
+            if !values.is_empty() {
+                let data = unsafe {
+                    // convert `TexturePtr` -> `&metal::TextureRef`
+                    mem::transmute(values)
+                };
+                encoder.set_textures(index as _, data);
+            }
+        }
         Cmd::BindSampler { index, sampler } => {
             let native = sampler.as_ref().map(|s| s.as_native());
             encoder.set_sampler_state(index as _, native);
+        }
+        Cmd::BindSamplers { index, ref samplers } => {
+            use soft::AsSlice;
+            let values = samplers.as_slice(resources);
+            if !values.is_empty() {
+                let data = unsafe {
+                    // convert `SamplerPtr` -> `&metal::SamplerStateRef`
+                    mem::transmute(values)
+                };
+                encoder.set_sampler_states(index as _, data);
+            }
         }
         Cmd::BindPipeline(ref pipeline) => {
             encoder.set_compute_pipeline_state(pipeline.borrow());
@@ -2991,25 +3055,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         (pso::Stage::Fragment, &mut self.state.resources_ps, &info.offsets.ps, &resources.ps),
                     ];
                     //TODO: remove the checks?
-                    for &mut (stage, ref mut cache, res_offset, pool_offset) in stages.iter_mut() {
+                    for &mut (_, ref mut cache, res_offset, pool_offset) in stages.iter_mut() {
                         for (index, &sampler) in (res_offset.samplers .. )
                             .zip(&data.samplers[pool_offset.samplers.start as usize .. pool_offset.samplers.end as usize])
                         {
-                            let out = &mut cache.samplers[index as usize];
-                            if *out != sampler {
-                                *out = sampler;
-                                pre.issue(soft::RenderCommand::BindSampler { stage, index, sampler });
-                            }
+                            cache.samplers[index as usize] = sampler;
                         }
                         for (index, texture_pair) in (res_offset.textures .. )
                             .zip(&data.textures[pool_offset.textures.start as usize .. pool_offset.textures.end as usize])
                         {
-                            let texture = Some(texture_pair.unwrap().0);
-                            let out = &mut cache.textures[index as usize];
-                            if *out != texture {
-                                *out = texture;
-                                pre.issue(soft::RenderCommand::BindTexture { stage, index, texture });
-                            }
+                            cache.textures[index as usize] = texture_pair.map(|(t, _)| t);
                         }
                         for (index, buffer_pair) in (res_offset.buffers .. )
                             .zip(&data.buffers[pool_offset.buffers.start as usize .. pool_offset.buffers.end as usize])
@@ -3030,6 +3085,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     }
 
                     for &(stage, ref cache, res_offset, pool_offset) in stages.iter() {
+                        pre.issue(soft::RenderCommand::BindTextures {
+                            stage,
+                            index: res_offset.textures,
+                            textures: {
+                                let count = (pool_offset.textures.end - pool_offset.textures.start) as usize;
+                                &cache.textures[res_offset.textures as usize .. res_offset.textures as usize + count]
+                            }
+                        });
+                        pre.issue(soft::RenderCommand::BindSamplers {
+                            stage,
+                            index: res_offset.samplers,
+                            samplers: {
+                                let count = (pool_offset.samplers.end - pool_offset.samplers.start) as usize;
+                                &cache.samplers[res_offset.samplers as usize .. res_offset.samplers as usize + count]
+                            }
+                        });
                         pre.issue(soft::RenderCommand::BindBuffers {
                             stage,
                             index: res_offset.buffers,
@@ -3108,21 +3179,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     for (index, &sampler) in (res_offset.samplers .. )
                         .zip(&data.samplers[pool_offset.samplers.start as usize .. pool_offset.samplers.end as usize])
                     {
-                        let out = &mut cache.samplers[index as usize];
-                        if *out != sampler {
-                            *out = sampler;
-                            pre.issue(soft::ComputeCommand::BindSampler { index, sampler });
-                        }
+                        cache.samplers[index as usize] = sampler;
                     }
                     for (index, texture_pair) in (res_offset.textures .. )
                         .zip(&data.textures[pool_offset.textures.start as usize .. pool_offset.textures.end as usize])
                     {
-                        let texture = Some(texture_pair.unwrap().0);
-                        let out = &mut cache.textures[index as usize];
-                        if *out != texture {
-                            *out = texture;
-                            pre.issue(soft::ComputeCommand::BindTexture { index, texture });
-                        }
+                        cache.textures[index as usize] = texture_pair.map(|(t, _)| t);
                     }
                     for (index, buffer_pair) in (res_offset.buffers .. )
                         .zip(&data.buffers[pool_offset.buffers.start as usize .. pool_offset.buffers.end as usize])
@@ -3138,6 +3200,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
                     }
 
+                    pre.issue(soft::ComputeCommand::BindTextures {
+                        index: res_offset.textures,
+                        textures: {
+                            let count = (pool_offset.textures.end - pool_offset.textures.start) as usize;
+                            &cache.textures[res_offset.textures as usize .. res_offset.textures as usize + count]
+                        }
+                    });
+                    pre.issue(soft::ComputeCommand::BindSamplers {
+                        index: res_offset.samplers,
+                        samplers: {
+                            let count = (pool_offset.samplers.end - pool_offset.samplers.start) as usize;
+                            &cache.samplers[res_offset.samplers as usize .. res_offset.samplers as usize + count]
+                        }
+                    });
                     pre.issue(soft::ComputeCommand::BindBuffers {
                         index: res_offset.buffers,
                         buffers: {
