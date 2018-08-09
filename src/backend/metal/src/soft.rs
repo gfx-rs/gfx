@@ -62,7 +62,8 @@ pub enum RenderCommand<R: Resources> {
     BindBuffer {
         stage: hal::pso::Stage,
         index: ResourceIndex,
-        buffer: Option<(BufferPtr, hal::buffer::Offset)>,
+        buffer: BufferPtr,
+        offset: hal::buffer::Offset,
     },
     BindBuffers {
         stage: hal::pso::Stage,
@@ -74,20 +75,10 @@ pub enum RenderCommand<R: Resources> {
         index: ResourceIndex,
         words: R::Data,
     },
-    BindTexture {
-        stage: hal::pso::Stage,
-        index: ResourceIndex,
-        texture: Option<TexturePtr>,
-    },
     BindTextures {
         stage: hal::pso::Stage,
         index: ResourceIndex,
         textures: R::TextureArray,
-    },
-    BindSampler {
-        stage: hal::pso::Stage,
-        index: ResourceIndex,
-        sampler: Option<SamplerPtr>,
     },
     BindSamplers {
         stage: hal::pso::Stage,
@@ -150,7 +141,8 @@ pub enum BlitCommand {
 pub enum ComputeCommand<R: Resources> {
     BindBuffer {
         index: ResourceIndex,
-        buffer: Option<(BufferPtr, hal::buffer::Offset)>,
+        buffer: BufferPtr,
+        offset: hal::buffer::Offset,
     },
     BindBuffers {
         index: ResourceIndex,
@@ -160,17 +152,9 @@ pub enum ComputeCommand<R: Resources> {
         index: ResourceIndex,
         words: R::Data,
     },
-    BindTexture {
-        index: ResourceIndex,
-        texture: Option<TexturePtr>,
-    },
     BindTextures {
         index: ResourceIndex,
         textures: R::TextureArray,
-    },
-    BindSampler {
-        index: ResourceIndex,
-        sampler: Option<SamplerPtr>,
     },
     BindSamplers {
         index: ResourceIndex,
@@ -214,10 +198,11 @@ impl Own {
             SetDepthStencilState(state) => SetDepthStencilState(state.to_owned()),
             SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
             SetRasterizerState(ref state) => SetRasterizerState(state.clone()),
-            BindBuffer { stage, index, buffer } => BindBuffer {
+            BindBuffer { stage, index, buffer, offset } => BindBuffer {
                 stage,
                 index,
                 buffer,
+                offset,
             },
             BindBuffers { stage, index, buffers: (buffers, offsets) } => BindBuffers {
                 stage,
@@ -234,11 +219,6 @@ impl Own {
                 index,
                 words: words.to_vec(),
             },
-            BindTexture { stage, index, texture } => BindTexture {
-                stage,
-                index,
-                texture,
-            },
             BindTextures { stage, index, textures } => BindTextures {
                 stage,
                 index,
@@ -247,11 +227,6 @@ impl Own {
                     self.textures.extend_from_slice(textures);
                     start .. self.textures.len() as CacheResourceIndex
                 },
-            },
-            BindSampler { stage, index, sampler } => BindSampler {
-                stage,
-                index,
-                sampler,
             },
             BindSamplers { stage, index, samplers } => BindSamplers {
                 stage,
@@ -292,9 +267,10 @@ impl Own {
     pub fn own_compute(&mut self, com: ComputeCommand<&Ref>) -> ComputeCommand<Self> {
         use self::ComputeCommand::*;
         match com {
-            BindBuffer { index, buffer } => BindBuffer {
+            BindBuffer { index, buffer, offset } => BindBuffer {
                 index,
                 buffer,
+                offset,
             },
             BindBuffers { index, buffers: (buffers, offsets) } => BindBuffers {
                 index,
@@ -309,10 +285,6 @@ impl Own {
                 index,
                 words: words.to_vec(),
             },
-            BindTexture { index, texture } => BindTexture {
-                index,
-                texture,
-            },
             BindTextures { index, textures } => BindTextures {
                 index,
                 textures: {
@@ -320,10 +292,6 @@ impl Own {
                     self.textures.extend_from_slice(textures);
                     start .. self.textures.len() as CacheResourceIndex
                 },
-            },
-            BindSampler { index, sampler } => BindSampler {
-                index,
-                sampler,
             },
             BindSamplers { index, samplers } => BindSamplers {
                 index,

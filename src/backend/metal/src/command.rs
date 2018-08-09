@@ -383,13 +383,14 @@ impl State {
             .iter()
             .zip(&self.resources_vs.buffer_offsets)
             .enumerate()
-            .filter_map(move |(index, (resource, offset))| {
+            .filter_map(move |(index, (resource, &offset))| {
                 if mask & (1u64 << index) != 0 {
                     resource.map(|buffer| {
                         soft::RenderCommand::BindBuffer {
                             stage: pso::Stage::Vertex,
                             index: index as _,
-                            buffer: Some((buffer, *offset)),
+                            buffer,
+                            offset,
                         }
                     })
                 } else {
@@ -1158,11 +1159,8 @@ where
             encoder.set_cull_mode(rs.cull_mode);
             encoder.set_depth_clip_mode(rs.depth_clip);
         }
-        Cmd::BindBuffer { stage, index, buffer } => {
-            let (native, offset) = match buffer {
-                Some((ref ptr, offset)) => (Some(ptr.as_native()), offset),
-                None => (None, 0),
-            };
+        Cmd::BindBuffer { stage, index, buffer, offset } => {
+            let native = Some(buffer.as_native());
             match stage {
                 pso::Stage::Vertex =>
                     encoder.set_vertex_buffer(index as _, offset as _, native),
@@ -1199,16 +1197,6 @@ where
                 _ => unreachable!()
             }
         }
-        Cmd::BindTexture { stage, index, texture } => {
-            let native = texture.as_ref().map(|t| t.as_native());
-            match stage {
-                pso::Stage::Vertex =>
-                    encoder.set_vertex_texture(index as _, native),
-                pso::Stage::Fragment =>
-                    encoder.set_fragment_texture(index as _, native),
-                _ => unreachable!()
-            }
-        }
         Cmd::BindTextures { stage, index, ref textures } => {
             use soft::AsSlice;
             let values = textures.as_slice(resources);
@@ -1224,16 +1212,6 @@ where
                         encoder.set_fragment_textures(index as _, data),
                     _ => unreachable!()
                 }
-            }
-        }
-        Cmd::BindSampler { stage, index, sampler } => {
-            let native = sampler.as_ref().map(|s| s.as_native());
-            match stage {
-                pso::Stage::Vertex =>
-                    encoder.set_vertex_sampler_state(index as _, native),
-                pso::Stage::Fragment =>
-                    encoder.set_fragment_sampler_state(index as _, native),
-                _ => unreachable!()
             }
         }
         Cmd::BindSamplers { stage, index, ref samplers } => {
@@ -1442,11 +1420,8 @@ where
 {
     use soft::ComputeCommand as Cmd;
     match *command.borrow() {
-        Cmd::BindBuffer { index, buffer } => {
-            let (native, offset) = match buffer {
-                Some((ref ptr, offset)) => (Some(ptr.as_native()), offset),
-                None => (None, 0),
-            };
+        Cmd::BindBuffer { index, buffer, offset } => {
+            let native = Some(buffer.as_native());
             encoder.set_buffer(index as _, offset, native);
         }
         Cmd::BindBuffers { index, ref buffers } => {
@@ -1465,10 +1440,6 @@ where
             let slice = words.borrow();
             encoder.set_bytes(index as _, (slice.len() * WORD_SIZE) as u64, slice.as_ptr() as _);
         }
-        Cmd::BindTexture { index, texture } => {
-            let native = texture.as_ref().map(|t| t.as_native());
-            encoder.set_texture(index as _,  native);
-        }
         Cmd::BindTextures { index, ref textures } => {
             use soft::AsSlice;
             let values = textures.as_slice(resources);
@@ -1479,10 +1450,6 @@ where
                 };
                 encoder.set_textures(index as _, data);
             }
-        }
-        Cmd::BindSampler { index, sampler } => {
-            let native = sampler.as_ref().map(|s| s.as_native());
-            encoder.set_sampler_state(index as _, native);
         }
         Cmd::BindSamplers { index, ref samplers } => {
             use soft::AsSlice;
@@ -1993,7 +1960,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::ComputeCommand::BindPipeline(pso),
             soft::ComputeCommand::BindBuffer {
                 index: 0,
-                buffer: Some((AsNative::from(buffer.raw.as_ref()), start)),
+                buffer: AsNative::from(buffer.raw.as_ref()),
+                offset: start,
             },
             soft::ComputeCommand::BindBufferData {
                 index: 1,
@@ -2358,22 +2326,24 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             None => None,
         };
 
-        let first_vs_offset = self.state.resources_vs.buffer_offsets.first();
-        let com_vs = self.state.resources_vs.buffers
-            .first()
-            .map(|&buffer| soft::RenderCommand::BindBuffer {
+        let com_vs = match (self.state.resources_vs.buffers.first(), self.state.resources_vs.buffer_offsets.first()) {
+            (Some(&Some(buffer)), Some(&offset)) => Some(soft::RenderCommand::BindBuffer {
                 stage: pso::Stage::Vertex,
                 index: 0,
-                buffer: buffer.map(|b| (b, *first_vs_offset.unwrap())),
-            });
-        let first_ps_offset = self.state.resources_ps.buffer_offsets.first();
-        let com_ps = self.state.resources_ps.buffers
-            .first()
-            .map(|&buffer| soft::RenderCommand::BindBuffer {
+                buffer,
+                offset,
+            }),
+            _ => None,
+        };
+        let com_ps = match (self.state.resources_ps.buffers.first(), self.state.resources_ps.buffer_offsets.first()) {
+            (Some(&Some(buffer)), Some(&offset)) => Some(soft::RenderCommand::BindBuffer {
                 stage: pso::Stage::Fragment,
                 index: 0,
-                buffer: buffer.map(|b| (b, *first_ps_offset.unwrap())),
-            });
+                buffer,
+                offset,
+            }),
+            _ => None,
+        };
 
         let commands = com_pso
             .into_iter()
@@ -2509,15 +2479,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let prelude = [
             soft::RenderCommand::BindPipeline(&**pso),
-            soft::RenderCommand::BindSampler {
+            soft::RenderCommand::BindSamplers {
                 stage: pso::Stage::Fragment,
                 index: 0,
-                sampler: Some(AsNative::from(sampler)),
+                samplers: &[Some(AsNative::from(sampler))][..],
             },
-            soft::RenderCommand::BindTexture {
+            soft::RenderCommand::BindTextures {
                 stage: pso::Stage::Fragment,
                 index: 0,
-                texture: Some(AsNative::from(src.raw.as_ref()))
+                textures: &[Some(AsNative::from(src.raw.as_ref()))][..],
             },
         ];
 
@@ -3082,7 +3052,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         pre.issue(soft::RenderCommand::BindBuffer {
                             stage: pso::Stage::Vertex,
                             index,
-                            buffer: Some((AsNative::from(raw.as_ref()), offset)),
+                            buffer: AsNative::from(raw.as_ref()),
+                            offset,
                         });
                     }
                     if stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
@@ -3092,7 +3063,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         pre.issue(soft::RenderCommand::BindBuffer {
                             stage: pso::Stage::Fragment,
                             index,
-                            buffer: Some((AsNative::from(raw.as_ref()), offset)),
+                            buffer: AsNative::from(raw.as_ref()),
+                            offset,
                         });
                     }
                 }
@@ -3192,7 +3164,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         cache.buffer_offsets[index as usize] = offset;
                         pre.issue(soft::ComputeCommand::BindBuffer {
                             index,
-                            buffer: Some((AsNative::from(raw.as_ref()), offset)),
+                            buffer: AsNative::from(raw.as_ref()),
+                            offset,
                         });
                     }
                 }
@@ -3273,11 +3246,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 0,
-                    buffer: Some((AsNative::from(dst.raw.as_ref()), r.dst)),
+                    buffer: AsNative::from(dst.raw.as_ref()),
+                    offset: r.dst,
                 });
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 1,
-                    buffer: Some((AsNative::from(src.raw.as_ref()), r.src)),
+                    buffer: AsNative::from(src.raw.as_ref()),
+                    offset: r.src,
                 });
                 compute_commands.push(soft::ComputeCommand::BindBufferData {
                     index: 2,
