@@ -274,47 +274,30 @@ impl State {
             .iter()
             .zip(render_resources)
             .flat_map(move |(&stage, resources)| {
-                let com_buffers = resources.buffers
-                    .iter()
-                    .zip(&resources.buffer_offsets)
-                    .enumerate()
-                    .filter_map(move |(i, (resource, offset))|
-                {
-                    resource.map(|buffer| {
-                        soft::RenderCommand::BindBuffer {
-                            stage,
-                            index: i as _,
-                            buffer: Some((buffer, *offset)),
-                        }
-                    })
-                });
-                let com_textures = resources.textures.iter().enumerate().filter_map(move |(i, resource)| {
-                    resource.map(|texture| {
-                        soft::RenderCommand::BindTexture {
-                            stage,
-                            index: i as _,
-                            texture: Some(texture),
-                        }
-                    })
-                });
-                let com_samplers = resources.samplers.iter().enumerate().filter_map(move |(i, resource)| {
-                    resource.map(|sampler| {
-                        soft::RenderCommand::BindSampler {
-                            stage,
-                            index: i as _,
-                            sampler: Some(sampler),
-                        }
-                    })
-                });
+                let com_buffers = soft::RenderCommand::BindBuffers {
+                    stage,
+                    index: 0,
+                    buffers: (&resources.buffers[..], &resources.buffer_offsets[..])
+                };
+                let com_textures = soft::RenderCommand::BindTextures {
+                    stage,
+                    index: 0,
+                    textures: &resources.textures[..],
+                };
+                let com_samplers = soft::RenderCommand::BindSamplers {
+                    stage,
+                    index: 0,
+                    samplers: &resources.samplers[..],
+                };
                 let com_push_constants = resources.push_constants_buffer_id
                     .map(|id| soft::RenderCommand::BindBufferData {
                         stage,
                         index: id  as _,
                         words: push_constants,
                     });
-                com_buffers
-                    .chain(com_textures)
-                    .chain(com_samplers)
+                iter::once(com_buffers)
+                    .chain(iter::once(com_textures))
+                    .chain(iter::once(com_samplers))
                     .chain(com_push_constants)
             });
 
@@ -330,44 +313,23 @@ impl State {
     }
 
     fn make_compute_commands<'a>(&'a self) -> impl Iterator<Item = soft::ComputeCommand<&'a soft::Ref>> {
+        let resources = &self.resources_cs;
         let com_pso = self.compute_pso
             .as_ref()
             .map(|pso| soft::ComputeCommand::BindPipeline(&**pso));
-        let com_buffers = self.resources_cs.buffers
-            .iter()
-            .zip(&self.resources_cs.buffer_offsets)
-            .enumerate()
-            .filter_map(|(i, (resource, offset))| {
-                resource.map(|buffer| {
-                    soft::ComputeCommand::BindBuffer {
-                        index: i as _,
-                        buffer: Some((buffer, *offset)),
-                    }
-                })
-            });
-        let com_textures = self.resources_cs.textures
-            .iter()
-            .enumerate()
-            .filter_map(|(i, ref resource)| {
-                resource.map(|texture| {
-                    soft::ComputeCommand::BindTexture {
-                        index: i as _,
-                        texture: Some(texture),
-                    }
-                })
-            });
-        let com_samplers = self.resources_cs.samplers
-            .iter()
-            .enumerate()
-            .filter_map(|(i, ref resource)| {
-                resource.map(|sampler| {
-                    soft::ComputeCommand::BindSampler {
-                        index: i as _,
-                        sampler: Some(sampler),
-                    }
-                })
-            });
-        let com_push_constants = self.resources_cs.push_constants_buffer_id
+        let com_buffers = soft::ComputeCommand::BindBuffers {
+            index: 0,
+            buffers: (&resources.buffers[..], &resources.buffer_offsets[..])
+        };
+        let com_textures = soft::ComputeCommand::BindTextures {
+            index: 0,
+            textures: &resources.textures[..],
+        };
+        let com_samplers = soft::ComputeCommand::BindSamplers {
+            index: 0,
+            samplers: &resources.samplers[..],
+        };
+        let com_push_constants = resources.push_constants_buffer_id
             .map(|id| soft::ComputeCommand::BindBufferData {
                 index: id as _,
                 words: self.push_constants.as_slice(),
@@ -375,9 +337,9 @@ impl State {
 
         com_pso
             .into_iter()
-            .chain(com_buffers)
-            .chain(com_textures)
-            .chain(com_samplers)
+            .chain(iter::once(com_buffers))
+            .chain(iter::once(com_textures))
+            .chain(iter::once(com_samplers))
             .chain(com_push_constants)
     }
 
