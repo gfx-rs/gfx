@@ -8,24 +8,37 @@ use metal;
 use std::ops::Range;
 
 
+pub type CacheResourceIndex = u32;
+
 pub trait Resources {
     type Data;
+    type BufferArray;
     type DepthStencil;
     type RenderPipeline;
     type ComputePipeline;
 }
 
-#[derive(Debug)]
-pub enum Own {}
+#[derive(Debug, Default)]
+pub struct Own {
+    pub buffers: Vec<Option<BufferPtr>>,
+    pub buffer_offsets: Vec<hal::buffer::Offset>,
+    pub textures: Vec<Option<TexturePtr>>,
+    pub samplers: Vec<Option<SamplerPtr>>,
+}
+
 impl Resources for Own {
     type Data = Vec<u32>;
+    type BufferArray = Range<CacheResourceIndex>;
     type DepthStencil = metal::DepthStencilState;
     type RenderPipeline = metal::RenderPipelineState;
     type ComputePipeline = metal::ComputePipelineState;
 }
 
-impl<'a> Resources for &'a Own {
+#[derive(Debug)]
+pub struct Ref;
+impl<'a> Resources for &'a Ref {
     type Data = &'a [u32];
+    type BufferArray = (&'a [Option<BufferPtr>], &'a [hal::buffer::Offset]);
     type DepthStencil = &'a metal::DepthStencilStateRef;
     type RenderPipeline = &'a metal::RenderPipelineStateRef;
     type ComputePipeline = &'a metal::ComputePipelineStateRef;
@@ -44,6 +57,11 @@ pub enum RenderCommand<R: Resources> {
         stage: hal::pso::Stage,
         index: ResourceIndex,
         buffer: Option<(BufferPtr, hal::buffer::Offset)>,
+    },
+    BindBuffers {
+        stage: hal::pso::Stage,
+        index: ResourceIndex,
+        buffers: R::BufferArray,
     },
     BindBufferData {
         stage: hal::pso::Stage,
@@ -86,10 +104,85 @@ pub enum RenderCommand<R: Resources> {
     },
 }
 
-impl<'a> RenderCommand<&'a Own> {
-    pub fn own(self) -> RenderCommand<Own> {
+#[derive(Clone, Debug)]
+pub enum BlitCommand {
+    CopyBuffer {
+        src: BufferPtr,
+        dst: BufferPtr,
+        region: hal::command::BufferCopy,
+    },
+    CopyImage {
+        src: TexturePtr,
+        dst: TexturePtr,
+        region: hal::command::ImageCopy,
+    },
+    CopyBufferToImage {
+        src: BufferPtr,
+        dst: TexturePtr,
+        dst_desc: hal::format::FormatDesc,
+        region: hal::command::BufferImageCopy,
+    },
+    CopyImageToBuffer {
+        src: TexturePtr,
+        src_desc: hal::format::FormatDesc,
+        dst: BufferPtr,
+        region: hal::command::BufferImageCopy,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum ComputeCommand<R: Resources> {
+    BindBuffer {
+        index: ResourceIndex,
+        buffer: Option<(BufferPtr, hal::buffer::Offset)>,
+    },
+    BindBuffers {
+        index: ResourceIndex,
+        buffers: R::BufferArray,
+    },
+    BindBufferData {
+        index: ResourceIndex,
+        words: R::Data,
+    },
+    BindTexture {
+        index: ResourceIndex,
+        texture: Option<TexturePtr>,
+    },
+    BindSampler {
+        index: ResourceIndex,
+        sampler: Option<SamplerPtr>,
+    },
+    BindPipeline(R::ComputePipeline),
+    Dispatch {
+        wg_size: metal::MTLSize,
+        wg_count: metal::MTLSize,
+    },
+    DispatchIndirect {
+        wg_size: metal::MTLSize,
+        buffer: BufferPtr,
+        offset: hal::buffer::Offset,
+    },
+}
+
+
+#[derive(Debug)]
+pub enum Pass {
+    Render(metal::RenderPassDescriptor),
+    Blit,
+    Compute,
+}
+
+impl Own {
+    pub fn clear(&mut self) {
+        self.buffers.clear();
+        self.buffer_offsets.clear();
+        self.textures.clear();
+        self.samplers.clear();
+    }
+
+    pub fn own_render(&mut self, com: RenderCommand<&Ref>) -> RenderCommand<Self> {
         use self::RenderCommand::*;
-        match self {
+        match com {
             SetViewport(rect, depth) => SetViewport(rect, depth),
             SetScissor(rect) => SetScissor(rect),
             SetBlendColor(color) => SetBlendColor(color),
@@ -101,6 +194,16 @@ impl<'a> RenderCommand<&'a Own> {
                 stage,
                 index,
                 buffer,
+            },
+            BindBuffers { stage, index, buffers: (buffers, offsets) } => BindBuffers {
+                stage,
+                index,
+                buffers: {
+                    let buf_start = self.buffers.len() as CacheResourceIndex;
+                    self.buffers.extend_from_slice(buffers);
+                    self.buffer_offsets.extend_from_slice(offsets);
+                    buf_start .. self.buffers.len() as CacheResourceIndex
+                },
             },
             BindBufferData { stage, index, words } => BindBufferData {
                 stage,
@@ -143,72 +246,22 @@ impl<'a> RenderCommand<&'a Own> {
             },
         }
     }
-}
 
-
-#[derive(Clone, Debug)]
-pub enum BlitCommand {
-    CopyBuffer {
-        src: BufferPtr,
-        dst: BufferPtr,
-        region: hal::command::BufferCopy,
-    },
-    CopyImage {
-        src: TexturePtr,
-        dst: TexturePtr,
-        region: hal::command::ImageCopy,
-    },
-    CopyBufferToImage {
-        src: BufferPtr,
-        dst: TexturePtr,
-        dst_desc: hal::format::FormatDesc,
-        region: hal::command::BufferImageCopy,
-    },
-    CopyImageToBuffer {
-        src: TexturePtr,
-        src_desc: hal::format::FormatDesc,
-        dst: BufferPtr,
-        region: hal::command::BufferImageCopy,
-    },
-}
-
-#[derive(Clone, Debug)]
-pub enum ComputeCommand<R: Resources> {
-    BindBuffer {
-        index: ResourceIndex,
-        buffer: Option<(BufferPtr, hal::buffer::Offset)>,
-    },
-    BindBufferData {
-        index: ResourceIndex,
-        words: R::Data,
-    },
-    BindTexture {
-        index: ResourceIndex,
-        texture: Option<TexturePtr>,
-    },
-    BindSampler {
-        index: ResourceIndex,
-        sampler: Option<SamplerPtr>,
-    },
-    BindPipeline(R::ComputePipeline),
-    Dispatch {
-        wg_size: metal::MTLSize,
-        wg_count: metal::MTLSize,
-    },
-    DispatchIndirect {
-        wg_size: metal::MTLSize,
-        buffer: BufferPtr,
-        offset: hal::buffer::Offset,
-    },
-}
-
-impl<'a> ComputeCommand<&'a Own> {
-    pub fn own(self) -> ComputeCommand<Own> {
+    pub fn own_compute(&mut self, com: ComputeCommand<&Ref>) -> ComputeCommand<Self> {
         use self::ComputeCommand::*;
-        match self {
+        match com {
             BindBuffer { index, buffer } => BindBuffer {
                 index,
                 buffer,
+            },
+            BindBuffers { index, buffers: (buffers, offsets) } => BindBuffers {
+                index,
+                buffers: {
+                    let buf_start = self.buffers.len() as CacheResourceIndex;
+                    self.buffers.extend_from_slice(buffers);
+                    self.buffer_offsets.extend_from_slice(offsets);
+                    buf_start .. self.buffers.len() as CacheResourceIndex
+                },
             },
             BindBufferData { index, words } => BindBufferData {
                 index,
@@ -236,12 +289,52 @@ impl<'a> ComputeCommand<&'a Own> {
     }
 }
 
-
-#[derive(Debug)]
-pub enum Pass {
-    Render(metal::RenderPassDescriptor),
-    Blit,
-    Compute,
+/// This is a helper trait that allows us to unify owned and non-owned handling
+/// of the context-dependent data, such as resource arrays.
+pub trait AsSlice<T, R> {
+    fn as_slice<'a>(&'a self, resources: &'a R) -> &'a [T];
+}
+impl<'b, T> AsSlice<Option<T>, &'b Ref> for [Option<T>] {
+    #[inline(always)]
+    fn as_slice<'a>(&'a self, _: &'a &'b Ref) -> &'a [Option<T>] {
+        self
+    }
+}
+impl<'b> AsSlice<Option<BufferPtr>, &'b Ref> for (&'b [Option<BufferPtr>], &'b [hal::buffer::Offset]) {
+    #[inline(always)]
+    fn as_slice<'a>(&'a self, _: &'a &'b Ref) -> &'a [Option<BufferPtr>] {
+        self.0
+    }
+}
+impl<'b> AsSlice<hal::buffer::Offset, &'b Ref> for (&'b [Option<BufferPtr>], &'b [hal::buffer::Offset]) {
+    #[inline(always)]
+    fn as_slice<'a>(&'a self, _: &'a &'b Ref) -> &'a [hal::buffer::Offset] {
+        self.1
+    }
+}
+impl AsSlice<Option<BufferPtr>, Own> for Range<CacheResourceIndex> {
+    #[inline(always)]
+    fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [Option<BufferPtr>] {
+        &resources.buffers[self.start as usize .. self.end as usize]
+    }
+}
+impl AsSlice<hal::buffer::Offset, Own> for Range<CacheResourceIndex> {
+    #[inline(always)]
+    fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [hal::buffer::Offset] {
+        &resources.buffer_offsets[self.start as usize .. self.end as usize]
+    }
+}
+impl AsSlice<Option<TexturePtr>, Own> for Range<CacheResourceIndex> {
+    #[inline(always)]
+    fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [Option<TexturePtr>] {
+        &resources.textures[self.start as usize .. self.end as usize]
+    }
+}
+impl AsSlice<Option<SamplerPtr>, Own> for Range<CacheResourceIndex> {
+    #[inline(always)]
+    fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [Option<SamplerPtr>] {
+        &resources.samplers[self.start as usize .. self.end as usize]
+    }
 }
 
 

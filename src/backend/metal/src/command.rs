@@ -234,7 +234,7 @@ impl State {
 
     fn make_pso_commands<'a>(
         &'a self
-    ) -> (Option<soft::RenderCommand<&'a soft::Own>>, Option<soft::RenderCommand<&'a soft::Own>>){
+    ) -> (Option<soft::RenderCommand<&'a soft::Ref>>, Option<soft::RenderCommand<&'a soft::Ref>>){
         if self.render_pso_is_compatible {
             (
                 self.render_pso.as_ref().map(|ps| soft::RenderCommand::BindPipeline(&*ps.raw)),
@@ -248,7 +248,7 @@ impl State {
 
     fn make_render_commands<'a>(
         &'a self, aspects: Aspects
-    ) -> impl Iterator<Item = soft::RenderCommand<&'a soft::Own>> {
+    ) -> impl Iterator<Item = soft::RenderCommand<&'a soft::Ref>> {
         // Apply previously bound values for this command buffer
         let com_vp = self.viewport.as_ref().map(|&(rect, ref depth)| {
             soft::RenderCommand::SetViewport(rect, depth.clone())
@@ -329,7 +329,7 @@ impl State {
             .chain(com_resources)
     }
 
-    fn make_compute_commands<'a>(&'a self) -> impl Iterator<Item = soft::ComputeCommand<&'a soft::Own>> {
+    fn make_compute_commands<'a>(&'a self) -> impl Iterator<Item = soft::ComputeCommand<&'a soft::Ref>> {
         let com_pso = self.compute_pso
             .as_ref()
             .map(|pso| soft::ComputeCommand::BindPipeline(&**pso));
@@ -416,7 +416,7 @@ impl State {
         mask
     }
 
-    fn iter_vertex_buffers<'a>(&'a self, mask: u64) -> impl Iterator<Item = soft::RenderCommand<&'a soft::Own>> {
+    fn iter_vertex_buffers<'a>(&'a self, mask: u64) -> impl Iterator<Item = soft::RenderCommand<&'a soft::Ref>> {
         self.resources_vs.buffers
             .iter()
             .zip(&self.resources_vs.buffer_offsets)
@@ -469,12 +469,12 @@ impl State {
         Some(desc)
     }
 
-    fn set_depth_bias<'a>(&mut self, depth_bias: &pso::DepthBias) -> soft::RenderCommand<&'a soft::Own> {
+    fn set_depth_bias<'a>(&mut self, depth_bias: &pso::DepthBias) -> soft::RenderCommand<&'a soft::Ref> {
         self.depth_bias = *depth_bias;
         soft::RenderCommand::SetDepthBias(*depth_bias)
     }
 
-    fn push_vs_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::RenderCommand<&'a soft::Own>{
+    fn push_vs_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::RenderCommand<&'a soft::Ref>{
         self.resources_vs.push_constants_buffer_id = Some(index);
         soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Vertex,
@@ -483,7 +483,7 @@ impl State {
         }
     }
 
-    fn push_ps_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::RenderCommand<&'a soft::Own> {
+    fn push_ps_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::RenderCommand<&'a soft::Ref> {
         self.resources_ps.push_constants_buffer_id = Some(index);
         soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Fragment,
@@ -492,7 +492,7 @@ impl State {
         }
     }
 
-    fn push_cs_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::ComputeCommand<&'a soft::Own> {
+    fn push_cs_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::ComputeCommand<&'a soft::Ref> {
         self.resources_cs.push_constants_buffer_id = Some(index);
         soft::ComputeCommand::BindBufferData {
             index,
@@ -502,7 +502,7 @@ impl State {
 
     fn set_viewport<'a>(
         &mut self, vp: &'a pso::Viewport, disabilities: &PrivateDisabilities
-    ) -> soft::RenderCommand<&'a soft::Own> {
+    ) -> soft::RenderCommand<&'a soft::Ref> {
         let depth = vp.depth.start .. if disabilities.broken_viewport_near_depth {
             (vp.depth.end - vp.depth.start)
         } else {
@@ -512,7 +512,7 @@ impl State {
         soft::RenderCommand::SetViewport(vp.rect, depth)
     }
 
-    fn set_scissor<'a>(&mut self, rect: &'a pso::Rect) -> soft::RenderCommand<&'a soft::Own> {
+    fn set_scissor<'a>(&mut self, rect: &'a pso::Rect) -> soft::RenderCommand<&'a soft::Ref> {
         let scissor = MTLScissorRect {
             x: rect.x as _,
             y: rect.y as _,
@@ -524,7 +524,7 @@ impl State {
         soft::RenderCommand::SetScissor(clamped)
     }
 
-    fn set_blend_color<'a>(&mut self, color: &'a pso::ColorValue) -> soft::RenderCommand<&'a soft::Own> {
+    fn set_blend_color<'a>(&mut self, color: &'a pso::ColorValue) -> soft::RenderCommand<&'a soft::Ref> {
         self.blend_color = Some(*color);
         soft::RenderCommand::SetBlendColor(*color)
     }
@@ -652,6 +652,7 @@ impl EncodePass {
 
 #[derive(Debug, Default)]
 struct Journal {
+    resources: soft::Own,
     passes: Vec<(soft::Pass, Range<usize>)>,
     render_commands: Vec<soft::RenderCommand<soft::Own>>,
     compute_commands: Vec<soft::ComputeCommand<soft::Own>>,
@@ -660,6 +661,7 @@ struct Journal {
 
 impl Journal {
     fn clear(&mut self) {
+        self.resources.clear();
         self.passes.clear();
         self.render_commands.clear();
         self.compute_commands.clear();
@@ -687,7 +689,7 @@ impl Journal {
                 soft::Pass::Render(ref desc) => {
                     let encoder = command_buf.new_render_command_encoder(desc);
                     for command in &self.render_commands[range.clone()] {
-                        exec_render(&encoder, command);
+                        exec_render(&encoder, command, &self.resources);
                     }
                     encoder.end_encoding();
                 }
@@ -701,7 +703,7 @@ impl Journal {
                 soft::Pass::Compute => {
                     let encoder = command_buf.new_compute_command_encoder();
                     for command in &self.compute_commands[range.clone()] {
-                        exec_compute(&encoder, command);
+                        exec_compute(&encoder, command, &self.resources);
                     }
                     encoder.end_encoding();
                 }
@@ -735,7 +737,7 @@ enum CommandSink {
 /// applicable to a render pass currently encoded.
 enum PreRender<'a> {
     Immediate(&'a metal::RenderCommandEncoderRef),
-    Deferred(&'a mut Vec<soft::RenderCommand<soft::Own>>),
+    Deferred(&'a mut soft::Own, &'a mut Vec<soft::RenderCommand<soft::Own>>),
     Void,
 }
 
@@ -747,26 +749,26 @@ impl<'a> PreRender<'a> {
         }
     }
 
-    fn issue<'b>(&mut self, command: soft::RenderCommand<&'b soft::Own>) {
+    fn issue<'b>(&mut self, command: soft::RenderCommand<&'b soft::Ref>) {
         match *self {
-            PreRender::Immediate(encoder) => exec_render(encoder, command),
-            PreRender::Deferred(ref mut list) => list.push(command.own()),
+            PreRender::Immediate(encoder) => exec_render(encoder, command, &&soft::Ref),
+            PreRender::Deferred(ref mut resources, ref mut list) => list.push(resources.own_render(command)),
             PreRender::Void => (),
         }
     }
 
     fn issue_many<'b, I>(&mut self, commands: I)
     where
-        I: Iterator<Item = soft::RenderCommand<&'b soft::Own>>
+        I: Iterator<Item = soft::RenderCommand<&'b soft::Ref>>
     {
         match *self {
             PreRender::Immediate(encoder) => {
                 for com in commands {
-                    exec_render(encoder, com);
+                    exec_render(encoder, com, &&soft::Ref);
                 }
             }
-            PreRender::Deferred(ref mut list) => {
-                list.extend(commands.map(soft::RenderCommand::own))
+            PreRender::Deferred(ref mut resources, ref mut list) => {
+                list.extend(commands.map(|com| resources.own_render(com)))
             }
             PreRender::Void => {}
         }
@@ -777,38 +779,31 @@ impl<'a> PreRender<'a> {
 /// applicable to a compute pass currently encoded.
 enum PreCompute<'a> {
     Immediate(&'a metal::ComputeCommandEncoderRef),
-    Deferred(&'a mut Vec<soft::ComputeCommand<soft::Own>>),
+    Deferred(&'a mut soft::Own, &'a mut Vec<soft::ComputeCommand<soft::Own>>),
     Void,
 }
 
 impl<'a> PreCompute<'a> {
-    fn is_void(&self) -> bool {
+    fn issue<'b>(&mut self, command: soft::ComputeCommand<&'b soft::Ref>) {
         match *self {
-            PreCompute::Void => true,
-            _ => false,
-        }
-    }
-
-    fn issue<'b>(&mut self, command: soft::ComputeCommand<&'b soft::Own>) {
-        match *self {
-            PreCompute::Immediate(encoder) => exec_compute(encoder, command),
-            PreCompute::Deferred(ref mut list) => list.push(command.own()),
+            PreCompute::Immediate(encoder) => exec_compute(encoder, command, &&soft::Ref),
+            PreCompute::Deferred(ref mut resources, ref mut list) => list.push(resources.own_compute(command)),
             PreCompute::Void => (),
         }
     }
 
     fn issue_many<'b, I>(&mut self, commands: I)
     where
-        I: Iterator<Item = soft::ComputeCommand<&'b soft::Own>>
+        I: Iterator<Item = soft::ComputeCommand<&'b soft::Ref>>
     {
         match *self {
             PreCompute::Immediate(encoder) => {
                 for com in commands {
-                    exec_compute(encoder, com);
+                    exec_compute(encoder, com, &&soft::Ref);
                 }
             }
-            PreCompute::Deferred(ref mut list) => {
-                list.extend(commands.map(soft::ComputeCommand::own))
+            PreCompute::Deferred(ref mut resources, ref mut list) => {
+                list.extend(commands.map(|com| resources.own_compute(com)))
             }
             PreCompute::Void => {}
         }
@@ -844,7 +839,7 @@ impl CommandSink {
             }
             CommandSink::Deferred { is_encoding: true, ref mut journal } => {
                 match journal.passes.last() {
-                    Some(&(soft::Pass::Render(_), _)) => PreRender::Deferred(&mut journal.render_commands),
+                    Some(&(soft::Pass::Render(_), _)) => PreRender::Deferred(&mut journal.resources, &mut journal.render_commands),
                     _ => PreRender::Void,
                 }
             }
@@ -875,7 +870,7 @@ impl CommandSink {
                 let pass = soft::Pass::Render(descriptor.to_owned());
                 *is_encoding = true;
                 journal.passes.push((pass, journal.render_commands.len() .. 0));
-                PreRender::Deferred(&mut journal.render_commands)
+                PreRender::Deferred(&mut journal.resources, &mut journal.render_commands)
             }
             #[cfg(feature = "dispatch")]
             CommandSink::Remote { ref mut pass, ref capacity, .. } => {
@@ -896,7 +891,7 @@ impl CommandSink {
         commands: I,
     )
     where
-        I: Iterator<Item = soft::RenderCommand<&'a soft::Own>>,
+        I: Iterator<Item = soft::RenderCommand<&'a soft::Ref>>,
     {
         {
             let mut pre = self.switch_render(descriptor);
@@ -979,7 +974,7 @@ impl CommandSink {
             }
             CommandSink::Deferred { is_encoding: true, ref mut journal } => {
                 match journal.passes.last() {
-                    Some(&(soft::Pass::Compute, _)) => PreCompute::Deferred(&mut journal.compute_commands),
+                    Some(&(soft::Pass::Compute, _)) => PreCompute::Deferred(&mut journal.resources, &mut journal.compute_commands),
                     _ => PreCompute::Void,
                 }
             }
@@ -1014,7 +1009,7 @@ impl CommandSink {
                     journal.passes.push((soft::Pass::Compute, journal.compute_commands.len() .. 0));
                     true
                 };
-                (PreCompute::Deferred(&mut journal.compute_commands), switch)
+                (PreCompute::Deferred(&mut journal.resources, &mut journal.compute_commands), switch)
             }
             #[cfg(feature = "dispatch")]
             CommandSink::Remote { pass: Some(EncodePass::Compute(ref mut list)), .. } => {
@@ -1038,7 +1033,7 @@ impl CommandSink {
 
     fn quick_compute<'a, I>(&mut self, label: &str, commands: I)
     where
-        I: Iterator<Item = soft::ComputeCommand<&'a soft::Own>>
+        I: Iterator<Item = soft::ComputeCommand<&'a soft::Ref>>
     {
         {
             let (mut pre, switch) = self.switch_compute();
@@ -1158,9 +1153,10 @@ fn compute_pitches(
     (row_pitch, slice_pitch)
 }
 
-fn exec_render<R, C>(encoder: &metal::RenderCommandEncoderRef, command: C)
+fn exec_render<R, C>(encoder: &metal::RenderCommandEncoderRef, command: C, resources: &R)
 where
     R: soft::Resources,
+    R::BufferArray: soft::AsSlice<Option<BufferPtr>, R> + soft::AsSlice<buffer::Offset, R>,
     R::Data: Borrow<[u32]>,
     R::DepthStencil: Borrow<metal::DepthStencilStateRef>,
     R::RenderPipeline: Borrow<metal::RenderPipelineStateRef>,
@@ -1208,7 +1204,23 @@ where
                     encoder.set_vertex_buffer(index as _, offset as _, native),
                 pso::Stage::Fragment =>
                     encoder.set_fragment_buffer(index as _, offset as _, native),
-                _ => unimplemented!()
+                _ => unreachable!()
+            }
+        }
+        Cmd::BindBuffers { stage, index, ref buffers } => {
+            use soft::AsSlice;
+            let values: &[Option<BufferPtr>] = buffers.as_slice(resources);
+            let data = unsafe {
+                // convert `BufferPtr` -> `&metal::BufferRef`
+                mem::transmute(values)
+            };
+            let offsets = buffers.as_slice(resources);
+            match stage {
+                pso::Stage::Vertex =>
+                    encoder.set_vertex_buffers(index as _, data, offsets),
+                pso::Stage::Fragment =>
+                    encoder.set_fragment_buffers(index as _, data, offsets),
+                _ => unreachable!()
             }
         }
         Cmd::BindBufferData { stage, index, ref words } => {
@@ -1218,7 +1230,7 @@ where
                     encoder.set_vertex_bytes(index as _, (slice.len() * WORD_SIZE) as u64, slice.as_ptr() as _),
                 pso::Stage::Fragment =>
                     encoder.set_fragment_bytes(index as _, (slice.len() * WORD_SIZE) as u64, slice.as_ptr() as _),
-                _ => unimplemented!()
+                _ => unreachable!()
             }
         }
         Cmd::BindTexture { stage, index, texture } => {
@@ -1228,7 +1240,7 @@ where
                     encoder.set_vertex_texture(index as _, native),
                 pso::Stage::Fragment =>
                     encoder.set_fragment_texture(index as _, native),
-                _ => unimplemented!()
+                _ => unreachable!()
             }
         }
         Cmd::BindSampler { stage, index, sampler } => {
@@ -1238,7 +1250,7 @@ where
                     encoder.set_vertex_sampler_state(index as _, native),
                 pso::Stage::Fragment =>
                     encoder.set_fragment_sampler_state(index as _, native),
-                _ => unimplemented!()
+                _ => unreachable!()
             }
         }
         Cmd::BindPipeline(ref pipeline_state) => {
@@ -1418,9 +1430,10 @@ where
     }
 }
 
-fn exec_compute<R, C>(encoder: &metal::ComputeCommandEncoderRef, command: C)
+fn exec_compute<R, C>(encoder: &metal::ComputeCommandEncoderRef, command: C, resources: &R)
 where
     R: soft::Resources,
+    R::BufferArray: soft::AsSlice<Option<BufferPtr>, R> + soft::AsSlice<buffer::Offset, R>,
     R::Data: Borrow<[u32]>,
     R::ComputePipeline: Borrow<metal::ComputePipelineStateRef>,
     C: Borrow<soft::ComputeCommand<R>>,
@@ -1433,6 +1446,16 @@ where
                 None => (None, 0),
             };
             encoder.set_buffer(index as _, offset, native);
+        }
+        Cmd::BindBuffers { index, ref buffers } => {
+            use soft::AsSlice;
+            let values: &[Option<BufferPtr>] = buffers.as_slice(resources);
+            let data = unsafe {
+                // convert `BufferPtr` -> `&metal::BufferRef`
+                mem::transmute(values)
+            };
+            let offsets = buffers.as_slice(resources);
+            encoder.set_buffers(index as _, data, offsets);
         }
         Cmd::BindBufferData { ref words, index } => {
             let slice = words.borrow();
@@ -3006,14 +3029,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
                     }
 
-                    if !pre.is_void() {
-                        for &(stage, ref cache, res_offset, pool_offset) in stages.iter() {
-                            let count = (pool_offset.buffers.end - pool_offset.buffers.start) as ResourceIndex;
-                            for index in res_offset.buffers .. res_offset.buffers + count {
-                                let buffer = cache.buffers[index as usize].map(|buf| (buf, cache.buffer_offsets[index as usize]));
-                                pre.issue(soft::RenderCommand::BindBuffer { stage, index, buffer });
+                    for &(stage, ref cache, res_offset, pool_offset) in stages.iter() {
+                        pre.issue(soft::RenderCommand::BindBuffers {
+                            stage,
+                            index: res_offset.buffers,
+                            buffers: {
+                                let count = (pool_offset.buffers.end - pool_offset.buffers.start) as usize;
+                                let range = res_offset.buffers as usize .. res_offset.buffers as usize + count;
+                                (&cache.buffers[range.clone()], &cache.buffer_offsets[range])
                             }
-                        }
+                        });
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
@@ -3113,13 +3138,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
                     }
 
-                    if !pre.is_void() {
-                        let count = (pool_offset.buffers.end - pool_offset.buffers.start) as ResourceIndex;
-                        for index in res_offset.buffers .. res_offset.buffers + count {
-                            let buffer = cache.buffers[index as usize].map(|buf| (buf, cache.buffer_offsets[index as usize]));
-                            pre.issue(soft::ComputeCommand::BindBuffer { index, buffer });
+                    pre.issue(soft::ComputeCommand::BindBuffers {
+                        index: res_offset.buffers,
+                        buffers: {
+                            let count = (pool_offset.buffers.end - pool_offset.buffers.start) as usize;
+                            let range = res_offset.buffers as usize .. res_offset.buffers as usize + count;
+                            (&cache.buffers[range.clone()], &cache.buffer_offsets[range])
                         }
-                    }
+                    });
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
