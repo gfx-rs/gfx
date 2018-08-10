@@ -2976,28 +2976,34 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
-
+        let mut bind_count = native::MultiStageResourceCounters {
+            vs: native::ResourceData::new(),
+            ps: native::ResourceData::new(),
+            cs: native::ResourceData::new(),
+        };
         for (info, desc_set) in pipe_layout.infos[first_set ..].iter().zip(sets) {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref resources, .. } => {
                     let data = pool.read();
 
                     let mut stages = [
-                        (pso::Stage::Vertex,   &mut self.state.resources_vs, &info.offsets.vs, &resources.vs),
-                        (pso::Stage::Fragment, &mut self.state.resources_ps, &info.offsets.ps, &resources.ps),
+                        (&mut self.state.resources_vs, &info.offsets.vs, &resources.vs, &mut bind_count.vs),
+                        (&mut self.state.resources_ps, &info.offsets.ps, &resources.ps, &mut bind_count.ps),
                     ];
-                    //TODO: remove the checks?
-                    for &mut (_, ref mut cache, res_offset, pool_offset) in stages.iter_mut() {
+                    for &mut (ref mut cache, res_offset, pool_offset, ref mut count) in stages.iter_mut() {
+                        count.samplers += pool_offset.samplers.end - pool_offset.samplers.start;
                         for (index, &sampler) in (res_offset.samplers .. )
                             .zip(&data.samplers[pool_offset.samplers.start as usize .. pool_offset.samplers.end as usize])
                         {
                             cache.samplers[index as usize] = sampler;
                         }
+                        count.textures += pool_offset.textures.end - pool_offset.textures.start;
                         for (index, texture_pair) in (res_offset.textures .. )
                             .zip(&data.textures[pool_offset.textures.start as usize .. pool_offset.textures.end as usize])
                         {
                             cache.textures[index as usize] = texture_pair.map(|(t, _)| t);
                         }
+                        count.buffers += pool_offset.buffers.end - pool_offset.buffers.start;
                         for (index, buffer_pair) in (res_offset.buffers .. )
                             .zip(&data.buffers[pool_offset.buffers.start as usize .. pool_offset.buffers.end as usize])
                         {
@@ -3009,42 +3015,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                     for (dyn_data, offset) in info.dynamic_buffers.iter().zip(dynamic_offset_iter.by_ref()) {
                         if dyn_data.vs != !0 {
-                            stages[0].1.buffer_offsets[dyn_data.vs as usize] += *offset.borrow() as buffer::Offset;
+                            stages[0].0.buffer_offsets[dyn_data.vs as usize] += *offset.borrow() as buffer::Offset;
                         }
                         if dyn_data.ps != !0 {
-                            stages[1].1.buffer_offsets[dyn_data.ps as usize] += *offset.borrow() as buffer::Offset;
+                            stages[1].0.buffer_offsets[dyn_data.ps as usize] += *offset.borrow() as buffer::Offset;
                         }
-                    }
-
-                    for &(stage, ref cache, res_offset, pool_offset) in stages.iter() {
-                        pre.issue(soft::RenderCommand::BindTextures {
-                            stage,
-                            index: res_offset.textures,
-                            textures: {
-                                let count = (pool_offset.textures.end - pool_offset.textures.start) as usize;
-                                &cache.textures[res_offset.textures as usize .. res_offset.textures as usize + count]
-                            }
-                        });
-                        pre.issue(soft::RenderCommand::BindSamplers {
-                            stage,
-                            index: res_offset.samplers,
-                            samplers: {
-                                let count = (pool_offset.samplers.end - pool_offset.samplers.start) as usize;
-                                &cache.samplers[res_offset.samplers as usize .. res_offset.samplers as usize + count]
-                            }
-                        });
-                        pre.issue(soft::RenderCommand::BindBuffers {
-                            stage,
-                            index: res_offset.buffers,
-                            buffers: {
-                                let count = (pool_offset.buffers.end - pool_offset.buffers.start) as usize;
-                                let range = res_offset.buffers as usize .. res_offset.buffers as usize + count;
-                                (&cache.buffers[range.clone()], &cache.buffer_offsets[range])
-                            }
-                        });
                     }
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
+                    //Note: this is incompatible with the binding scheme below
                     if stage_flags.contains(pso::ShaderStageFlags::VERTEX) {
                         let index = info.offsets.vs.buffers;
                         self.state.resources_vs.buffers[index as usize] = Some(AsNative::from(raw.as_ref()));
@@ -3069,6 +3048,33 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     }
                 }
             }
+        }
+
+        // now bind all the affected resources
+        let offsets = &pipe_layout.infos[first_set].offsets;
+        let stages = [
+            (pso::Stage::Vertex,   &self.state.resources_vs, &offsets.vs, &bind_count.vs),
+            (pso::Stage::Fragment, &self.state.resources_ps, &offsets.ps, &bind_count.ps),
+        ];
+        for &(stage, ref cache, res_offset, counts) in stages.iter() {
+            pre.issue(soft::RenderCommand::BindTextures {
+                stage,
+                index: res_offset.textures,
+                textures: &cache.textures[res_offset.textures as usize .. res_offset.textures as usize + counts.textures as usize],
+            });
+            pre.issue(soft::RenderCommand::BindSamplers {
+                stage,
+                index: res_offset.samplers,
+                samplers: &cache.samplers[res_offset.samplers as usize .. res_offset.samplers as usize + counts.samplers as usize],
+            });
+            pre.issue(soft::RenderCommand::BindBuffers {
+                stage,
+                index: res_offset.buffers,
+                buffers: {
+                    let range = res_offset.buffers as usize .. res_offset.buffers as usize + counts.buffers as usize;
+                    (&cache.buffers[range.clone()], &cache.buffer_offsets[range])
+                },
+            });
         }
     }
 
@@ -3101,25 +3107,29 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut dynamic_offset_iter = dynamic_offsets.into_iter();
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
+        let cache = &mut self.state.resources_cs;
+        let mut bind_count = native::ResourceData::new();
 
         for (info, desc_set) in pipe_layout.infos[first_set ..].iter().zip(sets) {
             let res_offset = &info.offsets.cs;
-            let cache = &mut self.state.resources_cs;
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref resources, .. } => {
                     let pool_offset = &resources.cs;
                     let data = pool.read();
 
+                    bind_count.samplers += pool_offset.samplers.end - pool_offset.samplers.start;
                     for (index, &sampler) in (res_offset.samplers .. )
                         .zip(&data.samplers[pool_offset.samplers.start as usize .. pool_offset.samplers.end as usize])
                     {
                         cache.samplers[index as usize] = sampler;
                     }
+                    bind_count.textures += pool_offset.textures.end - pool_offset.textures.start;
                     for (index, texture_pair) in (res_offset.textures .. )
                         .zip(&data.textures[pool_offset.textures.start as usize .. pool_offset.textures.end as usize])
                     {
                         cache.textures[index as usize] = texture_pair.map(|(t, _)| t);
                     }
+                    bind_count.buffers += pool_offset.buffers.end - pool_offset.buffers.start;
                     for (index, buffer_pair) in (res_offset.buffers .. )
                         .zip(&data.buffers[pool_offset.buffers.start as usize .. pool_offset.buffers.end as usize])
                     {
@@ -3133,29 +3143,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             cache.buffer_offsets[dyn_data.cs as usize] += *offset.borrow() as buffer::Offset;
                         }
                     }
-
-                    pre.issue(soft::ComputeCommand::BindTextures {
-                        index: res_offset.textures,
-                        textures: {
-                            let count = (pool_offset.textures.end - pool_offset.textures.start) as usize;
-                            &cache.textures[res_offset.textures as usize .. res_offset.textures as usize + count]
-                        }
-                    });
-                    pre.issue(soft::ComputeCommand::BindSamplers {
-                        index: res_offset.samplers,
-                        samplers: {
-                            let count = (pool_offset.samplers.end - pool_offset.samplers.start) as usize;
-                            &cache.samplers[res_offset.samplers as usize .. res_offset.samplers as usize + count]
-                        }
-                    });
-                    pre.issue(soft::ComputeCommand::BindBuffers {
-                        index: res_offset.buffers,
-                        buffers: {
-                            let count = (pool_offset.buffers.end - pool_offset.buffers.start) as usize;
-                            let range = res_offset.buffers as usize .. res_offset.buffers as usize + count;
-                            (&cache.buffers[range.clone()], &cache.buffer_offsets[range])
-                        }
-                    });
                 }
                 native::DescriptorSet::ArgumentBuffer { ref raw, offset, stage_flags, .. } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
@@ -3171,6 +3158,25 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
             }
         }
+
+        // now bind all the affected resources
+        let res_offset = &pipe_layout.infos[first_set].offsets.cs;
+        let counts = bind_count;
+        pre.issue(soft::ComputeCommand::BindTextures {
+            index: res_offset.textures,
+            textures: &cache.textures[res_offset.textures as usize .. res_offset.textures as usize + counts.textures as usize],
+        });
+        pre.issue(soft::ComputeCommand::BindSamplers {
+            index: res_offset.samplers,
+            samplers: &cache.samplers[res_offset.samplers as usize .. res_offset.samplers as usize + counts.samplers as usize],
+        });
+        pre.issue(soft::ComputeCommand::BindBuffers {
+            index: res_offset.buffers,
+            buffers: {
+                let range = res_offset.buffers as usize .. res_offset.buffers as usize + counts.buffers as usize;
+                (&cache.buffers[range.clone()], &cache.buffer_offsets[range])
+            },
+        });
     }
 
     fn dispatch(&mut self, count: WorkGroupCount) {
