@@ -548,6 +548,37 @@ impl StageResources {
             self.buffer_offsets.resize(counters.buffers as usize, 0);
         }
     }
+
+    fn bind_set(
+        &mut self,
+        data: &native::DescriptorPoolInner,
+        res_offset: &native::ResourceData<ResourceIndex>,
+        pool_range: &native::ResourceData<Range<native::PoolResourceIndex>>,
+        total: native::ResourceData<ResourceIndex>,
+    ) -> native::ResourceData<ResourceIndex> {
+        for (index, &sampler) in (res_offset.samplers .. )
+            .zip(&data.samplers[pool_range.samplers.start as usize .. pool_range.samplers.end as usize])
+        {
+            self.samplers[index as usize] = sampler;
+        }
+        for (index, texture_pair) in (res_offset.textures .. )
+            .zip(&data.textures[pool_range.textures.start as usize .. pool_range.textures.end as usize])
+        {
+            self.textures[index as usize] = texture_pair.map(|(t, _)| t);
+        }
+        for (index, buffer_pair) in (res_offset.buffers .. )
+            .zip(&data.buffers[pool_range.buffers.start as usize .. pool_range.buffers.end as usize])
+        {
+            let (buffer, offset) = buffer_pair.unwrap();
+            self.buffers[index as usize] = Some(buffer);
+            self.buffer_offsets[index as usize] = offset;
+        }
+        native::ResourceData {
+            samplers: total.samplers + (pool_range.samplers.end - pool_range.samplers.start) as ResourceIndex,
+            textures: total.textures + (pool_range.textures.end - pool_range.textures.start) as ResourceIndex,
+            buffers: total.buffers + (pool_range.buffers.end - pool_range.buffers.start) as ResourceIndex,
+        }
+    }
 }
 
 
@@ -2986,39 +3017,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 native::DescriptorSet::Emulated { ref pool, ref resources, .. } => {
                     let data = pool.read();
 
-                    let mut stages = [
-                        (&mut self.state.resources_vs, &info.offsets.vs, &resources.vs, &mut bind_count.vs),
-                        (&mut self.state.resources_ps, &info.offsets.ps, &resources.ps, &mut bind_count.ps),
-                    ];
-                    for &mut (ref mut cache, res_offset, pool_offset, ref mut count) in stages.iter_mut() {
-                        count.samplers += pool_offset.samplers.end - pool_offset.samplers.start;
-                        for (index, &sampler) in (res_offset.samplers .. )
-                            .zip(&data.samplers[pool_offset.samplers.start as usize .. pool_offset.samplers.end as usize])
-                        {
-                            cache.samplers[index as usize] = sampler;
-                        }
-                        count.textures += pool_offset.textures.end - pool_offset.textures.start;
-                        for (index, texture_pair) in (res_offset.textures .. )
-                            .zip(&data.textures[pool_offset.textures.start as usize .. pool_offset.textures.end as usize])
-                        {
-                            cache.textures[index as usize] = texture_pair.map(|(t, _)| t);
-                        }
-                        count.buffers += pool_offset.buffers.end - pool_offset.buffers.start;
-                        for (index, buffer_pair) in (res_offset.buffers .. )
-                            .zip(&data.buffers[pool_offset.buffers.start as usize .. pool_offset.buffers.end as usize])
-                        {
-                            let (buffer, offset) = buffer_pair.unwrap();
-                            cache.buffers[index as usize] = Some(buffer);
-                            cache.buffer_offsets[index as usize] = offset;
-                        }
-                    }
+                    bind_count.vs = self.state.resources_vs.bind_set(&*data, &info.offsets.vs, &resources.vs, bind_count.vs);
+                    bind_count.ps = self.state.resources_ps.bind_set(&*data, &info.offsets.ps, &resources.ps, bind_count.ps);
 
                     for (dyn_data, offset) in info.dynamic_buffers.iter().zip(dynamic_offset_iter.by_ref()) {
                         if dyn_data.vs != !0 {
-                            stages[0].0.buffer_offsets[dyn_data.vs as usize] += *offset.borrow() as buffer::Offset;
+                            self.state.resources_vs.buffer_offsets[dyn_data.vs as usize] += *offset.borrow() as buffer::Offset;
                         }
                         if dyn_data.ps != !0 {
-                            stages[1].0.buffer_offsets[dyn_data.ps as usize] += *offset.borrow() as buffer::Offset;
+                            self.state.resources_ps.buffer_offsets[dyn_data.ps as usize] += *offset.borrow() as buffer::Offset;
                         }
                     }
                 }
@@ -3053,10 +3060,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // now bind all the affected resources
         let offsets = &pipe_layout.infos[first_set].offsets;
         let stages = [
-            (pso::Stage::Vertex,   &self.state.resources_vs, &offsets.vs, &bind_count.vs),
-            (pso::Stage::Fragment, &self.state.resources_ps, &offsets.ps, &bind_count.ps),
+            (pso::Stage::Vertex,   &self.state.resources_vs, &offsets.vs, bind_count.vs),
+            (pso::Stage::Fragment, &self.state.resources_ps, &offsets.ps, bind_count.ps),
         ];
-        for &(stage, ref cache, res_offset, counts) in stages.iter() {
+        for &(stage, ref cache, res_offset, ref counts) in stages.iter() {
             pre.issue(soft::RenderCommand::BindTextures {
                 stage,
                 index: res_offset.textures,
@@ -3114,29 +3121,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let res_offset = &info.offsets.cs;
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated { ref pool, ref resources, .. } => {
-                    let pool_offset = &resources.cs;
                     let data = pool.read();
 
-                    bind_count.samplers += pool_offset.samplers.end - pool_offset.samplers.start;
-                    for (index, &sampler) in (res_offset.samplers .. )
-                        .zip(&data.samplers[pool_offset.samplers.start as usize .. pool_offset.samplers.end as usize])
-                    {
-                        cache.samplers[index as usize] = sampler;
-                    }
-                    bind_count.textures += pool_offset.textures.end - pool_offset.textures.start;
-                    for (index, texture_pair) in (res_offset.textures .. )
-                        .zip(&data.textures[pool_offset.textures.start as usize .. pool_offset.textures.end as usize])
-                    {
-                        cache.textures[index as usize] = texture_pair.map(|(t, _)| t);
-                    }
-                    bind_count.buffers += pool_offset.buffers.end - pool_offset.buffers.start;
-                    for (index, buffer_pair) in (res_offset.buffers .. )
-                        .zip(&data.buffers[pool_offset.buffers.start as usize .. pool_offset.buffers.end as usize])
-                    {
-                        let (buffer, offset) = buffer_pair.unwrap();
-                        cache.buffers[index as usize] = Some(buffer);
-                        cache.buffer_offsets[index as usize] = offset;
-                    }
+                    bind_count = cache.bind_set(&*data, &res_offset, &resources.cs, bind_count);
 
                     for (dyn_data, offset) in info.dynamic_buffers.iter().zip(dynamic_offset_iter.by_ref()) {
                         if dyn_data.cs != !0 {
