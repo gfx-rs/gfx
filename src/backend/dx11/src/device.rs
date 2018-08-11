@@ -71,8 +71,8 @@ impl Device {
             memory_properties,
             memory_heap_flags: [
                 MemoryHeapFlags::DEVICE_LOCAL,
+                MemoryHeapFlags::HOST_COHERENT,
                 MemoryHeapFlags::HOST_NONCOHERENT,
-                MemoryHeapFlags::HOST_COHERENT
             ],
             internal: internal::Internal::new(&device),
         }
@@ -253,6 +253,63 @@ impl Device {
         }
     }
 
+    fn create_geometry_shader(&self, blob: ComPtr<d3dcommon::ID3DBlob>) -> Result<ComPtr<d3d11::ID3D11GeometryShader>, pso::CreationError> {
+        let mut gs = ptr::null_mut();
+
+        let hr = unsafe {
+            self.raw.CreateGeometryShader(
+                blob.GetBufferPointer(),
+                blob.GetBufferSize(),
+                ptr::null_mut(),
+                &mut gs as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(gs) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    fn create_hull_shader(&self, blob: ComPtr<d3dcommon::ID3DBlob>) -> Result<ComPtr<d3d11::ID3D11HullShader>, pso::CreationError> {
+        let mut hs = ptr::null_mut();
+
+        let hr = unsafe {
+            self.raw.CreateHullShader(
+                blob.GetBufferPointer(),
+                blob.GetBufferSize(),
+                ptr::null_mut(),
+                &mut hs as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(hs) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
+    fn create_domain_shader(&self, blob: ComPtr<d3dcommon::ID3DBlob>) -> Result<ComPtr<d3d11::ID3D11DomainShader>, pso::CreationError> {
+        let mut ds = ptr::null_mut();
+
+        let hr = unsafe {
+            self.raw.CreateDomainShader(
+                blob.GetBufferPointer(),
+                blob.GetBufferSize(),
+                ptr::null_mut(),
+                &mut ds as *mut *mut _ as *mut *mut _
+            )
+        };
+
+        if winerror::SUCCEEDED(hr) {
+            Ok(unsafe { ComPtr::from_raw(ds) })
+        } else {
+            Err(pso::CreationError::Other)
+        }
+    }
+
     fn create_compute_shader(&self, blob: ComPtr<d3dcommon::ID3DBlob>) -> Result<ComPtr<d3d11::ID3D11ComputeShader>, pso::CreationError> {
         let mut cs = ptr::null_mut();
 
@@ -310,6 +367,22 @@ impl Device {
 
 
         match info.view_kind {
+            image::ViewKind::D1 => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE1D;
+                *unsafe{ desc.u.Texture1D_mut() } = d3d11::D3D11_TEX1D_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                }
+            },
+            image::ViewKind::D1Array => {
+                desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE1DARRAY;
+                *unsafe{ desc.u.Texture1DArray_mut() } = d3d11::D3D11_TEX1D_ARRAY_SRV {
+                    MostDetailedMip,
+                    MipLevels,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            },
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_TEXTURE2D;
                 *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_SRV {
@@ -349,13 +422,12 @@ impl Device {
                     NumCubes: ArraySize / 6,
                 }
             },
-            _ => unimplemented!()
         }
 
         let mut srv = ptr::null_mut();
         let hr = unsafe {
             self.raw.CreateShaderResourceView(
-                info.resource,
+                info.resource.as_raw(),
                 &desc,
                 &mut srv as *mut *mut _ as *mut *mut _
             )
@@ -380,6 +452,20 @@ impl Device {
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
         match info.view_kind {
+            image::ViewKind::D1 => {
+                desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_TEXTURE1D;
+                *unsafe{ desc.u.Texture1D_mut() } = d3d11::D3D11_TEX1D_UAV {
+                    MipSlice: info.range.levels.start as _,
+                }
+            },
+            image::ViewKind::D1Array => {
+                desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_TEXTURE1DARRAY;
+                *unsafe{ desc.u.Texture1DArray_mut() } = d3d11::D3D11_TEX1D_ARRAY_UAV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            },
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_TEXTURE2D;
                 *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_UAV {
@@ -408,7 +494,7 @@ impl Device {
         let mut uav = ptr::null_mut();
         let hr = unsafe {
             self.raw.CreateUnorderedAccessView(
-                info.resource,
+                info.resource.as_raw(),
                 &desc,
                 &mut uav as *mut *mut _ as *mut *mut _
             )
@@ -433,6 +519,20 @@ impl Device {
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
         match info.view_kind {
+            image::ViewKind::D1 => {
+                desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE1D;
+                *unsafe{ desc.u.Texture1D_mut() } = d3d11::D3D11_TEX1D_RTV {
+                    MipSlice,
+                }
+            },
+            image::ViewKind::D1Array => {
+                desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE1DARRAY;
+                *unsafe{ desc.u.Texture1DArray_mut() } = d3d11::D3D11_TEX1D_ARRAY_RTV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            },
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d11::D3D11_RTV_DIMENSION_TEXTURE2D;
                 *unsafe{ desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_RTV {
@@ -461,7 +561,7 @@ impl Device {
         let mut rtv = ptr::null_mut();
         let hr = unsafe {
             self.raw.CreateRenderTargetView(
-                info.resource,
+                info.resource.as_raw(),
                 &desc,
                 &mut rtv as *mut *mut _ as *mut *mut _
             )
@@ -491,9 +591,8 @@ impl Device {
         let mut dsv = ptr::null_mut();
         let hr = unsafe {
             self.raw.CreateDepthStencilView(
-                info.resource,
+                info.resource.as_raw(),
                 &desc,
-
                 &mut dsv as *mut *mut _ as *mut *mut _
             )
         };
@@ -512,12 +611,13 @@ impl hal::Device<Backend> for Device {
         mem_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<Memory, device::OutOfMemory> {
+        let vec = Vec::with_capacity(size as usize);
         Ok(Memory {
             ty: self.memory_heap_flags[mem_type.0],
             properties: self.memory_properties.memory_types[mem_type.0].properties,
             size,
-            mapped_ptr: RefCell::new(None),
-            host_visible: Some(RefCell::new(Vec::with_capacity(size as usize))),
+            mapped_ptr: vec.as_ptr() as *mut _,
+            host_visible: Some(RefCell::new(vec)),
             local_buffers: RefCell::new(Vec::new()),
             local_images: RefCell::new(Vec::new()),
         })
@@ -632,6 +732,10 @@ impl hal::Device<Backend> for Device {
                 let mut state = None;
 
                 for binding in bindings {
+                    if !binding.stage.contains(stage) {
+                            continue;
+                    }
+
                     state = match state {
                         None => {
                             if binding.stage.contains(stage) {
@@ -648,8 +752,7 @@ impl hal::Device<Backend> for Device {
                             // and begin a new one.
                             if ty != binding.ty ||
                                end != binding.binding_range.start ||
-                               current_offset + 1 != binding.handle_offset ||
-                               stage != binding.stage
+                               current_offset + 1 != binding.handle_offset
                             {
                                 let register_offset = get_descriptor_offset(ty, s_offset, t_offset, c_offset, u_offset);
 
@@ -760,10 +863,9 @@ impl hal::Device<Backend> for Device {
 
         let vs = build_shader(pso::Stage::Vertex, Some(&desc.shaders.vertex))?.unwrap();
         let ps = build_shader(pso::Stage::Fragment, desc.shaders.fragment.as_ref())?;
-        // TODO:
-        /*let gs = build_shader(pso::Stage::Geometry, desc.shaders.geometry.as_ref())?;
+        let gs = build_shader(pso::Stage::Geometry, desc.shaders.geometry.as_ref())?;
         let ds = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
-        let hs = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;*/
+        let hs = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;
 
         let layout = self.create_input_layout(vs.clone(), &desc.vertex_buffers, &desc.attributes, &desc.input_assembler)?;
         let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
@@ -776,9 +878,27 @@ impl hal::Device<Backend> for Device {
         } else {
             None
         };
+        let gs = if let Some(blob) = gs {
+            Some(self.create_geometry_shader(blob)?)
+        } else {
+            None
+        };
+        let ds = if let Some(blob) = ds {
+            Some(self.create_domain_shader(blob)?)
+        } else {
+            None
+        };
+        let hs = if let Some(blob) = hs {
+            Some(self.create_hull_shader(blob)?)
+        } else {
+            None
+        };
 
         Ok(GraphicsPipeline {
             vs,
+            gs,
+            ds,
+            hs,
             ps,
             topology: layout.topology,
             input_layout: layout.raw,
@@ -1088,7 +1208,7 @@ impl hal::Device<Backend> for Device {
         memory.bind_buffer(range.clone(), buffer.clone());
 
         let host_ptr = if let Some(vec) = &memory.host_visible {
-            vec.borrow_mut().as_mut_ptr()
+            vec.borrow().as_ptr() as *mut _
         } else {
             ptr::null_mut()
         };
@@ -1183,7 +1303,7 @@ impl hal::Device<Backend> for Device {
     fn bind_image_memory(
         &self,
         memory: &Memory,
-        _offset: u64,
+        offset: u64,
         image: UnboundImage,
     ) -> Result<Image, device::BindError> {
         use memory::Properties;
@@ -1208,9 +1328,64 @@ impl hal::Device<Backend> for Device {
 
         let dxgi_format = conv::map_format(image.format).unwrap();
         let decomposed = conv::DecomposedDxgiFormat::from_dxgi_format(dxgi_format);
+        let bpp = format_desc.bits as u32 / 8;
 
         let (view_kind, resource) = match image.kind {
+            image::Kind::D1(width, layers) => {
+                let initial_data = memory.host_visible.as_ref().map(|_p| d3d11::D3D11_SUBRESOURCE_DATA {
+                    pSysMem: unsafe { memory.mapped_ptr.offset(offset as isize) as _ },
+                    SysMemPitch: 0,
+                    SysMemSlicePitch: 0
+                });
+
+                let desc = d3d11::D3D11_TEXTURE1D_DESC {
+                    Width: width,
+                    MipLevels: image.mip_levels as _,
+                    ArraySize: layers as _,
+                    Format: decomposed.typeless,
+                    Usage: usage,
+                    BindFlags: bind,
+                    CPUAccessFlags: cpu,
+                    MiscFlags: 0
+                };
+
+                let mut resource = ptr::null_mut();
+                let hr = unsafe {
+                    self.raw.CreateTexture1D(
+                        &desc,
+                        if let Some(data) = initial_data {
+                            &data
+                        } else {
+                            ptr::null_mut()
+                        },
+                        &mut resource as *mut *mut _ as *mut *mut _
+                    )
+                };
+
+                if !winerror::SUCCEEDED(hr) {
+                    error!("CreateTexture1D failed: 0x{:x}", hr);
+
+                    return Err(device::BindError::WrongMemory);
+                }
+
+                (image::ViewKind::D1Array, unsafe { ComPtr::<d3d11::ID3D11Resource>::from_raw(resource) })
+            },
             image::Kind::D2(width, height, layers, _) => {
+                let mut initial_datas = Vec::new();
+
+                for _layer in 0..layers {
+                    for level in 0..image.mip_levels {
+                        let width = image.kind.extent().at_level(level).width;
+
+                        // TODO: layer offset?
+                        initial_datas.push(d3d11::D3D11_SUBRESOURCE_DATA {
+                            pSysMem: unsafe { memory.mapped_ptr.offset(offset as isize) as _ },
+                            SysMemPitch: width * bpp,
+                            SysMemSlicePitch: 0,
+                        });
+                    }
+                }
+
                 let desc = d3d11::D3D11_TEXTURE2D_DESC {
                     Width: width,
                     Height: height,
@@ -1235,7 +1410,11 @@ impl hal::Device<Backend> for Device {
                 let hr = unsafe {
                     self.raw.CreateTexture2D(
                         &desc,
-                        ptr::null_mut(),
+                        if !depth {
+                            initial_datas.as_ptr()
+                        } else {
+                            ptr::null_mut()
+                        },
                         &mut resource as *mut *mut _ as *mut *mut _
                     )
                 };
@@ -1246,9 +1425,15 @@ impl hal::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                (image::ViewKind::D2Array, resource)
+                (image::ViewKind::D2Array, unsafe { ComPtr::from_raw(resource) })
             },
             image::Kind::D3(width, height, depth) => {
+                let initial_data = memory.host_visible.as_ref().map(|_p| d3d11::D3D11_SUBRESOURCE_DATA {
+                    pSysMem: unsafe { memory.mapped_ptr.offset(offset as isize) as _ },
+                    SysMemPitch: width * bpp,
+                    SysMemSlicePitch: width * height * bpp,
+                });
+
                 let desc = d3d11::D3D11_TEXTURE3D_DESC {
                     Width: width,
                     Height: height,
@@ -1265,7 +1450,11 @@ impl hal::Device<Backend> for Device {
                 let hr = unsafe {
                     self.raw.CreateTexture3D(
                         &desc,
-                        ptr::null_mut(),
+                        if let Some(data) = initial_data {
+                            &data
+                        } else {
+                            ptr::null_mut()
+                        },
                         &mut resource as *mut *mut _ as *mut *mut _
                     )
                 };
@@ -1276,10 +1465,8 @@ impl hal::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                (image::ViewKind::D3, resource)
+                (image::ViewKind::D3, unsafe { ComPtr::from_raw(resource) })
             },
-
-            _ => unimplemented!()
         };
 
         let mut unordered_access_views = Vec::new();
@@ -1287,7 +1474,7 @@ impl hal::Device<Backend> for Device {
         if image.usage.contains(Usage::TRANSFER_DST) && !compressed && !depth {
             for mip in 0..image.mip_levels {
                 let view = ViewInfo {
-                    resource,
+                    resource: resource.clone(),
                     kind: image.kind,
                     flags: image::StorageFlags::empty(),
                     view_kind,
@@ -1310,7 +1497,7 @@ impl hal::Device<Backend> for Device {
 
         let (copy_srv, srv) = if image.usage.contains(image::Usage::TRANSFER_SRC) {
             let mut view = ViewInfo {
-                resource,
+                resource: resource.clone(),
                 kind: image.kind,
                 flags: image::StorageFlags::empty(),
                 view_kind,
@@ -1349,7 +1536,7 @@ impl hal::Device<Backend> for Device {
             for layer in 0..image.kind.num_layers() {
                 for mip in 0..image.mip_levels {
                     let view = ViewInfo {
-                        resource,
+                        resource: resource.clone(),
                         kind: image.kind,
                         flags: image::StorageFlags::empty(),
                         view_kind,
@@ -1372,7 +1559,7 @@ impl hal::Device<Backend> for Device {
             for layer in 0..image.kind.num_layers() {
                 for mip in 0..image.mip_levels {
                     let view = ViewInfo {
-                        resource,
+                        resource: resource.clone(),
                         kind: image.kind,
                         flags: image::StorageFlags::empty(),
                         view_kind: image::ViewKind::D2,
@@ -1393,7 +1580,7 @@ impl hal::Device<Backend> for Device {
         }
 
         let internal = InternalImage {
-            raw: resource,
+            raw: resource.clone(),
             copy_srv,
             srv,
             unordered_access_views,
@@ -1422,7 +1609,7 @@ impl hal::Device<Backend> for Device {
         range: image::SubresourceRange,
     ) -> Result<ImageView, image::ViewError> {
         let info = ViewInfo {
-            resource: image.internal.raw,
+            resource: image.internal.raw.clone(),
             kind: image.kind,
             flags: image.storage_flags,
             view_kind,
@@ -1432,7 +1619,7 @@ impl hal::Device<Backend> for Device {
         };
 
         let srv_info = ViewInfo {
-            resource: image.internal.raw,
+            resource: image.internal.raw.clone(),
             kind: image.kind,
             flags: image.storage_flags,
             view_kind,
@@ -1441,7 +1628,8 @@ impl hal::Device<Backend> for Device {
         };
 
         Ok(ImageView {
-            srv_handle: if image.usage.contains(image::Usage::SAMPLED) {
+            format,
+            srv_handle: if image.usage.intersects(image::Usage::SAMPLED) {
                 Some(self.view_image_as_shader_resource(&srv_info)?)
             } else {
                 None
@@ -1794,22 +1982,13 @@ impl hal::Device<Backend> for Device {
     where
         R: RangeArg<u64>,
     {
-        if let Some(ref host_visible) = memory.host_visible {
-            let ptr = host_visible.borrow_mut().as_mut_ptr();
-            memory.mapped_ptr.replace(Some(ptr));
+        assert_eq!(memory.host_visible.is_some(), true);
 
-            Ok(unsafe { ptr.offset(*range.start().unwrap_or(&0) as isize) })
-        } else {
-            error!("Tried to map non-host visible memory");
-
-            Err(mapping::Error::InvalidAccess)
-        }
+        Ok(unsafe { memory.mapped_ptr.offset(*range.start().unwrap_or(&0) as isize) })
     }
 
     fn unmap_memory(&self, memory: &Memory) {
         assert_eq!(memory.host_visible.is_some(), true);
-
-        memory.mapped_ptr.replace(None);
     }
 
     fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
@@ -2069,13 +2248,13 @@ impl hal::Device<Backend> for Device {
             };
             assert_eq!(hr, winerror::S_OK);
 
-            resource
+            unsafe { ComPtr::from_raw(resource) }
         };
 
         let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
 
         let mut view_info = ViewInfo {
-            resource,
+            resource: resource.clone(),
             kind,
             flags: image::StorageFlags::empty(),
             view_kind: image::ViewKind::D2,
@@ -2099,7 +2278,7 @@ impl hal::Device<Backend> for Device {
             // only get write access to the first buffer in the case of `_SEQUENTIAL` flip model,
             // and read access to the rest
             let internal = InternalImage {
-                raw: resource,
+                raw: resource.clone(),
                 copy_srv: Some(copy_srv.clone()),
                 srv: None,
                 unordered_access_views: Vec::new(),
