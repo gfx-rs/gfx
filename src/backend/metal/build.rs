@@ -8,6 +8,26 @@ use std::ffi::OsStr;
 
 fn main() {
     let pd = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let target = env::var("TARGET").unwrap();
+    let os = if target.ends_with("ios") {
+        "ios"
+    } else if target.ends_with("darwin") {
+        "darwin"
+    } else {
+        panic!("unsupported target {}", target)
+    };
+    let arch = &target[..target.chars().position(|c| c == '-').unwrap()];
+
+    let sdk_name = match (os, arch) {
+        ("ios", "aarch64") => "iphoneos",
+        | ("ios", "armv7s")
+        | ("ios", "armv7") => panic!("32-bit iOS does not have metal support"),
+        ("ios", "i386")
+        | ("ios", "x86_64") => panic!("iOS simulator does not have metal support"),
+        ("darwin", _) => "macosx",
+        _ => panic!("unsupported target {}", target)
+    };
+
     let project_dir = Path::new(&pd);
     let shader_dir = project_dir.join("shaders");
     println!("cargo:rerun-if-changed={}", shader_dir.to_str().unwrap());
@@ -37,7 +57,7 @@ fn main() {
         out_path.set_extension("air");
 
         let status = Command::new("xcrun")
-            .args(&["-sdk", "macosx", "metal"])
+            .args(&["-sdk", sdk_name, "metal"])
             .arg(shader_path.as_os_str())
             .arg("-o")
             .arg(out_path.as_os_str())
@@ -54,7 +74,7 @@ fn main() {
 
     // Link all the compiled files into a single library
     let status = Command::new("xcrun")
-        .args(&["-sdk", "macosx", "metallib"])
+        .args(&["-sdk", sdk_name, "metallib"])
         .args(compiled_shader_files.iter().map(|p| p.as_os_str()))
         .arg("-o")
         .arg(out_lib.as_os_str())

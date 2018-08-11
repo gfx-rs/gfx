@@ -1,3 +1,4 @@
+#include "macros.metal"
 #include <metal_stdlib>
 using namespace metal;
 
@@ -12,7 +13,7 @@ typedef struct {
 
 typedef struct {
     float4 position [[position]];
-    uint layer [[render_target_array_index]];
+    uint layer GFX_RENDER_TARGET_ARRAY_INDEX;
 } ClearVertexData;
 
 vertex ClearVertexData vs_clear(ClearAttributes in [[stage_in]]) {

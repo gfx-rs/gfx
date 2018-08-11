@@ -9,8 +9,7 @@ use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
 use hal::window::Extent2D;
 
-use cocoa::foundation::{NSRect};
-use core_graphics::geometry::{CGSize};
+use core_graphics::geometry::{CGRect, CGSize};
 use foreign_types::{ForeignType, ForeignTypeRef};
 use parking_lot::{Mutex, MutexGuard};
 use metal;
@@ -27,7 +26,7 @@ pub struct Surface {
 
 #[derive(Debug)]
 pub(crate) struct SurfaceInner {
-    pub(crate) nsview: *mut Object,
+    pub(crate) view: *mut Object,
     pub(crate) render_layer: Mutex<CAMetalLayer>,
 }
 
@@ -36,7 +35,7 @@ unsafe impl Sync for SurfaceInner {}
 
 impl Drop for SurfaceInner {
     fn drop(&mut self) {
-        unsafe { msg_send![self.nsview, release]; }
+        unsafe { msg_send![self.view, release]; }
     }
 }
 
@@ -212,8 +211,8 @@ impl hal::Surface<Backend> for Surface {
 impl SurfaceInner {
     fn dimensions(&self) -> Extent2D {
         unsafe {
-            // NSView bounds are measured in DIPs
-            let bounds: NSRect = msg_send![self.nsview, bounds];
+            // NSView/UIView bounds are measured in DIPs
+            let bounds: CGRect = msg_send![self.view, bounds];
             //let bounds_pixel: NSRect = msg_send![self.nsview, convertRectToBacking:bounds];
             Extent2D {
                 width: bounds.size.width as _,

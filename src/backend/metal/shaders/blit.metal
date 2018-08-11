@@ -1,3 +1,4 @@
+#include "macros.metal"
 #include <metal_stdlib>
 using namespace metal;
 
@@ -9,7 +10,7 @@ typedef struct {
 typedef struct {
     float4 position [[position]];
     float4 uv;
-    uint layer [[render_target_array_index]];
+    uint layer GFX_RENDER_TARGET_ARRAY_INDEX;
 } BlitVertexData;
 
 typedef struct {
