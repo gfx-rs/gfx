@@ -11,7 +11,6 @@ use hal::format::{Aspects, ChannelType};
 use hal::image::Filter;
 
 use std::mem;
-use std::path::Path;
 
 
 pub type FastStorageMap<K, V> = StorageMap<RawRwLock, FastHashMap<K, V>>;
@@ -448,9 +447,8 @@ pub struct ServicePipes {
 
 impl ServicePipes {
     pub fn new(device: &metal::DeviceRef) -> Self {
-        let lib_path = Path::new(env!("OUT_DIR"))
-            .join("gfx_shaders.metallib");
-        let library = device.new_library_with_file(lib_path).unwrap();
+        let data = include_bytes!(concat!(env!("OUT_DIR"), "/gfx_shaders.metallib"));
+        let library = device.new_library_with_data(data).unwrap();
 
         let copy_buffer = Self::create_copy_buffer(&library, device);
         let fill_buffer = Self::create_fill_buffer(&library, device);
