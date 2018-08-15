@@ -13,6 +13,7 @@ use winapi::um::d3dcommon;
 pub use winapi::shared::winerror::HRESULT;
 
 pub mod barrier;
+pub mod blit;
 pub mod copy;
 pub mod native;
 pub mod pso;

@@ -63,23 +63,6 @@ fn gen_query_error(err: SpirvErrorCode) -> d::ShaderError {
     d::ShaderError::CompilationFailed(msg)
 }
 
-pub(crate) fn shader_bytecode(shader: *mut d3dcommon::ID3DBlob) -> d3d12::D3D12_SHADER_BYTECODE {
-    unsafe {
-        d3d12::D3D12_SHADER_BYTECODE {
-            pShaderBytecode: if !shader.is_null() {
-                (*shader).GetBufferPointer() as *const _
-            } else {
-                ptr::null_mut()
-            },
-            BytecodeLength: if !shader.is_null() {
-                (*shader).GetBufferSize()
-            } else {
-                0
-            },
-        }
-    }
-}
-
 #[derive(Clone, Debug)]
 pub(crate) struct ViewInfo {
     pub(crate) resource: native::Resource,
@@ -307,7 +290,8 @@ impl Device {
 
         let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
         for image in &shader_resources.separate_images {
-            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet)
+            let set = ast
+                .get_decoration(image.id, spirv::Decoration::DescriptorSet)
                 .map_err(gen_query_error)?;
             ast.set_decoration(
                 image.id,
@@ -317,7 +301,8 @@ impl Device {
         }
 
         for uniform_buffer in &shader_resources.uniform_buffers {
-            let set = ast.get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet)
+            let set = ast
+                .get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet)
                 .map_err(gen_query_error)?;
             ast.set_decoration(
                 uniform_buffer.id,
@@ -327,7 +312,8 @@ impl Device {
         }
 
         for storage_buffer in &shader_resources.storage_buffers {
-            let set = ast.get_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet)
+            let set = ast
+                .get_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet)
                 .map_err(gen_query_error)?;
             ast.set_decoration(
                 storage_buffer.id,
@@ -337,7 +323,8 @@ impl Device {
         }
 
         for image in &shader_resources.storage_images {
-            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet)
+            let set = ast
+                .get_decoration(image.id, spirv::Decoration::DescriptorSet)
                 .map_err(gen_query_error)?;
             ast.set_decoration(
                 image.id,
@@ -347,7 +334,8 @@ impl Device {
         }
 
         for sampler in &shader_resources.separate_samplers {
-            let set = ast.get_decoration(sampler.id, spirv::Decoration::DescriptorSet)
+            let set = ast
+                .get_decoration(sampler.id, spirv::Decoration::DescriptorSet)
                 .map_err(gen_query_error)?;
             ast.set_decoration(
                 sampler.id,
@@ -357,7 +345,8 @@ impl Device {
         }
 
         for image in &shader_resources.sampled_images {
-            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet)
+            let set = ast
+                .get_decoration(image.id, spirv::Decoration::DescriptorSet)
                 .map_err(gen_query_error)?;
             ast.set_decoration(
                 image.id,
@@ -367,7 +356,8 @@ impl Device {
         }
 
         for input in &shader_resources.subpass_inputs {
-            let set = ast.get_decoration(input.id, spirv::Decoration::DescriptorSet)
+            let set = ast
+                .get_decoration(input.id, spirv::Decoration::DescriptorSet)
                 .map_err(gen_query_error)?;
             ast.set_decoration(
                 input.id,
@@ -470,9 +460,9 @@ impl Device {
                 let shader_code = Self::translate_spirv(&mut ast, shader_model, layout, stage)?;
                 debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
-                let real_name =
-                    ast.get_cleansed_entry_point_name(source.entry, conv::map_stage(stage))
-                        .map_err(gen_query_error)?;
+                let real_name = ast
+                    .get_cleansed_entry_point_name(source.entry, conv::map_stage(stage))
+                    .map_err(gen_query_error)?;
                 // TODO: opt: don't query *all* entry points.
                 let entry_points = ast.get_entry_points().map_err(gen_query_error)?;
                 entry_points
@@ -1364,7 +1354,8 @@ impl d::Device<B> for Device {
         // Collect the whole number of bindings we will create upfront.
         // It allows us to preallocate enough storage to avoid reallocation,
         // which could cause invalid pointers.
-        let total = sets.iter()
+        let total = sets
+            .iter()
             .map(|desc_set| {
                 let mut sum = 0;
                 let bindings = &desc_set.borrow().bindings;
@@ -1523,10 +1514,12 @@ impl d::Device<B> for Device {
         }
 
         // Define input element descriptions
-        let input_element_descs = desc.attributes
+        let input_element_descs = desc
+            .attributes
             .iter()
             .filter_map(|attrib| {
-                let buffer_desc = match desc.vertex_buffers
+                let buffer_desc = match desc
+                    .vertex_buffers
                     .iter()
                     .find(|buffer_desc| buffer_desc.binding == attrib.binding)
                 {
@@ -1658,7 +1651,8 @@ impl d::Device<B> for Device {
             PrimitiveTopologyType: conv::map_topology_type(desc.input_assembler.primitive),
             NumRenderTargets: num_rtvs,
             RTVFormats: rtvs,
-            DSVFormat: pass.depth_stencil_attachment
+            DSVFormat: pass
+                .depth_stencil_attachment
                 .and_then(|att_ref| {
                     desc.subpass.main_pass.attachments[att_ref.0]
                         .format
@@ -2308,11 +2302,13 @@ impl d::Device<B> for Device {
                 None
             },
             handle_dsv: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(self.view_image_as_depth_stencil(ViewInfo {
-                    format: conv::map_format_dsv(format.base_format().0)
-                        .ok_or(image::ViewError::BadFormat)?,
-                    ..info
-                })?)
+                Some(
+                    self.view_image_as_depth_stencil(ViewInfo {
+                        format: conv::map_format_dsv(format.base_format().0)
+                            .ok_or(image::ViewError::BadFormat)?,
+                        ..info
+                    })?,
+                )
             } else {
                 None
             },
