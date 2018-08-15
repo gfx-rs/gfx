@@ -1,7 +1,7 @@
+use super::super::HRESULT;
 use super::com::WeakPtr;
 use super::sync::Fence;
 use winapi::um::d3d12;
-use HRESULT;
 
 #[repr(u32)]
 pub enum Priority {

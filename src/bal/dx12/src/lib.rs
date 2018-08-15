@@ -1,11 +1,3 @@
-extern crate gfx_bal as bal;
-extern crate winapi;
-extern crate wio;
-#[macro_use]
-extern crate static_assertions;
-#[macro_use]
-extern crate bitflags;
-
 use winapi::shared::dxgiformat;
 use winapi::um::d3d12;
 use winapi::um::d3dcommon;

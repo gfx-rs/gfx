@@ -1,9 +1,9 @@
+use super::super::{D3DResult, TextureAddressMode};
 use super::com::WeakPtr;
 use super::{Blob, Error};
 use std::mem;
 use std::ops::Range;
 use winapi::um::d3d12;
-use {D3DResult, TextureAddressMode};
 
 pub type CpuDescriptor = d3d12::D3D12_CPU_DESCRIPTOR_HANDLE;
 pub type GpuDescriptor = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE;

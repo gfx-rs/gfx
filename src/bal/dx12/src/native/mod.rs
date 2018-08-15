@@ -23,8 +23,8 @@ pub use self::queue::CommandQueue;
 pub use self::resource::{Heap, Resource};
 pub use self::sync::Fence;
 
-pub type Blob = com::WeakPtr<d3dcommon::ID3DBlob>;
-pub type Error = com::WeakPtr<d3dcommon::ID3DBlob>;
+pub type Blob = self::com::WeakPtr<d3dcommon::ID3DBlob>;
+pub type Error = self::com::WeakPtr<d3dcommon::ID3DBlob>;
 impl Error {
     pub unsafe fn as_c_str(&self) -> &CStr {
         debug_assert!(!self.is_null());

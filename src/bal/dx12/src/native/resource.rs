@@ -1,10 +1,10 @@
 //! GPU Resource
 
+use super::super::{D3DResult, Rect};
 use super::com::WeakPtr;
 use std::ops::Range;
 use std::ptr;
 use winapi::um::d3d12;
-use {D3DResult, Rect};
 
 pub type Subresource = u32;
 

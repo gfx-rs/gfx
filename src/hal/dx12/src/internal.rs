@@ -1,20 +1,8 @@
 use hal::backend::FastHashMap;
-use hal::pso;
-use spirv_cross::hlsl;
 use std::sync::Mutex;
-use std::{mem, ptr};
-
-use d3d12;
-use winapi::shared::minwindef::{FALSE, TRUE};
-use winapi::shared::{dxgiformat, dxgitype, winerror};
-use winapi::um::d3d12::*;
-use winapi::Interface;
-
-use device;
 
 use bal_dx12::blit::{BlitKey, BlitPipe};
 use bal_dx12::native;
-use bal_dx12::native::descriptor;
 
 type BlitMap = FastHashMap<BlitKey, BlitPipe>;
 
@@ -42,7 +30,7 @@ impl ServicePipes {
         let mut blits = self.blits_2d_color.lock().unwrap();
         blits
             .entry(key)
-            .or_insert_with(|| self.create_blit_2d_color(key))
+            .or_insert_with(|| BlitPipe::new(self.device, key))
             .clone()
     }
 }

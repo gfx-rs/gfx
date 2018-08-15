@@ -524,14 +524,16 @@ impl CommandBuffer {
         match self.active_bindpoint {
             BindPoint::Compute => {
                 // Switch to graphics bind point
-                let (pipeline, _) = self.gr_pipeline
+                let (pipeline, _) = self
+                    .gr_pipeline
                     .pipeline
                     .expect("No graphics pipeline bound");
                 self.raw.set_pipeline_state(pipeline);
             }
             BindPoint::Graphics { internal: true } => {
                 // Switch to graphics bind point
-                let (pipeline, signature) = self.gr_pipeline
+                let (pipeline, signature) = self
+                    .gr_pipeline
                     .pipeline
                     .expect("No graphics pipeline bound");
                 self.raw.set_pipeline_state(pipeline);
@@ -609,7 +611,8 @@ impl CommandBuffer {
         match self.active_bindpoint {
             BindPoint::Graphics { internal } => {
                 // Switch to compute bind point
-                let (pipeline, _) = self.comp_pipeline
+                let (pipeline, _) = self
+                    .comp_pipeline
                     .pipeline
                     .expect("No compute pipeline bound");
 
@@ -778,11 +781,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // This wouldn't make much sense, and proceeding with this constraint
         // allows the state transitions generated from subpass dependencies
         // to ignore the layouts completely.
-        assert!(!render_pass.subpasses.iter().any(|sp| sp.color_attachments
-            .iter()
-            .chain(sp.depth_stencil_attachment.iter())
-            .chain(sp.input_attachments.iter())
-            .any(|aref| aref.1 == image::Layout::Present)));
+        assert!(!render_pass.subpasses.iter().any(|sp| {
+            sp.color_attachments
+                .iter()
+                .chain(sp.depth_stencil_attachment.iter())
+                .chain(sp.input_attachments.iter())
+                .any(|aref| aref.1 == image::Layout::Present)
+        }));
 
         let mut clear_iter = clear_values.into_iter();
         let attachment_clears = render_pass
@@ -1231,7 +1236,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         struct Instance {
             rtv: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
             viewport: d3d12::D3D12_VIEWPORT,
-            data: internal::BlitData,
+            data: bal_dx12::blit::BlitData,
         };
         let mut instances = FastHashMap::<internal::BlitKey, Vec<Instance>>::default();
         let mut barriers = Vec::new();
@@ -1321,7 +1326,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     let image::Extent { width, height, .. } =
                         src.kind.level_extent(r.src_subresource.level);
 
-                    internal::BlitData {
+                    bal_dx12::blit::BlitData {
                         src_offset: [sx as f32 / width as f32, sy as f32 / height as f32],
                         src_extent: [dx as f32 / width as f32, dy as f32 / height as f32],
                         layer: src_layer as f32,
@@ -1379,7 +1384,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     self.raw.RSSetScissorRects(1, &scissor);
                     self.raw.SetGraphicsRoot32BitConstants(
                         1,
-                        (mem::size_of::<internal::BlitData>() / 4) as _,
+                        (mem::size_of::<bal_dx12::blit::BlitData>() / 4) as _,
                         &inst.data as *const _ as *const _,
                         0,
                     );
@@ -1593,7 +1598,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        self.active_descriptor_heaps = self.gr_pipeline
+        self.active_descriptor_heaps = self
+            .gr_pipeline
             .bind_descriptor_sets(layout, first_set, sets, offsets);
         self.bind_descriptor_heaps();
     }
@@ -1629,7 +1635,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
-        self.active_descriptor_heaps = self.comp_pipeline
+        self.active_descriptor_heaps = self
+            .comp_pipeline
             .bind_descriptor_sets(layout, first_set, sets, offsets);
         self.bind_descriptor_heaps();
     }
@@ -1830,7 +1837,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 back: (r.src_offset.z + r.extent.depth as i32) as _,
             };
 
-            for (src_layer, dst_layer) in r.src_subresource
+            for (src_layer, dst_layer) in r
+                .src_subresource
                 .layers
                 .clone()
                 .zip(r.dst_subresource.layers.clone())

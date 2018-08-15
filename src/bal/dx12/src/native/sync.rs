@@ -1,7 +1,7 @@
+use super::super::HRESULT;
 use super::com::WeakPtr;
 use winapi::um::d3d12;
 use winapi::um::winnt;
-use HRESULT;
 
 pub type Event = winnt::HANDLE;
 pub type Fence = WeakPtr<d3d12::ID3D12Fence>;

@@ -7,7 +7,7 @@ use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 
 use winapi::shared::minwindef::{FALSE, TRUE, UINT};
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
-use winapi::um::{d3d12, d3dcommon, d3dcompiler, synchapi, winbase, winnt};
+use winapi::um::{d3d12, d3dcompiler, synchapi, winbase, winnt};
 use winapi::Interface;
 
 use hal::format::{Aspects, Format};

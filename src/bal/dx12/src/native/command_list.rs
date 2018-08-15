@@ -1,5 +1,6 @@
 //! Graphics command list
 
+use super::super::{Format, GpuAddress, Rect, HRESULT};
 use super::com::WeakPtr;
 use super::resource::DiscardRegion;
 use super::{
@@ -9,7 +10,6 @@ use super::{
 use bal;
 use std::ptr;
 use winapi::um::d3d12;
-use {Format, GpuAddress, Rect, HRESULT};
 
 #[repr(u32)]
 #[derive(Clone, Copy)]

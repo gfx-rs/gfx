@@ -2,7 +2,6 @@
 extern crate bitflags;
 #[macro_use]
 extern crate derivative;
-extern crate gfx_bal_dx12 as bal_dx12;
 extern crate gfx_hal as hal;
 #[macro_use]
 extern crate log;
@@ -11,6 +10,12 @@ extern crate spirv_cross;
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
+#[macro_use]
+extern crate static_assertions;
+extern crate gfx_bal as bal;
+
+#[path = "../../../bal/dx12/src/lib.rs"]
+mod bal_dx12;
 
 mod command;
 mod conv;

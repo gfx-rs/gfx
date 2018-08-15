@@ -2,11 +2,11 @@
 
 use super::com::WeakPtr;
 
+use super::super::{D3DResult, FeatureLevel, NodeMask, TextureAddressMode};
 use std::ops::Range;
 use std::ptr;
 use winapi::um::d3d12;
 use winapi::Interface;
-use {D3DResult, FeatureLevel, NodeMask, TextureAddressMode};
 
 use super::command_list::CmdListType;
 use super::descriptor::{CpuDescriptor, HeapFlags, HeapType};

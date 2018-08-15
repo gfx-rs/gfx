@@ -20,11 +20,12 @@ name = "gfx_hal_dx12"
 [dependencies]
 bitflags = "1"
 derivative = "1"
+gfx-bal = { path = "../../bal", version = "0.1" }
 gfx-hal = { path = "..", version = "0.1" }
-gfx-bal-dx12 = { path = "../../bal/dx12", version = "0.1" }
 log = { version = "0.4", features = ["release_max_level_error"] }
 smallvec = "0.6"
 spirv_cross = "0.9"
 winapi = { version = "0.3", features = ["basetsd","d3d12","d3d12sdklayers","d3d12shader","d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4","dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
 winit = { version = "0.16", optional = true }
 wio = "0.2"
+static_assertions = "0.2.5"
