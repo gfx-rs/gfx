@@ -40,8 +40,9 @@ use std::sync::Arc;
 
 use hal::queue::QueueFamilyId;
 
-use objc::runtime::{Class, Object};
+use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
+use objc::runtime::{Class, Object};
 use foreign_types::ForeignTypeRef;
 use parking_lot::Mutex;
 
@@ -146,9 +147,16 @@ impl Instance {
             let class = Class::get("CAMetalLayer").unwrap();
             let render_layer: *mut Object = msg_send![class, new];
             msg_send![view, setLayer: render_layer];
-            let view_size: CGRect = msg_send![view, bounds];
-            msg_send![render_layer, setFrame: view_size];
             msg_send![view, retain];
+            let bounds: CGRect = msg_send![view, bounds];
+            msg_send![render_layer, setBounds: bounds];
+
+            let window: *mut Object = msg_send![view, window];
+            if window.is_null() {
+                panic!("surface is not attached to a window");
+            }
+            let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
+            msg_send![render_layer, setContentsScale:scale_factor];
 
             window::SurfaceInner {
                 nsview: view,
@@ -160,7 +168,6 @@ impl Instance {
     pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
         window::Surface {
             inner: Arc::new(self.create_from_nsview(nsview)),
-            apply_pixel_scale: false,
             has_swapchain: false
         }
     }
@@ -170,7 +177,6 @@ impl Instance {
         use winit::os::macos::WindowExt;
         window::Surface {
             inner: Arc::new(self.create_from_nsview(window.get_nsview())),
-            apply_pixel_scale: true,
             has_swapchain: false,
         }
     }

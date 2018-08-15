@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use gl;
 use gl::types::{GLint, GLenum, GLfloat};
 
-use hal::{self as c, device as d, error, image as i, memory, pass, pso, buffer, mapping, query, window};
+use hal::{self as c, device as d, error, image as i, memory, pass, pso, buffer, mapping, query};
 use hal::backend::FastHashMap;
 use hal::format::{ChannelType, Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
@@ -1409,7 +1409,6 @@ impl d::Device<B> for Device {
         surface: &mut Surface,
         config: c::SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
-        _extent: &window::Extent2D,
     ) -> (Swapchain, c::Backbuffer<B>) {
         self.create_swapchain_impl(surface, config)
     }

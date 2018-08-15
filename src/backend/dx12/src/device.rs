@@ -11,7 +11,7 @@ use winapi::shared::minwindef::{FALSE, TRUE, UINT};
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
 use wio::com::ComPtr;
 
-use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query, window};
+use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
 use hal::format::{Aspects, Format};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
@@ -2961,11 +2961,10 @@ impl d::Device<B> for Device {
         surface: &mut w::Surface,
         config: hal::SwapchainConfig,
         _old_swapchain: Option<w::Swapchain>,
-        _extent: &window::Extent2D,
     ) -> (w::Swapchain, hal::Backbuffer<B>) {
         let mut swap_chain: *mut dxgi1_2::IDXGISwapChain1 = ptr::null_mut();
 
-        let format = match config.color_format {
+        let format = match config.format {
             // Apparently, swap chain doesn't like sRGB, but the RTV can still have some:
             // https://www.gamedev.net/forums/topic/670546-d3d12srgb-buffer-format-for-swap-chain/
             // [15716] DXGI ERROR: IDXGIFactory::CreateSwapchain: Flip model swapchains
@@ -2980,7 +2979,7 @@ impl d::Device<B> for Device {
         let format = conv::map_format(format).unwrap(); // TODO: error handling
 
         let rtv_desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
-            Format: conv::map_format(config.color_format).unwrap(),
+            Format: conv::map_format(config.format).unwrap(),
             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
             .. unsafe { mem::zeroed() }
         };
@@ -3045,10 +3044,7 @@ impl d::Device<B> for Device {
 
             unsafe { resources.push(ComPtr::<d3d12::ID3D12Resource>::from_raw(resource)); }
 
-            let surface_type = config
-                .color_format
-                .base_format()
-                .0;
+            let surface_type = config.format.base_format().0;
             let format_desc = surface_type
                 .desc();
 

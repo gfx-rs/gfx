@@ -310,7 +310,7 @@ impl hal::Surface<Backend> for Surface {
 
         // `0xFFFFFFFF` indicates that the extent depends on the created swapchain.
         let current_extent =
-            if caps.current_extent.width != 0xFFFFFFFF && caps.current_extent.height != 0xFFFFFFFF {
+            if caps.current_extent.width != !0 && caps.current_extent.height != !0 {
                 Some(hal::window::Extent2D {
                     width: caps.current_extent.width,
                     height: caps.current_extent.height,

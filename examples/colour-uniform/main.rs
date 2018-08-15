@@ -58,8 +58,6 @@ struct Vertex {
     a_uv: [f32; 2],
 }
 
-#[cfg(not(feature = "gl"))]
-type WindowType = winit::Window;
 
 trait SurfaceTrait {
     #[cfg(feature = "gl")]
@@ -585,10 +583,7 @@ impl WindowState {
         let events_loop = winit::EventsLoop::new();
 
         let wb = winit::WindowBuilder::new()
-            .with_dimensions(winit::dpi::LogicalSize::from_physical(winit::dpi::PhysicalSize {
-                width: DIMS.width as _,
-                height: DIMS.height as _,
-            }, 1.0))
+            .with_dimensions(winit::dpi::LogicalSize::new(DIMS.width as _, DIMS.height as _))
             .with_title("quad".to_string());
 
         WindowState {
@@ -601,8 +596,6 @@ impl WindowState {
 struct BackendState<B: Backend> {
     surface: B::Surface,
     adapter: AdapterState<B>,
-    #[cfg(not(feature = "gl"))]
-    window: WindowType,
 }
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
@@ -617,7 +610,7 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
         BackendState {
             adapter: AdapterState::new(&mut adapters),
             surface,
-            window,
+            //window,
         },
         instance,
     )
@@ -1367,7 +1360,7 @@ where
     swapchain: Option<B::Swapchain>,
     backbuffer: Option<Backbuffer<B>>,
     device: Rc<RefCell<DeviceState<B>>>,
-    extent: hal::window::Extent2D,
+    extent: i::Extent,
     format: f::Format,
 }
 
@@ -1389,35 +1382,13 @@ where
                     .unwrap_or(formats[0])
             });
 
-        let extent = match caps.current_extent {
-            Some(e) => e,
-            None => {
-                #[cfg(not(feature = "gl"))]
-                let window = &backend.window;
-                #[cfg(feature = "gl")]
-                let window = backend.surface.get_window_t();
-
-                let window_size = window.get_inner_size().unwrap().to_physical(window.get_hidpi_factor());
-                let mut extent = hal::window::Extent2D { width: window_size.width as _, height: window_size.height as _};
-
-                extent.width = extent.width.max(caps.extents.start.width).min(caps.extents.end.width);
-                extent.height = extent.height.max(caps.extents.start.height).min(caps.extents.end.height);
-
-                extent
-            }
-        };
-
         println!("Surface format: {:?}", format);
-
-        let swap_config = SwapchainConfig::new()
-            .with_color(format)
-            .with_image_count(caps.image_count.start)
-            .with_image_usage(i::Usage::COLOR_ATTACHMENT);
+        let swap_config = SwapchainConfig::from_caps(&caps, format);
+        let extent = swap_config.extent.to_extent();
         let (swapchain, backbuffer) = device.borrow().device.create_swapchain(
             &mut backend.surface,
             swap_config,
             None,
-            &extent,
         );
 
         let swapchain = SwapchainState {

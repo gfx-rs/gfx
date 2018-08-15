@@ -1,7 +1,7 @@
 use hal;
 use hal::queue::QueueFamilyId;
 use hal::range::RangeArg;
-use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query, window};
+use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query};
 
 use winapi::Interface;
 use winapi::shared::dxgi::{IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD};
@@ -1986,7 +1986,6 @@ impl hal::Device<Backend> for Device {
         surface: &mut Surface,
         config: hal::SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
-        _extent: &window::Extent2D,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
         // TODO: use IDXGIFactory2 for >=11.1
         // TODO: this function should be able to fail (Result)?
@@ -1998,13 +1997,13 @@ impl hal::Device<Backend> for Device {
         let (non_srgb_format, format) = {
             // NOTE: DXGI doesn't allow sRGB format on the swapchain, but
             //       creating RTV of swapchain buffers with sRGB works
-            let format = match config.color_format {
+            let format = match config.format {
                 format::Format::Bgra8Srgb => format::Format::Bgra8Unorm,
                 format::Format::Rgba8Srgb => format::Format::Rgba8Unorm,
                 format => format,
             };
 
-            (map_format(format).unwrap(), map_format(config.color_format).unwrap())
+            (map_format(format).unwrap(), map_format(config.format).unwrap())
         };
         let decomposed = conv::DecomposedDxgiFormat::from_dxgi_format(format);
 
@@ -2103,7 +2102,7 @@ impl hal::Device<Backend> for Device {
             Image {
                 kind,
                 usage: config.image_usage,
-                format: config.color_format,
+                format: config.format,
                 storage_flags: image::StorageFlags::empty(),
                 // NOTE: not the actual format of the backbuffer(s)
                 decomposed_format: decomposed.clone(),
