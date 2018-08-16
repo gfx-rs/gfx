@@ -971,7 +971,7 @@ impl hal::Device<Backend> for Device {
         let mut next_buffer_index = pipeline_layout.attribute_buffer_index();
         trace!("Vertex attribute remapping started");
 
-        for (i, &pso::AttributeDesc { binding, element, ..}) in pipeline_desc.attributes.iter().enumerate() {
+        for &pso::AttributeDesc { location, binding, element } in &pipeline_desc.attributes {
             let original = pipeline_desc.vertex_buffers
                 .iter()
                 .find(|vb| vb.binding == binding)
@@ -1006,11 +1006,11 @@ impl hal::Device<Backend> for Device {
                 Entry::Occupied(e) => e.get().binding,
             };
             trace!("\tAttribute[{}] is mapped to vertex buffer[{}] with binding {} and offsets {} + {}",
-                i, binding, mtl_buffer_index, base_offset, cut_offset);
+                location, binding, mtl_buffer_index, base_offset, cut_offset);
             // pass the refined data to Metal
             let mtl_attribute_desc = vertex_descriptor
                 .attributes()
-                .object_at(i)
+                .object_at(location as usize)
                 .expect("too many vertex attributes");
             let mtl_vertex_format = conv::map_vertex_format(element.format)
                 .expect("unsupported vertex format");
