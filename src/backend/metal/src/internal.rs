@@ -437,7 +437,6 @@ impl ImageBlitPipes {
 pub struct ServicePipes {
     pub library: Mutex<metal::Library>,
     pub sampler_states: SamplerStates,
-    //TODO: use something smarter than a mutex
     pub depth_stencil_states: DepthStencilStates,
     pub clears: ImageClearPipes,
     pub blits: ImageBlitPipes,
@@ -477,11 +476,12 @@ impl ServicePipes {
         pipeline.set_compute_function(Some(&cs_copy_buffer));
         pipeline.set_thread_group_size_is_multiple_of_thread_execution_width(true);
 
+        /*TODO: check MacOS version
         if let Some(buffers) = pipeline.buffers() {
             buffers.object_at(0).unwrap().set_mutability(metal::MTLMutability::Mutable);
             buffers.object_at(1).unwrap().set_mutability(metal::MTLMutability::Immutable);
             buffers.object_at(2).unwrap().set_mutability(metal::MTLMutability::Immutable);
-        }
+        }*/
 
         device.new_compute_pipeline_state(&pipeline).unwrap()
     }
@@ -495,10 +495,11 @@ impl ServicePipes {
         pipeline.set_compute_function(Some(&cs_fill_buffer));
         pipeline.set_thread_group_size_is_multiple_of_thread_execution_width(true);
 
+        /*TODO: check MacOS version
         if let Some(buffers) = pipeline.buffers() {
             buffers.object_at(0).unwrap().set_mutability(metal::MTLMutability::Mutable);
             buffers.object_at(1).unwrap().set_mutability(metal::MTLMutability::Immutable);
-        }
+        }*/
 
         device.new_compute_pipeline_state(&pipeline).unwrap()
     }

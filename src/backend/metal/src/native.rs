@@ -291,7 +291,7 @@ pub struct StencilState<T> {
     pub back_write_mask: T,
 }
 
-pub type VertexBufferMap = FastHashMap<(pso::BufferIndex, pso::ElemOffset), pso::VertexBufferDesc>;
+pub type VertexBufferVec = Vec<Option<(pso::VertexBufferDesc, pso::ElemOffset)>>;
 
 #[derive(Debug)]
 pub struct GraphicsPipeline {
@@ -306,11 +306,11 @@ pub struct GraphicsPipeline {
     pub(crate) depth_bias: pso::State<pso::DepthBias>,
     pub(crate) depth_stencil_desc: pso::DepthStencilDesc,
     pub(crate) baked_states: pso::BakedStates,
-    /// The mapping of additional vertex buffer bindings over the original ones.
+    /// The mapping from Metal vertex buffers to Vulkan ones.
     /// This is needed because Vulkan allows attribute offsets to exceed the strides,
     /// while Metal does not. Thus, we register extra vertex buffer bindings with
     /// adjusted offsets to cover this use case.
-    pub(crate) vertex_buffer_map: VertexBufferMap,
+    pub(crate) vertex_buffers: VertexBufferVec,
     /// Tracked attachment formats for figuring (roughly) renderpass compatibility.
     pub(crate) attachment_formats: Vec<Option<Format>>,
 }
