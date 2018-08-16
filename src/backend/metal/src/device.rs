@@ -859,9 +859,10 @@ impl hal::Device<Backend> for Device {
         let pipeline_layout = &pipeline_desc.layout;
         let pass_descriptor = &pipeline_desc.subpass;
 
-        if pipeline_layout.attribute_buffer_index() + pipeline_desc.vertex_buffers.len() as ResourceIndex > self.private_caps.max_buffers_per_stage {
+        let attribute_buffer_index = pipeline_layout.attribute_buffer_index();
+        if attribute_buffer_index + pipeline_desc.vertex_buffers.len() as ResourceIndex > self.private_caps.max_buffers_per_stage {
             let msg = format!("Too many buffers inputs of the vertex stage: {} attributes + {} resources",
-                pipeline_desc.vertex_buffers.len(), pipeline_layout.attribute_buffer_index());
+                pipeline_desc.vertex_buffers.len(), attribute_buffer_index);
             return Err(pso::CreationError::Shader(ShaderError::InterfaceMismatch(msg)));
         }
         // FIXME: lots missing
@@ -967,8 +968,7 @@ impl hal::Device<Backend> for Device {
 
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();
-        let mut vertex_buffer_map = n::VertexBufferMap::default();
-        let mut next_buffer_index = pipeline_layout.attribute_buffer_index();
+        let mut vertex_buffers: n::VertexBufferVec = Vec::new();
         trace!("Vertex attribute remapping started");
 
         for &pso::AttributeDesc { location, binding, element } in &pipeline_desc.attributes {
@@ -988,23 +988,22 @@ impl hal::Device<Backend> for Device {
                     (0, element.offset)
                 }
             };
-            let mtl_buffer_index = match vertex_buffer_map.entry((binding, base_offset)) {
-                Entry::Vacant(_) if next_buffer_index == self.shared.push_constants_buffer_id => {
-                    error!("Attribute offset {} exceeds the stride {}, and there is no room for replacement.",
-                        element.offset, original.stride);
-                    return Err(pso::CreationError::Other);
-                }
-                Entry::Vacant(e) => {
-                    e.insert(pso::VertexBufferDesc {
-                        binding: next_buffer_index as _,
-                        stride: original.stride,
-                        rate: original.rate,
-                    });
-                    next_buffer_index += 1;
-                    next_buffer_index as u32 - 1
-                }
-                Entry::Occupied(e) => e.get().binding,
-            };
+            let relative_index = vertex_buffers
+                .iter()
+                .position(|vb_maybe| match vb_maybe {
+                    Some((ref vb, offset)) => vb.binding == binding && base_offset == *offset,
+                    None => false,
+                })
+                .unwrap_or_else(|| {
+                    vertex_buffers.push(Some((original.clone(), base_offset)));
+                    vertex_buffers.len() - 1
+                });
+            let mtl_buffer_index = attribute_buffer_index as usize + relative_index;
+            if mtl_buffer_index == self.shared.push_constants_buffer_id as usize {
+                error!("Attribute offset {} exceeds the stride {}, and there is no room for replacement.",
+                    element.offset, original.stride);
+                return Err(pso::CreationError::Other);
+            }
             trace!("\tAttribute[{}] is mapped to vertex buffer[{}] with binding {} and offsets {} + {}",
                 location, binding, mtl_buffer_index, base_offset, cut_offset);
             // pass the refined data to Metal
@@ -1020,10 +1019,14 @@ impl hal::Device<Backend> for Device {
         }
 
         const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
-        for vb in vertex_buffer_map.values() {
+        for (i, vb_maybe) in vertex_buffers.iter().enumerate() {
+            let vb = match vb_maybe {
+                Some((ref vb, _)) => vb,
+                None => continue,
+            };
             let mtl_buffer_desc = vertex_descriptor
                 .layouts()
-                .object_at(vb.binding as usize)
+                .object_at(attribute_buffer_index as usize + i)
                 .expect("too many vertex descriptor layouts");
             if vb.stride % STRIDE_GRANULARITY != 0 {
                 error!("Stride ({}) must be a multiple of {}", vb.stride, STRIDE_GRANULARITY);
@@ -1043,7 +1046,7 @@ impl hal::Device<Backend> for Device {
                 mtl_buffer_desc.set_step_rate(!0);
             }
         }
-        if !vertex_buffer_map.is_empty() {
+        if !vertex_buffers.is_empty() {
             pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
         }
 
@@ -1089,12 +1092,12 @@ impl hal::Device<Backend> for Device {
                     fs_lib,
                     raw,
                     primitive_type,
-                    attribute_buffer_index: pipeline_layout.attribute_buffer_index(),
+                    attribute_buffer_index,
                     rasterizer_state,
                     depth_bias,
                     depth_stencil_desc: pipeline_desc.depth_stencil.clone(),
                     baked_states: pipeline_desc.baked_states.clone(),
-                    vertex_buffer_map,
+                    vertex_buffers,
                     attachment_formats,
                 })
             .map_err(|err| {
