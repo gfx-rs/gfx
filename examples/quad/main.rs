@@ -69,14 +69,11 @@ fn main() {
     let mut events_loop = winit::EventsLoop::new();
 
     let wb = winit::WindowBuilder::new()
-        .with_dimensions(winit::dpi::LogicalSize::from_physical(winit::dpi::PhysicalSize {
-            width: DIMS.width as _,
-            height: DIMS.height as _,
-        }, 1.0))
-         .with_title("quad".to_string());
+        .with_dimensions(winit::dpi::LogicalSize::new(DIMS.width as _, DIMS.height as _))
+        .with_title("quad".to_string());
     // instantiate backend
     #[cfg(not(feature = "gl"))]
-    let (window, _instance, mut adapters, mut surface) = {
+    let (_window, _instance, mut adapters, mut surface) = {
         let window = wb.build(&events_loop).unwrap();
         let instance = back::Instance::create("gfx-rs quad", 1);
         let surface = instance.create_surface(&window);
@@ -351,10 +348,6 @@ fn main() {
     let mut extent;
 
     {
-        #[cfg(not(feature = "gl"))]
-        let window = &window;
-        #[cfg(feature = "gl")]
-        let window = &0;
         let (
             new_swap_chain,
             new_render_pass,
@@ -368,7 +361,6 @@ fn main() {
             &mut device,
             &adapter.physical_device,
             &set_layout,
-            window,
         );
 
         swap_chain = new_swap_chain;
@@ -409,6 +401,7 @@ fn main() {
                     }
                     | winit::WindowEvent::CloseRequested => running = false,
                     winit::WindowEvent::Resized(dims) => {
+                        println!("resized to {:?}", dims);
                         #[cfg(feature = "gl")]
                         surface.get_window().resize(dims.to_physical(surface.get_window().get_hidpi_factor()));
                         recreate_swapchain = true;
@@ -435,10 +428,6 @@ fn main() {
             device.destroy_render_pass(render_pass);
             device.destroy_swapchain(swap_chain);
 
-            #[cfg(not(feature = "gl"))]
-            let window = &window;
-            #[cfg(feature = "gl")]
-            let window = &0;
             let (
                 new_swap_chain,
                 new_render_pass,
@@ -452,7 +441,6 @@ fn main() {
                 &mut device,
                 &adapter.physical_device,
                 &set_layout,
-                window,
             );
             swap_chain = new_swap_chain;
             render_pass = new_render_pass;
@@ -551,18 +539,12 @@ fn main() {
     println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
 }
 
-#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
-type WindowType = winit::Window;
-#[cfg(feature = "gl")]
-type WindowType = u32;
-
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
 fn swapchain_stuff(
     surface: &mut <back::Backend as hal::Backend>::Surface,
     device: &mut back::Device,
     physical_device: &back::PhysicalDevice,
     set_layout: &<back::Backend as hal::Backend>::DescriptorSetLayout,
-    window: &WindowType,
 ) -> (
     <back::Backend as hal::Backend>::Swapchain,
     <back::Backend as hal::Backend>::RenderPass,
@@ -573,7 +555,7 @@ fn swapchain_stuff(
     )>,
     <back::Backend as hal::Backend>::GraphicsPipeline,
     <back::Backend as hal::Backend>::PipelineLayout,
-    Extent2D,
+    i::Extent,
 ) {
     let (caps, formats, _present_modes) = surface.compatibility(physical_device);
     println!("formats: {:?}", formats);
@@ -586,30 +568,10 @@ fn swapchain_stuff(
                 .unwrap_or(formats[0])
         });
 
-    let extent = match caps.current_extent {
-        Some(e) => e,
-        None => {
-            #[cfg(feature = "gl")]
-            let _window = window;
-            #[cfg(feature = "gl")]
-            let window = surface.get_window();
-
-            let window_size = window.get_inner_size().unwrap().to_physical(window.get_hidpi_factor());
-            let mut extent = hal::window::Extent2D { width: window_size.width as _, height: window_size.height as _};
-
-            extent.width = extent.width.max(caps.extents.start.width).min(caps.extents.end.width);
-            extent.height = extent.height.max(caps.extents.start.height).min(caps.extents.end.height);
-
-            extent
-        }
-    };
-
-    println!("Surface format: {:?}", format);
-    let swap_config = SwapchainConfig::new()
-        .with_color(format)
-        .with_image_count(caps.image_count.start)
-        .with_image_usage(i::Usage::COLOR_ATTACHMENT);
-    let (swap_chain, backbuffer) = device.create_swapchain(surface, swap_config, None, &extent);
+    let swap_config = SwapchainConfig::from_caps(&caps, format);
+    println!("{:?}", swap_config);
+    let extent = swap_config.extent.to_extent();
+    let (swap_chain, backbuffer) = device.create_swapchain(surface, swap_config, None);
 
     let render_pass = {
         let attachment = pass::Attachment {
@@ -642,11 +604,6 @@ fn swapchain_stuff(
     };
     let (frame_images, framebuffers) = match backbuffer {
         Backbuffer::Images(images) => {
-            let extent = i::Extent {
-                width: extent.width as _,
-                height: extent.height as _,
-                depth: 1,
-            };
             let pairs = images
                 .into_iter()
                 .map(|image| {

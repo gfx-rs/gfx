@@ -9,9 +9,8 @@ use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
 use hal::window::Extent2D;
 
-use core_graphics::base::CGFloat;
-use core_graphics::geometry::CGRect;
 use cocoa::foundation::{NSRect};
+use core_graphics::geometry::{CGSize};
 use foreign_types::{ForeignType, ForeignTypeRef};
 use parking_lot::{Mutex, MutexGuard};
 use metal;
@@ -23,7 +22,6 @@ pub type CAMetalLayer = *mut Object;
 
 pub struct Surface {
     pub(crate) inner: Arc<SurfaceInner>,
-    pub(crate) apply_pixel_scale: bool,
     pub(crate) has_swapchain: bool
 }
 
@@ -95,7 +93,7 @@ impl Drop for Frame {
 pub struct Swapchain {
     frames: Arc<Vec<Frame>>,
     surface: Arc<SurfaceInner>,
-    size_pixels: (image::Size, image::Size),
+    extent: Extent2D,
     last_frame: usize,
     image_ready_callbacks: Vec<Arc<Mutex<Option<SwapchainImage>>>>,
 }
@@ -172,18 +170,20 @@ impl SwapchainImage {
 
 impl hal::Surface<Backend> for Surface {
     fn kind(&self) -> image::Kind {
-        let (width, height) = self.inner.pixel_dimensions();
+        let ex = self.inner.dimensions();
 
-        image::Kind::D2(width, height, 1, 1)
+        image::Kind::D2(ex.width, ex.height, 1, 1)
     }
 
     fn compatibility(
         &self, _: &PhysicalDevice,
     ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>) {
+        let current_extent = Some(self.inner.dimensions());
+
         let caps = hal::SurfaceCapabilities {
             //Note: this is hardcoded in `CAMetalLayer` documentation
             image_count: 2 .. 4,
-            current_extent: None,
+            current_extent,
             extents: Extent2D { width: 4, height: 4} .. Extent2D { width: 4096, height: 4096 },
             max_image_layers: 1,
         };
@@ -208,12 +208,15 @@ impl hal::Surface<Backend> for Surface {
 }
 
 impl SurfaceInner {
-    fn pixel_dimensions(&self) -> (image::Size, image::Size) {
+    fn dimensions(&self) -> Extent2D {
         unsafe {
             // NSView bounds are measured in DIPs
             let bounds: NSRect = msg_send![self.nsview, bounds];
-            let bounds_pixel: NSRect = msg_send![self.nsview, convertRectToBacking:bounds];
-            (bounds_pixel.size.width as _, bounds_pixel.size.height as _)
+            //let bounds_pixel: NSRect = msg_send![self.nsview, convertRectToBacking:bounds];
+            Extent2D {
+                width: bounds.size.width as _,
+                height: bounds.size.height as _,
+            }
         }
     }
 }
@@ -227,13 +230,12 @@ impl Device {
         info!("build_swapchain {:?}", config);
 
         let mtl_format = self.private_caps
-            .map_format(config.color_format)
+            .map_format(config.format)
             .expect("unsupported backbuffer format");
 
         let render_layer_borrow = surface.inner.render_layer.lock();
         let render_layer = *render_layer_borrow;
-        let nsview = surface.inner.nsview;
-        let format_desc = config.color_format.surface_desc();
+        let format_desc = config.format.surface_desc();
         let framebuffer_only = config.image_usage == image::Usage::COLOR_ATTACHMENT;
         let display_sync = match config.present_mode {
             hal::PresentMode::Immediate => false,
@@ -242,34 +244,15 @@ impl Device {
         let device = self.shared.device.lock();
         let device_raw: &metal::DeviceRef = &*device;
 
-        let (view_size, scale_factor) = unsafe {
+        unsafe {
             msg_send![render_layer, setDevice: device_raw];
             msg_send![render_layer, setPixelFormat: mtl_format];
             msg_send![render_layer, setFramebufferOnly: framebuffer_only];
             msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
+            msg_send![render_layer, setDrawableSize: CGSize::new(config.extent.width as f64, config.extent.height as f64)];
             //TODO: only set it where supported
             msg_send![render_layer, setDisplaySyncEnabled: display_sync];
-
-            // Update render layer size
-            let view_points_size: CGRect = msg_send![nsview, bounds];
-            msg_send![render_layer, setBounds: view_points_size];
-
-            let view_window: *mut Object = msg_send![nsview, window];
-            if view_window.is_null() {
-                panic!("surface is not attached to a window");
-            }
-            let scale_factor: CGFloat = if surface.apply_pixel_scale {
-                msg_send![view_window, backingScaleFactor]
-            } else {
-                1.0
-            };
-            msg_send![render_layer, setContentsScale: scale_factor];
-            info!("view points size {:?} scale factor {:?}", view_points_size, scale_factor);
-            (view_points_size.size, scale_factor)
         };
-
-        let pixel_width = (view_size.width * scale_factor) as image::Size;
-        let pixel_height = (view_size.height * scale_factor) as image::Size;
 
         let frames = (0 .. config.image_count)
             .map(|index| autoreleasepool(|| { // for the drawable & texture
@@ -305,7 +288,7 @@ impl Device {
             .iter()
             .map(|frame| native::Image {
                 raw: frame.texture.clone(),
-                kind: image::Kind::D2(pixel_width, pixel_height, 1, 1),
+                kind: image::Kind::D2(config.extent.width, config.extent.height, 1, 1),
                 format_desc,
                 shader_channel: Channel::Float,
                 mtl_format,
@@ -318,7 +301,7 @@ impl Device {
         let swapchain = Swapchain {
             frames: Arc::new(frames),
             surface: surface.inner.clone(),
-            size_pixels: (pixel_width, pixel_height),
+            extent: config.extent,
             last_frame: 0,
             image_ready_callbacks: Vec::new(),
         };
@@ -333,7 +316,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         self.last_frame += 1;
 
         //TODO: figure out a proper story of HiDPI
-        if false && self.surface.pixel_dimensions() != self.size_pixels {
+        if false && self.surface.dimensions() != self.extent {
             return Err(())
         }
 

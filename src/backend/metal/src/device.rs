@@ -17,7 +17,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{cmp, mem, slice, thread, time};
 
-use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query, window};
+use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
@@ -2134,7 +2134,6 @@ impl hal::Device<Backend> for Device {
         surface: &mut Surface,
         config: hal::SwapchainConfig,
         old_swapchain: Option<Swapchain>,
-        _extent: &window::Extent2D,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
         if let Some(_swapchain) = old_swapchain {
             //swapchain is dropped here

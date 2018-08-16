@@ -7,7 +7,7 @@ use std::borrow::Borrow;
 use std::ops::Range;
 use hal::{
     buffer, command, device, error, format, image, mapping,
-    memory, pass, pool, pso, query, queue, window
+    memory, pass, pool, pso, query, queue
 };
 use hal::range::RangeArg;
 
@@ -376,7 +376,6 @@ impl hal::Device<Backend> for Device {
         _: &mut Surface,
         _: hal::SwapchainConfig,
         _: Option<Swapchain>,
-        _: &window::Extent2D,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
         unimplemented!()
     }

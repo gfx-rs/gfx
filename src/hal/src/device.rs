@@ -17,7 +17,7 @@ use std::borrow::Borrow;
 use std::error::Error;
 use std::ops::Range;
 
-use {buffer, format, image, mapping, pass, pso, query, window};
+use {buffer, format, image, mapping, pass, pso, query};
 use {Backend, MemoryTypeId};
 
 use error::HostExecutionError;
@@ -645,9 +645,8 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// # let mut surface: empty::Surface = return;
     /// # let device: empty::Device = return;
-    /// # let extent = gfx_hal::window::Extent2D {width: 0, height: 0} ;
-    /// let swapchain_config = SwapchainConfig::new().with_color(Format::Rgba8Srgb);
-    /// device.create_swapchain(&mut surface, swapchain_config, None, &extent);
+    /// let swapchain_config = SwapchainConfig::new(100, 100, Format::Rgba8Srgb, 2);
+    /// device.create_swapchain(&mut surface, swapchain_config, None);
     /// # }
     /// ```
     fn create_swapchain(
@@ -655,7 +654,6 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         surface: &mut B::Surface,
         config: SwapchainConfig,
         old_swapchain: Option<B::Swapchain>,
-        extent: &window::Extent2D,
     ) -> (B::Swapchain, Backbuffer<B>);
 
     ///

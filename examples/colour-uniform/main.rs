@@ -58,21 +58,6 @@ struct Vertex {
     a_uv: [f32; 2],
 }
 
-#[cfg(not(feature = "gl"))]
-type WindowType = winit::Window;
-
-trait SurfaceTrait {
-    #[cfg(feature = "gl")]
-    fn get_window_t(&self) -> &back::glutin::GlWindow;
-}
-
-impl SurfaceTrait for <back::Backend as hal::Backend>::Surface {
-    #[cfg(feature = "gl")]
-    fn get_window_t(&self) -> &back::glutin::GlWindow {
-        self.get_window()
-    }
-}
-
 const QUAD: [Vertex; 6] = [
     Vertex { a_pos: [ -0.5, 0.33 ], a_uv: [0.0, 1.0] },
     Vertex { a_pos: [  0.5, 0.33 ], a_uv: [1.0, 1.0] },
@@ -89,9 +74,20 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     layers: 0..1,
 };
 
-struct RendererState<B: Backend>
-where
-    B::Surface: SurfaceTrait {
+trait SurfaceTrait {
+    #[cfg(feature = "gl")]
+    fn get_window_t(&self) -> &back::glutin::GlWindow;
+}
+
+impl SurfaceTrait for <back::Backend as hal::Backend>::Surface {
+    #[cfg(feature = "gl")]
+    fn get_window_t(&self) -> &back::glutin::GlWindow {
+        self.get_window()
+    }
+}
+
+
+struct RendererState<B: Backend> {
     uniform_desc_pool: Option<B::DescriptorPool>,
     img_desc_pool: Option<B::DescriptorPool>,
     swapchain: Option<SwapchainState<B>>,
@@ -115,9 +111,7 @@ enum Color {
     Alpha,
 }
 
-impl<B: Backend> RendererState<B>
-where
-    B::Surface: SurfaceTrait {
+impl<B: Backend> RendererState<B> {
     fn new(mut backend: BackendState<B>, window: WindowState) -> Self {
         let device = Rc::new(RefCell::new(DeviceState::new(
             backend.adapter.adapter.take().unwrap(),
@@ -307,7 +301,10 @@ where
         }
     }
 
-    fn mainloop(&mut self) {
+    fn mainloop(&mut self)
+    where
+        B::Surface: SurfaceTrait,
+    {
         let mut running = true;
         let mut recreate_swapchain = false;
 
@@ -558,9 +555,7 @@ where
     }
 }
 
-impl<B: Backend> Drop for RendererState<B>
-where
-    B::Surface: SurfaceTrait {
+impl<B: Backend> Drop for RendererState<B> {
     fn drop(&mut self) {
         self.device.borrow().device.wait_idle().unwrap();
         self.device
@@ -585,10 +580,7 @@ impl WindowState {
         let events_loop = winit::EventsLoop::new();
 
         let wb = winit::WindowBuilder::new()
-            .with_dimensions(winit::dpi::LogicalSize::from_physical(winit::dpi::PhysicalSize {
-                width: DIMS.width as _,
-                height: DIMS.height as _,
-            }, 1.0))
+            .with_dimensions(winit::dpi::LogicalSize::new(DIMS.width as _, DIMS.height as _))
             .with_title("quad".to_string());
 
         WindowState {
@@ -601,8 +593,9 @@ impl WindowState {
 struct BackendState<B: Backend> {
     surface: B::Surface,
     adapter: AdapterState<B>,
-    #[cfg(not(feature = "gl"))]
-    window: WindowType,
+    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
+    #[allow(dead_code)]
+    window: winit::Window,
 }
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
@@ -697,16 +690,12 @@ impl<B: Backend> DeviceState<B> {
     }
 }
 
-struct RenderPassState<B: Backend>
-where
-    B::Surface: SurfaceTrait {
+struct RenderPassState<B: Backend> {
     render_pass: Option<B::RenderPass>,
     device: Rc<RefCell<DeviceState<B>>>,
 }
 
-impl<B: Backend> RenderPassState<B>
-where
-    B::Surface: SurfaceTrait {
+impl<B: Backend> RenderPassState<B> {
     fn new(swapchain: &SwapchainState<B>, device: Rc<RefCell<DeviceState<B>>>) -> Self {
         let render_pass = {
             let attachment = pass::Attachment {
@@ -749,9 +738,7 @@ where
     }
 }
 
-impl<B: Backend> Drop for RenderPassState<B>
-where
-    B::Surface: SurfaceTrait {
+impl<B: Backend> Drop for RenderPassState<B> {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
         device.destroy_render_pass(self.render_pass.take().unwrap());
@@ -1361,19 +1348,15 @@ impl<B: Backend> Drop for PipelineState<B> {
     }
 }
 
-struct SwapchainState<B: Backend>
-where
-    B::Surface: SurfaceTrait {
+struct SwapchainState<B: Backend> {
     swapchain: Option<B::Swapchain>,
     backbuffer: Option<Backbuffer<B>>,
     device: Rc<RefCell<DeviceState<B>>>,
-    extent: hal::window::Extent2D,
+    extent: i::Extent,
     format: f::Format,
 }
 
-impl<B: Backend> SwapchainState<B>
-where
-    B::Surface: SurfaceTrait {
+impl<B: Backend> SwapchainState<B> {
     fn new(
         backend: &mut BackendState<B>,
         device: Rc<RefCell<DeviceState<B>>>,
@@ -1389,35 +1372,13 @@ where
                     .unwrap_or(formats[0])
             });
 
-        let extent = match caps.current_extent {
-            Some(e) => e,
-            None => {
-                #[cfg(not(feature = "gl"))]
-                let window = &backend.window;
-                #[cfg(feature = "gl")]
-                let window = backend.surface.get_window_t();
-
-                let window_size = window.get_inner_size().unwrap().to_physical(window.get_hidpi_factor());
-                let mut extent = hal::window::Extent2D { width: window_size.width as _, height: window_size.height as _};
-
-                extent.width = extent.width.max(caps.extents.start.width).min(caps.extents.end.width);
-                extent.height = extent.height.max(caps.extents.start.height).min(caps.extents.end.height);
-
-                extent
-            }
-        };
-
         println!("Surface format: {:?}", format);
-
-        let swap_config = SwapchainConfig::new()
-            .with_color(format)
-            .with_image_count(caps.image_count.start)
-            .with_image_usage(i::Usage::COLOR_ATTACHMENT);
+        let swap_config = SwapchainConfig::from_caps(&caps, format);
+        let extent = swap_config.extent.to_extent();
         let (swapchain, backbuffer) = device.borrow().device.create_swapchain(
             &mut backend.surface,
             swap_config,
             None,
-            &extent,
         );
 
         let swapchain = SwapchainState {
@@ -1431,9 +1392,7 @@ where
     }
 }
 
-impl<B: Backend> Drop for SwapchainState<B>
-where
-    B::Surface: SurfaceTrait {
+impl<B: Backend> Drop for SwapchainState<B> {
     fn drop(&mut self) {
         self.device
             .borrow()
@@ -1442,9 +1401,7 @@ where
     }
 }
 
-struct FramebufferState<B: Backend>
-where
-    B::Surface: SurfaceTrait {
+struct FramebufferState<B: Backend> {
     framebuffers: Option<Vec<B::Framebuffer>>,
     framebuffer_fences: Option<Vec<B::Fence>>,
     command_pools: Option<Vec<hal::CommandPool<B, hal::Graphics>>>,
@@ -1455,9 +1412,7 @@ where
     device: Rc<RefCell<DeviceState<B>>>,
 }
 
-impl<B: Backend> FramebufferState<B>
-where
-    B::Surface: SurfaceTrait {
+impl<B: Backend> FramebufferState<B> {
     fn new(
         device: Rc<RefCell<DeviceState<B>>>,
         render_pass: &RenderPassState<B>,
@@ -1581,9 +1536,7 @@ where
     }
 }
 
-impl<B: Backend> Drop for FramebufferState<B>
-where
-    B::Surface: SurfaceTrait {
+impl<B: Backend> Drop for FramebufferState<B> {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
 
