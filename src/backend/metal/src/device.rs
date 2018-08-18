@@ -350,7 +350,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn features(&self) -> hal::Features {
         hal::Features::ROBUST_BUFFER_ACCESS |
         hal::Features::DRAW_INDIRECT_FIRST_INSTANCE |
-        hal::Features::DEPTH_CLAMP
+        hal::Features::DEPTH_CLAMP |
+        hal::Features::SAMPLER_ANISOTROPY |
+        hal::Features::FORMAT_BC |
+        hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING
     }
 
     fn limits(&self) -> hal::Limits {
