@@ -208,7 +208,7 @@ pub enum Job {
     Transfer(TransferCommand),
     Graphics {
         framebuffer: String,
-        clear_values: Vec<hal::command::ClearValue>,
+        clear_values: Vec<(hal::pass::AttachmentId, hal::command::ClearValue)>,
         pass: (String, HashMap<String, DrawPass>),
     },
     Compute {

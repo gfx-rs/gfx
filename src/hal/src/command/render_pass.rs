@@ -1,10 +1,12 @@
 use std::borrow::Borrow;
 use std::ops::{Range, Deref, DerefMut};
 use std::marker::PhantomData;
+use std::vec::Vec;
 
 use {buffer, pso};
 use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use queue::{Supports, Graphics};
+use pass::AttachmentId;
 use super::{
     AttachmentClear, ClearValue, ClearValueRaw, CommandBuffer, RawCommandBuffer,
     Shot, Level, Primary, Secondary, Submittable, Submit, DescriptorSetOffset,
@@ -173,18 +175,13 @@ impl<'a, B: Backend, L: Level> RenderPassInlineEncoder<'a, B, L> {
     ) -> Self
     where
         C: Supports<Graphics>,
-        T: IntoIterator,
-        T::Item: Borrow<ClearValue>,
+        T: Iterator<Item=(AttachmentId, ClearValue)>
     {
-        let clear_values = clear_values
-            .into_iter()
-            .map(|cv| ClearValueRaw::from(*cv.borrow()));
-
         cmd_buffer.raw.begin_render_pass(
             render_pass,
             frame_buffer,
             render_area,
-            clear_values,
+            clear_values.map(|(id, value)| (id, ClearValueRaw::from(value))),
             SubpassContents::Inline,
         );
 
@@ -250,18 +247,13 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
     ) -> Self
     where
         C: Supports<Graphics>,
-        T: IntoIterator,
-        T::Item: Borrow<ClearValue>,
+        T: Iterator<Item=(AttachmentId, ClearValue)>
     {
-        let clear_values = clear_values
-            .into_iter()
-            .map(|cv| ClearValueRaw::from(*cv.borrow()));
-
         cmd_buffer.raw.begin_render_pass(
             render_pass,
             frame_buffer,
             render_area,
-            clear_values,
+            clear_values.map(|(id, value)| (id, ClearValueRaw::from(value))),
             SubpassContents::SecondaryBuffers,
         );
 

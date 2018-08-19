@@ -482,9 +482,9 @@ fn main() {
                     &render_pass,
                     &framebuffers[frame as usize],
                     viewport.rect,
-                    &[command::ClearValue::Color(command::ClearColor::Float([
-                        0.8, 0.8, 0.8, 1.0,
-                    ]))],
+                    [
+                        (0, command::ClearValue::Color(command::ClearColor::Float([0.8, 0.8, 0.8, 1.0])))
+                    ].iter().cloned(),
                 );
                 encoder.draw(0..6, 0..1);
             }

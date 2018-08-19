@@ -9,6 +9,7 @@ use image::{Filter, Layout, SubresourceRange};
 use memory::{Barrier, Dependencies};
 use query::{PipelineStatistic, Query, QueryControl, QueryId};
 use range::RangeArg;
+use pass::AttachmentId;
 use super::{
     AttachmentClear, BufferCopy, BufferImageCopy,
     ImageBlit, ImageCopy, ImageResolve, SubpassContents,
@@ -303,8 +304,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
         clear_values: T,
         first_subpass: SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<ClearValueRaw>;
+        T: Iterator<Item=(AttachmentId, ClearValueRaw)>;
 
     /// Steps to the next subpass in the current render pass.
     fn next_subpass(&mut self, contents: SubpassContents);

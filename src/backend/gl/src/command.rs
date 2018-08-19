@@ -8,6 +8,7 @@ use hal::range::RangeArg;
 
 use {native as n, Backend};
 use pool::{self, BufferMemory};
+use clear_values::convert_clear_values_iter;
 
 use std::borrow::Borrow;
 use std::{mem, slice};
@@ -554,8 +555,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         clear_values: T,
         _first_subpass: command::SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<command::ClearValueRaw>,
+        T: Iterator<Item=(pass::AttachmentId, command::ClearValueRaw)>
     {
         // TODO: load ops: clearing strategy
         //  1.  < GL 3.0 / GL ES 2.0: glClear, only single color attachment?
@@ -576,7 +576,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         let attachment_clears = render_pass.attachments
             .iter()
-            .zip(clear_values.into_iter())
+            .zip(convert_clear_values_iter(clear_values))
             .enumerate()
             .map(|(i, (attachment, clear_value))| {
                 AttachmentClear {

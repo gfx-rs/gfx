@@ -2,6 +2,7 @@ use {AsNative, Backend, ResourceIndex, BufferPtr, SamplerPtr, TexturePtr};
 use internal::{Channel, FastStorageMap};
 use range_alloc::RangeAllocator;
 use window::SwapchainImage;
+use clear_values::convert_clear_values_iter;
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -10,7 +11,7 @@ use std::ops::Range;
 use std::os::raw::{c_void, c_long};
 use std::sync::Arc;
 
-use hal::{buffer, image, pso};
+use hal::{pass, buffer, image, pso, command as com};
 use hal::{DescriptorPool as HalDescriptorPool, MemoryTypeId};
 use hal::backend::FastHashMap;
 use hal::command::{ClearColorRaw, ClearValueRaw};
@@ -70,21 +71,11 @@ unsafe impl Sync for RenderPass {}
 impl RenderPass {
     pub fn build_key<T>(&self, clear_values: T) -> (RenderPassKey, Aspects)
     where
-        T: IntoIterator,
-        T::Item: Borrow<ClearValueRaw>,
+        T: Iterator<Item=(pass::AttachmentId, com::ClearValueRaw)>
     {
         let mut key = RenderPassKey::default();
         let mut full_aspects = Aspects::empty();
-
-        let dummy_value = ClearValueRaw {
-            color: ClearColorRaw {
-                int32: [0; 4],
-            },
-        };
-        let clear_values_iter = clear_values
-            .into_iter()
-            .map(|c| *c.borrow())
-            .chain(iter::repeat(dummy_value));
+        let clear_values_iter = convert_clear_values_iter(clear_values);
 
         for (rat, clear_value) in self.attachments.iter().zip(clear_values_iter) {
             //TODO: avoid calling `surface_desc` as often

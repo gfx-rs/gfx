@@ -23,6 +23,7 @@ use hal::backend::RawQueueGroup;
 use hal::range::RangeArg;
 
 use range_alloc::RangeAllocator;
+use clear_values::convert_clear_values_iter;
 
 use winapi::shared::{dxgiformat, winerror};
 
@@ -73,6 +74,8 @@ macro_rules! debug_marker {
     });
 }
 
+#[path = "../../auxil/clear_values.rs"]
+mod clear_values;
 #[path = "../../auxil/range_alloc.rs"]
 mod range_alloc;
 mod conv;
@@ -1070,30 +1073,22 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin_render_pass<T>(&mut self, render_pass: &RenderPass, framebuffer: &Framebuffer, _target_rect: pso::Rect, clear_values: T, _first_subpass: command::SubpassContents)
     where
-        T: IntoIterator,
-        T::Item: Borrow<command::ClearValueRaw>,
+        T: Iterator<Item=(pass::AttachmentId, command::ClearValueRaw)>
     {
-        let mut clear_iter = clear_values.into_iter();
         let attachment_clears = render_pass.attachments
             .iter()
+            .zip(convert_clear_values_iter(clear_values))
             .enumerate()
-            .map(|(i, attachment)| {
-                let cv = if attachment.ops.load == pass::AttachmentLoadOp::Clear || attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                    Some(*clear_iter.next().unwrap().borrow())
-                } else {
-                    None
-                };
-
+            .map(|(i, (attachment, clear_value))| {
                 AttachmentClear {
                     subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
                     value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                        assert!(cv.is_some());
-                        cv
+                        Some(clear_value)
                     } else {
                         None
                     },
                     stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                        Some(unsafe { cv.unwrap().depth_stencil.stencil })
+                        Some(unsafe { clear_value.depth_stencil.stencil })
                     } else {
                         None
                     },

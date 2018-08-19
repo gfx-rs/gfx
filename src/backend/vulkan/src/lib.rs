@@ -42,6 +42,8 @@ use shared_library::dynamic_library::{DynamicLibrary, SpecialHandles};
 #[cfg(feature = "use-rtld-next")]
 use ash::{EntryCustom, LoadingError};
 
+#[path = "../../auxil/clear_values.rs"]
+mod clear_values;
 mod command;
 mod conv;
 mod device;

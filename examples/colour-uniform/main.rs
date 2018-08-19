@@ -526,9 +526,11 @@ impl<B: Backend> RendererState<B> {
                         self.render_pass.render_pass.as_ref().unwrap(),
                         framebuffer,
                         self.viewport.rect,
-                        &[command::ClearValue::Color(command::ClearColor::Float([
-                            cr, cg, cb, 1.0,
-                        ]))],
+                        [
+                            (0, command::ClearValue::Color(command::ClearColor::Float([
+                                cr, cg, cb, 1.0,
+                            ])))
+                        ].iter().cloned()
                     );
                     encoder.draw(0..6, 0..1);
                 }

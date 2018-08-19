@@ -575,8 +575,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _: T,
         _: command::SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<command::ClearValueRaw>,
+        T: Iterator<Item=(pass::AttachmentId, command::ClearValueRaw)>
     {
         unimplemented!()
     }

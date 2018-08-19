@@ -6,13 +6,14 @@ use smallvec::SmallVec;
 use ash::vk;
 use ash::version::DeviceV1_0;
 
-use hal::{buffer, command as com, memory, pso, query};
+use hal::{pass, buffer, command as com, memory, pso, query};
 use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use hal::format::Aspects;
 use hal::image::{Filter, Layout, SubresourceRange};
 use hal::range::RangeArg;
 use {conv, native as n};
 use {Backend, RawDevice};
+use clear_values::collect_by_ids;
 
 #[derive(Clone)]
 pub struct CommandBuffer {
@@ -133,19 +134,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         clear_values: T,
         first_subpass: com::SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::ClearValueRaw>,
+        T: Iterator<Item=(pass::AttachmentId, com::ClearValueRaw)>
     {
         let render_area = conv::map_rect(&render_area);
-
-        let clear_values: SmallVec<[vk::ClearValue; 16]> =
-            clear_values
-                .into_iter()
-                .map(|clear| unsafe {
-                    // Vulkan and HAL share same memory layout
-                    mem::transmute(*clear.borrow())
-                })
-                .collect();
+        let clear_values = collect_by_ids(
+            clear_values.map(|(id, value)| {
+                // Vulkan and HAL share same memory layout
+                (id, unsafe { mem::transmute(value) })
+            }),
+            unsafe { mem::zeroed() });
 
         let info = vk::RenderPassBeginInfo {
             s_type: vk::StructureType::RenderPassBeginInfo,

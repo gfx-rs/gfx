@@ -12,7 +12,7 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 use std::{iter, mem, slice, time};
 
-use hal::{buffer, command as com, error, memory, pool, pso};
+use hal::{pass, buffer, command as com, error, memory, pool, pso};
 use hal::{DrawCount, SwapImageIndex, VertexCount, VertexOffset, InstanceCount, IndexCount, IndexType, WorkGroupCount};
 use hal::backend::FastHashMap;
 use hal::format::{Aspects, Format, FormatDesc};
@@ -2771,8 +2771,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         clear_values: T,
         _first_subpass: com::SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::ClearValueRaw>,
+        T: Iterator<Item=(pass::AttachmentId, com::ClearValueRaw)>
     {
         // FIXME: subpasses
         let desc_guard;

@@ -911,7 +911,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         w: extent.width as _,
                         h: extent.height as _,
                     };
-                    let mut encoder = command_buf.begin_render_pass_inline(&rp.handle, fb, rect, clear_values);
+                    let mut encoder = command_buf.begin_render_pass_inline(&rp.handle, fb, rect, clear_values.iter().cloned());
                     encoder.set_scissors(0, Some(rect));
                     encoder.set_viewports(0, Some(pso::Viewport {
                         rect,

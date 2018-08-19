@@ -12,6 +12,8 @@ extern crate winapi;
 extern crate winit;
 extern crate wio;
 
+#[path = "../../auxil/clear_values.rs"]
+mod clear_values;
 #[path = "../../auxil/range_alloc.rs"]
 mod range_alloc;
 mod command;

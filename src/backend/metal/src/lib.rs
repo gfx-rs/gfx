@@ -17,6 +17,8 @@ extern crate winit;
 #[cfg(feature = "dispatch")]
 extern crate dispatch;
 
+#[path = "../../auxil/clear_values.rs"]
+mod clear_values;
 #[path = "../../auxil/range_alloc.rs"]
 mod range_alloc;
 mod device;

@@ -21,6 +21,7 @@ use {conv, device, descriptors_cpu, internal, native as n, Backend, Device, Shar
 use device::ViewInfo;
 use root_constants::RootConstant;
 use smallvec::SmallVec;
+use clear_values::convert_clear_values_iter;
 
 // Fixed size of the root signature.
 // Limited by D3D12.
@@ -992,8 +993,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         clear_values: T,
         _first_subpass: com::SubpassContents,
     ) where
-        T: IntoIterator,
-        T::Item: Borrow<com::ClearValueRaw>,
+        T: Iterator<Item=(pass::AttachmentId, com::ClearValueRaw)>
     {
         assert_eq!(framebuffer.attachments.len(), render_pass.attachments.len());
         // Make sure that no subpass works with Present as intermediate layout.
@@ -1008,27 +1008,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 any(|aref| aref.1 == image::Layout::Present)
         }));
 
-        let mut clear_iter = clear_values.into_iter();
         let attachment_clears = render_pass.attachments
             .iter()
+            .zip(convert_clear_values_iter(clear_values))
             .enumerate()
-            .map(|(i, attachment)| {
-                let cv = if attachment.ops.load == pass::AttachmentLoadOp::Clear || attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                    Some(*clear_iter.next().unwrap().borrow())
-                } else {
-                    None
-                };
-
+            .map(|(i, (attachment, clear_value))| {
                 AttachmentClear {
                     subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
                     value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                        assert!(cv.is_some());
-                        cv
+                        Some(clear_value)
                     } else {
                         None
                     },
                     stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                        Some(unsafe { cv.unwrap().depth_stencil.stencil })
+                        Some(unsafe { clear_value.depth_stencil.stencil })
                     } else {
                         None
                     },

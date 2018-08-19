@@ -26,6 +26,8 @@ use hal::queue::{Queues, QueueFamilyId};
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
 
+#[path = "../../auxil/clear_values.rs"]
+mod clear_values;
 mod command;
 mod conv;
 mod device;

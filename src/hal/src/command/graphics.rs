@@ -12,6 +12,7 @@ use super::{
     Shot, Level, Primary,
     ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw, DescriptorSetOffset,
 };
+use pass::AttachmentId;
 
 
 /// A universal clear color supporting integer formats
@@ -314,8 +315,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot> CommandBuffer<'a, B, C, S, 
         clear_values: T,
     ) -> RenderPassInlineEncoder<B, Primary>
     where
-        T: IntoIterator,
-        T::Item: Borrow<ClearValue>,
+        T: Iterator<Item=(AttachmentId, ClearValue)>
     {
         RenderPassInlineEncoder::new(self, render_pass, frame_buffer, render_area, clear_values)
     }
@@ -329,8 +329,7 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot> CommandBuffer<'a, B, C, S, 
         clear_values: T,
     ) -> RenderPassSecondaryEncoder<B>
     where
-        T: IntoIterator,
-        T::Item: Borrow<ClearValue>,
+        T: Iterator<Item=(AttachmentId, ClearValue)>
     {
         RenderPassSecondaryEncoder::new(self, render_pass, frame_buffer, render_area, clear_values)
     }
