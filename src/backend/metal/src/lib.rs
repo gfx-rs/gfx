@@ -84,7 +84,6 @@ struct Shared {
     device: Mutex<metal::Device>,
     queue: Mutex<command::QueueInner>,
     service_pipes: internal::ServicePipes,
-    push_constants_buffer_id: ResourceIndex,
     disabilities: PrivateDisabilities,
 }
 
@@ -97,7 +96,6 @@ impl Shared {
         Shared {
             queue: Mutex::new(command::QueueInner::new(&device, Some(MAX_ACTIVE_COMMAND_BUFFERS))),
             service_pipes: internal::ServicePipes::new(&device),
-            push_constants_buffer_id: 30,
             disabilities: PrivateDisabilities {
                 broken_viewport_near_depth: device.name().starts_with("Intel") &&
                     !device.supports_feature_set(feature_macos_10_14),

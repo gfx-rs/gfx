@@ -236,6 +236,7 @@ pub struct PipelineLayout {
     pub(crate) shader_compiler_options_point: msl::CompilerOptions,
     pub(crate) infos: Vec<DescriptorSetInfo>,
     pub(crate) total: MultiStageResourceCounters,
+    pub(crate) push_constant_buffer_index: MultiStageData<Option<ResourceIndex>>,
 }
 
 impl PipelineLayout {

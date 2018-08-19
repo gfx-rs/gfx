@@ -3466,22 +3466,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn push_graphics_constants(
         &mut self,
-        _layout: &native::PipelineLayout,
+        layout: &native::PipelineLayout,
         stages: pso::ShaderStageFlags,
         offset: u32,
         constants: &[u32],
     ) {
         self.state.update_push_constants(offset, constants);
-        let id = self.shared.push_constants_buffer_id;
-
         if stages.intersects(pso::ShaderStageFlags::GRAPHICS) {
             let mut inner = self.inner.borrow_mut();
             let mut pre = inner.sink().pre_render();
             // Note: the whole range is re-uploaded, which may be inefficient
             if stages.contains(pso::ShaderStageFlags::VERTEX) {
+                let id = layout.push_constant_buffer_index.vs.unwrap();
                 pre.issue(self.state.push_vs_constants(id));
             }
             if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
+                let id = layout.push_constant_buffer_index.ps.unwrap();
                 pre.issue(self.state.push_ps_constants(id));
             }
         }
@@ -3489,12 +3489,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn push_compute_constants(
         &mut self,
-        _layout: &native::PipelineLayout,
+        layout: &native::PipelineLayout,
         offset: u32,
         constants: &[u32],
     ) {
         self.state.update_push_constants(offset, constants);
-        let id = self.shared.push_constants_buffer_id;
+        let id = layout.push_constant_buffer_index.cs.unwrap();
 
         // Note: the whole range is re-uploaded, which may be inefficient
         self.inner

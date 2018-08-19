@@ -216,11 +216,8 @@ impl PhysicalDevice {
             },
         };
 
-        let shared = Arc::new(Shared::new(device));
-        assert!(shared.push_constants_buffer_id < private_caps.max_buffers_per_stage);
-
         PhysicalDevice {
-            shared,
+            shared:  Arc::new(Shared::new(device)),
             memory_types: [
                 hal::MemoryType { // PRIVATE
                     properties: Properties::DEVICE_LOCAL,
@@ -756,6 +753,7 @@ impl hal::Device<Backend> for Device {
             });
         }
 
+        let mut pc_buffers = [None; 3];
         let mut pc_limits = [0u32; 3];
         for pcr in push_constant_ranges {
             let (flags, range) = pcr.borrow();
@@ -766,10 +764,17 @@ impl hal::Device<Backend> for Device {
             }
         }
 
-        for (limit, &mut (_, stage, ref mut counters)) in pc_limits.iter().zip(&mut stage_infos) {
+        for ((limit, ref mut buffer_index), &mut (_, stage, ref mut counters)) in pc_limits
+            .iter()
+            .zip(pc_buffers.iter_mut())
+            .zip(stage_infos.iter_mut())
+        {
             // handle the push constant buffer assignment and shader overrides
             if *limit != 0 {
-                let index = self.shared.push_constants_buffer_id;
+                let index = counters.buffers;
+                **buffer_index = Some(index);
+                counters.buffers += 1;
+
                 res_overrides.insert(
                     msl::ResourceBindingLocation {
                         stage,
@@ -783,11 +788,9 @@ impl hal::Device<Backend> for Device {
                         force_used: false,
                     },
                 );
-                assert!(counters.buffers < index);
-            } else {
-                assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
             }
             // make sure we fit the limits
+            assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
             assert!(counters.textures <= self.private_caps.max_textures_per_stage);
             assert!(counters.samplers <= self.private_caps.max_samplers_per_stage);
         }
@@ -808,6 +811,11 @@ impl hal::Device<Backend> for Device {
                 vs: stage_infos[0].2.clone(),
                 ps: stage_infos[1].2.clone(),
                 cs: stage_infos[2].2.clone(),
+            },
+            push_constant_buffer_index: n::MultiStageData {
+                vs: pc_buffers[0],
+                ps: pc_buffers[1],
+                cs: pc_buffers[2],
             },
         }
     }
@@ -1002,7 +1010,7 @@ impl hal::Device<Backend> for Device {
                     vertex_buffers.len() - 1
                 });
             let mtl_buffer_index = attribute_buffer_index as usize + relative_index;
-            if mtl_buffer_index == self.shared.push_constants_buffer_id as usize {
+            if mtl_buffer_index >= self.private_caps.max_buffers_per_stage as usize {
                 error!("Attribute offset {} exceeds the stride {}, and there is no room for replacement.",
                     element.offset, original.stride);
                 return Err(pso::CreationError::Other);
