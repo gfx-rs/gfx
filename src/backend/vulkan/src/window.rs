@@ -334,6 +334,7 @@ impl hal::Surface<Backend> for Surface {
             current_extent,
             extents: min_extent..max_extent,
             max_image_layers: caps.max_image_array_layers as _,
+            usage: conv::map_vk_image_usage(caps.supported_usage_flags),
         };
 
         // Swapchain formats

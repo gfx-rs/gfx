@@ -658,6 +658,7 @@ impl hal::Surface<Backend> for Surface {
             current_extent: Some(extent),
             extents: extent..extent,
             max_image_layers: 1,
+            usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
         };
 
         let formats = vec![
