@@ -116,6 +116,9 @@ pub struct SurfaceCapabilities {
     ///
     /// Must be at least 1.
     pub max_image_layers: image::Layer,
+
+    /// Supported image usage flags.
+    pub usage: image::Usage,
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented

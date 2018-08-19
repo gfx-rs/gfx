@@ -181,6 +181,11 @@ pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
     unsafe { mem::transmute(usage) }
 }
 
+pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> image::Usage {
+    // Safe due to equivalence of HAL values and Vulkan values
+    unsafe { mem::transmute(usage) }
+}
+
 pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
     // enums have to match exactly
     unsafe { mem::transmute(ty) }

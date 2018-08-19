@@ -75,6 +75,7 @@ impl hal::Surface<Backend> for Surface {
             current_extent: Some(extent),
             extents: extent..extent,
             max_image_layers: 1,
+            usage: i::Usage::COLOR_ATTACHMENT | i::Usage::TRANSFER_SRC,
         };
 
         // Sticking to FLIP swap effects for the moment.
