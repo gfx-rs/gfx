@@ -8,6 +8,7 @@ use super::{
     RootSignature,
 };
 use bal;
+use std::mem;
 use winapi::um::d3d12;
 
 #[repr(u32)]
@@ -26,6 +27,34 @@ bitflags! {
         const DEPTH = d3d12::D3D12_CLEAR_FLAG_DEPTH;
         const STENCIL = d3d12::D3D12_CLEAR_FLAG_STENCIL;
     }
+}
+
+#[repr(transparent)]
+pub struct IndirectArgument(d3d12::D3D12_INDIRECT_ARGUMENT_DESC);
+
+impl IndirectArgument {
+    pub fn draw() -> Self {
+        IndirectArgument(d3d12::D3D12_INDIRECT_ARGUMENT_DESC {
+            Type: d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
+            ..unsafe { mem::zeroed() }
+        })
+    }
+
+    pub fn draw_indexed() -> Self {
+        IndirectArgument(d3d12::D3D12_INDIRECT_ARGUMENT_DESC {
+            Type: d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
+            ..unsafe { mem::zeroed() }
+        })
+    }
+
+    pub fn dispatch() -> Self {
+        IndirectArgument(d3d12::D3D12_INDIRECT_ARGUMENT_DESC {
+            Type: d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
+            ..unsafe { mem::zeroed() }
+        })
+    }
+
+    // TODO: missing variants
 }
 
 pub type CommandSignature = WeakPtr<d3d12::ID3D12CommandSignature>;
@@ -148,9 +177,6 @@ impl GraphicsCommandList {
     }
 
     pub fn set_descriptor_heaps(&self, heaps: &[DescriptorHeap]) {
-        // Required for the conversion below
-        assert_eq_size!(DescriptorHeap, *mut d3d12::ID3D12DescriptorHeap);
-
         unsafe {
             self.SetDescriptorHeaps(
                 heaps.len() as _,

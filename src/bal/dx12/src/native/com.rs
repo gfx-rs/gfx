@@ -7,6 +7,7 @@ use winapi::ctypes::c_void;
 use winapi::um::unknwnbase::IUnknown;
 use winapi::Interface;
 
+#[repr(transparent)]
 pub struct WeakPtr<T>(*mut T);
 
 impl<T> WeakPtr<T> {

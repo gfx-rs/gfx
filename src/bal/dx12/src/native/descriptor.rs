@@ -55,6 +55,7 @@ pub enum DescriptorRangeType {
     Sampler = d3d12::D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
 }
 
+#[repr(transparent)]
 pub struct DescriptorRange(d3d12::D3D12_DESCRIPTOR_RANGE);
 impl DescriptorRange {
     pub fn new(
@@ -74,6 +75,7 @@ impl DescriptorRange {
     }
 }
 
+#[repr(transparent)]
 pub struct RootParameter(d3d12::D3D12_ROOT_PARAMETER);
 impl RootParameter {
     // TODO: DescriptorRange must outlive Self
@@ -121,6 +123,7 @@ pub enum StaticBorderColor {
     OpaqueWhite = d3d12::D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE,
 }
 
+#[repr(transparent)]
 pub struct StaticSampler(d3d12::D3D12_STATIC_SAMPLER_DESC);
 impl StaticSampler {
     pub fn new(
@@ -180,10 +183,6 @@ impl RootSignature {
         static_samplers: &[StaticSampler],
         flags: RootSignatureFlags,
     ) -> D3DResult<(Blob, Error)> {
-        // Required for the pointer conversion below
-        assert_eq_size!(RootParameter, d3d12::D3D12_ROOT_PARAMETER);
-        assert_eq_size!(StaticSampler, d3d12::D3D12_STATIC_SAMPLER_DESC);
-
         let mut blob = Blob::null();
         let mut error = Error::null();
 

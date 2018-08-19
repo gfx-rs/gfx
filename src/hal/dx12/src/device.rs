@@ -28,6 +28,7 @@ use {
 };
 
 use bal_dx12::native;
+use bal_dx12::native::command_list::IndirectArgument;
 use bal_dx12::native::descriptor;
 use bal_dx12::native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
 use bal_dx12::native::query;
@@ -501,33 +502,14 @@ impl Device {
         device: native::Device,
         ty: CommandSignature,
     ) -> native::CommandSignature {
-        let (arg_ty, stride) = match ty {
-            CommandSignature::Draw => (d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW, 16),
-            CommandSignature::DrawIndexed => (d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED, 20),
-            CommandSignature::Dispatch => (d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH, 12),
+        let (arg, stride) = match ty {
+            CommandSignature::Draw => (IndirectArgument::draw(), 16),
+            CommandSignature::DrawIndexed => (IndirectArgument::draw_indexed(), 20),
+            CommandSignature::Dispatch => (IndirectArgument::dispatch(), 12),
         };
 
-        let arg = d3d12::D3D12_INDIRECT_ARGUMENT_DESC {
-            Type: arg_ty,
-            ..unsafe { mem::zeroed() }
-        };
-
-        let desc = d3d12::D3D12_COMMAND_SIGNATURE_DESC {
-            ByteStride: stride,
-            NumArgumentDescs: 1,
-            pArgumentDescs: &arg,
-            NodeMask: 0,
-        };
-
-        let mut signature = native::CommandSignature::null();
-        let hr = unsafe {
-            device.CreateCommandSignature(
-                &desc,
-                ptr::null_mut(),
-                &d3d12::ID3D12CommandSignature::uuidof(),
-                signature.mut_void(),
-            )
-        };
+        let (signature, hr) =
+            device.create_command_signature(native::RootSignature::null(), &[arg], stride, 0);
 
         if !winerror::SUCCEEDED(hr) {
             error!("error on command signature creation: {:x}", hr);

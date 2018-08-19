@@ -7,7 +7,7 @@ use std::ops::Range;
 use winapi::um::d3d12;
 use winapi::Interface;
 
-use super::command_list::CmdListType;
+use super::command_list::{CmdListType, CommandSignature, IndirectArgument};
 use super::descriptor::{CpuDescriptor, HeapFlags, HeapType};
 use super::{pso, query, queue};
 use super::{
@@ -233,6 +233,33 @@ impl Device {
                 node_mask,
                 blob.GetBufferPointer(),
                 blob.GetBufferSize(),
+                &d3d12::ID3D12RootSignature::uuidof(),
+                signature.mut_void(),
+            )
+        };
+
+        (signature, hr)
+    }
+
+    pub fn create_command_signature(
+        &self,
+        root_signature: RootSignature,
+        arguments: &[IndirectArgument],
+        stride: u32,
+        node_mask: NodeMask,
+    ) -> D3DResult<CommandSignature> {
+        let mut signature = CommandSignature::null();
+        let desc = d3d12::D3D12_COMMAND_SIGNATURE_DESC {
+            ByteStride: stride,
+            NumArgumentDescs: arguments.len() as _,
+            pArgumentDescs: arguments.as_ptr() as *const _,
+            NodeMask: node_mask,
+        };
+
+        let hr = unsafe {
+            self.CreateCommandSignature(
+                &desc,
+                root_signature.as_mut_ptr(),
                 &d3d12::ID3D12RootSignature::uuidof(),
                 signature.mut_void(),
             )
