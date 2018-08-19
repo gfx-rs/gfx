@@ -8,7 +8,6 @@ use super::{
     RootSignature,
 };
 use bal;
-use std::ptr;
 use winapi::um::d3d12;
 
 #[repr(u32)]

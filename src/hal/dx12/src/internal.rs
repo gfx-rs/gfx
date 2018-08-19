@@ -1,8 +1,10 @@
 use hal::backend::FastHashMap;
 use std::sync::Mutex;
 
-use bal_dx12::blit::{BlitKey, BlitPipe};
+use bal_dx12::blit::BlitPipe;
 use bal_dx12::native;
+
+pub use bal_dx12::blit::BlitKey;
 
 type BlitMap = FastHashMap<BlitKey, BlitPipe>;
 

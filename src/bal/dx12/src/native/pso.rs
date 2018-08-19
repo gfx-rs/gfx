@@ -1,14 +1,27 @@
 //! Pipeline state
 
+use super::super::D3DResult;
 use super::com::WeakPtr;
-use super::Blob;
+use super::{Blob, Error};
 use std::ops::Deref;
-use std::ptr;
-use winapi::um::d3d12;
+use std::{ffi, ptr};
+use winapi::um::{d3d12, d3dcompiler};
 
 bitflags! {
     pub struct PipelineStateFlags: u32 {
         const TOOL_DEBUG = d3d12::D3D12_PIPELINE_STATE_FLAG_TOOL_DEBUG;
+    }
+}
+
+bitflags! {
+    pub struct ShaderCompileFlags: u32 {
+        const DEBUG = d3dcompiler::D3DCOMPILE_DEBUG;
+        const SKIP_VALIDATION = d3dcompiler::D3DCOMPILE_SKIP_VALIDATION;
+        const SKIP_OPTIMIZATION = d3dcompiler::D3DCOMPILE_SKIP_OPTIMIZATION;
+        const PACK_MATRIX_ROW_MAJOR = d3dcompiler::D3DCOMPILE_PACK_MATRIX_ROW_MAJOR;
+        const PACK_MATRIX_COLUMN_MAJOR = d3dcompiler::D3DCOMPILE_PACK_MATRIX_COLUMN_MAJOR;
+        const PARTIAL_PRECISION = d3dcompiler::D3DCOMPILE_PARTIAL_PRECISION;
+        // TODO: add missing flags
     }
 }
 
@@ -28,6 +41,37 @@ impl Shader {
             BytecodeLength: unsafe { blob.GetBufferSize() },
             pShaderBytecode: unsafe { blob.GetBufferPointer() },
         })
+    }
+
+    /// Compile a shader from raw HLSL.
+    ///
+    /// * `target`: example format: `ps_5_1`.
+    pub fn compile(
+        code: &[u8],
+        target: &ffi::CStr,
+        entry: &ffi::CStr,
+        flags: ShaderCompileFlags,
+    ) -> D3DResult<(Blob, Error)> {
+        let mut shader = Blob::null();
+        let mut error = Error::null();
+
+        let hr = unsafe {
+            d3dcompiler::D3DCompile(
+                code.as_ptr() as *const _,
+                code.len(),
+                ptr::null(), // defines
+                ptr::null(), // include
+                ptr::null_mut(),
+                entry.as_ptr() as *const _,
+                target.as_ptr() as *const _,
+                flags.bits(),
+                0,
+                shader.mut_void() as *mut *mut _,
+                error.mut_void() as *mut *mut _,
+            )
+        };
+
+        ((shader, error), hr)
     }
 }
 
