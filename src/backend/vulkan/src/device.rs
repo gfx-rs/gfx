@@ -1474,7 +1474,7 @@ impl d::Device<B> for Device {
         unsafe { self.raw.0.free_memory(memory.raw, None); }
     }
 
-    fn create_query_pool(&self, ty: query::QueryType, query_count: u32) -> n::QueryPool {
+    fn create_query_pool(&self, ty: query::QueryType, query_count: query::QueryId) -> n::QueryPool {
         let (query_type, pipeline_statistics) = match ty {
             query::QueryType::Occlusion =>
                 (vk::QueryType::Occlusion, vk::QueryPipelineStatisticFlags::empty()),

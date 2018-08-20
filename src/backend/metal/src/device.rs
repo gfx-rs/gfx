@@ -2135,7 +2135,7 @@ impl hal::Device<Backend> for Device {
     fn destroy_fence(&self, _fence: n::Fence) {
     }
 
-    fn create_query_pool(&self, _ty: query::QueryType, _count: u32) -> () {
+    fn create_query_pool(&self, _ty: query::QueryType, _count: query::QueryId) -> () {
         unimplemented!()
     }
 

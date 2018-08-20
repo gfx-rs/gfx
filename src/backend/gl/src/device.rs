@@ -1320,7 +1320,7 @@ impl d::Device<B> for Device {
         // Nothing to do
     }
 
-    fn create_query_pool(&self, _ty: query::QueryType, _count: u32) -> () {
+    fn create_query_pool(&self, _ty: query::QueryType, _count: query::QueryId) -> () {
         unimplemented!()
     }
 

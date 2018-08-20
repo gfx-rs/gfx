@@ -616,7 +616,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// Queries are managed using query pool objects. Each query pool is a collection of a specific
     /// number of queries of a particular type.
-    fn create_query_pool(&self, ty: query::QueryType, count: u32) -> B::QueryPool;
+    fn create_query_pool(&self, ty: query::QueryType, count: query::QueryId) -> B::QueryPool;
 
     /// Destroy a query pool object
     fn destroy_query_pool(&self, pool: B::QueryPool);

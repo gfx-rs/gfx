@@ -1180,9 +1180,9 @@ where
             let native = Some(buffer.as_native());
             match stage {
                 pso::Stage::Vertex =>
-                    encoder.set_vertex_buffer(index as _, offset as _, native),
+                    encoder.set_vertex_buffer(index as _, native, offset as _),
                 pso::Stage::Fragment =>
-                    encoder.set_fragment_buffer(index as _, offset as _, native),
+                    encoder.set_fragment_buffer(index as _, native, offset as _),
                 _ => unreachable!()
             }
         }
@@ -1439,7 +1439,7 @@ where
     match *command.borrow() {
         Cmd::BindBuffer { index, buffer, offset } => {
             let native = Some(buffer.as_native());
-            encoder.set_buffer(index as _, offset, native);
+            encoder.set_buffer(index as _, native, offset);
         }
         Cmd::BindBuffers { index, ref buffers } => {
             use soft::AsSlice;
