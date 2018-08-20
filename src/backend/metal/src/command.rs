@@ -121,6 +121,7 @@ struct PoolShared {
     online_recording: OnlineRecording,
     #[cfg(feature = "dispatch")]
     dispatch_queue: Option<dispatch::Queue>,
+    visibility_buffer: metal::Buffer,
 }
 
 type CommandBufferInnerPtr = Arc<RefCell<CommandBufferInner>>;
@@ -136,7 +137,11 @@ unsafe impl Send for CommandPool {}
 unsafe impl Sync for CommandPool {}
 
 impl CommandPool {
-    pub(crate) fn new(shared: &Arc<Shared>, online_recording: OnlineRecording) -> Self {
+    pub(crate) fn new(
+        shared: &Arc<Shared>,
+        online_recording: OnlineRecording,
+        visibility_buffer: metal::Buffer,
+    ) -> Self {
         let pool_shared = PoolShared {
             #[cfg(feature = "dispatch")]
             dispatch_queue: match online_recording {
@@ -145,6 +150,7 @@ impl CommandPool {
                 OnlineRecording::Remote(priority) => Some(dispatch::Queue::global(priority.clone())),
             },
             online_recording,
+            visibility_buffer,
         };
         CommandPool {
             shared: Arc::clone(shared),
@@ -209,6 +215,7 @@ struct State {
     push_constants: Vec<u32>,
     vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
     framebuffer_inner: native::FramebufferInner,
+    visibility_query: (metal::MTLVisibilityResultMode, buffer::Offset),
 }
 
 impl State {
@@ -267,6 +274,11 @@ impl State {
         } else {
             None
         };
+        let com_visibility = if self.visibility_query.0 != metal::MTLVisibilityResultMode::Disabled {
+            Some(soft::RenderCommand::SetVisibilityResult(self.visibility_query.0, self.visibility_query.1))
+        } else {
+            None
+        };
         let (com_pso, com_rast) = self.make_pso_commands();
 
         let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_ps));
@@ -307,6 +319,7 @@ impl State {
             .chain(com_scissor)
             .chain(com_blend)
             .chain(com_depth_bias)
+            .chain(com_visibility)
             .chain(com_pso)
             .chain(com_rast)
             //.chain(com_ds) // done outside
@@ -487,6 +500,13 @@ impl State {
             data.push(0);
         }
         data[offset .. offset + constants.len()].copy_from_slice(constants);
+    }
+
+    fn set_visibility_query(
+        &mut self, mode: metal::MTLVisibilityResultMode, offset: buffer::Offset,
+    ) -> soft::RenderCommand<&soft::Ref> {
+        self.visibility_query = (mode, offset);
+        soft::RenderCommand::SetVisibilityResult(mode, offset)
     }
 }
 
@@ -1176,6 +1196,9 @@ where
             encoder.set_cull_mode(rs.cull_mode);
             encoder.set_depth_clip_mode(rs.depth_clip);
         }
+        Cmd::SetVisibilityResult(mode, offset) => {
+            encoder.set_visibility_result_mode(offset, mode);
+        }
         Cmd::BindBuffer { stage, index, buffer, offset } => {
             let native = Some(buffer.as_native());
             match stage {
@@ -1358,7 +1381,7 @@ where
                 value,
             );
         }
-        Cmd::CopyBuffer { src, dst, region } => {
+        Cmd::CopyBuffer { src, dst, ref region } => {
             encoder.copy_from_buffer(
                 src.as_native(),
                 region.src as NSUInteger,
@@ -1820,7 +1843,8 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                     aspects: Aspects::empty(),
                     colors: SmallVec::new(),
                     depth_stencil: None,
-                }
+                },
+                visibility_query: (metal::MTLVisibilityResultMode::Disabled, 0),
             },
             temp: Temp {
                 clear_vertices: Vec::new(),
@@ -1937,7 +1961,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        // TODO: MTLRenderCommandEncoder.textureBarrier on macOS?
     }
 
     fn fill_buffer<R>(
@@ -3454,25 +3477,71 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin_query(
         &mut self,
-        _query: Query<Backend>,
-        _flags: QueryControl,
+        query: Query<Backend>,
+        flags: QueryControl,
     ) {
-        unimplemented!()
+        match query.pool {
+            native::QueryPool::Occlusion(ref pool_range) => {
+                debug_assert!(pool_range.start + query.id < pool_range.end);
+                let offset = (query.id + pool_range.start) as buffer::Offset + mem::size_of::<u64>() as buffer::Offset;
+                let mode = if flags.contains(QueryControl::PRECISE) {
+                    metal::MTLVisibilityResultMode::Counting
+                } else {
+                    metal::MTLVisibilityResultMode::Boolean
+                };
+
+                let com = self.state.set_visibility_query(mode, offset);
+                self.inner
+                    .borrow_mut()
+                    .sink()
+                    .pre_render()
+                    .issue(com);
+            }
+        }
     }
 
     fn end_query(
         &mut self,
-        _query: Query<Backend>,
+        query: Query<Backend>,
     ) {
-        unimplemented!()
+        match query.pool {
+            native::QueryPool::Occlusion(ref pool_range) => {
+                debug_assert!(pool_range.start + query.id < pool_range.end);
+
+                let com = self.state.set_visibility_query(metal::MTLVisibilityResultMode::Disabled, 0);
+                self.inner
+                    .borrow_mut()
+                    .sink()
+                    .pre_render()
+                    .issue(com);
+            }
+        }
     }
 
     fn reset_query_pool(
         &mut self,
-        _pool: &(),
-        _queries: Range<QueryId>,
+        pool: &native::QueryPool,
+        queries: Range<QueryId>,
     ) {
-        unimplemented!()
+        let pool_shared = self.pool_shared.borrow_mut();
+        match *pool {
+            native::QueryPool::Occlusion(ref pool_range) => {
+                debug_assert!(pool_range.start + queries.end <= pool_range.end);
+                let query_size = mem::size_of::<u64>() as buffer::Offset;
+                let command = soft::BlitCommand::FillBuffer {
+                    dst: AsNative::from(pool_shared.visibility_buffer.as_ref()),
+                    range:
+                        (pool_range.start + queries.start) as buffer::Offset * query_size ..
+                        (pool_range.start + queries.end) as buffer::Offset * query_size,
+                    value: 0,
+                };
+
+                self.inner
+                    .borrow_mut()
+                    .sink()
+                    .blit_commands(iter::once(command));
+            }
+        }
     }
 
     fn write_timestamp(

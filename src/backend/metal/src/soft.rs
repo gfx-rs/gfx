@@ -59,6 +59,7 @@ pub enum RenderCommand<R: Resources> {
     SetDepthStencilState(R::DepthStencil),
     SetStencilReferenceValues(hal::pso::StencilValue, hal::pso::StencilValue),
     SetRasterizerState(RasterizerState),
+    SetVisibilityResult(metal::MTLVisibilityResultMode, hal::buffer::Offset),
     BindBuffer {
         stage: hal::pso::Stage,
         index: ResourceIndex,
@@ -203,6 +204,7 @@ impl Own {
             SetDepthStencilState(state) => SetDepthStencilState(state.to_owned()),
             SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
             SetRasterizerState(ref state) => SetRasterizerState(state.clone()),
+            SetVisibilityResult(mode, offset) => SetVisibilityResult(mode, offset),
             BindBuffer { stage, index, buffer, offset } => BindBuffer {
                 stage,
                 index,

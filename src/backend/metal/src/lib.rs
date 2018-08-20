@@ -70,6 +70,7 @@ impl Default for OnlineRecording {
 }
 
 const MAX_ACTIVE_COMMAND_BUFFERS: usize = 1 << 14;
+const MAX_VISIBILITY_QUERIES: usize = 1 << 14;
 
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily {}
@@ -218,7 +219,7 @@ impl hal::Backend for Backend {
 
     type Fence = native::Fence;
     type Semaphore = native::Semaphore;
-    type QueryPool = ();
+    type QueryPool = native::QueryPool;
 }
 
 #[derive(Clone, Debug)]

@@ -1,7 +1,7 @@
 use {
     AsNative, Backend, PrivateCapabilities, QueueFamily, ResourceIndex, OnlineRecording,
     Shared, Surface, Swapchain,
-    validate_line_width,
+    validate_line_width, MAX_VISIBILITY_QUERIES,
 };
 use {conversions as conv, command, native as n};
 use internal::FastStorageMap;
@@ -244,6 +244,8 @@ pub struct Device {
     pub(crate) private_caps: PrivateCapabilities,
     memory_types: [hal::MemoryType; 4],
     pub online_recording: OnlineRecording,
+    visibility_buffer: metal::Buffer,
+    visibility_alloc: Mutex<RangeAllocator<query::QueryId>>,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -407,10 +409,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         assert_eq!(families.len(), 1);
         assert_eq!(families[0].1.len(), 1);
         let family = *families[0].0;
+        let device = self.shared.device.lock();
 
         if cfg!(feature = "auto-capture") {
             info!("Metal capture start");
-            let device = self.shared.device.lock();
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&*device);
             shared_capture_manager.set_default_capture_scope(default_capture_scope);
@@ -428,6 +430,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             private_caps: self.private_caps.clone(),
             memory_types: self.memory_types,
             online_recording: OnlineRecording::default(),
+            visibility_buffer: device.new_buffer(
+                (MAX_VISIBILITY_QUERIES * mem::size_of::<u64>()) as u64,
+                MTLResourceOptions::StorageModeShared,
+            ),
+            visibility_alloc: Mutex::new(RangeAllocator::new(0 .. MAX_VISIBILITY_QUERIES as query::QueryId)),
         };
 
         Ok(hal::Gpu {
@@ -506,6 +513,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         hal::Features::DEPTH_CLAMP |
         hal::Features::SAMPLER_ANISOTROPY |
         hal::Features::FORMAT_BC |
+        hal::Features::PRECISE_OCCLUSION_QUERY |
         hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING
     }
 
@@ -773,7 +781,11 @@ impl hal::Device<Backend> for Device {
     fn create_command_pool(
         &self, _family: QueueFamilyId, _flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
-        command::CommandPool::new(&self.shared, self.online_recording.clone())
+        command::CommandPool::new(
+            &self.shared,
+            self.online_recording.clone(),
+            self.visibility_buffer.clone(),
+        )
     }
 
     fn destroy_command_pool(&self, mut pool: command::CommandPool) {
@@ -1313,6 +1325,7 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<n::ImageView>
     {
         let descriptor = metal::RenderPassDescriptor::new().to_owned();
+        descriptor.set_visibility_result_buffer(Some(&self.visibility_buffer));
         descriptor.set_render_target_array_length(extent.depth as NSUInteger);
 
         let mut inner = n::FramebufferInner {
@@ -2291,12 +2304,22 @@ impl hal::Device<Backend> for Device {
     fn destroy_fence(&self, _fence: n::Fence) {
     }
 
-    fn create_query_pool(&self, _ty: query::QueryType, _count: query::QueryId) -> () {
-        unimplemented!()
+    fn create_query_pool(&self, ty: query::QueryType, count: query::QueryId) -> n::QueryPool {
+        match ty {
+            query::QueryType::Occlusion => {
+                let range = self.visibility_alloc.lock().allocate_range(count).unwrap();
+                n::QueryPool::Occlusion(range)
+            }
+            _ => unimplemented!()
+        }
     }
 
-    fn destroy_query_pool(&self, _: ()) {
-        unimplemented!()
+    fn destroy_query_pool(&self, pool: n::QueryPool) {
+        match pool {
+            n::QueryPool::Occlusion(range) => {
+                self.visibility_alloc.lock().free_range(range);
+            }
+        }
     }
 
     fn create_swapchain(
