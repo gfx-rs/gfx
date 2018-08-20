@@ -1348,6 +1348,16 @@ where
 {
     use soft::BlitCommand as Cmd;
     match *command.borrow() {
+        Cmd::FillBuffer { dst, ref range, value } => {
+            encoder.fill_buffer(
+                dst.as_native(),
+                NSRange {
+                    location: range.start,
+                    length: range.end - range.start,
+                },
+                value,
+            );
+        }
         Cmd::CopyBuffer { src, dst, region } => {
             encoder.copy_from_buffer(
                 src.as_native(),
@@ -1939,7 +1949,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         R: RangeArg<buffer::Offset>,
     {
         let mut inner = self.inner.borrow_mut();
-        let pso = &*self.shared.service_pipes.fill_buffer;
 
         let start = *range.start().unwrap_or(&0);
         assert_eq!(start % WORD_ALIGNMENT, 0);
@@ -1955,42 +1964,52 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             },
         };
 
-        let length = (end - start) / WORD_ALIGNMENT;
-        let value_and_length = [data, length as _];
+        if (data & 0xFF) * 0x1010101 == data {
+            let command = soft::BlitCommand::FillBuffer {
+                dst: AsNative::from(buffer.raw.as_ref()),
+                range: start .. end,
+                value: data as u8,
+            };
+            inner.sink().blit_commands(iter::once(command));
+        } else {
+            let pso = &*self.shared.service_pipes.fill_buffer;
+            let length = (end - start) / WORD_ALIGNMENT;
+            let value_and_length = [data, length as _];
 
-        // TODO: Consider writing multiple values per thread in shader
-        let threads_per_threadgroup = pso.thread_execution_width();
-        let threadgroups = (length + threads_per_threadgroup - 1) / threads_per_threadgroup;
+            // TODO: Consider writing multiple values per thread in shader
+            let threads_per_threadgroup = pso.thread_execution_width();
+            let threadgroups = (length + threads_per_threadgroup - 1) / threads_per_threadgroup;
 
-        let wg_count = MTLSize {
-            width: threadgroups,
-            height: 1,
-            depth: 1,
-        };
-        let wg_size = MTLSize {
-            width: threads_per_threadgroup,
-            height: 1,
-            depth: 1,
-        };
+            let wg_count = MTLSize {
+                width: threadgroups,
+                height: 1,
+                depth: 1,
+            };
+            let wg_size = MTLSize {
+                width: threads_per_threadgroup,
+                height: 1,
+                depth: 1,
+            };
 
-        let commands = [
-            soft::ComputeCommand::BindPipeline(pso),
-            soft::ComputeCommand::BindBuffer {
-                index: 0,
-                buffer: AsNative::from(buffer.raw.as_ref()),
-                offset: start,
-            },
-            soft::ComputeCommand::BindBufferData {
-                index: 1,
-                words: &value_and_length[..],
-            },
-            soft::ComputeCommand::Dispatch {
-                wg_size,
-                wg_count,
-            },
-        ];
+            let commands = [
+                soft::ComputeCommand::BindPipeline(pso),
+                soft::ComputeCommand::BindBuffer {
+                    index: 0,
+                    buffer: AsNative::from(buffer.raw.as_ref()),
+                    offset: start,
+                },
+                soft::ComputeCommand::BindBufferData {
+                    index: 1,
+                    words: &value_and_length[..],
+                },
+                soft::ComputeCommand::Dispatch {
+                    wg_size,
+                    wg_count,
+                },
+            ];
 
-        inner.sink().quick_compute("fill_buffer", commands.iter().cloned());
+            inner.sink().quick_compute("fill_buffer", commands.iter().cloned());
+        }
     }
 
     fn update_buffer(
