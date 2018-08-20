@@ -51,6 +51,119 @@ const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v3,
 ];
 
+const ASTC_PIXEL_FORMAT_FEATURES: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily2_v1,
+    MTLFeatureSet::iOS_GPUFamily2_v2,
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily2_v3,
+    MTLFeatureSet::iOS_GPUFamily3_v2,
+    MTLFeatureSet::iOS_GPUFamily2_v4,
+    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::tvOS_GPUFamily1_v1,
+    MTLFeatureSet::tvOS_GPUFamily1_v2,
+    MTLFeatureSet::tvOS_GPUFamily1_v3,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+];
+
+const R8UNORM_SRGB_ALL: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily2_v3,
+    MTLFeatureSet::iOS_GPUFamily3_v2,
+    MTLFeatureSet::iOS_GPUFamily2_v4,
+    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::tvOS_GPUFamily1_v2,
+    MTLFeatureSet::tvOS_GPUFamily1_v3,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+];
+
+const R8SNORM_NO_RESOLVE: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily1_v1,
+    MTLFeatureSet::iOS_GPUFamily1_v2,
+    MTLFeatureSet::iOS_GPUFamily1_v3,
+    MTLFeatureSet::iOS_GPUFamily1_v4,
+];
+
+const RG8UNORM_SRGB_NO_WRITE: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily1_v1,
+    MTLFeatureSet::iOS_GPUFamily2_v1,
+    MTLFeatureSet::iOS_GPUFamily1_v2,
+    MTLFeatureSet::iOS_GPUFamily2_v2,
+    MTLFeatureSet::iOS_GPUFamily1_v3,
+    MTLFeatureSet::iOS_GPUFamily1_v4,
+    MTLFeatureSet::tvOS_GPUFamily1_v1,
+];
+
+const RG8SNORM_NO_RESOLVE: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily1_v1,
+    MTLFeatureSet::iOS_GPUFamily1_v2,
+    MTLFeatureSet::iOS_GPUFamily1_v3,
+    MTLFeatureSet::iOS_GPUFamily1_v4,
+];
+
+const RGBA8_SRGB: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily2_v3,
+    MTLFeatureSet::iOS_GPUFamily3_v2,
+    MTLFeatureSet::iOS_GPUFamily2_v4,
+    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::tvOS_GPUFamily1_v2,
+    MTLFeatureSet::tvOS_GPUFamily1_v3,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+];
+
+const RGB10A2UNORM_ALL: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily3_v2,
+    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v2,
+    MTLFeatureSet::macOS_GPUFamily1_v3,
+];
+
+const RGB10A2UINT_COLOR_WRITE: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily3_v2,
+    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v2,
+    MTLFeatureSet::macOS_GPUFamily1_v3,
+];
+
+const RG11B10FLOAT_ALL: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily3_v2,
+    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v2,
+    MTLFeatureSet::macOS_GPUFamily1_v3,
+];
+
+const RGB9E5FLOAT_ALL: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily3_v2,
+    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+];
+
+const BGR10A2_ALL: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily1_v4,
+    MTLFeatureSet::iOS_GPUFamily2_v4,
+    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::tvOS_GPUFamily1_v3,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+];
+
 const BASE_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v4,
     MTLFeatureSet::iOS_GPUFamily3_v1,
@@ -186,38 +299,83 @@ impl PhysicalDevice {
         features_sets.iter().cloned().any(|x| raw.supports_feature_set(x))
     }
 
-    pub(crate) fn new(device: metal::Device) -> Self {
-        let private_caps = PrivateCapabilities {
-            //TODO: MSL versions only depend on the OS version, not feature sets
-            msl_version: if device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v3) {
-                MTLLanguageVersion::V2_0
-            } else if device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v2) {
-                MTLLanguageVersion::V1_2
-            } else {
-                MTLLanguageVersion::V1_1
-            },
-            exposed_queues: 1,
-            resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
-            argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
-            shared_textures: !Self::is_mac(&device),
-            base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
-            format_depth24_stencil8: device.d24_s8_supported(),
-            format_depth32_stencil8: true, //TODO: crashing the Metal validation layer upon copying from buffer
-            format_min_srgb_channels: if Self::is_mac(&device) {4} else {1},
-            format_b5: !Self::is_mac(&device),
-            max_buffers_per_stage: 31,
-            max_textures_per_stage: if Self::is_mac(&device) {128} else {31},
-            max_samplers_per_stage: 16,
-            buffer_alignment: if Self::is_mac(&device) {256} else {64},
-            max_buffer_size: if Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]) {
-                1 << 30 // 1GB on macOS 1.2 and up
-            } else {
-                1 << 28 // 256MB otherwise
-            },
+    pub(crate) fn new(shared: Arc<Shared>) -> Self {
+        let device = shared.device.lock();
+        let private_caps = {
+            PrivateCapabilities {
+                //TODO: MSL versions only depend on the OS version, not feature sets
+                msl_version: if device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v3) {
+                    MTLLanguageVersion::V2_0
+                } else if device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v2) {
+                    MTLLanguageVersion::V1_2
+                } else {
+                    MTLLanguageVersion::V1_1
+                },
+                exposed_queues: 1,
+                resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
+                argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
+                shared_textures: !Self::is_mac(&device),
+                base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
+                format_depth24_stencil8: device.d24_s8_supported(),
+                format_depth32_stencil8_filter: Self::is_mac(&device), 
+                format_depth32_stencil8_none: !Self::is_mac(&device),
+                format_min_srgb_channels: if Self::is_mac(&device) {4} else {1},
+                format_b5: !Self::is_mac(&device),
+                format_bc: Self::is_mac(&device),
+                format_eac_etc: !Self::is_mac(&device),
+                format_astc: Self::supports_any(&device, ASTC_PIXEL_FORMAT_FEATURES),
+                format_r8unorm_srgb_all: Self::supports_any(&device, R8UNORM_SRGB_ALL),
+                format_r8unorm_srgb_no_write: !Self::supports_any(&device, R8UNORM_SRGB_ALL) && !Self::is_mac(&device),
+                format_r8snorm_all: !Self::supports_any(&device, R8SNORM_NO_RESOLVE),
+                format_r16_norm_all: Self::is_mac(&device),
+                format_rg8unorm_srgb_all: Self::supports_any(&device, RG8UNORM_SRGB_NO_WRITE),
+                format_rg8unorm_srgb_no_write: !Self::supports_any(&device, RG8UNORM_SRGB_NO_WRITE) && !Self::is_mac(&device),
+                format_rg8snorm_all: !Self::supports_any(&device, RG8SNORM_NO_RESOLVE),
+                format_r32_all: !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
+                format_r32_no_write: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
+                format_r32float_no_write_no_filter: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]) && !Self::is_mac(&device),
+                format_r32float_no_filter: !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]) && !Self::is_mac(&device),
+                format_r32float_all: Self::is_mac(&device),
+                format_rgba8_srgb_all: Self::supports_any(&device, RGBA8_SRGB),
+                format_rgba8_srgb_no_write: !Self::supports_any(&device, RGBA8_SRGB),
+                format_rgb10a2_unorm_all: Self::supports_any(&device, RGB10A2UNORM_ALL),
+                format_rgb10a2_unorm_no_write: !Self::supports_any(&device, RGB10A2UNORM_ALL),
+                format_rgb10a2_uint_color: !Self::supports_any(&device, RGB10A2UINT_COLOR_WRITE),
+                format_rgb10a2_uint_color_write: Self::supports_any(&device, RGB10A2UINT_COLOR_WRITE),
+                format_rg11b10_all: Self::supports_any(&device, RG11B10FLOAT_ALL),
+                format_rg11b10_no_write: !Self::supports_any(&device, RG11B10FLOAT_ALL),
+                format_rgb9e5_all: Self::supports_any(&device, RGB9E5FLOAT_ALL),
+                format_rgb9e5_no_write: !Self::supports_any(&device, RGB9E5FLOAT_ALL) && !Self::is_mac(&device),
+                format_rgb9e5_filter_only: Self::is_mac(&device),
+                format_rg32_color: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
+                format_rg32_color_write: !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
+                format_rg32float_all: Self::is_mac(&device),
+                format_rg32float_color_blend: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
+                format_rg32float_no_filter: !Self::is_mac(&device) && !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
+                format_rgba32int_color: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
+                format_rgba32int_color_write: !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
+                format_rgba32float_color: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
+                format_rgba32float_color_write: !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]) && !Self::is_mac(&device),
+                format_rgba32float_all: Self::is_mac(&device),
+                format_depth16unorm: Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]),
+                format_depth32float_filter: Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v1, MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]),
+                format_depth32float_none: !Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v1, MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]),
+                format_bgr10a2_all: Self::supports_any(&device, BGR10A2_ALL),
+                format_bgr10a2_no_write: !Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v3]),
+                max_buffers_per_stage: 31,
+                max_textures_per_stage: if Self::is_mac(&device) {128} else {31},
+                max_samplers_per_stage: 16,
+                buffer_alignment: if Self::is_mac(&device) {256} else {64},
+                max_buffer_size: if Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]) {
+                    1 << 30 // 1GB on macOS 1.2 and up
+                } else {
+                    1 << 28 // 256MB otherwise
+                },
+            }
         };
 
         PhysicalDevice {
-            shared:  Arc::new(Shared::new(device)),
+            shared:  shared.clone(),
             memory_types: [
                 hal::MemoryType { // PRIVATE
                     properties: Properties::DEVICE_LOCAL,
@@ -280,10 +438,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
         match format.and_then(|f| self.private_caps.map_format(f)) {
-            Some(_) => format::Properties {
-                linear_tiling: format::ImageFeature::empty(),
-                optimal_tiling: format::ImageFeature::all(),
-                buffer_features: format::BufferFeature::all(),
+            Some(format) =>  { 
+                self.private_caps.map_format_properties(format)
             },
             None => format::Properties {
                 linear_tiling: format::ImageFeature::empty(),
