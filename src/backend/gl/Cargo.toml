@@ -23,5 +23,5 @@ log = { version = "0.4", features = ["release_max_level_error"] }
 gfx_gl = "0.5"
 gfx-hal = { path = "../../hal", version = "0.1" }
 smallvec = "0.6"
-glutin = { version = "0.17", optional = true }
-spirv_cross = "0.9"
+glutin = { version = "0.18", optional = true }
+spirv_cross = "0.10"

@@ -1916,7 +1916,7 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_query_pool(&self, _query_ty: query::QueryType, _count: u32) -> QueryPool {
+    fn create_query_pool(&self, _query_ty: query::QueryType, _count: query::QueryId) -> QueryPool {
         unimplemented!()
     }
 

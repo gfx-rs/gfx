@@ -2856,7 +2856,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_query_pool(&self, query_ty: query::QueryType, count: u32) -> n::QueryPool {
+    fn create_query_pool(&self, query_ty: query::QueryType, count: query::QueryId) -> n::QueryPool {
         let heap_ty = match query_ty {
             query::QueryType::Occlusion =>
                 d3d12::D3D12_QUERY_HEAP_TYPE_OCCLUSION,

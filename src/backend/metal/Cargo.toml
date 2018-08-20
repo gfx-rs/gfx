@@ -22,14 +22,14 @@ name = "gfx_backend_metal"
 gfx-hal = { path = "../../hal", version = "0.1" }
 bitflags = "1.0"
 log = { version = "0.4", features = ["release_max_level_error"] }
-winit = { version = "0.16", optional = true }
+winit = { version = "0.17", optional = true }
 dispatch = { version = "0.1", optional = true }
-metal = "0.11.1"
+metal = "0.12"
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
-cocoa = "0.17"
-core-graphics = "0.14"
+cocoa = "0.18"
+core-graphics = "0.17"
 smallvec = "0.6"
 spirv_cross = "0.10"
 parking_lot = "0.6.3"

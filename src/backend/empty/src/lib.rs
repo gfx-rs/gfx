@@ -280,7 +280,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_query_pool(&self, _: query::QueryType, _: u32) -> () {
+    fn create_query_pool(&self, _: query::QueryType, _: query::QueryId) -> () {
         unimplemented!()
     }
 
