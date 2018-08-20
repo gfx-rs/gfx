@@ -113,6 +113,11 @@ pub enum RenderCommand<R: Resources> {
 
 #[derive(Clone, Debug)]
 pub enum BlitCommand {
+    FillBuffer {
+        dst: BufferPtr,
+        range: Range<hal::buffer::Offset>,
+        value: u8,
+    },
     CopyBuffer {
         src: BufferPtr,
         dst: BufferPtr,
