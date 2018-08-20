@@ -1474,13 +1474,13 @@ impl d::Device<B> for Device {
         unsafe { self.raw.0.free_memory(memory.raw, None); }
     }
 
-    fn create_query_pool(&self, ty: query::QueryType, query_count: query::QueryId) -> n::QueryPool {
+    fn create_query_pool(&self, ty: query::Type, query_count: query::Id) -> Result<n::QueryPool, query::Error> {
         let (query_type, pipeline_statistics) = match ty {
-            query::QueryType::Occlusion =>
+            query::Type::Occlusion =>
                 (vk::QueryType::Occlusion, vk::QueryPipelineStatisticFlags::empty()),
-            query::QueryType::PipelineStatistics(statistics) =>
+            query::Type::PipelineStatistics(statistics) =>
                 (vk::QueryType::PipelineStatistics, conv::map_pipeline_statistics(statistics)),
-            query::QueryType::Timestamp =>
+            query::Type::Timestamp =>
                 (vk::QueryType::Timestamp, vk::QueryPipelineStatisticFlags::empty()),
         };
 
@@ -1498,7 +1498,27 @@ impl d::Device<B> for Device {
                         .expect("Error on query pool creation") // TODO: error handling
         };
 
-        n::QueryPool(pool)
+        Ok(n::QueryPool(pool))
+    }
+
+    fn get_query_pool_results(
+        &self, pool: &n::QueryPool, queries: Range<query::Id>,
+        data: &mut [u8], stride: buffer::Offset,
+        flags: query::ResultFlags,
+    ) -> Result<bool, query::Error> {
+        let result = unsafe {
+            self.raw.0.get_query_pool_results(
+                pool.0, queries.start, queries.end - queries.start,
+                data, //stride, //TODO
+                conv::map_query_result_flags(flags),
+            )
+        };
+
+        match result {
+            Ok(()) => Ok(true),
+            Err(vk::Result::NotReady) => Ok(false),
+            Err(_e) => Err(()),
+        }
     }
 
     fn create_swapchain(

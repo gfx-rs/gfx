@@ -12,13 +12,12 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 use std::{iter, mem, slice, time};
 
-use hal::{buffer, command as com, error, memory, pool, pso};
+use hal::{buffer, command as com, error, memory, pool, pso, query};
 use hal::{DrawCount, SwapImageIndex, VertexCount, VertexOffset, InstanceCount, IndexCount, IndexType, WorkGroupCount};
 use hal::backend::FastHashMap;
 use hal::format::{Aspects, Format, FormatDesc};
 use hal::image::{Extent, Filter, Layout, Level, SubresourceRange};
 use hal::pass::{AttachmentLoadOp, AttachmentOps};
-use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
 
@@ -3477,14 +3476,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin_query(
         &mut self,
-        query: Query<Backend>,
-        flags: QueryControl,
+        query: query::Query<Backend>,
+        flags: query::ControlFlags,
     ) {
         match query.pool {
             native::QueryPool::Occlusion(ref pool_range) => {
                 debug_assert!(pool_range.start + query.id < pool_range.end);
                 let offset = (query.id + pool_range.start) as buffer::Offset + mem::size_of::<u64>() as buffer::Offset;
-                let mode = if flags.contains(QueryControl::PRECISE) {
+                let mode = if flags.contains(query::ControlFlags::PRECISE) {
                     metal::MTLVisibilityResultMode::Counting
                 } else {
                     metal::MTLVisibilityResultMode::Boolean
@@ -3502,7 +3501,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn end_query(
         &mut self,
-        query: Query<Backend>,
+        query: query::Query<Backend>,
     ) {
         match query.pool {
             native::QueryPool::Occlusion(ref pool_range) => {
@@ -3521,7 +3520,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn reset_query_pool(
         &mut self,
         pool: &native::QueryPool,
-        queries: Range<QueryId>,
+        queries: Range<query::Id>,
     ) {
         let pool_shared = self.pool_shared.borrow_mut();
         match *pool {
@@ -3544,10 +3543,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
+    fn copy_query_pool_results(
+        &mut self,
+        _pool: &native::QueryPool,
+        _queries: Range<query::Id>,
+        _buffer: &native::Buffer,
+        _offset: buffer::Offset,
+        _stride: buffer::Offset,
+        _flags: query::ResultFlags,
+    ) {
+        unimplemented!()
+    }
+
     fn write_timestamp(
         &mut self,
         _: pso::PipelineStage,
-        _: Query<Backend>,
+        _: query::Query<Backend>,
     ) {
         // nothing to do, timestamps are unsupported on Metal
     }

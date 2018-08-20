@@ -1320,11 +1320,19 @@ impl d::Device<B> for Device {
         // Nothing to do
     }
 
-    fn create_query_pool(&self, _ty: query::QueryType, _count: query::QueryId) -> () {
+    fn create_query_pool(&self, _ty: query::Type, _count: query::Id) -> Result<(), query::Error> {
         unimplemented!()
     }
 
     fn destroy_query_pool(&self, _: ()) {
+        unimplemented!()
+    }
+
+    fn get_query_pool_results(
+        &self, _pool: &(), _queries: Range<query::Id>,
+        _data: &mut [u8], _stride: buffer::Offset,
+        _flags: query::ResultFlags,
+    ) -> Result<bool, query::Error> {
         unimplemented!()
     }
 

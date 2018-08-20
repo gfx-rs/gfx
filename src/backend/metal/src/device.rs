@@ -245,7 +245,7 @@ pub struct Device {
     memory_types: [hal::MemoryType; 4],
     pub online_recording: OnlineRecording,
     visibility_buffer: metal::Buffer,
-    visibility_alloc: Mutex<RangeAllocator<query::QueryId>>,
+    visibility_alloc: Mutex<RangeAllocator<query::Id>>,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -434,7 +434,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 (MAX_VISIBILITY_QUERIES * mem::size_of::<u64>()) as u64,
                 MTLResourceOptions::StorageModeShared,
             ),
-            visibility_alloc: Mutex::new(RangeAllocator::new(0 .. MAX_VISIBILITY_QUERIES as query::QueryId)),
+            visibility_alloc: Mutex::new(RangeAllocator::new(0 .. MAX_VISIBILITY_QUERIES as query::Id)),
         };
 
         Ok(hal::Gpu {
@@ -2304,13 +2304,18 @@ impl hal::Device<Backend> for Device {
     fn destroy_fence(&self, _fence: n::Fence) {
     }
 
-    fn create_query_pool(&self, ty: query::QueryType, count: query::QueryId) -> n::QueryPool {
+    fn create_query_pool(
+        &self, ty: query::Type, count: query::Id
+    ) -> Result<n::QueryPool, query::Error> {
         match ty {
-            query::QueryType::Occlusion => {
+            query::Type::Occlusion => {
                 let range = self.visibility_alloc.lock().allocate_range(count).unwrap();
-                n::QueryPool::Occlusion(range)
+                Ok(n::QueryPool::Occlusion(range))
             }
-            _ => unimplemented!()
+            _ => {
+                error!("Only occlusion queries are currently supported");
+                Err(())
+            }
         }
     }
 
@@ -2320,6 +2325,14 @@ impl hal::Device<Backend> for Device {
                 self.visibility_alloc.lock().free_range(range);
             }
         }
+    }
+
+    fn get_query_pool_results(
+        &self, _pool: &n::QueryPool, _queries: Range<query::Id>,
+        _data: &mut [u8], _stride: buffer::Offset,
+        _flags: query::ResultFlags,
+    ) -> Result<bool, query::Error> {
+        unimplemented!()
     }
 
     fn create_swapchain(

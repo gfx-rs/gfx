@@ -1140,17 +1140,19 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn begin_query(
         &mut self,
         _query: query::Query<Backend>,
-        _flags: query::QueryControl,
+        _flags: query::ControlFlags,
     ) {
         unimplemented!()
     }
 
-    fn push_graphics_constants(
+    fn copy_query_pool_results(
         &mut self,
-        _layout: &n::PipelineLayout,
-        _stages: pso::ShaderStageFlags,
-        _offset: u32,
-        _constants: &[u32],
+        _pool: &(),
+        _queries: Range<query::Id>,
+        _buffer: &n::Buffer,
+        _offset: buffer::Offset,
+        _stride: buffer::Offset,
+        _flags: query::ResultFlags,
     ) {
         unimplemented!()
     }
@@ -1165,7 +1167,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn reset_query_pool(
         &mut self,
         _pool: &(),
-        _queries: Range<query::QueryId>,
+        _queries: Range<query::Id>,
     ) {
         unimplemented!()
     }
@@ -1174,6 +1176,16 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _: pso::PipelineStage,
         _: query::Query<Backend>,
+    ) {
+        unimplemented!()
+    }
+
+    fn push_graphics_constants(
+        &mut self,
+        _layout: &n::PipelineLayout,
+        _stages: pso::ShaderStageFlags,
+        _offset: u32,
+        _constants: &[u32],
     ) {
         unimplemented!()
     }

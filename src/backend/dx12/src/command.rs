@@ -2292,11 +2292,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin_query(
         &mut self,
         query: query::Query<Backend>,
-        flags: query::QueryControl,
+        flags: query::ControlFlags,
     ) {
         let query_ty = match query.pool.ty {
             d3d12::D3D12_QUERY_HEAP_TYPE_OCCLUSION => {
-                if flags.contains(query::QueryControl::PRECISE) {
+                if flags.contains(query::ControlFlags::PRECISE) {
                     self.occlusion_query = Some(OcclusionQuery::Precise(query.id));
                     d3d12::D3D12_QUERY_TYPE_OCCLUSION
                 } else {
@@ -2364,7 +2364,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn reset_query_pool(
         &mut self,
         _pool: &n::QueryPool,
-        _queries: Range<query::QueryId>,
+        _queries: Range<query::Id>,
     ) {
         // Nothing to do here
         // vkCmdResetQueryPool sets the queries to `unavailable` but the specification
@@ -2372,6 +2372,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // buffer must be made inactive, which can only be done with EndQuery.
         // Therefore, every `begin_query` must follow a `end_query` state, the resulting values
         // after calling are undefined.
+    }
+
+    fn copy_query_pool_results(
+        &mut self,
+        _pool: &n::QueryPool,
+        _queries: Range<query::Id>,
+        _buffer: &n::Buffer,
+        _offset: buffer::Offset,
+        _stride: buffer::Offset,
+        _flags: query::ResultFlags,
+    ) -> Result<bool, query::Error> {
+        unimplemented!()
     }
 
     fn write_timestamp(
