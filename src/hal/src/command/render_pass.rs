@@ -2,7 +2,7 @@ use std::borrow::Borrow;
 use std::ops::{Range, Deref, DerefMut};
 use std::marker::PhantomData;
 
-use {buffer, pso};
+use {buffer, pso, query};
 use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset};
 use queue::{Supports, Graphics};
 use super::{
@@ -153,7 +153,21 @@ impl<'a, B: Backend> RenderSubpassCommon<'a, B> {
     }
 
     // TODO: pipeline barrier (postponed)
-    // TODO: begin/end query
+
+    ///
+    pub fn begin_query(&mut self, query: query::Query<B>, flags: query::ControlFlags) {
+        self.0.begin_query(query, flags)
+    }
+
+    ///
+    pub fn end_query(&mut self, query: query::Query<B>) {
+        self.0.end_query(query)
+    }
+
+    ///
+    pub fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>) {
+        self.0.write_timestamp(stage, query)
+    }
 }
 
 /// An object that records commands into a command buffer inline, that is,

@@ -3,8 +3,7 @@ use std::borrow::Borrow;
 use std::ops::Range;
 
 use Backend;
-use {buffer, image, pso};
-use query::{Query, QueryControl, QueryId};
+use {buffer, image, pso, query};
 use queue::capability::{Graphics, GraphicsOrCompute, Supports};
 use super::{
     CommandBuffer, RawCommandBuffer,
@@ -338,22 +337,35 @@ impl<'a, B: Backend, C: Supports<Graphics>, S: Shot> CommandBuffer<'a, B, C, S, 
 
 impl<'a, B: Backend, C: Supports<GraphicsOrCompute>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn begin_query(&mut self, query: Query<B>, flags: QueryControl) {
+    pub fn begin_query(&mut self, query: query::Query<B>, flags: query::ControlFlags) {
         self.raw.begin_query(query, flags)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn end_query(&mut self, query: Query<B>) {
+    pub fn end_query(&mut self, query: query::Query<B>) {
         self.raw.end_query(query)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<QueryId>) {
+    pub fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<query::Id>) {
         self.raw.reset_query_pool(pool, queries)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn write_timestamp(&mut self, stage: pso::PipelineStage, query: Query<B>) {
+    pub fn copy_query_pool_results(
+        &mut self,
+        pool: &B::QueryPool,
+        queries: Range<query::Id>,
+        buffer: &B::Buffer,
+        offset: buffer::Offset,
+        stride: buffer::Offset,
+        flags: query::ResultFlags,
+    ) {
+        self.raw.copy_query_pool_results(pool, queries, buffer, offset, stride, flags)
+    }
+
+    /// Identical to the `RawCommandBuffer` method of the same name.
+    pub fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>) {
         self.raw.write_timestamp(stage, query)
     }
 }

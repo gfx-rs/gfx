@@ -616,10 +616,18 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// Queries are managed using query pool objects. Each query pool is a collection of a specific
     /// number of queries of a particular type.
-    fn create_query_pool(&self, ty: query::QueryType, count: query::QueryId) -> B::QueryPool;
+    fn create_query_pool(&self, ty: query::Type, count: query::Id) -> Result<B::QueryPool, query::Error>;
 
     /// Destroy a query pool object
     fn destroy_query_pool(&self, pool: B::QueryPool);
+
+    /// Get query pool results into the specified CPU memory.
+    /// Returns `Ok(false)` if the resutls are not ready yet and neither of `WAIT` or `PARTIAL` flags are set.
+    fn get_query_pool_results(
+        &self, pool: &B::QueryPool, queries: Range<query::Id>,
+        data: &mut [u8], stride: buffer::Offset,
+        flags: query::ResultFlags,
+    ) -> Result<bool, query::Error>;
 
     /// Create a new swapchain from a surface and a queue family, optionally providing the old
     /// swapchain to aid in resource reuse and rendering continuity.
