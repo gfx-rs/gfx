@@ -15,7 +15,7 @@ use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
-use std::{cmp, mem, slice, thread, time};
+use std::{cmp, mem, ptr, slice, thread, time};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
@@ -2328,11 +2328,52 @@ impl hal::Device<Backend> for Device {
     }
 
     fn get_query_pool_results(
-        &self, _pool: &n::QueryPool, _queries: Range<query::Id>,
-        _data: &mut [u8], _stride: buffer::Offset,
-        _flags: query::ResultFlags,
+        &self, pool: &n::QueryPool, queries: Range<query::Id>,
+        data: &mut [u8], stride: buffer::Offset,
+        flags: query::ResultFlags,
     ) -> Result<bool, query::Error> {
-        unimplemented!()
+        match *pool {
+            native::QueryPool::Occlusion(ref pool_range) => {
+                if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
+                    error!("Query availability is not implemented yet");
+                    return Err(())
+                }
+                if flags.contains(query::ResultFlags::WAIT) {
+                    error!("Query wait is not implemented yet");
+                    return Err(())
+                }
+                let contents = unsafe {
+                    (self.visibility_buffer.contents() as *const u8)
+                        .offset((pool_range.start + queries.start) as isize * stride as isize)
+                };
+                // if stride is matching, copy everything in one go
+                if stride as usize == mem::size_of::<u64>() {
+                    unsafe {
+                        ptr::copy_nonoverlapping(
+                            contents,
+                            data.as_mut_ptr(),
+                            stride as usize * (queries.end - queries.start) as usize,
+                        )
+                    };
+                } else {
+                    let size = if flags.contains(query::ResultFlags::BITS_64) {
+                        mem::size_of::<u64>()
+                    } else {
+                        mem::size_of::<u32>()
+                    };
+                    for id in 0 .. queries.end - queries.start {
+                        unsafe {
+                            ptr::copy_nonoverlapping(
+                                contents.offset(id as isize * stride as isize),
+                                data[id as usize * stride as usize ..].as_mut_ptr(),
+                                size,
+                            )
+                        };
+                    }
+                }
+            }
+        }
+        Ok(true)
     }
 
     fn create_swapchain(

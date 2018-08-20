@@ -3545,14 +3545,62 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn copy_query_pool_results(
         &mut self,
-        _pool: &native::QueryPool,
-        _queries: Range<query::Id>,
-        _buffer: &native::Buffer,
-        _offset: buffer::Offset,
-        _stride: buffer::Offset,
-        _flags: query::ResultFlags,
+        pool: &native::QueryPool,
+        queries: Range<query::Id>,
+        buffer: &native::Buffer,
+        offset: buffer::Offset,
+        stride: buffer::Offset,
+        flags: query::ResultFlags,
     ) {
-        unimplemented!()
+        match *pool {
+            native::QueryPool::Occlusion(ref pool_range) => {
+                if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
+                    error!("Query availability is not implemented yet");
+                    return
+                }
+                if flags.contains(query::ResultFlags::WAIT) {
+                    error!("Query wait is not implemented yet");
+                    return
+                }
+                let pool_shared = self.pool_shared.borrow_mut();
+                // if stride is matching, copy everything in one go
+                if stride as usize == mem::size_of::<u64>() {
+                    let com = soft::BlitCommand::CopyBuffer {
+                        src: AsNative::from(pool_shared.visibility_buffer.as_ref()),
+                        dst: AsNative::from(buffer.raw.as_ref()),
+                        region: com::BufferCopy {
+                            src: (queries.start + pool_range.start) as buffer::Offset * stride,
+                            dst: buffer.range.start + offset,
+                            size: (queries.end - queries.start) as buffer::Offset * stride,
+                        },
+                    };
+                    self.inner
+                        .borrow_mut()
+                        .sink()
+                        .blit_commands(iter::once(com));
+                } else {
+                    let base = queries.start;
+                    let size = if flags.contains(query::ResultFlags::BITS_64) {
+                        mem::size_of::<u64>() as buffer::Offset
+                    } else {
+                        mem::size_of::<u32>() as buffer::Offset
+                    };
+                    let commands = queries.map(|id| soft::BlitCommand::CopyBuffer {
+                        src: AsNative::from(pool_shared.visibility_buffer.as_ref()),
+                        dst: AsNative::from(buffer.raw.as_ref()),
+                        region: com::BufferCopy {
+                            src: (id + pool_range.start) as buffer::Offset * stride,
+                            dst: buffer.range.start + offset + (id - base) as buffer::Offset * stride,
+                            size,
+                        },
+                    });
+                    self.inner
+                        .borrow_mut()
+                        .sink()
+                        .blit_commands(commands);
+                }
+            }
+        }
     }
 
     fn write_timestamp(
