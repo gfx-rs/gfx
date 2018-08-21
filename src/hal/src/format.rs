@@ -545,7 +545,7 @@ formats! {
     Etc2R8g8b8a8Unorm = (ETC2_R8_G8_B8_A8, Unorm),
     Etc2R8g8b8a8Srgb = (ETC2_R8_G8_B8_A8, Srgb),
     EacR11Unorm = (EAC_R11, Unorm),
-    EacR11Inorm = (EAC_R11, Unorm),
+    EacR11Inorm = (EAC_R11, Inorm),
     EacR11g11Unorm = (EAC_R11_G11, Unorm),
     EacR11g11Inorm = (EAC_R11_G11, Inorm),
     Astc4x4Unorm = (ASTC_4x4, Unorm),
