@@ -895,10 +895,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn copy_query_pool_results(
-        &self, pool: &n::QueryPool, queries: Range<query::Id>,
+        &mut self, pool: &n::QueryPool, queries: Range<query::Id>,
         buffer: &n::Buffer, offset: buffer::Offset, stride: buffer::Offset,
         flags: query::ResultFlags,
-    )  {
+    ) {
         unsafe {
             self.raw.copy_query_pool_results(
                 pool.0, queries.start, queries.end - queries.start,

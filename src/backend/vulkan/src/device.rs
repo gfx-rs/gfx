@@ -1507,11 +1507,14 @@ impl d::Device<B> for Device {
         flags: query::ResultFlags,
     ) -> Result<bool, query::Error> {
         let result = unsafe {
-            self.raw.0.get_query_pool_results(
-                pool.0, queries.start, queries.end - queries.start,
-                data, //stride, //TODO
-                conv::map_query_result_flags(flags),
-            )
+            self.raw.0
+                .fp_v1_0()
+                .get_query_pool_results(
+                    self.raw.0.handle(),
+                    pool.0, queries.start, queries.end - queries.start,
+                    data.len(), data.as_mut_ptr(), stride,
+                    conv::map_query_result_flags(flags),
+                )
         };
 
         match result {

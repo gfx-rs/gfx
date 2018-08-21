@@ -1,7 +1,7 @@
 use {
     AsNative, Backend, PrivateCapabilities, QueueFamily, ResourceIndex, OnlineRecording,
-    Shared, Surface, Swapchain,
-    validate_line_width, MAX_VISIBILITY_QUERIES,
+    Shared, Surface, Swapchain, VisibilityShared,
+    validate_line_width,
 };
 use {conversions as conv, command, native as n};
 use internal::FastStorageMap;
@@ -238,14 +238,23 @@ fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: 
     Ok(mtl_function)
 }
 
+impl VisibilityShared {
+    fn are_available(&self, pool_base: query::Id, queries: &Range<query::Id>) -> bool {
+        unsafe {
+            let availability_ptr = ((self.buffer.contents() as *mut u8)
+                .offset(self.availability_offset as isize) as *mut u32)
+                .offset(pool_base as isize);
+            queries.clone().all(|id| *availability_ptr.offset(id as isize) != 0)
+        }
+    }
+}
+
 //#[derive(Clone)]
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
     pub(crate) private_caps: PrivateCapabilities,
     memory_types: [hal::MemoryType; 4],
     pub online_recording: OnlineRecording,
-    visibility_buffer: metal::Buffer,
-    visibility_alloc: Mutex<RangeAllocator<query::Id>>,
 }
 unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
@@ -430,11 +439,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             private_caps: self.private_caps.clone(),
             memory_types: self.memory_types,
             online_recording: OnlineRecording::default(),
-            visibility_buffer: device.new_buffer(
-                (MAX_VISIBILITY_QUERIES * mem::size_of::<u64>()) as u64,
-                MTLResourceOptions::StorageModeShared,
-            ),
-            visibility_alloc: Mutex::new(RangeAllocator::new(0 .. MAX_VISIBILITY_QUERIES as query::Id)),
         };
 
         Ok(hal::Gpu {
@@ -781,11 +785,7 @@ impl hal::Device<Backend> for Device {
     fn create_command_pool(
         &self, _family: QueueFamilyId, _flags: CommandPoolCreateFlags
     ) -> command::CommandPool {
-        command::CommandPool::new(
-            &self.shared,
-            self.online_recording.clone(),
-            self.visibility_buffer.clone(),
-        )
+        command::CommandPool::new(&self.shared, self.online_recording.clone())
     }
 
     fn destroy_command_pool(&self, mut pool: command::CommandPool) {
@@ -1325,7 +1325,7 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<n::ImageView>
     {
         let descriptor = metal::RenderPassDescriptor::new().to_owned();
-        descriptor.set_visibility_result_buffer(Some(&self.visibility_buffer));
+        descriptor.set_visibility_result_buffer(Some(&self.shared.visibility.buffer));
         descriptor.set_render_target_array_length(extent.depth as NSUInteger);
 
         let mut inner = n::FramebufferInner {
@@ -2309,7 +2309,12 @@ impl hal::Device<Backend> for Device {
     ) -> Result<n::QueryPool, query::Error> {
         match ty {
             query::Type::Occlusion => {
-                let range = self.visibility_alloc.lock().allocate_range(count).unwrap();
+                let range = self.shared.visibility.allocator
+                    .lock()
+                    .allocate_range(count)
+                    .map_err(|_| {
+                        error!("Not enough space to allocate an occlusion query pool");
+                    })?;
                 Ok(n::QueryPool::Occlusion(range))
             }
             _ => {
@@ -2322,7 +2327,9 @@ impl hal::Device<Backend> for Device {
     fn destroy_query_pool(&self, pool: n::QueryPool) {
         match pool {
             n::QueryPool::Occlusion(range) => {
-                self.visibility_alloc.lock().free_range(range);
+                self.shared.visibility.allocator
+                    .lock()
+                    .free_range(range);
             }
         }
     }
@@ -2332,48 +2339,67 @@ impl hal::Device<Backend> for Device {
         data: &mut [u8], stride: buffer::Offset,
         flags: query::ResultFlags,
     ) -> Result<bool, query::Error> {
-        match *pool {
+        let is_ready = match *pool {
             native::QueryPool::Occlusion(ref pool_range) => {
-                if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
-                    error!("Query availability is not implemented yet");
-                    return Err(())
-                }
-                if flags.contains(query::ResultFlags::WAIT) {
-                    error!("Query wait is not implemented yet");
-                    return Err(())
-                }
-                let contents = unsafe {
-                    (self.visibility_buffer.contents() as *const u8)
-                        .offset((pool_range.start + queries.start) as isize * stride as isize)
+                let visibility = &self.shared.visibility;
+                let is_ready = if flags.contains(query::ResultFlags::WAIT) {
+                    let mut guard = visibility.allocator.lock();
+                    while !visibility.are_available(pool_range.start, &queries) {
+                        println!("query: not available"); //TEMP
+                        visibility.condvar.wait(&mut guard);
+                    }
+                    true
+                } else {
+                    visibility.are_available(pool_range.start, &queries)
                 };
-                // if stride is matching, copy everything in one go
-                if stride as usize == mem::size_of::<u64>() {
+
+                let size_data = mem::size_of::<u64>() as buffer::Offset;
+                if stride == size_data && flags.contains(query::ResultFlags::BITS_64) &&
+                    !flags.contains(query::ResultFlags::WITH_AVAILABILITY)
+                {
+                    // if stride is matching, copy everything in one go
                     unsafe {
                         ptr::copy_nonoverlapping(
-                            contents,
+                            (visibility.buffer.contents() as *const u8)
+                                .offset((pool_range.start + queries.start) as isize * size_data as isize),
                             data.as_mut_ptr(),
                             stride as usize * (queries.end - queries.start) as usize,
                         )
                     };
                 } else {
-                    let size = if flags.contains(query::ResultFlags::BITS_64) {
-                        mem::size_of::<u64>()
-                    } else {
-                        mem::size_of::<u32>()
-                    };
-                    for id in 0 .. queries.end - queries.start {
-                        unsafe {
-                            ptr::copy_nonoverlapping(
-                                contents.offset(id as isize * stride as isize),
-                                data[id as usize * stride as usize ..].as_mut_ptr(),
-                                size,
-                            )
+                    // copy parts of individual entries
+                    for i in 0 .. queries.end - queries.start {
+                        let absolute_index = (pool_range.start + queries.start + i) as isize;
+                        let value = unsafe {
+                            *(visibility.buffer.contents() as *const u64).offset(absolute_index)
                         };
+                        let availability = unsafe {
+                            let base = (visibility.buffer.contents() as *const u8)
+                                .offset(visibility.availability_offset as isize);
+                            *(base as *const u32).offset(absolute_index)
+                        };
+                        let data_ptr = data[i as usize * stride as usize ..].as_mut_ptr();
+                        unsafe {
+                            if flags.contains(query::ResultFlags::BITS_64) {
+                                *(data_ptr as *mut u64) = value;
+                                if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
+                                    *(data_ptr as *mut u64).offset(1) = availability as u64;
+                                }
+                            } else {
+                                *(data_ptr as *mut u32) = value as u32;
+                                if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
+                                    *(data_ptr as *mut u32).offset(1) = availability;
+                                }
+                            }
+                        }
                     }
                 }
+
+                is_ready
             }
-        }
-        Ok(true)
+        };
+
+        Ok(is_ready)
     }
 
     fn create_swapchain(

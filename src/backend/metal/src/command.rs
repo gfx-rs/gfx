@@ -120,7 +120,6 @@ struct PoolShared {
     online_recording: OnlineRecording,
     #[cfg(feature = "dispatch")]
     dispatch_queue: Option<dispatch::Queue>,
-    visibility_buffer: metal::Buffer,
 }
 
 type CommandBufferInnerPtr = Arc<RefCell<CommandBufferInner>>;
@@ -139,7 +138,6 @@ impl CommandPool {
     pub(crate) fn new(
         shared: &Arc<Shared>,
         online_recording: OnlineRecording,
-        visibility_buffer: metal::Buffer,
     ) -> Self {
         let pool_shared = PoolShared {
             #[cfg(feature = "dispatch")]
@@ -149,7 +147,6 @@ impl CommandPool {
                 OnlineRecording::Remote(priority) => Some(dispatch::Queue::global(priority.clone())),
             },
             online_recording,
-            visibility_buffer,
         };
         CommandPool {
             shared: Arc::clone(shared),
@@ -1062,6 +1059,7 @@ pub struct CommandBufferInner {
     backup_capacity: Option<Capacity>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
+    active_visibility_queries: Vec<query::Id>,
 }
 
 impl Drop for CommandBufferInner {
@@ -1096,6 +1094,7 @@ impl CommandBufferInner {
         };
         self.retained_buffers.clear();
         self.retained_textures.clear();
+        self.active_visibility_queries.clear();
     }
 
     fn sink(&mut self) -> &mut CommandSink {
@@ -1540,6 +1539,7 @@ pub struct CommandQueue {
     shared: Arc<Shared>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
+    active_visibility_queries: Vec<query::Id>,
     perf_counters: Option<PerformanceCounters>,
     /// If true, we combine deferred command buffers together into one giant
     /// command buffer per submission, including the signalling logic.
@@ -1557,6 +1557,7 @@ impl CommandQueue {
             shared,
             retained_buffers: Vec::new(),
             retained_textures: Vec::new(),
+            active_visibility_queries: Vec::new(),
             perf_counters: if COUNTERS_REPORT_WINDOW != 0 {
                 Some(PerformanceCounters::default())
             } else {
@@ -1627,6 +1628,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     ref sink,
                     ref mut retained_buffers,
                     ref mut retained_textures,
+                    ref mut active_visibility_queries,
                     ..
                 } = *inner;
 
@@ -1636,6 +1638,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                         trace!("\timmediate {:?} with {} passes", token, num_passes);
                         self.retained_buffers.extend(retained_buffers.drain(..));
                         self.retained_textures.extend(retained_textures.drain(..));
+                        self.active_visibility_queries.extend(active_visibility_queries.drain(..));
                         if num_passes != 0 {
                             // flush the deferred recording, if any
                             if let Some(cb) = deferred_cmd_buffer.take() {
@@ -1647,6 +1650,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     Some(CommandSink::Deferred { ref journal, .. }) => {
                         num_deferred += 1;
                         trace!("\tdeferred with {} passes", journal.passes.len());
+                        self.active_visibility_queries.extend_from_slice(active_visibility_queries);
                         if !journal.passes.is_empty() {
                             let cmd_buffer = deferred_cmd_buffer
                                 .take()
@@ -1678,13 +1682,21 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 }
             }
 
-            if do_signal {
+            if do_signal || !self.active_visibility_queries.is_empty() {
                 let free_buffers = self.retained_buffers
                     .drain(..)
                     .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
                 let free_textures = self.retained_textures
                     .drain(..)
                     .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+                let visibility = if self.active_visibility_queries.is_empty() {
+                    None
+                } else {
+                    let queries = self.active_visibility_queries
+                        .drain(..)
+                        .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+                    Some((Arc::clone(&self.shared), queries))
+                };
 
                 let block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                     // signal the semaphores
@@ -1694,6 +1706,18 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     // free all the manually retained resources
                     let _ = free_buffers;
                     let _ = free_textures;
+                    // update visibility queries
+                    if let Some((ref shared, ref queries)) = visibility {
+                        let vis = &shared.visibility;
+                        let availability_ptr = (vis.buffer.contents() as *mut u8)
+                            .offset(vis.availability_offset as isize) as *mut u32;
+                        for &q in queries {
+                            *availability_ptr.offset(q as isize) = 1;
+                        }
+                        //HACK: the lock is needed to wake up, but it doesn't hold the checked data
+                        let _ = vis.allocator.lock();
+                        vis.condvar.notify_all();
+                    }
                 }).copy();
 
                 let cmd_buffer = deferred_cmd_buffer
@@ -1811,6 +1835,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 backup_capacity: None,
                 retained_buffers: Vec::new(),
                 retained_textures: Vec::new(),
+                active_visibility_queries: Vec::new(),
             })),
             state: State {
                 viewport: None,
@@ -3482,7 +3507,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         match query.pool {
             native::QueryPool::Occlusion(ref pool_range) => {
                 debug_assert!(pool_range.start + query.id < pool_range.end);
-                let offset = (query.id + pool_range.start) as buffer::Offset + mem::size_of::<u64>() as buffer::Offset;
+                let offset = (query.id + pool_range.start) as buffer::Offset * mem::size_of::<u64>() as buffer::Offset;
                 let mode = if flags.contains(query::ControlFlags::PRECISE) {
                     metal::MTLVisibilityResultMode::Counting
                 } else {
@@ -3505,11 +3530,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         match query.pool {
             native::QueryPool::Occlusion(ref pool_range) => {
+                let mut inner = self.inner.borrow_mut();
                 debug_assert!(pool_range.start + query.id < pool_range.end);
+                inner.active_visibility_queries.push(pool_range.start + query.id);
 
                 let com = self.state.set_visibility_query(metal::MTLVisibilityResultMode::Disabled, 0);
-                self.inner
-                    .borrow_mut()
+                inner
                     .sink()
                     .pre_render()
                     .issue(com);
@@ -3522,23 +3548,38 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         pool: &native::QueryPool,
         queries: Range<query::Id>,
     ) {
-        let pool_shared = self.pool_shared.borrow_mut();
+        let visibility = &self.shared.visibility;
         match *pool {
             native::QueryPool::Occlusion(ref pool_range) => {
+                let mut inner = self.inner.borrow_mut();
                 debug_assert!(pool_range.start + queries.end <= pool_range.end);
-                let query_size = mem::size_of::<u64>() as buffer::Offset;
-                let command = soft::BlitCommand::FillBuffer {
-                    dst: AsNative::from(pool_shared.visibility_buffer.as_ref()),
+                inner.active_visibility_queries.retain(|&id| id < pool_range.start + queries.start || id >= pool_range.start + queries.end);
+
+                let size_data = mem::size_of::<u64>() as buffer::Offset;
+                let offset_data = pool_range.start as buffer::Offset * size_data;
+                let command_data = soft::BlitCommand::FillBuffer {
+                    dst: AsNative::from(visibility.buffer.as_ref()),
                     range:
-                        (pool_range.start + queries.start) as buffer::Offset * query_size ..
-                        (pool_range.start + queries.end) as buffer::Offset * query_size,
+                        offset_data + queries.start as buffer::Offset * size_data ..
+                        offset_data + queries.end as buffer::Offset * size_data,
                     value: 0,
                 };
 
-                self.inner
-                    .borrow_mut()
+                let size_meta = mem::size_of::<u32>() as buffer::Offset;
+                let offset_meta = visibility.availability_offset + pool_range.start as buffer::Offset * size_meta;
+                let command_meta = soft::BlitCommand::FillBuffer {
+                    dst: AsNative::from(visibility.buffer.as_ref()),
+                    range:
+                        offset_meta + queries.start as buffer::Offset * size_meta ..
+                        offset_meta + queries.end as buffer::Offset * size_meta,
+                    value: 0,
+                };
+
+                let commands = iter::once(command_data)
+                    .chain(iter::once(command_meta));
+                inner
                     .sink()
-                    .blit_commands(iter::once(command));
+                    .blit_commands(commands);
             }
         }
     }
@@ -3554,24 +3595,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         match *pool {
             native::QueryPool::Occlusion(ref pool_range) => {
-                if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
-                    error!("Query availability is not implemented yet");
-                    return
-                }
-                if flags.contains(query::ResultFlags::WAIT) {
-                    error!("Query wait is not implemented yet");
-                    return
-                }
-                let pool_shared = self.pool_shared.borrow_mut();
-                // if stride is matching, copy everything in one go
-                if stride as usize == mem::size_of::<u64>() {
+                let visibility = &self.shared.visibility;
+                let size_data = mem::size_of::<u64>() as buffer::Offset;
+                let size_meta = mem::size_of::<u32>() as buffer::Offset;
+
+                if stride == size_data && flags.contains(query::ResultFlags::BITS_64) &&
+                    !flags.contains(query::ResultFlags::WITH_AVAILABILITY)
+                {
+                    // if stride is matching, copy everything in one go
                     let com = soft::BlitCommand::CopyBuffer {
-                        src: AsNative::from(pool_shared.visibility_buffer.as_ref()),
+                        src: AsNative::from(visibility.buffer.as_ref()),
                         dst: AsNative::from(buffer.raw.as_ref()),
                         region: com::BufferCopy {
-                            src: (queries.start + pool_range.start) as buffer::Offset * stride,
+                            src: (pool_range.start + queries.start) as buffer::Offset * size_data,
                             dst: buffer.range.start + offset,
-                            size: (queries.end - queries.start) as buffer::Offset * stride,
+                            size: (queries.end - queries.start) as buffer::Offset * size_data,
                         },
                     };
                     self.inner
@@ -3579,20 +3617,62 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         .sink()
                         .blit_commands(iter::once(com));
                 } else {
-                    let base = queries.start;
-                    let size = if flags.contains(query::ResultFlags::BITS_64) {
+                    // copy parts of individual entries
+                    let size_payload = if flags.contains(query::ResultFlags::BITS_64) {
                         mem::size_of::<u64>() as buffer::Offset
                     } else {
                         mem::size_of::<u32>() as buffer::Offset
                     };
-                    let commands = queries.map(|id| soft::BlitCommand::CopyBuffer {
-                        src: AsNative::from(pool_shared.visibility_buffer.as_ref()),
-                        dst: AsNative::from(buffer.raw.as_ref()),
-                        region: com::BufferCopy {
-                            src: (id + pool_range.start) as buffer::Offset * stride,
-                            dst: buffer.range.start + offset + (id - base) as buffer::Offset * stride,
-                            size,
-                        },
+                    let commands = (0 .. queries.end - queries.start).flat_map(|i| {
+                        let absolute_index = (pool_range.start + queries.start + i) as buffer::Offset;
+                        let dst_offset = buffer.range.start + offset + i as buffer::Offset * stride;
+                        let com_data = soft::BlitCommand::CopyBuffer {
+                            src: AsNative::from(visibility.buffer.as_ref()),
+                            dst: AsNative::from(buffer.raw.as_ref()),
+                            region: com::BufferCopy {
+                                src: absolute_index * size_data,
+                                dst: dst_offset,
+                                size: size_payload,
+                            },
+                        };
+
+                        let (com_avail, com_pad) = if flags.contains(query::ResultFlags::WITH_AVAILABILITY | query::ResultFlags::WAIT) {
+                            // Technically waiting is a no-op on a single queue. However,
+                            // the client expects the avaiability to be set regardless.
+                            let com = soft::BlitCommand::FillBuffer {
+                                dst: AsNative::from(buffer.raw.as_ref()),
+                                range: dst_offset + size_payload .. dst_offset + 2 * size_payload,
+                                value: !0,
+                            };
+                            (Some(com), None)
+                        } else if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
+                            let com_avail = soft::BlitCommand::CopyBuffer {
+                                src: AsNative::from(visibility.buffer.as_ref()),
+                                dst: AsNative::from(buffer.raw.as_ref()),
+                                region: com::BufferCopy {
+                                    src: visibility.availability_offset + absolute_index * size_meta,
+                                    dst: dst_offset + size_payload,
+                                    size: size_meta,
+                                },
+                            };
+                            // An extra paddig is requred if the client expects 64bits availability without a wait
+                            let com_pad = if flags.contains(query::ResultFlags::BITS_64) {
+                                Some(soft::BlitCommand::FillBuffer {
+                                    dst: AsNative::from(buffer.raw.as_ref()),
+                                    range: dst_offset + size_payload + size_meta .. dst_offset + 2 * size_payload,
+                                    value: 0,
+                                })
+                            } else {
+                                None
+                            };
+                            (Some(com_avail), com_pad)
+                        } else {
+                            (None, None)
+                        };
+
+                        iter::once(com_data)
+                            .chain(com_avail)
+                            .chain(com_pad)
                     });
                     self.inner
                         .borrow_mut()
