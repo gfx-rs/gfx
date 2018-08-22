@@ -663,8 +663,10 @@ fn bind_read_fbo(gl: &gl::Gl, texture: NewTexture, level: t::Level, fbo: FrameBu
     if texture == NewTexture::Surface(0) {
         //Warning: assuming the back buffer
         unsafe {
+            let mut buffer : gl::types::GLint = 0;
+            gl.GetIntegerv(gl::DRAW_BUFFER, &mut buffer);
             gl.BindFramebuffer(target, 0);
-            gl.ReadBuffer(gl::BACK);
+            gl.ReadBuffer(buffer as u32);
         }
         return
     }
