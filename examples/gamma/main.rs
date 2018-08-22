@@ -86,9 +86,6 @@ pub fn main() {
     };
 
     let mut screenshot = false;
-    let (w, h, _, _) = data.out.get_dimensions();
-    let mut download = factory.create_download_buffer::<SurfaceData>(w as usize * h as usize)
-        .unwrap();
 
     let mut running = true;
     while running {
@@ -108,11 +105,6 @@ pub fn main() {
                     WindowEvent::Resized(size) => {
                         window.resize(size.to_physical(window.get_hidpi_factor()));
                         gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
-                        download = factory
-                            .create_download_buffer(
-                                size.width.round() as usize * size.height.round() as usize,
-                            )
-                            .unwrap();
                     },
                     WindowEvent::KeyboardInput {
                         input: KeyboardInput {
@@ -129,6 +121,8 @@ pub fn main() {
             if screenshot {
                 println!("taking screenshot");
                 let (w, h, _, _) = data.out.get_dimensions();
+                let download = factory.create_download_buffer::<SurfaceData>(w as usize * h as usize)
+                    .unwrap();
                 encoder.copy_texture_to_buffer_raw(
                     data.out.raw().get_texture(),
                     None,
