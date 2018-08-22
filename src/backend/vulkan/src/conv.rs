@@ -400,7 +400,11 @@ pub fn map_pipeline_statistics(
 
 pub fn map_query_control_flags(flags: query::ControlFlags) -> vk::QueryControlFlags {
     // Safe due to equivalence of HAL values and Vulkan values
-    flags.bits()
+    vk::QueryControlFlags::from_flags_truncate(flags.bits())
+}
+
+pub fn map_query_result_flags(flags: query::ResultFlags) -> vk::QueryResultFlags {
+    vk::QueryResultFlags::from_flags_truncate(flags.bits())
 }
 
 pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeature {
@@ -524,8 +528,4 @@ pub fn map_image_flags(flags: image::StorageFlags) -> vk::ImageCreateFlags {
 pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> PresentMode {
     // the enum variants have to match Vulkan
     unsafe { mem::transmute(mode) }
-}
-
-pub fn map_query_result_flags(flags: query::ResultFlags) -> vk::QueryResultFlags {
-    flags.bits()
 }

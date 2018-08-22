@@ -1512,15 +1512,18 @@ impl d::Device<B> for Device {
                 .get_query_pool_results(
                     self.raw.0.handle(),
                     pool.0, queries.start, queries.end - queries.start,
-                    data.len(), data.as_mut_ptr(), stride,
+                    data.len(), data.as_mut_ptr() as *mut _, stride,
                     conv::map_query_result_flags(flags),
                 )
         };
 
         match result {
-            Ok(()) => Ok(true),
-            Err(vk::Result::NotReady) => Ok(false),
-            Err(_e) => Err(()),
+            vk::Result::Success => Ok(true),
+            vk::Result::NotReady => Ok(false),
+            _ => {
+                error!("get_query_pool_results error {:?}", result);
+                Err(())
+            }
         }
     }
 

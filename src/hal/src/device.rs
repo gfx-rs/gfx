@@ -622,7 +622,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     fn destroy_query_pool(&self, pool: B::QueryPool);
 
     /// Get query pool results into the specified CPU memory.
-    /// Returns `Ok(false)` if the resutls are not ready yet and neither of `WAIT` or `PARTIAL` flags are set.
+    /// Returns `Ok(false)` if the results are not ready yet and neither of `WAIT` or `PARTIAL` flags are set.
     fn get_query_pool_results(
         &self, pool: &B::QueryPool, queries: Range<query::Id>,
         data: &mut [u8], stride: buffer::Offset,

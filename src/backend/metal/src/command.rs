@@ -3638,7 +3638,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                         let (com_avail, com_pad) = if flags.contains(query::ResultFlags::WITH_AVAILABILITY | query::ResultFlags::WAIT) {
                             // Technically waiting is a no-op on a single queue. However,
-                            // the client expects the avaiability to be set regardless.
+                            // the client expects the availability to be set regardless.
                             let com = soft::BlitCommand::FillBuffer {
                                 dst: AsNative::from(buffer.raw.as_ref()),
                                 range: dst_offset + size_payload .. dst_offset + 2 * size_payload,
@@ -3655,7 +3655,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                     size: size_meta,
                                 },
                             };
-                            // An extra paddig is requred if the client expects 64bits availability without a wait
+                            // An extra padding is required if the client expects 64 bits availability without a wait
                             let com_pad = if flags.contains(query::ResultFlags::BITS_64) {
                                 Some(soft::BlitCommand::FillBuffer {
                                     dst: AsNative::from(buffer.raw.as_ref()),

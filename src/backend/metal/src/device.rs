@@ -328,7 +328,7 @@ impl PhysicalDevice {
                 shared_textures: !Self::is_mac(&device),
                 base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
                 format_depth24_stencil8: device.d24_s8_supported(),
-                format_depth32_stencil8_filter: Self::is_mac(&device), 
+                format_depth32_stencil8_filter: Self::is_mac(&device),
                 format_depth32_stencil8_none: !Self::is_mac(&device),
                 format_min_srgb_channels: if Self::is_mac(&device) {4} else {1},
                 format_b5: !Self::is_mac(&device),
@@ -449,7 +449,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
         match format.and_then(|f| self.private_caps.map_format(f)) {
-            Some(format) =>  { 
+            Some(format) =>  {
                 self.private_caps.map_format_properties(format)
             },
             None => format::Properties {
@@ -2345,7 +2345,6 @@ impl hal::Device<Backend> for Device {
                 let is_ready = if flags.contains(query::ResultFlags::WAIT) {
                     let mut guard = visibility.allocator.lock();
                     while !visibility.are_available(pool_range.start, &queries) {
-                        println!("query: not available"); //TEMP
                         visibility.condvar.wait(&mut guard);
                     }
                     true

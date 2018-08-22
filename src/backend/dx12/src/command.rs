@@ -2382,7 +2382,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         _offset: buffer::Offset,
         _stride: buffer::Offset,
         _flags: query::ResultFlags,
-    ) -> Result<bool, query::Error> {
+    ) {
         unimplemented!()
     }
 
