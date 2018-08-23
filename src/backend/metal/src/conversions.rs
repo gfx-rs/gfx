@@ -17,7 +17,7 @@ impl PrivateCapabilities {
             f::Rgba8Srgb      if self.format_min_srgb_channels <= 4 => RGBA8Unorm_sRGB,
             f::Bgra8Srgb      if self.format_min_srgb_channels <= 4 => BGRA8Unorm_sRGB,
             f::D24UnormS8Uint if self.format_depth24_stencil8 => Depth24Unorm_Stencil8,
-            f::D32FloatS8Uint if self.format_depth32_stencil8_filter || self.format_depth32_stencil8_none => Depth32Float_Stencil8,
+            f::D32FloatS8Uint if self.format_depth32_stencil8_filter => Depth32Float_Stencil8,
             f::R8Unorm           => R8Unorm,
             f::R8Inorm           => R8Snorm,
             f::R8Uint            => R8Uint,
@@ -46,8 +46,8 @@ impl PrivateCapabilities {
             f::Rgba16Uint        => RGBA16Uint,
             f::Rgba16Int         => RGBA16Sint,
             f::Rgba16Float       => RGBA16Float,
-            f::A2r10g10b10Unorm  => RGB10A2Unorm,
-            f::A2r10g10b10Uint   => RGB10A2Uint,
+            f::A2r10g10b10Unorm  => BGR10A2Unorm,
+            f::A2b10g10r10Unorm  => RGB10A2Unorm,
             f::B10g11r11Ufloat   => RG11B10Float,
             f::E5b9g9r9Ufloat    => RGB9E5Float,
             f::R32Uint           => R32Uint,
@@ -885,12 +885,14 @@ impl PrivateCapabilities {
                 ..defaults
             },
             Depth16Unorm if self.format_depth16unorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: defaults.optimal_tiling
+                    | If::DEPTH_STENCIL_ATTACHMENT
                     | If::SAMPLED_LINEAR,
                 ..defaults
             },
             Depth32Float if self.format_depth32float_filter => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: defaults.optimal_tiling
+                    | If::DEPTH_STENCIL_ATTACHMENT
                     | If::SAMPLED_LINEAR,
                 ..defaults
             },
@@ -903,12 +905,13 @@ impl PrivateCapabilities {
                 ..defaults
             },
             Depth24Unorm_Stencil8 if self.format_depth24_stencil8 => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
+                optimal_tiling: defaults.optimal_tiling
+                    | If::DEPTH_STENCIL_ATTACHMENT,
                 ..defaults
             },
             Depth32Float_Stencil8 if self.format_depth32_stencil8_filter => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: defaults.optimal_tiling
+                    | If::DEPTH_STENCIL_ATTACHMENT
                     | If::SAMPLED_LINEAR,
                 ..defaults
             },
