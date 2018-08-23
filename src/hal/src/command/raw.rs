@@ -3,11 +3,10 @@ use std::borrow::Borrow;
 use std::ops::Range;
 use std::fmt;
 
-use {buffer, pass, pso};
+use {buffer, pass, pso, query};
 use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 use image::{Filter, Layout, SubresourceRange};
 use memory::{Barrier, Dependencies};
-use query::{PipelineStatistic, Query, QueryControl, QueryId};
 use range::RangeArg;
 use super::{
     AttachmentClear, BufferCopy, BufferImageCopy,
@@ -100,8 +99,8 @@ pub struct CommandBufferInheritanceInfo<'a, B: Backend> {
     pub subpass: Option<pass::Subpass<'a, B>>,
     pub framebuffer: Option<&'a B::Framebuffer>,
     pub occlusion_query_enable: bool,
-    pub occlusion_query_flags: QueryControl,
-    pub pipeline_statistics: PipelineStatistic,
+    pub occlusion_query_flags: query::ControlFlags,
+    pub pipeline_statistics: query::PipelineStatistic,
 }
 
 impl<'a, B: Backend> Default for CommandBufferInheritanceInfo<'a, B> {
@@ -110,8 +109,8 @@ impl<'a, B: Backend> Default for CommandBufferInheritanceInfo<'a, B> {
             subpass: None,
             framebuffer: None,
             occlusion_query_enable: false,
-            occlusion_query_flags: QueryControl::empty(),
-            pipeline_statistics: PipelineStatistic::empty(),
+            occlusion_query_flags: query::ControlFlags::empty(),
+            pipeline_statistics: query::PipelineStatistic::empty(),
         }
     }
 }
@@ -490,16 +489,27 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     /// Begins a query operation.  Queries count operations or record timestamps
     /// resulting from commands that occur between the beginning and end of the query,
     /// and save the results to the query pool.
-    fn begin_query(&mut self, query: Query<B>, flags: QueryControl);
+    fn begin_query(&mut self, query: query::Query<B>, flags: query::ControlFlags);
 
     /// End a query.
-    fn end_query(&mut self, query: Query<B>);
+    fn end_query(&mut self, query: query::Query<B>);
 
     /// Reset/clear the values in the given range of the query pool.
-    fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<QueryId>);
+    fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<query::Id>);
+
+    /// Copy query results into a buffer.
+    fn copy_query_pool_results(
+        &mut self,
+        pool: &B::QueryPool,
+        queries: Range<query::Id>,
+        buffer: &B::Buffer,
+        offset: buffer::Offset,
+        stride: buffer::Offset,
+        flags: query::ResultFlags,
+    );
 
     /// Requests a timestamp to be written.
-    fn write_timestamp(&mut self, pso::PipelineStage, Query<B>);
+    fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>);
 
     /// Modify constant data in a graphics pipeline.
     /// Push constants are intended to modify data in a pipeline more

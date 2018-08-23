@@ -44,7 +44,7 @@ use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use objc::runtime::{Class, Object};
 use foreign_types::ForeignTypeRef;
-use parking_lot::Mutex;
+use parking_lot::{Condvar, Mutex};
 
 
 //TODO: investigate why exactly using `u8` here is slower (~5% total).
@@ -70,6 +70,7 @@ impl Default for OnlineRecording {
 }
 
 const MAX_ACTIVE_COMMAND_BUFFERS: usize = 1 << 14;
+const MAX_VISIBILITY_QUERIES: usize = 1 << 14;
 
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily {}
@@ -80,11 +81,21 @@ impl hal::QueueFamily for QueueFamily {
     fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
 }
 
+struct VisibilityShared {
+    /// Availability buffer is in shared memory, it has N double words for
+    /// query results followed by N words for the availability.
+    buffer: metal::Buffer,
+    allocator: Mutex<range_alloc::RangeAllocator<hal::query::Id>>,
+    availability_offset: hal::buffer::Offset,
+    condvar: Condvar,
+}
+
 struct Shared {
     device: Mutex<metal::Device>,
     queue: Mutex<command::QueueInner>,
     service_pipes: internal::ServicePipes,
     disabilities: PrivateDisabilities,
+    visibility: VisibilityShared,
 }
 
 unsafe impl Send for Shared {}
@@ -93,6 +104,15 @@ unsafe impl Sync for Shared {}
 impl Shared {
     fn new(device: metal::Device) -> Self {
         let feature_macos_10_14: metal::MTLFeatureSet = unsafe { mem::transmute(10004u64) };
+        let visibility = VisibilityShared {
+            buffer: device.new_buffer(
+                MAX_VISIBILITY_QUERIES as u64 * (mem::size_of::<u64>() + mem::size_of::<u32>()) as u64,
+                metal::MTLResourceOptions::StorageModeShared,
+            ),
+            allocator: Mutex::new(range_alloc::RangeAllocator::new(0 .. MAX_VISIBILITY_QUERIES as hal::query::Id)),
+            availability_offset: (MAX_VISIBILITY_QUERIES * mem::size_of::<u64>()) as hal::buffer::Offset,
+            condvar: Condvar::new(),
+        };
         Shared {
             queue: Mutex::new(command::QueueInner::new(&device, Some(MAX_ACTIVE_COMMAND_BUFFERS))),
             service_pipes: internal::ServicePipes::new(&device),
@@ -101,6 +121,7 @@ impl Shared {
                     !device.supports_feature_set(feature_macos_10_14),
             },
             device: Mutex::new(device),
+            visibility,
         }
     }
 }
@@ -218,7 +239,7 @@ impl hal::Backend for Backend {
 
     type Fence = native::Fence;
     type Semaphore = native::Semaphore;
-    type QueryPool = ();
+    type QueryPool = native::QueryPool;
 }
 
 #[derive(Clone, Debug)]

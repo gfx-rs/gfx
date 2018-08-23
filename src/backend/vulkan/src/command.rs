@@ -849,19 +849,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin_query(
         &mut self,
         query: query::Query<Backend>,
-        control: query::QueryControl,
+        flags: query::ControlFlags,
     ) {
-        let mut flags = vk::QueryControlFlags::empty();
-        if control.contains(query::QueryControl::PRECISE) {
-            flags |= vk::QUERY_CONTROL_PRECISE_BIT;
-        }
-
         unsafe {
             self.device.0.cmd_begin_query(
                 self.raw,
                 query.pool.0,
                 query.id,
-                flags
+                conv::map_query_control_flags(flags),
             )
         }
     }
@@ -882,7 +877,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn reset_query_pool(
         &mut self,
         pool: &n::QueryPool,
-        queries: Range<query::QueryId>,
+        queries: Range<query::Id>,
     ) {
         unsafe {
             self.device.0.cmd_reset_query_pool(
@@ -892,6 +887,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 queries.end - queries.start,
             )
         }
+    }
+
+    fn copy_query_pool_results(
+        &mut self, pool: &n::QueryPool, queries: Range<query::Id>,
+        buffer: &n::Buffer, offset: buffer::Offset, stride: buffer::Offset,
+        flags: query::ResultFlags,
+    ) {
+        //TODO: use safer wrapper
+        unsafe {
+            self.device.0.fp_v1_0().cmd_copy_query_pool_results(
+                self.raw,
+                pool.0, queries.start, queries.end - queries.start,
+                buffer.raw, offset, stride,
+                conv::map_query_result_flags(flags),
+            )
+        };
     }
 
     fn write_timestamp(

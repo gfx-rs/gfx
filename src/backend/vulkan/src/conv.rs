@@ -398,9 +398,13 @@ pub fn map_pipeline_statistics(
     unsafe { mem::transmute(statistics) }
 }
 
-pub fn map_query_control_flags(flags: query::QueryControl) -> vk::QueryControlFlags {
+pub fn map_query_control_flags(flags: query::ControlFlags) -> vk::QueryControlFlags {
     // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(flags) }
+    vk::QueryControlFlags::from_flags_truncate(flags.bits())
+}
+
+pub fn map_query_result_flags(flags: query::ResultFlags) -> vk::QueryResultFlags {
+    vk::QueryResultFlags::from_flags_truncate(flags.bits())
 }
 
 pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeature {

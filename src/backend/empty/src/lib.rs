@@ -280,11 +280,19 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_query_pool(&self, _: query::QueryType, _: query::QueryId) -> () {
+    fn create_query_pool(&self, _: query::Type, _: u32) -> Result<(), query::Error> {
         unimplemented!()
     }
 
     fn destroy_query_pool(&self, _: ()) {
+        unimplemented!()
+    }
+
+    fn get_query_pool_results(
+        &self, _: &(), _: Range<query::Id>,
+        _: &mut [u8], _: buffer::Offset,
+        _: query::ResultFlags,
+    ) -> Result<bool, query::Error> {
         unimplemented!()
     }
 
@@ -712,7 +720,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn begin_query(
         &mut self,
         _: query::Query<Backend>,
-        _: query::QueryControl,
+        _: query::ControlFlags,
     ) {
         unimplemented!()
     }
@@ -727,7 +735,19 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     fn reset_query_pool(
         &mut self,
         _: &(),
-        _: Range<query::QueryId>,
+        _: Range<query::Id>,
+    ) {
+        unimplemented!()
+    }
+
+    fn copy_query_pool_results(
+        &mut self,
+        _: &(),
+        _: Range<query::Id>,
+        _: &(),
+        _: buffer::Offset,
+        _: buffer::Offset,
+        _: query::ResultFlags,
     ) {
         unimplemented!()
     }

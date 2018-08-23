@@ -1,6 +1,6 @@
 use {
     AsNative, Backend, PrivateCapabilities, QueueFamily, ResourceIndex, OnlineRecording,
-    Shared, Surface, Swapchain,
+    Shared, Surface, Swapchain, VisibilityShared,
     validate_line_width,
 };
 use {conversions as conv, command, native as n};
@@ -15,7 +15,7 @@ use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
-use std::{cmp, mem, slice, thread, time};
+use std::{cmp, mem, ptr, slice, thread, time};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
@@ -238,6 +238,17 @@ fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: 
     Ok(mtl_function)
 }
 
+impl VisibilityShared {
+    fn are_available(&self, pool_base: query::Id, queries: &Range<query::Id>) -> bool {
+        unsafe {
+            let availability_ptr = ((self.buffer.contents() as *mut u8)
+                .offset(self.availability_offset as isize) as *mut u32)
+                .offset(pool_base as isize);
+            queries.clone().all(|id| *availability_ptr.offset(id as isize) != 0)
+        }
+    }
+}
+
 //#[derive(Clone)]
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
@@ -317,7 +328,7 @@ impl PhysicalDevice {
                 shared_textures: !Self::is_mac(&device),
                 base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
                 format_depth24_stencil8: device.d24_s8_supported(),
-                format_depth32_stencil8_filter: Self::is_mac(&device), 
+                format_depth32_stencil8_filter: Self::is_mac(&device),
                 format_depth32_stencil8_none: !Self::is_mac(&device),
                 format_min_srgb_channels: if Self::is_mac(&device) {4} else {1},
                 format_b5: !Self::is_mac(&device),
@@ -407,10 +418,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         assert_eq!(families.len(), 1);
         assert_eq!(families[0].1.len(), 1);
         let family = *families[0].0;
+        let device = self.shared.device.lock();
 
         if cfg!(feature = "auto-capture") {
             info!("Metal capture start");
-            let device = self.shared.device.lock();
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope = shared_capture_manager.new_capture_scope_with_device(&*device);
             shared_capture_manager.set_default_capture_scope(default_capture_scope);
@@ -438,7 +449,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
         match format.and_then(|f| self.private_caps.map_format(f)) {
-            Some(format) =>  { 
+            Some(format) =>  {
                 self.private_caps.map_format_properties(format)
             },
             None => format::Properties {
@@ -506,6 +517,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         hal::Features::DEPTH_CLAMP |
         hal::Features::SAMPLER_ANISOTROPY |
         hal::Features::FORMAT_BC |
+        hal::Features::PRECISE_OCCLUSION_QUERY |
         hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING
     }
 
@@ -1313,6 +1325,7 @@ impl hal::Device<Backend> for Device {
         I::Item: Borrow<n::ImageView>
     {
         let descriptor = metal::RenderPassDescriptor::new().to_owned();
+        descriptor.set_visibility_result_buffer(Some(&self.shared.visibility.buffer));
         descriptor.set_render_target_array_length(extent.depth as NSUInteger);
 
         let mut inner = n::FramebufferInner {
@@ -2291,12 +2304,101 @@ impl hal::Device<Backend> for Device {
     fn destroy_fence(&self, _fence: n::Fence) {
     }
 
-    fn create_query_pool(&self, _ty: query::QueryType, _count: query::QueryId) -> () {
-        unimplemented!()
+    fn create_query_pool(
+        &self, ty: query::Type, count: query::Id
+    ) -> Result<n::QueryPool, query::Error> {
+        match ty {
+            query::Type::Occlusion => {
+                let range = self.shared.visibility.allocator
+                    .lock()
+                    .allocate_range(count)
+                    .map_err(|_| {
+                        error!("Not enough space to allocate an occlusion query pool");
+                    })?;
+                Ok(n::QueryPool::Occlusion(range))
+            }
+            _ => {
+                error!("Only occlusion queries are currently supported");
+                Err(())
+            }
+        }
     }
 
-    fn destroy_query_pool(&self, _: ()) {
-        unimplemented!()
+    fn destroy_query_pool(&self, pool: n::QueryPool) {
+        match pool {
+            n::QueryPool::Occlusion(range) => {
+                self.shared.visibility.allocator
+                    .lock()
+                    .free_range(range);
+            }
+        }
+    }
+
+    fn get_query_pool_results(
+        &self, pool: &n::QueryPool, queries: Range<query::Id>,
+        data: &mut [u8], stride: buffer::Offset,
+        flags: query::ResultFlags,
+    ) -> Result<bool, query::Error> {
+        let is_ready = match *pool {
+            native::QueryPool::Occlusion(ref pool_range) => {
+                let visibility = &self.shared.visibility;
+                let is_ready = if flags.contains(query::ResultFlags::WAIT) {
+                    let mut guard = visibility.allocator.lock();
+                    while !visibility.are_available(pool_range.start, &queries) {
+                        visibility.condvar.wait(&mut guard);
+                    }
+                    true
+                } else {
+                    visibility.are_available(pool_range.start, &queries)
+                };
+
+                let size_data = mem::size_of::<u64>() as buffer::Offset;
+                if stride == size_data && flags.contains(query::ResultFlags::BITS_64) &&
+                    !flags.contains(query::ResultFlags::WITH_AVAILABILITY)
+                {
+                    // if stride is matching, copy everything in one go
+                    unsafe {
+                        ptr::copy_nonoverlapping(
+                            (visibility.buffer.contents() as *const u8)
+                                .offset((pool_range.start + queries.start) as isize * size_data as isize),
+                            data.as_mut_ptr(),
+                            stride as usize * (queries.end - queries.start) as usize,
+                        )
+                    };
+                } else {
+                    // copy parts of individual entries
+                    for i in 0 .. queries.end - queries.start {
+                        let absolute_index = (pool_range.start + queries.start + i) as isize;
+                        let value = unsafe {
+                            *(visibility.buffer.contents() as *const u64).offset(absolute_index)
+                        };
+                        let availability = unsafe {
+                            let base = (visibility.buffer.contents() as *const u8)
+                                .offset(visibility.availability_offset as isize);
+                            *(base as *const u32).offset(absolute_index)
+                        };
+                        let data_ptr = data[i as usize * stride as usize ..].as_mut_ptr();
+                        unsafe {
+                            if flags.contains(query::ResultFlags::BITS_64) {
+                                *(data_ptr as *mut u64) = value;
+                                if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
+                                    *(data_ptr as *mut u64).offset(1) = availability as u64;
+                                }
+                            } else {
+                                *(data_ptr as *mut u32) = value as u32;
+                                if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
+                                    *(data_ptr as *mut u32).offset(1) = availability;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                is_ready
+            }
+        };
+
+        Ok(is_ready)
     }
 
     fn create_swapchain(

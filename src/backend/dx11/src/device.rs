@@ -1916,11 +1916,19 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_query_pool(&self, _query_ty: query::QueryType, _count: query::QueryId) -> QueryPool {
+    fn create_query_pool(&self, _query_ty: query::Type, _count: query::Id) -> Result<QueryPool, query::Error> {
         unimplemented!()
     }
 
     fn destroy_query_pool(&self, _pool: QueryPool) {
+        unimplemented!()
+    }
+
+    fn get_query_pool_results(
+        &self, _pool: &QueryPool, _queries: Range<query::Id>,
+        _data: &mut [u8], _stride: buffer::Offset,
+        _flags: query::ResultFlags,
+    ) -> Result<bool, query::Error> {
         unimplemented!()
     }
 

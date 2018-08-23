@@ -7,7 +7,10 @@ use Backend;
 
 
 /// A query identifier.
-pub type QueryId = u32;
+pub type Id = u32;
+
+/// Generic query error;
+pub type Error = ();
 
 /// A `Query` object has a particular identifier and saves its results to a given `QueryPool`.
 /// It is passed as a parameter to the command buffer's query methods.
@@ -16,13 +19,13 @@ pub struct Query<'a, B: Backend> {
     /// 
     pub pool: &'a B::QueryPool,
     /// 
-    pub id: QueryId,
+    pub id: Id,
 }
 
 bitflags!(
     /// Query control flags.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct QueryControl: u32 {
+    pub struct ControlFlags: u32 {
         /// Occlusion queries **must** return the exact sampler number.
         ///
         /// Requires `precise_occlusion_query` device feature.
@@ -30,9 +33,24 @@ bitflags!(
     }
 );
 
+bitflags!(
+    /// Query result flags.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct ResultFlags: u32 {
+        /// Results will be written as an array of 64-bit unsigned integer values.
+        const BITS_64 = 0x1;
+        /// Wait for each query’s status to become available before retrieving its results.
+        const WAIT = 0x2;
+        /// Availability status accompanies the results.
+        const WITH_AVAILABILITY = 0x4;
+        /// Returning partial results is acceptable.
+        const PARTIAL = 0x8;
+    }
+);
+
 /// Type of queries in a query pool.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum QueryType {
+pub enum Type {
     /// Occlusion query. Count the number of drawn samples between
     /// the start and end of the query command.
     Occlusion,

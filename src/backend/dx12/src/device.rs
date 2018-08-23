@@ -2856,13 +2856,13 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_query_pool(&self, query_ty: query::QueryType, count: query::QueryId) -> n::QueryPool {
+    fn create_query_pool(&self, query_ty: query::Type, count: query::Id) -> Result<n::QueryPool, query::Error> {
         let heap_ty = match query_ty {
-            query::QueryType::Occlusion =>
+            query::Type::Occlusion =>
                 d3d12::D3D12_QUERY_HEAP_TYPE_OCCLUSION,
-            query::QueryType::PipelineStatistics(_) =>
+            query::Type::PipelineStatistics(_) =>
                 d3d12::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS,
-            query::QueryType::Timestamp =>
+            query::Type::Timestamp =>
                 d3d12::D3D12_QUERY_HEAP_TYPE_TIMESTAMP,
         };
 
@@ -2881,14 +2881,22 @@ impl d::Device<B> for Device {
             )
         });
 
-        n::QueryPool {
+        Ok(n::QueryPool {
             raw: unsafe { ComPtr::from_raw(handle as *mut _) },
             ty: heap_ty,
-        }
+        })
     }
 
     fn destroy_query_pool(&self, _pool: n::QueryPool) {
         // Just drop
+    }
+
+    fn get_query_pool_results(
+        &self, _pool: &n::QueryPool, _queries: Range<query::Id>,
+        _data: &mut [u8], _stride: buffer::Offset,
+        _flags: query::ResultFlags,
+    ) -> Result<bool, query::Error> {
+        unimplemented!()
     }
 
     fn destroy_shader_module(&self, shader_lib: n::ShaderModule) {

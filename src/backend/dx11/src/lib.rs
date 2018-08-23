@@ -1581,7 +1581,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn begin_query(&mut self, _query: query::Query<Backend>, _flags: query::QueryControl) {
+    fn begin_query(&mut self, _query: query::Query<Backend>, _flags: query::ControlFlags) {
         unimplemented!()
     }
 
@@ -1589,7 +1589,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn reset_query_pool(&mut self, _pool: &QueryPool, _queries: Range<query::QueryId>) {
+    fn reset_query_pool(&mut self, _pool: &QueryPool, _queries: Range<query::Id>) {
+        unimplemented!()
+    }
+
+    fn copy_query_pool_results(
+        &mut self,
+        _pool: &QueryPool,
+        _queries: Range<query::Id>,
+        _buffer: &Buffer,
+        _offset: buffer::Offset,
+        _stride: buffer::Offset,
+        _flags: query::ResultFlags,
+    ) {
         unimplemented!()
     }
 

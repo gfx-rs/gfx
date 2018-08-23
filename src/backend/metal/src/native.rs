@@ -822,6 +822,11 @@ unsafe impl Send for UnboundImage {}
 unsafe impl Sync for UnboundImage {}
 
 #[derive(Debug)]
+pub enum QueryPool {
+    Occlusion(Range<u32>),
+}
+
+#[derive(Debug)]
 pub enum FenceInner {
     Idle { signaled: bool },
     Pending(metal::CommandBuffer),

@@ -12,13 +12,12 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 use std::{iter, mem, slice, time};
 
-use hal::{buffer, command as com, error, memory, pool, pso};
+use hal::{buffer, command as com, error, memory, pool, pso, query};
 use hal::{DrawCount, SwapImageIndex, VertexCount, VertexOffset, InstanceCount, IndexCount, IndexType, WorkGroupCount};
 use hal::backend::FastHashMap;
 use hal::format::{Aspects, Format, FormatDesc};
 use hal::image::{Extent, Filter, Layout, Level, SubresourceRange};
 use hal::pass::{AttachmentLoadOp, AttachmentOps};
-use hal::query::{Query, QueryControl, QueryId};
 use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
 
@@ -136,7 +135,10 @@ unsafe impl Send for CommandPool {}
 unsafe impl Sync for CommandPool {}
 
 impl CommandPool {
-    pub(crate) fn new(shared: &Arc<Shared>, online_recording: OnlineRecording) -> Self {
+    pub(crate) fn new(
+        shared: &Arc<Shared>,
+        online_recording: OnlineRecording,
+    ) -> Self {
         let pool_shared = PoolShared {
             #[cfg(feature = "dispatch")]
             dispatch_queue: match online_recording {
@@ -209,6 +211,7 @@ struct State {
     push_constants: Vec<u32>,
     vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
     framebuffer_inner: native::FramebufferInner,
+    visibility_query: (metal::MTLVisibilityResultMode, buffer::Offset),
 }
 
 impl State {
@@ -267,6 +270,11 @@ impl State {
         } else {
             None
         };
+        let com_visibility = if self.visibility_query.0 != metal::MTLVisibilityResultMode::Disabled {
+            Some(soft::RenderCommand::SetVisibilityResult(self.visibility_query.0, self.visibility_query.1))
+        } else {
+            None
+        };
         let (com_pso, com_rast) = self.make_pso_commands();
 
         let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_ps));
@@ -307,6 +315,7 @@ impl State {
             .chain(com_scissor)
             .chain(com_blend)
             .chain(com_depth_bias)
+            .chain(com_visibility)
             .chain(com_pso)
             .chain(com_rast)
             //.chain(com_ds) // done outside
@@ -487,6 +496,13 @@ impl State {
             data.push(0);
         }
         data[offset .. offset + constants.len()].copy_from_slice(constants);
+    }
+
+    fn set_visibility_query(
+        &mut self, mode: metal::MTLVisibilityResultMode, offset: buffer::Offset,
+    ) -> soft::RenderCommand<&soft::Ref> {
+        self.visibility_query = (mode, offset);
+        soft::RenderCommand::SetVisibilityResult(mode, offset)
     }
 }
 
@@ -1043,6 +1059,7 @@ pub struct CommandBufferInner {
     backup_capacity: Option<Capacity>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
+    active_visibility_queries: Vec<query::Id>,
 }
 
 impl Drop for CommandBufferInner {
@@ -1077,6 +1094,7 @@ impl CommandBufferInner {
         };
         self.retained_buffers.clear();
         self.retained_textures.clear();
+        self.active_visibility_queries.clear();
     }
 
     fn sink(&mut self) -> &mut CommandSink {
@@ -1175,6 +1193,9 @@ where
             encoder.set_front_facing_winding(rs.front_winding);
             encoder.set_cull_mode(rs.cull_mode);
             encoder.set_depth_clip_mode(rs.depth_clip);
+        }
+        Cmd::SetVisibilityResult(mode, offset) => {
+            encoder.set_visibility_result_mode(offset, mode);
         }
         Cmd::BindBuffer { stage, index, buffer, offset } => {
             let native = Some(buffer.as_native());
@@ -1358,7 +1379,7 @@ where
                 value,
             );
         }
-        Cmd::CopyBuffer { src, dst, region } => {
+        Cmd::CopyBuffer { src, dst, ref region } => {
             encoder.copy_from_buffer(
                 src.as_native(),
                 region.src as NSUInteger,
@@ -1518,6 +1539,7 @@ pub struct CommandQueue {
     shared: Arc<Shared>,
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
+    active_visibility_queries: Vec<query::Id>,
     perf_counters: Option<PerformanceCounters>,
     /// If true, we combine deferred command buffers together into one giant
     /// command buffer per submission, including the signalling logic.
@@ -1535,6 +1557,7 @@ impl CommandQueue {
             shared,
             retained_buffers: Vec::new(),
             retained_textures: Vec::new(),
+            active_visibility_queries: Vec::new(),
             perf_counters: if COUNTERS_REPORT_WINDOW != 0 {
                 Some(PerformanceCounters::default())
             } else {
@@ -1605,6 +1628,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     ref sink,
                     ref mut retained_buffers,
                     ref mut retained_textures,
+                    ref mut active_visibility_queries,
                     ..
                 } = *inner;
 
@@ -1614,6 +1638,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                         trace!("\timmediate {:?} with {} passes", token, num_passes);
                         self.retained_buffers.extend(retained_buffers.drain(..));
                         self.retained_textures.extend(retained_textures.drain(..));
+                        self.active_visibility_queries.extend(active_visibility_queries.drain(..));
                         if num_passes != 0 {
                             // flush the deferred recording, if any
                             if let Some(cb) = deferred_cmd_buffer.take() {
@@ -1625,6 +1650,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     Some(CommandSink::Deferred { ref journal, .. }) => {
                         num_deferred += 1;
                         trace!("\tdeferred with {} passes", journal.passes.len());
+                        self.active_visibility_queries.extend_from_slice(active_visibility_queries);
                         if !journal.passes.is_empty() {
                             let cmd_buffer = deferred_cmd_buffer
                                 .take()
@@ -1656,13 +1682,21 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 }
             }
 
-            if do_signal {
+            if do_signal || !self.active_visibility_queries.is_empty() {
                 let free_buffers = self.retained_buffers
                     .drain(..)
                     .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
                 let free_textures = self.retained_textures
                     .drain(..)
                     .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+                let visibility = if self.active_visibility_queries.is_empty() {
+                    None
+                } else {
+                    let queries = self.active_visibility_queries
+                        .drain(..)
+                        .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
+                    Some((Arc::clone(&self.shared), queries))
+                };
 
                 let block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
                     // signal the semaphores
@@ -1672,6 +1706,18 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     // free all the manually retained resources
                     let _ = free_buffers;
                     let _ = free_textures;
+                    // update visibility queries
+                    if let Some((ref shared, ref queries)) = visibility {
+                        let vis = &shared.visibility;
+                        let availability_ptr = (vis.buffer.contents() as *mut u8)
+                            .offset(vis.availability_offset as isize) as *mut u32;
+                        for &q in queries {
+                            *availability_ptr.offset(q as isize) = 1;
+                        }
+                        //HACK: the lock is needed to wake up, but it doesn't hold the checked data
+                        let _ = vis.allocator.lock();
+                        vis.condvar.notify_all();
+                    }
                 }).copy();
 
                 let cmd_buffer = deferred_cmd_buffer
@@ -1789,6 +1835,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 backup_capacity: None,
                 retained_buffers: Vec::new(),
                 retained_textures: Vec::new(),
+                active_visibility_queries: Vec::new(),
             })),
             state: State {
                 viewport: None,
@@ -1820,7 +1867,8 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                     aspects: Aspects::empty(),
                     colors: SmallVec::new(),
                     depth_stencil: None,
-                }
+                },
+                visibility_query: (metal::MTLVisibilityResultMode::Disabled, 0),
             },
             temp: Temp {
                 clear_vertices: Vec::new(),
@@ -1937,7 +1985,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        // TODO: MTLRenderCommandEncoder.textureBarrier on macOS?
     }
 
     fn fill_buffer<R>(
@@ -3454,31 +3501,192 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn begin_query(
         &mut self,
-        _query: Query<Backend>,
-        _flags: QueryControl,
+        query: query::Query<Backend>,
+        flags: query::ControlFlags,
     ) {
-        unimplemented!()
+        match query.pool {
+            native::QueryPool::Occlusion(ref pool_range) => {
+                debug_assert!(pool_range.start + query.id < pool_range.end);
+                let offset = (query.id + pool_range.start) as buffer::Offset * mem::size_of::<u64>() as buffer::Offset;
+                let mode = if flags.contains(query::ControlFlags::PRECISE) {
+                    metal::MTLVisibilityResultMode::Counting
+                } else {
+                    metal::MTLVisibilityResultMode::Boolean
+                };
+
+                let com = self.state.set_visibility_query(mode, offset);
+                self.inner
+                    .borrow_mut()
+                    .sink()
+                    .pre_render()
+                    .issue(com);
+            }
+        }
     }
 
     fn end_query(
         &mut self,
-        _query: Query<Backend>,
+        query: query::Query<Backend>,
     ) {
-        unimplemented!()
+        match query.pool {
+            native::QueryPool::Occlusion(ref pool_range) => {
+                let mut inner = self.inner.borrow_mut();
+                debug_assert!(pool_range.start + query.id < pool_range.end);
+                inner.active_visibility_queries.push(pool_range.start + query.id);
+
+                let com = self.state.set_visibility_query(metal::MTLVisibilityResultMode::Disabled, 0);
+                inner
+                    .sink()
+                    .pre_render()
+                    .issue(com);
+            }
+        }
     }
 
     fn reset_query_pool(
         &mut self,
-        _pool: &(),
-        _queries: Range<QueryId>,
+        pool: &native::QueryPool,
+        queries: Range<query::Id>,
     ) {
-        unimplemented!()
+        let visibility = &self.shared.visibility;
+        match *pool {
+            native::QueryPool::Occlusion(ref pool_range) => {
+                let mut inner = self.inner.borrow_mut();
+                debug_assert!(pool_range.start + queries.end <= pool_range.end);
+                inner.active_visibility_queries.retain(|&id| id < pool_range.start + queries.start || id >= pool_range.start + queries.end);
+
+                let size_data = mem::size_of::<u64>() as buffer::Offset;
+                let offset_data = pool_range.start as buffer::Offset * size_data;
+                let command_data = soft::BlitCommand::FillBuffer {
+                    dst: AsNative::from(visibility.buffer.as_ref()),
+                    range:
+                        offset_data + queries.start as buffer::Offset * size_data ..
+                        offset_data + queries.end as buffer::Offset * size_data,
+                    value: 0,
+                };
+
+                let size_meta = mem::size_of::<u32>() as buffer::Offset;
+                let offset_meta = visibility.availability_offset + pool_range.start as buffer::Offset * size_meta;
+                let command_meta = soft::BlitCommand::FillBuffer {
+                    dst: AsNative::from(visibility.buffer.as_ref()),
+                    range:
+                        offset_meta + queries.start as buffer::Offset * size_meta ..
+                        offset_meta + queries.end as buffer::Offset * size_meta,
+                    value: 0,
+                };
+
+                let commands = iter::once(command_data)
+                    .chain(iter::once(command_meta));
+                inner
+                    .sink()
+                    .blit_commands(commands);
+            }
+        }
+    }
+
+    fn copy_query_pool_results(
+        &mut self,
+        pool: &native::QueryPool,
+        queries: Range<query::Id>,
+        buffer: &native::Buffer,
+        offset: buffer::Offset,
+        stride: buffer::Offset,
+        flags: query::ResultFlags,
+    ) {
+        match *pool {
+            native::QueryPool::Occlusion(ref pool_range) => {
+                let visibility = &self.shared.visibility;
+                let size_data = mem::size_of::<u64>() as buffer::Offset;
+                let size_meta = mem::size_of::<u32>() as buffer::Offset;
+
+                if stride == size_data && flags.contains(query::ResultFlags::BITS_64) &&
+                    !flags.contains(query::ResultFlags::WITH_AVAILABILITY)
+                {
+                    // if stride is matching, copy everything in one go
+                    let com = soft::BlitCommand::CopyBuffer {
+                        src: AsNative::from(visibility.buffer.as_ref()),
+                        dst: AsNative::from(buffer.raw.as_ref()),
+                        region: com::BufferCopy {
+                            src: (pool_range.start + queries.start) as buffer::Offset * size_data,
+                            dst: buffer.range.start + offset,
+                            size: (queries.end - queries.start) as buffer::Offset * size_data,
+                        },
+                    };
+                    self.inner
+                        .borrow_mut()
+                        .sink()
+                        .blit_commands(iter::once(com));
+                } else {
+                    // copy parts of individual entries
+                    let size_payload = if flags.contains(query::ResultFlags::BITS_64) {
+                        mem::size_of::<u64>() as buffer::Offset
+                    } else {
+                        mem::size_of::<u32>() as buffer::Offset
+                    };
+                    let commands = (0 .. queries.end - queries.start).flat_map(|i| {
+                        let absolute_index = (pool_range.start + queries.start + i) as buffer::Offset;
+                        let dst_offset = buffer.range.start + offset + i as buffer::Offset * stride;
+                        let com_data = soft::BlitCommand::CopyBuffer {
+                            src: AsNative::from(visibility.buffer.as_ref()),
+                            dst: AsNative::from(buffer.raw.as_ref()),
+                            region: com::BufferCopy {
+                                src: absolute_index * size_data,
+                                dst: dst_offset,
+                                size: size_payload,
+                            },
+                        };
+
+                        let (com_avail, com_pad) = if flags.contains(query::ResultFlags::WITH_AVAILABILITY | query::ResultFlags::WAIT) {
+                            // Technically waiting is a no-op on a single queue. However,
+                            // the client expects the availability to be set regardless.
+                            let com = soft::BlitCommand::FillBuffer {
+                                dst: AsNative::from(buffer.raw.as_ref()),
+                                range: dst_offset + size_payload .. dst_offset + 2 * size_payload,
+                                value: !0,
+                            };
+                            (Some(com), None)
+                        } else if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
+                            let com_avail = soft::BlitCommand::CopyBuffer {
+                                src: AsNative::from(visibility.buffer.as_ref()),
+                                dst: AsNative::from(buffer.raw.as_ref()),
+                                region: com::BufferCopy {
+                                    src: visibility.availability_offset + absolute_index * size_meta,
+                                    dst: dst_offset + size_payload,
+                                    size: size_meta,
+                                },
+                            };
+                            // An extra padding is required if the client expects 64 bits availability without a wait
+                            let com_pad = if flags.contains(query::ResultFlags::BITS_64) {
+                                Some(soft::BlitCommand::FillBuffer {
+                                    dst: AsNative::from(buffer.raw.as_ref()),
+                                    range: dst_offset + size_payload + size_meta .. dst_offset + 2 * size_payload,
+                                    value: 0,
+                                })
+                            } else {
+                                None
+                            };
+                            (Some(com_avail), com_pad)
+                        } else {
+                            (None, None)
+                        };
+
+                        iter::once(com_data)
+                            .chain(com_avail)
+                            .chain(com_pad)
+                    });
+                    self.inner
+                        .borrow_mut()
+                        .sink()
+                        .blit_commands(commands);
+                }
+            }
+        }
     }
 
     fn write_timestamp(
         &mut self,
         _: pso::PipelineStage,
-        _: Query<Backend>,
+        _: query::Query<Backend>,
     ) {
         // nothing to do, timestamps are unsupported on Metal
     }
