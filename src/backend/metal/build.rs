@@ -1,10 +1,10 @@
 // Compiles the shaders used internally by some commands
 
 use std::env;
+use std::ffi::OsStr;
+use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::fs;
-use std::ffi::OsStr;
 
 fn main() {
     let pd = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -20,12 +20,10 @@ fn main() {
 
     let sdk_name = match (os, arch) {
         ("ios", "aarch64") => "iphoneos",
-        | ("ios", "armv7s")
-        | ("ios", "armv7") => panic!("32-bit iOS does not have metal support"),
-        ("ios", "i386")
-        | ("ios", "x86_64") => panic!("iOS simulator does not have metal support"),
+        ("ios", "armv7s") | ("ios", "armv7") => panic!("32-bit iOS does not have metal support"),
+        ("ios", "i386") | ("ios", "x86_64") => panic!("iOS simulator does not have metal support"),
         ("darwin", _) => "macosx",
-        _ => panic!("unsupported target {}", target)
+        _ => panic!("unsupported target {}", target),
     };
 
     let project_dir = Path::new(&pd);
@@ -44,7 +42,7 @@ fn main() {
             let path = entry.path();
             match path.extension().and_then(OsStr::to_str) {
                 Some("metal") => Some(path),
-                _ => None
+                _ => None,
             }
         });
 
@@ -85,4 +83,3 @@ fn main() {
         panic!("shader library build failed");
     }
 }
-
