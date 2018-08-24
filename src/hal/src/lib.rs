@@ -231,6 +231,8 @@ bitflags! {
 pub struct Limits {
     /// Maximum supported texture size.
     pub max_texture_size: usize,
+    /// Maximum number of elements for the BufferView to see.
+    pub max_texel_elements: usize,
     /// Maximum number of vertices for each patch.
     pub max_patch_size: PatchSize,
     /// Maximum number of viewports.

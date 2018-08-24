@@ -1013,6 +1013,7 @@ impl hal::Instance for Instance {
                     if depth_bounds_test_supported { Features::DEPTH_BOUNDS } else { Features::empty() },
                 limits: Limits { // TODO
                     max_texture_size: 0,
+                    max_texel_elements: 0,
                     max_patch_size: 0,
                     max_viewports: 0,
                     max_compute_group_count: [
