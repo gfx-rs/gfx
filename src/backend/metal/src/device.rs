@@ -1953,8 +1953,8 @@ impl hal::Device<Backend> for Device {
             None => return Err(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe }),
         };
         let format_desc = format.surface_desc();
-        if format_desc.aspects != format::Aspects::COLOR {
-            // no depth/stencil support for buffer views here
+        if format_desc.aspects != format::Aspects::COLOR || format_desc.is_compressed() {
+            // Vadlidator says "Linear texture: cannot create compressed, depth, or stencil textures"
             return Err(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe })
         }
         let block_count = (end_rough - start) * 8 / format_desc.bits as u64;
@@ -1963,9 +1963,8 @@ impl hal::Device<Backend> for Device {
             .ok_or(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe })?;
 
         let descriptor = metal::TextureDescriptor::new();
-        descriptor.set_texture_type(MTLTextureType::D2);
-        descriptor.set_width(format_desc.dim.0 as u64 * block_count);
-        descriptor.set_height(format_desc.dim.1 as u64);
+        descriptor.set_texture_type(MTLTextureType::D1);
+        descriptor.set_width(block_count);
         descriptor.set_mipmap_level_count(1);
         descriptor.set_pixel_format(mtl_format);
         descriptor.set_resource_options(buffer.res_options);
