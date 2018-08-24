@@ -24,7 +24,7 @@ use hal::pool::CommandPoolCreateFlags;
 use hal::queue::{QueueFamilyId, Queues};
 use hal::range::RangeArg;
 
-use cocoa::foundation::{NSRange, NSUInteger};
+use cocoa::foundation::{NSRange, NSUInteger, NSInteger};
 use foreign_types::ForeignType;
 use metal::{self,
     MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass,
@@ -33,6 +33,7 @@ use metal::{self,
     CaptureManager
 };
 use objc::rc::autoreleasepool;
+use objc::runtime::Object;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
@@ -294,6 +295,14 @@ impl MemoryTypes {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+struct NSOperatingSystemVersion {
+    major: NSInteger,
+    minor: NSInteger,
+    patch: NSInteger,
+}
+
 pub struct PhysicalDevice {
     shared: Arc<Shared>,
     memory_types: [hal::MemoryType; 4],
@@ -312,15 +321,32 @@ impl PhysicalDevice {
 
     pub(crate) fn new(shared: Arc<Shared>) -> Self {
         let device = shared.device.lock();
+
+        let NSOperatingSystemVersion { major, minor, .. } = unsafe {
+            let process_info: *mut Object = msg_send![class!(NSProcessInfo), processInfo];
+            msg_send![process_info, operatingSystemVersion]
+        };
+
         let private_caps = {
             PrivateCapabilities {
-                //TODO: MSL versions only depend on the OS version, not feature sets
-                msl_version: if device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v3) {
+                msl_version: if Self::is_mac(&device) {
+                    if major >= 10 && minor >= 13 {
+                        MTLLanguageVersion::V2_0
+                    } else if major >= 10 && minor >= 12 {
+                        MTLLanguageVersion::V1_2
+                    } else if major >= 10 && minor >= 11 {
+                        MTLLanguageVersion::V1_1
+                    } else {
+                        MTLLanguageVersion::V1_0
+                    }
+                } else if major >= 11 {
                     MTLLanguageVersion::V2_0
-                } else if device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v2) {
+                } else if major >= 10 {
                     MTLLanguageVersion::V1_2
-                } else {
+                } else if major >= 9 {
                     MTLLanguageVersion::V1_1
+                } else {
+                    MTLLanguageVersion::V1_0
                 },
                 exposed_queues: 1,
                 resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
