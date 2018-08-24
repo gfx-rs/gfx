@@ -41,8 +41,11 @@ use std::sync::Arc;
 use hal::queue::QueueFamilyId;
 
 use core_graphics::base::CGFloat;
-use core_graphics::geometry::CGRect;
 use objc::runtime::{Class, Object};
+#[cfg(target_os = "ios")]
+use objc::runtime::{BOOL, YES};
+#[cfg(target_os = "macos")]
+use core_graphics::geometry::CGRect;
 use foreign_types::ForeignTypeRef;
 use parking_lot::{Condvar, Mutex};
 
@@ -151,6 +154,7 @@ impl hal::Instance for Instance {
     }
 }
 
+#[cfg(target_os = "macos")]
 impl Instance {
     pub fn create(_: &str, _: u32) -> Self {
         Instance
@@ -178,7 +182,7 @@ impl Instance {
             msg_send![render_layer, setContentsScale:scale_factor];
 
             window::SurfaceInner {
-                nsview: view,
+                view,
                 render_layer: Mutex::new(render_layer),
             }
         }
@@ -196,6 +200,64 @@ impl Instance {
         use winit::os::macos::WindowExt;
         window::Surface {
             inner: Arc::new(self.create_from_nsview(window.get_nsview())),
+            has_swapchain: false,
+        }
+    }
+}
+
+#[cfg(target_os = "ios")]
+impl Instance {
+    pub fn create(_: &str, _: u32) -> Self {
+        Instance
+    }
+
+    fn create_from_uiview(&self, uiview: *mut c_void) -> window::SurfaceInner {
+        unsafe {
+            let view: cocoa::base::id = mem::transmute(uiview);
+            if view.is_null() {
+                panic!("window does not have a valid contentView");
+            }
+
+            let render_layer: *mut Object = msg_send![view, layer];
+            let class = Class::get("CAMetalLayer").unwrap();
+            let is_valid_layer: BOOL = msg_send![render_layer, isKindOfClass: class];
+            if is_valid_layer != YES {
+                panic!("expected [UIView layer] to be a CAMetalLayer");
+            }
+
+            let window: *mut Object = msg_send![view, window];
+            if window.is_null() {
+                panic!("surface is not attached to a window");
+            }
+
+            let screen: *mut Object = msg_send![window, screen];
+            if screen.is_null() {
+                panic!("window is not attached to a screen");
+            }
+
+            let scale_factor: CGFloat = msg_send![screen, nativeScale];
+            msg_send![view, setContentScaleFactor:scale_factor];
+
+            msg_send![view, retain];
+            window::SurfaceInner {
+                view,
+                render_layer: Mutex::new(render_layer),
+            }
+        }
+    }
+
+    pub fn create_surface_from_uiview(&self, uiview: *mut c_void) -> Surface {
+        window::Surface {
+            inner: Arc::new(self.create_from_uiview(uiview)),
+            has_swapchain: false,
+        }
+    }
+
+    #[cfg(feature = "winit")]
+    pub fn create_surface(&self, window: &winit::Window) -> Surface {
+        use winit::os::ios::WindowExt;
+        window::Surface {
+            inner: Arc::new(self.create_from_uiview(window.get_uiview())),
             has_swapchain: false,
         }
     }
