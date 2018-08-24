@@ -1109,17 +1109,12 @@ pub fn map_texture_usage(usage: image::Usage, tiling: image::Tiling) -> MTLTextu
         texture_usage |= MTLTextureUsage::ShaderRead | MTLTextureUsage::ShaderWrite;
     }
 
-    match tiling {
-        image::Tiling::Optimal => {
-            // Note: for blitting, we do actual rendering, so we add more flags for TRANSFER_* usage
-            if usage.contains(U::TRANSFER_DST) {
-                texture_usage |= MTLTextureUsage::RenderTarget;
-            }
-            if usage.contains(U::TRANSFER_SRC) {
-                texture_usage |= MTLTextureUsage::ShaderRead;
-            }
-        }
-        image::Tiling::Linear => {}
+    // Note: for blitting, we do actual rendering, so we add more flags for TRANSFER_* usage
+    if usage.contains(U::TRANSFER_DST) && tiling == image::Tiling::Optimal {
+        texture_usage |= MTLTextureUsage::RenderTarget;
+    }
+    if usage.contains(U::TRANSFER_SRC) {
+        texture_usage |= MTLTextureUsage::ShaderRead;
     }
 
     texture_usage

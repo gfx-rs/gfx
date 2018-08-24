@@ -1970,6 +1970,7 @@ impl hal::Device<Backend> for Device {
         descriptor.set_pixel_format(mtl_format);
         descriptor.set_resource_options(buffer.res_options);
         descriptor.set_storage_mode(buffer.raw.storage_mode());
+        descriptor.set_usage(metal::MTLTextureUsage::ShaderRead);
 
         let size = block_count * (format_desc.bits as u64 / 8);
         let stride = (size + STRIDE_MASK) & !STRIDE_MASK;
