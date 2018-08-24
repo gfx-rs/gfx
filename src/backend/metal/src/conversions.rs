@@ -1,7 +1,7 @@
 use PrivateCapabilities;
 
 use hal::{pass, image, pso, IndexType};
-use hal::format::{Format, Swizzle, Properties, BufferFeature};
+use hal::format::{Format, Swizzle, Properties};
 use hal::pso::{Comparison, StencilOp};
 use metal::*;
 
@@ -155,786 +155,789 @@ impl PrivateCapabilities {
     }
 
     pub fn map_format_properties(&self, format: MTLPixelFormat) -> Properties {
-        use hal::format::ImageFeature as If;
+        use hal::format::{BufferFeature as Bf, ImageFeature as If};
         use metal::MTLPixelFormat::*;
 
-        let defaults = Properties {
-            linear_tiling: If::empty(),
-            optimal_tiling: If::SAMPLED | If::BLIT_SRC | If::BLIT_DST,
-            buffer_features: BufferFeature::all(),
-        };
+        let buffer_features = Bf::all();
+        let color_if = If::SAMPLED | If::BLIT_SRC | If::BLIT_DST;
+        let compressed_if = color_if | If::SAMPLED_LINEAR;
+        let depth_if = color_if | If::DEPTH_STENCIL_ATTACHMENT;
 
         match format {
             A8Unorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                buffer_features,
+                .. Properties::default()
             },
             R8Unorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R8Unorm_sRGB if self.format_r8unorm_srgb_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R8Unorm_sRGB if self.format_r8unorm_srgb_no_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R8Snorm if self.format_r8snorm_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R8Uint => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R8Sint => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R16Unorm if self.format_r16_norm_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R16Snorm if self.format_r16_norm_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R16Uint => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R16Sint => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R16Float => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG8Unorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG8Unorm_sRGB if self.format_rg8unorm_srgb_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG8Unorm_sRGB if self.format_rg8unorm_srgb_no_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG8Snorm if self.format_rg8snorm_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG8Uint => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG8Sint => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             B5G6R5Unorm if self.format_b5 => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             A1BGR5Unorm if self.format_b5 => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             ABGR4Unorm if self.format_b5 => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             BGR5A1Unorm if self.format_b5 => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R32Uint if self.format_r32_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R32Uint if self.format_r32_no_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R32Sint if self.format_r32_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R32Sint if self.format_r32_no_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R32Float if self.format_r32float_no_write_no_filter => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT 
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R32Float if self.format_r32float_no_filter => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             R32Float if self.format_r32float_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG16Unorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG16Snorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG16Float => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA8Unorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA8Unorm_sRGB if self.format_rgba8_srgb_no_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA8Unorm_sRGB if self.format_rgba8_srgb_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA8Snorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA8Uint => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA8Sint => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             BGRA8Unorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             BGRA8Unorm_sRGB if self.format_rgba8_srgb_no_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             BGRA8Unorm_sRGB if self.format_rgba8_srgb_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGB10A2Unorm if self.format_rgb10a2_unorm_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGB10A2Unorm if self.format_rgb10a2_unorm_no_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGB10A2Uint if self.format_rgb10a2_uint_color => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGB10A2Uint if self.format_rgb10a2_uint_color_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG11B10Float if self.format_rg11b10_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG11B10Float if self.format_rg11b10_no_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGB9E5Float if self.format_rgb9e5_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGB9E5Float if self.format_rgb9e5_filter_only => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                buffer_features,
+                .. Properties::default()
             },
             RGB9E5Float if self.format_rgb9e5_no_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG32Uint if self.format_rg32_color => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG32Sint if self.format_rg32_color => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG32Uint if self.format_rg32_color_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT 
                     | If::STORAGE,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG32Sint if self.format_rg32_color_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT 
                     | If::STORAGE,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG32Float if self.format_rg32float_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG32Float if self.format_rg32float_color_blend => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT 
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RG32Float if self.format_rg32float_no_filter => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT 
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA16Unorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA16Snorm => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA16Uint => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA16Sint => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::STORAGE 
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA16Float => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA32Uint if self.format_rgba32int_color => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA32Uint if self.format_rgba32int_color_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT 
                     | If::STORAGE,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA32Sint if self.format_rgba32int_color => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA32Sint if self.format_rgba32int_color_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT 
                     | If::STORAGE,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA32Float if self.format_rgba32float_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA32Float if self.format_rgba32float_color => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             RGBA32Float if self.format_rgba32float_color_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::COLOR_ATTACHMENT 
                     | If::STORAGE,
-                ..defaults
+                buffer_features,
+                .. Properties::default()
             },
             EAC_R11Unorm if self.format_eac_etc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             EAC_R11Snorm if self.format_eac_etc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             EAC_RG11Unorm if self.format_eac_etc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             EAC_RG11Snorm if self.format_eac_etc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ETC2_RGB8 if self.format_eac_etc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ETC2_RGB8_sRGB if self.format_eac_etc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ETC2_RGB8A1 if self.format_eac_etc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ETC2_RGB8A1_sRGB if self.format_eac_etc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_4x4_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_4x4_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_5x4_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_5x4_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_5x5_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_5x5_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_6x5_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_6x5_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_6x6_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_6x6_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_8x5_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_8x5_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_8x6_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_8x6_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_8x8_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_8x8_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_10x5_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_10x5_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_10x6_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_10x6_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_10x8_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling     
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_10x8_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_10x10_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_10x10_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_12x10_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_12x10_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_12x12_LDR if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             ASTC_12x12_sRGB if self.format_astc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC1_RGBA if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC1_RGBA_sRGB if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC2_RGBA if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC2_RGBA_sRGB if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC3_RGBA if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC3_RGBA_sRGB if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC4_RUnorm if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC4_RSnorm if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC5_RGUnorm if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC5_RGSnorm if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC6H_RGBUfloat if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC6H_RGBFloat if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC7_RGBAUnorm if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             BC7_RGBAUnorm_sRGB if self.format_bc => Properties {
-                optimal_tiling: defaults.optimal_tiling 
-                    | If::SAMPLED_LINEAR,
-                ..defaults
+                optimal_tiling: compressed_if,
+                .. Properties::default()
             },
             Depth16Unorm if self.format_depth16unorm => Properties {
-                optimal_tiling: defaults.optimal_tiling
-                    | If::DEPTH_STENCIL_ATTACHMENT
+                optimal_tiling: depth_if
                     | If::SAMPLED_LINEAR,
-                ..defaults
+                .. Properties::default()
             },
             Depth32Float if self.format_depth32float_filter => Properties {
-                optimal_tiling: defaults.optimal_tiling
-                    | If::DEPTH_STENCIL_ATTACHMENT
+                optimal_tiling: depth_if
                     | If::SAMPLED_LINEAR,
-                ..defaults
-            },
-            Depth32Float if self.format_depth32float_none => Properties {
-                optimal_tiling: If::empty(),
-                ..defaults
+                .. Properties::default()
             },
             Stencil8 => Properties {
-                optimal_tiling: If::empty(),
-                ..defaults
+                .. Properties::default()
             },
             Depth24Unorm_Stencil8 if self.format_depth24_stencil8 => Properties {
-                optimal_tiling: defaults.optimal_tiling
-                    | If::DEPTH_STENCIL_ATTACHMENT,
-                ..defaults
+                optimal_tiling: depth_if,
+                .. Properties::default()
             },
             Depth32Float_Stencil8 if self.format_depth32_stencil8_filter => Properties {
-                optimal_tiling: defaults.optimal_tiling
-                    | If::DEPTH_STENCIL_ATTACHMENT
+                optimal_tiling: depth_if
                     | If::SAMPLED_LINEAR,
-                ..defaults
-            },
-            Depth32Float_Stencil8 if self.format_depth32_stencil8_none => Properties {
-                optimal_tiling: If::empty(),
-                ..defaults
+                .. Properties::default()
             },
             BGR10A2Unorm if self.format_bgr10a2_all => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                .. Properties::default()
             },
             BGR10A2Unorm if self.format_bgr10a2_no_write => Properties {
-                optimal_tiling: defaults.optimal_tiling 
+                optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
                     | If::COLOR_ATTACHMENT_BLEND,
-                ..defaults
+                .. Properties::default()
             },
-            _ => defaults,
+            _ => Properties::default(),
         }
     }
 }
