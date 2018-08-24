@@ -301,6 +301,7 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, LegacyFeatures, Limits, Privat
 
     let mut limits = Limits {
         max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
+        max_texel_elements: get_usize(gl, gl::MAX_TEXTURE_BUFFER_SIZE),
         max_viewports: 1,
         min_buffer_copy_offset_alignment: 1,
         min_buffer_copy_pitch_alignment: 1,

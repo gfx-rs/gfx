@@ -314,6 +314,7 @@ impl hal::Instance for Instance {
 
             let limits = hal::Limits {
                 max_texture_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
+                max_texel_elements: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _, //TODO
                 max_patch_size: 0, // TODO
                 max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
                 max_compute_group_count: [

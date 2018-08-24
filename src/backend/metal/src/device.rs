@@ -172,10 +172,6 @@ const BASE_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
 
-//The offset and bytesPerRow parameters must be byte aligned to the size returned by the
-// minimumLinearTextureAlignmentForPixelFormat: method. The bytesPerRow parameter must also be
-// greater than or equal to the size of one pixel, in bytes, multiplied by the pixel width of one row.
-const STRIDE_MASK: u64 = 0xFF;
 
 /// Emit error during shader module parsing.
 fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
@@ -382,6 +378,7 @@ impl PhysicalDevice {
                 } else {
                     1 << 28 // 256MB otherwise
                 },
+                max_texture_size: 4096, //TODO
             }
         };
 
@@ -523,7 +520,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn limits(&self) -> hal::Limits {
         hal::Limits {
-            max_texture_size: 4096, // TODO: feature set
+            max_texture_size: self.private_caps.max_texture_size as usize,
+            max_texel_elements: (self.private_caps.max_texture_size * self.private_caps.max_texture_size) as usize,
             max_patch_size: 0, // No tessellation
 
             // Note: The maximum number of supported viewports and scissor rectangles varies by device.
@@ -1957,22 +1955,27 @@ impl hal::Device<Backend> for Device {
             // Vadlidator says "Linear texture: cannot create compressed, depth, or stencil textures"
             return Err(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe })
         }
-        let block_count = (end_rough - start) * 8 / format_desc.bits as u64;
+
+        //Note: we rely on SPIRV-Cross to use the proper 2D texel indexing here
+        let texel_count = (end_rough - start) * 8 / format_desc.bits as u64;
+        let col_count = cmp::min(texel_count, self.private_caps.max_texture_size);
+        let row_count = cmp::max(1, texel_count / self.private_caps.max_texture_size);
         let mtl_format = self.private_caps
             .map_format(format)
             .ok_or(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe })?;
 
         let descriptor = metal::TextureDescriptor::new();
-        descriptor.set_texture_type(MTLTextureType::D1);
-        descriptor.set_width(block_count);
+        descriptor.set_texture_type(MTLTextureType::D2);
+        descriptor.set_width(col_count);
+        descriptor.set_height(row_count);
         descriptor.set_mipmap_level_count(1);
         descriptor.set_pixel_format(mtl_format);
         descriptor.set_resource_options(buffer.res_options);
         descriptor.set_storage_mode(buffer.raw.storage_mode());
         descriptor.set_usage(metal::MTLTextureUsage::ShaderRead);
 
-        let size = block_count * (format_desc.bits as u64 / 8);
-        let stride = (size + STRIDE_MASK) & !STRIDE_MASK;
+        let alignment = self.private_caps.buffer_alignment;
+        let stride = (col_count * (format_desc.bits as u64 / 8) + alignment - 1) & !alignment;
 
         Ok(n::BufferView {
             raw: buffer.raw.new_texture_from_contents(&descriptor, start, stride),
@@ -2165,7 +2168,8 @@ impl hal::Device<Backend> for Device {
             },
             n::MemoryHeap::Public(memory_type, ref cpu_buffer) => {
                 let row_size = image.kind.extent().width as u64 * (format_desc.bits as u64 / 8);
-                let stride = (row_size + STRIDE_MASK) & !STRIDE_MASK;
+                let alignment = self.private_caps.buffer_alignment;
+                let stride = (row_size + alignment - 1) & !alignment;
 
                 let (storage_mode, cache_mode) = MemoryTypes::describe(memory_type.0);
                 image.texture_desc.set_storage_mode(storage_mode);

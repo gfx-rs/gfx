@@ -632,6 +632,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         Limits {
             max_texture_size: limits.max_image_dimension3d as _,
+            max_texel_elements: limits.max_texel_buffer_elements as _,
             max_patch_size: limits.max_tessellation_patch_size as PatchSize,
             max_viewports: limits.max_viewports as _,
             max_compute_group_count: [max_group_count[0] as _, max_group_count[1] as _, max_group_count[2] as _],

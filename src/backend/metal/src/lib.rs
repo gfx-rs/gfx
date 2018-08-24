@@ -301,6 +301,7 @@ struct PrivateCapabilities {
     max_samplers_per_stage: ResourceIndex,
     buffer_alignment: u64,
     max_buffer_size: u64,
+    max_texture_size: u64,
 }
 
 #[derive(Clone, Copy, Debug)]
