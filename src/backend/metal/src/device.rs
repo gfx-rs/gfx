@@ -2000,8 +2000,8 @@ impl hal::Device<Backend> for Device {
         descriptor.set_storage_mode(buffer.raw.storage_mode());
         descriptor.set_usage(metal::MTLTextureUsage::ShaderRead);
 
-        let alignment = self.private_caps.buffer_alignment;
-        let stride = (col_count * (format_desc.bits as u64 / 8) + alignment - 1) & !alignment;
+        let align_mask = self.private_caps.buffer_alignment - 1;
+        let stride = (col_count * (format_desc.bits as u64 / 8) + align_mask) & !align_mask;
 
         Ok(n::BufferView {
             raw: buffer.raw.new_texture_from_contents(&descriptor, start, stride),
@@ -2194,8 +2194,8 @@ impl hal::Device<Backend> for Device {
             },
             n::MemoryHeap::Public(memory_type, ref cpu_buffer) => {
                 let row_size = image.kind.extent().width as u64 * (format_desc.bits as u64 / 8);
-                let alignment = self.private_caps.buffer_alignment;
-                let stride = (row_size + alignment - 1) & !alignment;
+                let align_mask = self.private_caps.buffer_alignment - 1;
+                let stride = (row_size + align_mask) & !align_mask;
 
                 let (storage_mode, cache_mode) = MemoryTypes::describe(memory_type.0);
                 image.texture_desc.set_storage_mode(storage_mode);
