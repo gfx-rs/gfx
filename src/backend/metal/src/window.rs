@@ -186,7 +186,8 @@ impl hal::Surface<Backend> for Surface {
             current_extent,
             extents: Extent2D { width: 4, height: 4} .. Extent2D { width: 4096, height: 4096 },
             max_image_layers: 1,
-            usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
+            usage: image::Usage::COLOR_ATTACHMENT | image::Usage::SAMPLED |
+                image::Usage::TRANSFER_SRC | image::Usage::TRANSFER_DST,
         };
 
         let formats = vec![

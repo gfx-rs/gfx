@@ -35,6 +35,10 @@ pub struct Extent {
 }
 
 impl Extent {
+    /// Return true if one of the dimensions is zero.
+    pub fn is_empty(&self) -> bool {
+        self.width == 0 || self.height == 0 || self.depth == 0
+    }
     /// Get the extent at a particular mipmap level.
     pub fn at_level(&self, level: Level) -> Self {
         Extent {

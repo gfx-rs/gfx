@@ -3343,11 +3343,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             retained_textures.last().unwrap()
         };
 
-        let commands = regions.into_iter().map(|region| {
-            soft::BlitCommand::CopyImage {
-                src: AsNative::from(new_src),
-                dst: AsNative::from(dst.raw.as_ref()),
-                region: region.borrow().clone(),
+        let commands = regions.into_iter().filter_map(|region| {
+            let r = region.borrow();
+            if r.extent.is_empty() {
+                None
+            } else {
+                Some(soft::BlitCommand::CopyImage {
+                    src: AsNative::from(new_src),
+                    dst: AsNative::from(dst.raw.as_ref()),
+                    region: r.clone(),
+                })
             }
         });
         sink.as_mut()
@@ -3366,12 +3371,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::BufferImageCopy>,
     {
         // FIXME: layout
-        let commands = regions.into_iter().map(|region| {
-            soft::BlitCommand::CopyBufferToImage {
-                src: AsNative::from(src.raw.as_ref()),
-                dst: AsNative::from(dst.raw.as_ref()),
-                dst_desc: dst.format_desc,
-                region: region.borrow().clone(),
+        let commands = regions.into_iter().filter_map(|region| {
+            let r = region.borrow();
+            if r.image_extent.is_empty() {
+                None
+            } else {
+                Some(soft::BlitCommand::CopyBufferToImage {
+                    src: AsNative::from(src.raw.as_ref()),
+                    dst: AsNative::from(dst.raw.as_ref()),
+                    dst_desc: dst.format_desc,
+                    region: r.clone(),
+                })
             }
         });
         self.inner
@@ -3391,12 +3401,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::BufferImageCopy>,
     {
         // FIXME: layout
-        let commands = regions.into_iter().map(|region| {
-            soft::BlitCommand::CopyImageToBuffer {
-                src: AsNative::from(src.raw.as_ref()),
-                src_desc: src.format_desc,
-                dst: AsNative::from(dst.raw.as_ref()),
-                region: region.borrow().clone(),
+        let commands = regions.into_iter().filter_map(|region| {
+            let r = region.borrow();
+            if r.image_extent.is_empty() {
+                None
+            } else {
+                Some(soft::BlitCommand::CopyImageToBuffer {
+                    src: AsNative::from(src.raw.as_ref()),
+                    src_desc: src.format_desc,
+                    dst: AsNative::from(dst.raw.as_ref()),
+                    region: r.clone(),
+                })
             }
         });
         self.inner
