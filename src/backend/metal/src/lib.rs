@@ -306,6 +306,8 @@ impl hal::Backend for Backend {
 
 #[derive(Clone, Debug)]
 struct PrivateCapabilities {
+    pub os_is_mac: bool,
+    os_version: (u32, u32),
     msl_version: metal::MTLLanguageVersion,
     exposed_queues: usize,
     resource_heaps: bool,
@@ -364,6 +366,17 @@ struct PrivateCapabilities {
     buffer_alignment: u64,
     max_buffer_size: u64,
     max_texture_size: u64,
+}
+
+impl PrivateCapabilities {
+    fn version_at_least(major: u32, minor: u32, needed_major: u32, needed_minor: u32) -> bool {
+        major > needed_major || (major == needed_major && minor >= needed_minor)
+    }
+
+    fn has_version_at_least(&self, needed_major: u32, needed_minor: u32) -> bool {
+        let (major, minor) = self.os_version;
+        Self::version_at_least(major, minor, needed_major, needed_minor)
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
