@@ -1452,7 +1452,13 @@ impl hal::Device<Backend> for Device {
         descriptor.set_lod_bias(info.lod_bias.into());
         descriptor.set_lod_min_clamp(info.lod_range.start.into());
         descriptor.set_lod_max_clamp(info.lod_range.end.into());
-        descriptor.set_lod_average(true); // optimization
+        
+        let caps = &self.private_caps;
+        // TODO: Clarify minimum macOS version with Apple (43707452)
+        if (caps.os_is_mac && caps.has_version_at_least(10, 13)) ||
+            (!caps.os_is_mac && caps.has_version_at_least(9, 0)) {
+            descriptor.set_lod_average(true); // optimization
+        }
 
         if let Some(fun) = info.comparison {
             descriptor.set_compare_function(conv::map_compare_function(fun));
