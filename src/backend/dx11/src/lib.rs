@@ -688,7 +688,9 @@ unsafe impl Send for Swapchain { }
 unsafe impl Sync for Swapchain { }
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_image(&mut self, _sync: hal::FrameSync<Backend>) -> Result<hal::SwapImageIndex, ()> {
+    fn acquire_image(
+        &mut self, _timeout_ns: u64, _sync: hal::FrameSync<Backend>
+    ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         // TODO: non-`_DISCARD` swap effects have more than one buffer, `FLIP`
         //       effects are dxgi 1.3 (w10+?) in which case there is
         //       `GetCurrentBackBufferIndex()` on the swapchain
