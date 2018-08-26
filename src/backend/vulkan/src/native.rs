@@ -110,7 +110,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         }
 
         let info = vk::DescriptorSetAllocateInfo {
-            s_type: vk::StructureType::DescriptorSetAllocateInfo,
+            s_type: vk::StructureType::DESCRIPTOR_SET_ALLOCATE_INFO,
             p_next: ptr::null(),
             descriptor_pool: self.raw,
             descriptor_set_count: raw_layouts.len() as u32,
@@ -131,10 +131,10 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                     .collect()
             }
             Err(err) => vec![Err(match err {
-                vk::Result::ErrorOutOfHostMemory => pso::AllocationError::OutOfHostMemory,
-                vk::Result::ErrorOutOfDeviceMemory => pso::AllocationError::OutOfDeviceMemory,
-                // TODO: Uncomment when ash updates to include VK_ERROR_OUT_OF_POOL_MEMORY(_KHR)
-                // vk::Result::ErrorOutOfPoolMemory => pso::AllocationError::OutOfPoolMemory,
+                vk::Result::ERROR_OUT_OF_HOST_MEMORY => pso::AllocationError::OutOfHostMemory,
+                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => pso::AllocationError::OutOfDeviceMemory,
+                // TODO: Uncomment when ash updates to include ERROR_OUT_OF_POOL_MEMORY(_KHR)
+                // vk::Result::ERROR_OUT_OF_POOL_MEMORY => pso::AllocationError::OutOfPoolMemory,
                 _ => pso::AllocationError::FragmentedPool,
             })]
         }

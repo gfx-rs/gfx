@@ -62,7 +62,7 @@ impl Device {
 impl d::Device<B> for Device {
     fn allocate_memory(&self, mem_type: MemoryTypeId, size: u64) -> Result<n::Memory, d::OutOfMemory> {
         let info = vk::MemoryAllocateInfo {
-            s_type: vk::StructureType::MemoryAllocateInfo,
+            s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
             p_next: ptr::null(),
             allocation_size: size,
             memory_type_index: mem_type.0 as _,
@@ -80,14 +80,14 @@ impl d::Device<B> for Device {
     ) -> RawCommandPool {
         let mut flags = vk::CommandPoolCreateFlags::empty();
         if create_flags.contains(CommandPoolCreateFlags::TRANSIENT) {
-            flags |= vk::COMMAND_POOL_CREATE_TRANSIENT_BIT;
+            flags |= vk::CommandPoolCreateFlags::TRANSIENT;
         }
         if create_flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
-            flags |= vk::COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            flags |= vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER;
         }
 
         let info = vk::CommandPoolCreateInfo {
-            s_type: vk::StructureType::CommandPoolCreateInfo,
+            s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
             p_next: ptr::null(),
             flags,
             queue_family_index: family.0 as _,
@@ -124,7 +124,7 @@ impl d::Device<B> for Device {
     {
         let map_subpass_ref = |pass: pass::SubpassRef| {
             match pass {
-                pass::SubpassRef::External => vk::VK_SUBPASS_EXTERNAL,
+                pass::SubpassRef::External => vk::SUBPASS_EXTERNAL,
                 pass::SubpassRef::Pass(id) => id as u32,
             }
         };
@@ -133,8 +133,8 @@ impl d::Device<B> for Device {
             let attachment = attachment.borrow();
             vk::AttachmentDescription {
                 flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
-                format: attachment.format.map_or(vk::Format::Undefined, conv::map_format),
-                samples: vk::SAMPLE_COUNT_1_BIT, // TODO: multisampling
+                format: attachment.format.map_or(vk::Format::UNDEFINED, conv::map_format),
+                samples: vk::SampleCountFlags::TYPE_1, // TODO: multisampling
                 load_op: conv::map_attachment_load_op(attachment.ops.load),
                 store_op: conv::map_attachment_store_op(attachment.ops.store),
                 stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
@@ -175,7 +175,7 @@ impl d::Device<B> for Device {
 
             vk::SubpassDescription {
                 flags: vk::SubpassDescriptionFlags::empty(),
-                pipeline_bind_point: vk::PipelineBindPoint::Graphics,
+                pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
                 input_attachment_count: input_attachments.len() as u32,
                 p_input_attachments: input_attachments.as_ptr(),
                 color_attachment_count: color_attachments.len() as u32,
@@ -205,7 +205,7 @@ impl d::Device<B> for Device {
         }).collect::<Vec<_>>();
 
         let info = vk::RenderPassCreateInfo {
-            s_type: vk::StructureType::RenderPassCreateInfo,
+            s_type: vk::StructureType::RENDER_PASS_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::RenderPassCreateFlags::empty(),
             attachment_count: attachments.len() as u32,
@@ -251,7 +251,7 @@ impl d::Device<B> for Device {
             }).collect::<Vec<_>>();
 
         let info = vk::PipelineLayoutCreateInfo {
-            s_type: vk::StructureType::PipelineLayoutCreateInfo,
+            s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::PipelineLayoutCreateFlags::empty(),
             set_layout_count: set_layouts.len() as u32,
@@ -324,7 +324,7 @@ impl d::Device<B> for Device {
             let info = info_specializations.last().unwrap();
 
             vk::PipelineShaderStageCreateInfo {
-                s_type: vk::StructureType::PipelineShaderStageCreateInfo,
+                s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::PipelineShaderStageCreateFlags::empty(),
                 stage,
@@ -339,23 +339,23 @@ impl d::Device<B> for Device {
             let mut stages = Vec::new();
             // Vertex stage
             if true { //vertex shader is required
-                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, &desc.shaders.vertex));
+                stages.push(make_stage(vk::ShaderStageFlags::VERTEX, &desc.shaders.vertex));
             }
             // Pixel stage
             if let Some(ref entry) = desc.shaders.fragment {
-                stages.push(make_stage(vk::SHADER_STAGE_FRAGMENT_BIT, entry));
+                stages.push(make_stage(vk::ShaderStageFlags::FRAGMENT, entry));
             }
             // Geometry stage
             if let Some(ref entry) = desc.shaders.geometry {
-                stages.push(make_stage(vk::SHADER_STAGE_GEOMETRY_BIT, entry));
+                stages.push(make_stage(vk::ShaderStageFlags::GEOMETRY, entry));
             }
             // Domain stage
             if let Some(ref entry) = desc.shaders.domain {
-                stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT, entry));
+                stages.push(make_stage(vk::ShaderStageFlags::TESSELLATION_EVALUATION, entry));
             }
             // Hull stage
             if let Some(ref entry) = desc.shaders.hull {
-                stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT, entry));
+                stages.push(make_stage(vk::ShaderStageFlags::TESSELLATION_CONTROL, entry));
             }
 
             let (polygon_mode, line_width) = conv::map_polygon_mode(desc.rasterizer.polygon_mode);
@@ -368,9 +368,9 @@ impl d::Device<B> for Device {
                         binding: vbuf.binding,
                         stride: vbuf.stride as u32,
                         input_rate: if vbuf.rate == 0 {
-                            vk::VertexInputRate::Vertex
+                            vk::VertexInputRate::VERTEX
                         } else {
-                            vk::VertexInputRate::Instance
+                            vk::VertexInputRate::INSTANCE
                         },
                     });
                 }
@@ -390,7 +390,7 @@ impl d::Device<B> for Device {
             let &(ref vertex_bindings, ref vertex_attributes) = info_vertex_descs.last().unwrap();
 
             info_vertex_input_states.push(vk::PipelineVertexInputStateCreateInfo {
-                s_type: vk::StructureType::PipelineVertexInputStateCreateInfo,
+                s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::PipelineVertexInputStateCreateFlags::empty(),
                 vertex_binding_description_count: vertex_bindings.len() as u32,
@@ -400,32 +400,32 @@ impl d::Device<B> for Device {
             });
 
             info_input_assembly_states.push(vk::PipelineInputAssemblyStateCreateInfo {
-                s_type: vk::StructureType::PipelineInputAssemblyStateCreateInfo,
+                s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
                 topology: conv::map_topology(desc.input_assembler.primitive),
-                primitive_restart_enable: vk::VK_FALSE,
+                primitive_restart_enable: vk::FALSE,
             });
 
             info_rasterization_states.push(vk::PipelineRasterizationStateCreateInfo {
-                s_type: vk::StructureType::PipelineRasterizationStateCreateInfo,
+                s_type: vk::StructureType::PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::PipelineRasterizationStateCreateFlags::empty(),
                 depth_clamp_enable: if desc.rasterizer.depth_clamping {
                     if self.raw.1.contains(Features::DEPTH_CLAMP) {
-                        vk::VK_TRUE
+                        vk::TRUE
                     } else {
                         warn!("Depth clamping was requested on a device with disabled feature");
-                        vk::VK_FALSE
+                        vk::FALSE
                     }
                 } else {
-                    vk::VK_FALSE
+                    vk::FALSE
                 },
-                rasterizer_discard_enable: if desc.shaders.fragment.is_none() { vk::VK_TRUE } else { vk::VK_FALSE },
+                rasterizer_discard_enable: if desc.shaders.fragment.is_none() { vk::TRUE } else { vk::FALSE },
                 polygon_mode,
-                cull_mode: desc.rasterizer.cull_face.map(conv::map_cull_face).unwrap_or(vk::CULL_MODE_NONE),
+                cull_mode: desc.rasterizer.cull_face.map(conv::map_cull_face).unwrap_or(vk::CullModeFlags::NONE),
                 front_face: conv::map_front_face(desc.rasterizer.front_face),
-                depth_bias_enable: if desc.rasterizer.depth_bias.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
+                depth_bias_enable: if desc.rasterizer.depth_bias.is_some() { vk::TRUE } else { vk::FALSE },
                 depth_bias_constant_factor: desc.rasterizer.depth_bias.map_or(0.0, |off| off.const_factor),
                 depth_bias_clamp: desc.rasterizer.depth_bias.map_or(0.0, |off| off.clamp),
                 depth_bias_slope_factor: desc.rasterizer.depth_bias.map_or(0.0, |off| off.slope_factor),
@@ -435,7 +435,7 @@ impl d::Device<B> for Device {
             let is_tessellated = desc.shaders.hull.is_some() && desc.shaders.domain.is_some();
             if is_tessellated {
                 info_tessellation_states.push(vk::PipelineTessellationStateCreateInfo {
-                    s_type: vk::StructureType::PipelineTessellationStateCreateInfo,
+                    s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
                     p_next: ptr::null(),
                     flags: vk::PipelineTessellationStateCreateFlags::empty(),
                     patch_control_points: 1 // TODO: 0 < control_points <= VkPhysicalDeviceLimits::maxTessellationPatchSize
@@ -445,7 +445,7 @@ impl d::Device<B> for Device {
             let dynamic_state_base = dynamic_states.len();
 
             info_viewport_states.push(vk::PipelineViewportStateCreateInfo {
-                s_type: vk::StructureType::PipelineViewportStateCreateInfo,
+                s_type: vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::PipelineViewportStateCreateFlags::empty(),
                 scissor_count: 1, // TODO
@@ -455,7 +455,7 @@ impl d::Device<B> for Device {
                         scissors.last().unwrap()
                     },
                     None => {
-                        dynamic_states.push(vk::DynamicState::Scissor);
+                        dynamic_states.push(vk::DynamicState::SCISSOR);
                         ptr::null()
                     },
                 },
@@ -466,7 +466,7 @@ impl d::Device<B> for Device {
                         viewports.last().unwrap()
                     },
                     None => {
-                        dynamic_states.push(vk::DynamicState::Viewport);
+                        dynamic_states.push(vk::DynamicState::VIEWPORT);
                         ptr::null()
                     },
                 },
@@ -481,7 +481,7 @@ impl d::Device<B> for Device {
                     sample_masks.push(sample_mask);
 
                     vk::PipelineMultisampleStateCreateInfo {
-                        s_type: vk::StructureType::PipelineMultisampleStateCreateInfo,
+                        s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
                         p_next: ptr::null(),
                         flags: vk::PipelineMultisampleStateCreateFlags::empty(),
                         rasterization_samples: vk::SampleCountFlags::from_flags_truncate(ms.rasterization_samples as _),
@@ -493,27 +493,27 @@ impl d::Device<B> for Device {
                     }
                 },
                 None => vk::PipelineMultisampleStateCreateInfo {
-                    s_type: vk::StructureType::PipelineMultisampleStateCreateInfo,
+                    s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
                     p_next: ptr::null(),
                     flags: vk::PipelineMultisampleStateCreateFlags::empty(),
-                    rasterization_samples: vk::SAMPLE_COUNT_1_BIT,
-                    sample_shading_enable: vk::VK_FALSE,
+                    rasterization_samples: vk::SampleCountFlags::TYPE_1,
+                    sample_shading_enable: vk::FALSE,
                     min_sample_shading: 0.0,
                     p_sample_mask: ptr::null(),
-                    alpha_to_coverage_enable: vk::VK_FALSE,
-                    alpha_to_one_enable: vk::VK_FALSE,
+                    alpha_to_coverage_enable: vk::FALSE,
+                    alpha_to_one_enable: vk::FALSE,
                 },
             };
             info_multisample_states.push(multisampling_state);
 
             let depth_stencil = desc.depth_stencil;
             let (depth_test_enable, depth_write_enable, depth_compare_op) = match depth_stencil.depth {
-                pso::DepthTest::On { fun, write } => (vk::VK_TRUE, write as _, conv::map_comparison(fun)),
-                pso::DepthTest::Off => (vk::VK_FALSE, vk::VK_FALSE, vk::CompareOp::Never),
+                pso::DepthTest::On { fun, write } => (vk::TRUE, write as _, conv::map_comparison(fun)),
+                pso::DepthTest::Off => (vk::FALSE, vk::FALSE, vk::CompareOp::NEVER),
             };
             let (stencil_test_enable, front, back) = match depth_stencil.stencil {
                 pso::StencilTest::On { ref front, ref back } => (
-                    vk::VK_TRUE,
+                    vk::TRUE,
                     conv::map_stencil_side(front),
                     conv::map_stencil_side(back),
                 ),
@@ -522,13 +522,13 @@ impl d::Device<B> for Device {
             let (min_depth_bounds, max_depth_bounds) = match desc.baked_states.depth_bounds {
                 Some(ref range) => (range.start, range.end),
                 None => {
-                    dynamic_states.push(vk::DynamicState::DepthBounds);
+                    dynamic_states.push(vk::DynamicState::DEPTH_BOUNDS);
                     (0.0, 1.0)
                 }
             };
 
             info_depth_stencil_states.push(vk::PipelineDepthStencilStateCreateInfo {
-                s_type: vk::StructureType::PipelineDepthStencilStateCreateInfo,
+                s_type: vk::StructureType::PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
                 depth_test_enable,
@@ -553,7 +553,7 @@ impl d::Device<B> for Device {
                             let (alpha_blend_op, src_alpha_blend_factor, dst_alpha_blend_factor) = conv::map_blend_op(alpha);
                             vk::PipelineColorBlendAttachmentState {
                                 color_write_mask,
-                                blend_enable: vk::VK_TRUE,
+                                blend_enable: vk::TRUE,
                                 src_color_blend_factor,
                                 dst_color_blend_factor,
                                 color_blend_op,
@@ -572,24 +572,24 @@ impl d::Device<B> for Device {
             color_attachments.push(blend_states);
 
             info_color_blend_states.push(vk::PipelineColorBlendStateCreateInfo {
-                s_type: vk::StructureType::PipelineColorBlendStateCreateInfo,
+                s_type: vk::StructureType::PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::PipelineColorBlendStateCreateFlags::empty(),
-                logic_op_enable: vk::VK_FALSE, // TODO
-                logic_op: vk::LogicOp::Clear,
+                logic_op_enable: vk::FALSE, // TODO
+                logic_op: vk::LogicOp::CLEAR,
                 attachment_count: color_attachments.last().unwrap().len() as _,
                 p_attachments: color_attachments.last().unwrap().as_ptr(), // TODO:
                 blend_constants: match desc.baked_states.blend_color {
                     Some(value) => value,
                     None => {
-                        dynamic_states.push(vk::DynamicState::BlendConstants);
+                        dynamic_states.push(vk::DynamicState::BLEND_CONSTANTS);
                         [0.0; 4]
                     },
                 },
             });
 
             info_dynamic_states.push(vk::PipelineDynamicStateCreateInfo {
-                s_type: vk::StructureType::PipelineDynamicStateCreateInfo,
+                s_type: vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::PipelineDynamicStateCreateFlags::empty(),
                 dynamic_state_count: (dynamic_states.len() - dynamic_state_base) as _,
@@ -607,17 +607,17 @@ impl d::Device<B> for Device {
             let mut flags = vk::PipelineCreateFlags::empty();
             match desc.parent {
                 pso::BasePipeline::None => (),
-                _ => { flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT; }
+                _ => { flags |= vk::PipelineCreateFlags::DERIVATIVE; }
             }
             if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
-                flags |= vk::PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
+                flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
             }
             if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
-                flags |= vk::PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
+                flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
             }
 
             Ok(vk::GraphicsPipelineCreateInfo {
-                s_type: vk::StructureType::GraphicsPipelineCreateInfo,
+                s_type: vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags,
                 stage_count: info_stages.last().unwrap().len() as _,
@@ -707,10 +707,10 @@ impl d::Device<B> for Device {
             let info = info_specializations.last().unwrap();
 
             let stage = vk::PipelineShaderStageCreateInfo {
-                s_type: vk::StructureType::PipelineShaderStageCreateInfo,
+                s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::PipelineShaderStageCreateFlags::empty(),
-                stage: vk::SHADER_STAGE_COMPUTE_BIT,
+                stage: vk::ShaderStageFlags::COMPUTE,
                 module: desc.shader.module.raw,
                 p_name,
                 p_specialization_info: info,
@@ -725,17 +725,17 @@ impl d::Device<B> for Device {
             let mut flags = vk::PipelineCreateFlags::empty();
             match desc.parent {
                 pso::BasePipeline::None => (),
-                _ => { flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT; }
+                _ => { flags |= vk::PipelineCreateFlags::DERIVATIVE; }
             }
             if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
-                flags |= vk::PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
+                flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
             }
             if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
-                flags |= vk::PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
+                flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
             }
 
             Ok(vk::ComputePipelineCreateInfo {
-                s_type: vk::StructureType::ComputePipelineCreateInfo,
+                s_type: vk::StructureType::COMPUTE_PIPELINE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags,
                 stage,
@@ -793,7 +793,7 @@ impl d::Device<B> for Device {
             .collect::<SmallVec<[_; 4]>>();
 
         let info = vk::FramebufferCreateInfo {
-            s_type: vk::StructureType::FramebufferCreateInfo,
+            s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::FramebufferCreateFlags::empty(),
             render_pass: renderpass.raw,
@@ -816,7 +816,7 @@ impl d::Device<B> for Device {
         assert_eq!(spirv_data.len() & 3, 0);
 
         let info = vk::ShaderModuleCreateInfo {
-            s_type: vk::StructureType::ShaderModuleCreateInfo,
+            s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::ShaderModuleCreateFlags::empty(),
             code_size: spirv_data.len(),
@@ -840,18 +840,18 @@ impl d::Device<B> for Device {
         use hal::pso::Comparison;
 
         let (anisotropy_enable, max_anisotropy) = match sampler_info.anisotropic {
-            image::Anisotropic::Off => (vk::VK_FALSE, 1.0),
+            image::Anisotropic::Off => (vk::FALSE, 1.0),
             image::Anisotropic::On(aniso) => {
                 if self.raw.1.contains(Features::SAMPLER_ANISOTROPY) {
-                    (vk::VK_TRUE, aniso as f32)
+                    (vk::TRUE, aniso as f32)
                 } else {
                     warn!("Anisotropy({}) was requested on a device with disabled feature", aniso);
-                    (vk::VK_FALSE, 1.0)
+                    (vk::FALSE, 1.0)
                 }
             },
         };
         let info = vk::SamplerCreateInfo {
-            s_type: vk::StructureType::SamplerCreateInfo,
+            s_type: vk::StructureType::SAMPLER_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::SamplerCreateFlags::empty(),
             mag_filter: conv::map_filter(sampler_info.mag_filter),
@@ -863,7 +863,7 @@ impl d::Device<B> for Device {
             mip_lod_bias: sampler_info.lod_bias.into(),
             anisotropy_enable,
             max_anisotropy,
-            compare_enable: if sampler_info.comparison.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
+            compare_enable: if sampler_info.comparison.is_some() { vk::TRUE } else { vk::FALSE },
             compare_op: conv::map_comparison(sampler_info.comparison.unwrap_or(Comparison::Never)),
             min_lod: sampler_info.lod_range.start.into(),
             max_lod: sampler_info.lod_range.end.into(),
@@ -871,10 +871,10 @@ impl d::Device<B> for Device {
                 Some(bc) => bc,
                 None => {
                     error!("Unsupported border color {:x}", sampler_info.border.0);
-                    vk::BorderColor::FloatTransparentBlack
+                    vk::BorderColor::FLOAT_TRANSPARENT_BLACK
                 }
             },
-            unnormalized_coordinates: vk::VK_FALSE,
+            unnormalized_coordinates: vk::FALSE,
         };
 
         let sampler = unsafe {
@@ -888,12 +888,12 @@ impl d::Device<B> for Device {
     ///
     fn create_buffer(&self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
         let info = vk::BufferCreateInfo {
-            s_type: vk::StructureType::BufferCreateInfo,
+            s_type: vk::StructureType::BUFFER_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::BufferCreateFlags::empty(), // TODO:
             size,
             usage: conv::map_buffer_usage(usage),
-            sharing_mode: vk::SharingMode::Exclusive, // TODO:
+            sharing_mode: vk::SharingMode::EXCLUSIVE, // TODO:
             queue_family_index_count: 0,
             p_queue_family_indices: ptr::null(),
         };
@@ -933,11 +933,11 @@ impl d::Device<B> for Device {
     ) -> Result<n::BufferView, buffer::ViewError> {
         let (offset, size) = conv::map_range_arg(&range);
         let info = vk::BufferViewCreateInfo {
-            s_type: vk::StructureType::BufferViewCreateInfo,
+            s_type: vk::StructureType::BUFFER_VIEW_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::BufferViewCreateFlags::empty(),
             buffer: buffer.raw,
-            format: format.map_or(vk::Format::Undefined, conv::map_format),
+            format: format.map_or(vk::Format::UNDEFINED, conv::map_format),
             offset,
             range: size,
         };
@@ -963,13 +963,13 @@ impl d::Device<B> for Device {
         let array_layers = kind.num_layers();
         let samples = kind.num_samples() as u32;
         let image_type = match kind {
-            image::Kind::D1(..) => vk::ImageType::Type1d,
-            image::Kind::D2(..) => vk::ImageType::Type2d,
-            image::Kind::D3(..) => vk::ImageType::Type3d,
+            image::Kind::D1(..) => vk::ImageType::TYPE_1D,
+            image::Kind::D2(..) => vk::ImageType::TYPE_2D,
+            image::Kind::D3(..) => vk::ImageType::TYPE_3D,
         };
 
         let info = vk::ImageCreateInfo {
-            s_type: vk::StructureType::ImageCreateInfo,
+            s_type: vk::StructureType::IMAGE_CREATE_INFO,
             p_next: ptr::null(),
             flags,
             image_type,
@@ -980,10 +980,10 @@ impl d::Device<B> for Device {
             samples: vk::SampleCountFlags::from_flags_truncate(samples),
             tiling: conv::map_tiling(tiling),
             usage: conv::map_image_usage(usage),
-            sharing_mode: vk::SharingMode::Exclusive, // TODO:
+            sharing_mode: vk::SharingMode::EXCLUSIVE, // TODO:
             queue_family_index_count: 0,
             p_queue_family_indices: ptr::null(),
-            initial_layout: vk::ImageLayout::Undefined,
+            initial_layout: vk::ImageLayout::UNDEFINED,
         };
 
         let raw = unsafe {
@@ -1035,9 +1035,9 @@ impl d::Device<B> for Device {
         swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
-        let is_cube = image.flags.intersects(vk::IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
+        let is_cube = image.flags.intersects(vk::ImageCreateFlags::CUBE_COMPATIBLE);
         let info = vk::ImageViewCreateInfo {
-            s_type: vk::StructureType::ImageViewCreateInfo,
+            s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::ImageViewCreateFlags::empty(),
             image: image.raw,
@@ -1069,13 +1069,13 @@ impl d::Device<B> for Device {
         let pools = descriptor_pools.into_iter().map(|pool| {
             let pool = pool.borrow();
             vk::DescriptorPoolSize {
-                typ: conv::map_descriptor_type(pool.ty),
+                ty: conv::map_descriptor_type(pool.ty),
                 descriptor_count: pool.count as u32,
             }
         }).collect::<Vec<_>>();
 
         let info = vk::DescriptorPoolCreateInfo {
-            s_type: vk::StructureType::DescriptorPoolCreateInfo,
+            s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::DescriptorPoolCreateFlags::empty(), // disallow individual freeing
             max_sets: max_sets as u32,
@@ -1135,7 +1135,7 @@ impl d::Device<B> for Device {
         debug!("create_descriptor_set_layout {:?}", raw_bindings);
 
         let info = vk::DescriptorSetLayoutCreateInfo {
-            s_type: vk::StructureType::DescriptorSetLayoutCreateInfo,
+            s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::DescriptorSetLayoutCreateFlags::empty(),
             binding_count: raw_bindings.len() as _,
@@ -1169,7 +1169,7 @@ impl d::Device<B> for Device {
                 .find(|lb| lb.binding == sw.binding)
                 .expect("Descriptor set writes don't match the set layout!");
             let mut raw = vk::WriteDescriptorSet {
-                s_type: vk::StructureType::WriteDescriptorSet,
+                s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
                 p_next: ptr::null(),
                 dst_set: sw.set.raw,
                 dst_binding: sw.binding,
@@ -1188,7 +1188,7 @@ impl d::Device<B> for Device {
                         image_infos.push(vk::DescriptorImageInfo {
                             sampler: sampler.0,
                             image_view: vk::ImageView::null(),
-                            image_layout: vk::ImageLayout::General,
+                            image_layout: vk::ImageLayout::GENERAL,
                         });
                     }
                     pso::Descriptor::Image(view, layout) => {
@@ -1212,7 +1212,7 @@ impl d::Device<B> for Device {
                             offset,
                             range: match range.end {
                                 Some(end) => end - offset,
-                                None => vk::VK_WHOLE_SIZE,
+                                None => vk::WHOLE_SIZE,
                             },
                         });
                     }
@@ -1233,32 +1233,32 @@ impl d::Device<B> for Device {
         for raw in &mut raw_writes {
             use vk::DescriptorType as Dt;
             match raw.descriptor_type {
-                Dt::Sampler |
-                Dt::SampledImage |
-                Dt::StorageImage |
-                Dt::CombinedImageSampler |
-                Dt::InputAttachment => {
+                Dt::SAMPLER |
+                Dt::SAMPLED_IMAGE |
+                Dt::STORAGE_IMAGE |
+                Dt::COMBINED_IMAGE_SAMPLER |
+                Dt::INPUT_ATTACHMENT => {
                     raw.p_buffer_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
                     let base = raw.p_image_info as usize - raw.descriptor_count as usize;
                     raw.p_image_info = image_infos[base..].as_ptr();
                 }
-                Dt::UniformTexelBuffer |
-                Dt::StorageTexelBuffer => {
+                Dt::UNIFORM_TEXEL_BUFFER |
+                Dt::STORAGE_TEXEL_BUFFER => {
                     raw.p_buffer_info = ptr::null();
                     raw.p_image_info = ptr::null();
                     let base = raw.p_texel_buffer_view as usize - raw.descriptor_count as usize;
                     raw.p_texel_buffer_view = texel_buffer_views[base..].as_ptr();
                 }
-                Dt::UniformBuffer |
-                Dt::StorageBuffer => {
+                Dt::UNIFORM_BUFFER |
+                Dt::STORAGE_BUFFER => {
                     raw.p_image_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
                     let base = raw.p_buffer_info as usize - raw.descriptor_count as usize;
                     raw.p_buffer_info = buffer_infos[base..].as_ptr();
                 }
-                Dt::StorageBufferDynamic |
-                Dt::UniformBufferDynamic => unimplemented!()
+                Dt::STORAGE_BUFFER_DYNAMIC |
+                Dt::UNIFORM_BUFFER_DYNAMIC => unimplemented!()
             }
         }
 
@@ -1275,7 +1275,7 @@ impl d::Device<B> for Device {
         let copies = copies.into_iter().map(|copy| {
             let c = copy.borrow();
             vk::CopyDescriptorSet {
-                s_type: vk::StructureType::CopyDescriptorSet,
+                s_type: vk::StructureType::COPY_DESCRIPTOR_SET,
                 p_next: ptr::null(),
                 src_set: c.src_set.raw,
                 src_binding: c.src_binding as u32,
@@ -1343,7 +1343,7 @@ impl d::Device<B> for Device {
 
     fn create_semaphore(&self) -> n::Semaphore {
         let info = vk::SemaphoreCreateInfo {
-            s_type: vk::StructureType::SemaphoreCreateInfo,
+            s_type: vk::StructureType::SEMAPHORE_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::SemaphoreCreateFlags::empty(),
         };
@@ -1358,10 +1358,10 @@ impl d::Device<B> for Device {
 
     fn create_fence(&self, signaled: bool) -> n::Fence {
         let info = vk::FenceCreateInfo {
-            s_type: vk::StructureType::FenceCreateInfo,
+            s_type: vk::StructureType::FENCE_CREATE_INFO,
             p_next: ptr::null(),
             flags: if signaled {
-                vk::FENCE_CREATE_SIGNALED_BIT
+                vk::FenceCreateFlags::SIGNALED
             } else {
                 vk::FenceCreateFlags::empty()
             },
@@ -1400,8 +1400,8 @@ impl d::Device<B> for Device {
             self.raw.0.wait_for_fences(&fences, all, timeout_ms as u64 * 1000)
         };
         match result {
-            Ok(()) | Err(vk::Result::Success) => true,
-            Err(vk::Result::Timeout) => false,
+            Ok(()) | Err(vk::Result::SUCCESS) => true,
+            Err(vk::Result::TIMEOUT) => false,
             _ => panic!("Unexpected wait result {:?}", result),
         }
     }
@@ -1411,8 +1411,8 @@ impl d::Device<B> for Device {
             self.raw.0.get_fence_status(fence.0)
         };
         match result {
-            Ok(()) | Err(vk::Result::Success) => true,
-            Err(vk::Result::NotReady) => false,
+            Ok(()) | Err(vk::Result::SUCCESS) => true,
+            Err(vk::Result::NOT_READY) => false,
             _ => panic!("Unexpected get_fence_status result {:?}", result),
         }
     }
@@ -1424,15 +1424,15 @@ impl d::Device<B> for Device {
     fn create_query_pool(&self, ty: query::QueryType, query_count: u32) -> n::QueryPool {
         let (query_type, pipeline_statistics) = match ty {
             query::QueryType::Occlusion =>
-                (vk::QueryType::Occlusion, vk::QueryPipelineStatisticFlags::empty()),
+                (vk::QueryType::OCCLUSION, vk::QueryPipelineStatisticFlags::empty()),
             query::QueryType::PipelineStatistics(statistics) =>
-                (vk::QueryType::PipelineStatistics, conv::map_pipeline_statistics(statistics)),
+                (vk::QueryType::PIPELINE_STATISTICS, conv::map_pipeline_statistics(statistics)),
             query::QueryType::Timestamp =>
-                (vk::QueryType::Timestamp, vk::QueryPipelineStatisticFlags::empty()),
+                (vk::QueryType::TIMESTAMP, vk::QueryPipelineStatisticFlags::empty()),
         };
 
         let info = vk::QueryPoolCreateInfo {
-            s_type: vk::StructureType::QueryPoolCreateInfo,
+            s_type: vk::StructureType::QUERY_POOL_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::QueryPoolCreateFlags::empty(),
             query_type,
@@ -1457,30 +1457,30 @@ impl d::Device<B> for Device {
             .expect("Unable to query swapchain function");
 
         // TODO: check for better ones if available
-        let present_mode = vk::PresentModeKHR::Fifo; // required to be supported
+        let present_mode = vk::PresentModeKHR::FIFO; // required to be supported
 
         // TODO: handle depth stencil
         let format = config.color_format;
 
         let info = vk::SwapchainCreateInfoKHR {
-            s_type: vk::StructureType::SwapchainCreateInfoKhr,
+            s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
             p_next: ptr::null(),
             flags: vk::SwapchainCreateFlagsKHR::empty(),
             surface: surface.raw.handle,
             min_image_count: config.image_count,
             image_format: conv::map_format(format),
-            image_color_space: vk::ColorSpaceKHR::SrgbNonlinear,
+            image_color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
             image_extent: vk::Extent2D {
                 width: surface.width,
                 height: surface.height,
             },
             image_array_layers: 1,
             image_usage: conv::map_image_usage(config.image_usage),
-            image_sharing_mode: vk::SharingMode::Exclusive,
+            image_sharing_mode: vk::SharingMode::EXCLUSIVE,
             queue_family_index_count: 0,
             p_queue_family_indices: ptr::null(),
-            pre_transform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-            composite_alpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            pre_transform: vk::SurfaceTransformFlagsKHR::IDENTITY,
+            composite_alpha: vk::CompositeAlphaFlagsKHR::OPAQUE,
             present_mode: present_mode,
             clipped: 1,
             old_swapchain: vk::SwapchainKHR::null(),
@@ -1503,7 +1503,7 @@ impl d::Device<B> for Device {
             .map(|image| {
                 n::Image {
                     raw: image,
-                    ty: vk::ImageType::Type2d,
+                    ty: vk::ImageType::TYPE_2D,
                     flags: vk::ImageCreateFlags::empty(),
                     extent: vk::Extent3D {
                         width: surface.width,

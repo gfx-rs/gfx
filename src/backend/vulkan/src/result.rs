@@ -30,25 +30,25 @@ pub(crate) enum Error {
 
 impl From<vk::Result> for Error {
     fn from(result: vk::Result) -> Self {
-        use ash::vk::Result::*;
+        
         match result {
-            ErrorOutOfHostMemory => Error::OutOfHostMemory,
-            ErrorOutOfDeviceMemory => Error::OutOfDeviceMemory,
-            ErrorInitializationFailed => Error::InitializationFailed,
-            ErrorDeviceLost => Error::DeviceLost,
-            ErrorMemoryMapFailed => Error::MemoryMapFailed,
-            ErrorLayerNotPresent => Error::LayerNotPresent,
-            ErrorExtensionNotPresent => Error::ExtensionNotPresent,
-            ErrorFeatureNotPresent => Error::FeatureNotPresent,
-            ErrorIncompatibleDriver => Error::IncompatibleDriver,
-            ErrorTooManyObjects => Error::TooManyObjects,
-            ErrorFormatNotSupported => Error::FormatNotSupported,
-            ErrorFragmentedPool => Error::FragmentedPool,
-            ErrorSurfaceLostKhr => Error::SurfaceLostKhr,
-            ErrorNativeWindowInUseKhr => Error::NativeWindowInUseKhr,
-            ErrorOutOfDateKhr => Error::OutOfDateKhr,
-            ErrorIncompatibleDisplayKhr => Error::IncompatibleDisplayKhr,
-            ErrorValidationFailedExt => Error::ValidationFailedExt,
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => Error::OutOfHostMemory,
+            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Error::OutOfDeviceMemory,
+            vk::Result::ERROR_INITIALIZATION_FAILED => Error::InitializationFailed,
+            vk::Result::ERROR_DEVICE_LOST => Error::DeviceLost,
+            vk::Result::ERROR_MEMORY_MAP_FAILED => Error::MemoryMapFailed,
+            vk::Result::ERROR_LAYER_NOT_PRESENT => Error::LayerNotPresent,
+            vk::Result::ERROR_EXTENSION_NOT_PRESENT => Error::ExtensionNotPresent,
+            vk::Result::ERROR_FEATURE_NOT_PRESENT => Error::FeatureNotPresent,
+            vk::Result::ERROR_INCOMPATIBLE_DRIVER => Error::IncompatibleDriver,
+            vk::Result::ERROR_TOO_MANY_OBJECTS => Error::TooManyObjects,
+            vk::Result::ERROR_FORMAT_NOT_SUPPORTED => Error::FormatNotSupported,
+            vk::Result::ERROR_FRAGMENTED_POOL => Error::FragmentedPool,
+            vk::Result::ERROR_SURFACE_LOST_KHR => Error::SurfaceLostKhr,
+            vk::Result::ERROR_NATIVE_WINDOW_IN_USE_KHR => Error::NativeWindowInUseKhr,
+            vk::Result::ERROR_OUT_OF_DATE_KHR => Error::OutOfDateKhr,
+            vk::Result::ERROR_INCOMPATIBLE_DISPLAY_KHR => Error::IncompatibleDisplayKhr,
+            vk::Result::ERROR_VALIDATION_FAILED_EXT => Error::ValidationFailedExt,
             _ => Error::Unknown,
         }
     }
@@ -58,7 +58,7 @@ impl From<vk::Result> for Error {
 //
 // Syntax:
 //    #HalError {
-//       #VulkanError => #HalErrorVariant,
+//       #Vulkanvk::Result::ERROR_ => #HalErrorVariant,
 //    }
 macro_rules! from_error {
     { $($name:ident { $($base_error:ident => $err:ident,)* },)* } => {
