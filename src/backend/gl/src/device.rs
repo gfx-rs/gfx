@@ -107,7 +107,7 @@ pub struct UnboundImage {
 /// GL device.
 #[derive(Debug)]
 pub struct Device {
-    share: Starc<Share>,
+    pub(crate) share: Starc<Share>,
 }
 
 impl Drop for Device {
@@ -1419,13 +1419,13 @@ impl d::Device<B> for Device {
         &self,
         surface: &mut Surface,
         config: c::SwapchainConfig,
-        _old_swapchain: Option<Swapchain>,
+        old_swapchain: Option<Swapchain>,
     ) -> (Swapchain, c::Backbuffer<B>) {
-        self.create_swapchain_impl(surface, config)
+        self.create_swapchain_impl(surface, config, old_swapchain)
     }
 
-    fn destroy_swapchain(&self, _swapchain: Swapchain) {
-        // Nothing to do
+    fn destroy_swapchain(&self, swapchain: Swapchain) {
+        self.destroy_swapchain_impl(swapchain)
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {

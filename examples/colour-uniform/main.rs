@@ -14,9 +14,6 @@ extern crate gfx_backend_metal as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
 
-#[cfg(feature = "gl")]
-use back::glutin::GlContext;
-
 #[macro_use]
 extern crate log;
 extern crate env_logger;
@@ -73,19 +70,6 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     levels: 0..1,
     layers: 0..1,
 };
-
-trait SurfaceTrait {
-    #[cfg(feature = "gl")]
-    fn get_window_t(&self) -> &back::glutin::GlWindow;
-}
-
-impl SurfaceTrait for <back::Backend as hal::Backend>::Surface {
-    #[cfg(feature = "gl")]
-    fn get_window_t(&self) -> &back::glutin::GlWindow {
-        self.get_window()
-    }
-}
-
 
 struct RendererState<B: Backend> {
     uniform_desc_pool: Option<B::DescriptorPool>,
@@ -301,10 +285,7 @@ impl<B: Backend> RendererState<B> {
         }
     }
 
-    fn mainloop(&mut self)
-    where
-        B::Surface: SurfaceTrait,
-    {
+    fn mainloop(&mut self) {
         let mut running = true;
         let mut recreate_swapchain = false;
 
@@ -332,8 +313,6 @@ impl<B: Backend> RendererState<B> {
         while running {
             {
                 let uniform = &mut self.uniform;
-                #[cfg(feature = "gl")]
-                let backend = &self.backend;
 
                 self.window.events_loop.poll_events(|event| {
                     if let winit::Event::WindowEvent { event, .. } = event {
@@ -349,15 +328,6 @@ impl<B: Backend> RendererState<B> {
                             }
                             | winit::WindowEvent::CloseRequested => running = false,
                             winit::WindowEvent::Resized(dims) => {
-                                #[cfg(feature = "gl")]
-                                backend
-                                    .surface
-                                    .get_window_t()
-                                    .resize(
-                                        dims.to_physical(
-                                            backend.surface.get_window_t().get_hidpi_factor()
-                                        )
-                                    );
                                 recreate_swapchain = true;
                             }
                             winit::WindowEvent::KeyboardInput {
@@ -590,15 +560,14 @@ impl WindowState {
     }
 }
 
+#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
 struct BackendState<B: Backend> {
     surface: B::Surface,
     adapter: AdapterState<B>,
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
-    #[allow(dead_code)]
-    window: winit::Window,
+    _window: winit::Window,
 }
 
-#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
+#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
 fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend>, back::Instance) {
     let window = window_state.wb.take().unwrap()
         .build(&window_state.events_loop)
@@ -610,37 +579,9 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
         BackendState {
             adapter: AdapterState::new(&mut adapters),
             surface,
-            window,
+            _window: window,
         },
         instance,
-    )
-}
-
-#[cfg(feature = "gl")]
-fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend>, ()) {
-    let window = {
-        let builder =
-            back::config_context(
-                back::glutin::ContextBuilder::new(),
-                ColorFormat::SELF,
-                None,
-            )
-            .with_vsync(true);
-        back::glutin::GlWindow::new(
-            window_state.wb.take().unwrap(),
-            builder,
-            &window_state.events_loop,
-        ).unwrap()
-    };
-
-    let surface = back::Surface::from_window(window);
-    let mut adapters = surface.enumerate_adapters();
-    (
-        BackendState {
-            adapter: AdapterState::new(&mut adapters),
-            surface,
-        },
-        (),
     )
 }
 

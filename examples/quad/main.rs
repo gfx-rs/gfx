@@ -14,9 +14,6 @@ extern crate gfx_backend_metal as back;
 extern crate gfx_backend_vulkan as back;
 extern crate gfx_hal as hal;
 
-#[cfg(feature = "gl")]
-use back::glutin::GlContext;
-
 extern crate glsl_to_spirv;
 extern crate image;
 extern crate winit;
@@ -76,26 +73,12 @@ fn main() {
         ))
         .with_title("quad".to_string());
     // instantiate backend
-    #[cfg(not(feature = "gl"))]
-    let (_window, _instance, mut adapters, mut surface) = {
+    let (window, _instance, mut adapters, mut surface) = {
         let window = wb.build(&events_loop).unwrap();
         let instance = back::Instance::create("gfx-rs quad", 1);
         let surface = instance.create_surface(&window);
         let adapters = instance.enumerate_adapters();
         (window, instance, adapters, surface)
-    };
-    #[cfg(feature = "gl")]
-    let (mut adapters, mut surface) = {
-        let window = {
-            let builder =
-                back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
-                    .with_vsync(true);
-            back::glutin::GlWindow::new(wb, builder, &events_loop).unwrap()
-        };
-
-        let surface = back::Surface::from_window(window);
-        let adapters = surface.enumerate_adapters();
-        (adapters, surface)
     };
 
     for adapter in &adapters {
@@ -549,10 +532,6 @@ fn main() {
                     | winit::WindowEvent::CloseRequested => running = false,
                     winit::WindowEvent::Resized(dims) => {
                         println!("resized to {:?}", dims);
-                        #[cfg(feature = "gl")]
-                        surface
-                            .get_window()
-                            .resize(dims.to_physical(surface.get_window().get_hidpi_factor()));
                         recreate_swapchain = true;
                     }
                     _ => (),

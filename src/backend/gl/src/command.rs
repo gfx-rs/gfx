@@ -212,6 +212,7 @@ pub struct RawCommandBuffer {
     individual_reset: bool,
 
     fbo: Option<n::FrameBuffer>,
+
     /// The framebuffer to use for rendering to the main targets (0 by default).
     ///
     /// Use this to set the framebuffer that will be used for the screen display targets created

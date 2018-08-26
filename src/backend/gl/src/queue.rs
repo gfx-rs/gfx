@@ -728,14 +728,63 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
-        use glutin::GlContext;
+        for (swapchain, index) in swapchains {
+            let swapchain = swapchain.borrow();
 
-        for swapchain in swapchains {
-            swapchain.0
-                .borrow()
+            // NOTE: If the extents don't match, it is *probably only* suboptimal.
+            // HAL doesn't currently distinguish between suboptimal and out of date,
+            // so we just have to return Err. This is a note to whoever adds the
+            // ability to distinquish between the two.
+            //
+            // NOTE: I say probably because I'm not sure what happens if you
+            // the dimmensions of the destination fbo you give is bigger than
+            // the actual dimmensions of the destination fbo. It's probably ok,
+            // but you should probably check.
+            let extent = window::glutin::physical_to_extent(
+                &swapchain
                 .window
+                .get_inner_size()
+                .unwrap()
+                .to_physical(swapchain.window.get_hidpi_factor())
+            );
+
+            if extent != swapchain.extent {
+                return Err(());
+            }
+
+            unsafe {
+                let gl = &swapchain.device.share.context;
+                gl.BindFramebuffer(gl::READ_FRAMEBUFFER, swapchain.fbo);
+
+                gl.FramebufferTexture2D(
+                    gl::READ_FRAMEBUFFER,
+                    gl::COLOR_ATTACHMENT0,
+                    gl::TEXTURE_2D,
+                    swapchain.images[index as usize].image,
+                    0,
+                );
+
+                gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
+                gl.BlitFramebuffer(
+                    0, 0, extent.width as _, extent.height as _,
+                    0, 0, extent.width as _, extent.height as _,
+                    gl::COLOR_BUFFER_BIT,
+                    gl::NEAREST,
+                );
+            }
+
+            swapchain
+                .surface_context
+                .context
                 .swap_buffers()
                 .unwrap();
+
+            let mut currently_acquired = swapchain
+                .images[index as usize]
+                .currently_acquired
+                .lock()
+                .unwrap();
+            *currently_acquired = false;
         }
 
         Ok(())

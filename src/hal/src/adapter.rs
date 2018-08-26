@@ -126,7 +126,7 @@ pub struct AdapterInfo {
     /// PCI id of the adapter
     pub device: usize,
     /// Type of device
-    pub device_type: DeviceType, 
+    pub device_type: DeviceType,
 }
 
 /// The list of `Adapter` instances is obtained by calling `Instance::enumerate_adapters()`.
@@ -134,6 +134,7 @@ pub struct AdapterInfo {
 /// Given an `Adapter` a `Gpu` can be constructed by calling `PhysicalDevice::open()` on its
 /// `physical_device` field. However, if only a single queue family is needed, then the
 /// `Adapter::open_with` convenience method can be used instead.
+#[derive(Clone)]
 pub struct Adapter<B: Backend> {
     /// General information about this adapter.
     pub info: AdapterInfo,

@@ -2,6 +2,7 @@
 //! least VAOs, but using newer extensions when available.
 
 #![allow(missing_docs, missing_copy_implementations)]
+#![feature(duration_as_u128)]
 
 #[macro_use]
 extern crate bitflags;
@@ -17,7 +18,7 @@ extern crate spirv_cross;
 use std::cell::Cell;
 use std::fmt;
 use std::ops::Deref;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Weak, Mutex};
 use std::thread::{self, ThreadId};
 
 use hal::queue::{QueueFamilyId, Queues};
@@ -37,15 +38,81 @@ mod state;
 mod window;
 
 #[cfg(feature = "glutin")]
-pub use window::glutin::{config_context, Headless, Surface, Swapchain};
+pub use window::glutin::{Surface, Swapchain};
 
-pub(crate) struct GlContainer {
-    context: gl::Gl,
+#[cfg(feature = "glutin")]
+use window::glutin::{SurfaceContext, ContextMaker};
+
+#[cfg(feature = "glutin")]
+use glutin::GlContext;
+
+pub(crate) struct InstanceContext {
+    _instance: glutin::EventsLoop,
+    context: glutin::Context,
 }
 
+pub struct InstanceInternal {
+    _instance_context: Starc<InstanceContext>,
+    adapter: hal::Adapter<Backend>,
+}
+
+pub struct Instance(Starc<InstanceInternal>);
+
+impl Instance {
+    pub fn create(_name: &str, _version: u32) -> Self {
+        let (context, instance) = ContextMaker::new_empty().unwrap();
+        let instance_context = Starc::new(InstanceContext {
+            context,
+            _instance: instance,
+        });
+
+        let adapter = PhysicalDevice::new_adapter(
+            |s| instance_context.context.get_proc_address(s) as *const _,
+            Contexts::InstanceContext(Starc::downgrade(&instance_context)),
+		);
+
+        Instance(Starc::new(InstanceInternal {
+            _instance_context: instance_context,
+            adapter,
+        }))
+    }
+}
+
+impl hal::Instance for Instance {
+    type Backend = Backend;
+    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+        vec![self.0.adapter.clone()]
+    }
+}
+
+pub(crate) enum Contexts {
+    InstanceContext(Wstarc<InstanceContext>),
+    SurfaceContext(Weak<SurfaceContext>),
+}
+
+#[cfg(feature = "glutin")]
+pub(crate) struct GlContainer {
+    context: gl::Gl,
+    instance: Mutex<Contexts>,
+}
+
+#[cfg(feature = "glutin")]
 impl GlContainer {
     fn make_current(&self) {
-        // Unimplemented
+        match *self.instance.lock().unwrap() {
+            Contexts::InstanceContext(ref i) => {
+                let i = Wstarc::upgrade(i).unwrap();
+                if !i.context.is_current() {
+                    unsafe { i.context.make_current().unwrap() }
+                }
+            }
+            Contexts::SurfaceContext(ref i) => {
+                let i = Weak::upgrade(i).unwrap();
+                if !i.context.is_current() {
+                    unsafe { i.context.make_current().unwrap() }
+                }
+            }
+        }
     }
 }
 
@@ -238,16 +305,17 @@ impl<T> Wstarc<T> {
 unsafe impl<T: ?Sized> Send for Wstarc<T> {}
 unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PhysicalDevice(Starc<Share>);
 
 impl PhysicalDevice {
-    fn new_adapter<F>(fn_proc: F) -> hal::Adapter<Backend>
+    fn new_adapter<F>(fn_proc: F, instance: Contexts) -> hal::Adapter<Backend>
     where
         F: FnMut(&str) -> *const std::os::raw::c_void,
     {
         let gl = GlContainer {
             context: gl::Gl::load_with(fn_proc),
+            instance: Mutex::new(instance),
         };
 
         // query information
@@ -294,13 +362,8 @@ impl PhysicalDevice {
     pub fn legacy_features(&self) -> &info::LegacyFeatures {
         &self.0.legacy_features
     }
-}
 
-impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(
-        &self,
-        families: &[(&QueueFamily, &[hal::QueuePriority])],
-    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
+    pub(crate) fn to_device(&self, make_vao: bool) ->  Result<(Option<u32>, Device), error::DeviceCreationError> {
         // Can't have multiple logical devices at the same time
         // as they would share the same context.
         if self.0.open.get() {
@@ -327,57 +390,33 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             }
         }
 
-        // create main VAO and bind it
-        let mut vao = 0;
-        if self.0.private_caps.vertex_array {
-            unsafe {
-                gl.GenVertexArrays(1, &mut vao);
-                gl.BindVertexArray(vao);
+        let vao = if make_vao {
+            // create main VAO and bind it
+            let mut vao = 0;
+            if self.0.private_caps.vertex_array {
+                unsafe {
+                    gl.GenVertexArrays(1, &mut vao);
+                    gl.BindVertexArray(vao);
+                }
             }
-        }
+            Some(vao)
+        } else {
+            None
+        };
 
         if let Err(err) = self.0.check() {
             panic!("Error opening adapter: {:?}", err);
         }
 
-        Ok(hal::Gpu {
-            device: Device::new(self.0.clone()),
-            queues: Queues::new(
-                families
-                    .into_iter()
-                    .map(|&(proto_family, priorities)| {
-                        assert_eq!(priorities.len(), 1);
-                        let mut family = hal::backend::RawQueueGroup::new(proto_family.clone());
-                        let queue = queue::CommandQueue::new(&self.0, vao);
-                        family.add_queue(queue);
-                        family
-                    })
-                    .collect(),
-            ),
-        })
+        Ok((vao, Device::new(self.0.clone())))
     }
 
-    fn format_properties(&self, _: Option<hal::format::Format>) -> hal::format::Properties {
-        unimplemented!()
-    }
-
-    fn image_format_properties(
-        &self,
-        _format: hal::format::Format,
-        _dimensions: u8,
-        _tiling: image::Tiling,
-        _usage: image::Usage,
-        _storage_flags: image::StorageFlags,
-    ) -> Option<image::FormatProperties> {
-        None //TODO
-    }
-
-    fn memory_properties(&self) -> hal::MemoryProperties {
+    fn memory_properties_internal(pcaps: &info::PrivateCaps) -> hal::MemoryProperties {
         use hal::memory::Properties;
 
         // COHERENT flags require that the backend does flushing and invalidation
         // by itself. If we move towards persistent mapping we need to re-evaluate it.
-        let memory_types = if self.0.private_caps.map {
+        let memory_types = if pcaps.map {
             vec![
                 hal::MemoryType {
                     properties: Properties::DEVICE_LOCAL,
@@ -407,6 +446,50 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             memory_types,
             memory_heaps: vec![!0, !0],
         }
+    }
+}
+
+impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+    fn open(
+        &self,
+        families: &[(&QueueFamily, &[hal::QueuePriority])],
+    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
+        let (vao, device) = self.to_device(true)?;
+
+        Ok(hal::Gpu {
+            device,
+            queues: Queues::new(
+                families
+                    .into_iter()
+                    .map(|&(proto_family, priorities)| {
+                        assert_eq!(priorities.len(), 1);
+                        let mut family = hal::backend::RawQueueGroup::new(proto_family.clone());
+                        let queue = queue::CommandQueue::new(&self.0, vao.unwrap());
+                        family.add_queue(queue);
+                        family
+                    })
+                    .collect(),
+            ),
+        })
+    }
+
+    fn format_properties(&self, _: Option<hal::format::Format>) -> hal::format::Properties {
+        unimplemented!()
+    }
+
+    fn image_format_properties(
+        &self,
+        _format: hal::format::Format,
+        _dimensions: u8,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        _storage_flags: image::StorageFlags,
+    ) -> Option<image::FormatProperties> {
+        None //TODO
+    }
+
+    fn memory_properties(&self) -> hal::MemoryProperties {
+        Self::memory_properties_internal(&self.0.private_caps)
     }
 
     fn features(&self) -> hal::Features {
