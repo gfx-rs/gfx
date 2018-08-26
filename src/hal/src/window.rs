@@ -34,7 +34,7 @@
 //! let acquisition_semaphore = device.create_semaphore();
 //! let render_semaphore = device.create_semaphore();
 //!
-//! let frame = swapchain.acquire_image(FrameSync::Semaphore(&acquisition_semaphore));
+//! let frame = swapchain.acquire_image(!0, FrameSync::Semaphore(&acquisition_semaphore));
 //! // render the scene..
 //! // `render_semaphore` will be signalled once rendering has been finished
 //! swapchain.present(&mut present_queue, 0, &[render_semaphore]);
@@ -57,6 +57,7 @@ use queue::CommandQueue;
 use std::any::Any;
 use std::borrow::Borrow;
 use std::ops::Range;
+
 
 /// An extent describes the size of a rectangle, such as
 /// a window or texture. It is not used for referring to a
@@ -288,12 +289,24 @@ pub enum Backbuffer<B: Backend> {
     Framebuffer(B::Framebuffer),
 }
 
+
+/// Error on acquiring the next image from a swapchain.
+#[derive(Debug)]
+pub enum AcquireError {
+    /// No image was ready after the specified timeout expired.
+    NotReady,
+    /// The swapchain is no longer in sync with the surface, needs to be re-created.
+    OutOfDate,
+    /// The surface was lost, and the swapchain is no longer usable.
+    SurfaceLost,
+}
+
 /// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
 pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// Acquire a new swapchain image for rendering. This needs to be called before presenting.
     ///
-    /// Will fail if the swapchain needs recreation.
+    /// May fail according to one of the reasons indicated in `AcquireError` enum.
     ///
     /// # Synchronization
     ///
@@ -307,7 +320,9 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// ```no_run
     ///
     /// ```
-    fn acquire_image(&mut self, sync: FrameSync<B>) -> Result<SwapImageIndex, ()>;
+    fn acquire_image(
+        &mut self, timeout_ns: u64, sync: FrameSync<B>
+    ) -> Result<SwapImageIndex, AcquireError>;
 
     /// Present one acquired image.
     ///

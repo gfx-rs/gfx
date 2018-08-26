@@ -36,7 +36,7 @@ pub use self::queue::{
     Capability, Supports, General, Graphics, Compute, Transfer,
 };
 pub use self::window::{
-    Backbuffer, SwapImageIndex, FrameSync, PresentMode,
+    AcquireError, Backbuffer, SwapImageIndex, FrameSync, PresentMode,
     Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,
 };
 

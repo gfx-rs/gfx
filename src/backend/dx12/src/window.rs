@@ -110,7 +110,9 @@ pub struct Swapchain {
 }
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_image(&mut self, _sync: hal::FrameSync<Backend>) -> Result<hal::SwapImageIndex, ()> {
+    fn acquire_image(
+        &mut self, _timout_ns: u64, _sync: hal::FrameSync<Backend>
+    ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         // TODO: sync
 
         if false {

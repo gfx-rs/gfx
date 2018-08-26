@@ -40,7 +40,7 @@ impl Drop for SurfaceInner {
 }
 
 impl SurfaceInner {
-    fn next_frame<'a>(&self, frames: &'a [Frame]) -> (usize, MutexGuard<'a, FrameInner>) {
+    fn next_frame<'a>(&self, frames: &'a [Frame]) -> Result<(usize, MutexGuard<'a, FrameInner>), ()> {
         let layer_ref = self.render_layer.lock();
         autoreleasepool(|| { // for the drawable
             let (drawable, texture_temp): (&metal::DrawableRef, &metal::TextureRef) = unsafe {
@@ -49,17 +49,17 @@ impl SurfaceInner {
             };
 
             trace!("looking for {:?}", texture_temp);
-            let index = frames
-                .iter()
-                .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
-                .expect("Surface lost?");
+            match frames.iter().position(|f| f.texture.as_ptr() == texture_temp.as_ptr()) {
+                Some(index) => {
+                    let mut frame = frames[index].inner.lock();
+                    assert!(frame.drawable.is_none());
+                    frame.drawable = Some(drawable.to_owned());
 
-            let mut frame = frames[index].inner.lock();
-            assert!(frame.drawable.is_none());
-            frame.drawable = Some(drawable.to_owned());
-
-            debug!("next is frame[{}]", index);
-            (index, frame)
+                    debug!("next is frame[{}]", index);
+                    Ok((index, frame))
+                }
+                None => Err(()),
+            }
         })
     }
 }
@@ -89,12 +89,19 @@ impl Drop for Frame {
     }
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum AcquireMode {
+    Wait,
+    Oldest,
+}
+
 pub struct Swapchain {
     frames: Arc<Vec<Frame>>,
     surface: Arc<SurfaceInner>,
     extent: Extent2D,
     last_frame: usize,
     image_ready_callbacks: Vec<Arc<Mutex<Option<SwapchainImage>>>>,
+    pub acquire_mode: AcquireMode,
 }
 
 impl Drop for Swapchain {
@@ -158,7 +165,7 @@ impl SwapchainImage {
         }
         // wait for new frames to come until we meet the chosen one
         let mut count = 1;
-        while self.surface.next_frame(&self.frames).0 != self.index as usize {
+        while self.surface.next_frame(&self.frames).unwrap().0 != self.index as usize {
             count += 1;
         }
         debug!("Swapchain image is ready after {} frames", count);
@@ -170,7 +177,6 @@ impl SwapchainImage {
 impl hal::Surface<Backend> for Surface {
     fn kind(&self) -> image::Kind {
         let ex = self.inner.dimensions();
-
         image::Kind::D2(ex.width, ex.height, 1, 1)
     }
 
@@ -252,6 +258,7 @@ impl Device {
             msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
             msg_send![render_layer, setDrawableSize: CGSize::new(config.extent.width as f64, config.extent.height as f64)];
             //TODO: only set it where supported
+            msg_send![render_layer, setAllowsNextDrawableTimeout:false];
             msg_send![render_layer, setDisplaySyncEnabled: display_sync];
         };
 
@@ -305,6 +312,7 @@ impl Device {
             extent: config.extent,
             last_frame: 0,
             image_ready_callbacks: Vec::new(),
+            acquire_mode: AcquireMode::Wait,
         };
 
 
@@ -313,12 +321,14 @@ impl Device {
 }
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_image(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::SwapImageIndex, ()> {
+    fn acquire_image(
+        &mut self, _timeout_ns: u64, sync: hal::FrameSync<Backend>
+    ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         self.last_frame += 1;
 
         //TODO: figure out a proper story of HiDPI
         if false && self.surface.dimensions() != self.extent {
-            return Err(())
+            unimplemented!()
         }
 
         let mut oldest_index = 0;
@@ -341,31 +351,33 @@ impl hal::Swapchain<Backend> for Swapchain {
             }
         }
 
-        let blocking = false;
-
-        let (index, mut frame) = if blocking {
-            self.surface.next_frame(&self.frames)
-        } else {
-            self.image_ready_callbacks.retain(|ir| ir.lock().is_some());
-            match sync {
-                hal::FrameSync::Semaphore(semaphore) => {
-                    self.image_ready_callbacks.push(Arc::clone(&semaphore.image_ready));
-                    let mut sw_image = semaphore.image_ready.lock();
-                    assert!(sw_image.is_none());
-                    *sw_image = Some(SwapchainImage {
-                        frames: self.frames.clone(),
-                        surface: self.surface.clone(),
-                        index: oldest_index as _,
-                    });
-                }
-                hal::FrameSync::Fence(_fence) => {
-                    //TODO: need presentation handlers always created and setting a bool
-                    unimplemented!()
-                }
+        let (index, mut frame) = match self.acquire_mode {
+            AcquireMode::Wait => {
+                self.surface.next_frame(&self.frames)
+                    .map_err(|_| hal::AcquireError::OutOfDate)?
             }
+            AcquireMode::Oldest => {
+                self.image_ready_callbacks.retain(|ir| ir.lock().is_some());
+                match sync {
+                    hal::FrameSync::Semaphore(semaphore) => {
+                        self.image_ready_callbacks.push(Arc::clone(&semaphore.image_ready));
+                        let mut sw_image = semaphore.image_ready.lock();
+                        assert!(sw_image.is_none());
+                        *sw_image = Some(SwapchainImage {
+                            frames: self.frames.clone(),
+                            surface: self.surface.clone(),
+                            index: oldest_index as _,
+                        });
+                    }
+                    hal::FrameSync::Fence(_fence) => {
+                        //TODO: need presentation handlers always created and setting a bool
+                        unimplemented!()
+                    }
+                }
 
-            let frame = self.frames[oldest_index].inner.lock();
-            (oldest_index, frame)
+                let frame = self.frames[oldest_index].inner.lock();
+                (oldest_index, frame)
+            }
         };
 
         assert!(frame.available);

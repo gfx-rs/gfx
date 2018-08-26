@@ -29,7 +29,7 @@ mod soft;
 
 pub use command::CommandPool;
 pub use device::{Device, LanguageVersion, PhysicalDevice};
-pub use window::{Surface, Swapchain};
+pub use window::{AcquireMode, Surface, Swapchain};
 
 pub type GraphicsCommandPool = CommandPool;
 

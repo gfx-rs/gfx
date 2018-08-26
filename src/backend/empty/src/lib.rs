@@ -828,7 +828,9 @@ impl hal::Surface<Backend> for Surface {
 /// Dummy swapchain.
 pub struct Swapchain;
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_image(&mut self, _: hal::FrameSync<Backend>) -> Result<hal::SwapImageIndex, ()> {
+    fn acquire_image(
+        &mut self, _: u64, _: hal::FrameSync<Backend>
+    ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         unimplemented!()
     }
 }

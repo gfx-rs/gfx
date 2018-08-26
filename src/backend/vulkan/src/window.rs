@@ -387,7 +387,9 @@ pub struct Swapchain {
 
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_image(&mut self, sync: hal::FrameSync<Backend>) -> Result<hal::SwapImageIndex, ()> {
+    fn acquire_image(
+        &mut self, timeout_ns: u64, sync: hal::FrameSync<Backend>
+    ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         let (semaphore, fence) = match sync {
             hal::FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
             hal::FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
@@ -395,12 +397,14 @@ impl hal::Swapchain<Backend> for Swapchain {
 
         let index = unsafe {
             // will block if no image is available
-            self.functor.acquire_next_image_khr(self.raw, !0, semaphore, fence)
+            self.functor.acquire_next_image_khr(self.raw, timeout_ns, semaphore, fence)
         };
 
         match index {
             Ok(i) => Ok(i),
-            Err(vk::Result::SuboptimalKhr) | Err(vk::Result::ErrorOutOfDateKhr) => Err(()),
+            Err(vk::Result::NotReady) => Err(hal::AcquireError::NotReady),
+            Err(vk::Result::SuboptimalKhr) | Err(vk::Result::ErrorOutOfDateKhr) => Err(hal::AcquireError::OutOfDate),
+            Err(vk::Result::ErrorSurfaceLostKhr) => Err(hal::AcquireError::SurfaceLost),
             _ => panic!("Failed to acquire image."),
         }
     }

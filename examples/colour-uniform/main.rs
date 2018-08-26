@@ -479,7 +479,7 @@ impl<B: Backend> RendererState<B> {
                     .swapchain
                     .as_mut()
                     .unwrap()
-                    .acquire_image(FrameSync::Semaphore(acquire_semaphore))
+                    .acquire_image(!0, FrameSync::Semaphore(acquire_semaphore))
                 {
                     Ok(i) => i,
                     Err(_) => {
