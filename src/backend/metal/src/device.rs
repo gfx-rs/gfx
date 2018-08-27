@@ -1690,6 +1690,18 @@ impl hal::Device<Backend> for Device {
 
             desc_layouts.sort_by_key(|dl| (dl.binding, dl.array_index));
             tmp_samplers.sort_by_key(|ts| (ts.binding, ts.array_index));
+            // From here on, we assume that `desc_layouts` has at most a single item for
+            // a (binding, array_index) pair. To achieve that, we deduplicate the array now
+            desc_layouts.dedup_by(|a, b| {
+                if (a.binding, a.array_index) == (b.binding, b.array_index) {
+                    debug_assert!(!b.stages.intersects(a.stages));
+                    debug_assert_eq!(a.content, b.content); //TODO: double check if this can be demanded
+                    b.stages |= a.stages; //`b` is here to stay
+                    true
+                } else {
+                    false
+                }
+            });
 
             n::DescriptorSetLayout::Emulated(
                 Arc::new(desc_layouts),
