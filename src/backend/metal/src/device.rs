@@ -302,7 +302,7 @@ struct NSOperatingSystemVersion {
 pub struct PhysicalDevice {
     shared: Arc<Shared>,
     memory_types: [hal::MemoryType; 4],
-    private_caps: PrivateCapabilities,
+    pub(crate) private_caps: PrivateCapabilities,
 }
 unsafe impl Send for PhysicalDevice {}
 unsafe impl Sync for PhysicalDevice {}
