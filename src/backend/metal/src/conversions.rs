@@ -11,7 +11,9 @@ impl PrivateCapabilities {
         use hal::format::Format as f;
         Some(match format {
             f::B5g6r5Unorm    if self.format_b5 => B5G6R5Unorm,
-            f::B5g5r5a1Unorm  if self.format_b5 => BGR5A1Unorm,
+            f::R5g5b5a1Unorm  if self.format_b5 => A1BGR5Unorm,
+            f::A1r5g5b5Unorm  if self.format_b5 => BGR5A1Unorm,
+            f::Rgba4Unorm     if self.format_b5 => ABGR4Unorm,
             f::R8Srgb         if self.format_min_srgb_channels <= 1 => R8Unorm_sRGB,
             f::Rg8Srgb        if self.format_min_srgb_channels <= 2 => RG8Unorm_sRGB,
             f::Rgba8Srgb      if self.format_min_srgb_channels <= 4 => RGBA8Unorm_sRGB,
@@ -61,8 +63,10 @@ impl PrivateCapabilities {
             f::Rgba32Float       => RGBA32Float,
             f::D16Unorm          => Depth16Unorm,
             f::D32Float          => Depth32Float,
-            f::Bc1RgbUnorm       if self.format_bc => BC1_RGBA,
-            f::Bc1RgbSrgb        if self.format_bc => BC1_RGBA_sRGB,
+            f::Bc1RgbaUnorm      if self.format_bc => BC1_RGBA,
+            f::Bc1RgbaSrgb       if self.format_bc => BC1_RGBA_sRGB,
+            f::Bc1RgbUnorm       if self.format_bc => BC1_RGBA, //TODO?
+            f::Bc1RgbSrgb        if self.format_bc => BC1_RGBA_sRGB, //TODO?
             f::Bc2Unorm          if self.format_bc => BC2_RGBA,
             f::Bc2Srgb           if self.format_bc => BC2_RGBA_sRGB,
             f::Bc3Unorm          if self.format_bc => BC3_RGBA,
@@ -146,7 +150,8 @@ impl PrivateCapabilities {
             (Bgra8Unorm, Swizzle(B, G, R, A)) => Some(Pf::RGBA8Unorm),
             (Bgra8Srgb, Swizzle(B, G, R, A)) => Some(Pf::RGBA8Unorm_sRGB),
             _ => {
-                if swizzle != Swizzle::NO {
+                let bits = format.base_format().0.describe_bits();
+                if swizzle != Swizzle::NO && !(bits.alpha == 0 && swizzle == Swizzle(R, G, B, One)) {
                     error!("Unsupported swizzle {:?} for format {:?}", swizzle, format);
                 }
                 self.map_format(format)
