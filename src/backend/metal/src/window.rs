@@ -236,7 +236,8 @@ impl Device {
     ) -> (Swapchain, Backbuffer<Backend>) {
         info!("build_swapchain {:?}", config);
 
-        let mtl_format = self.private_caps
+        let caps = &self.private_caps;
+        let mtl_format = caps
             .map_format(config.format)
             .expect("unsupported backbuffer format");
 
@@ -244,10 +245,8 @@ impl Device {
         let render_layer = *render_layer_borrow;
         let format_desc = config.format.surface_desc();
         let framebuffer_only = config.image_usage == image::Usage::COLOR_ATTACHMENT;
-        let display_sync = match config.present_mode {
-            hal::PresentMode::Immediate => false,
-            _ => true,
-        };
+        let display_sync = config.present_mode != hal::PresentMode::Immediate;
+        let can_set_display_sync = caps.os_is_mac && caps.has_version_at_least(10, 13);
         let device = self.shared.device.lock();
         let device_raw: &metal::DeviceRef = &*device;
 
@@ -257,9 +256,10 @@ impl Device {
             msg_send![render_layer, setFramebufferOnly: framebuffer_only];
             msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
             msg_send![render_layer, setDrawableSize: CGSize::new(config.extent.width as f64, config.extent.height as f64)];
-            //TODO: only set it where supported
             msg_send![render_layer, setAllowsNextDrawableTimeout:false];
-            msg_send![render_layer, setDisplaySyncEnabled: display_sync];
+            if can_set_display_sync {
+                msg_send![render_layer, setDisplaySyncEnabled: display_sync];
+            }
         };
 
         let frames = (0 .. config.image_count)
