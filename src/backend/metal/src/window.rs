@@ -181,7 +181,7 @@ impl hal::Surface<Backend> for Surface {
     }
 
     fn compatibility(
-        &self, _: &PhysicalDevice,
+        &self, device: &PhysicalDevice,
     ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>) {
         let current_extent = Some(self.inner.dimensions());
 
@@ -200,10 +200,15 @@ impl hal::Surface<Backend> for Surface {
             format::Format::Bgra8Srgb,
             format::Format::Rgba16Float,
         ];
-        let present_modes = vec![
-            hal::PresentMode::Fifo,
-            hal::PresentMode::Immediate,
-        ];
+
+        let device_caps = &device.private_caps;
+        let can_set_display_sync = device_caps.os_is_mac && device_caps.has_version_at_least(10, 13);
+
+        let present_modes = if can_set_display_sync {
+            vec![hal::PresentMode::Fifo, hal::PresentMode::Immediate]
+        } else {
+            vec![hal::PresentMode::Fifo]
+        };
 
         (caps, Some(formats), present_modes)
     }
