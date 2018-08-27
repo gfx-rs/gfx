@@ -991,6 +991,12 @@ impl hal::Device<Backend> for Device {
         }
 
         let mut shader_compiler_options = msl::CompilerOptions::default();
+        shader_compiler_options.version = match self.private_caps.msl_version {
+            MTLLanguageVersion::V1_0 => msl::Version::V1_0,
+            MTLLanguageVersion::V1_1 => msl::Version::V1_1,
+            MTLLanguageVersion::V1_2 => msl::Version::V1_2,
+            MTLLanguageVersion::V2_0 => msl::Version::V2_0,
+        };
         shader_compiler_options.enable_point_size_builtin = false;
         shader_compiler_options.resolve_specialized_array_lengths = true;
         shader_compiler_options.vertex.invert_y = true;
