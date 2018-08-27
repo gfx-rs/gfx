@@ -1763,10 +1763,10 @@ impl hal::Device<Backend> for Device {
                                 texture = Some((AsNative::from(view.raw.as_ref()), image::Layout::General));
                             }
                             pso::Descriptor::Buffer(buf, ref range) => {
-                                let buf_length = buf.raw.length();
-                                let start = range.start.unwrap_or(0);
-                                let end = range.end.unwrap_or(buf_length);
-                                assert!(end <= buf_length);
+                                let start = buf.range.start + range.start.unwrap_or(0);
+                                if let Some(end) = range.end {
+                                    debug_assert!(buf.range.start + end <= buf.range.end);
+                                };
                                 buffer = Some((AsNative::from(buf.raw.as_ref()), start));
                             }
                         }
@@ -1812,7 +1812,7 @@ impl hal::Device<Backend> for Device {
                                 encoder.set_textures(&[&image.raw], write.binding as _);
                             }
                             pso::Descriptor::Buffer(buffer, ref range) => {
-                                encoder.set_buffer(&buffer.raw, range.start.unwrap_or(0), write.binding as _);
+                                encoder.set_buffer(&buffer.raw, buffer.range.start + range.start.unwrap_or(0), write.binding as _);
                             }
                             pso::Descriptor::CombinedImageSampler(..) |
                             pso::Descriptor::UniformTexelBuffer(..) |
