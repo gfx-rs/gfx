@@ -251,7 +251,13 @@ impl Device {
         let format_desc = config.format.surface_desc();
         let framebuffer_only = config.image_usage == image::Usage::COLOR_ATTACHMENT;
         let display_sync = config.present_mode != hal::PresentMode::Immediate;
-        let can_set_display_sync = caps.os_is_mac && caps.has_version_at_least(10, 13);
+        let is_mac = caps.os_is_mac;
+        let can_set_next_drawable_timeout = if is_mac {
+            caps.has_version_at_least(10, 13)
+        } else {
+            caps.has_version_at_least(11, 0)
+        };
+        let can_set_display_sync = is_mac && caps.has_version_at_least(10, 13);
         let device = self.shared.device.lock();
         let device_raw: &metal::DeviceRef = &*device;
 
@@ -261,7 +267,9 @@ impl Device {
             msg_send![render_layer, setFramebufferOnly: framebuffer_only];
             msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
             msg_send![render_layer, setDrawableSize: CGSize::new(config.extent.width as f64, config.extent.height as f64)];
-            msg_send![render_layer, setAllowsNextDrawableTimeout:false];
+            if can_set_next_drawable_timeout {
+                msg_send![render_layer, setAllowsNextDrawableTimeout:false];
+            }
             if can_set_display_sync {
                 msg_send![render_layer, setDisplaySyncEnabled: display_sync];
             }
