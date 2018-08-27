@@ -1980,7 +1980,10 @@ impl hal::Device<Backend> for Device {
         &self, buffer: &n::Buffer, format_maybe: Option<format::Format>, range: R
     ) -> Result<n::BufferView, buffer::ViewCreationError> {
         let start = buffer.range.start + *range.start().unwrap_or(&0);
-        let end_rough = *range.end().unwrap_or(&buffer.raw.length());
+        let end_rough = match range.end() {
+            Some(end) => buffer.range.start + end,
+            None => buffer.range.end,
+        };
         let format = match format_maybe {
             Some(fmt) => fmt,
             None => return Err(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe }),
@@ -1994,7 +1997,7 @@ impl hal::Device<Backend> for Device {
         //Note: we rely on SPIRV-Cross to use the proper 2D texel indexing here
         let texel_count = (end_rough - start) * 8 / format_desc.bits as u64;
         let col_count = cmp::min(texel_count, self.private_caps.max_texture_size);
-        let row_count = cmp::max(1, texel_count / self.private_caps.max_texture_size);
+        let row_count = (texel_count + self.private_caps.max_texture_size - 1) / self.private_caps.max_texture_size;
         let mtl_format = self.private_caps
             .map_format(format)
             .ok_or(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe })?;
