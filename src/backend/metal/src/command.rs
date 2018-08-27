@@ -1323,9 +1323,6 @@ where
                     instances.end as _,
                 );
             } else {
-                // Metal requires `indexBufferOffset` alignment of 4, but only for base instance
-                // variant of the call for some weird reason.
-                assert_eq!(offset % WORD_ALIGNMENT, 0);
                 encoder.draw_indexed_primitives_instanced_base_instance(
                     primitive_type,
                     index_count,
