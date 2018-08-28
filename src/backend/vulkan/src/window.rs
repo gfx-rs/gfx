@@ -254,9 +254,10 @@ impl Instance {
         #[cfg(target_os = "android")]
         {
             use winit::os::android::WindowExt;
-            let (width, height) = window.get_inner_size().unwrap();
-            self.create_surface_android(window.get_native_window(), width, height)
-
+            let logical_size = window.get_inner_size().unwrap();
+            let width = logical_size.width * window.get_hidpi_factor();
+            let height = logical_size.height * window.get_hidpi_factor();
+            self.create_surface_android(window.get_native_window(), width as _, height as _)
         }
         #[cfg(windows)]
         {
