@@ -170,6 +170,12 @@ const BASE_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
 ];
 
+const DUAL_SOURCE_BLEND_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily1_v4,
+    MTLFeatureSet::tvOS_GPUFamily1_v3,
+    MTLFeatureSet::macOS_GPUFamily1_v2,
+];
+
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
 
@@ -352,6 +358,7 @@ impl PhysicalDevice {
                 argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
                 shared_textures: !os_is_mac,
                 base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
+                dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
                 format_depth24_stencil8: device.d24_s8_supported(),
                 format_depth32_stencil8_filter: os_is_mac,
                 format_depth32_stencil8_none: !os_is_mac,
@@ -544,7 +551,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         hal::Features::SAMPLER_ANISOTROPY |
         hal::Features::FORMAT_BC |
         hal::Features::PRECISE_OCCLUSION_QUERY |
-        hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING
+        hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING |
+        if self.private_caps.dual_source_blending { hal::Features::DUAL_SRC_BLENDING } else { hal::Features::empty() }
     }
 
     fn limits(&self) -> hal::Limits {
