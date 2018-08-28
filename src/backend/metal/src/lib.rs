@@ -176,10 +176,11 @@ impl Instance {
 
             let window: *mut Object = msg_send![view, window];
             if window.is_null() {
-                panic!("surface is not attached to a window");
+                warn!("surface is not attached to a window");
+            } else {
+                let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
+                msg_send![render_layer, setContentsScale:scale_factor];
             }
-            let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
-            msg_send![render_layer, setContentsScale:scale_factor];
 
             window::SurfaceInner {
                 view,
