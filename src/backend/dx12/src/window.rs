@@ -17,22 +17,9 @@ use std::os::raw::c_void;
 
 impl Instance {
     pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
-        let (width, height) = unsafe {
-            let mut rect: RECT = mem::zeroed();
-            if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
-                panic!("GetClientRect failed");
-            }
-            (
-                (rect.right - rect.left) as u32,
-                (rect.bottom - rect.top) as u32,
-            )
-        };
-
         Surface {
             factory: self.factory.clone(),
             wnd_handle: hwnd as *mut _,
-            width: width,
-            height: height,
         }
     }
 
@@ -46,12 +33,25 @@ impl Instance {
 pub struct Surface {
     pub(crate) factory: ComPtr<dxgi1_4::IDXGIFactory4>,
     pub(crate) wnd_handle: HWND,
-    pub(crate) width: i::Size,
-    pub(crate) height: i::Size,
 }
 
 unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
+
+impl Surface {
+    fn get_extent(&self) -> (u32, u32) {
+        unsafe {
+            let mut rect: RECT = mem::zeroed();
+            if GetClientRect(self.wnd_handle as *mut _, &mut rect as *mut RECT) == 0 {
+                panic!("GetClientRect failed");
+            }
+            (
+                (rect.right - rect.left) as u32,
+                (rect.bottom - rect.top) as u32,
+            )
+        }
+    }
+}
 
 impl hal::Surface<Backend> for Surface {
     fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
@@ -62,7 +62,8 @@ impl hal::Surface<Backend> for Surface {
     }
 
     fn kind(&self) -> i::Kind {
-        i::Kind::D2(self.width, self.height, 1, 1)
+        let (width, height) = self.get_extent();
+        i::Kind::D2(width, height, 1, 1)
     }
 
     fn compatibility(
@@ -73,10 +74,8 @@ impl hal::Surface<Backend> for Surface {
         Option<Vec<f::Format>>,
         Vec<hal::PresentMode>,
     ) {
-        let extent = hal::window::Extent2D {
-            width: self.width,
-            height: self.height,
-        };
+        let (width, height) = self.get_extent();
+        let extent = hal::window::Extent2D { width, height };
 
         let capabilities = hal::SurfaceCapabilities {
             image_count: 2..16, // we currently use a flip effect which supports 2..16 buffers

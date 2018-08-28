@@ -3144,8 +3144,8 @@ impl d::Device<B> for Device {
         let desc = dxgi1_2::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: dxgi1_2::DXGI_ALPHA_MODE_IGNORE,
             BufferCount: config.image_count,
-            Width: surface.width,
-            Height: surface.height,
+            Width: config.extent.width,
+            Height: config.extent.height,
             Format: format,
             Flags: 0,
             BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
@@ -3205,7 +3205,7 @@ impl d::Device<B> for Device {
 
                 let bytes_per_block = (format_desc.bits / 8) as _;
                 let block_dim = format_desc.dim;
-                let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
+                let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
 
                 n::Image {
                     resource,
@@ -3217,8 +3217,8 @@ impl d::Device<B> for Device {
                     descriptor: d3d12::D3D12_RESOURCE_DESC {
                         Dimension: d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
                         Alignment: 0,
-                        Width: surface.width as _,
-                        Height: surface.height as _,
+                        Width: config.extent.width as _,
+                        Height: config.extent.height as _,
                         DepthOrArraySize: 1,
                         MipLevels: 1,
                         Format: format,
