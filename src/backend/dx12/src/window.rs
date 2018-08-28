@@ -6,8 +6,8 @@ use winit;
 
 use winapi::shared::dxgi1_4;
 use winapi::shared::windef::{HWND, RECT};
-use winapi::um::winuser::GetClientRect;
 use winapi::um::d3d12;
+use winapi::um::winuser::GetClientRect;
 use wio::com::ComPtr;
 
 use hal::{self, format as f, image as i};
@@ -22,7 +22,10 @@ impl Instance {
             if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
                 panic!("GetClientRect failed");
             }
-            ((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32)
+            (
+                (rect.right - rect.left) as u32,
+                (rect.bottom - rect.top) as u32,
+            )
         };
 
         Surface {
@@ -47,14 +50,14 @@ pub struct Surface {
     pub(crate) height: i::Size,
 }
 
-unsafe impl Send for Surface { }
-unsafe impl Sync for Surface { }
+unsafe impl Send for Surface {}
+unsafe impl Sync for Surface {}
 
 impl hal::Surface<Backend> for Surface {
     fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
         match queue_family {
             &QueueFamily::Present => true,
-            _ => false
+            _ => false,
         }
     }
 
@@ -63,8 +66,13 @@ impl hal::Surface<Backend> for Surface {
     }
 
     fn compatibility(
-        &self, _: &PhysicalDevice,
-    ) -> (hal::SurfaceCapabilities, Option<Vec<f::Format>>, Vec<hal::PresentMode>) {
+        &self,
+        _: &PhysicalDevice,
+    ) -> (
+        hal::SurfaceCapabilities,
+        Option<Vec<f::Format>>,
+        Vec<hal::PresentMode>,
+    ) {
         let extent = hal::window::Extent2D {
             width: self.width,
             height: self.height,
@@ -91,7 +99,7 @@ impl hal::Surface<Backend> for Surface {
         ];
 
         let present_modes = vec![
-            hal::PresentMode::Fifo //TODO
+            hal::PresentMode::Fifo, //TODO
         ];
 
         (capabilities, Some(formats), present_modes)
@@ -111,7 +119,9 @@ pub struct Swapchain {
 
 impl hal::Swapchain<Backend> for Swapchain {
     fn acquire_image(
-        &mut self, _timout_ns: u64, _sync: hal::FrameSync<Backend>
+        &mut self,
+        _timout_ns: u64,
+        _sync: hal::FrameSync<Backend>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         // TODO: sync
 
@@ -129,5 +139,5 @@ impl hal::Swapchain<Backend> for Swapchain {
     }
 }
 
-unsafe impl Send for Swapchain { }
-unsafe impl Sync for Swapchain { }
+unsafe impl Send for Swapchain {}
+unsafe impl Sync for Swapchain {}
