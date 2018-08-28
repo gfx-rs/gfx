@@ -5,26 +5,26 @@ use std::{ffi, mem, ptr, slice};
 
 use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 
-use winapi::Interface;
-use winapi::um::{d3d12, d3dcommon, d3dcompiler, synchapi, winbase, winnt};
 use winapi::shared::minwindef::{FALSE, TRUE, UINT};
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
+use winapi::um::{d3d12, d3dcommon, d3dcompiler, synchapi, winbase, winnt};
+use winapi::Interface;
 use wio::com::ComPtr;
 
-use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
 use hal::format::{Aspects, Format};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
-use hal::queue::{RawCommandQueue, QueueFamilyId};
+use hal::queue::{QueueFamilyId, RawCommandQueue};
 use hal::range::RangeArg;
+use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
 
-use {
-    conv, descriptors_cpu, native as n, root_constants, window as w,
-    Backend as B, Device, MemoryGroup, QUEUE_FAMILIES, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES,
-};
 use pool::RawCommandPool;
 use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
+use {
+    conv, descriptors_cpu, native as n, root_constants, window as w, Backend as B, Device,
+    MemoryGroup, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES, QUEUE_FAMILIES,
+};
 
 // Register space used for root constants.
 const ROOT_CONSTANT_SPACE: u32 = 0;
@@ -98,7 +98,7 @@ pub struct UnboundBuffer {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct UnboundImage {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     desc: d3d12::D3D12_RESOURCE_DESC,
     dsv_format: dxgiformat::DXGI_FORMAT,
     requirements: memory::Requirements,
@@ -154,7 +154,8 @@ pub(crate) fn compile_shader(
             1,
             0,
             &mut blob as *mut *mut _,
-            &mut error as *mut *mut _)
+            &mut error as *mut *mut _,
+        )
     };
     if !winerror::SUCCEEDED(hr) {
         error!("D3DCompile error {:x}", hr);
@@ -218,39 +219,99 @@ impl GraphicsPipelineStateSubobjectStream {
         depth_bounds_test_enable: bool,
     ) -> Self {
         GraphicsPipelineStateSubobjectStream {
-            root_signature: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE, pso_desc.pRootSignature),
-            vs: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS, pso_desc.VS),
-            ps: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS, pso_desc.PS),
-            ds: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS, pso_desc.DS),
-            hs: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS, pso_desc.HS),
-            gs: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS, pso_desc.GS),
-            stream_output: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT, pso_desc.StreamOutput),
-            blend: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND, pso_desc.BlendState),
-            sample_mask: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK, pso_desc.SampleMask),
-            rasterizer: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER, pso_desc.RasterizerState),
-            depth_stencil: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1, d3d12::D3D12_DEPTH_STENCIL_DESC1 {
-                DepthEnable: pso_desc.DepthStencilState.DepthEnable,
-                DepthWriteMask: pso_desc.DepthStencilState.DepthWriteMask,
-                DepthFunc: pso_desc.DepthStencilState.DepthFunc,
-                StencilEnable: pso_desc.DepthStencilState.StencilEnable,
-                StencilReadMask: pso_desc.DepthStencilState.StencilReadMask,
-                StencilWriteMask: pso_desc.DepthStencilState.StencilWriteMask,
-                FrontFace: pso_desc.DepthStencilState.FrontFace,
-                BackFace: pso_desc.DepthStencilState.BackFace,
-                DepthBoundsTestEnable: depth_bounds_test_enable as _,
-            }),
-            input_layout: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT, pso_desc.InputLayout),
-            ib_strip_cut_value: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE, pso_desc.IBStripCutValue),
-            primitive_topology: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY, pso_desc.PrimitiveTopologyType),
-            render_target_formats: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS, d3d12::D3D12_RT_FORMAT_ARRAY {
-                RTFormats: pso_desc.RTVFormats,
-                NumRenderTargets: pso_desc.NumRenderTargets,
-            }),
-            depth_stencil_format: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT, pso_desc.DSVFormat),
-            sample_desc: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC, pso_desc.SampleDesc),
-            node_mask: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK, pso_desc.NodeMask),
-            cached_pso: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO, pso_desc.CachedPSO),
-            flags: PipelineStateSubobject::new(d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS, pso_desc.Flags),
+            root_signature: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_ROOT_SIGNATURE,
+                pso_desc.pRootSignature,
+            ),
+            vs: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_VS,
+                pso_desc.VS,
+            ),
+            ps: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PS,
+                pso_desc.PS,
+            ),
+            ds: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DS,
+                pso_desc.DS,
+            ),
+            hs: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_HS,
+                pso_desc.HS,
+            ),
+            gs: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_GS,
+                pso_desc.GS,
+            ),
+            stream_output: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_STREAM_OUTPUT,
+                pso_desc.StreamOutput,
+            ),
+            blend: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_BLEND,
+                pso_desc.BlendState,
+            ),
+            sample_mask: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_MASK,
+                pso_desc.SampleMask,
+            ),
+            rasterizer: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RASTERIZER,
+                pso_desc.RasterizerState,
+            ),
+            depth_stencil: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL1,
+                d3d12::D3D12_DEPTH_STENCIL_DESC1 {
+                    DepthEnable: pso_desc.DepthStencilState.DepthEnable,
+                    DepthWriteMask: pso_desc.DepthStencilState.DepthWriteMask,
+                    DepthFunc: pso_desc.DepthStencilState.DepthFunc,
+                    StencilEnable: pso_desc.DepthStencilState.StencilEnable,
+                    StencilReadMask: pso_desc.DepthStencilState.StencilReadMask,
+                    StencilWriteMask: pso_desc.DepthStencilState.StencilWriteMask,
+                    FrontFace: pso_desc.DepthStencilState.FrontFace,
+                    BackFace: pso_desc.DepthStencilState.BackFace,
+                    DepthBoundsTestEnable: depth_bounds_test_enable as _,
+                },
+            ),
+            input_layout: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_INPUT_LAYOUT,
+                pso_desc.InputLayout,
+            ),
+            ib_strip_cut_value: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_IB_STRIP_CUT_VALUE,
+                pso_desc.IBStripCutValue,
+            ),
+            primitive_topology: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_PRIMITIVE_TOPOLOGY,
+                pso_desc.PrimitiveTopologyType,
+            ),
+            render_target_formats: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_RENDER_TARGET_FORMATS,
+                d3d12::D3D12_RT_FORMAT_ARRAY {
+                    RTFormats: pso_desc.RTVFormats,
+                    NumRenderTargets: pso_desc.NumRenderTargets,
+                },
+            ),
+            depth_stencil_format: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_DEPTH_STENCIL_FORMAT,
+                pso_desc.DSVFormat,
+            ),
+            sample_desc: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_SAMPLE_DESC,
+                pso_desc.SampleDesc,
+            ),
+            node_mask: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_NODE_MASK,
+                pso_desc.NodeMask,
+            ),
+            cached_pso: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_CACHED_PSO,
+                pso_desc.CachedPSO,
+            ),
+            flags: PipelineStateSubobject::new(
+                d3d12::D3D12_PIPELINE_STATE_SUBOBJECT_TYPE_FLAGS,
+                pso_desc.Flags,
+            ),
         }
     }
 }
@@ -267,14 +328,13 @@ impl Device {
             )
         });
 
-        spirv::Ast::parse(&module)
-            .map_err(|err| {
-                let msg =  match err {
-                    SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
-                };
-                d::ShaderError::CompilationFailed(msg)
-            })
+        spirv::Ast::parse(&module).map_err(|err| {
+            let msg = match err {
+                SpirvErrorCode::CompilationError(msg) => msg,
+                SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
+            };
+            d::ShaderError::CompilationFailed(msg)
+        })
     }
 
     fn patch_spirv_resources(
@@ -291,45 +351,80 @@ impl Device {
 
         let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
         for image in &shader_resources.separate_images {
-            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + set)
-               .map_err(gen_unexpected_error)?;
+            let set = ast
+                .get_decoration(image.id, spirv::Decoration::DescriptorSet)
+                .map_err(gen_query_error)?;
+            ast.set_decoration(
+                image.id,
+                spirv::Decoration::DescriptorSet,
+                space_offset + set,
+            ).map_err(gen_unexpected_error)?;
         }
 
         for uniform_buffer in &shader_resources.uniform_buffers {
-            let set = ast.get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet, space_offset + set)
-               .map_err(gen_unexpected_error)?;
+            let set = ast
+                .get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet)
+                .map_err(gen_query_error)?;
+            ast.set_decoration(
+                uniform_buffer.id,
+                spirv::Decoration::DescriptorSet,
+                space_offset + set,
+            ).map_err(gen_unexpected_error)?;
         }
 
         for storage_buffer in &shader_resources.storage_buffers {
-            let set = ast.get_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet, space_offset + set)
-               .map_err(gen_unexpected_error)?;
+            let set = ast
+                .get_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet)
+                .map_err(gen_query_error)?;
+            ast.set_decoration(
+                storage_buffer.id,
+                spirv::Decoration::DescriptorSet,
+                space_offset + set,
+            ).map_err(gen_unexpected_error)?;
         }
 
         for image in &shader_resources.storage_images {
-            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + set)
-               .map_err(gen_unexpected_error)?;
+            let set = ast
+                .get_decoration(image.id, spirv::Decoration::DescriptorSet)
+                .map_err(gen_query_error)?;
+            ast.set_decoration(
+                image.id,
+                spirv::Decoration::DescriptorSet,
+                space_offset + set,
+            ).map_err(gen_unexpected_error)?;
         }
 
         for sampler in &shader_resources.separate_samplers {
-            let set = ast.get_decoration(sampler.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(sampler.id, spirv::Decoration::DescriptorSet, space_offset + set)
-               .map_err(gen_unexpected_error)?;
+            let set = ast
+                .get_decoration(sampler.id, spirv::Decoration::DescriptorSet)
+                .map_err(gen_query_error)?;
+            ast.set_decoration(
+                sampler.id,
+                spirv::Decoration::DescriptorSet,
+                space_offset + set,
+            ).map_err(gen_unexpected_error)?;
         }
 
         for image in &shader_resources.sampled_images {
-            let set = ast.get_decoration(image.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(image.id, spirv::Decoration::DescriptorSet, space_offset + set)
-               .map_err(gen_unexpected_error)?;
+            let set = ast
+                .get_decoration(image.id, spirv::Decoration::DescriptorSet)
+                .map_err(gen_query_error)?;
+            ast.set_decoration(
+                image.id,
+                spirv::Decoration::DescriptorSet,
+                space_offset + set,
+            ).map_err(gen_unexpected_error)?;
         }
 
         for input in &shader_resources.subpass_inputs {
-            let set = ast.get_decoration(input.id, spirv::Decoration::DescriptorSet).map_err(gen_query_error)?;
-            ast.set_decoration(input.id, spirv::Decoration::DescriptorSet, space_offset + set)
-               .map_err(gen_unexpected_error)?;
+            let set = ast
+                .get_decoration(input.id, spirv::Decoration::DescriptorSet)
+                .map_err(gen_query_error)?;
+            ast.set_decoration(
+                input.id,
+                spirv::Decoration::DescriptorSet,
+                space_offset + set,
+            ).map_err(gen_unexpected_error)?;
         }
 
         // TODO: other resources
@@ -351,29 +446,30 @@ impl Device {
         let root_constant_layout = layout
             .root_constants
             .iter()
-            .filter_map(|constant| if constant.stages.contains(stage_flag) {
-                Some(hlsl::RootConstant {
-                    start: constant.range.start * 4,
-                    end: constant.range.end * 4,
-                    binding: constant.range.start,
-                    space: 0,
-                })
-            } else {
-                None
+            .filter_map(|constant| {
+                if constant.stages.contains(stage_flag) {
+                    Some(hlsl::RootConstant {
+                        start: constant.range.start * 4,
+                        end: constant.range.end * 4,
+                        binding: constant.range.start,
+                        space: 0,
+                    })
+                } else {
+                    None
+                }
             })
             .collect();
         ast.set_compiler_options(&compile_options)
             .map_err(gen_unexpected_error)?;
         ast.set_root_constant_layout(root_constant_layout)
             .map_err(gen_unexpected_error)?;
-        ast.compile()
-            .map_err(|err| {
-                let msg =  match err {
-                    SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
-                };
-                d::ShaderError::CompilationFailed(msg)
-            })
+        ast.compile().map_err(|err| {
+            let msg = match err {
+                SpirvErrorCode::CompilationError(msg) => msg,
+                SpirvErrorCode::Unhandled => "Unknown compile error".into(),
+            };
+            d::ShaderError::CompilationFailed(msg)
+        })
     }
 
     // Extract entry point from shader module on pipeline creation.
@@ -395,9 +491,7 @@ impl Device {
             }
             n::ShaderModule::Spirv(ref raw_data) => {
                 let mut ast = Self::parse_spirv(raw_data)?;
-                let spec_constants = ast
-                    .get_specialization_constants()
-                    .map_err(gen_query_error)?;
+                let spec_constants = ast.get_specialization_constants().map_err(gen_query_error)?;
 
                 for spec_constant in spec_constants {
                     if let Some(constant) = source
@@ -416,7 +510,8 @@ impl Device {
                                 pso::Constant::F32(v) => *(&v as *const _ as *const u64),
                                 pso::Constant::F64(v) => *(&v as *const _ as *const u64),
                             };
-                            ast.set_scalar_constant(spec_constant.id, value).map_err(gen_query_error)?;
+                            ast.set_scalar_constant(spec_constant.id, value)
+                                .map_err(gen_query_error)?;
                         }
                     }
                 }
@@ -470,23 +565,14 @@ impl Device {
         let mut signature = ptr::null_mut();
 
         let (arg_ty, stride) = match ty {
-            CommandSignature::Draw => (
-                d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW,
-                16,
-            ),
-            CommandSignature::DrawIndexed => (
-                d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED,
-                20,
-            ),
-            CommandSignature::Dispatch => (
-                d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH,
-                12,
-            ),
+            CommandSignature::Draw => (d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW, 16),
+            CommandSignature::DrawIndexed => (d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DRAW_INDEXED, 20),
+            CommandSignature::Dispatch => (d3d12::D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH, 12),
         };
 
         let arg = d3d12::D3D12_INDIRECT_ARGUMENT_DESC {
             Type: arg_ty,
-            .. unsafe { mem::zeroed() }
+            ..unsafe { mem::zeroed() }
         };
 
         let desc = d3d12::D3D12_COMMAND_SIGNATURE_DESC {
@@ -582,13 +668,11 @@ impl Device {
         match info.view_kind {
             image::ViewKind::D1 => {
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE1D;
-                *unsafe{ desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_RTV {
-                    MipSlice,
-                }
+                *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_RTV { MipSlice }
             }
             image::ViewKind::D1Array => {
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE1DARRAY;
-                *unsafe{ desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_RTV {
+                *unsafe { desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_RTV {
                     MipSlice,
                     FirstArraySlice,
                     ArraySize,
@@ -596,27 +680,27 @@ impl Device {
             }
             image::ViewKind::D2 if is_msaa => {
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DMS;
-                *unsafe{ desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_RTV {
+                *unsafe { desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_RTV {
                     UnusedField_NothingToDefine: 0,
                 }
             }
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2D;
-                *unsafe{ desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_RTV {
+                *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_RTV {
                     MipSlice,
                     PlaneSlice: 0, //TODO
                 }
             }
             image::ViewKind::D2Array if is_msaa => {
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DMSARRAY;
-                *unsafe{ desc.u.Texture2DMSArray_mut() } = d3d12::D3D12_TEX2DMS_ARRAY_RTV {
+                *unsafe { desc.u.Texture2DMSArray_mut() } = d3d12::D3D12_TEX2DMS_ARRAY_RTV {
                     FirstArraySlice,
                     ArraySize,
                 }
             }
             image::ViewKind::D2Array => {
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
-                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                *unsafe { desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
                     MipSlice,
                     FirstArraySlice,
                     ArraySize,
@@ -625,17 +709,16 @@ impl Device {
             }
             image::ViewKind::D3 => {
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE3D;
-                *unsafe{ desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_RTV {
+                *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_RTV {
                     MipSlice,
                     FirstWSlice: 0,
                     WSize: info.kind.extent().depth as _,
                 }
             }
-            image::ViewKind::Cube |
-            image::ViewKind::CubeArray => {
+            image::ViewKind::Cube | image::ViewKind::CubeArray => {
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY;
                 //TODO: double-check if any *6 are needed
-                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                *unsafe { desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
                     MipSlice,
                     FirstArraySlice,
                     ArraySize,
@@ -652,11 +735,11 @@ impl Device {
     }
 
     fn view_image_as_render_target(
-        &self, info: ViewInfo
+        &self,
+        info: ViewInfo,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
         let handle = self.rtv_pool.lock().unwrap().alloc_handle();
-        Self::view_image_as_render_target_impl(&mut self.raw.clone(), handle, info)
-            .map(|_| handle)
+        Self::view_image_as_render_target_impl(&mut self.raw.clone(), handle, info).map(|_| handle)
     }
 
     pub(crate) fn view_image_as_depth_stencil_impl(
@@ -683,13 +766,11 @@ impl Device {
         match info.view_kind {
             image::ViewKind::D1 => {
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE1D;
-                *unsafe{ desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_DSV {
-                    MipSlice,
-                }
+                *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_DSV { MipSlice }
             }
             image::ViewKind::D1Array => {
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE1DARRAY;
-                *unsafe{ desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_DSV {
+                *unsafe { desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_DSV {
                     MipSlice,
                     FirstArraySlice,
                     ArraySize,
@@ -697,34 +778,30 @@ impl Device {
             }
             image::ViewKind::D2 if is_msaa => {
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DMS;
-                *unsafe{ desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_DSV {
+                *unsafe { desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_DSV {
                     UnusedField_NothingToDefine: 0,
                 }
             }
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2D;
-                *unsafe{ desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_DSV {
-                    MipSlice,
-                }
+                *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_DSV { MipSlice }
             }
             image::ViewKind::D2Array if is_msaa => {
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
-                *unsafe{ desc.u.Texture2DMSArray_mut() } = d3d12::D3D12_TEX2DMS_ARRAY_DSV {
+                *unsafe { desc.u.Texture2DMSArray_mut() } = d3d12::D3D12_TEX2DMS_ARRAY_DSV {
                     FirstArraySlice,
                     ArraySize,
                 }
             }
             image::ViewKind::D2Array => {
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_DSV {
+                *unsafe { desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_DSV {
                     MipSlice,
                     FirstArraySlice,
                     ArraySize,
                 }
             }
-            image::ViewKind::D3 |
-            image::ViewKind::Cube |
-            image::ViewKind::CubeArray => {
+            image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => {
                 unimplemented!()
             }
         };
@@ -737,14 +814,16 @@ impl Device {
     }
 
     fn view_image_as_depth_stencil(
-        &self, info: ViewInfo
+        &self,
+        info: ViewInfo,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
         let handle = self.dsv_pool.lock().unwrap().alloc_handle();
-        Self::view_image_as_depth_stencil_impl(&mut self.raw.clone(), handle, info)
-            .map(|_| handle)
+        Self::view_image_as_depth_stencil_impl(&mut self.raw.clone(), handle, info).map(|_| handle)
     }
 
-    pub(crate) fn build_image_as_shader_resource_desc(info: &ViewInfo) -> Result<d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC, image::ViewError> {
+    pub(crate) fn build_image_as_shader_resource_desc(
+        info: &ViewInfo,
+    ) -> Result<d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC, image::ViewError> {
         #![allow(non_snake_case)]
 
         let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
@@ -766,7 +845,7 @@ impl Device {
         match info.view_kind {
             image::ViewKind::D1 => {
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE1D;
-                *unsafe{ desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_SRV {
+                *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_SRV {
                     MostDetailedMip,
                     MipLevels,
                     ResourceMinLODClamp: 0.0,
@@ -774,7 +853,7 @@ impl Device {
             }
             image::ViewKind::D1Array => {
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE1DARRAY;
-                *unsafe{ desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_SRV {
+                *unsafe { desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_SRV {
                     MostDetailedMip,
                     MipLevels,
                     FirstArraySlice,
@@ -784,13 +863,13 @@ impl Device {
             }
             image::ViewKind::D2 if is_msaa => {
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2DMS;
-                *unsafe{ desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_SRV {
+                *unsafe { desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_SRV {
                     UnusedField_NothingToDefine: 0,
                 }
             }
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2D;
-                *unsafe{ desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_SRV {
+                *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_SRV {
                     MostDetailedMip,
                     MipLevels,
                     PlaneSlice: 0, //TODO
@@ -799,14 +878,14 @@ impl Device {
             }
             image::ViewKind::D2Array if is_msaa => {
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY;
-                *unsafe{ desc.u.Texture2DMSArray_mut() } = d3d12::D3D12_TEX2DMS_ARRAY_SRV {
+                *unsafe { desc.u.Texture2DMSArray_mut() } = d3d12::D3D12_TEX2DMS_ARRAY_SRV {
                     FirstArraySlice,
                     ArraySize,
                 }
             }
             image::ViewKind::D2Array => {
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
-                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_SRV {
+                *unsafe { desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_SRV {
                     MostDetailedMip,
                     MipLevels,
                     FirstArraySlice,
@@ -817,7 +896,7 @@ impl Device {
             }
             image::ViewKind::D3 => {
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE3D;
-                *unsafe{ desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_SRV {
+                *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_SRV {
                     MostDetailedMip,
                     MipLevels,
                     ResourceMinLODClamp: 0.0,
@@ -825,7 +904,7 @@ impl Device {
             }
             image::ViewKind::Cube if is_cube => {
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURECUBE;
-                *unsafe{ desc.u.TextureCube_mut() } = d3d12::D3D12_TEXCUBE_SRV {
+                *unsafe { desc.u.TextureCube_mut() } = d3d12::D3D12_TEXCUBE_SRV {
                     MostDetailedMip,
                     MipLevels,
                     ResourceMinLODClamp: 0.0,
@@ -834,7 +913,7 @@ impl Device {
             image::ViewKind::CubeArray if is_cube => {
                 assert_eq!(0, ArraySize % 6);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
-                *unsafe{ desc.u.TextureCubeArray_mut() } = d3d12::D3D12_TEXCUBE_ARRAY_SRV {
+                *unsafe { desc.u.TextureCubeArray_mut() } = d3d12::D3D12_TEXCUBE_ARRAY_SRV {
                     MostDetailedMip,
                     MipLevels,
                     First2DArrayFace: FirstArraySlice,
@@ -842,10 +921,12 @@ impl Device {
                     ResourceMinLODClamp: 0.0,
                 }
             }
-            image::ViewKind::Cube |
-            image::ViewKind::CubeArray => {
-                error!("Cube views are not supported for the image, kind: {:?}", info.kind);
-                return Err(image::ViewError::BadKind)
+            image::ViewKind::Cube | image::ViewKind::CubeArray => {
+                error!(
+                    "Cube views are not supported for the image, kind: {:?}",
+                    info.kind
+                );
+                return Err(image::ViewError::BadKind);
             }
         }
 
@@ -853,7 +934,8 @@ impl Device {
     }
 
     fn view_image_as_shader_resource(
-        &self, mut info: ViewInfo
+        &self,
+        mut info: ViewInfo,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
         #![allow(non_snake_case)]
 
@@ -867,14 +949,17 @@ impl Device {
         let desc = Self::build_image_as_shader_resource_desc(&info)?;
         let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
         unsafe {
-            self.raw.clone().CreateShaderResourceView(info.resource, &desc, handle);
+            self.raw
+                .clone()
+                .CreateShaderResourceView(info.resource, &desc, handle);
         }
 
         Ok(handle)
     }
 
     fn view_image_as_storage(
-        &self, info: ViewInfo
+        &self,
+        info: ViewInfo,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
         #![allow(non_snake_case)]
         assert_eq!(info.range.levels.start + 1, info.range.levels.end);
@@ -892,19 +977,17 @@ impl Device {
         assert!(info.range.layers.end <= info.kind.num_layers());
         if info.kind.num_samples() > 1 {
             error!("MSAA images can't be viewed as UAV");
-            return Err(image::ViewError::Unsupported)
+            return Err(image::ViewError::Unsupported);
         }
 
         match info.view_kind {
             image::ViewKind::D1 => {
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE1D;
-                *unsafe{ desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_UAV {
-                    MipSlice,
-                }
+                *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_UAV { MipSlice }
             }
             image::ViewKind::D1Array => {
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE1DARRAY;
-                *unsafe{ desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_UAV {
+                *unsafe { desc.u.Texture1DArray_mut() } = d3d12::D3D12_TEX1D_ARRAY_UAV {
                     MipSlice,
                     FirstArraySlice,
                     ArraySize,
@@ -912,14 +995,14 @@ impl Device {
             }
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE2D;
-                *unsafe{ desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_UAV {
+                *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_UAV {
                     MipSlice,
                     PlaneSlice: 0, //TODO
                 }
             }
             image::ViewKind::D2Array => {
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-                *unsafe{ desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_UAV {
+                *unsafe { desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_UAV {
                     MipSlice,
                     FirstArraySlice,
                     ArraySize,
@@ -928,14 +1011,13 @@ impl Device {
             }
             image::ViewKind::D3 => {
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE3D;
-                *unsafe{ desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_UAV {
+                *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_UAV {
                     MipSlice,
                     FirstWSlice: 0,
                     WSize: info.kind.extent().depth as _,
                 }
             }
-            image::ViewKind::Cube |
-            image::ViewKind::CubeArray => {
+            image::ViewKind::Cube | image::ViewKind::CubeArray => {
                 error!("Cubic images can't be viewed as UAV");
                 return Err(image::ViewError::Unsupported);
             }
@@ -943,7 +1025,12 @@ impl Device {
 
         let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
         unsafe {
-            self.raw.clone().CreateUnorderedAccessView(info.resource, ptr::null_mut(), &desc, handle);
+            self.raw.clone().CreateUnorderedAccessView(
+                info.resource,
+                ptr::null_mut(),
+                &desc,
+                handle,
+            );
         }
 
         Ok(handle)
@@ -994,13 +1081,15 @@ impl d::Device<B> for Device {
                 1 => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_BUFFERS,
                 2 => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_NON_RT_DS_TEXTURES,
                 3 => d3d12::D3D12_HEAP_FLAG_ALLOW_ONLY_RT_DS_TEXTURES,
-                _ => unreachable!()
+                _ => unreachable!(),
             },
         };
 
         let mut heap = ptr::null_mut();
         let hr = unsafe {
-            self.raw.clone().CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), &mut heap)
+            self.raw
+                .clone()
+                .CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), &mut heap)
         };
         if hr == winerror::E_OUTOFMEMORY {
             return Err(d::OutOfMemory);
@@ -1011,8 +1100,9 @@ impl d::Device<B> for Device {
         // be mapped.
         // Devices supporting heap tier 1 can only created buffers on mem group 1 (ALLOW_ONLY_BUFFERS).
         // Devices supporting heap tier 2 always expose only mem group 0 and don't have any further restrictions.
-        let is_mapable = mem_base_id != 0 &&
-            (mem_group == MemoryGroup::Universal as _ || mem_group == MemoryGroup::BufferOnly as _);
+        let is_mapable = mem_base_id != 0
+            && (mem_group == MemoryGroup::Universal as _
+                || mem_group == MemoryGroup::BufferOnly as _);
 
         // Create a buffer resource covering the whole memory slice to be able to map the whole memory.
         let resource = if is_mapable {
@@ -1059,7 +1149,9 @@ impl d::Device<B> for Device {
     }
 
     fn create_command_pool(
-        &self, family: QueueFamilyId, _create_flags: CommandPoolCreateFlags
+        &self,
+        family: QueueFamilyId,
+        _create_flags: CommandPoolCreateFlags,
     ) -> RawCommandPool {
         let list_type = QUEUE_FAMILIES[family.0].native_type();
         // create command allocator
@@ -1117,9 +1209,10 @@ impl d::Device<B> for Device {
             barrier_start_index: usize,
         }
 
-        let attachments = attachments.into_iter()
-                                     .map(|attachment| attachment.borrow().clone())
-                                     .collect::<Vec<_>>();
+        let attachments = attachments
+            .into_iter()
+            .map(|attachment| attachment.borrow().clone())
+            .collect::<Vec<_>>();
         let subpasses = subpasses.into_iter().collect::<Vec<_>>();
         let dependencies = dependencies.into_iter().collect::<Vec<_>>();
         let mut att_infos = attachments
@@ -1131,7 +1224,10 @@ impl d::Device<B> for Device {
                 } else {
                     d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET
                 },
-                last_state: conv::map_image_resource_state(image::Access::empty(), att.layouts.start),
+                last_state: conv::map_image_resource_state(
+                    image::Access::empty(),
+                    att.layouts.start,
+                ),
                 barrier_start_index: 0,
             })
             .collect::<Vec<_>>();
@@ -1173,7 +1269,8 @@ impl d::Device<B> for Device {
         for dep in &dependencies {
             let dep = dep.borrow();
             //Note: self-dependencies are ignored
-            if dep.passes.start != dep.passes.end && dep.passes.start != pass::SubpassRef::External {
+            if dep.passes.start != dep.passes.end && dep.passes.start != pass::SubpassRef::External
+            {
                 if let pass::SubpassRef::Pass(sid) = dep.passes.end {
                     deps_left[sid] += 1;
                 }
@@ -1190,7 +1287,9 @@ impl d::Device<B> for Device {
             deps_left[sid] = !0; // mark as done
             for dep in &dependencies {
                 let dep = dep.borrow();
-                if dep.passes.start != dep.passes.end && dep.passes.start == pass::SubpassRef::Pass(sid) {
+                if dep.passes.start != dep.passes.end
+                    && dep.passes.start == pass::SubpassRef::Pass(sid)
+                {
                     if let pass::SubpassRef::Pass(other) = dep.passes.end {
                         deps_left[other] -= 1;
                     }
@@ -1205,43 +1304,43 @@ impl d::Device<B> for Device {
                 match ai.sub_states[sid] {
                     SubState::Preserve => {
                         ai.barrier_start_index = rp.subpasses.len() + 1;
-                    },
+                    }
                     SubState::New(state) if state != ai.last_state => {
-                        let barrier = n::BarrierDesc::new(att_id, ai.last_state .. state);
+                        let barrier = n::BarrierDesc::new(att_id, ai.last_state..state);
                         match rp.subpasses.get_mut(ai.barrier_start_index) {
                             Some(past_subpass) => {
                                 let split = barrier.split();
                                 past_subpass.pre_barriers.push(split.start);
                                 pre_barriers.push(split.end);
-                            },
+                            }
                             None => pre_barriers.push(barrier),
                         }
                         ai.last_state = state;
                         ai.barrier_start_index = rp.subpasses.len() + 1;
-                    },
+                    }
                     SubState::Resolve(state) => {
                         // 1. Standard pre barrier to update state from previous pass into desired substate.
                         if state != ai.last_state {
-                            let barrier = n::BarrierDesc::new(att_id, ai.last_state .. state);
+                            let barrier = n::BarrierDesc::new(att_id, ai.last_state..state);
                             match rp.subpasses.get_mut(ai.barrier_start_index) {
                                 Some(past_subpass) => {
                                     let split = barrier.split();
                                     past_subpass.pre_barriers.push(split.start);
                                     pre_barriers.push(split.end);
-                                },
+                                }
                                 None => pre_barriers.push(barrier),
                             }
                         }
 
                         // 2. Post Barrier at the end of the subpass into RESOLVE_SOURCE.
                         let resolve_state = d3d12::D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
-                        let barrier = n::BarrierDesc::new(att_id, state .. resolve_state);
+                        let barrier = n::BarrierDesc::new(att_id, state..resolve_state);
                         post_barriers.push(barrier);
 
                         ai.last_state = resolve_state;
                         ai.barrier_start_index = rp.subpasses.len() + 1;
-                    },
-                    _ => { }
+                    }
+                    _ => {}
                 };
             }
 
@@ -1264,13 +1363,13 @@ impl d::Device<B> for Device {
             if state_dst == ai.last_state {
                 continue;
             }
-            let barrier = n::BarrierDesc::new(att_id, ai.last_state .. state_dst);
+            let barrier = n::BarrierDesc::new(att_id, ai.last_state..state_dst);
             match rp.subpasses.get_mut(ai.barrier_start_index) {
                 Some(past_subpass) => {
                     let split = barrier.split();
                     past_subpass.pre_barriers.push(split.start);
                     rp.post_barriers.push(split.end);
-                },
+                }
                 None => rp.post_barriers.push(barrier),
             }
         }
@@ -1322,10 +1421,10 @@ impl d::Device<B> for Device {
             let mut param = d3d12::D3D12_ROOT_PARAMETER {
                 ParameterType: d3d12::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS,
                 ShaderVisibility: d3d12::D3D12_SHADER_VISIBILITY_ALL, //TODO
-                .. unsafe { mem::zeroed() }
+                ..unsafe { mem::zeroed() }
             };
 
-            *unsafe{ param.u.Constants_mut() } = d3d12::D3D12_ROOT_CONSTANTS {
+            *unsafe { param.u.Constants_mut() } = d3d12::D3D12_ROOT_CONSTANTS {
                 ShaderRegister: root_constant.range.start as _,
                 RegisterSpace: ROOT_CONSTANT_SPACE,
                 Num32BitValues: (root_constant.range.end - root_constant.range.start) as _,
@@ -1345,9 +1444,7 @@ impl d::Device<B> for Device {
             .iter()
             .map(|desc_set| {
                 let mut sum = 0;
-                let bindings = &desc_set
-                    .borrow()
-                    .bindings;
+                let bindings = &desc_set.borrow().bindings;
 
                 for binding in bindings {
                     sum += if binding.ty == pso::DescriptorType::CombinedImageSampler {
@@ -1370,18 +1467,21 @@ impl d::Device<B> for Device {
             let mut param = d3d12::D3D12_ROOT_PARAMETER {
                 ParameterType: d3d12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
                 ShaderVisibility: d3d12::D3D12_SHADER_VISIBILITY_ALL, //TODO
-                .. unsafe { mem::zeroed() }
+                ..unsafe { mem::zeroed() }
             };
 
             let range_base = ranges.len();
-            ranges.extend(set
-                .bindings
-                .iter()
-                .filter(|bind| bind.ty != pso::DescriptorType::Sampler)
-                .map(|bind| conv::map_descriptor_range(bind, (table_space_offset + i) as u32, false)));
+            ranges.extend(
+                set.bindings
+                    .iter()
+                    .filter(|bind| bind.ty != pso::DescriptorType::Sampler)
+                    .map(|bind| {
+                        conv::map_descriptor_range(bind, (table_space_offset + i) as u32, false)
+                    }),
+            );
 
             if ranges.len() > range_base {
-                *unsafe{ param.u.DescriptorTable_mut() } = d3d12::D3D12_ROOT_DESCRIPTOR_TABLE {
+                *unsafe { param.u.DescriptorTable_mut() } = d3d12::D3D12_ROOT_DESCRIPTOR_TABLE {
                     NumDescriptorRanges: (ranges.len() - range_base) as _,
                     pDescriptorRanges: ranges[range_base..].as_ptr(),
                 };
@@ -1391,20 +1491,20 @@ impl d::Device<B> for Device {
             }
 
             let range_base = ranges.len();
-            ranges.extend(set
-                .bindings
-                .iter()
-                .filter(|bind| bind.ty == pso::DescriptorType::Sampler || bind.ty == pso::DescriptorType::CombinedImageSampler)
-                .map(|bind| {
-                    conv::map_descriptor_range(
-                        bind,
-                        (table_space_offset + i) as u32,
-                        true,
-                    )
-                }));
+            ranges.extend(
+                set.bindings
+                    .iter()
+                    .filter(|bind| {
+                        bind.ty == pso::DescriptorType::Sampler
+                            || bind.ty == pso::DescriptorType::CombinedImageSampler
+                    })
+                    .map(|bind| {
+                        conv::map_descriptor_range(bind, (table_space_offset + i) as u32, true)
+                    }),
+            );
 
             if ranges.len() > range_base {
-                *unsafe{ param.u.DescriptorTable_mut() } = d3d12::D3D12_ROOT_DESCRIPTOR_TABLE {
+                *unsafe { param.u.DescriptorTable_mut() } = d3d12::D3D12_ROOT_DESCRIPTOR_TABLE {
                     NumDescriptorRanges: (ranges.len() - range_base) as _,
                     pDescriptorRanges: ranges[range_base..].as_ptr(),
                 };
@@ -1448,7 +1548,10 @@ impl d::Device<B> for Device {
                 //TODO
                 let error_output = (*error).GetBufferPointer();
                 let message = ::std::ffi::CStr::from_ptr(error_output as *const _ as *const _);
-                error!("D3D12SerializeRootSignature error: {:?}", message.to_str().unwrap());
+                error!(
+                    "D3D12SerializeRootSignature error: {:?}",
+                    message.to_str().unwrap()
+                );
                 (*error).Release();
             }
 
@@ -1488,18 +1591,18 @@ impl d::Device<B> for Device {
 
     fn create_graphics_pipeline<'a>(
         &self,
-        desc: &pso::GraphicsPipelineDesc<'a, B>, _cache: Option<&()>
+        desc: &pso::GraphicsPipelineDesc<'a, B>,
+        _cache: Option<&()>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
-        let build_shader =
-            |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, B>>| {
-                let source = match source {
-                    Some(src) => src,
-                    None => return Ok((ptr::null_mut(), false)),
-                };
-
-                Self::extract_entry_point(stage, source, desc.layout)
-                    .map_err(|err| pso::CreationError::Shader(err))
+        let build_shader = |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, B>>| {
+            let source = match source {
+                Some(src) => src,
+                None => return Ok((ptr::null_mut(), false)),
             };
+
+            Self::extract_entry_point(stage, source, desc.layout)
+                .map_err(|err| pso::CreationError::Shader(err))
+        };
 
         let (vs, vs_destroy) = build_shader(pso::Stage::Vertex, Some(&desc.shaders.vertex))?;
         let (fs, fs_destroy) = build_shader(pso::Stage::Fragment, desc.shaders.fragment.as_ref())?;
@@ -1528,15 +1631,21 @@ impl d::Device<B> for Device {
         }
 
         // Define input element descriptions
-        let input_element_descs = desc.attributes
+        let input_element_descs = desc
+            .attributes
             .iter()
             .filter_map(|attrib| {
-                let buffer_desc = match desc.vertex_buffers
-                    .iter().find(|buffer_desc| buffer_desc.binding == attrib.binding)
+                let buffer_desc = match desc
+                    .vertex_buffers
+                    .iter()
+                    .find(|buffer_desc| buffer_desc.binding == attrib.binding)
                 {
                     Some(buffer_desc) => buffer_desc,
                     None => {
-                        error!("Couldn't find associated vertex buffer description {:?}", attrib.binding);
+                        error!(
+                            "Couldn't find associated vertex buffer description {:?}",
+                            attrib.binding
+                        );
                         return Some(Err(pso::CreationError::Other));
                     }
                 };
@@ -1556,10 +1665,7 @@ impl d::Device<B> for Device {
                 let (input_slot, offset) = if stride <= offset {
                     // Number of input attributes may not exceed bindings, see limits.
                     // We will always find at least one free binding.
-                    let mapping = vertex_bindings
-                        .iter()
-                        .position(Option::is_none)
-                        .unwrap();
+                    let mapping = vertex_bindings.iter().position(Option::is_none).unwrap();
                     vertex_bindings[mapping] = Some(n::VertexBinding {
                         stride: vertex_strides[binding],
                         offset: offset,
@@ -1589,8 +1695,6 @@ impl d::Device<B> for Device {
             })
             .collect::<Result<Vec<_>, _>>()?;
 
-
-
         // TODO: check maximum number of rtvs
         // Get associated subpass information
         let pass = {
@@ -1605,11 +1709,11 @@ impl d::Device<B> for Device {
         let (rtvs, num_rtvs) = {
             let mut rtvs = [dxgiformat::DXGI_FORMAT_UNKNOWN; 8];
             let mut num_rtvs = 0;
-            for (rtv, target) in rtvs.iter_mut()
-                .zip(pass.color_attachments.iter())
-            {
+            for (rtv, target) in rtvs.iter_mut().zip(pass.color_attachments.iter()) {
                 let format = desc.subpass.main_pass.attachments[target.0].format;
-                *rtv = format.and_then(conv::map_format).unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN);
+                *rtv = format
+                    .and_then(conv::map_format)
+                    .unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN);
                 num_rtvs += 1;
             }
             (rtvs, num_rtvs)
@@ -1639,10 +1743,13 @@ impl d::Device<B> for Device {
                 RasterizedStream: 0,
             },
             BlendState: d3d12::D3D12_BLEND_DESC {
-                AlphaToCoverageEnable: desc
-                    .multisampling
-                    .as_ref()
-                    .map_or(FALSE, |ms| if ms.alpha_coverage { TRUE } else { FALSE }),
+                AlphaToCoverageEnable: desc.multisampling.as_ref().map_or(FALSE, |ms| {
+                    if ms.alpha_coverage {
+                        TRUE
+                    } else {
+                        FALSE
+                    }
+                }),
                 IndependentBlendEnable: TRUE,
                 RenderTarget: conv::map_render_targets(&desc.blender.targets),
             },
@@ -1650,21 +1757,24 @@ impl d::Device<B> for Device {
             RasterizerState: conv::map_rasterizer(&desc.rasterizer),
             DepthStencilState: conv::map_depth_stencil(&desc.depth_stencil),
             InputLayout: d3d12::D3D12_INPUT_LAYOUT_DESC {
-                pInputElementDescs: if input_element_descs.is_empty() { ptr::null() } else { input_element_descs.as_ptr() },
+                pInputElementDescs: if input_element_descs.is_empty() {
+                    ptr::null()
+                } else {
+                    input_element_descs.as_ptr()
+                },
                 NumElements: input_element_descs.len() as u32,
             },
             IBStripCutValue: d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED, // TODO
             PrimitiveTopologyType: conv::map_topology_type(desc.input_assembler.primitive),
             NumRenderTargets: num_rtvs,
             RTVFormats: rtvs,
-            DSVFormat: pass.depth_stencil_attachment
-                .and_then(|att_ref|
-                    desc.subpass
-                        .main_pass
-                        .attachments[att_ref.0]
+            DSVFormat: pass
+                .depth_stencil_attachment
+                .and_then(|att_ref| {
+                    desc.subpass.main_pass.attachments[att_ref.0]
                         .format
                         .and_then(|f| conv::map_format_dsv(f.base_format().0))
-                )
+                })
                 .unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN),
             SampleDesc: sample_desc,
             NodeMask: 0,
@@ -1694,7 +1804,8 @@ impl d::Device<B> for Device {
                         device2.CreatePipelineState(
                             &pss_desc,
                             &d3d12::ID3D12PipelineState::uuidof(),
-                            &mut pipeline as *mut *mut _ as *mut *mut _)
+                            &mut pipeline as *mut *mut _ as *mut *mut _,
+                        )
                     }
                 }
             }
@@ -1703,17 +1814,28 @@ impl d::Device<B> for Device {
                 self.raw.clone().CreateGraphicsPipelineState(
                     &pso_desc,
                     &d3d12::ID3D12PipelineState::uuidof(),
-                    &mut pipeline as *mut *mut _ as *mut *mut _)
+                    &mut pipeline as *mut *mut _ as *mut *mut _,
+                )
             }
         };
 
         let destroy_shader = |shader: *mut d3dcommon::ID3DBlob| unsafe { (*shader).Release() };
 
-        if vs_destroy { destroy_shader(vs); }
-        if fs_destroy { destroy_shader(fs); }
-        if gs_destroy { destroy_shader(gs); }
-        if hs_destroy { destroy_shader(hs); }
-        if ds_destroy { destroy_shader(ds); }
+        if vs_destroy {
+            destroy_shader(vs);
+        }
+        if fs_destroy {
+            destroy_shader(fs);
+        }
+        if gs_destroy {
+            destroy_shader(gs);
+        }
+        if hs_destroy {
+            destroy_shader(hs);
+        }
+        if ds_destroy {
+            destroy_shader(ds);
+        }
 
         if winerror::SUCCEEDED(hr) {
             let mut baked_states = desc.baked_states.clone();
@@ -1736,15 +1858,13 @@ impl d::Device<B> for Device {
     }
 
     fn create_compute_pipeline<'a>(
-        &self, desc: &pso::ComputePipelineDesc<'a, B>, _cache: Option<&()>
+        &self,
+        desc: &pso::ComputePipelineDesc<'a, B>,
+        _cache: Option<&()>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         let (cs, cs_destroy) =
-            Self::extract_entry_point(
-                pso::Stage::Compute,
-                &desc.shader,
-                desc.layout,
-            )
-            .map_err(|err| pso::CreationError::Shader(err))?;
+            Self::extract_entry_point(pso::Stage::Compute, &desc.shader, desc.layout)
+                .map_err(|err| pso::CreationError::Shader(err))?;
 
         let pso_desc = d3d12::D3D12_COMPUTE_PIPELINE_STATE_DESC {
             pRootSignature: desc.layout.raw,
@@ -1763,11 +1883,14 @@ impl d::Device<B> for Device {
             self.raw.clone().CreateComputePipelineState(
                 &pso_desc,
                 &d3d12::ID3D12PipelineState::uuidof(),
-                &mut pipeline as *mut *mut _ as *mut *mut _)
+                &mut pipeline as *mut *mut _ as *mut *mut _,
+            )
         };
 
         if cs_destroy {
-            unsafe { (*cs).Release(); }
+            unsafe {
+                (*cs).Release();
+            }
         }
 
         if winerror::SUCCEEDED(hr) {
@@ -1790,7 +1913,7 @@ impl d::Device<B> for Device {
     ) -> Result<n::Framebuffer, d::FramebufferError>
     where
         I: IntoIterator,
-        I::Item: Borrow<n::ImageView>
+        I::Item: Borrow<n::ImageView>,
     {
         Ok(n::Framebuffer {
             attachments: attachments.into_iter().map(|att| *att.borrow()).collect(),
@@ -1847,12 +1970,14 @@ impl d::Device<B> for Device {
         buffer: UnboundBuffer,
     ) -> Result<n::Buffer, d::BindError> {
         if buffer.requirements.type_mask & (1 << memory.type_id) == 0 {
-            error!("Bind memory failure: supported mask 0x{:x}, given id {}",
-                buffer.requirements.type_mask, memory.type_id);
-            return Err(d::BindError::WrongMemory)
+            error!(
+                "Bind memory failure: supported mask 0x{:x}, given id {}",
+                buffer.requirements.type_mask, memory.type_id
+            );
+            return Err(d::BindError::WrongMemory);
         }
         if offset + buffer.requirements.size > memory.size {
-            return Err(d::BindError::OutOfBounds)
+            return Err(d::BindError::OutOfBounds);
         }
 
         let mut resource = ptr::null_mut();
@@ -1892,7 +2017,7 @@ impl d::Device<B> for Device {
                 u: unsafe { mem::zeroed() },
             };
 
-           *unsafe { view_desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
+            *unsafe { view_desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
                 FirstElement: 0,
                 NumElements: (buffer.requirements.size / 4) as _,
                 StructureByteStride: 0,
@@ -1952,7 +2077,7 @@ impl d::Device<B> for Device {
                 u: unsafe { mem::zeroed() },
             };
 
-            *unsafe{ desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_SRV {
+            *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_SRV {
                 FirstElement: first_element,
                 NumElements: num_elements as _,
                 StructureByteStride: bytes_per_texel as _,
@@ -1961,21 +2086,25 @@ impl d::Device<B> for Device {
 
             let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
             unsafe {
-                self.raw.clone().CreateShaderResourceView(buffer.resource, &desc, handle);
+                self.raw
+                    .clone()
+                    .CreateShaderResourceView(buffer.resource, &desc, handle);
             }
             handle
         } else {
             d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 }
         };
 
-        let handle_uav = if buffer_features.intersects(format::BufferFeature::STORAGE_TEXEL | format::BufferFeature::STORAGE_TEXEL_ATOMIC) {
+        let handle_uav = if buffer_features.intersects(
+            format::BufferFeature::STORAGE_TEXEL | format::BufferFeature::STORAGE_TEXEL_ATOMIC,
+        ) {
             let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                 Format: format,
                 ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
                 u: unsafe { mem::zeroed() },
             };
 
-            *unsafe{ desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
+            *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
                 FirstElement: first_element,
                 NumElements: num_elements as _,
                 StructureByteStride: bytes_per_texel as _,
@@ -1985,7 +2114,12 @@ impl d::Device<B> for Device {
 
             let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
             unsafe {
-                self.raw.clone().CreateUnorderedAccessView(buffer.resource, ptr::null_mut(), &desc, handle);
+                self.raw.clone().CreateUnorderedAccessView(
+                    buffer.resource,
+                    ptr::null_mut(),
+                    &desc,
+                    handle,
+                );
             }
             handle
         } else {
@@ -2017,8 +2151,14 @@ impl d::Device<B> for Device {
 
         let format_properties = &self.format_properties[format as usize];
         let (layout, features) = match tiling {
-            image::Tiling::Optimal => (d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN, format_properties.optimal_tiling),
-            image::Tiling::Linear => (d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR, format_properties.linear_tiling),
+            image::Tiling::Optimal => (
+                d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
+                format_properties.optimal_tiling,
+            ),
+            image::Tiling::Linear => (
+                d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
+                format_properties.linear_tiling,
+            ),
         };
 
         let desc = d3d12::D3D12_RESOURCE_DESC {
@@ -2048,12 +2188,11 @@ impl d::Device<B> for Device {
             Flags: conv::map_image_flags(usage, features),
         };
 
-        let alloc_info = unsafe {
-            self.raw.clone().GetResourceAllocationInfo(0, 1, &desc)
-        };
+        let alloc_info = unsafe { self.raw.clone().GetResourceAllocationInfo(0, 1, &desc) };
 
         // Image usages which require RT/DS heap due to internal implementation.
-        let target_usage = image::Usage::COLOR_ATTACHMENT | image::Usage::DEPTH_STENCIL_ATTACHMENT
+        let target_usage = image::Usage::COLOR_ATTACHMENT
+            | image::Usage::DEPTH_STENCIL_ATTACHMENT
             | image::Usage::TRANSFER_DST;
 
         let type_mask_shift = if self.private_caps.heterogeneous_resource_heaps {
@@ -2065,8 +2204,7 @@ impl d::Device<B> for Device {
         };
 
         Ok(UnboundImage {
-            dsv_format: conv::map_format_dsv(base_format.0)
-                .unwrap_or(desc.Format),
+            dsv_format: conv::map_format_dsv(base_format.0).unwrap_or(desc.Format),
             desc,
             requirements: memory::Requirements {
                 size: alloc_info.SizeInBytes,
@@ -2089,7 +2227,9 @@ impl d::Device<B> for Device {
     }
 
     fn get_image_subresource_footprint(
-        &self, image: &n::Image, sub: image::Subresource
+        &self,
+        image: &n::Image,
+        sub: image::Subresource,
     ) -> image::SubresourceFootprint {
         let mut num_rows = 0;
         let mut total_bytes = 0;
@@ -2112,7 +2252,7 @@ impl d::Device<B> for Device {
         let depth_pitch = (footprint.Footprint.RowPitch * num_rows) as buffer::Offset;
         let array_pitch = footprint.Footprint.Depth as buffer::Offset * depth_pitch;
         image::SubresourceFootprint {
-            slice: footprint.Offset .. footprint.Offset + total_bytes,
+            slice: footprint.Offset..footprint.Offset + total_bytes,
             row_pitch: footprint.Footprint.RowPitch as _,
             depth_pitch,
             array_pitch,
@@ -2128,12 +2268,14 @@ impl d::Device<B> for Device {
         use self::image::Usage;
 
         if image.requirements.type_mask & (1 << memory.type_id) == 0 {
-            error!("Bind memory failure: supported mask 0x{:x}, given id {}",
-                image.requirements.type_mask, memory.type_id);
-            return Err(d::BindError::WrongMemory)
+            error!(
+                "Bind memory failure: supported mask 0x{:x}, given id {}",
+                image.requirements.type_mask, memory.type_id
+            );
+            return Err(d::BindError::WrongMemory);
         }
         if offset + image.requirements.size > memory.size {
-            return Err(d::BindError::OutOfBounds)
+            return Err(d::BindError::OutOfBounds);
         }
 
         let mut resource = ptr::null_mut();
@@ -2163,8 +2305,8 @@ impl d::Device<B> for Device {
             format: image.desc.Format,
             range: image::SubresourceRange {
                 aspects: Aspects::empty(),
-                levels: 0 .. 0,
-                layers: 0 .. 0,
+                levels: 0..0,
+                layers: 0..0,
             },
         };
 
@@ -2176,15 +2318,22 @@ impl d::Device<B> for Device {
             image::Tiling::Optimal => format_properties.optimal_tiling,
             image::Tiling::Linear => format_properties.linear_tiling,
         };
-        let can_clear_color = image.usage.intersects(Usage::TRANSFER_DST | Usage::COLOR_ATTACHMENT) &&
-            props.contains(format::ImageFeature::COLOR_ATTACHMENT);
-        let can_clear_depth = image.usage.intersects(Usage::TRANSFER_DST | Usage::DEPTH_STENCIL_ATTACHMENT) &&
-            props.contains(format::ImageFeature::DEPTH_STENCIL_ATTACHMENT);
+        let can_clear_color = image
+            .usage
+            .intersects(Usage::TRANSFER_DST | Usage::COLOR_ATTACHMENT)
+            && props.contains(format::ImageFeature::COLOR_ATTACHMENT);
+        let can_clear_depth = image
+            .usage
+            .intersects(Usage::TRANSFER_DST | Usage::DEPTH_STENCIL_ATTACHMENT)
+            && props.contains(format::ImageFeature::DEPTH_STENCIL_ATTACHMENT);
         let aspects = image.format.surface_desc().aspects;
 
         Ok(n::Image {
             resource: resource as *mut _,
-            place: n::Place::Heap { raw: memory.heap.clone(), offset },
+            place: n::Place::Heap {
+                raw: memory.heap.clone(),
+                offset,
+            },
             surface_type: image.format.base_format().0,
             kind: image.kind,
             usage: image.usage,
@@ -2193,53 +2342,50 @@ impl d::Device<B> for Device {
             bytes_per_block: image.bytes_per_block,
             block_dim: image.block_dim,
             clear_cv: if aspects.contains(Aspects::COLOR) && can_clear_color {
-                (0 .. num_layers)
+                (0..num_layers)
                     .map(|layer| {
-                        self.view_image_as_render_target(
-                            ViewInfo {
-                                range: image::SubresourceRange {
-                                    aspects: Aspects::COLOR,
-                                    levels: 0 .. 1, //TODO?
-                                    layers: layer .. layer + 1,
-                                },
-                                .. info.clone()
-                            }).unwrap()
+                        self.view_image_as_render_target(ViewInfo {
+                            range: image::SubresourceRange {
+                                aspects: Aspects::COLOR,
+                                levels: 0..1, //TODO?
+                                layers: layer..layer + 1,
+                            },
+                            ..info.clone()
+                        }).unwrap()
                     })
                     .collect()
             } else {
                 Vec::new()
             },
             clear_dv: if aspects.contains(Aspects::DEPTH) && can_clear_depth {
-                (0 .. num_layers)
+                (0..num_layers)
                     .map(|layer| {
-                        self.view_image_as_depth_stencil(
-                            ViewInfo {
-                                format: image.dsv_format,
-                                range: image::SubresourceRange {
-                                    aspects: Aspects::DEPTH,
-                                    levels: 0 .. 1, //TODO?
-                                    layers: layer .. layer + 1,
-                                },
-                                .. info.clone()
-                            }).unwrap()
+                        self.view_image_as_depth_stencil(ViewInfo {
+                            format: image.dsv_format,
+                            range: image::SubresourceRange {
+                                aspects: Aspects::DEPTH,
+                                levels: 0..1, //TODO?
+                                layers: layer..layer + 1,
+                            },
+                            ..info.clone()
+                        }).unwrap()
                     })
                     .collect()
             } else {
                 Vec::new()
             },
             clear_sv: if aspects.contains(Aspects::STENCIL) && can_clear_depth {
-                (0 .. num_layers)
+                (0..num_layers)
                     .map(|layer| {
-                        self.view_image_as_depth_stencil(
-                            ViewInfo {
-                                format: image.dsv_format,
-                                range: image::SubresourceRange {
-                                    aspects: Aspects::STENCIL,
-                                    levels: 0 .. 1, //TODO?
-                                    layers: layer .. layer + 1,
-                                },
-                                .. info.clone()
-                            }).unwrap()
+                        self.view_image_as_depth_stencil(ViewInfo {
+                            format: image.dsv_format,
+                            range: image::SubresourceRange {
+                                aspects: Aspects::STENCIL,
+                                levels: 0..1, //TODO?
+                                layers: layer..layer + 1,
+                            },
+                            ..info.clone()
+                        }).unwrap()
                     })
                     .collect()
             } else {
@@ -2264,14 +2410,16 @@ impl d::Device<B> for Device {
             kind: image.kind,
             flags: image.storage_flags,
             view_kind,
-            format: conv::map_format(format)
-                .ok_or(image::ViewError::BadFormat)?,
+            format: conv::map_format(format).ok_or(image::ViewError::BadFormat)?,
             range,
         };
 
         Ok(n::ImageView {
             resource: image.resource,
-            handle_srv: if image.usage.intersects(image::Usage::SAMPLED | image::Usage::INPUT_ATTACHMENT) {
+            handle_srv: if image
+                .usage
+                .intersects(image::Usage::SAMPLED | image::Usage::INPUT_ATTACHMENT)
+            {
                 Some(self.view_image_as_shader_resource(info.clone())?)
             } else {
                 None
@@ -2287,11 +2435,13 @@ impl d::Device<B> for Device {
                 None
             },
             handle_dsv: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(self.view_image_as_depth_stencil(ViewInfo {
-                    format: conv::map_format_dsv(format.base_format().0)
-                        .ok_or(image::ViewError::BadFormat)?,
-                    .. info
-                })?)
+                Some(
+                    self.view_image_as_depth_stencil(ViewInfo {
+                        format: conv::map_format_dsv(format.base_format().0)
+                            .ok_or(image::ViewError::BadFormat)?,
+                        ..info
+                    })?,
+                )
             } else {
                 None
             },
@@ -2311,7 +2461,13 @@ impl d::Device<B> for Device {
             None => d3d12::D3D12_FILTER_REDUCTION_TYPE_STANDARD,
         };
         let desc = d3d12::D3D12_SAMPLER_DESC {
-            Filter: conv::map_filter(info.mag_filter, info.min_filter, info.mip_filter, op, info.anisotropic),
+            Filter: conv::map_filter(
+                info.mag_filter,
+                info.min_filter,
+                info.mip_filter,
+                op,
+                info.anisotropic,
+            ),
             AddressU: conv::map_wrap(info.wrap_mode.0),
             AddressV: conv::map_wrap(info.wrap_mode.1),
             AddressW: conv::map_wrap(info.wrap_mode.2),
@@ -2320,7 +2476,9 @@ impl d::Device<B> for Device {
                 image::Anisotropic::On(max) => max as _, // TODO: check support here?
                 image::Anisotropic::Off => 0,
             },
-            ComparisonFunc: conv::map_comparison(info.comparison.unwrap_or(pso::Comparison::Always)),
+            ComparisonFunc: conv::map_comparison(
+                info.comparison.unwrap_or(pso::Comparison::Always),
+            ),
             BorderColor: info.border.into(),
             MinLOD: info.lod_range.start.into(),
             MaxLOD: info.lod_range.end.into(),
@@ -2333,21 +2491,18 @@ impl d::Device<B> for Device {
         n::Sampler { handle }
     }
 
-    fn create_descriptor_pool<I>(
-        &self,
-        max_sets: usize,
-        descriptor_pools: I,
-    ) -> n::DescriptorPool
+    fn create_descriptor_pool<I>(&self, max_sets: usize, descriptor_pools: I) -> n::DescriptorPool
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorRangeDesc>
+        I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
         let mut num_srv_cbv_uav = 0;
         let mut num_samplers = 0;
 
-        let descriptor_pools = descriptor_pools.into_iter()
-                                               .map(|desc| *desc.borrow())
-                                               .collect::<Vec<_>>();
+        let descriptor_pools = descriptor_pools
+            .into_iter()
+            .map(|desc| *desc.borrow())
+            .collect::<Vec<_>>();
 
         for desc in &descriptor_pools {
             match desc.ty {
@@ -2365,17 +2520,14 @@ impl d::Device<B> for Device {
         }
 
         let heap_srv_cbv_uav = {
-            let mut heap_srv_cbv_uav = self
-                .heap_srv_cbv_uav
-                .lock()
-                .unwrap();
+            let mut heap_srv_cbv_uav = self.heap_srv_cbv_uav.lock().unwrap();
 
             let range = match num_srv_cbv_uav {
                 0 => 0..0,
                 _ => heap_srv_cbv_uav
-                        .range_allocator
-                        .allocate_range(num_srv_cbv_uav as _)
-                        .unwrap(), // TODO: error/resize
+                    .range_allocator
+                    .allocate_range(num_srv_cbv_uav as _)
+                    .unwrap(), // TODO: error/resize
             };
 
             n::DescriptorHeapSlice {
@@ -2386,19 +2538,15 @@ impl d::Device<B> for Device {
             }
         };
 
-
         let heap_sampler = {
-            let mut heap_sampler = self
-                .heap_sampler
-                .lock()
-                .unwrap();
+            let mut heap_sampler = self.heap_sampler.lock().unwrap();
 
             let range = match num_samplers {
                 0 => 0..0,
                 _ => heap_sampler
-                        .range_allocator
-                        .allocate_range(num_samplers as _)
-                        .unwrap(), // TODO: error/resize
+                    .range_allocator
+                    .allocate_range(num_samplers as _)
+                    .unwrap(), // TODO: error/resize
             };
 
             n::DescriptorHeapSlice {
@@ -2418,7 +2566,9 @@ impl d::Device<B> for Device {
     }
 
     fn create_descriptor_set_layout<I, J>(
-        &self, bindings: I, _immutable_samplers: J
+        &self,
+        bindings: I,
+        _immutable_samplers: J,
     ) -> n::DescriptorSetLayout
     where
         I: IntoIterator,
@@ -2427,7 +2577,7 @@ impl d::Device<B> for Device {
         J::Item: Borrow<n::Sampler>,
     {
         n::DescriptorSetLayout {
-            bindings: bindings.into_iter().map(|b| b.borrow().clone()).collect()
+            bindings: bindings.into_iter().map(|b| b.borrow().clone()).collect(),
         }
     }
 
@@ -2463,14 +2613,12 @@ impl d::Device<B> for Device {
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
                         if update_pool_index == descriptor_update_pools.len() {
-                            let max_size = 1u64<<12; //arbitrary
-                            descriptor_update_pools.push(
-                                descriptors_cpu::HeapLinear::new(
-                                    &self.raw,
-                                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                                    max_size as _,
-                                )
-                            );
+                            let max_size = 1u64 << 12; //arbitrary
+                            descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
+                                &self.raw,
+                                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+                                max_size as _,
+                            ));
                         }
                         let heap = descriptor_update_pools.last_mut().unwrap();
                         let handle = heap.alloc_handle();
@@ -2488,7 +2636,7 @@ impl d::Device<B> for Device {
                                 ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
                                 u: unsafe { mem::zeroed() },
                             };
-                           *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
+                            *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
                                 FirstElement: start as _,
                                 NumElements: ((end - start) / 4) as _,
                                 StructureByteStride: 0,
@@ -2496,7 +2644,12 @@ impl d::Device<B> for Device {
                                 Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
                             };
                             unsafe {
-                                self.raw.CreateUnorderedAccessView(buffer.resource, ptr::null_mut(), &desc, handle);
+                                self.raw.CreateUnorderedAccessView(
+                                    buffer.resource,
+                                    ptr::null_mut(),
+                                    &desc,
+                                    handle,
+                                );
                             }
                         } else {
                             // Making the size field of buffer requirements for uniform
@@ -2506,10 +2659,13 @@ impl d::Device<B> for Device {
                             // CBVs without going out-of-bounds.
                             let size = ((end - start) + 255) & !255;
                             let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
-                                BufferLocation: unsafe { (*buffer.resource).GetGPUVirtualAddress() } + start,
+                                BufferLocation: unsafe { (*buffer.resource).GetGPUVirtualAddress() }
+                                    + start,
                                 SizeInBytes: size as _,
                             };
-                            unsafe { self.raw.CreateConstantBufferView(&desc, handle); }
+                            unsafe {
+                                self.raw.CreateConstantBufferView(&desc, handle);
+                            }
                         }
 
                         src_views.push(handle);
@@ -2613,14 +2769,19 @@ impl d::Device<B> for Device {
             let copy = copy_wrap.borrow();
             let src_info = &copy.src_set.binding_infos[copy.src_binding as usize];
             let dst_info = &copy.dst_set.binding_infos[copy.dst_binding as usize];
-            if let (Some(src_range), Some(dst_range)) = (src_info.view_range.as_ref(), dst_info.view_range.as_ref()) {
+            if let (Some(src_range), Some(dst_range)) =
+                (src_info.view_range.as_ref(), dst_info.view_range.as_ref())
+            {
                 assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
                 assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
                 src_views.push(src_range.at(copy.src_array_offset as _));
                 dst_views.push(dst_range.at(copy.dst_array_offset as _));
                 num_views.push(copy.count as u32);
             }
-            if let (Some(src_range), Some(dst_range)) = (src_info.sampler_range.as_ref(), dst_info.sampler_range.as_ref()) {
+            if let (Some(src_range), Some(dst_range)) = (
+                src_info.sampler_range.as_ref(),
+                dst_info.sampler_range.as_ref(),
+            ) {
                 assert!(copy.src_array_offset + copy.count <= src_range.count as usize);
                 assert!(copy.dst_array_offset + copy.count <= dst_range.count as usize);
                 src_samplers.push(src_range.at(copy.src_array_offset as _));
@@ -2668,16 +2829,11 @@ impl d::Device<B> for Device {
 
             let mut ptr = ptr::null_mut();
             assert_eq!(winerror::S_OK, unsafe {
-                (*mem).Map(
-                    0,
-                    &d3d12::D3D12_RANGE {
-                        Begin: 0,
-                        End: 0,
-                    },
-                    &mut ptr,
-                )
+                (*mem).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, &mut ptr)
             });
-            unsafe { ptr = ptr.offset(*start as _); }
+            unsafe {
+                ptr = ptr.offset(*start as _);
+            }
             Ok(ptr as *mut _)
         } else {
             panic!("Memory not created with a memory type exposing `CPU_VISIBLE`.")
@@ -2687,13 +2843,7 @@ impl d::Device<B> for Device {
     fn unmap_memory(&self, memory: &n::Memory) {
         if let Some(mem) = memory.resource {
             unsafe {
-                (*mem).Unmap(
-                    0,
-                    &d3d12::D3D12_RANGE {
-                        Begin: 0,
-                        End: 0,
-                    },
-                );
+                (*mem).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
             }
         }
     }
@@ -2710,14 +2860,7 @@ impl d::Device<B> for Device {
                 // map and immediately unmap, hoping that dx12 drivers internally cache
                 // currently mapped buffers.
                 assert_eq!(winerror::S_OK, unsafe {
-                    (*mem).Map(
-                        0,
-                        &d3d12::D3D12_RANGE {
-                            Begin: 0,
-                            End: 0,
-                        },
-                        ptr::null_mut(),
-                    )
+                    (*mem).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, ptr::null_mut())
                 });
 
                 let start = *range.start().unwrap_or(&0);
@@ -2762,13 +2905,7 @@ impl d::Device<B> for Device {
                 });
 
                 unsafe {
-                    (*mem).Unmap(
-                        0,
-                        &d3d12::D3D12_RANGE {
-                            Begin: 0,
-                            End: 0,
-                        },
-                    );
+                    (*mem).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
                 }
             }
         }
@@ -2776,9 +2913,7 @@ impl d::Device<B> for Device {
 
     fn create_semaphore(&self) -> n::Semaphore {
         let fence = self.create_fence(false);
-        n::Semaphore {
-            raw: fence.raw,
-        }
+        n::Semaphore { raw: fence.raw }
     }
 
     fn create_fence(&self, signalled: bool) -> n::Fence {
@@ -2788,9 +2923,7 @@ impl d::Device<B> for Device {
     }
 
     fn reset_fence(&self, fence: &n::Fence) {
-        assert_eq!(winerror::S_OK, unsafe {
-            fence.raw.clone().Signal(0)
-        });
+        assert_eq!(winerror::S_OK, unsafe { fence.raw.clone().Signal(0) });
     }
 
     fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ns: u64) -> bool
@@ -2800,14 +2933,9 @@ impl d::Device<B> for Device {
     {
         let fences = fences.into_iter().collect::<Vec<_>>();
         let mut events = self.events.lock().unwrap();
-        for _ in events.len() .. fences.len() {
+        for _ in events.len()..fences.len() {
             events.push(unsafe {
-                synchapi::CreateEventA(
-                    ptr::null_mut(),
-                    FALSE,
-                    FALSE,
-                    ptr::null(),
-                )
+                synchapi::CreateEventA(ptr::null_mut(), FALSE, FALSE, ptr::null())
             });
         }
 
@@ -2839,8 +2967,8 @@ impl d::Device<B> for Device {
         const WAIT_OBJECT_LAST: u32 = winbase::WAIT_OBJECT_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         const WAIT_ABANDONED_LAST: u32 = winbase::WAIT_ABANDONED_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         match hr {
-            winbase::WAIT_OBJECT_0 ... WAIT_OBJECT_LAST => true,
-            winbase::WAIT_ABANDONED_0 ... WAIT_ABANDONED_LAST => true, //TODO?
+            winbase::WAIT_OBJECT_0...WAIT_OBJECT_LAST => true,
+            winbase::WAIT_ABANDONED_0...WAIT_ABANDONED_LAST => true, //TODO?
             winerror::WAIT_TIMEOUT => false,
             _ => panic!("Unexpected wait status 0x{:X}", hr),
         }
@@ -2852,18 +2980,21 @@ impl d::Device<B> for Device {
 
     fn free_memory(&self, memory: n::Memory) {
         if let Some(buffer) = memory.resource {
-            unsafe { (*buffer).Release(); }
+            unsafe {
+                (*buffer).Release();
+            }
         }
     }
 
-    fn create_query_pool(&self, query_ty: query::Type, count: query::Id) -> Result<n::QueryPool, query::Error> {
+    fn create_query_pool(
+        &self,
+        query_ty: query::Type,
+        count: query::Id,
+    ) -> Result<n::QueryPool, query::Error> {
         let heap_ty = match query_ty {
-            query::Type::Occlusion =>
-                d3d12::D3D12_QUERY_HEAP_TYPE_OCCLUSION,
-            query::Type::PipelineStatistics(_) =>
-                d3d12::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS,
-            query::Type::Timestamp =>
-                d3d12::D3D12_QUERY_HEAP_TYPE_TIMESTAMP,
+            query::Type::Occlusion => d3d12::D3D12_QUERY_HEAP_TYPE_OCCLUSION,
+            query::Type::PipelineStatistics(_) => d3d12::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS,
+            query::Type::Timestamp => d3d12::D3D12_QUERY_HEAP_TYPE_TIMESTAMP,
         };
 
         let desc = d3d12::D3D12_QUERY_HEAP_DESC {
@@ -2874,11 +3005,9 @@ impl d::Device<B> for Device {
 
         let mut handle = ptr::null_mut();
         assert_eq!(winerror::S_OK, unsafe {
-            self.raw.clone().CreateQueryHeap(
-                &desc,
-                &d3d12::ID3D12QueryHeap::uuidof(),
-                &mut handle,
-            )
+            self.raw
+                .clone()
+                .CreateQueryHeap(&desc, &d3d12::ID3D12QueryHeap::uuidof(), &mut handle)
         });
 
         Ok(n::QueryPool {
@@ -2892,8 +3021,11 @@ impl d::Device<B> for Device {
     }
 
     fn get_query_pool_results(
-        &self, _pool: &n::QueryPool, _queries: Range<query::Id>,
-        _data: &mut [u8], _stride: buffer::Offset,
+        &self,
+        _pool: &n::QueryPool,
+        _queries: Range<query::Id>,
+        _data: &mut [u8],
+        _stride: buffer::Offset,
         _flags: query::ResultFlags,
     ) -> Result<bool, query::Error> {
         unimplemented!()
@@ -2912,15 +3044,21 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_pipeline_layout(&self, layout: n::PipelineLayout) {
-        unsafe { (*layout.raw).Release(); }
+        unsafe {
+            (*layout.raw).Release();
+        }
     }
 
     fn destroy_graphics_pipeline(&self, pipeline: n::GraphicsPipeline) {
-        unsafe { (*pipeline.raw).Release(); }
+        unsafe {
+            (*pipeline.raw).Release();
+        }
     }
 
     fn destroy_compute_pipeline(&self, pipeline: n::ComputePipeline) {
-        unsafe { (*pipeline.raw).Release(); }
+        unsafe {
+            (*pipeline.raw).Release();
+        }
     }
 
     fn destroy_framebuffer(&self, _fb: n::Framebuffer) {
@@ -2928,7 +3066,9 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_buffer(&self, buffer: n::Buffer) {
-        unsafe { (*buffer.resource).Release(); }
+        unsafe {
+            (*buffer.resource).Release();
+        }
     }
 
     fn destroy_buffer_view(&self, _view: n::BufferView) {
@@ -2936,7 +3076,9 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_image(&self, image: n::Image) {
-        unsafe { (*image.resource).Release(); }
+        unsafe {
+            (*image.resource).Release();
+        }
     }
 
     fn destroy_image_view(&self, _view: n::ImageView) {
@@ -2989,7 +3131,7 @@ impl d::Device<B> for Device {
         let rtv_desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
             Format: conv::map_format(config.format).unwrap(),
             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
-            .. unsafe { mem::zeroed() }
+            ..unsafe { mem::zeroed() }
         };
         let rtv_heap = Device::create_descriptor_heap_impl(
             &mut self.raw.clone(),
@@ -3002,8 +3144,8 @@ impl d::Device<B> for Device {
         let desc = dxgi1_2::DXGI_SWAP_CHAIN_DESC1 {
             AlphaMode: dxgi1_2::DXGI_ALPHA_MODE_IGNORE,
             BufferCount: config.image_count,
-            Width: surface.width,
-            Height: surface.height,
+            Width: config.extent.width,
+            Height: config.extent.height,
             Format: format,
             Flags: 0,
             BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
@@ -3036,56 +3178,62 @@ impl d::Device<B> for Device {
 
         // Get backbuffer images
         let mut resources: Vec<ComPtr<d3d12::ID3D12Resource>> = Vec::new();
-        let images = (0 .. config.image_count).map(|i| {
-            let mut resource: *mut d3d12::ID3D12Resource = ptr::null_mut();
-            unsafe {
-                swap_chain.GetBuffer(
-                    i as _,
-                    &d3d12::ID3D12Resource::uuidof(),
-                    &mut resource as *mut *mut _ as *mut *mut _);
-            }
+        let images = (0..config.image_count)
+            .map(|i| {
+                let mut resource: *mut d3d12::ID3D12Resource = ptr::null_mut();
+                unsafe {
+                    swap_chain.GetBuffer(
+                        i as _,
+                        &d3d12::ID3D12Resource::uuidof(),
+                        &mut resource as *mut *mut _ as *mut *mut _,
+                    );
+                }
 
-            let rtv_handle = rtv_heap.at(i as _, 0).cpu;
-            unsafe {
-                self.raw.clone().CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
-            }
+                let rtv_handle = rtv_heap.at(i as _, 0).cpu;
+                unsafe {
+                    self.raw
+                        .clone()
+                        .CreateRenderTargetView(resource, &rtv_desc, rtv_handle);
+                }
 
-            unsafe { resources.push(ComPtr::<d3d12::ID3D12Resource>::from_raw(resource)); }
+                unsafe {
+                    resources.push(ComPtr::<d3d12::ID3D12Resource>::from_raw(resource));
+                }
 
-            let surface_type = config.format.base_format().0;
-            let format_desc = surface_type
-                .desc();
+                let surface_type = config.format.base_format().0;
+                let format_desc = surface_type.desc();
 
-            let bytes_per_block = (format_desc.bits / 8) as _;
-            let block_dim = format_desc.dim;
-            let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
+                let bytes_per_block = (format_desc.bits / 8) as _;
+                let block_dim = format_desc.dim;
+                let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
 
-            n::Image {
-                resource,
-                place: n::Place::SwapChain,
-                surface_type,
-                kind,
-                usage: config.image_usage,
-                storage_flags: image::StorageFlags::empty(),
-                descriptor: d3d12::D3D12_RESOURCE_DESC {
-                    Dimension: d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-                    Alignment: 0,
-                    Width: surface.width as _,
-                    Height: surface.height as _,
-                    DepthOrArraySize: 1,
-                    MipLevels: 1,
-                    Format: format,
-                    SampleDesc: desc.SampleDesc.clone(),
-                    Layout: d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
-                    Flags: 0,
-                },
-                bytes_per_block,
-                block_dim,
-                clear_cv: vec![rtv_handle],
-                clear_dv: Vec::new(),
-                clear_sv: Vec::new(),
-            }
-        }).collect();
+                n::Image {
+                    resource,
+                    place: n::Place::SwapChain,
+                    surface_type,
+                    kind,
+                    usage: config.image_usage,
+                    storage_flags: image::StorageFlags::empty(),
+                    descriptor: d3d12::D3D12_RESOURCE_DESC {
+                        Dimension: d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+                        Alignment: 0,
+                        Width: config.extent.width as _,
+                        Height: config.extent.height as _,
+                        DepthOrArraySize: 1,
+                        MipLevels: 1,
+                        Format: format,
+                        SampleDesc: desc.SampleDesc.clone(),
+                        Layout: d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
+                        Flags: 0,
+                    },
+                    bytes_per_block,
+                    block_dim,
+                    clear_cv: vec![rtv_handle],
+                    clear_dv: Vec::new(),
+                    clear_sv: Vec::new(),
+                }
+            })
+            .collect();
 
         let swapchain = w::Swapchain {
             inner: swap_chain,
