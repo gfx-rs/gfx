@@ -1,31 +1,34 @@
 extern crate gfx_hal as hal;
 extern crate metal;
-#[macro_use] extern crate bitflags;
+#[macro_use]
+extern crate bitflags;
 extern crate cocoa;
 extern crate foreign_types;
-#[macro_use] extern crate objc;
+#[macro_use]
+extern crate objc;
 extern crate core_graphics;
-#[macro_use] extern crate log;
+#[macro_use]
+extern crate log;
 extern crate block;
 extern crate parking_lot;
 extern crate smallvec;
 extern crate spirv_cross;
 extern crate storage_map;
 
-#[cfg(feature = "winit")]
-extern crate winit;
 #[cfg(feature = "dispatch")]
 extern crate dispatch;
+#[cfg(feature = "winit")]
+extern crate winit;
 
-#[path = "../../auxil/range_alloc.rs"]
-mod range_alloc;
-mod device;
-mod window;
 mod command;
+mod conversions;
+mod device;
 mod internal;
 mod native;
-mod conversions;
+#[path = "../../auxil/range_alloc.rs"]
+mod range_alloc;
 mod soft;
+mod window;
 
 pub use command::CommandPool;
 pub use device::{Device, LanguageVersion, PhysicalDevice};
@@ -34,21 +37,20 @@ pub use window::{AcquireMode, Surface, Swapchain};
 pub type GraphicsCommandPool = CommandPool;
 
 use std::mem;
-use std::ptr::NonNull;
 use std::os::raw::c_void;
+use std::ptr::NonNull;
 use std::sync::Arc;
 
 use hal::queue::QueueFamilyId;
 
 use core_graphics::base::CGFloat;
-use objc::runtime::{Class, Object};
-#[cfg(target_os = "ios")]
-use objc::runtime::{BOOL, YES};
 #[cfg(target_os = "macos")]
 use core_graphics::geometry::CGRect;
 use foreign_types::ForeignTypeRef;
+use objc::runtime::{Class, Object};
+#[cfg(target_os = "ios")]
+use objc::runtime::{BOOL, YES};
 use parking_lot::{Condvar, Mutex};
-
 
 //TODO: investigate why exactly using `u8` here is slower (~5% total).
 /// A type representing Metal binding's resource index.
@@ -79,9 +81,15 @@ const MAX_VISIBILITY_QUERIES: usize = 1 << 14;
 pub struct QueueFamily {}
 
 impl hal::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> hal::QueueType { hal::QueueType::General }
-    fn max_queues(&self) -> usize { 1 }
-    fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
+    fn queue_type(&self) -> hal::QueueType {
+        hal::QueueType::General
+    }
+    fn max_queues(&self) -> usize {
+        1
+    }
+    fn id(&self) -> QueueFamilyId {
+        QueueFamilyId(0)
+    }
 }
 
 struct VisibilityShared {
@@ -109,26 +117,32 @@ impl Shared {
         let feature_macos_10_14: metal::MTLFeatureSet = unsafe { mem::transmute(10004u64) };
         let visibility = VisibilityShared {
             buffer: device.new_buffer(
-                MAX_VISIBILITY_QUERIES as u64 * (mem::size_of::<u64>() + mem::size_of::<u32>()) as u64,
+                MAX_VISIBILITY_QUERIES as u64
+                    * (mem::size_of::<u64>() + mem::size_of::<u32>()) as u64,
                 metal::MTLResourceOptions::StorageModeShared,
             ),
-            allocator: Mutex::new(range_alloc::RangeAllocator::new(0 .. MAX_VISIBILITY_QUERIES as hal::query::Id)),
-            availability_offset: (MAX_VISIBILITY_QUERIES * mem::size_of::<u64>()) as hal::buffer::Offset,
+            allocator: Mutex::new(range_alloc::RangeAllocator::new(
+                0..MAX_VISIBILITY_QUERIES as hal::query::Id,
+            )),
+            availability_offset: (MAX_VISIBILITY_QUERIES * mem::size_of::<u64>())
+                as hal::buffer::Offset,
             condvar: Condvar::new(),
         };
         Shared {
-            queue: Mutex::new(command::QueueInner::new(&device, Some(MAX_ACTIVE_COMMAND_BUFFERS))),
+            queue: Mutex::new(command::QueueInner::new(
+                &device,
+                Some(MAX_ACTIVE_COMMAND_BUFFERS),
+            )),
             service_pipes: internal::ServicePipes::new(&device),
             disabilities: PrivateDisabilities {
-                broken_viewport_near_depth: device.name().starts_with("Intel") &&
-                    !device.supports_feature_set(feature_macos_10_14),
+                broken_viewport_near_depth: device.name().starts_with("Intel")
+                    && !device.supports_feature_set(feature_macos_10_14),
             },
             device: Mutex::new(device),
             visibility,
         }
     }
 }
-
 
 pub struct Instance;
 
@@ -145,16 +159,15 @@ impl hal::Instance for Instance {
                     name: dev.name().into(),
                     vendor: 0,
                     device: 0,
-                    device_type: 
-                        if dev.is_low_power() {
-                            hal::adapter::DeviceType::IntegratedGpu                        
-                        } else {
-                            hal::adapter::DeviceType::DiscreteGpu  
-                        },
+                    device_type: if dev.is_low_power() {
+                        hal::adapter::DeviceType::IntegratedGpu
+                    } else {
+                        hal::adapter::DeviceType::DiscreteGpu
+                    },
                     software_rendering: false,
                 },
                 physical_device: device::PhysicalDevice::new(Arc::new(Shared::new(dev))),
-                queue_families: vec![QueueFamily{}],
+                queue_families: vec![QueueFamily {}],
             })
             .collect()
     }
@@ -185,7 +198,7 @@ impl Instance {
                 warn!("surface is not attached to a window");
             } else {
                 let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
-                msg_send![render_layer, setContentsScale:scale_factor];
+                msg_send![render_layer, setContentsScale: scale_factor];
             }
 
             window::SurfaceInner {
@@ -198,7 +211,7 @@ impl Instance {
     pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
         window::Surface {
             inner: Arc::new(self.create_from_nsview(nsview)),
-            has_swapchain: false
+            has_swapchain: false,
         }
     }
 
@@ -243,7 +256,7 @@ impl Instance {
             }
 
             let scale_factor: CGFloat = msg_send![screen, nativeScale];
-            msg_send![view, setContentScaleFactor:scale_factor];
+            msg_send![view, setContentScaleFactor: scale_factor];
 
             msg_send![view, retain];
             window::SurfaceInner {
@@ -395,10 +408,9 @@ struct PrivateDisabilities {
 fn validate_line_width(width: f32) {
     // Note from the Vulkan spec:
     // > If the wide lines feature is not enabled, lineWidth must be 1.0
-    // Simply assert and no-op because Metal never exposes `Features::LINE_WIDTH` 
+    // Simply assert and no-op because Metal never exposes `Features::LINE_WIDTH`
     assert_eq!(width, 1.0);
 }
-
 
 trait AsNative {
     type Native;
@@ -414,15 +426,11 @@ impl AsNative for BufferPtr {
     type Native = metal::BufferRef;
     #[inline]
     fn from(native: &metal::BufferRef) -> Self {
-        unsafe {
-            NonNull::new_unchecked(native.as_ptr())
-        }
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
     }
     #[inline]
     fn as_native(&self) -> &metal::BufferRef {
-        unsafe {
-            metal::BufferRef::from_ptr(self.as_ptr())
-        }
+        unsafe { metal::BufferRef::from_ptr(self.as_ptr()) }
     }
 }
 
@@ -430,15 +438,11 @@ impl AsNative for TexturePtr {
     type Native = metal::TextureRef;
     #[inline]
     fn from(native: &metal::TextureRef) -> Self {
-        unsafe {
-            NonNull::new_unchecked(native.as_ptr())
-        }
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
     }
     #[inline]
     fn as_native(&self) -> &metal::TextureRef {
-        unsafe {
-            metal::TextureRef::from_ptr(self.as_ptr())
-        }
+        unsafe { metal::TextureRef::from_ptr(self.as_ptr()) }
     }
 }
 
@@ -446,14 +450,10 @@ impl AsNative for SamplerPtr {
     type Native = metal::SamplerStateRef;
     #[inline]
     fn from(native: &metal::SamplerStateRef) -> Self {
-        unsafe {
-            NonNull::new_unchecked(native.as_ptr())
-        }
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
     }
     #[inline]
     fn as_native(&self) -> &metal::SamplerStateRef {
-        unsafe {
-            metal::SamplerStateRef::from_ptr(self.as_ptr())
-        }
+        unsafe { metal::SamplerStateRef::from_ptr(self.as_ptr()) }
     }
 }

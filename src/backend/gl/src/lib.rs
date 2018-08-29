@@ -9,19 +9,19 @@ extern crate bitflags;
 extern crate log;
 extern crate gfx_gl as gl;
 extern crate gfx_hal as hal;
-extern crate smallvec;
-extern crate spirv_cross;
 #[cfg(feature = "glutin")]
 pub extern crate glutin;
+extern crate smallvec;
+extern crate spirv_cross;
 
 use std::cell::Cell;
 use std::fmt;
-use std::sync::Arc;
 use std::ops::Deref;
+use std::sync::Arc;
 use std::thread::{self, ThreadId};
 
+use hal::queue::{QueueFamilyId, Queues};
 use hal::{error, image, pso};
-use hal::queue::{Queues, QueueFamilyId};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -94,13 +94,13 @@ pub enum Error {
 impl Error {
     pub fn from_error_code(error_code: gl::types::GLenum) -> Error {
         match error_code {
-            gl::NO_ERROR                      => Error::NoError,
-            gl::INVALID_ENUM                  => Error::InvalidEnum,
-            gl::INVALID_VALUE                 => Error::InvalidValue,
-            gl::INVALID_OPERATION             => Error::InvalidOperation,
+            gl::NO_ERROR => Error::NoError,
+            gl::INVALID_ENUM => Error::InvalidEnum,
+            gl::INVALID_VALUE => Error::InvalidValue,
+            gl::INVALID_OPERATION => Error::InvalidOperation,
             gl::INVALID_FRAMEBUFFER_OPERATION => Error::InvalidFramebufferOperation,
-            gl::OUT_OF_MEMORY                 => Error::OutOfMemory,
-            _                                 => Error::UnknownError,
+            gl::OUT_OF_MEMORY => Error::OutOfMemory,
+            _ => Error::UnknownError,
         }
     }
 }
@@ -124,7 +124,7 @@ impl Share {
             let gl = &self.context;
             let err = Error::from_error_code(unsafe { gl.GetError() });
             if err != Error::NoError {
-                return Err(err)
+                return Err(err);
             }
         }
         Ok(())
@@ -149,9 +149,9 @@ impl<T: ?Sized> Clone for Starc<T> {
 }
 
 impl<T: ?Sized> fmt::Debug for Starc<T> {
-     fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-         write!(fmt, "{:p}@{:?}", self.arc, self.thread)
-     }
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        write!(fmt, "{:p}@{:?}", self.arc, self.thread)
+    }
 }
 
 impl<T> Starc<T> {
@@ -179,7 +179,8 @@ pub struct PhysicalDevice(Starc<Share>);
 
 impl PhysicalDevice {
     fn new_adapter<F>(fn_proc: F) -> hal::Adapter<Backend>
-    where F: FnMut(&str) -> *const std::os::raw::c_void
+    where
+        F: FnMut(&str) -> *const std::os::raw::c_void,
     {
         let gl = gl::Gl::load_with(fn_proc);
         // query information
@@ -213,10 +214,10 @@ impl PhysicalDevice {
         hal::Adapter {
             info: hal::AdapterInfo {
                 name,
-                vendor: 0, // TODO
-                device: 0, // TODO
-                device_type: hal::adapter::DeviceType::DiscreteGpu,  // TODO Is there a way to detect this?
-                software_rendering: false, // not always true ..
+                vendor: 0,                                          // TODO
+                device: 0,                                          // TODO
+                device_type: hal::adapter::DeviceType::DiscreteGpu, // TODO Is there a way to detect this?
+                software_rendering: false,                          // not always true ..
             },
             physical_device: PhysicalDevice(Starc::new(share)),
             queue_families: vec![QueueFamily],
@@ -231,7 +232,8 @@ impl PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        &self, families: &[(&QueueFamily, &[hal::QueuePriority])],
+        &self,
+        families: &[(&QueueFamily, &[hal::QueuePriority])],
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         // Can't have multiple logical devices at the same time
         // as they would share the same context.
@@ -242,7 +244,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         // initialize permanent states
         let gl = &self.0.context;
-        if self.0.legacy_features.contains(info::LegacyFeatures::SRGB_COLOR) {
+        if self
+            .0
+            .legacy_features
+            .contains(info::LegacyFeatures::SRGB_COLOR)
+        {
             unsafe {
                 gl.Enable(gl::FRAMEBUFFER_SRGB);
             }
@@ -270,16 +276,18 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         Ok(hal::Gpu {
             device: Device::new(self.0.clone()),
-            queues: Queues::new(families
-                .into_iter()
-                .map(|&(proto_family, priorities)| {
-                    assert_eq!(priorities.len(), 1);
-                    let mut family = hal::backend::RawQueueGroup::new(proto_family.clone());
-                    let queue = queue::CommandQueue::new(&self.0, vao);
-                    family.add_queue(queue);
-                    family
-                })
-                .collect()),
+            queues: Queues::new(
+                families
+                    .into_iter()
+                    .map(|&(proto_family, priorities)| {
+                        assert_eq!(priorities.len(), 1);
+                        let mut family = hal::backend::RawQueueGroup::new(proto_family.clone());
+                        let queue = queue::CommandQueue::new(&self.0, vao);
+                        family.add_queue(queue);
+                        family
+                    })
+                    .collect(),
+            ),
         })
     }
 
@@ -288,8 +296,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, _format: hal::format::Format, _dimensions: u8, _tiling: image::Tiling,
-        _usage: image::Usage, _storage_flags: image::StorageFlags,
+        &self,
+        _format: hal::format::Format,
+        _dimensions: u8,
+        _tiling: image::Tiling,
+        _usage: image::Usage,
+        _storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
         None //TODO
     }
@@ -305,22 +317,24 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     properties: Properties::DEVICE_LOCAL,
                     heap_index: 1,
                 },
-                hal::MemoryType { // upload
+                hal::MemoryType {
+                    // upload
                     properties: Properties::CPU_VISIBLE | Properties::COHERENT,
                     heap_index: 0,
                 },
-                hal::MemoryType { // download
-                    properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
+                hal::MemoryType {
+                    // download
+                    properties: Properties::CPU_VISIBLE
+                        | Properties::COHERENT
+                        | Properties::CPU_CACHED,
                     heap_index: 0,
                 },
             ]
         } else {
-            vec![
-                hal::MemoryType {
-                    properties: Properties::DEVICE_LOCAL,
-                    heap_index: 0,
-                },
-            ]
+            vec![hal::MemoryType {
+                properties: Properties::DEVICE_LOCAL,
+                heap_index: 0,
+            }]
         };
 
         hal::MemoryProperties {
@@ -342,7 +356,13 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 pub struct QueueFamily;
 
 impl hal::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> hal::QueueType { hal::QueueType::General }
-    fn max_queues(&self) -> usize { 1 }
-    fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
+    fn queue_type(&self) -> hal::QueueType {
+        hal::QueueType::General
+    }
+    fn max_queues(&self) -> usize {
+        1
+    }
+    fn id(&self) -> QueueFamilyId {
+        QueueFamilyId(0)
+    }
 }

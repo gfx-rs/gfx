@@ -7,41 +7,45 @@ extern crate derivative;
 extern crate gfx_hal as hal;
 #[macro_use]
 extern crate log;
+extern crate parking_lot;
 extern crate smallvec;
 extern crate spirv_cross;
-extern crate parking_lot;
 #[macro_use]
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
 extern crate wio;
 
-use hal::{buffer, command, error, format, image, memory, query, pass, pso, Features, Limits, QueueType};
-use hal::{DrawCount, SwapImageIndex, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
-use hal::queue::{QueueFamilyId, Queues};
 use hal::backend::RawQueueGroup;
+use hal::queue::{QueueFamilyId, Queues};
 use hal::range::RangeArg;
+use hal::{
+    buffer, command, error, format, image, memory, pass, pso, query, Features, Limits, QueueType,
+};
+use hal::{
+    DrawCount, IndexCount, InstanceCount, SwapImageIndex, VertexCount, VertexOffset, WorkGroupCount,
+};
 
 use range_alloc::RangeAllocator;
 
 use winapi::shared::{dxgiformat, winerror};
 
-use winapi::shared::dxgi::{IDXGIFactory, IDXGIAdapter, IDXGISwapChain};
+use winapi::shared::dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain};
 use winapi::shared::minwindef::{FALSE, UINT};
 use winapi::shared::windef::{HWND, RECT};
-use winapi::um::winuser::{GetClientRect};
+use winapi::um::winuser::GetClientRect;
 use winapi::um::{d3d11, d3dcommon};
 
 use wio::com::ComPtr;
 
 use parking_lot::{Condvar, Mutex};
 
-use std::sync::Arc;
-use std::ptr;
+use std::borrow::Borrow;
+use std::cell::RefCell;
 use std::mem;
 use std::ops::Range;
-use std::cell::RefCell;
-use std::borrow::Borrow;
+use std::ptr;
+use std::sync::Arc;
 
 use std::os::raw::c_void;
 
@@ -73,20 +77,20 @@ macro_rules! debug_marker {
     });
 }
 
-#[path = "../../auxil/range_alloc.rs"]
-mod range_alloc;
 mod conv;
 #[cfg(debug_assertions)]
 mod debug;
-mod dxgi;
-mod shader;
-mod internal;
 mod device;
+mod dxgi;
+mod internal;
+#[path = "../../auxil/range_alloc.rs"]
+mod range_alloc;
+mod shader;
 
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub(crate) struct ViewInfo {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     resource: *mut d3d11::ID3D11Resource,
     kind: image::Kind,
     flags: image::StorageFlags,
@@ -97,11 +101,11 @@ pub(crate) struct ViewInfo {
 
 pub struct Instance {
     pub(crate) factory: ComPtr<IDXGIFactory>,
-    pub(crate) dxgi_version: dxgi::DxgiVersion
+    pub(crate) dxgi_version: dxgi::DxgiVersion,
 }
 
-unsafe impl Send for Instance { }
-unsafe impl Sync for Instance { }
+unsafe impl Send for Instance {}
+unsafe impl Sync for Instance {}
 
 impl Instance {
     pub fn create(_: &str, _: u32) -> Self {
@@ -113,7 +117,7 @@ impl Instance {
 
         Instance {
             factory,
-            dxgi_version
+            dxgi_version,
         }
     }
 
@@ -123,7 +127,10 @@ impl Instance {
             if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
                 panic!("GetClientRect failed");
             }
-            ((rect.right - rect.left) as u32, (rect.bottom - rect.top) as u32)
+            (
+                (rect.right - rect.left) as u32,
+                (rect.bottom - rect.top) as u32,
+            )
         };
 
         Surface {
@@ -141,18 +148,21 @@ impl Instance {
     }
 }
 
-fn get_features(_device: ComPtr<d3d11::ID3D11Device>, _feature_level: d3dcommon::D3D_FEATURE_LEVEL) -> hal::Features {
+fn get_features(
+    _device: ComPtr<d3d11::ID3D11Device>,
+    _feature_level: d3dcommon::D3D_FEATURE_LEVEL,
+) -> hal::Features {
     use hal::Features;
 
     let features =
-        Features::ROBUST_BUFFER_ACCESS |
-        Features::FULL_DRAW_INDEX_U32 |
-        Features::FORMAT_BC;
+        Features::ROBUST_BUFFER_ACCESS | Features::FULL_DRAW_INDEX_U32 | Features::FORMAT_BC;
 
     features
 }
 
-fn get_format_properties(device: ComPtr<d3d11::ID3D11Device>) -> [format::Properties; format::NUM_FORMATS] {
+fn get_format_properties(
+    device: ComPtr<d3d11::ID3D11Device>,
+) -> [format::Properties; format::NUM_FORMATS] {
     let mut format_properties = [format::Properties::default(); format::NUM_FORMATS];
     for (i, props) in &mut format_properties.iter_mut().enumerate().skip(1) {
         let format: format::Format = unsafe { mem::transmute(i as u32) };
@@ -175,24 +185,25 @@ fn get_format_properties(device: ComPtr<d3d11::ID3D11Device>) -> [format::Proper
             device.CheckFeatureSupport(
                 d3d11::D3D11_FEATURE_FORMAT_SUPPORT,
                 &mut support as *mut _ as *mut _,
-                mem::size_of::<d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT>() as UINT
+                mem::size_of::<d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT>() as UINT,
             )
         };
 
         if hr == winerror::S_OK {
             let can_buffer = 0 != support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_BUFFER;
-            let can_image = 0 != support.OutFormatSupport & (
-                d3d11::D3D11_FORMAT_SUPPORT_TEXTURE1D |
-                d3d11::D3D11_FORMAT_SUPPORT_TEXTURE2D |
-                d3d11::D3D11_FORMAT_SUPPORT_TEXTURE3D |
-                d3d11::D3D11_FORMAT_SUPPORT_TEXTURECUBE
-            );
+            let can_image = 0 != support.OutFormatSupport
+                & (d3d11::D3D11_FORMAT_SUPPORT_TEXTURE1D
+                    | d3d11::D3D11_FORMAT_SUPPORT_TEXTURE2D
+                    | d3d11::D3D11_FORMAT_SUPPORT_TEXTURE3D
+                    | d3d11::D3D11_FORMAT_SUPPORT_TEXTURECUBE);
             let can_linear = can_image && !format.surface_desc().is_compressed();
             if can_image {
-                props.optimal_tiling |= format::ImageFeature::SAMPLED | format::ImageFeature::BLIT_SRC;
+                props.optimal_tiling |=
+                    format::ImageFeature::SAMPLED | format::ImageFeature::BLIT_SRC;
             }
             if can_linear {
-                props.linear_tiling |= format::ImageFeature::SAMPLED | format::ImageFeature::BLIT_SRC;
+                props.linear_tiling |=
+                    format::ImageFeature::SAMPLED | format::ImageFeature::BLIT_SRC;
             }
             if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_IA_VERTEX_BUFFER != 0 {
                 props.buffer_features |= format::BufferFeature::VERTEX;
@@ -201,9 +212,11 @@ fn get_format_properties(device: ComPtr<d3d11::ID3D11Device>) -> [format::Proper
                 props.optimal_tiling |= format::ImageFeature::SAMPLED_LINEAR;
             }
             if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_RENDER_TARGET != 0 {
-                props.optimal_tiling |= format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::BLIT_DST;
+                props.optimal_tiling |=
+                    format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::BLIT_DST;
                 if can_linear {
-                    props.linear_tiling |= format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::BLIT_DST;
+                    props.linear_tiling |=
+                        format::ImageFeature::COLOR_ATTACHMENT | format::ImageFeature::BLIT_DST;
                 }
             }
             if support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_BLENDABLE != 0 {
@@ -223,7 +236,7 @@ fn get_format_properties(device: ComPtr<d3d11::ID3D11Device>) -> [format::Proper
                 device.CheckFeatureSupport(
                     d3d11::D3D11_FEATURE_FORMAT_SUPPORT2,
                     &mut support_2 as *mut _ as *mut _,
-                    mem::size_of::<d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT2>() as UINT
+                    mem::size_of::<d3d11::D3D11_FEATURE_DATA_FORMAT_SUPPORT2>() as UINT,
                 )
             };
             if hr == winerror::S_OK {
@@ -260,7 +273,9 @@ impl hal::Instance for Instance {
         let mut adapters = Vec::new();
         let mut idx = 0;
 
-        while let Ok((adapter, info)) = dxgi::get_adapter(idx, self.factory.as_raw(), self.dxgi_version) {
+        while let Ok((adapter, info)) =
+            dxgi::get_adapter(idx, self.factory.as_raw(), self.dxgi_version)
+        {
             idx += 1;
 
             use hal::memory::Properties;
@@ -289,7 +304,10 @@ impl hal::Instance for Instance {
                     continue;
                 }
 
-                (unsafe { ComPtr::<d3d11::ID3D11Device>::from_raw(device) }, feature_level)
+                (
+                    unsafe { ComPtr::<d3d11::ID3D11Device>::from_raw(device) },
+                    feature_level,
+                )
             };
 
             let memory_properties = hal::MemoryProperties {
@@ -303,45 +321,44 @@ impl hal::Instance for Instance {
                         heap_index: 1,
                     },
                     hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
+                        properties: Properties::CPU_VISIBLE
+                            | Properties::COHERENT
+                            | Properties::CPU_CACHED,
                         heap_index: 1,
                     },
                 ],
                 // TODO: would using *VideoMemory and *SystemMemory from
                 //       DXGI_ADAPTER_DESC be too optimistic? :)
-                memory_heaps: vec![!0, !0]
+                memory_heaps: vec![!0, !0],
             };
 
             let limits = hal::Limits {
                 max_texture_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
                 max_texel_elements: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _, //TODO
-                max_patch_size: 0, // TODO
+                max_patch_size: 0,                                                    // TODO
                 max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
                 max_compute_group_count: [
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
-                    d3d11::D3D11_CS_THREAD_GROUP_MAX_Z
+                    d3d11::D3D11_CS_THREAD_GROUP_MAX_Z,
                 ],
-                max_compute_group_size: [
-                    d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
-                    1,
-                    1
-                ], // TODO
+                max_compute_group_size: [d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP, 1, 1], // TODO
                 max_vertex_input_attribute_offset: 255, // TODO
                 max_vertex_input_attributes: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
-                max_vertex_input_binding_stride: d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
+                max_vertex_input_binding_stride:
+                    d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
                 max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _, // TODO: verify same as attributes
                 max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _, // TODO
-                min_buffer_copy_offset_alignment: 1,    // TODO
-                min_buffer_copy_pitch_alignment: 1,     // TODO
-                min_texel_buffer_offset_alignment: 1,   // TODO
+                min_buffer_copy_offset_alignment: 1,                                      // TODO
+                min_buffer_copy_pitch_alignment: 1,                                       // TODO
+                min_texel_buffer_offset_alignment: 1,                                     // TODO
                 min_uniform_buffer_offset_alignment: 16, // TODO: verify
-                min_storage_buffer_offset_alignment: 1, // TODO
-                framebuffer_color_samples_count: 1,     // TODO
-                framebuffer_depth_samples_count: 1,     // TODO
-                framebuffer_stencil_samples_count: 1,   // TODO
-                max_color_attachments: 1,               // TODO
-                non_coherent_atom_size: 1,              // TODO
+                min_storage_buffer_offset_alignment: 1,  // TODO
+                framebuffer_color_samples_count: 1,      // TODO
+                framebuffer_depth_samples_count: 1,      // TODO
+                framebuffer_stencil_samples_count: 1,    // TODO
+                max_color_attachments: 1,                // TODO
+                non_coherent_atom_size: 1,               // TODO
             };
 
             let features = get_features(device.clone(), feature_level);
@@ -360,7 +377,7 @@ impl hal::Instance for Instance {
             adapters.push(hal::Adapter {
                 info,
                 physical_device,
-                queue_families: vec![QueueFamily]
+                queue_families: vec![QueueFamily],
             });
         }
 
@@ -371,17 +388,17 @@ impl hal::Instance for Instance {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct PhysicalDevice {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     adapter: ComPtr<IDXGIAdapter>,
     features: hal::Features,
     limits: hal::Limits,
     memory_properties: hal::MemoryProperties,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     format_properties: [format::Properties; format::NUM_FORMATS],
 }
 
-unsafe impl Send for PhysicalDevice { }
-unsafe impl Sync for PhysicalDevice { }
+unsafe impl Send for PhysicalDevice {}
+unsafe impl Sync for PhysicalDevice {}
 
 // TODO: does the adapter we get earlier matter for feature level?
 fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL {
@@ -407,7 +424,7 @@ fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL
             d3d11::D3D11_SDK_VERSION,
             ptr::null_mut(),
             &mut feature_level as *mut _,
-            ptr::null_mut()
+            ptr::null_mut(),
         )
     };
 
@@ -427,7 +444,7 @@ fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL
                     d3d11::D3D11_SDK_VERSION,
                     ptr::null_mut(),
                     &mut feature_level as *mut _,
-                    ptr::null_mut()
+                    ptr::null_mut(),
                 )
             };
 
@@ -443,9 +460,10 @@ fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL
 
 // TODO: PhysicalDevice
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(&self, families: &[(&QueueFamily, &[hal::QueuePriority])])
-        -> Result<hal::Gpu<Backend>, error::DeviceCreationError>
-    {
+    fn open(
+        &self,
+        families: &[(&QueueFamily, &[hal::QueuePriority])],
+    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         let (device, cxt) = {
             let feature_level = get_feature_level(self.adapter.as_raw());
             let mut returned_level = d3dcommon::D3D_FEATURE_LEVEL_9_1;
@@ -502,13 +520,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     group.add_queue(queue);
                     group
                 })
-                .collect()
+                .collect(),
         );
 
-        Ok(hal::Gpu {
-            device,
-            queues
-        })
+        Ok(hal::Gpu { device, queues })
     }
 
     fn format_properties(&self, fmt: Option<format::Format>) -> format::Properties {
@@ -516,7 +531,14 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         self.format_properties[idx]
     }
 
-    fn image_format_properties(&self, format: format::Format, dimensions: u8, tiling: image::Tiling, usage: image::Usage, storage_flags: image::StorageFlags) -> Option<image::FormatProperties> {
+    fn image_format_properties(
+        &self,
+        format: format::Format,
+        dimensions: u8,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        storage_flags: image::StorageFlags,
+    ) -> Option<image::FormatProperties> {
         conv::map_format(format)?; //filter out unknown formats
 
         let supported_usage = {
@@ -552,7 +574,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             return None;
         }
 
-        let max_resource_size = (d3d11::D3D11_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20;
+        let max_resource_size =
+            (d3d11::D3D11_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20;
         Some(match tiling {
             image::Tiling::Optimal => image::FormatProperties {
                 max_extent: match dimensions {
@@ -579,8 +602,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     2 => d3d11::D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
                     _ => return None,
                 },
-                sample_count_mask: if dimensions == 2 && !storage_flags.contains(image::StorageFlags::CUBE_VIEW) &&
-                    (usage.contains(image::Usage::COLOR_ATTACHMENT) | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
+                sample_count_mask: if dimensions == 2
+                    && !storage_flags.contains(image::StorageFlags::CUBE_VIEW)
+                    && (usage.contains(image::Usage::COLOR_ATTACHMENT)
+                        | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
                 {
                     0x3F //TODO: use D3D12_FEATURE_DATA_FORMAT_SUPPORT
                 } else {
@@ -616,18 +641,17 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn limits(&self) -> Limits {
         self.limits
     }
-
 }
 
 pub struct Surface {
     pub(crate) factory: ComPtr<IDXGIFactory>,
     wnd_handle: HWND,
     width: u32,
-    height: u32
+    height: u32,
 }
 
-unsafe impl Send for Surface { }
-unsafe impl Sync for Surface { }
+unsafe impl Send for Surface {}
+unsafe impl Sync for Surface {}
 
 impl hal::Surface<Backend> for Surface {
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
@@ -644,8 +668,13 @@ impl hal::Surface<Backend> for Surface {
     }
 
     fn compatibility(
-        &self, _: &PhysicalDevice
-    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>) {
+        &self,
+        _: &PhysicalDevice,
+    ) -> (
+        hal::SurfaceCapabilities,
+        Option<Vec<format::Format>>,
+        Vec<hal::PresentMode>,
+    ) {
         let extent = hal::window::Extent2D {
             width: self.width,
             height: self.height,
@@ -672,24 +701,25 @@ impl hal::Surface<Backend> for Surface {
         ];
 
         let present_modes = vec![
-            hal::PresentMode::Fifo //TODO
+            hal::PresentMode::Fifo, //TODO
         ];
 
         (capabilities, Some(formats), present_modes)
     }
-
 }
 
 pub struct Swapchain {
     dxgi_swapchain: ComPtr<IDXGISwapChain>,
 }
 
-unsafe impl Send for Swapchain { }
-unsafe impl Sync for Swapchain { }
+unsafe impl Send for Swapchain {}
+unsafe impl Sync for Swapchain {}
 
 impl hal::Swapchain<Backend> for Swapchain {
     fn acquire_image(
-        &mut self, _timeout_ns: u64, _sync: hal::FrameSync<Backend>
+        &mut self,
+        _timeout_ns: u64,
+        _sync: hal::FrameSync<Backend>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         // TODO: non-`_DISCARD` swap effects have more than one buffer, `FLIP`
         //       effects are dxgi 1.3 (w10+?) in which case there is
@@ -698,29 +728,37 @@ impl hal::Swapchain<Backend> for Swapchain {
     }
 }
 
-
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily;
 
 impl hal::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> QueueType { QueueType::General }
-    fn max_queues(&self) -> usize { 1 }
-    fn id(&self) -> QueueFamilyId { QueueFamilyId(0) }
+    fn queue_type(&self) -> QueueType {
+        QueueType::General
+    }
+    fn max_queues(&self) -> usize {
+        1
+    }
+    fn id(&self) -> QueueFamilyId {
+        QueueFamilyId(0)
+    }
 }
 
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct CommandQueue {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     context: ComPtr<d3d11::ID3D11DeviceContext>,
 }
 
-unsafe impl Send for CommandQueue { }
-unsafe impl Sync for CommandQueue { }
+unsafe impl Send for CommandQueue {}
+unsafe impl Sync for CommandQueue {}
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(&mut self, submission: hal::queue::RawSubmission<Backend, IC>, fence: Option<&Fence>)
-    where
+    unsafe fn submit_raw<IC>(
+        &mut self,
+        submission: hal::queue::RawSubmission<Backend, IC>,
+        fence: Option<&Fence>,
+    ) where
         IC: IntoIterator,
         IC::Item: Borrow<CommandBuffer>,
     {
@@ -741,14 +779,14 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
                     sync.do_flush(&self.context);
                 }
             }
-            self.context.ExecuteCommandList(cmd_buf.as_raw_list().as_raw(), FALSE);
+            self.context
+                .ExecuteCommandList(cmd_buf.as_raw_list().as_raw(), FALSE);
             {
                 let _scope = debug_scope!(&self.context, "Post-Exec: Invalidate");
                 for sync in &cmd_buf.invalidate_coherent_memory {
                     sync.do_invalidate(&self.context);
                 }
             }
-
         }
 
         if let Some(fence) = fence {
@@ -765,7 +803,9 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IW::Item: Borrow<Semaphore>,
     {
         for (swapchain, _idx) in swapchains {
-            unsafe { swapchain.borrow().dxgi_swapchain.Present(1, 0); }
+            unsafe {
+                swapchain.borrow().dxgi_swapchain.Present(1, 0);
+            }
         }
 
         Ok(())
@@ -775,7 +815,6 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         // unimplemented!()
         Ok(())
     }
-
 }
 
 #[derive(Derivative, Clone)]
@@ -798,29 +837,40 @@ impl RenderPassCache {
     pub fn advance_subpass(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
         let subpass = &self.render_pass.subpasses[self.current_subpass];
 
-        let color_views = subpass.color_attachments
+        let color_views = subpass
+            .color_attachments
             .iter()
-            .map(|&(id, _)| self.framebuffer.attachments[id].rtv_handle.clone().unwrap().as_raw())
+            .map(|&(id, _)| {
+                self.framebuffer.attachments[id]
+                    .rtv_handle
+                    .clone()
+                    .unwrap()
+                    .as_raw()
+            })
             .collect::<Vec<_>>();
         let ds_view = match subpass.depth_stencil_attachment {
-            Some((id, _)) => self.framebuffer.attachments[id].dsv_handle.clone().unwrap().as_raw(),
+            Some((id, _)) => self.framebuffer.attachments[id]
+                .dsv_handle
+                .clone()
+                .unwrap()
+                .as_raw(),
             None => ptr::null_mut(),
         };
 
         unsafe {
-            context.OMSetRenderTargets(
-                color_views.len() as UINT,
-                color_views.as_ptr(),
-                ds_view,
-            );
+            context.OMSetRenderTargets(color_views.len() as UINT, color_views.as_ptr(), ds_view);
         }
 
         // performs clears for all the attachments first used in this subpass
-        for (view, clear) in self.framebuffer.attachments.iter().zip(self.attachment_clear_values.iter()) {
+        for (view, clear) in self
+            .framebuffer
+            .attachments
+            .iter()
+            .zip(self.attachment_clear_values.iter())
+        {
             if clear.subpass_id != Some(self.current_subpass) {
                 continue;
             }
-
 
             if let (Some(ref handle), Some(cv)) = (&view.rtv_handle, clear.value) {
                 unsafe {
@@ -861,11 +911,11 @@ impl RenderPassCache {
 #[derivative(Debug)]
 pub struct CommandBuffer {
     // TODO: better way of sharing
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     internal: internal::Internal,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     context: ComPtr<d3d11::ID3D11DeviceContext>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     list: Option<ComPtr<d3d11::ID3D11CommandList>>,
 
     // since coherent memory needs to be synchronized at submission, we need to gather up all
@@ -899,9 +949,8 @@ unsafe impl Sync for CommandBuffer {}
 impl CommandBuffer {
     fn create_deferred(device: ComPtr<d3d11::ID3D11Device>, internal: internal::Internal) -> Self {
         let mut context: *mut d3d11::ID3D11DeviceContext = ptr::null_mut();
-        let hr = unsafe {
-            device.CreateDeferredContext(0, &mut context as *mut *mut _ as *mut *mut _)
-        };
+        let hr =
+            unsafe { device.CreateDeferredContext(0, &mut context as *mut *mut _ as *mut *mut _) };
         assert_eq!(hr, winerror::S_OK);
 
         CommandBuffer {
@@ -920,15 +969,14 @@ impl CommandBuffer {
         }
     }
 
-
     fn as_raw_list(&self) -> ComPtr<d3d11::ID3D11CommandList> {
         self.list.clone().unwrap().clone()
     }
 
     fn set_vertex_buffers(&self) {
         if let Some(binding_count) = self.max_bindings {
-            if self.vertex_buffers.len() >= binding_count as usize &&
-               self.vertex_strides.len() >= binding_count as usize
+            if self.vertex_buffers.len() >= binding_count as usize
+                && self.vertex_strides.len() >= binding_count as usize
             {
                 unsafe {
                     self.context.IASetVertexBuffers(
@@ -943,7 +991,12 @@ impl CommandBuffer {
         }
     }
 
-    unsafe fn bind_vertex_descriptor(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, binding: &PipelineBinding, handles: *mut Descriptor) {
+    unsafe fn bind_vertex_descriptor(
+        &self,
+        context: &ComPtr<d3d11::ID3D11DeviceContext>,
+        binding: &PipelineBinding,
+        handles: *mut Descriptor,
+    ) {
         use pso::DescriptorType::*;
 
         let handles = handles.offset(binding.handle_offset as isize);
@@ -952,18 +1005,30 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.VSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            SampledImage | InputAttachment => context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
+            SampledImage | InputAttachment => {
+                context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
+            }
             CombinedImageSampler => {
                 context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
-                context.VSSetSamplers(start, len, handles.offset(1) as *const *mut _ as *const *mut _);
-            },
-            UniformBuffer |
-            UniformBufferDynamic => context.VSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _),
+                context.VSSetSamplers(
+                    start,
+                    len,
+                    handles.offset(1) as *const *mut _ as *const *mut _,
+                );
+            }
+            UniformBuffer | UniformBufferDynamic => {
+                context.VSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _)
+            }
             _ => {}
         }
     }
 
-    unsafe fn bind_fragment_descriptor(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, binding: &PipelineBinding, handles: *mut Descriptor) {
+    unsafe fn bind_fragment_descriptor(
+        &self,
+        context: &ComPtr<d3d11::ID3D11DeviceContext>,
+        binding: &PipelineBinding,
+        handles: *mut Descriptor,
+    ) {
         use pso::DescriptorType::*;
 
         let handles = handles.offset(binding.handle_offset as isize);
@@ -972,18 +1037,30 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.PSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            SampledImage | InputAttachment => context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
+            SampledImage | InputAttachment => {
+                context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
+            }
             CombinedImageSampler => {
                 context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
-                context.PSSetSamplers(start, len, handles.offset(1) as *const *mut _ as *const *mut _);
-            },
-            UniformBuffer |
-            UniformBufferDynamic => context.PSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _),
+                context.PSSetSamplers(
+                    start,
+                    len,
+                    handles.offset(1) as *const *mut _ as *const *mut _,
+                );
+            }
+            UniformBuffer | UniformBufferDynamic => {
+                context.PSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _)
+            }
             _ => {}
         }
     }
 
-    unsafe fn bind_compute_descriptor(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, binding: &PipelineBinding, handles: *mut Descriptor) {
+    unsafe fn bind_compute_descriptor(
+        &self,
+        context: &ComPtr<d3d11::ID3D11DeviceContext>,
+        binding: &PipelineBinding,
+        handles: *mut Descriptor,
+    ) {
         use pso::DescriptorType::*;
 
         let handles = handles.offset(binding.handle_offset as isize);
@@ -992,20 +1069,36 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.CSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            SampledImage | InputAttachment => context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _),
+            SampledImage | InputAttachment => {
+                context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
+            }
             CombinedImageSampler => {
                 context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
-                context.CSSetSamplers(start, len, handles.offset(1) as *const *mut _ as *const *mut _);
-            },
-            UniformBuffer |
-            UniformBufferDynamic => context.CSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _),
-            StorageImage |
-            StorageBuffer => context.CSSetUnorderedAccessViews(start, len, handles as *const *mut _ as *const *mut _, ptr::null_mut()),
-            _ => unimplemented!()
+                context.CSSetSamplers(
+                    start,
+                    len,
+                    handles.offset(1) as *const *mut _ as *const *mut _,
+                );
+            }
+            UniformBuffer | UniformBufferDynamic => {
+                context.CSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _)
+            }
+            StorageImage | StorageBuffer => context.CSSetUnorderedAccessViews(
+                start,
+                len,
+                handles as *const *mut _ as *const *mut _,
+                ptr::null_mut(),
+            ),
+            _ => unimplemented!(),
         }
     }
 
-    fn bind_descriptor(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, binding: &PipelineBinding, handles: *mut Descriptor) {
+    fn bind_descriptor(
+        &self,
+        context: &ComPtr<d3d11::ID3D11DeviceContext>,
+        binding: &PipelineBinding,
+        handles: *mut Descriptor,
+    ) {
         //use pso::ShaderStageFlags::*;
 
         unsafe {
@@ -1028,7 +1121,7 @@ impl CommandBuffer {
             host_memory: buffer.host_ptr,
             sync_range: SyncRange::Whole,
 
-            buffer: buffer.internal.raw
+            buffer: buffer.internal.raw,
         });
     }
 
@@ -1040,21 +1133,27 @@ impl CommandBuffer {
             host_memory: buffer.host_ptr,
             sync_range: buffer.bound_range.clone(),
 
-            buffer: buffer.internal.raw
+            buffer: buffer.internal.raw,
         });
     }
 }
 
 impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
-
-    fn begin(&mut self, _flags: command::CommandBufferFlags, _info: command::CommandBufferInheritanceInfo<Backend>) {
+    fn begin(
+        &mut self,
+        _flags: command::CommandBufferFlags,
+        _info: command::CommandBufferInheritanceInfo<Backend>,
+    ) {
     }
 
     fn finish(&mut self) {
         // TODO:
 
         let mut list = ptr::null_mut();
-        let hr = unsafe { self.context.FinishCommandList(FALSE, &mut list as *mut *mut _ as *mut *mut _) };
+        let hr = unsafe {
+            self.context
+                .FinishCommandList(FALSE, &mut list as *mut *mut _ as *mut *mut _)
+        };
         assert_eq!(hr, winerror::S_OK);
 
         self.list = Some(unsafe { ComPtr::from_raw(list) });
@@ -1072,17 +1171,26 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         self.vertex_strides.clear();
     }
 
-    fn begin_render_pass<T>(&mut self, render_pass: &RenderPass, framebuffer: &Framebuffer, _target_rect: pso::Rect, clear_values: T, _first_subpass: command::SubpassContents)
-    where
+    fn begin_render_pass<T>(
+        &mut self,
+        render_pass: &RenderPass,
+        framebuffer: &Framebuffer,
+        _target_rect: pso::Rect,
+        clear_values: T,
+        _first_subpass: command::SubpassContents,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<command::ClearValueRaw>,
     {
         let mut clear_iter = clear_values.into_iter();
-        let attachment_clears = render_pass.attachments
+        let attachment_clears = render_pass
+            .attachments
             .iter()
             .enumerate()
             .map(|(i, attachment)| {
-                let cv = if attachment.ops.load == pass::AttachmentLoadOp::Clear || attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                let cv = if attachment.ops.load == pass::AttachmentLoadOp::Clear
+                    || attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear
+                {
                     Some(*clear_iter.next().unwrap().borrow())
                 } else {
                     None
@@ -1102,7 +1210,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                         None
                     },
                 }
-            }).collect();
+            })
+            .collect();
 
         self.render_pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
@@ -1127,8 +1236,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         self.render_pass_cache = None;
     }
 
-    fn pipeline_barrier<'a, T>(&mut self, _stages: Range<pso::PipelineStage>, _dependencies: memory::Dependencies, _barriers: T)
-    where
+    fn pipeline_barrier<'a, T>(
+        &mut self,
+        _stages: Range<pso::PipelineStage>,
+        _dependencies: memory::Dependencies,
+        _barriers: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
@@ -1136,8 +1249,14 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         // unimplemented!()
     }
 
-    fn clear_image<T>(&mut self, image: &Image, _: image::Layout, color: command::ClearColorRaw, depth_stencil: command::ClearDepthStencilRaw, subresource_ranges: T)
-    where
+    fn clear_image<T>(
+        &mut self,
+        image: &Image,
+        _: image::Layout,
+        color: command::ClearColorRaw,
+        depth_stencil: command::ClearDepthStencilRaw,
+        subresource_ranges: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<image::SubresourceRange>,
     {
@@ -1150,7 +1269,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                         unsafe {
                             self.context.ClearRenderTargetView(
                                 image.get_rtv(level, layer).unwrap().as_raw(),
-                                &color.float32
+                                &color.float32,
                             );
                         }
                     }
@@ -1193,20 +1312,34 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         // unimplemented!()
     }
 
-    fn resolve_image<T>(&mut self, _src: &Image, _src_layout: image::Layout, _dst: &Image, _dst_layout: image::Layout, _regions: T)
-    where
+    fn resolve_image<T>(
+        &mut self,
+        _src: &Image,
+        _src_layout: image::Layout,
+        _dst: &Image,
+        _dst_layout: image::Layout,
+        _regions: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<command::ImageResolve>,
     {
         unimplemented!()
     }
 
-    fn blit_image<T>(&mut self, src: &Image, _src_layout: image::Layout, dst: &Image, _dst_layout: image::Layout, filter: image::Filter, regions: T)
-    where
+    fn blit_image<T>(
+        &mut self,
+        src: &Image,
+        _src_layout: image::Layout,
+        dst: &Image,
+        _dst_layout: image::Layout,
+        filter: image::Filter,
+        regions: T,
+    ) where
         T: IntoIterator,
-        T::Item: Borrow<command::ImageBlit>
+        T::Item: Borrow<command::ImageBlit>,
     {
-        self.internal.blit_2d_image(&self.context, src, dst, filter, regions);
+        self.internal
+            .blit_2d_image(&self.context, src, dst, filter, regions);
     }
 
     fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
@@ -1214,7 +1347,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             self.context.IASetIndexBuffer(
                 ibv.buffer.internal.raw,
                 conv::map_index_type(ibv.index_type),
-                ibv.offset as u32
+                ibv.offset as u32,
             );
         }
     }
@@ -1225,7 +1358,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: Borrow<Buffer>,
     {
         if self.vertex_buffers.len() <= first_binding as usize {
-            self.vertex_buffers.resize(first_binding as usize + 1, ptr::null_mut());
+            self.vertex_buffers
+                .resize(first_binding as usize + 1, ptr::null_mut());
             self.vertex_offsets.resize(first_binding as usize + 1, 0);
         }
 
@@ -1256,13 +1390,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
     {
-        let viewports = viewports.into_iter().map(|v| {
-            let v = v.borrow();
-            conv::map_viewport(v)
-        }).collect::<Vec<_>>();
+        let viewports = viewports
+            .into_iter()
+            .map(|v| {
+                let v = v.borrow();
+                conv::map_viewport(v)
+            })
+            .collect::<Vec<_>>();
 
         // TODO: DX only lets us set all VPs at once, so cache in slice?
-        unsafe { self.context.RSSetViewports(viewports.len() as _, viewports.as_ptr()); }
+        unsafe {
+            self.context
+                .RSSetViewports(viewports.len() as _, viewports.as_ptr());
+        }
     }
 
     fn set_scissors<T>(&mut self, _first_scissor: u32, scissors: T)
@@ -1270,13 +1410,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
     {
-        let scissors = scissors.into_iter().map(|s| {
-            let s = s.borrow();
-            conv::map_rect(s)
-        }).collect::<Vec<_>>();
+        let scissors = scissors
+            .into_iter()
+            .map(|s| {
+                let s = s.borrow();
+                conv::map_rect(s)
+            })
+            .collect::<Vec<_>>();
 
         // TODO: same as for viewports
-        unsafe { self.context.RSSetScissorRects(scissors.len() as _, scissors.as_ptr()); }
+        unsafe {
+            self.context
+                .RSSetScissorRects(scissors.len() as _, scissors.as_ptr());
+        }
     }
 
     fn set_blend_constants(&mut self, _color: pso::ColorValue) {
@@ -1319,25 +1465,30 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
         unsafe {
             self.context.IASetPrimitiveTopology(pipeline.topology);
-            self.context.IASetInputLayout(pipeline.input_layout.as_raw());
+            self.context
+                .IASetInputLayout(pipeline.input_layout.as_raw());
 
-            self.context.VSSetShader(pipeline.vs.as_raw(), ptr::null_mut(), 0);
+            self.context
+                .VSSetShader(pipeline.vs.as_raw(), ptr::null_mut(), 0);
             if let Some(ref ps) = pipeline.ps {
                 self.context.PSSetShader(ps.as_raw(), ptr::null_mut(), 0);
             }
 
             self.context.RSSetState(pipeline.rasterizer_state.as_raw());
             if let Some(ref viewport) = pipeline.baked_states.viewport {
-                self.context.RSSetViewports(1, [conv::map_viewport(&viewport)].as_ptr());
+                self.context
+                    .RSSetViewports(1, [conv::map_viewport(&viewport)].as_ptr());
             }
             if let Some(ref scissor) = pipeline.baked_states.scissor {
-                self.context.RSSetScissorRects(1, [conv::map_rect(&scissor)].as_ptr());
+                self.context
+                    .RSSetScissorRects(1, [conv::map_rect(&scissor)].as_ptr());
             }
 
             let blend_color = pipeline.baked_states.blend_color.unwrap_or([1f32; 4]);
 
             // TODO: blend constants
-            self.context.OMSetBlendState(pipeline.blend_state.as_raw(), &blend_color, !0);
+            self.context
+                .OMSetBlendState(pipeline.blend_state.as_raw(), &blend_color, !0);
             if let Some((ref state, reference)) = pipeline.depth_stencil_state {
                 let stencil_ref = if let pso::State::Static(reference) = reference {
                     reference
@@ -1346,13 +1497,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                     // unimplemented!()
                 };
 
-                self.context.OMSetDepthStencilState(state.as_raw(), stencil_ref);
+                self.context
+                    .OMSetDepthStencilState(state.as_raw(), stencil_ref);
             }
         }
     }
 
-    fn bind_graphics_descriptor_sets<'a, I, J>(&mut self, layout: &PipelineLayout, first_set: usize, sets: I, _offsets: J)
-    where
+    fn bind_graphics_descriptor_sets<'a, I, J>(
+        &mut self,
+        layout: &PipelineLayout,
+        first_set: usize,
+        sets: I,
+        _offsets: J,
+    ) where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSet>,
         J: IntoIterator,
@@ -1362,12 +1519,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
         // TODO: find a better solution to invalidating old bindings..
         unsafe {
-            self.context.CSSetUnorderedAccessViews(0, 16, [ptr::null_mut(); 16].as_ptr(), ptr::null_mut());
+            self.context.CSSetUnorderedAccessViews(
+                0,
+                16,
+                [ptr::null_mut(); 16].as_ptr(),
+                ptr::null_mut(),
+            );
         }
 
         //let offsets: Vec<command::DescriptorSetOffset> = offsets.into_iter().map(|o| *o.borrow()).collect();
 
-        let iter = sets.into_iter().zip(layout.set_bindings.iter().skip(first_set));
+        let iter = sets
+            .into_iter()
+            .zip(layout.set_bindings.iter().skip(first_set));
 
         for (set, bindings) in iter {
             let set = set.borrow();
@@ -1376,28 +1540,35 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                 let coherent_buffers = set.coherent_buffers.lock();
                 for sync in coherent_buffers.flush_coherent_buffers.borrow().iter() {
                     // TODO: merge sync range if a flush already exists
-                    if !self.flush_coherent_memory.iter().any(|m| m.buffer == sync.device_buffer) {
+                    if !self
+                        .flush_coherent_memory
+                        .iter()
+                        .any(|m| m.buffer == sync.device_buffer)
+                    {
                         self.flush_coherent_memory.push(MemoryFlush {
                             host_memory: sync.host_ptr,
                             sync_range: sync.range.clone(),
-                            buffer: sync.device_buffer
+                            buffer: sync.device_buffer,
                         });
                     }
                 }
 
                 for sync in coherent_buffers.invalidate_coherent_buffers.borrow().iter() {
-                    if !self.invalidate_coherent_memory.iter().any(|m| m.buffer == sync.device_buffer) {
+                    if !self
+                        .invalidate_coherent_memory
+                        .iter()
+                        .any(|m| m.buffer == sync.device_buffer)
+                    {
                         self.invalidate_coherent_memory.push(MemoryInvalidate {
                             working_buffer: Some(self.internal.working_buffer.clone()),
                             working_buffer_size: self.internal.working_buffer_size,
                             host_memory: sync.host_ptr,
                             sync_range: sync.range.clone(),
-                            buffer: sync.device_buffer
+                            buffer: sync.device_buffer,
                         });
                     }
                 }
             }
-
 
             // TODO: offsets
             for binding in bindings.iter() {
@@ -1408,13 +1579,18 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn bind_compute_pipeline(&mut self, pipeline: &ComputePipeline) {
         unsafe {
-            self.context.CSSetShader(pipeline.cs.as_raw(), ptr::null_mut(), 0);
+            self.context
+                .CSSetShader(pipeline.cs.as_raw(), ptr::null_mut(), 0);
         }
     }
 
-
-    fn bind_compute_descriptor_sets<I, J>(&mut self, layout: &PipelineLayout, first_set: usize, sets: I, _offsets: J)
-    where
+    fn bind_compute_descriptor_sets<I, J>(
+        &mut self,
+        layout: &PipelineLayout,
+        first_set: usize,
+        sets: I,
+        _offsets: J,
+    ) where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSet>,
         J: IntoIterator,
@@ -1423,9 +1599,16 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         let _scope = debug_scope!(&self.context, "BindComputeDescriptorSets");
 
         unsafe {
-            self.context.CSSetUnorderedAccessViews(0, 16, [ptr::null_mut(); 16].as_ptr(), ptr::null_mut());
+            self.context.CSSetUnorderedAccessViews(
+                0,
+                16,
+                [ptr::null_mut(); 16].as_ptr(),
+                ptr::null_mut(),
+            );
         }
-        let iter = sets.into_iter().zip(layout.set_bindings.iter().skip(first_set));
+        let iter = sets
+            .into_iter()
+            .zip(layout.set_bindings.iter().skip(first_set));
 
         for (set, bindings) in iter {
             let set = set.borrow();
@@ -1433,23 +1616,31 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             {
                 let coherent_buffers = set.coherent_buffers.lock();
                 for sync in coherent_buffers.flush_coherent_buffers.borrow().iter() {
-                    if !self.flush_coherent_memory.iter().any(|m| m.buffer == sync.device_buffer) {
+                    if !self
+                        .flush_coherent_memory
+                        .iter()
+                        .any(|m| m.buffer == sync.device_buffer)
+                    {
                         self.flush_coherent_memory.push(MemoryFlush {
                             host_memory: sync.host_ptr,
                             sync_range: sync.range.clone(),
-                            buffer: sync.device_buffer
+                            buffer: sync.device_buffer,
                         });
                     }
                 }
 
                 for sync in coherent_buffers.invalidate_coherent_buffers.borrow().iter() {
-                    if !self.invalidate_coherent_memory.iter().any(|m| m.buffer == sync.device_buffer) {
+                    if !self
+                        .invalidate_coherent_memory
+                        .iter()
+                        .any(|m| m.buffer == sync.device_buffer)
+                    {
                         self.invalidate_coherent_memory.push(MemoryInvalidate {
                             working_buffer: Some(self.internal.working_buffer.clone()),
                             working_buffer_size: self.internal.working_buffer_size,
                             host_memory: sync.host_ptr,
                             sync_range: sync.range.clone(),
-                            buffer: sync.device_buffer
+                            buffer: sync.device_buffer,
                         });
                     }
                 }
@@ -1511,22 +1702,34 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                         right: (info.src + info.size) as _,
                         bottom: 1,
                         back: 1,
-                    }
+                    },
                 );
             }
         }
     }
 
-    fn copy_image<T>(&mut self, src: &Image, _: image::Layout, dst: &Image, _: image::Layout, regions: T)
-    where
+    fn copy_image<T>(
+        &mut self,
+        src: &Image,
+        _: image::Layout,
+        dst: &Image,
+        _: image::Layout,
+        regions: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<command::ImageCopy>,
     {
-        self.internal.copy_image_2d(&self.context, src, dst, regions);
+        self.internal
+            .copy_image_2d(&self.context, src, dst, regions);
     }
 
-    fn copy_buffer_to_image<T>(&mut self, buffer: &Buffer, image: &Image, _: image::Layout, regions: T)
-    where
+    fn copy_buffer_to_image<T>(
+        &mut self,
+        buffer: &Buffer,
+        image: &Image,
+        _: image::Layout,
+        regions: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
@@ -1534,11 +1737,17 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             self.defer_coherent_flush(buffer);
         }
 
-        self.internal.copy_buffer_to_image_2d(&self.context, buffer, image, regions);
+        self.internal
+            .copy_buffer_to_image_2d(&self.context, buffer, image, regions);
     }
 
-    fn copy_image_to_buffer<T>(&mut self, image: &Image, _: image::Layout, buffer: &Buffer, regions: T)
-    where
+    fn copy_image_to_buffer<T>(
+        &mut self,
+        image: &Image,
+        _: image::Layout,
+        buffer: &Buffer,
+        regions: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
@@ -1546,11 +1755,14 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             self.defer_coherent_invalidate(buffer);
         }
 
-        self.internal.copy_image_2d_to_buffer(&self.context, image, buffer, regions);
+        self.internal
+            .copy_image_2d_to_buffer(&self.context, image, buffer, regions);
     }
 
     fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
-        debug_assert!((self.bound_bindings | self.required_bindings.unwrap_or(!0)) == self.bound_bindings);
+        debug_assert!(
+            (self.bound_bindings | self.required_bindings.unwrap_or(!0)) == self.bound_bindings
+        );
 
         unsafe {
             self.context.DrawInstanced(
@@ -1562,8 +1774,15 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
-        debug_assert!((self.bound_bindings | self.required_bindings.unwrap_or(!0)) == self.bound_bindings);
+    fn draw_indexed(
+        &mut self,
+        indices: Range<IndexCount>,
+        base_vertex: VertexOffset,
+        instances: Range<InstanceCount>,
+    ) {
+        debug_assert!(
+            (self.bound_bindings | self.required_bindings.unwrap_or(!0)) == self.bound_bindings
+        );
 
         unsafe {
             self.context.DrawIndexedInstanced(
@@ -1576,11 +1795,23 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn draw_indirect(&mut self, _buffer: &Buffer, _offset: buffer::Offset, _draw_count: DrawCount, _stride: u32) {
+    fn draw_indirect(
+        &mut self,
+        _buffer: &Buffer,
+        _offset: buffer::Offset,
+        _draw_count: DrawCount,
+        _stride: u32,
+    ) {
         unimplemented!()
     }
 
-    fn draw_indexed_indirect(&mut self, _buffer: &Buffer, _offset: buffer::Offset, _draw_count: DrawCount, _stride: u32) {
+    fn draw_indexed_indirect(
+        &mut self,
+        _buffer: &Buffer,
+        _offset: buffer::Offset,
+        _draw_count: DrawCount,
+        _stride: u32,
+    ) {
         unimplemented!()
     }
 
@@ -1612,11 +1843,22 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn push_graphics_constants(&mut self, _layout: &PipelineLayout, _stages: pso::ShaderStageFlags, _offset: u32, _constants: &[u32]) {
+    fn push_graphics_constants(
+        &mut self,
+        _layout: &PipelineLayout,
+        _stages: pso::ShaderStageFlags,
+        _offset: u32,
+        _constants: &[u32],
+    ) {
         // unimplemented!()
     }
 
-    fn push_compute_constants(&mut self, _layout: &PipelineLayout, _offset: u32, _constants: &[u32]) {
+    fn push_compute_constants(
+        &mut self,
+        _layout: &PipelineLayout,
+        _offset: u32,
+        _constants: &[u32],
+    ) {
         unimplemented!()
     }
 
@@ -1640,25 +1882,25 @@ bitflags! {
 #[derive(Debug, Clone)]
 enum SyncRange {
     Whole,
-    Partial(Range<u64>)
+    Partial(Range<u64>),
 }
 
 #[derive(Debug, Clone)]
 pub struct MemoryFlush {
     host_memory: *mut u8,
     sync_range: SyncRange,
-    buffer: *mut d3d11::ID3D11Buffer
+    buffer: *mut d3d11::ID3D11Buffer,
 }
 
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct MemoryInvalidate {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     working_buffer: Option<ComPtr<d3d11::ID3D11Buffer>>,
     working_buffer_size: u64,
     host_memory: *mut u8,
     sync_range: Range<u64>,
-    buffer: *mut d3d11::ID3D11Buffer
+    buffer: *mut d3d11::ID3D11Buffer,
 }
 
 fn intersection(a: &Range<u64>, b: &Range<u64>) -> Option<Range<u64>> {
@@ -1668,7 +1910,11 @@ fn intersection(a: &Range<u64>, b: &Range<u64>) -> Option<Range<u64>> {
     if min.end < max.start {
         None
     } else {
-        let end = if min.end < max.end { min.end } else { max.end };
+        let end = if min.end < max.end {
+            min.end
+        } else {
+            max.end
+        };
         Some(max.start..end)
     }
 }
@@ -1702,14 +1948,19 @@ impl MemoryFlush {
                 },
                 src as _,
                 0,
-                0
+                0,
             );
         }
     }
 }
 
 impl MemoryInvalidate {
-    fn download(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, buffer: *mut d3d11::ID3D11Buffer, range: Range<u64>) {
+    fn download(
+        &self,
+        context: &ComPtr<d3d11::ID3D11DeviceContext>,
+        buffer: *mut d3d11::ID3D11Buffer,
+        range: Range<u64>,
+    ) {
         unsafe {
             context.CopySubresourceRegion(
                 self.working_buffer.clone().unwrap().as_raw() as _,
@@ -1726,7 +1977,7 @@ impl MemoryInvalidate {
                     right: range.end as _,
                     bottom: 1,
                     back: 1,
-                }
+                },
             );
 
             // copy over to our vec
@@ -1735,7 +1986,6 @@ impl MemoryInvalidate {
             ptr::copy(src, dst, (range.end - range.start) as usize);
             self.unmap(&context);
         }
-
     }
 
     fn do_invalidate(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
@@ -1768,7 +2018,7 @@ impl MemoryInvalidate {
                 0,
                 d3d11::D3D11_MAP_READ,
                 0,
-                &mut map
+                &mut map,
             );
 
             assert_eq!(hr, winerror::S_OK);
@@ -1779,14 +2029,10 @@ impl MemoryInvalidate {
 
     fn unmap(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
         unsafe {
-            context.Unmap(
-                self.working_buffer.clone().unwrap().as_raw() as _,
-                0,
-            );
+            context.Unmap(self.working_buffer.clone().unwrap().as_raw() as _, 0);
         }
     }
 }
-
 
 // Since we dont have any heaps to work with directly, everytime we bind a
 // buffer/image to memory we allocate a dx11 resource and assign it a range.
@@ -1808,11 +2054,11 @@ pub struct Memory {
     host_visible: Option<RefCell<Vec<u8>>>,
 
     // list of all buffers bound to this memory
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     local_buffers: RefCell<Vec<(Range<u64>, InternalBuffer)>>,
 
     // list of all images bound to this memory
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     local_images: RefCell<Vec<(Range<u64>, InternalImage)>>,
 }
 
@@ -1821,7 +2067,7 @@ unsafe impl Sync for Memory {}
 
 impl Memory {
     pub fn resolve<R: hal::range::RangeArg<u64>>(&self, range: &R) -> Range<u64> {
-        *range.start().unwrap_or(&0) .. *range.end().unwrap_or(&self.size)
+        *range.start().unwrap_or(&0)..*range.end().unwrap_or(&self.size)
     }
 
     pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) {
@@ -1852,21 +2098,21 @@ impl Memory {
                     MemoryFlush {
                         host_memory: unsafe { ptr.offset(buffer_range.start as _) },
                         sync_range: SyncRange::Whole,
-                        buffer: buffer.raw
+                        buffer: buffer.raw,
                     }.do_flush(&context);
 
                     if let Some(disjoint) = buffer.disjoint_cb {
                         MemoryFlush {
                             host_memory: unsafe { ptr.offset(buffer_range.start as _) },
                             sync_range: SyncRange::Whole,
-                            buffer: disjoint
+                            buffer: disjoint,
                         }.do_flush(&context);
                     }
                 } else if buffer.usage == Usage::UNIFORM {
                     MemoryFlush {
                         host_memory: unsafe { ptr.offset(buffer_range.start as _) },
                         sync_range: SyncRange::Whole,
-                        buffer: buffer.raw
+                        buffer: buffer.raw,
                     }.do_flush(&context);
                 } else {
                     let local_start = range.start - buffer_range.start;
@@ -1875,14 +2121,20 @@ impl Memory {
                     MemoryFlush {
                         host_memory: unsafe { ptr.offset(range.start as _) },
                         sync_range: SyncRange::Partial(local_start..(local_start + local_len)),
-                        buffer: buffer.raw
+                        buffer: buffer.raw,
                     }.do_flush(&context);
                 }
             }
         }
     }
 
-    pub fn invalidate(&self, context: &ComPtr<d3d11::ID3D11DeviceContext>, range: Range<u64>, working_buffer: ComPtr<d3d11::ID3D11Buffer>, working_buffer_size: u64) {
+    pub fn invalidate(
+        &self,
+        context: &ComPtr<d3d11::ID3D11DeviceContext>,
+        range: Range<u64>,
+        working_buffer: ComPtr<d3d11::ID3D11Buffer>,
+        working_buffer_size: u64,
+    ) {
         for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
             if let Some(range) = intersection(&range, &buffer_range) {
                 MemoryInvalidate {
@@ -1890,7 +2142,7 @@ impl Memory {
                     working_buffer_size,
                     host_memory: self.mapped_ptr.borrow().unwrap(),
                     sync_range: range.clone(),
-                    buffer: buffer.raw
+                    buffer: buffer.raw,
                 }.do_invalidate(&context);
             }
         }
@@ -1928,7 +2180,7 @@ impl hal::pool::RawCommandPool<Backend> for CommandPool {
 //#[derivative(Debug)]
 pub enum ShaderModule {
     Dxbc(Vec<u8>),
-    Spirv(Vec<u8>)
+    Spirv(Vec<u8>),
 }
 
 // TODO: temporary
@@ -1938,8 +2190,8 @@ impl ::std::fmt::Debug for ShaderModule {
     }
 }
 
-unsafe impl Send for ShaderModule { }
-unsafe impl Sync for ShaderModule { }
+unsafe impl Send for ShaderModule {}
+unsafe impl Sync for ShaderModule {}
 
 #[derive(Debug, Clone)]
 pub struct SubpassDesc {
@@ -1951,7 +2203,8 @@ pub struct SubpassDesc {
 
 impl SubpassDesc {
     pub(crate) fn is_using(&self, at_id: pass::AttachmentId) -> bool {
-        self.color_attachments.iter()
+        self.color_attachments
+            .iter()
             .chain(self.depth_stencil_attachment.iter())
             .chain(self.input_attachments.iter())
             .chain(self.resolve_attachments.iter())
@@ -2015,7 +2268,7 @@ pub struct UnboundImage {
     usage: image::Usage,
     flags: image::StorageFlags,
     bind: d3d11::D3D11_BIND_FLAG,
-    requirements: memory::Requirements
+    requirements: memory::Requirements,
 }
 
 #[derive(Derivative)]
@@ -2034,82 +2287,100 @@ pub struct Image {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct InternalImage {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     raw: *mut d3d11::ID3D11Resource,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     copy_srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
 
     /// Contains UAVs for all subresources
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     unordered_access_views: Vec<ComPtr<d3d11::ID3D11UnorderedAccessView>>,
 
     /// Contains DSVs for all subresources
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     depth_stencil_views: Vec<ComPtr<d3d11::ID3D11DepthStencilView>>,
 
     /// Contains RTVs for all subresources
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     render_target_views: Vec<ComPtr<d3d11::ID3D11RenderTargetView>>,
 }
 
-unsafe impl Send for Image { }
-unsafe impl Sync for Image { }
+unsafe impl Send for Image {}
+unsafe impl Sync for Image {}
 
 impl Image {
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
         mip_level + (layer * self.num_mips as UINT)
     }
 
-    pub fn get_uav(&self, mip_level: image::Level, _layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11UnorderedAccessView>> {
-        self.internal.unordered_access_views.get(self.calc_subresource(mip_level as _, 0) as usize)
+    pub fn get_uav(
+        &self,
+        mip_level: image::Level,
+        _layer: image::Layer,
+    ) -> Option<&ComPtr<d3d11::ID3D11UnorderedAccessView>> {
+        self.internal
+            .unordered_access_views
+            .get(self.calc_subresource(mip_level as _, 0) as usize)
     }
 
-    pub fn get_dsv(&self, mip_level: image::Level, layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11DepthStencilView>> {
-        self.internal.depth_stencil_views.get(self.calc_subresource(mip_level as _, layer as _) as usize)
+    pub fn get_dsv(
+        &self,
+        mip_level: image::Level,
+        layer: image::Layer,
+    ) -> Option<&ComPtr<d3d11::ID3D11DepthStencilView>> {
+        self.internal
+            .depth_stencil_views
+            .get(self.calc_subresource(mip_level as _, layer as _) as usize)
     }
 
-    pub fn get_rtv(&self, mip_level: image::Level, layer: image::Layer) -> Option<&ComPtr<d3d11::ID3D11RenderTargetView>> {
-        self.internal.render_target_views.get(self.calc_subresource(mip_level as _, layer as _) as usize)
+    pub fn get_rtv(
+        &self,
+        mip_level: image::Level,
+        layer: image::Layer,
+    ) -> Option<&ComPtr<d3d11::ID3D11RenderTargetView>> {
+        self.internal
+            .render_target_views
+            .get(self.calc_subresource(mip_level as _, layer as _) as usize)
     }
 }
 
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct ImageView {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     rtv_handle: Option<ComPtr<d3d11::ID3D11RenderTargetView>>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     srv_handle: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     dsv_handle: Option<ComPtr<d3d11::ID3D11DepthStencilView>>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     uav_handle: Option<ComPtr<d3d11::ID3D11UnorderedAccessView>>,
 }
 
-unsafe impl Send for ImageView { }
-unsafe impl Sync for ImageView { }
+unsafe impl Send for ImageView {}
+unsafe impl Sync for ImageView {}
 
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct Sampler {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     sampler_handle: ComPtr<d3d11::ID3D11SamplerState>,
 }
 
-unsafe impl Send for Sampler { }
-unsafe impl Sync for Sampler { }
+unsafe impl Send for Sampler {}
+unsafe impl Sync for Sampler {}
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct ComputePipeline {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     cs: ComPtr<d3d11::ID3D11ComputeShader>,
 }
 
-unsafe impl Send for ComputePipeline { }
-unsafe impl Sync for ComputePipeline { }
+unsafe impl Send for ComputePipeline {}
+unsafe impl Sync for ComputePipeline {}
 
 /// NOTE: some objects are hashed internally and reused when created with the
 ///       same params[0], need to investigate which interfaces this applies
@@ -2120,28 +2391,31 @@ unsafe impl Sync for ComputePipeline { }
 #[derivative(Debug)]
 pub struct GraphicsPipeline {
     // TODO: gs, hs, ds
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     vs: ComPtr<d3d11::ID3D11VertexShader>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     ps: Option<ComPtr<d3d11::ID3D11PixelShader>>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     topology: d3d11::D3D11_PRIMITIVE_TOPOLOGY,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     input_layout: ComPtr<d3d11::ID3D11InputLayout>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     rasterizer_state: ComPtr<d3d11::ID3D11RasterizerState>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     blend_state: ComPtr<d3d11::ID3D11BlendState>,
-    #[derivative(Debug="ignore")]
-    depth_stencil_state: Option<(ComPtr<d3d11::ID3D11DepthStencilState>, pso::State<pso::StencilValue>)>,
+    #[derivative(Debug = "ignore")]
+    depth_stencil_state: Option<(
+        ComPtr<d3d11::ID3D11DepthStencilState>,
+        pso::State<pso::StencilValue>,
+    )>,
     baked_states: pso::BakedStates,
     required_bindings: u32,
     max_vertex_bindings: u32,
     strides: Vec<u32>,
 }
 
-unsafe impl Send for GraphicsPipeline { }
-unsafe impl Sync for GraphicsPipeline { }
+unsafe impl Send for GraphicsPipeline {}
+unsafe impl Sync for GraphicsPipeline {}
 
 #[derive(Clone, Debug)]
 struct PipelineBinding {
@@ -2156,7 +2430,7 @@ struct RegisterMapping {
     ty: pso::DescriptorType,
     spirv_binding: u32,
     hlsl_register: u8,
-    combined: bool
+    combined: bool,
 }
 
 #[derive(Clone, Debug)]
@@ -2229,9 +2503,10 @@ impl CoherentBuffers {
                 buffers.push(sync_range);
             }
 
-
             if let Some(disjoint) = buffer.internal.disjoint_cb {
-                let pos = buffers.iter().position(|sync| disjoint == sync.device_buffer);
+                let pos = buffers
+                    .iter()
+                    .position(|sync| disjoint == sync.device_buffer);
 
                 let sync_range = CoherentBufferFlushRange {
                     device_buffer: disjoint,
@@ -2269,7 +2544,6 @@ impl CoherentBuffers {
             }
         }
     }
-
 }
 
 /// Newtype around a common interface that all bindable resources inherit from.
@@ -2294,33 +2568,49 @@ impl DescriptorSet {
     fn get_handle_offset(&self, target_binding: u32) -> (pso::DescriptorType, u8, u8) {
         use pso::DescriptorType::*;
 
-        let mapping = self.register_remap.mapping.iter().find(|&mapping| target_binding == mapping.spirv_binding).unwrap();
+        let mapping = self
+            .register_remap
+            .mapping
+            .iter()
+            .find(|&mapping| target_binding == mapping.spirv_binding)
+            .unwrap();
 
         let (ty, register) = (mapping.ty, mapping.hlsl_register);
 
         match ty {
             Sampler => {
                 let (ty, t_reg) = if mapping.combined {
-                    let combined_mapping = self.register_remap.mapping.iter().find(|&mapping| mapping.ty == SampledImage && target_binding == mapping.spirv_binding).unwrap();
+                    let combined_mapping = self
+                        .register_remap
+                        .mapping
+                        .iter()
+                        .find(|&mapping| {
+                            mapping.ty == SampledImage && target_binding == mapping.spirv_binding
+                        })
+                        .unwrap();
                     (CombinedImageSampler, combined_mapping.hlsl_register)
                 } else {
                     (ty, 0)
                 };
 
                 (ty, register, self.register_remap.num_s + t_reg)
-            },
-            SampledImage | UniformTexelBuffer => {
-
-                (ty, self.register_remap.num_s + register, 0)
-            },
-            UniformBuffer | UniformBufferDynamic => {
-                (ty, self.register_remap.num_s + self.register_remap.num_t + register, 0)
-            },
-            StorageTexelBuffer | StorageBuffer | InputAttachment | StorageBufferDynamic |
-            StorageImage => {
-                (ty, self.register_remap.num_s + self.register_remap.num_t + self.register_remap.num_c + register, 0)
-            },
-            CombinedImageSampler => unreachable!()
+            }
+            SampledImage | UniformTexelBuffer => (ty, self.register_remap.num_s + register, 0),
+            UniformBuffer | UniformBufferDynamic => (
+                ty,
+                self.register_remap.num_s + self.register_remap.num_t + register,
+                0,
+            ),
+            StorageTexelBuffer | StorageBuffer | InputAttachment | StorageBufferDynamic
+            | StorageImage => (
+                ty,
+                self.register_remap.num_s
+                    + self.register_remap.num_t
+                    + self.register_remap.num_c
+                    + register,
+                0,
+            ),
+            CombinedImageSampler => unreachable!(),
         }
     }
 
@@ -2344,7 +2634,7 @@ impl DescriptorSet {
 #[derive(Debug)]
 pub struct DescriptorPool {
     handles: Vec<Descriptor>,
-    allocator: RangeAllocator<usize>
+    allocator: RangeAllocator<usize>,
 }
 
 unsafe impl Send for DescriptorPool {}
@@ -2354,41 +2644,48 @@ impl DescriptorPool {
     pub fn with_capacity(size: usize) -> Self {
         DescriptorPool {
             handles: vec![Descriptor(ptr::null_mut()); size],
-            allocator: RangeAllocator::new(0..size)
+            allocator: RangeAllocator::new(0..size),
         }
     }
 }
 
 impl hal::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
+    fn allocate_set(
+        &mut self,
+        layout: &DescriptorSetLayout,
+    ) -> Result<DescriptorSet, pso::AllocationError> {
         // TODO: make sure this doesn't contradict vulkan semantics
         // if layout has 0 bindings, allocate 1 handle anyway
         let len = layout.handle_count.max(1) as _;
 
-        self.allocator.allocate_range(len).map(|range| {
-            for handle in &mut self.handles[range.clone()] {
-                *handle = Descriptor(ptr::null_mut());
-            }
+        self.allocator
+            .allocate_range(len)
+            .map(|range| {
+                for handle in &mut self.handles[range.clone()] {
+                    *handle = Descriptor(ptr::null_mut());
+                }
 
-            DescriptorSet {
-                offset: range.start,
-                len,
-                handles: unsafe { self.handles.as_mut_ptr().offset(range.start as _) },
-                register_remap: layout.register_remap.clone(),
-                coherent_buffers: Mutex::new(CoherentBuffers {
-                    flush_coherent_buffers: RefCell::new(Vec::new()),
-                    invalidate_coherent_buffers: RefCell::new(Vec::new()),
-                })
-            }
-        }).map_err(|_| pso::AllocationError::OutOfPoolMemory)
+                DescriptorSet {
+                    offset: range.start,
+                    len,
+                    handles: unsafe { self.handles.as_mut_ptr().offset(range.start as _) },
+                    register_remap: layout.register_remap.clone(),
+                    coherent_buffers: Mutex::new(CoherentBuffers {
+                        flush_coherent_buffers: RefCell::new(Vec::new()),
+                        invalidate_coherent_buffers: RefCell::new(Vec::new()),
+                    }),
+                }
+            })
+            .map_err(|_| pso::AllocationError::OutOfPoolMemory)
     }
 
     fn free_sets<I>(&mut self, descriptor_sets: I)
     where
-        I: IntoIterator<Item = DescriptorSet>
+        I: IntoIterator<Item = DescriptorSet>,
     {
         for set in descriptor_sets {
-            self.allocator.free_range(set.offset..(set.offset + set.len))
+            self.allocator
+                .free_range(set.offset..(set.offset + set.len))
         }
     }
 
