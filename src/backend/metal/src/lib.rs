@@ -150,7 +150,7 @@ impl hal::Instance for Instance {
                             hal::adapter::DeviceType::IntegratedGpu                        
                         } else {
                             hal::adapter::DeviceType::DiscreteGpu  
-                        };
+                        },
                     software_rendering: false,
                 },
                 physical_device: device::PhysicalDevice::new(Arc::new(Shared::new(dev))),
