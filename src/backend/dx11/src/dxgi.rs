@@ -1,4 +1,5 @@
 use hal::AdapterInfo;
+use hal::adapter::DeviceType;
 
 use winapi::shared::guiddef::GUID;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_5, winerror};
@@ -7,10 +8,10 @@ use winapi::Interface;
 
 use wio::com::ComPtr;
 
-use std::ptr;
+use std::ffi::OsString;
 use std::mem;
 use std::os::windows::ffi::OsStringExt;
-use std::ffi::OsString;
+use std::ptr;
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum DxgiVersion {
@@ -70,12 +71,7 @@ pub(crate) enum DxgiVersion {
 fn create_dxgi_factory1(guid: &GUID) -> Result<ComPtr<dxgi::IDXGIFactory>, winerror::HRESULT> {
     let mut factory: *mut IUnknown = ptr::null_mut();
 
-    let hr = unsafe {
-        dxgi::CreateDXGIFactory1(
-            guid,
-            &mut factory as *mut *mut _ as *mut *mut _
-        )
-    };
+    let hr = unsafe { dxgi::CreateDXGIFactory1(guid, &mut factory as *mut *mut _ as *mut *mut _) };
 
     if winerror::SUCCEEDED(hr) {
         Ok(unsafe { ComPtr::from_raw(factory as *mut _) })
@@ -84,7 +80,8 @@ fn create_dxgi_factory1(guid: &GUID) -> Result<ComPtr<dxgi::IDXGIFactory>, winer
     }
 }
 
-pub(crate) fn get_dxgi_factory() -> Result<(ComPtr<dxgi::IDXGIFactory>, DxgiVersion), winerror::HRESULT> {
+pub(crate) fn get_dxgi_factory(
+) -> Result<(ComPtr<dxgi::IDXGIFactory>, DxgiVersion), winerror::HRESULT> {
     // TODO: do we even need `create_dxgi_factory2`?
     if let Ok(factory) = create_dxgi_factory1(&dxgi1_5::IDXGIFactory5::uuidof()) {
         return Ok((factory, DxgiVersion::Dxgi1_5));
@@ -108,18 +105,20 @@ pub(crate) fn get_dxgi_factory() -> Result<(ComPtr<dxgi::IDXGIFactory>, DxgiVers
 
     // TODO: any reason why above would fail and this wouldnt?
     match create_dxgi_factory1(&dxgi::IDXGIFactory::uuidof()) {
-        Ok(factory) => {
-            Ok((factory, DxgiVersion::Dxgi1_0))
-        },
-        Err(hr) => Err(hr)
+        Ok(factory) => Ok((factory, DxgiVersion::Dxgi1_0)),
+        Err(hr) => Err(hr),
     }
 }
 
-fn enum_adapters1(idx: u32, factory: *mut dxgi::IDXGIFactory) -> Result<ComPtr<dxgi::IDXGIAdapter>, winerror::HRESULT> {
+fn enum_adapters1(
+    idx: u32,
+    factory: *mut dxgi::IDXGIFactory,
+) -> Result<ComPtr<dxgi::IDXGIAdapter>, winerror::HRESULT> {
     let mut adapter: *mut dxgi::IDXGIAdapter = ptr::null_mut();
 
     let hr = unsafe {
-        (*(factory as *mut dxgi::IDXGIFactory1)).EnumAdapters1(idx, &mut adapter as *mut *mut _ as *mut *mut _)
+        (*(factory as *mut dxgi::IDXGIFactory1))
+            .EnumAdapters1(idx, &mut adapter as *mut *mut _ as *mut *mut _)
     };
 
     if winerror::SUCCEEDED(hr) {
@@ -133,7 +132,9 @@ fn get_adapter_desc(adapter: *mut dxgi::IDXGIAdapter, version: DxgiVersion) -> A
     match version {
         DxgiVersion::Dxgi1_0 => {
             let mut desc: dxgi::DXGI_ADAPTER_DESC1 = unsafe { mem::zeroed() };
-            unsafe { (*(adapter as *mut dxgi::IDXGIAdapter1)).GetDesc1(&mut desc); }
+            unsafe {
+                (*(adapter as *mut dxgi::IDXGIAdapter1)).GetDesc1(&mut desc);
+            }
 
             let device_name = {
                 let len = desc.Description.iter().take_while(|&&c| c != 0).count();
@@ -145,15 +146,22 @@ fn get_adapter_desc(adapter: *mut dxgi::IDXGIAdapter, version: DxgiVersion) -> A
                 name: device_name,
                 vendor: desc.VendorId as usize,
                 device: desc.DeviceId as usize,
+                device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
+                    DeviceType::VirtualGpu
+                } else {
+                    DeviceType::DiscreteGpu
+                },
                 software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
             }
-        },
-        DxgiVersion::Dxgi1_2 | 
-        DxgiVersion::Dxgi1_3 | 
-        DxgiVersion::Dxgi1_4 | 
-        DxgiVersion::Dxgi1_5 => {
+        }
+        DxgiVersion::Dxgi1_2
+        | DxgiVersion::Dxgi1_3
+        | DxgiVersion::Dxgi1_4
+        | DxgiVersion::Dxgi1_5 => {
             let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { mem::zeroed() };
-            unsafe { (*(adapter as *mut dxgi1_2::IDXGIAdapter2)).GetDesc2(&mut desc); }
+            unsafe {
+                (*(adapter as *mut dxgi1_2::IDXGIAdapter2)).GetDesc2(&mut desc);
+            }
 
             let device_name = {
                 let len = desc.Description.iter().take_while(|&&c| c != 0).count();
@@ -165,21 +173,28 @@ fn get_adapter_desc(adapter: *mut dxgi::IDXGIAdapter, version: DxgiVersion) -> A
                 name: device_name,
                 vendor: desc.VendorId as usize,
                 device: desc.DeviceId as usize,
+                device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
+                    DeviceType::VirtualGpu
+                } else {
+                    DeviceType::DiscreteGpu
+                },
                 software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
             }
         }
     }
 }
 
-pub(crate) fn get_adapter(idx: u32, factory: *mut dxgi::IDXGIFactory, version: DxgiVersion) -> Result<(ComPtr<dxgi::IDXGIAdapter>, AdapterInfo), winerror::HRESULT> {
+pub(crate) fn get_adapter(
+    idx: u32,
+    factory: *mut dxgi::IDXGIFactory,
+    version: DxgiVersion,
+) -> Result<(ComPtr<dxgi::IDXGIAdapter>, AdapterInfo), winerror::HRESULT> {
     let adapter = match version {
-        DxgiVersion::Dxgi1_0 | 
-        DxgiVersion::Dxgi1_2 | 
-        DxgiVersion::Dxgi1_3 | 
-        DxgiVersion::Dxgi1_4 | 
-        DxgiVersion::Dxgi1_5 => {
-            enum_adapters1(idx, factory)?
-        },
+        DxgiVersion::Dxgi1_0
+        | DxgiVersion::Dxgi1_2
+        | DxgiVersion::Dxgi1_3
+        | DxgiVersion::Dxgi1_4
+        | DxgiVersion::Dxgi1_5 => enum_adapters1(idx, factory)?,
     };
 
     let desc = get_adapter_desc(adapter.as_raw(), version);
