@@ -96,6 +96,22 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     fn limits(&self) -> Limits;
 }
 
+
+/// Supported physical device types
+#[derive(Clone,PartialEq, Eq, Debug)]
+pub enum DeviceType {
+    /// Other
+    Other = 0,
+    /// Integrated
+    IntegratedGpu = 1,
+    /// Discrete
+    DiscreteGpu = 2,
+    /// Virtual
+    VirtualGpu = 3,
+    /// Cpu
+    Cpu = 4
+}
+
 /// Metadata about a backend adapter.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -106,8 +122,11 @@ pub struct AdapterInfo {
     pub vendor: usize,
     /// PCI id of the adapter
     pub device: usize,
+    /// Type of device
+    pub device_type: DeviceType,
     /// Whether or not the device is based on a software rasterizer
     pub software_rendering: bool,
+
 }
 
 /// The list of `Adapter` instances is obtained by calling `Instance::enumerate_adapters()`.

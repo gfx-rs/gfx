@@ -145,6 +145,12 @@ impl hal::Instance for Instance {
                     name: dev.name().into(),
                     vendor: 0,
                     device: 0,
+                    device_type: 
+                        if dev.is_low_power() {
+                            hal::adapter::DeviceType::IntegratedGpu                        
+                        } else {
+                            hal::adapter::DeviceType::DiscreteGpu  
+                        };
                     software_rendering: false,
                 },
                 physical_device: device::PhysicalDevice::new(Arc::new(Shared::new(dev))),

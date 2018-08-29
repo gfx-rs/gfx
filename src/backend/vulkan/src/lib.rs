@@ -31,6 +31,7 @@ use ash::vk;
 use hal::{format, image, memory, queue};
 use hal::{Features, SwapImageIndex, Limits, PatchSize, QueueType};
 use hal::error::{DeviceCreationError, HostExecutionError};
+use hal::adapter::DeviceType;
 
 use std::{fmt, mem, ptr};
 use std::borrow::Borrow;
@@ -286,6 +287,13 @@ impl hal::Instance for Instance {
                     },
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
+                    device_type: match properties.device_type {
+                        ash::vk::PhysicalDeviceType::Other => DeviceType::Other,
+                        ash::vk::PhysicalDeviceType::IntegratedGpu => DeviceType::IntegratedGpu,
+                        ash::vk::PhysicalDeviceType::DiscreteGpu => DeviceType::DiscreteGpu,
+                        ash::vk::PhysicalDeviceType::VirtualGpu => DeviceType::VirtualGpu,
+                        ash::vk::PhysicalDeviceType::Cpu => DeviceType::Cpu
+                    },
                     software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
                 };
                 let physical_device = PhysicalDevice {
