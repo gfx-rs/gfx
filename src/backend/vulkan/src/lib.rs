@@ -6,9 +6,9 @@ extern crate byteorder;
 extern crate gfx_hal as hal;
 #[macro_use]
 extern crate lazy_static;
-extern crate smallvec;
 #[cfg(feature = "use-rtld-next")]
 extern crate shared_library;
+extern crate smallvec;
 
 #[cfg(windows)]
 extern crate winapi;
@@ -22,25 +22,26 @@ extern crate xcb;
 #[cfg(feature = "glsl-to-spirv")]
 extern crate glsl_to_spirv;
 
+use ash::extensions as ext;
+use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
+use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::{Entry, LoadingError};
-use ash::extensions as ext;
-use ash::version::{EntryV1_0, DeviceV1_0, InstanceV1_0, V1_0};
-use ash::vk;
 
-use hal::{format, image, memory, queue};
-use hal::{Features, SwapImageIndex, Limits, PatchSize, QueueType};
+use hal::adapter::DeviceType;
 use hal::error::{DeviceCreationError, HostExecutionError};
+use hal::{format, image, memory, queue};
+use hal::{Features, Limits, PatchSize, QueueType, SwapImageIndex};
 
-use std::{fmt, mem, ptr};
 use std::borrow::Borrow;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
+use std::{fmt, mem, ptr};
 
 #[cfg(feature = "use-rtld-next")]
-use shared_library::dynamic_library::{DynamicLibrary, SpecialHandles};
-#[cfg(feature = "use-rtld-next")]
 use ash::{EntryCustom, LoadingError};
+#[cfg(feature = "use-rtld-next")]
+use shared_library::dynamic_library::{DynamicLibrary, SpecialHandles};
 
 mod command;
 mod conv;
@@ -51,20 +52,13 @@ mod pool;
 mod result;
 mod window;
 
-const LAYERS: &'static [&'static str] = &[
-    #[cfg(debug_assertions)]
-    "VK_LAYER_LUNARG_standard_validation",
-];
-const EXTENSIONS: &'static [&'static str] = &[
-    #[cfg(debug_assertions)]
-    "VK_EXT_debug_report",
-];
-const DEVICE_EXTENSIONS: &'static [&'static str] = &[
-    vk::VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-];
+const LAYERS: &'static [&'static str] = &[#[cfg(debug_assertions)]
+"VK_LAYER_LUNARG_standard_validation"];
+const EXTENSIONS: &'static [&'static str] = &[#[cfg(debug_assertions)]
+"VK_EXT_debug_report"];
+const DEVICE_EXTENSIONS: &'static [&'static str] = &[vk::VK_KHR_SWAPCHAIN_EXTENSION_NAME];
 const SURFACE_EXTENSIONS: &'static [&'static str] = &[
     vk::VK_KHR_SURFACE_EXTENSION_NAME,
-
     // Platform-specific WSI extensions
     vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
     vk::VK_KHR_XCB_SURFACE_EXTENSION_NAME,
@@ -93,7 +87,10 @@ lazy_static! {
         );
 }
 
-pub struct RawInstance(pub ash::Instance<V1_0>, Option<(ext::DebugReport, vk::DebugReportCallbackEXT)>);
+pub struct RawInstance(
+    pub ash::Instance<V1_0>,
+    Option<(ext::DebugReport, vk::DebugReportCallbackEXT)>,
+);
 impl Drop for RawInstance {
     fn drop(&mut self) {
         unsafe {
@@ -117,11 +114,14 @@ pub struct Instance {
 }
 
 fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
-    if flags.subset(vk::QUEUE_GRAPHICS_BIT | vk::QUEUE_COMPUTE_BIT) { // TRANSFER_BIT optional
+    if flags.subset(vk::QUEUE_GRAPHICS_BIT | vk::QUEUE_COMPUTE_BIT) {
+        // TRANSFER_BIT optional
         QueueType::General
-    } else if flags.subset(vk::QUEUE_GRAPHICS_BIT) { // TRANSFER_BIT optional
+    } else if flags.subset(vk::QUEUE_GRAPHICS_BIT) {
+        // TRANSFER_BIT optional
         QueueType::Graphics
-    } else if flags.subset(vk::QUEUE_COMPUTE_BIT) { // TRANSFER_BIT optional
+    } else if flags.subset(vk::QUEUE_COMPUTE_BIT) {
+        // TRANSFER_BIT optional
         QueueType::Compute
     } else if flags.subset(vk::QUEUE_TRANSFER_BIT) {
         QueueType::Transfer
@@ -157,7 +157,9 @@ extern "system" fn callback(
 impl Instance {
     pub fn create(name: &str, version: u32) -> Self {
         // TODO: return errors instead of panic
-        let entry = VK_ENTRY.as_ref().expect("Unable to load Vulkan entry points");
+        let entry = VK_ENTRY
+            .as_ref()
+            .expect("Unable to load Vulkan entry points");
 
         let app_name = CString::new(name).unwrap();
         let app_info = vk::ApplicationInfo {
@@ -186,7 +188,8 @@ impl Instance {
                 instance_extensions
                     .iter()
                     .find(|inst_ext| unsafe {
-                        CStr::from_ptr(inst_ext.extension_name.as_ptr()).to_bytes() == ext.as_bytes()
+                        CStr::from_ptr(inst_ext.extension_name.as_ptr()).to_bytes()
+                            == ext.as_bytes()
                     })
                     .map(|_| ext)
                     .or_else(|| {
@@ -203,7 +206,8 @@ impl Instance {
                 instance_layers
                     .iter()
                     .find(|inst_layer| unsafe {
-                        CStr::from_ptr(inst_layer.layer_name.as_ptr()).to_bytes() == layer.as_bytes()
+                        CStr::from_ptr(inst_layer.layer_name.as_ptr()).to_bytes()
+                            == layer.as_bytes()
                     })
                     .map(|_| layer)
                     .or_else(|| {
@@ -220,10 +224,7 @@ impl Instance {
                 .map(|&s| CString::new(s).unwrap())
                 .collect::<Vec<_>>();
 
-            let str_pointers = cstrings
-                .iter()
-                .map(|s| s.as_ptr())
-                .collect::<Vec<_>>();
+            let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
 
             let create_info = vk::InstanceCreateInfo {
                 s_type: vk::StructureType::InstanceCreateInfo,
@@ -236,9 +237,8 @@ impl Instance {
                 pp_enabled_extension_names: str_pointers[layers.len()..].as_ptr(),
             };
 
-            unsafe {
-                entry.create_instance(&create_info, None)
-            }.expect("Unable to create Vulkan instance")
+            unsafe { entry.create_instance(&create_info, None) }
+                .expect("Unable to create Vulkan instance")
         };
 
         #[cfg(debug_assertions)]
@@ -247,15 +247,13 @@ impl Instance {
             let info = vk::DebugReportCallbackCreateInfoEXT {
                 s_type: vk::StructureType::DebugReportCallbackCreateInfoExt,
                 p_next: ptr::null(),
-                flags: vk::DEBUG_REPORT_WARNING_BIT_EXT |
-                       vk::DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT |
-                       vk::DEBUG_REPORT_ERROR_BIT_EXT,
+                flags: vk::DEBUG_REPORT_WARNING_BIT_EXT
+                    | vk::DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT
+                    | vk::DEBUG_REPORT_ERROR_BIT_EXT,
                 pfn_callback: callback,
                 p_user_data: ptr::null_mut(),
             };
-            let handle = unsafe {
-                ext.create_debug_report_callback_ext(&info, None)
-            }.unwrap();
+            let handle = unsafe { ext.create_debug_report_callback_ext(&info, None) }.unwrap();
             Some((ext, handle))
         };
         #[cfg(not(debug_assertions))]
@@ -272,7 +270,9 @@ impl hal::Instance for Instance {
     type Backend = Backend;
 
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
-        self.raw.0.enumerate_physical_devices()
+        self.raw
+            .0
+            .enumerate_physical_devices()
             .expect("Unable to enumerate adapter")
             .into_iter()
             .map(|device| {
@@ -286,6 +286,13 @@ impl hal::Instance for Instance {
                     },
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
+                    device_type: match properties.device_type {
+                        ash::vk::PhysicalDeviceType::Other => DeviceType::Other,
+                        ash::vk::PhysicalDeviceType::IntegratedGpu => DeviceType::IntegratedGpu,
+                        ash::vk::PhysicalDeviceType::DiscreteGpu => DeviceType::DiscreteGpu,
+                        ash::vk::PhysicalDeviceType::VirtualGpu => DeviceType::VirtualGpu,
+                        ash::vk::PhysicalDeviceType::Cpu => DeviceType::Cpu,
+                    },
                     software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
                 };
                 let physical_device = PhysicalDevice {
@@ -293,17 +300,18 @@ impl hal::Instance for Instance {
                     handle: device,
                     properties,
                 };
-                let queue_families = self.raw.0
+                let queue_families = self
+                    .raw
+                    .0
                     .get_physical_device_queue_family_properties(device)
                     .into_iter()
                     .enumerate()
-                    .map(|(i, properties)| {
-                        QueueFamily {
-                            properties,
-                            device,
-                            index: i as u32,
-                        }
-                    }).collect();
+                    .map(|(i, properties)| QueueFamily {
+                        properties,
+                        device,
+                        index: i as u32,
+                    })
+                    .collect();
                 hal::Adapter {
                     info,
                     physical_device,
@@ -333,7 +341,6 @@ impl hal::queue::QueueFamily for QueueFamily {
     }
 }
 
-
 pub struct PhysicalDevice {
     instance: Arc<RawInstance>,
     handle: vk::PhysicalDevice,
@@ -342,7 +349,8 @@ pub struct PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        &self, families: &[(&QueueFamily, &[hal::QueuePriority])]
+        &self,
+        families: &[(&QueueFamily, &[hal::QueuePriority])],
     ) -> Result<hal::Gpu<Backend>, DeviceCreationError> {
         let family_infos = families
             .iter()
@@ -366,10 +374,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 .map(|&s| CString::new(s).unwrap())
                 .collect::<Vec<_>>();
 
-            let str_pointers = cstrings
-                .iter()
-                .map(|s| s.as_ptr())
-                .collect::<Vec<_>>();
+            let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
 
             // TODO: derive from `features`
             let enabled_features = unsafe { mem::zeroed() };
@@ -390,11 +395,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 self.instance
                     .0
                     .create_device(self.handle, &info, None)
-                    .map_err(|err| {
-                        match err {
-                            ash::DeviceError::LoadError(err) => panic!("{:?}", err),
-                            ash::DeviceError::VkError(err) => Into::<result::Error>::into(err),
-                        }
+                    .map_err(|err| match err {
+                        ash::DeviceError::LoadError(err) => panic!("{:?}", err),
+                        ash::DeviceError::VkError(err) => Into::<result::Error>::into(err),
                     })
                     .map_err(Into::<DeviceCreationError>::into)?
             }
@@ -402,11 +405,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         let swapchain_fn = vk::SwapchainFn::load(|name| unsafe {
             mem::transmute(
-                self.instance.0
-                    .get_device_proc_addr(
-                        device_raw.handle(),
-                        name.as_ptr(),
-                    )
+                self.instance
+                    .0
+                    .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
             )
         }).unwrap();
 
@@ -420,10 +421,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .map(|&(family, ref priorities)| {
                 let family_index = family.index;
                 let mut family_raw = hal::backend::RawQueueGroup::new(family.clone());
-                for id in 0 .. priorities.len() {
-                    let queue_raw = unsafe {
-                        device_arc.0.get_device_queue(family_index, id as _)
-                    };
+                for id in 0..priorities.len() {
+                    let queue_raw = unsafe { device_arc.0.get_device_queue(family_index, id as _) };
                     family_raw.add_queue(CommandQueue {
                         raw: Arc::new(queue_raw),
                         device: device_arc.clone(),
@@ -441,11 +440,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
-        let properties = self.instance.0
-            .get_physical_device_format_properties(
-                self.handle,
-                format.map_or(vk::Format::Undefined, conv::map_format),
-            );
+        let properties = self.instance.0.get_physical_device_format_properties(
+            self.handle,
+            format.map_or(vk::Format::Undefined, conv::map_format),
+        );
 
         format::Properties {
             linear_tiling: conv::map_image_features(properties.linear_tiling_features),
@@ -455,24 +453,26 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, format: format::Format, dimensions: u8, tiling: image::Tiling,
-        usage: image::Usage, storage_flags: image::StorageFlags,
+        &self,
+        format: format::Format,
+        dimensions: u8,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
-        match self.instance.0
-            .get_physical_device_image_format_properties(
-                self.handle,
-                conv::map_format(format),
-                match dimensions {
-                    1 => vk::ImageType::Type1d,
-                    2 => vk::ImageType::Type2d,
-                    3 => vk::ImageType::Type3d,
-                    _ => panic!("Unexpected image dimensionality: {}", dimensions)
-                },
-                conv::map_tiling(tiling),
-                conv::map_image_usage(usage),
-                conv::map_image_flags(storage_flags),
-            )
-        {
+        match self.instance.0.get_physical_device_image_format_properties(
+            self.handle,
+            conv::map_format(format),
+            match dimensions {
+                1 => vk::ImageType::Type1d,
+                2 => vk::ImageType::Type2d,
+                3 => vk::ImageType::Type3d,
+                _ => panic!("Unexpected image dimensionality: {}", dimensions),
+            },
+            conv::map_tiling(tiling),
+            conv::map_image_usage(usage),
+            conv::map_image_flags(storage_flags),
+        ) {
             Ok(props) => Some(image::FormatProperties {
                 max_extent: image::Extent {
                     width: props.max_extent.width,
@@ -493,30 +493,48 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
-        let mem_properties = self.instance.0.get_physical_device_memory_properties(self.handle);
+        let mem_properties = self
+            .instance
+            .0
+            .get_physical_device_memory_properties(self.handle);
         let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize]
             .iter()
-            .map(|mem| mem.size).collect();
-        let memory_types = mem_properties
-            .memory_types[..mem_properties.memory_type_count as usize]
+            .map(|mem| mem.size)
+            .collect();
+        let memory_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize]
             .iter()
             .map(|mem| {
                 use memory::Properties;
                 let mut type_flags = Properties::empty();
 
-                if mem.property_flags.intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+                if mem
+                    .property_flags
+                    .intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+                {
                     type_flags |= Properties::DEVICE_LOCAL;
                 }
-                if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_COHERENT_BIT) {
+                if mem
+                    .property_flags
+                    .intersects(vk::MEMORY_PROPERTY_HOST_COHERENT_BIT)
+                {
                     type_flags |= Properties::COHERENT;
                 }
-                if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_CACHED_BIT) {
+                if mem
+                    .property_flags
+                    .intersects(vk::MEMORY_PROPERTY_HOST_CACHED_BIT)
+                {
                     type_flags |= Properties::CPU_CACHED;
                 }
-                if mem.property_flags.intersects(vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+                if mem
+                    .property_flags
+                    .intersects(vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+                {
                     type_flags |= Properties::CPU_VISIBLE;
                 }
-                if mem.property_flags.intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT) {
+                if mem
+                    .property_flags
+                    .intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT)
+                {
                     type_flags |= Properties::LAZILY_ALLOCATED;
                 }
 
@@ -535,9 +553,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn features(&self) -> Features {
         // see https://github.com/gfx-rs/gfx/issues/1930
-        let is_windows_intel_kaby = cfg!(windows) &&
-            self.properties.vendor_id == info::intel::VENDOR &&
-            self.properties.device_id & info::intel::DEVICE_KABY_LAKE_MASK == info::intel::DEVICE_KABY_LAKE_MASK;
+        let is_windows_intel_kaby = cfg!(windows)
+            && self.properties.vendor_id == info::intel::VENDOR
+            && self.properties.device_id & info::intel::DEVICE_KABY_LAKE_MASK
+                == info::intel::DEVICE_KABY_LAKE_MASK;
 
         let features = self.instance.0.get_physical_device_features(self.handle);
         let mut bits = Features::empty();
@@ -635,8 +654,16 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_texel_elements: limits.max_texel_buffer_elements as _,
             max_patch_size: limits.max_tessellation_patch_size as PatchSize,
             max_viewports: limits.max_viewports as _,
-            max_compute_group_count: [max_group_count[0] as _, max_group_count[1] as _, max_group_count[2] as _],
-            max_compute_group_size: [max_group_size[0] as _, max_group_size[1] as _, max_group_size[2] as _],
+            max_compute_group_count: [
+                max_group_count[0] as _,
+                max_group_count[1] as _,
+                max_group_count[2] as _,
+            ],
+            max_compute_group_size: [
+                max_group_size[0] as _,
+                max_group_size[1] as _,
+                max_group_size[2] as _,
+            ],
             max_vertex_input_attributes: limits.max_vertex_input_attributes as _,
             max_vertex_input_bindings: limits.max_vertex_input_bindings as _,
             max_vertex_input_attribute_offset: limits.max_vertex_input_attribute_offset as _,
@@ -649,7 +676,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as _,
             framebuffer_color_samples_count: limits.framebuffer_color_sample_counts.flags() as _,
             framebuffer_depth_samples_count: limits.framebuffer_depth_sample_counts.flags() as _,
-            framebuffer_stencil_samples_count: limits.framebuffer_stencil_sample_counts.flags() as _,
+            framebuffer_stencil_samples_count: limits.framebuffer_stencil_sample_counts.flags()
+                as _,
             max_color_attachments: limits.max_color_attachments as _,
             non_coherent_atom_size: limits.non_coherent_atom_size as _,
         }
@@ -665,7 +693,9 @@ impl fmt::Debug for RawDevice {
 }
 impl Drop for RawDevice {
     fn drop(&mut self) {
-        unsafe { self.0.destroy_device(None); }
+        unsafe {
+            self.0.destroy_device(None);
+        }
     }
 }
 
@@ -679,27 +709,31 @@ pub struct CommandQueue {
 }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(&mut self,
+    unsafe fn submit_raw<IC>(
+        &mut self,
         submission: hal::queue::RawSubmission<Backend, IC>,
         fence: Option<&native::Fence>,
-    )
-    where
+    ) where
         IC: IntoIterator,
         IC::Item: Borrow<command::CommandBuffer>,
     {
-        let buffers = submission.cmd_buffers
+        let buffers = submission
+            .cmd_buffers
             .into_iter()
             .map(|cmd| cmd.borrow().raw)
             .collect::<Vec<_>>();
-        let waits = submission.wait_semaphores
+        let waits = submission
+            .wait_semaphores
             .iter()
             .map(|&(ref semaphore, _)| semaphore.0)
             .collect::<Vec<_>>();
-        let stages = submission.wait_semaphores
+        let stages = submission
+            .wait_semaphores
             .iter()
             .map(|&(_, stage)| conv::map_pipeline_stage(stage))
             .collect::<Vec<_>>();
-        let signals = submission.signal_semaphores
+        let signals = submission
+            .signal_semaphores
             .iter()
             .map(|semaphore| semaphore.0)
             .collect::<Vec<_>>();
@@ -710,16 +744,18 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             wait_semaphore_count: waits.len() as u32,
             p_wait_semaphores: waits.as_ptr(),
             // If count is zero, AMD driver crashes if nullptr is not set for stage masks
-            p_wait_dst_stage_mask: if stages.is_empty() { ptr::null() } else { stages.as_ptr() },
+            p_wait_dst_stage_mask: if stages.is_empty() {
+                ptr::null()
+            } else {
+                stages.as_ptr()
+            },
             command_buffer_count: buffers.len() as u32,
             p_command_buffers: buffers.as_ptr(),
             signal_semaphore_count: signals.len() as u32,
             p_signal_semaphores: signals.as_ptr(),
         };
 
-        let fence_raw = fence
-            .map(|fence| fence.0)
-            .unwrap_or(vk::Fence::null());
+        let fence_raw = fence.map(|fence| fence.0).unwrap_or(vk::Fence::null());
 
         let result = self.device.0.queue_submit(*self.raw, &[info], fence_raw);
         assert_eq!(Ok(()), result);
@@ -755,10 +791,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             p_results: ptr::null_mut(),
         };
 
-        match unsafe {
-            self.swapchain_fn
-                .queue_present_khr(*self.raw, &info)
-        } {
+        match unsafe { self.swapchain_fn.queue_present_khr(*self.raw, &info) } {
             vk::Result::Success => Ok(()),
             vk::Result::SuboptimalKhr | vk::Result::ErrorOutOfDateKhr => Err(()),
             _ => panic!("Failed to present frame"),

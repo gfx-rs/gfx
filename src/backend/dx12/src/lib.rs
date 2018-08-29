@@ -12,8 +12,6 @@ extern crate winapi;
 extern crate winit;
 extern crate wio;
 
-#[path = "../../auxil/range_alloc.rs"]
-mod range_alloc;
 mod command;
 mod conv;
 mod descriptors_cpu;
@@ -21,24 +19,27 @@ mod device;
 mod internal;
 mod native;
 mod pool;
+#[path = "../../auxil/range_alloc.rs"]
+mod range_alloc;
 mod root_constants;
 mod window;
 
-use hal::{error, format as f, image, memory, Features, SwapImageIndex, Limits, QueueType};
-use hal::queue::{QueueFamilyId, Queues};
 use descriptors_cpu::DescriptorCpuPool;
+use hal::adapter::DeviceType;
+use hal::queue::{QueueFamilyId, Queues};
+use hal::{error, format as f, image, memory, Features, Limits, QueueType, SwapImageIndex};
 
-use winapi::Interface;
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::shared::minwindef::{FALSE, TRUE};
+use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
 use winapi::um::{d3d12, d3d12sdklayers, d3dcommon, handleapi, synchapi, winbase, winnt};
+use winapi::Interface;
 use wio::com::ComPtr;
 
-use std::{mem, ptr};
 use std::borrow::Borrow;
-use std::os::windows::ffi::OsStringExt;
 use std::ffi::OsString;
+use std::os::windows::ffi::OsStringExt;
 use std::sync::{Arc, Mutex};
+use std::{mem, ptr};
 
 pub(crate) struct HeapProperties {
     pub page_property: d3d12::D3D12_CPU_PAGE_PROPERTY,
@@ -75,7 +76,6 @@ static HEAPS_NUMA: [HeapProperties; NUM_HEAP_PROPERTIES] = [
     HeapProperties {
         page_property: d3d12::D3D12_CPU_PAGE_PROPERTY_WRITE_COMBINE,
         memory_pool: d3d12::D3D12_MEMORY_POOL_L0,
-
     },
     // READBACK
     HeapProperties {
@@ -188,12 +188,13 @@ pub struct PhysicalDevice {
     is_open: Arc<Mutex<bool>>,
 }
 
-unsafe impl Send for PhysicalDevice { }
-unsafe impl Sync for PhysicalDevice { }
+unsafe impl Send for PhysicalDevice {}
+unsafe impl Sync for PhysicalDevice {}
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn open(
-        &self, families: &[(&QueueFamily, &[hal::QueuePriority])]
+        &self,
+        families: &[(&QueueFamily, &[hal::QueuePriority])],
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         let lock = self.is_open.try_lock();
         let mut open_guard = match lock {
@@ -244,11 +245,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             unsafe { ComPtr::<d3d12::ID3D12CommandQueue>::from_raw(queue) }
         };
 
-        let mut device = Device::new(
-            device_raw,
-            &self,
-            present_queue,
-        );
+        let mut device = Device::new(device_raw, &self, present_queue);
 
         let queue_groups = families
             .into_iter()
@@ -285,7 +282,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                             NodeMask: 0,
                         };
 
-                        for _ in 0 .. priorities.len() {
+                        for _ in 0..priorities.len() {
                             let mut queue = ptr::null_mut();
                             let hr = unsafe {
                                 device.raw.CreateCommandQueue(
@@ -328,8 +325,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, format: f::Format, dimensions: u8, tiling: image::Tiling,
-        usage: image::Usage, storage_flags: image::StorageFlags,
+        &self,
+        format: f::Format,
+        dimensions: u8,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties> {
         conv::map_format(format)?; //filter out unknown formats
 
@@ -366,7 +367,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             return None;
         }
 
-        let max_resource_size = (d3d12::D3D12_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20;
+        let max_resource_size =
+            (d3d12::D3D12_REQ_RESOURCE_SIZE_IN_MEGABYTES_EXPRESSION_A_TERM as usize) << 20;
         Some(match tiling {
             image::Tiling::Optimal => image::FormatProperties {
                 max_extent: match dimensions {
@@ -393,8 +395,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     2 => d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
                     _ => return None,
                 },
-                sample_count_mask: if dimensions == 2 && !storage_flags.contains(image::StorageFlags::CUBE_VIEW) &&
-                    (usage.contains(image::Usage::COLOR_ATTACHMENT) | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
+                sample_count_mask: if dimensions == 2
+                    && !storage_flags.contains(image::StorageFlags::CUBE_VIEW)
+                    && (usage.contains(image::Usage::COLOR_ATTACHMENT)
+                        | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
                 {
                     0x3F //TODO: use D3D12_FEATURE_DATA_FORMAT_SUPPORT
                 } else {
@@ -423,8 +427,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         self.memory_properties.clone()
     }
 
-    fn features(&self) -> Features { self.features }
-    fn limits(&self) -> Limits { self.limits }
+    fn features(&self) -> Features {
+        self.features
+    }
+    fn limits(&self) -> Limits {
+        self.limits
+    }
 }
 
 #[derive(Clone)]
@@ -457,12 +465,11 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             .into_iter()
             .map(|buf| buf.borrow().as_raw_list())
             .collect::<Vec<_>>();
-        self.raw.ExecuteCommandLists(lists.len() as _, lists.as_mut_ptr());
+        self.raw
+            .ExecuteCommandLists(lists.len() as _, lists.as_mut_ptr());
 
         if let Some(fence) = fence {
-            assert_eq!(winerror::S_OK,
-                self.raw.Signal(fence.raw.as_raw(), 1)
-            );
+            assert_eq!(winerror::S_OK, self.raw.Signal(fence.raw.as_raw(), 1));
         }
     }
 
@@ -475,7 +482,9 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     {
         // TODO: semaphores
         for (swapchain, _) in swapchains {
-            unsafe { swapchain.borrow().inner.Present(1, 0); }
+            unsafe {
+                swapchain.borrow().inner.Present(1, 0);
+            }
         }
 
         Ok(())
@@ -484,7 +493,10 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unsafe {
             self.raw.Signal(self.idle_fence, 1);
-            assert_eq!(winerror::S_OK, (*self.idle_fence).SetEventOnCompletion(1, self.idle_event));
+            assert_eq!(
+                winerror::S_OK,
+                (*self.idle_fence).SetEventOnCompletion(1, self.idle_event)
+            );
             synchapi::WaitForSingleObject(self.idle_event, winbase::INFINITE);
         }
 
@@ -555,8 +567,10 @@ impl Device {
         // Allocate descriptor heaps
         let rtv_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
         let dsv_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-        let srv_uav_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        let sampler_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+        let srv_uav_pool =
+            DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+        let sampler_pool =
+            DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 
         let heap_srv_cbv_uav = Self::create_descriptor_heap_impl(
             &mut device,
@@ -572,20 +586,14 @@ impl Device {
             2_048,
         );
 
-        let draw_signature = Self::create_command_signature(
-            &mut device,
-            device::CommandSignature::Draw,
-        );
+        let draw_signature =
+            Self::create_command_signature(&mut device, device::CommandSignature::Draw);
 
-        let draw_indexed_signature = Self::create_command_signature(
-            &mut device,
-            device::CommandSignature::DrawIndexed,
-        );
+        let draw_indexed_signature =
+            Self::create_command_signature(&mut device, device::CommandSignature::DrawIndexed);
 
-        let dispatch_signature = Self::create_command_signature(
-            &mut device,
-            device::CommandSignature::Dispatch,
-        );
+        let dispatch_signature =
+            Self::create_command_signature(&mut device, device::CommandSignature::Dispatch);
 
         let signatures = CmdSignatures {
             draw: draw_signature,
@@ -646,8 +654,8 @@ pub struct Instance {
     pub(crate) factory: ComPtr<dxgi1_4::IDXGIFactory4>,
 }
 
-unsafe impl Send for Instance { }
-unsafe impl Sync for Instance { }
+unsafe impl Send for Instance {}
+unsafe impl Sync for Instance {}
 
 impl Instance {
     pub fn create(_: &str, _: u32) -> Instance {
@@ -658,12 +666,15 @@ impl Instance {
             let hr = unsafe {
                 d3d12::D3D12GetDebugInterface(
                     &d3d12sdklayers::ID3D12Debug::uuidof(),
-                    &mut debug_controller as *mut *mut _ as *mut *mut _)
+                    &mut debug_controller as *mut *mut _ as *mut *mut _,
+                )
             };
 
             if winerror::SUCCEEDED(hr) {
                 unsafe { (*debug_controller).EnableDebugLayer() };
-                unsafe { (*debug_controller).Release(); }
+                unsafe {
+                    (*debug_controller).Release();
+                }
             }
         }
 
@@ -674,7 +685,8 @@ impl Instance {
             dxgi1_3::CreateDXGIFactory2(
                 dxgi1_3::DXGI_CREATE_FACTORY_DEBUG,
                 &dxgi1_4::IDXGIFactory4::uuidof(),
-                &mut dxgi_factory as *mut *mut _ as *mut *mut _)
+                &mut dxgi_factory as *mut *mut _ as *mut *mut _,
+            )
         };
 
         if !winerror::SUCCEEDED(hr) {
@@ -700,9 +712,8 @@ impl hal::Instance for Instance {
             let adapter = {
                 let mut adapter: *mut dxgi::IDXGIAdapter1 = ptr::null_mut();
                 let hr = unsafe {
-                    self.factory.EnumAdapters1(
-                        cur_index,
-                        &mut adapter as *mut *mut _)
+                    self.factory
+                        .EnumAdapters1(cur_index, &mut adapter as *mut *mut _)
                 };
 
                 if hr == winerror::DXGI_ERROR_NOT_FOUND {
@@ -736,7 +747,9 @@ impl hal::Instance for Instance {
             // We have found a possible adapter
             // acquire the device information
             let mut desc: dxgi1_2::DXGI_ADAPTER_DESC2 = unsafe { mem::zeroed() };
-            unsafe { adapter.GetDesc2(&mut desc); }
+            unsafe {
+                adapter.GetDesc2(&mut desc);
+            }
 
             let device_name = {
                 let len = desc.Description.iter().take_while(|&&c| c != 0).count();
@@ -748,6 +761,11 @@ impl hal::Instance for Instance {
                 name: device_name,
                 vendor: desc.VendorId as usize,
                 device: desc.DeviceId as usize,
+                device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
+                    DeviceType::VirtualGpu
+                } else {
+                    DeviceType::DiscreteGpu
+                },
                 software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
             };
 
@@ -760,7 +778,8 @@ impl hal::Instance for Instance {
                 )
             });
 
-            let mut features_architecture: d3d12::D3D12_FEATURE_DATA_ARCHITECTURE = unsafe { mem::zeroed() };
+            let mut features_architecture: d3d12::D3D12_FEATURE_DATA_ARCHITECTURE =
+                unsafe { mem::zeroed() };
             assert_eq!(winerror::S_OK, unsafe {
                 device.CheckFeatureSupport(
                     d3d12::D3D12_FEATURE_ARCHITECTURE,
@@ -770,7 +789,8 @@ impl hal::Instance for Instance {
             });
 
             let depth_bounds_test_supported = {
-                let mut features2: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2 = unsafe { mem::zeroed() };
+                let mut features2: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2 =
+                    unsafe { mem::zeroed() };
                 let hr = unsafe {
                     device.CheckFeatureSupport(
                         d3d12::D3D12_FEATURE_D3D12_OPTIONS2,
@@ -778,7 +798,7 @@ impl hal::Instance for Instance {
                         mem::size_of::<d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS2>() as _,
                     )
                 };
-                if hr == winerror::S_OK  {
+                if hr == winerror::S_OK {
                     features2.DepthBoundsTestSupported != 0
                 } else {
                     false
@@ -804,12 +824,11 @@ impl hal::Instance for Instance {
                     )
                 });
                 let can_buffer = 0 != data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BUFFER;
-                let can_image = 0 != data.Support1 & (
-                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D |
-                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D |
-                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D |
-                    d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE
-                );
+                let can_image = 0 != data.Support1
+                    & (d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D
+                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D
+                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
+                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE);
                 let can_linear = can_image && !format.surface_desc().is_compressed();
                 if can_image {
                     props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
@@ -824,9 +843,11 @@ impl hal::Instance for Instance {
                     props.optimal_tiling |= f::ImageFeature::SAMPLED_LINEAR;
                 }
                 if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET != 0 {
-                    props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+                    props.optimal_tiling |=
+                        f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
                     if can_linear {
-                        props.linear_tiling |= f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+                        props.linear_tiling |=
+                            f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
                     }
                 }
                 if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BLENDABLE != 0 {
@@ -861,71 +882,86 @@ impl hal::Instance for Instance {
                 //TODO: blits, linear tiling
             }
 
-            let heterogeneous_resource_heaps = features.ResourceHeapTier != d3d12::D3D12_RESOURCE_HEAP_TIER_1;
+            let heterogeneous_resource_heaps =
+                features.ResourceHeapTier != d3d12::D3D12_RESOURCE_HEAP_TIER_1;
 
             let uma = features_architecture.UMA == TRUE;
             let cc_uma = features_architecture.CacheCoherentUMA == TRUE;
 
             let (memory_architecture, heap_properties) = match (uma, cc_uma) {
-                (true, true)  => (MemoryArchitecture::CacheCoherentUMA, &HEAPS_CCUMA),
+                (true, true) => (MemoryArchitecture::CacheCoherentUMA, &HEAPS_CCUMA),
                 (true, false) => (MemoryArchitecture::UMA, &HEAPS_UMA),
-                (false, _)    => (MemoryArchitecture::NUMA, &HEAPS_NUMA),
+                (false, _) => (MemoryArchitecture::NUMA, &HEAPS_NUMA),
             };
 
             // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
-            let base_memory_types: [hal::MemoryType; NUM_HEAP_PROPERTIES] = match memory_architecture {
-                MemoryArchitecture::NUMA => [
-                    // DEFAULT
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL,
-                        heap_index: 0,
-                    },
-                    // UPLOAD
-                    hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE | Properties::COHERENT,
-                        heap_index: 1,
-                    },
-                    // READBACK
-                    hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                        heap_index: 1,
-                    },
-                ],
-                MemoryArchitecture::UMA => [
-                    // DEFAULT
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL,
-                        heap_index: 0,
-                    },
-                    // UPLOAD
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT,
-                        heap_index: 0,
-                    },
-                    // READBACK
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                        heap_index: 0,
-                    },
-                ],
-                MemoryArchitecture::CacheCoherentUMA => [
-                    // DEFAULT
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL,
-                        heap_index: 0,
-                    },
-                    // UPLOAD
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                        heap_index: 0,
-                    },
-                    // READBACK
-                    hal::MemoryType {
-                        properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
-                        heap_index: 0,
-                    },
-                ],
-            };
+            let base_memory_types: [hal::MemoryType; NUM_HEAP_PROPERTIES] =
+                match memory_architecture {
+                    MemoryArchitecture::NUMA => [
+                        // DEFAULT
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL,
+                            heap_index: 0,
+                        },
+                        // UPLOAD
+                        hal::MemoryType {
+                            properties: Properties::CPU_VISIBLE | Properties::COHERENT,
+                            heap_index: 1,
+                        },
+                        // READBACK
+                        hal::MemoryType {
+                            properties: Properties::CPU_VISIBLE
+                                | Properties::COHERENT
+                                | Properties::CPU_CACHED,
+                            heap_index: 1,
+                        },
+                    ],
+                    MemoryArchitecture::UMA => [
+                        // DEFAULT
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL,
+                            heap_index: 0,
+                        },
+                        // UPLOAD
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL
+                                | Properties::CPU_VISIBLE
+                                | Properties::COHERENT,
+                            heap_index: 0,
+                        },
+                        // READBACK
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL
+                                | Properties::CPU_VISIBLE
+                                | Properties::COHERENT
+                                | Properties::CPU_CACHED,
+                            heap_index: 0,
+                        },
+                    ],
+                    MemoryArchitecture::CacheCoherentUMA => [
+                        // DEFAULT
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL,
+                            heap_index: 0,
+                        },
+                        // UPLOAD
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL
+                                | Properties::CPU_VISIBLE
+                                | Properties::COHERENT
+                                | Properties::CPU_CACHED,
+                            heap_index: 0,
+                        },
+                        // READBACK
+                        hal::MemoryType {
+                            properties: Properties::DEVICE_LOCAL
+                                | Properties::CPU_VISIBLE
+                                | Properties::COHERENT
+                                | Properties::CPU_CACHED,
+                            heap_index: 0,
+                        },
+                    ],
+                };
 
             let memory_types = if heterogeneous_resource_heaps {
                 base_memory_types.to_vec()
@@ -943,20 +979,17 @@ impl hal::Instance for Instance {
                 // `device::MEM_TYPE_IMAGE_SHIFT`, `device::MEM_TYPE_TARGET_SHIFT`)
                 // denote the usage group.
                 let mut types = Vec::new();
-                for i in 0 .. MemoryGroup::NumGroups as _ {
-                    types.extend(base_memory_types
-                        .iter()
-                        .map(|mem_type| {
-                            let mut ty = mem_type.clone();
+                for i in 0..MemoryGroup::NumGroups as _ {
+                    types.extend(base_memory_types.iter().map(|mem_type| {
+                        let mut ty = mem_type.clone();
 
-                            // Images and Targets are not host visible as we can't create
-                            // a corresponding buffer for mapping.
-                            if i == MemoryGroup::ImageOnly as _ || i == MemoryGroup::TargetOnly as _ {
-                                ty.properties.remove(Properties::CPU_VISIBLE);
-                            }
-                            ty
-                        })
-                    );
+                        // Images and Targets are not host visible as we can't create
+                        // a corresponding buffer for mapping.
+                        if i == MemoryGroup::ImageOnly as _ || i == MemoryGroup::TargetOnly as _ {
+                            ty.properties.remove(Properties::CPU_VISIBLE);
+                        }
+                        ty
+                    }));
                 }
                 types
             };
@@ -967,22 +1000,24 @@ impl hal::Instance for Instance {
                 let adapter = {
                     let mut adapter: *mut dxgi1_4::IDXGIAdapter3 = ptr::null_mut();
                     unsafe {
-                        assert_eq!(winerror::S_OK, self.factory.EnumAdapterByLuid(
-                            adapter_id,
-                            &dxgi1_4::IDXGIAdapter3::uuidof(),
-                            &mut adapter as *mut *mut _ as *mut *mut _,
-                        ));
+                        assert_eq!(
+                            winerror::S_OK,
+                            self.factory.EnumAdapterByLuid(
+                                adapter_id,
+                                &dxgi1_4::IDXGIAdapter3::uuidof(),
+                                &mut adapter as *mut *mut _ as *mut *mut _,
+                            )
+                        );
                         ComPtr::from_raw(adapter)
                     }
                 };
 
                 let query_memory = |segment: dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP| unsafe {
                     let mut mem_info: dxgi1_4::DXGI_QUERY_VIDEO_MEMORY_INFO = mem::uninitialized();
-                    assert_eq!(winerror::S_OK, adapter.QueryVideoMemoryInfo(
-                        0,
-                        segment,
-                        &mut mem_info,
-                    ));
+                    assert_eq!(
+                        winerror::S_OK,
+                        adapter.QueryVideoMemoryInfo(0, segment, &mut mem_info,)
+                    );
                     mem_info.Budget
                 };
 
@@ -991,7 +1026,7 @@ impl hal::Instance for Instance {
                     MemoryArchitecture::NUMA => {
                         let non_local = query_memory(dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP_NON_LOCAL);
                         vec![local, non_local]
-                    },
+                    }
                     _ => vec![local],
                 }
             };

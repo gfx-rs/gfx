@@ -215,6 +215,7 @@ impl PhysicalDevice {
                 name,
                 vendor: 0, // TODO
                 device: 0, // TODO
+                device_type: hal::adapter::DeviceType::DiscreteGpu,  // TODO Is there a way to detect this?
                 software_rendering: false, // not always true ..
             },
             physical_device: PhysicalDevice(Starc::new(share)),
