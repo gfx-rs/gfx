@@ -26,6 +26,7 @@ mod window;
 
 use hal::{error, format as f, image, memory, Features, SwapImageIndex, Limits, QueueType};
 use hal::queue::{QueueFamilyId, Queues};
+use hal::adapter::DeviceType;
 use descriptors_cpu::DescriptorCpuPool;
 
 use winapi::Interface;
@@ -748,6 +749,11 @@ impl hal::Instance for Instance {
                 name: device_name,
                 vendor: desc.VendorId as usize,
                 device: desc.DeviceId as usize,
+                device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
+                    DeviceType::VirtualGpu
+                } else {
+                    DeviceType::DiscreteGpu
+                },
                 software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
             };
 

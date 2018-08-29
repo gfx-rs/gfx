@@ -1,4 +1,5 @@
 use hal::AdapterInfo;
+use hal::adapter::DeviceType;
 
 use winapi::shared::guiddef::GUID;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_5, winerror};
@@ -145,6 +146,11 @@ fn get_adapter_desc(adapter: *mut dxgi::IDXGIAdapter, version: DxgiVersion) -> A
                 name: device_name,
                 vendor: desc.VendorId as usize,
                 device: desc.DeviceId as usize,
+                device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
+                    DeviceType::VirtualGpu
+                } else {
+                    DeviceType::DiscreteGpu
+                },
                 software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
             }
         },
@@ -165,6 +171,11 @@ fn get_adapter_desc(adapter: *mut dxgi::IDXGIAdapter, version: DxgiVersion) -> A
                 name: device_name,
                 vendor: desc.VendorId as usize,
                 device: desc.DeviceId as usize,
+                device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
+                    DeviceType::VirtualGpu
+                } else {
+                    DeviceType::DiscreteGpu
+                },
                 software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
             }
         }
