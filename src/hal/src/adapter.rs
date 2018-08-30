@@ -8,9 +8,9 @@
 
 use std::any::Any;
 
-use {format, image, memory, Backend, Gpu, Features, Limits};
 use error::DeviceCreationError;
 use queue::{Capability, QueueGroup};
+use {format, image, memory, Backend, Features, Gpu, Limits};
 
 /// Scheduling hint for devices about the priority of a queue.  Values range from `0.0` (low) to
 /// `1.0` (high).
@@ -71,18 +71,21 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     /// # }
     /// ```
     fn open(
-        &self, families: &[(&B::QueueFamily, &[QueuePriority])]
+        &self,
+        families: &[(&B::QueueFamily, &[QueuePriority])],
     ) -> Result<Gpu<B>, DeviceCreationError>;
 
     /// Fetch details for a particular format.
-    fn format_properties(
-        &self, format: Option<format::Format>
-    ) -> format::Properties;
+    fn format_properties(&self, format: Option<format::Format>) -> format::Properties;
 
     /// Fetch details for a particular image format.
     fn image_format_properties(
-        &self, format: format::Format, dimensions: u8, tiling: image:: Tiling,
-        usage: image::Usage, storage_flags: image::StorageFlags,
+        &self,
+        format: format::Format,
+        dimensions: u8,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        storage_flags: image::StorageFlags,
     ) -> Option<image::FormatProperties>;
 
     /// Fetch details for the memory regions provided by the device.
@@ -96,6 +99,22 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     fn limits(&self) -> Limits;
 }
 
+/// Supported physical device types
+#[derive(Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum DeviceType {
+    /// Other
+    Other = 0,
+    /// Integrated
+    IntegratedGpu = 1,
+    /// Discrete
+    DiscreteGpu = 2,
+    /// Virtual
+    VirtualGpu = 3,
+    /// Cpu
+    Cpu = 4,
+}
+
 /// Metadata about a backend adapter.
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -106,6 +125,8 @@ pub struct AdapterInfo {
     pub vendor: usize,
     /// PCI id of the adapter
     pub device: usize,
+    /// Type of device
+    pub device_type: DeviceType,
     /// Whether or not the device is based on a software rasterizer
     pub software_rendering: bool,
 }
@@ -147,7 +168,9 @@ impl<B: Backend> Adapter<B> {
     /// Returns the same errors as `open` and `InitializationFailed` if no suitable
     /// queue family could be found.
     pub fn open_with<F, C>(
-        &mut self, count: usize, selector: F
+        &mut self,
+        count: usize,
+        selector: F,
     ) -> Result<(B::Device, QueueGroup<B, C>), DeviceCreationError>
     where
         F: Fn(&B::QueueFamily) -> bool,
@@ -155,12 +178,13 @@ impl<B: Backend> Adapter<B> {
     {
         use queue::QueueFamily;
 
-        let requested_family = self.queue_families
+        let requested_family = self
+            .queue_families
             .drain(..)
             .filter(|family| {
-                C::supported_by(family.queue_type()) &&
-                    selector(&family) &&
-                    count <= family.max_queues()
+                C::supported_by(family.queue_type())
+                    && selector(&family)
+                    && count <= family.max_queues()
             })
             .next();
 
