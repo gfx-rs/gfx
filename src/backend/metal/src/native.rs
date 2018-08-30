@@ -292,7 +292,7 @@ pub struct StencilState<T> {
     pub back_write_mask: T,
 }
 
-pub type VertexBufferVec = Vec<Option<(pso::VertexBufferDesc, pso::ElemOffset)>>;
+pub type VertexBufferVec = Vec<(pso::VertexBufferDesc, pso::ElemOffset)>;
 
 #[derive(Debug)]
 pub struct GraphicsPipeline {
@@ -303,6 +303,8 @@ pub struct GraphicsPipeline {
     pub(crate) raw: metal::RenderPipelineState,
     pub(crate) primitive_type: metal::MTLPrimitiveType,
     pub(crate) attribute_buffer_index: ResourceIndex,
+    pub(crate) vs_pc_buffer_index: Option<ResourceIndex>,
+    pub(crate) ps_pc_buffer_index: Option<ResourceIndex>,
     pub(crate) rasterizer_state: Option<RasterizerState>,
     pub(crate) depth_bias: pso::State<pso::DepthBias>,
     pub(crate) depth_stencil_desc: pso::DepthStencilDesc,
@@ -324,6 +326,7 @@ pub struct ComputePipeline {
     pub(crate) cs_lib: metal::Library,
     pub(crate) raw: metal::ComputePipelineState,
     pub(crate) work_group_size: metal::MTLSize,
+    pub(crate) pc_buffer_index: Option<ResourceIndex>,
 }
 
 unsafe impl Send for ComputePipeline {}
