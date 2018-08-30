@@ -603,12 +603,12 @@ impl Internal {
                         src.internal.raw.as_raw() as _,
                         dst.calc_subresource(info.dst_subresource.level as _, 0),
                         &d3d11::D3D11_BOX {
-                            left: info.src_offset.x as _,
-                            top: info.src_offset.y as _,
-                            front: info.src_offset.z as _,
-                            right: info.extent.width as _,
-                            bottom: info.extent.height as _,
-                            back: info.extent.depth as _,
+                            left:   info.src_offset.x as _,
+                            top:    info.src_offset.y as _,
+                            front:  info.src_offset.z as _,
+                            right:  info.src_offset.x as u32 + info.extent.width as u32,
+                            bottom: info.src_offset.y as u32 + info.extent.height as u32,
+                            back:   info.src_offset.z as u32 + info.extent.depth as u32,
                         }
                     );
                 }

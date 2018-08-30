@@ -21,6 +21,15 @@ cbuffer CopyConstants : register(b0) {
     BufferImageCopy BufferImageCopies;
 };
 
+
+uint3 GetDestBounds()
+{
+    return min(
+        BufferImageCopies.ImageOffset + BufferImageCopies.ImageExtent,
+        BufferImageCopies.ImageSize
+    );
+}
+
 uint3 GetImageCopyDst(uint3 dispatch_thread_id)
 {
     return uint3(ImageCopies.Dst.xy + dispatch_thread_id.xy, ImageCopies.Dst.z);
@@ -215,7 +224,8 @@ void cs_copy_image2d_r32_image2d_r8g8b8a8(uint3 dispatch_thread_id : SV_Dispatch
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r32g32b32a32(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
-    if (dst_idx.x >= BufferImageCopies.ImageSize.x || dst_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
         return;
     }
 
@@ -232,7 +242,8 @@ void cs_copy_buffer_image2d_r32g32b32a32(uint3 dispatch_thread_id : SV_DispatchT
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r32g32b32a32_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
-    if (src_idx.x >= BufferImageCopies.ImageSize.x || src_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
         return;
     }
 
@@ -249,7 +260,8 @@ void cs_copy_image2d_r32g32b32a32_buffer(uint3 dispatch_thread_id : SV_DispatchT
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r32g32(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
-    if (dst_idx.x >= BufferImageCopies.ImageSize.x || dst_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
         return;
     }
 
@@ -264,7 +276,8 @@ void cs_copy_buffer_image2d_r32g32(uint3 dispatch_thread_id : SV_DispatchThreadI
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r32g32_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
-    if (src_idx.x >= BufferImageCopies.ImageSize.x || src_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
         return;
     }
 
@@ -279,7 +292,8 @@ void cs_copy_image2d_r32g32_buffer(uint3 dispatch_thread_id : SV_DispatchThreadI
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r16g16b16a16(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
-    if (dst_idx.x >= BufferImageCopies.ImageSize.x || dst_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
         return;
     }
 
@@ -294,7 +308,8 @@ void cs_copy_buffer_image2d_r16g16b16a16(uint3 dispatch_thread_id : SV_DispatchT
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r16g16b16a16_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
-    if (src_idx.x >= BufferImageCopies.ImageSize.x || src_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
         return;
     }
 
@@ -309,7 +324,8 @@ void cs_copy_image2d_r16g16b16a16_buffer(uint3 dispatch_thread_id : SV_DispatchT
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r32(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
-    if (dst_idx.x >= BufferImageCopies.ImageSize.x || dst_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
         return;
     }
 
@@ -321,7 +337,8 @@ void cs_copy_buffer_image2d_r32(uint3 dispatch_thread_id : SV_DispatchThreadID) 
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r32_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
-    if (src_idx.x >= BufferImageCopies.ImageSize.x || src_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
         return;
     }
 
@@ -334,7 +351,8 @@ void cs_copy_image2d_r32_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) 
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r16g16(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
-    if (dst_idx.x >= BufferImageCopies.ImageSize.x || dst_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
         return;
     }
 
@@ -346,7 +364,8 @@ void cs_copy_buffer_image2d_r16g16(uint3 dispatch_thread_id : SV_DispatchThreadI
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r16g16_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
-    if (src_idx.x >= BufferImageCopies.ImageSize.x || src_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
         return;
     }
 
@@ -359,7 +378,8 @@ void cs_copy_image2d_r16g16_buffer(uint3 dispatch_thread_id : SV_DispatchThreadI
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r8g8b8a8(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
-    if (dst_idx.x >= BufferImageCopies.ImageSize.x || dst_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
         return;
     }
 
@@ -371,7 +391,8 @@ void cs_copy_buffer_image2d_r8g8b8a8(uint3 dispatch_thread_id : SV_DispatchThrea
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r8g8b8a8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
-    if (src_idx.x >= BufferImageCopies.ImageSize.x || src_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
         return;
     }
 
@@ -384,7 +405,8 @@ void cs_copy_image2d_r8g8b8a8_buffer(uint3 dispatch_thread_id : SV_DispatchThrea
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_b8g8r8a8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
-    if (src_idx.x >= BufferImageCopies.ImageSize.x || src_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
         return;
     }
 
@@ -397,7 +419,8 @@ void cs_copy_image2d_b8g8r8a8_buffer(uint3 dispatch_thread_id : SV_DispatchThrea
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r16(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(uint3(2, 1, 0) * dispatch_thread_id);
-    if (dst_idx.x >= BufferImageCopies.ImageSize.x || dst_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
         return;
     }
 
@@ -411,7 +434,8 @@ void cs_copy_buffer_image2d_r16(uint3 dispatch_thread_id : SV_DispatchThreadID) 
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r16_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 src_idx = GetImageSrc(uint3(2, 1, 0) * dispatch_thread_id);
-    if (src_idx.x >= BufferImageCopies.ImageSize.x || src_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
         return;
     }
 
@@ -427,7 +451,8 @@ void cs_copy_image2d_r16_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) 
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r8g8(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(uint3(2, 1, 0) * dispatch_thread_id);
-    if (dst_idx.x >= BufferImageCopies.ImageSize.x || dst_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
         return;
     }
 
@@ -442,7 +467,8 @@ void cs_copy_buffer_image2d_r8g8(uint3 dispatch_thread_id : SV_DispatchThreadID)
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r8g8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 src_idx = GetImageSrc(uint3(2, 1, 0) * dispatch_thread_id);
-    if (src_idx.x >= BufferImageCopies.ImageSize.x || src_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
         return;
     }
 
@@ -458,7 +484,8 @@ void cs_copy_image2d_r8g8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID)
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r8(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(uint3(4, 1, 0) * dispatch_thread_id);
-    if (dst_idx.x >= BufferImageCopies.ImageSize.x || dst_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
         return;
     }
 
@@ -474,7 +501,8 @@ void cs_copy_buffer_image2d_r8(uint3 dispatch_thread_id : SV_DispatchThreadID) {
 [numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 src_idx = GetImageSrc(uint3(4, 1, 0) * dispatch_thread_id);
-    if (src_idx.x >= BufferImageCopies.ImageSize.x || src_idx.y >= BufferImageCopies.ImageSize.y) {
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
         return;
     }
 

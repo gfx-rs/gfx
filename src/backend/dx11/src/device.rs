@@ -1880,12 +1880,17 @@ impl hal::Device<Backend> for Device {
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
         for write in write_iter {
+            //println!("WriteDescriptorSets({:?})", write.set.handles);
             let target_binding = write.binding;
             let (ty, first_offset, second_offset) = write.set.get_handle_offset(target_binding);
+            assert!((first_offset as usize) < write.set.len);
+            assert!((second_offset as usize) < write.set.len);
 
             for descriptor in write.descriptors {
                 let handle = unsafe { write.set.handles.offset(first_offset as isize) };
                 let second_handle = unsafe { write.set.handles.offset(second_offset as isize) };
+
+                //println!("  Write(offset={}, handle={:?}) <= {:?}", first_offset, handle, ty);
 
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref _range) => {
