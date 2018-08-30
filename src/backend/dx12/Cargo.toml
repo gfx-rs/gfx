@@ -20,6 +20,7 @@ name = "gfx_backend_dx12"
 [dependencies]
 bitflags = "1"
 derivative = "1"
+d3d12-rs = { git = "https://github.com/gfx-rs/d3d12-rs.git" }
 gfx-hal = { path = "../../hal", version = "0.1" }
 log = { version = "0.4", features = ["release_max_level_error"] }
 smallvec = "0.6"

@@ -22,7 +22,7 @@ use pool::RawCommandPool;
 use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
 use {
-    conv, descriptors_cpu, native as n, root_constants, window as w, Backend as B, Device,
+    conv, descriptors_cpu, resource as r, root_constants, window as w, Backend as B, Device,
     MemoryGroup, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES, QUEUE_FAMILIES,
 };
 
@@ -339,7 +339,7 @@ impl Device {
 
     fn patch_spirv_resources(
         ast: &mut spirv::Ast<hlsl::Target>,
-        layout: Option<&n::PipelineLayout>,
+        layout: Option<&r::PipelineLayout>,
     ) -> Result<(), d::ShaderError> {
         // Patch descriptor sets due to the splitting of descriptor heaps into
         // SrvCbvUav and sampler heap. Each set will have a new location to match
@@ -435,7 +435,7 @@ impl Device {
     fn translate_spirv(
         ast: &mut spirv::Ast<hlsl::Target>,
         shader_model: hlsl::ShaderModel,
-        layout: &n::PipelineLayout,
+        layout: &r::PipelineLayout,
         stage: pso::Stage,
     ) -> Result<String, d::ShaderError> {
         let mut compile_options = hlsl::CompilerOptions::default();
@@ -478,10 +478,10 @@ impl Device {
     fn extract_entry_point(
         stage: pso::Stage,
         source: &pso::EntryPoint<B>,
-        layout: &n::PipelineLayout,
+        layout: &r::PipelineLayout,
     ) -> Result<(*mut d3dcommon::ID3DBlob, bool), d::ShaderError> {
         match *source.module {
-            n::ShaderModule::Compiled(ref shaders) => {
+            r::ShaderModule::Compiled(ref shaders) => {
                 // TODO: do we need to check for specialization constants?
                 // Use precompiled shader, ignore specialization or layout.
                 shaders
@@ -489,7 +489,7 @@ impl Device {
                     .map(|x| (*x, false))
                     .ok_or(d::ShaderError::MissingEntryPoint(source.entry.into()))
             }
-            n::ShaderModule::Spirv(ref raw_data) => {
+            r::ShaderModule::Spirv(ref raw_data) => {
                 let mut ast = Self::parse_spirv(raw_data)?;
                 let spec_constants = ast.get_specialization_constants().map_err(gen_query_error)?;
 
@@ -545,11 +545,11 @@ impl Device {
         hlsl_entry: &str,
         entry_point: &str,
         code: &[u8],
-    ) -> Result<n::ShaderModule, d::ShaderError> {
+    ) -> Result<r::ShaderModule, d::ShaderError> {
         let mut shader_map = BTreeMap::new();
         let blob = compile_shader(stage, hlsl::ShaderModel::V5_1, hlsl_entry, code)?;
         shader_map.insert(entry_point.into(), blob);
-        Ok(n::ShaderModule::Compiled(shader_map))
+        Ok(r::ShaderModule::Compiled(shader_map))
     }
 
     pub(crate) fn create_command_signature(
@@ -596,7 +596,7 @@ impl Device {
         heap_type: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE,
         shader_visible: bool,
         capacity: usize,
-    ) -> n::DescriptorHeap {
+    ) -> r::DescriptorHeap {
         assert_ne!(capacity, 0);
 
         let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
@@ -626,11 +626,11 @@ impl Device {
 
         let range_allocator = RangeAllocator::new(0..(capacity as u64));
 
-        n::DescriptorHeap {
+        r::DescriptorHeap {
             raw: unsafe { ComPtr::from_raw(heap) },
             handle_size: descriptor_size as _,
             total_handles: capacity as _,
-            start: n::DualHandle {
+            start: r::DualHandle {
                 cpu: cpu_handle,
                 gpu: gpu_handle,
                 size: 0,
@@ -1049,7 +1049,7 @@ impl d::Device<B> for Device {
         &self,
         mem_type: hal::MemoryTypeId,
         size: u64,
-    ) -> Result<n::Memory, d::OutOfMemory> {
+    ) -> Result<r::Memory, d::OutOfMemory> {
         let mem_type = mem_type.0;
         let mem_base_id = mem_type % NUM_HEAP_PROPERTIES;
         let heap_property = &self.heap_properties[mem_base_id];
@@ -1134,7 +1134,7 @@ impl d::Device<B> for Device {
             None
         };
 
-        Ok(n::Memory {
+        Ok(r::Memory {
             heap: unsafe { ComPtr::from_raw(heap as _) },
             type_id: mem_type,
             size,
@@ -1179,7 +1179,7 @@ impl d::Device<B> for Device {
         attachments: IA,
         subpasses: IS,
         dependencies: ID,
-    ) -> n::RenderPass
+    ) -> r::RenderPass
     where
         IA: IntoIterator,
         IA::Item: Borrow<pass::Attachment>,
@@ -1271,7 +1271,7 @@ impl d::Device<B> for Device {
             }
         }
 
-        let mut rp = n::RenderPass {
+        let mut rp = r::RenderPass {
             attachments: attachments.clone(),
             subpasses: Vec::new(),
             post_barriers: Vec::new(),
@@ -1300,7 +1300,7 @@ impl d::Device<B> for Device {
                         ai.barrier_start_index = rp.subpasses.len() + 1;
                     }
                     SubState::New(state) if state != ai.last_state => {
-                        let barrier = n::BarrierDesc::new(att_id, ai.last_state..state);
+                        let barrier = r::BarrierDesc::new(att_id, ai.last_state..state);
                         match rp.subpasses.get_mut(ai.barrier_start_index) {
                             Some(past_subpass) => {
                                 let split = barrier.split();
@@ -1315,7 +1315,7 @@ impl d::Device<B> for Device {
                     SubState::Resolve(state) => {
                         // 1. Standard pre barrier to update state from previous pass into desired substate.
                         if state != ai.last_state {
-                            let barrier = n::BarrierDesc::new(att_id, ai.last_state..state);
+                            let barrier = r::BarrierDesc::new(att_id, ai.last_state..state);
                             match rp.subpasses.get_mut(ai.barrier_start_index) {
                                 Some(past_subpass) => {
                                     let split = barrier.split();
@@ -1328,7 +1328,7 @@ impl d::Device<B> for Device {
 
                         // 2. Post Barrier at the end of the subpass into RESOLVE_SOURCE.
                         let resolve_state = d3d12::D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
-                        let barrier = n::BarrierDesc::new(att_id, state..resolve_state);
+                        let barrier = r::BarrierDesc::new(att_id, state..resolve_state);
                         post_barriers.push(barrier);
 
                         ai.last_state = resolve_state;
@@ -1338,7 +1338,7 @@ impl d::Device<B> for Device {
                 };
             }
 
-            rp.subpasses.push(n::SubpassDesc {
+            rp.subpasses.push(r::SubpassDesc {
                 color_attachments: subpasses[sid].borrow().colors.iter().cloned().collect(),
                 depth_stencil_attachment: subpasses[sid].borrow().depth_stencil.cloned(),
                 input_attachments: subpasses[sid].borrow().inputs.iter().cloned().collect(),
@@ -1357,7 +1357,7 @@ impl d::Device<B> for Device {
             if state_dst == ai.last_state {
                 continue;
             }
-            let barrier = n::BarrierDesc::new(att_id, ai.last_state..state_dst);
+            let barrier = r::BarrierDesc::new(att_id, ai.last_state..state_dst);
             match rp.subpasses.get_mut(ai.barrier_start_index) {
                 Some(past_subpass) => {
                     let split = barrier.split();
@@ -1375,10 +1375,10 @@ impl d::Device<B> for Device {
         &self,
         sets: IS,
         push_constant_ranges: IR,
-    ) -> n::PipelineLayout
+    ) -> r::PipelineLayout
     where
         IS: IntoIterator,
-        IS::Item: Borrow<n::DescriptorSetLayout>,
+        IS::Item: Borrow<r::DescriptorSetLayout>,
         IR: IntoIterator,
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
     {
@@ -1456,7 +1456,7 @@ impl d::Device<B> for Device {
 
         for (i, set) in sets.iter().enumerate() {
             let set = set.borrow();
-            let mut table_type = n::SetTableTypes::empty();
+            let mut table_type = r::SetTableTypes::empty();
 
             let mut param = d3d12::D3D12_ROOT_PARAMETER {
                 ParameterType: d3d12::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE,
@@ -1481,7 +1481,7 @@ impl d::Device<B> for Device {
                 };
 
                 parameters.push(param);
-                table_type |= n::SRV_CBV_UAV;
+                table_type |= r::SRV_CBV_UAV;
             }
 
             let range_base = ranges.len();
@@ -1504,7 +1504,7 @@ impl d::Device<B> for Device {
                 };
 
                 parameters.push(param);
-                table_type |= n::SAMPLERS;
+                table_type |= r::SAMPLERS;
             }
 
             set_tables.push(table_type);
@@ -1559,7 +1559,7 @@ impl d::Device<B> for Device {
             (*signature_raw).Release();
         }
 
-        n::PipelineLayout {
+        r::PipelineLayout {
             raw: signature,
             tables: set_tables,
             root_constants,
@@ -1587,7 +1587,7 @@ impl d::Device<B> for Device {
         &self,
         desc: &pso::GraphicsPipelineDesc<'a, B>,
         _cache: Option<&()>,
-    ) -> Result<n::GraphicsPipeline, pso::CreationError> {
+    ) -> Result<r::GraphicsPipeline, pso::CreationError> {
         let build_shader = |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, B>>| {
             let source = match source {
                 Some(src) => src,
@@ -1616,7 +1616,7 @@ impl d::Device<B> for Device {
             let binding = attrib.binding as usize;
             let stride = vertex_strides[attrib.binding as usize];
             if attrib.element.offset < stride {
-                vertex_bindings[binding] = Some(n::VertexBinding {
+                vertex_bindings[binding] = Some(r::VertexBinding {
                     stride: vertex_strides[attrib.binding as usize],
                     offset: 0,
                     mapped_binding: binding,
@@ -1660,7 +1660,7 @@ impl d::Device<B> for Device {
                     // Number of input attributes may not exceed bindings, see limits.
                     // We will always find at least one free binding.
                     let mapping = vertex_bindings.iter().position(Option::is_none).unwrap();
-                    vertex_bindings[mapping] = Some(n::VertexBinding {
+                    vertex_bindings[mapping] = Some(r::VertexBinding {
                         stride: vertex_strides[binding],
                         offset: offset,
                         mapped_binding: binding,
@@ -1837,7 +1837,7 @@ impl d::Device<B> for Device {
                 baked_states.depth_bounds = None;
             }
 
-            Ok(n::GraphicsPipeline {
+            Ok(r::GraphicsPipeline {
                 raw: pipeline,
                 signature: desc.layout.raw,
                 num_parameter_slots: desc.layout.num_parameter_slots,
@@ -1855,7 +1855,7 @@ impl d::Device<B> for Device {
         &self,
         desc: &pso::ComputePipelineDesc<'a, B>,
         _cache: Option<&()>,
-    ) -> Result<n::ComputePipeline, pso::CreationError> {
+    ) -> Result<r::ComputePipeline, pso::CreationError> {
         let (cs, cs_destroy) =
             Self::extract_entry_point(pso::Stage::Compute, &desc.shader, desc.layout)
                 .map_err(|err| pso::CreationError::Shader(err))?;
@@ -1888,7 +1888,7 @@ impl d::Device<B> for Device {
         }
 
         if winerror::SUCCEEDED(hr) {
-            Ok(n::ComputePipeline {
+            Ok(r::ComputePipeline {
                 raw: pipeline,
                 signature: desc.layout.raw,
                 num_parameter_slots: desc.layout.num_parameter_slots,
@@ -1901,22 +1901,22 @@ impl d::Device<B> for Device {
 
     fn create_framebuffer<I>(
         &self,
-        _renderpass: &n::RenderPass,
+        _renderpass: &r::RenderPass,
         attachments: I,
         extent: image::Extent,
-    ) -> Result<n::Framebuffer, d::FramebufferError>
+    ) -> Result<r::Framebuffer, d::FramebufferError>
     where
         I: IntoIterator,
-        I::Item: Borrow<n::ImageView>,
+        I::Item: Borrow<r::ImageView>,
     {
-        Ok(n::Framebuffer {
+        Ok(r::Framebuffer {
             attachments: attachments.into_iter().map(|att| *att.borrow()).collect(),
             layers: extent.depth as _,
         })
     }
 
-    fn create_shader_module(&self, raw_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
-        Ok(n::ShaderModule::Spirv(raw_data.into()))
+    fn create_shader_module(&self, raw_data: &[u8]) -> Result<r::ShaderModule, d::ShaderError> {
+        Ok(r::ShaderModule::Spirv(raw_data.into()))
     }
 
     fn create_buffer(
@@ -1959,10 +1959,10 @@ impl d::Device<B> for Device {
 
     fn bind_buffer_memory(
         &self,
-        memory: &n::Memory,
+        memory: &r::Memory,
         offset: u64,
         buffer: UnboundBuffer,
-    ) -> Result<n::Buffer, d::BindError> {
+    ) -> Result<r::Buffer, d::BindError> {
         if buffer.requirements.type_mask & (1 << memory.type_id) == 0 {
             error!(
                 "Bind memory failure: supported mask 0x{:x}, given id {}",
@@ -2032,7 +2032,7 @@ impl d::Device<B> for Device {
             None
         };
 
-        Ok(n::Buffer {
+        Ok(r::Buffer {
             resource: resource as *mut _,
             size_in_bytes: buffer.requirements.size as _,
             clear_uav,
@@ -2041,10 +2041,10 @@ impl d::Device<B> for Device {
 
     fn create_buffer_view<R: RangeArg<u64>>(
         &self,
-        buffer: &n::Buffer,
+        buffer: &r::Buffer,
         format: Option<format::Format>,
         range: R,
-    ) -> Result<n::BufferView, buffer::ViewCreationError> {
+    ) -> Result<r::BufferView, buffer::ViewCreationError> {
         let buffer_features = {
             let idx = format.map(|fmt| fmt as usize).unwrap_or(0);
             self.format_properties[idx].buffer_features
@@ -2120,7 +2120,7 @@ impl d::Device<B> for Device {
             d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 }
         };
 
-        return Ok(n::BufferView {
+        return Ok(r::BufferView {
             handle_srv,
             handle_uav,
         });
@@ -2222,7 +2222,7 @@ impl d::Device<B> for Device {
 
     fn get_image_subresource_footprint(
         &self,
-        image: &n::Image,
+        image: &r::Image,
         sub: image::Subresource,
     ) -> image::SubresourceFootprint {
         let mut num_rows = 0;
@@ -2255,10 +2255,10 @@ impl d::Device<B> for Device {
 
     fn bind_image_memory(
         &self,
-        memory: &n::Memory,
+        memory: &r::Memory,
         offset: u64,
         image: UnboundImage,
-    ) -> Result<n::Image, d::BindError> {
+    ) -> Result<r::Image, d::BindError> {
         use self::image::Usage;
 
         if image.requirements.type_mask & (1 << memory.type_id) == 0 {
@@ -2322,9 +2322,9 @@ impl d::Device<B> for Device {
             && props.contains(format::ImageFeature::DEPTH_STENCIL_ATTACHMENT);
         let aspects = image.format.surface_desc().aspects;
 
-        Ok(n::Image {
+        Ok(r::Image {
             resource: resource as *mut _,
-            place: n::Place::Heap {
+            place: r::Place::Heap {
                 raw: memory.heap.clone(),
                 offset,
             },
@@ -2390,12 +2390,12 @@ impl d::Device<B> for Device {
 
     fn create_image_view(
         &self,
-        image: &n::Image,
+        image: &r::Image,
         view_kind: image::ViewKind,
         format: format::Format,
         _swizzle: format::Swizzle,
         range: image::SubresourceRange,
-    ) -> Result<n::ImageView, image::ViewError> {
+    ) -> Result<r::ImageView, image::ViewError> {
         let mip_levels = (range.levels.start, range.levels.end);
         let layers = (range.layers.start, range.layers.end);
 
@@ -2408,7 +2408,7 @@ impl d::Device<B> for Device {
             range,
         };
 
-        Ok(n::ImageView {
+        Ok(r::ImageView {
             resource: image.resource,
             handle_srv: if image
                 .usage
@@ -2447,7 +2447,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_sampler(&self, info: image::SamplerInfo) -> n::Sampler {
+    fn create_sampler(&self, info: image::SamplerInfo) -> r::Sampler {
         let handle = self.sampler_pool.lock().unwrap().alloc_handle();
 
         let op = match info.comparison {
@@ -2482,10 +2482,10 @@ impl d::Device<B> for Device {
             self.raw.clone().CreateSampler(&desc, handle);
         }
 
-        n::Sampler { handle }
+        r::Sampler { handle }
     }
 
-    fn create_descriptor_pool<I>(&self, max_sets: usize, descriptor_pools: I) -> n::DescriptorPool
+    fn create_descriptor_pool<I>(&self, max_sets: usize, descriptor_pools: I) -> r::DescriptorPool
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
@@ -2524,7 +2524,7 @@ impl d::Device<B> for Device {
                     .unwrap(), // TODO: error/resize
             };
 
-            n::DescriptorHeapSlice {
+            r::DescriptorHeapSlice {
                 heap: heap_srv_cbv_uav.raw.clone(),
                 handle_size: heap_srv_cbv_uav.handle_size as _,
                 range_allocator: RangeAllocator::new(range),
@@ -2543,7 +2543,7 @@ impl d::Device<B> for Device {
                     .unwrap(), // TODO: error/resize
             };
 
-            n::DescriptorHeapSlice {
+            r::DescriptorHeapSlice {
                 heap: heap_sampler.raw.clone(),
                 handle_size: heap_sampler.handle_size as _,
                 range_allocator: RangeAllocator::new(range),
@@ -2551,7 +2551,7 @@ impl d::Device<B> for Device {
             }
         };
 
-        n::DescriptorPool {
+        r::DescriptorPool {
             heap_srv_cbv_uav,
             heap_sampler,
             pools: descriptor_pools,
@@ -2563,14 +2563,14 @@ impl d::Device<B> for Device {
         &self,
         bindings: I,
         _immutable_samplers: J,
-    ) -> n::DescriptorSetLayout
+    ) -> r::DescriptorSetLayout
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
         J: IntoIterator,
-        J::Item: Borrow<n::Sampler>,
+        J::Item: Borrow<r::Sampler>,
     {
-        n::DescriptorSetLayout {
+        r::DescriptorSetLayout {
             bindings: bindings.into_iter().map(|b| b.borrow().clone()).collect(),
         }
     }
@@ -2812,7 +2812,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn map_memory<R>(&self, memory: &n::Memory, range: R) -> Result<*mut u8, mapping::Error>
+    fn map_memory<R>(&self, memory: &r::Memory, range: R) -> Result<*mut u8, mapping::Error>
     where
         R: RangeArg<u64>,
     {
@@ -2834,7 +2834,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn unmap_memory(&self, memory: &n::Memory) {
+    fn unmap_memory(&self, memory: &r::Memory) {
         if let Some(mem) = memory.resource {
             unsafe {
                 (*mem).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
@@ -2845,7 +2845,7 @@ impl d::Device<B> for Device {
     fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, R)>,
+        I::Item: Borrow<(&'a r::Memory, R)>,
         R: RangeArg<u64>,
     {
         for range in ranges {
@@ -2876,7 +2876,7 @@ impl d::Device<B> for Device {
     fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, R)>,
+        I::Item: Borrow<(&'a r::Memory, R)>,
         R: RangeArg<u64>,
     {
         for range in ranges {
@@ -2905,25 +2905,25 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_semaphore(&self) -> n::Semaphore {
+    fn create_semaphore(&self) -> r::Semaphore {
         let fence = self.create_fence(false);
-        n::Semaphore { raw: fence.raw }
+        r::Semaphore { raw: fence.raw }
     }
 
-    fn create_fence(&self, signalled: bool) -> n::Fence {
-        n::Fence {
+    fn create_fence(&self, signalled: bool) -> r::Fence {
+        r::Fence {
             raw: unsafe { ComPtr::from_raw(self.create_raw_fence(signalled)) },
         }
     }
 
-    fn reset_fence(&self, fence: &n::Fence) {
+    fn reset_fence(&self, fence: &r::Fence) {
         assert_eq!(winerror::S_OK, unsafe { fence.raw.clone().Signal(0) });
     }
 
     fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ns: u64) -> bool
     where
         I: IntoIterator,
-        I::Item: Borrow<n::Fence>,
+        I::Item: Borrow<r::Fence>,
     {
         let fences = fences.into_iter().collect::<Vec<_>>();
         let mut events = self.events.lock().unwrap();
@@ -2968,11 +2968,11 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn get_fence_status(&self, _fence: &n::Fence) -> bool {
+    fn get_fence_status(&self, _fence: &r::Fence) -> bool {
         unimplemented!()
     }
 
-    fn free_memory(&self, memory: n::Memory) {
+    fn free_memory(&self, memory: r::Memory) {
         if let Some(buffer) = memory.resource {
             unsafe {
                 (*buffer).Release();
@@ -2984,7 +2984,7 @@ impl d::Device<B> for Device {
         &self,
         query_ty: query::Type,
         count: query::Id,
-    ) -> Result<n::QueryPool, query::Error> {
+    ) -> Result<r::QueryPool, query::Error> {
         let heap_ty = match query_ty {
             query::Type::Occlusion => d3d12::D3D12_QUERY_HEAP_TYPE_OCCLUSION,
             query::Type::PipelineStatistics(_) => d3d12::D3D12_QUERY_HEAP_TYPE_PIPELINE_STATISTICS,
@@ -3004,19 +3004,19 @@ impl d::Device<B> for Device {
                 .CreateQueryHeap(&desc, &d3d12::ID3D12QueryHeap::uuidof(), &mut handle)
         });
 
-        Ok(n::QueryPool {
+        Ok(r::QueryPool {
             raw: unsafe { ComPtr::from_raw(handle as *mut _) },
             ty: heap_ty,
         })
     }
 
-    fn destroy_query_pool(&self, _pool: n::QueryPool) {
+    fn destroy_query_pool(&self, _pool: r::QueryPool) {
         // Just drop
     }
 
     fn get_query_pool_results(
         &self,
-        _pool: &n::QueryPool,
+        _pool: &r::QueryPool,
         _queries: Range<query::Id>,
         _data: &mut [u8],
         _stride: buffer::Offset,
@@ -3025,78 +3025,78 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn destroy_shader_module(&self, shader_lib: n::ShaderModule) {
-        if let n::ShaderModule::Compiled(shaders) = shader_lib {
+    fn destroy_shader_module(&self, shader_lib: r::ShaderModule) {
+        if let r::ShaderModule::Compiled(shaders) = shader_lib {
             for (_, _blob) in shaders {
                 //unsafe { blob.Release(); } //TODO
             }
         }
     }
 
-    fn destroy_render_pass(&self, _rp: n::RenderPass) {
+    fn destroy_render_pass(&self, _rp: r::RenderPass) {
         // Just drop
     }
 
-    fn destroy_pipeline_layout(&self, layout: n::PipelineLayout) {
+    fn destroy_pipeline_layout(&self, layout: r::PipelineLayout) {
         unsafe {
             (*layout.raw).Release();
         }
     }
 
-    fn destroy_graphics_pipeline(&self, pipeline: n::GraphicsPipeline) {
+    fn destroy_graphics_pipeline(&self, pipeline: r::GraphicsPipeline) {
         unsafe {
             (*pipeline.raw).Release();
         }
     }
 
-    fn destroy_compute_pipeline(&self, pipeline: n::ComputePipeline) {
+    fn destroy_compute_pipeline(&self, pipeline: r::ComputePipeline) {
         unsafe {
             (*pipeline.raw).Release();
         }
     }
 
-    fn destroy_framebuffer(&self, _fb: n::Framebuffer) {
+    fn destroy_framebuffer(&self, _fb: r::Framebuffer) {
         // Just drop
     }
 
-    fn destroy_buffer(&self, buffer: n::Buffer) {
+    fn destroy_buffer(&self, buffer: r::Buffer) {
         unsafe {
             (*buffer.resource).Release();
         }
     }
 
-    fn destroy_buffer_view(&self, _view: n::BufferView) {
+    fn destroy_buffer_view(&self, _view: r::BufferView) {
         // empty
     }
 
-    fn destroy_image(&self, image: n::Image) {
+    fn destroy_image(&self, image: r::Image) {
         unsafe {
             (*image.resource).Release();
         }
     }
 
-    fn destroy_image_view(&self, _view: n::ImageView) {
+    fn destroy_image_view(&self, _view: r::ImageView) {
         // Just drop
     }
 
-    fn destroy_sampler(&self, _sampler: n::Sampler) {
+    fn destroy_sampler(&self, _sampler: r::Sampler) {
         // Just drop
     }
 
-    fn destroy_descriptor_pool(&self, _pool: n::DescriptorPool) {
+    fn destroy_descriptor_pool(&self, _pool: r::DescriptorPool) {
         // Just drop
         // Allocated descriptor sets don't need to be freed beforehand.
     }
 
-    fn destroy_descriptor_set_layout(&self, _layout: n::DescriptorSetLayout) {
+    fn destroy_descriptor_set_layout(&self, _layout: r::DescriptorSetLayout) {
         // Just drop
     }
 
-    fn destroy_fence(&self, _fence: n::Fence) {
+    fn destroy_fence(&self, _fence: r::Fence) {
         // Just drop, ComPtr backed
     }
 
-    fn destroy_semaphore(&self, _semaphore: n::Semaphore) {
+    fn destroy_semaphore(&self, _semaphore: r::Semaphore) {
         // Just drop, ComPtr backed
     }
 
@@ -3201,9 +3201,9 @@ impl d::Device<B> for Device {
                 let block_dim = format_desc.dim;
                 let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
 
-                n::Image {
+                r::Image {
                     resource,
-                    place: n::Place::SwapChain,
+                    place: r::Place::SwapChain,
                     surface_type,
                     kind,
                     usage: config.image_usage,
