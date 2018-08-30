@@ -10,7 +10,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::ops::{Deref, Range};
 use std::sync::Arc;
-use std::{iter, mem, slice, time};
+use std::{cmp, iter, mem, slice, time};
 
 use hal::{buffer, command as com, error, memory, pool, pso, query};
 use hal::{DrawCount, SwapImageIndex, VertexCount, VertexOffset, InstanceCount, IndexCount, IndexType, WorkGroupCount};
@@ -174,11 +174,13 @@ struct Temp {
     blit_vertices: FastHashMap<(Aspects, Level), Vec<BlitVertex>>,
 }
 
+type VertexBufferMaybeVec = Vec<Option<(pso::VertexBufferDesc, pso::ElemOffset)>>;
+
 #[derive(Clone)]
 struct RenderPipelineState {
     raw: metal::RenderPipelineState,
     ds_desc: pso::DepthStencilDesc,
-    vertex_buffers: native::VertexBufferVec,
+    vertex_buffers: VertexBufferMaybeVec,
     attribute_buffer_index: ResourceIndex,
     at_formats: Vec<Option<Format>>,
 }
@@ -2964,14 +2966,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut pre = inner.sink().pre_render();
 
         self.state.render_pso_is_compatible = true; //assume good intent :)
+        let mut old_attribute_buffer_index = 0;
         let set_pipeline = match self.state.render_pso {
             Some(ref ps) if ps.raw.as_ptr() == pipeline.raw.as_ptr() => {
                 false // chill out
             }
             Some(ref mut ps) => {
+                old_attribute_buffer_index = ps.attribute_buffer_index;
                 ps.raw = pipeline.raw.to_owned();
                 ps.vertex_buffers.clear();
-                ps.vertex_buffers.extend_from_slice(&pipeline.vertex_buffers);
+                ps.vertex_buffers.extend(pipeline.vertex_buffers.iter().cloned().map(Some));
                 ps.attribute_buffer_index = pipeline.attribute_buffer_index;
                 ps.ds_desc = pipeline.depth_stencil_desc.clone();
                 ps.at_formats.clear();
@@ -2982,7 +2986,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 self.state.render_pso = Some(RenderPipelineState {
                     raw: pipeline.raw.to_owned(),
                     ds_desc: pipeline.depth_stencil_desc.clone(),
-                    vertex_buffers: pipeline.vertex_buffers.clone(),
+                    vertex_buffers: pipeline.vertex_buffers.iter().cloned().map(Some).collect(),
                     attribute_buffer_index: pipeline.attribute_buffer_index,
                     at_formats: pipeline.attachment_formats.clone(),
                 });
@@ -2999,6 +3003,33 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             // re-bind vertex buffers
             if let Some(command) = self.state.set_vertex_buffers() {
                 pre.issue(command);
+            }
+            // Note: all VS resources past the `old_attribute_buffer_index` have to be re-bound
+            // but ones after `pipeline.attribute_buffer_index` are already covered by `set_vertex_buffers()`.
+            // re-bind damaged VS buffers
+            let vs_end = cmp::min(self.state.resources_vs.buffers.len(), pipeline.attribute_buffer_index as usize);
+            if vs_end > old_attribute_buffer_index as usize {
+                pre.issue(soft::RenderCommand::BindBuffers {
+                    stage: pso::Stage::Vertex,
+                    index: old_attribute_buffer_index,
+                    buffers: (
+                        &self.state.resources_vs.buffers[old_attribute_buffer_index as usize .. vs_end],
+                        &self.state.resources_vs.buffer_offsets[old_attribute_buffer_index as usize .. vs_end],
+                    ),
+                });
+            }
+            // re-bind push constants
+            if let Some(index) = pipeline.vs_pc_buffer_index {
+                if Some(index) != self.state.resources_vs.push_constants_buffer_id
+                    || index >= old_attribute_buffer_index
+                {
+                    pre.issue(self.state.push_vs_constants(index));
+                }
+            }
+            if let Some(index) = pipeline.ps_pc_buffer_index {
+                if Some(index) != self.state.resources_ps.push_constants_buffer_id {
+                    pre.issue(self.state.push_ps_constants(index));
+                }
             }
         } else {
             debug_assert_eq!(self.state.rasterizer_state, pipeline.rasterizer_state);
@@ -3133,12 +3164,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.compute_pso = Some(pipeline.raw.clone());
         self.state.work_group_size = pipeline.work_group_size;
 
-        let command = soft::ComputeCommand::BindPipeline(&*pipeline.raw);
-        self.inner
-            .borrow_mut()
-            .sink()
-            .pre_compute()
-            .issue(command);
+        let mut inner = self.inner.borrow_mut();
+        let mut pre = inner.sink().pre_compute();
+
+        pre.issue(soft::ComputeCommand::BindPipeline(&*pipeline.raw));
+
+        if let Some(index) = pipeline.pc_buffer_index {
+            if Some(index) != self.state.resources_cs.push_constants_buffer_id {
+                pre.issue(self.state.push_cs_constants(index));
+            }
+        }
     }
 
     fn bind_compute_descriptor_sets<'a, I, J>(

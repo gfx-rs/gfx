@@ -1079,14 +1079,6 @@ impl hal::Device<Backend> for Device {
         let pipeline_layout = &pipeline_desc.layout;
         let pass_descriptor = &pipeline_desc.subpass;
 
-        let attribute_buffer_index = pipeline_layout.attribute_buffer_index();
-        if attribute_buffer_index + pipeline_desc.vertex_buffers.len() as ResourceIndex > self.private_caps.max_buffers_per_stage {
-            let msg = format!("Too many buffers inputs of the vertex stage: {} attributes + {} resources",
-                pipeline_desc.vertex_buffers.len(), attribute_buffer_index);
-            return Err(pso::CreationError::Shader(ShaderError::InterfaceMismatch(msg)));
-        }
-        // FIXME: lots missing
-
         let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {
             hal::Primitive::PointList => (MTLPrimitiveTopologyClass::Point, MTLPrimitiveType::Point),
             hal::Primitive::LineList => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::Line),
@@ -1187,6 +1179,7 @@ impl hal::Device<Backend> for Device {
         }
 
         // Vertex buffers
+        let attribute_buffer_index = pipeline_layout.attribute_buffer_index();
         let vertex_descriptor = metal::VertexDescriptor::new();
         let mut vertex_buffers: n::VertexBufferVec = Vec::new();
         trace!("Vertex attribute remapping started");
@@ -1210,12 +1203,9 @@ impl hal::Device<Backend> for Device {
             };
             let relative_index = vertex_buffers
                 .iter()
-                .position(|vb_maybe| match vb_maybe {
-                    Some((ref vb, offset)) => vb.binding == binding && base_offset == *offset,
-                    None => false,
-                })
+                .position(|(ref vb, offset)| vb.binding == binding && base_offset == *offset)
                 .unwrap_or_else(|| {
-                    vertex_buffers.push(Some((original.clone(), base_offset)));
+                    vertex_buffers.push((original.clone(), base_offset));
                     vertex_buffers.len() - 1
                 });
             let mtl_buffer_index = attribute_buffer_index as usize + relative_index;
@@ -1239,11 +1229,7 @@ impl hal::Device<Backend> for Device {
         }
 
         const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
-        for (i, vb_maybe) in vertex_buffers.iter().enumerate() {
-            let vb = match vb_maybe {
-                Some((ref vb, _)) => vb,
-                None => continue,
-            };
+        for (i, (vb, _)) in vertex_buffers.iter().enumerate() {
             let mtl_buffer_desc = vertex_descriptor
                 .layouts()
                 .object_at(attribute_buffer_index as usize + i)
@@ -1313,6 +1299,8 @@ impl hal::Device<Backend> for Device {
                     raw,
                     primitive_type,
                     attribute_buffer_index,
+                    vs_pc_buffer_index: pipeline_desc.layout.push_constant_buffer_index.vs,
+                    ps_pc_buffer_index: pipeline_desc.layout.push_constant_buffer_index.ps,
                     rasterizer_state,
                     depth_bias,
                     depth_stencil_desc: pipeline_desc.depth_stencil.clone(),
@@ -1350,6 +1338,7 @@ impl hal::Device<Backend> for Device {
                     cs_lib,
                     raw,
                     work_group_size,
+                    pc_buffer_index: pipeline_desc.layout.push_constant_buffer_index.cs,
                 }
             })
             .map_err(|err| {
