@@ -7,20 +7,31 @@ cache:
 
 matrix:
   include:
+    # Linux 64bit
     - os: linux
       rust: stable
       compiler: gcc
     - os: linux
       rust: nightly
       compiler: gcc
-    - os: osx
+
+    # macOS 64bit
+    - env: MACOSX_DEPLOYMENT_TARGET=10.9
+      os: osx
       rust: stable
       osx_image: xcode9
       compiler: clang
-    - os: osx
+    - env: MACOSX_DEPLOYMENT_TARGET=10.9
+      os: osx
       rust: nightly
       osx_image: xcode9
       compiler: clang
+
+    # iPhoneOS 64bit
+    - env: TARGET=aarch64-apple-ios
+      os: osx
+      osx_image: xcode9
+      rust: nightly
 
 branches:
   except:
@@ -43,7 +54,9 @@ before_install:
   # (assuming it will have libsdl2-dev and Rust by then)
   # see https://docs.travis-ci.com/user/trusty-ci-environment/
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export DISPLAY=:99.0 && sh -e /etc/init.d/xvfb start && make travis-sdl2 && export CXX=g++-5; fi
-  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then brew update && brew install sdl2 && brew upgrade cmake && export CXX=clang++ && export MACOSX_DEPLOYMENT_TARGET=10.9; fi
+  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then brew update && brew install sdl2; fi
+  - rustup self update
+  - rustup target add $TARGET; true
 
 addons:
   apt:
@@ -74,5 +87,5 @@ script:
   - export PATH=$PATH:$HOME/deps/bin
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu; fi
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export LD_LIBRARY_PATH=$LIBRARY_PATH; fi
-  - make all
+  - if [[ $TARGET != "aarch64-apple-ios" ]]; then make all; else make check; fi
   #- if [[ $TRAVIS_OS_NAME == "linux" ]]; then make reftests-ci; fi
