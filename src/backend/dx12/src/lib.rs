@@ -765,8 +765,7 @@ impl hal::Instance for Instance {
                     DeviceType::VirtualGpu
                 } else {
                     DeviceType::DiscreteGpu
-                },
-                software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
+                },                
             };
 
             let mut features: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };

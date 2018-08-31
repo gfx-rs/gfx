@@ -292,8 +292,7 @@ impl hal::Instance for Instance {
                         ash::vk::PhysicalDeviceType::DiscreteGpu => DeviceType::DiscreteGpu,
                         ash::vk::PhysicalDeviceType::VirtualGpu => DeviceType::VirtualGpu,
                         ash::vk::PhysicalDeviceType::Cpu => DeviceType::Cpu,
-                    },
-                    software_rendering: properties.device_type == vk::PhysicalDeviceType::Cpu,
+                    },                    
                 };
                 let physical_device = PhysicalDevice {
                     instance: self.raw.clone(),

@@ -150,8 +150,7 @@ fn get_adapter_desc(adapter: *mut dxgi::IDXGIAdapter, version: DxgiVersion) -> A
                     DeviceType::VirtualGpu
                 } else {
                     DeviceType::DiscreteGpu
-                },
-                software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
+                },                
             }
         }
         DxgiVersion::Dxgi1_2
@@ -177,8 +176,7 @@ fn get_adapter_desc(adapter: *mut dxgi::IDXGIAdapter, version: DxgiVersion) -> A
                     DeviceType::VirtualGpu
                 } else {
                     DeviceType::DiscreteGpu
-                },
-                software_rendering: (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0,
+                },               
             }
         }
     }
