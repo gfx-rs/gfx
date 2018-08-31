@@ -109,9 +109,9 @@ pub enum DeviceType {
     IntegratedGpu = 1,
     /// Discrete
     DiscreteGpu = 2,
-    /// Virtual
+    /// Virtual / Hosted
     VirtualGpu = 3,
-    /// Cpu
+    /// Cpu / Software Rendering
     Cpu = 4,
 }
 
@@ -126,9 +126,7 @@ pub struct AdapterInfo {
     /// PCI id of the adapter
     pub device: usize,
     /// Type of device
-    pub device_type: DeviceType,
-    /// Whether or not the device is based on a software rasterizer
-    pub software_rendering: bool,
+    pub device_type: DeviceType, 
 }
 
 /// The list of `Adapter` instances is obtained by calling `Instance::enumerate_adapters()`.
