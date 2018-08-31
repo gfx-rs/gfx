@@ -359,7 +359,7 @@ impl PhysicalDevice {
                 shared_textures: !os_is_mac,
                 base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
                 dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
-                format_depth24_stencil8: device.d24_s8_supported(),
+                format_depth24_stencil8: os_is_mac && device.d24_s8_supported(),
                 format_depth32_stencil8_filter: os_is_mac,
                 format_depth32_stencil8_none: !os_is_mac,
                 format_min_srgb_channels: if os_is_mac {4} else {1},
