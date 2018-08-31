@@ -1,76 +1,62 @@
-use wio::com::ComPtr;
-use std::ptr;
 use std::sync::Arc;
 
-use winapi::Interface;
-use winapi::um::d3d12;
 use winapi::shared::winerror::SUCCEEDED;
 
-use hal::{pool, command};
-use command::{CommandBuffer};
-use {Backend, Shared};
+use command::CommandBuffer;
+use hal::{command, pool};
+use native::command_list::CmdListType;
+use {native, Backend, Shared};
 
 pub struct RawCommandPool {
-    pub(crate) inner: ComPtr<d3d12::ID3D12CommandAllocator>,
-    pub(crate) device: ComPtr<d3d12::ID3D12Device>,
-    pub(crate) list_type: d3d12::D3D12_COMMAND_LIST_TYPE,
+    pub(crate) raw: native::CommandAllocator,
+    pub(crate) device: native::Device,
+    pub(crate) list_type: CmdListType,
     pub(crate) shared: Arc<Shared>,
 }
 
 impl RawCommandPool {
-    fn create_command_list(&mut self) -> ComPtr<d3d12::ID3D12GraphicsCommandList> {
+    fn create_command_list(&mut self) -> native::GraphicsCommandList {
+        // TODO: error handling
+
         // allocate command lists
-        let command_list = {
-            let mut command_list: *mut d3d12::ID3D12GraphicsCommandList = ptr::null_mut();
-            let hr = unsafe {
-                self.device.CreateCommandList(
-                    0, // single gpu only atm
-                    self.list_type,
-                    self.inner.as_raw(),
-                    ptr::null_mut(),
-                    &d3d12::ID3D12GraphicsCommandList::uuidof(),
-                    &mut command_list as *mut *mut _ as *mut *mut _,
-                )
-            };
+        let (command_list, hr) = self.device.create_graphics_command_list(
+            self.list_type,
+            self.raw,
+            native::PipelineState::null(),
+            0,
+        );
 
-            // TODO: error handling
-            if !SUCCEEDED(hr) {
-                error!("error on command list creation: {:x}", hr);
-            }
-
-            unsafe { ComPtr::from_raw(command_list) }
-        };
+        if !SUCCEEDED(hr) {
+            error!("error on command list creation: {:x}", hr);
+        }
 
         // Close command list as they are initiated as recording.
         // But only one command list can be recording for each allocator
-        unsafe { command_list.Close(); }
+        let _hr = command_list.close();
 
         command_list
     }
 }
 
-unsafe impl Send for RawCommandPool { }
-unsafe impl Sync for RawCommandPool { }
+unsafe impl Send for RawCommandPool {}
+unsafe impl Sync for RawCommandPool {}
 
 impl pool::RawCommandPool<Backend> for RawCommandPool {
     fn reset(&mut self) {
-        unsafe { self.inner.Reset(); }
+        self.raw.reset();
     }
 
-    fn allocate(
-        &mut self, num: usize, level: command::RawLevel
-    ) -> Vec<CommandBuffer> { // TODO: Implement secondary buffers
+    fn allocate(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
+        // TODO: Implement secondary buffers
         assert_eq!(level, command::RawLevel::Primary);
         (0..num)
-            .map(|_| CommandBuffer::new(
-                self.create_command_list(),
-                self.inner.clone(),
-                self.shared.clone(),
-            ))
+            .map(|_| CommandBuffer::new(self.create_command_list(), self.raw, self.shared.clone()))
             .collect()
     }
 
-    unsafe fn free(&mut self, _cbufs: Vec<CommandBuffer>) {
-        // Just let the command buffers drop
+    unsafe fn free(&mut self, cbufs: Vec<CommandBuffer>) {
+        for mut cbuf in cbufs {
+            cbuf.destroy();
+        }
     }
 }

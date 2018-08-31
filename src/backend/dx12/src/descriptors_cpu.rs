@@ -1,60 +1,36 @@
-
+use native;
+use native::descriptor::{CpuDescriptor, HeapFlags, HeapType};
 use std::collections::HashSet;
-use std::ptr;
-use winapi::Interface;
-use winapi::um::d3d12;
-use wio::com::ComPtr;
 
 // Linear stack allocator for CPU descriptor heaps.
 pub struct HeapLinear {
     handle_size: usize,
     num: usize,
     size: usize,
-    start: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
-    _raw: ComPtr<d3d12::ID3D12DescriptorHeap>,
+    start: CpuDescriptor,
+    raw: native::DescriptorHeap,
 }
 
 impl HeapLinear {
-    pub fn new(
-        device: &ComPtr<d3d12::ID3D12Device>,
-        ty: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE,
-        size: usize,
-    ) -> Self {
-        let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
-            Type: ty,
-            NumDescriptors: size as u32,
-            Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-            NodeMask: 0,
-        };
-
-        let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
-        let handle_size = unsafe {
-            device.CreateDescriptorHeap(
-                &desc,
-                &d3d12::ID3D12DescriptorHeap::uuidof(),
-                &mut heap as *mut *mut _ as *mut *mut _,
-            );
-            device.GetDescriptorHandleIncrementSize(ty) as usize
-        };
-
-        let start = unsafe { (*heap).GetCPUDescriptorHandleForHeapStart() };
+    pub fn new(device: native::Device, ty: HeapType, size: usize) -> Self {
+        let (heap, _hr) = device.create_descriptor_heap(size as _, ty, HeapFlags::empty(), 0);
 
         HeapLinear {
-            handle_size,
+            handle_size: device.get_descriptor_increment_size(ty) as _,
             num: 0,
             size,
-            start,
-            _raw: unsafe { ComPtr::from_raw(heap) },
+            start: heap.start_cpu_descriptor(),
+            raw: heap,
         }
     }
 
-    pub fn alloc_handle(&mut self) -> d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
+    pub fn alloc_handle(&mut self) -> CpuDescriptor {
         assert!(!self.is_full());
 
         let slot = self.num;
         self.num += 1;
 
-        d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
+        CpuDescriptor {
             ptr: self.start.ptr + self.handle_size * slot,
         }
     }
@@ -65,6 +41,10 @@ impl HeapLinear {
 
     pub fn clear(&mut self) {
         self.num = 0;
+    }
+
+    pub unsafe fn destroy(&self) {
+        self.raw.destroy();
     }
 }
 
@@ -78,46 +58,31 @@ struct Heap {
     //  1 - free
     availability: u64,
     handle_size: usize,
-    start: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
-    _raw: ComPtr<d3d12::ID3D12DescriptorHeap>,
+    start: CpuDescriptor,
+    raw: native::DescriptorHeap,
 }
 
 impl Heap {
-    pub fn new(device: &ComPtr<d3d12::ID3D12Device>, ty: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE) -> Self {
-        let desc = d3d12::D3D12_DESCRIPTOR_HEAP_DESC {
-            Type: ty,
-            NumDescriptors: HEAP_SIZE_FIXED as _,
-            Flags: d3d12::D3D12_DESCRIPTOR_HEAP_FLAG_NONE,
-            NodeMask: 0,
-        };
-
-        let mut heap: *mut d3d12::ID3D12DescriptorHeap = ptr::null_mut();
-        let handle_size = unsafe {
-            device.CreateDescriptorHeap(
-                &desc,
-                &d3d12::ID3D12DescriptorHeap::uuidof(),
-                &mut heap as *mut *mut _ as *mut *mut _,
-            );
-            device.GetDescriptorHandleIncrementSize(ty) as usize
-        };
-        let start = unsafe { (*heap).GetCPUDescriptorHandleForHeapStart() };
+    pub fn new(device: native::Device, ty: HeapType) -> Self {
+        let (heap, _hr) =
+            device.create_descriptor_heap(HEAP_SIZE_FIXED as _, ty, HeapFlags::empty(), 0);
 
         Heap {
-            handle_size,
+            handle_size: device.get_descriptor_increment_size(ty) as _,
             availability: !0, // all free!
-            start,
-            _raw: unsafe { ComPtr::from_raw(heap) },
+            start: heap.start_cpu_descriptor(),
+            raw: heap,
         }
     }
 
-    pub fn alloc_handle(&mut self) -> d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
+    pub fn alloc_handle(&mut self) -> CpuDescriptor {
         // Find first free slot.
         let slot = self.availability.trailing_zeros() as usize;
         assert!(slot < HEAP_SIZE_FIXED);
         // Set the slot as occupied.
         self.availability ^= 1 << slot;
 
-        d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
+        CpuDescriptor {
             ptr: self.start.ptr + self.handle_size * slot,
         }
     }
@@ -125,38 +90,37 @@ impl Heap {
     pub fn is_full(&self) -> bool {
         self.availability == 0
     }
+
+    pub unsafe fn destroy(&self) {
+        self.raw.destroy();
+    }
 }
 
 pub struct DescriptorCpuPool {
-    device: ComPtr<d3d12::ID3D12Device>,
-    ty: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE,
+    device: native::Device,
+    ty: HeapType,
     heaps: Vec<Heap>,
     free_list: HashSet<usize>,
 }
 
 impl DescriptorCpuPool {
-    pub fn new(device: &ComPtr<d3d12::ID3D12Device>, ty: d3d12::D3D12_DESCRIPTOR_HEAP_TYPE) -> Self {
+    pub fn new(device: native::Device, ty: HeapType) -> Self {
         DescriptorCpuPool {
-            device: device.clone(),
+            device,
             ty,
             heaps: Vec::new(),
             free_list: HashSet::new(),
         }
     }
 
-    pub fn alloc_handle(&mut self) -> d3d12::D3D12_CPU_DESCRIPTOR_HANDLE {
-        let heap_id = self
-            .free_list
-            .iter()
-            .cloned()
-            .next()
-            .unwrap_or_else(|| {
-                // Allocate a new heap
-                let id = self.heaps.len();
-                self.heaps.push(Heap::new(&self.device, self.ty));
-                self.free_list.insert(id);
-                id
-            });
+    pub fn alloc_handle(&mut self) -> CpuDescriptor {
+        let heap_id = self.free_list.iter().cloned().next().unwrap_or_else(|| {
+            // Allocate a new heap
+            let id = self.heaps.len();
+            self.heaps.push(Heap::new(self.device, self.ty));
+            self.free_list.insert(id);
+            id
+        });
 
         let heap = &mut self.heaps[heap_id];
         let handle = heap.alloc_handle();
@@ -168,4 +132,10 @@ impl DescriptorCpuPool {
     }
 
     // TODO: free handles
+
+    pub unsafe fn destroy(&self) {
+        for heap in &self.heaps {
+            heap.destroy();
+        }
+    }
 }

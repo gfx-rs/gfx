@@ -13,6 +13,7 @@ use hal::format::{Format, ImageFeature, SurfaceType};
 use hal::{buffer, image, pso, Primitive};
 use hal::pso::DescriptorSetLayoutBinding;
 
+use native::descriptor::{DescriptorRange, DescriptorRangeType};
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::Format::*;
 
@@ -458,30 +459,35 @@ pub fn map_image_resource_state(access: image::Access, layout: image::Layout) ->
     state
 }
 
-pub fn map_descriptor_range(bind: &DescriptorSetLayoutBinding, register_space: u32, sampler: bool) -> D3D12_DESCRIPTOR_RANGE {
-    D3D12_DESCRIPTOR_RANGE {
-        RangeType: match bind.ty {
-            pso::DescriptorType::Sampler => D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER,
-            pso::DescriptorType::SampledImage |
-            pso::DescriptorType::InputAttachment |
-            pso::DescriptorType::UniformTexelBuffer => D3D12_DESCRIPTOR_RANGE_TYPE_SRV,
-            pso::DescriptorType::StorageBuffer |
-            pso::DescriptorType::StorageBufferDynamic |
-            pso::DescriptorType::StorageTexelBuffer |
-            pso::DescriptorType::StorageImage => D3D12_DESCRIPTOR_RANGE_TYPE_UAV,
-            pso::DescriptorType::UniformBuffer |
-            pso::DescriptorType::UniformBufferDynamic => D3D12_DESCRIPTOR_RANGE_TYPE_CBV,
-            pso::DescriptorType::CombinedImageSampler => if sampler {
-                D3D12_DESCRIPTOR_RANGE_TYPE_SAMPLER
-            } else {
-                D3D12_DESCRIPTOR_RANGE_TYPE_SRV
+pub fn map_descriptor_range(
+    bind: &DescriptorSetLayoutBinding,
+    register_space: u32,
+    sampler: bool,
+) -> DescriptorRange {
+    DescriptorRange::new(
+        match bind.ty {
+            pso::DescriptorType::Sampler => DescriptorRangeType::Sampler,
+            pso::DescriptorType::SampledImage
+            | pso::DescriptorType::InputAttachment
+            | pso::DescriptorType::UniformTexelBuffer => DescriptorRangeType::SRV,
+            pso::DescriptorType::StorageBuffer
+            | pso::DescriptorType::StorageBufferDynamic
+            | pso::DescriptorType::StorageTexelBuffer
+            | pso::DescriptorType::StorageImage => DescriptorRangeType::UAV,
+            pso::DescriptorType::UniformBuffer | pso::DescriptorType::UniformBufferDynamic => {
+                DescriptorRangeType::CBV
             }
+            pso::DescriptorType::CombinedImageSampler => if sampler {
+                DescriptorRangeType::Sampler
+            } else {
+                DescriptorRangeType::SRV
+            },
         },
-        NumDescriptors: bind.count as _,
-        BaseShaderRegister: bind.binding as _,
-        RegisterSpace: register_space,
-        OffsetInDescriptorsFromTableStart: D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
-    }
+        bind.count as _,
+        bind.binding as _,
+        register_space,
+        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+    )
 }
 
 pub fn map_buffer_flags(usage: buffer::Usage) -> D3D12_RESOURCE_FLAGS {

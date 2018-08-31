@@ -2,7 +2,7 @@
 extern crate bitflags;
 #[macro_use]
 extern crate derivative;
-extern crate d3d12_rs as n;
+extern crate d3d12_rs as native;
 extern crate gfx_hal as hal;
 #[macro_use]
 extern crate log;
@@ -11,7 +11,6 @@ extern crate spirv_cross;
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
-extern crate wio;
 
 mod command;
 mod conv;
@@ -32,15 +31,16 @@ use hal::{error, format as f, image, memory, Features, Limits, QueueType, SwapIm
 
 use winapi::shared::minwindef::{FALSE, TRUE};
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
-use winapi::um::{d3d12, d3d12sdklayers, d3dcommon, handleapi, synchapi, winbase, winnt};
+use winapi::um::{d3d12, d3d12sdklayers, handleapi, synchapi, winbase, winnt};
 use winapi::Interface;
-use wio::com::ComPtr;
 
 use std::borrow::Borrow;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::sync::{Arc, Mutex};
 use std::{mem, ptr};
+
+use native::descriptor;
 
 pub(crate) struct HeapProperties {
     pub page_property: d3d12::D3D12_CPU_PAGE_PROPERTY,
@@ -158,13 +158,15 @@ impl hal::QueueFamily for QueueFamily {
 }
 
 impl QueueFamily {
-    fn native_type(&self) -> d3d12::D3D12_COMMAND_LIST_TYPE {
+    fn native_type(&self) -> native::command_list::CmdListType {
         use hal::QueueFamily;
+        use native::command_list::CmdListType;
+
         let queue_type = self.queue_type();
         match queue_type {
-            QueueType::General | QueueType::Graphics => d3d12::D3D12_COMMAND_LIST_TYPE_DIRECT,
-            QueueType::Compute => d3d12::D3D12_COMMAND_LIST_TYPE_COMPUTE,
-            QueueType::Transfer => d3d12::D3D12_COMMAND_LIST_TYPE_COPY,
+            QueueType::General | QueueType::Graphics => CmdListType::Direct,
+            QueueType::Compute => CmdListType::Compute,
+            QueueType::Transfer => CmdListType::Copy,
         }
     }
 }
@@ -177,7 +179,7 @@ static QUEUE_FAMILIES: [QueueFamily; 4] = [
 ];
 
 pub struct PhysicalDevice {
-    adapter: ComPtr<dxgi1_2::IDXGIAdapter2>,
+    adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
     features: hal::Features,
     limits: hal::Limits,
     format_properties: Arc<[f::Properties; f::NUM_FORMATS]>,
@@ -203,48 +205,22 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             Err(_) => return Err(error::DeviceCreationError::TooManyObjects),
         };
 
-        // Create D3D12 device
-        let device_raw = {
-            let mut device_raw = ptr::null_mut();
-            let hr = unsafe {
-                d3d12::D3D12CreateDevice(
-                    self.adapter.as_raw() as *mut _,
-                    d3dcommon::D3D_FEATURE_LEVEL_11_0, // Minimum required feature level
-                    &d3d12::ID3D12Device::uuidof(),
-                    &mut device_raw as *mut *mut _ as *mut *mut _,
-                )
-            };
-            if !winerror::SUCCEEDED(hr) {
-                error!("error on device creation: {:x}", hr);
-            }
-
-            unsafe { ComPtr::<d3d12::ID3D12Device>::from_raw(device_raw) }
-        };
+        let (device_raw, hr_device) =
+            native::Device::create(self.adapter, native::FeatureLevel::L11_0);
+        if !winerror::SUCCEEDED(hr_device) {
+            error!("error on device creation: {:x}", hr_device);
+        }
 
         // Always create the presentation queue in case we want to build a swapchain.
-        let present_queue = {
-            let queue_desc = d3d12::D3D12_COMMAND_QUEUE_DESC {
-                Type: QueueFamily::Present.native_type(),
-                Priority: 0,
-                Flags: d3d12::D3D12_COMMAND_QUEUE_FLAG_NONE,
-                NodeMask: 0,
-            };
-
-            let mut queue = ptr::null_mut();
-            let hr = unsafe {
-                device_raw.CreateCommandQueue(
-                    &queue_desc,
-                    &d3d12::ID3D12CommandQueue::uuidof(),
-                    &mut queue as *mut *mut _ as *mut *mut _,
-                )
-            };
-
-            if !winerror::SUCCEEDED(hr) {
-                error!("error on queue creation: {:x}", hr);
-            }
-
-            unsafe { ComPtr::<d3d12::ID3D12CommandQueue>::from_raw(queue) }
-        };
+        let (present_queue, hr_queue) = device_raw.create_command_queue(
+            QueueFamily::Present.native_type(),
+            native::queue::Priority::Normal,
+            native::queue::CommandQueueFlags::empty(),
+            0,
+        );
+        if !winerror::SUCCEEDED(hr_queue) {
+            error!("error on queue creation: {:x}", hr_queue);
+        }
 
         let mut device = Device::new(device_raw, &self, present_queue);
 
@@ -276,33 +252,25 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                         group.add_queue(queue);
                     }
                     QueueFamily::Normal(_) => {
-                        let queue_desc = d3d12::D3D12_COMMAND_QUEUE_DESC {
-                            Type: family.native_type(),
-                            Priority: 0,
-                            Flags: d3d12::D3D12_COMMAND_QUEUE_FLAG_NONE,
-                            NodeMask: 0,
-                        };
-
+                        let list_type = family.native_type();
                         for _ in 0..priorities.len() {
-                            let mut queue = ptr::null_mut();
-                            let hr = unsafe {
-                                device.raw.CreateCommandQueue(
-                                    &queue_desc,
-                                    &d3d12::ID3D12CommandQueue::uuidof(),
-                                    &mut queue as *mut *mut _ as *mut *mut _,
-                                )
-                            };
+                            let (queue, hr_queue) = device_raw.create_command_queue(
+                                list_type,
+                                native::queue::Priority::Normal,
+                                native::queue::CommandQueueFlags::empty(),
+                                0,
+                            );
 
-                            if winerror::SUCCEEDED(hr) {
+                            if winerror::SUCCEEDED(hr_queue) {
                                 let queue = CommandQueue {
-                                    raw: unsafe { ComPtr::from_raw(queue) },
+                                    raw: queue,
                                     idle_fence: device.create_raw_fence(false),
                                     idle_event: create_idle_event(),
                                 };
                                 device.append_queue(queue.clone());
                                 group.add_queue(queue);
                             } else {
-                                error!("error on queue creation: {:x}", hr);
+                                error!("error on queue creation: {:x}", hr_queue);
                             }
                         }
                     }
@@ -438,9 +406,17 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
 #[derive(Clone)]
 pub struct CommandQueue {
-    pub(crate) raw: ComPtr<d3d12::ID3D12CommandQueue>,
-    idle_fence: *mut d3d12::ID3D12Fence,
+    pub(crate) raw: native::CommandQueue,
+    idle_fence: native::Fence,
     idle_event: winnt::HANDLE,
+}
+
+impl CommandQueue {
+    unsafe fn destroy(&self) {
+        handleapi::CloseHandle(self.idle_event);
+        self.idle_fence.destroy();
+        self.raw.destroy();
+    }
 }
 
 unsafe impl Send for CommandQueue {}
@@ -457,7 +433,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     {
         // Reset idle fence and event
         // That's safe here due to exclusive access to the queue
-        (*self.idle_fence).Signal(0);
+        self.idle_fence.signal(0);
         synchapi::ResetEvent(self.idle_event);
 
         // TODO: semaphores
@@ -470,7 +446,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             .ExecuteCommandLists(lists.len() as _, lists.as_mut_ptr());
 
         if let Some(fence) = fence {
-            assert_eq!(winerror::S_OK, self.raw.Signal(fence.raw.as_raw(), 1));
+            assert_eq!(winerror::S_OK, self.raw.Signal(fence.raw.as_mut_ptr(), 1));
         }
     }
 
@@ -492,12 +468,13 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+        self.raw.signal(self.idle_fence, 1);
+        assert_eq!(
+            winerror::S_OK,
+            self.idle_fence.set_event_on_completion(self.idle_event, 1)
+        );
+
         unsafe {
-            self.raw.Signal(self.idle_fence, 1);
-            assert_eq!(
-                winerror::S_OK,
-                (*self.idle_fence).SetEventOnCompletion(1, self.idle_event)
-            );
             synchapi::WaitForSingleObject(self.idle_event, winbase::INFINITE);
         }
 
@@ -520,9 +497,17 @@ pub struct Capabilities {
 
 #[derive(Clone)]
 struct CmdSignatures {
-    draw: ComPtr<d3d12::ID3D12CommandSignature>,
-    draw_indexed: ComPtr<d3d12::ID3D12CommandSignature>,
-    dispatch: ComPtr<d3d12::ID3D12CommandSignature>,
+    draw: native::CommandSignature,
+    draw_indexed: native::CommandSignature,
+    dispatch: native::CommandSignature,
+}
+
+impl CmdSignatures {
+    unsafe fn destroy(&self) {
+        self.draw.destroy();
+        self.draw_indexed.destroy();
+        self.dispatch.destroy();
+    }
 }
 
 // Shared objects between command buffers, owned by the device.
@@ -531,8 +516,15 @@ struct Shared {
     pub service_pipes: internal::ServicePipes,
 }
 
+impl Shared {
+    unsafe fn destroy(&self) {
+        self.signatures.destroy();
+        self.service_pipes.destroy();
+    }
+}
+
 pub struct Device {
-    raw: ComPtr<d3d12::ID3D12Device>,
+    raw: native::Device,
     private_caps: Capabilities,
     format_properties: Arc<[f::Properties; f::NUM_FORMATS]>,
     heap_properties: &'static [HeapProperties],
@@ -549,7 +541,7 @@ pub struct Device {
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
     // Required for swapchain creation. Only a single queue supports presentation.
-    present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
+    present_queue: native::CommandQueue,
     // List of all queues created from this device, including present queue.
     // Needed for `wait_idle`.
     queues: Vec<CommandQueue>,
@@ -561,47 +553,38 @@ unsafe impl Sync for Device {} //blocked by ComPtr
 
 impl Device {
     fn new(
-        mut device: ComPtr<d3d12::ID3D12Device>,
+        device: native::Device,
         physical_device: &PhysicalDevice,
-        present_queue: ComPtr<d3d12::ID3D12CommandQueue>,
+        present_queue: native::CommandQueue,
     ) -> Self {
         // Allocate descriptor heaps
-        let rtv_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-        let dsv_pool = DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-        let srv_uav_pool =
-            DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-        let sampler_pool =
-            DescriptorCpuPool::new(&device, d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+        let rtv_pool = DescriptorCpuPool::new(device, descriptor::HeapType::Rtv);
+        let dsv_pool = DescriptorCpuPool::new(device, descriptor::HeapType::Dsv);
+        let srv_uav_pool = DescriptorCpuPool::new(device, descriptor::HeapType::CbvSrvUav);
+        let sampler_pool = DescriptorCpuPool::new(device, descriptor::HeapType::Sampler);
 
         let heap_srv_cbv_uav = Self::create_descriptor_heap_impl(
-            &mut device,
-            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            device,
+            descriptor::HeapType::CbvSrvUav,
             true,
             1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
         );
 
-        let heap_sampler = Self::create_descriptor_heap_impl(
-            &mut device,
-            d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-            true,
-            2_048,
-        );
+        let heap_sampler =
+            Self::create_descriptor_heap_impl(device, descriptor::HeapType::Sampler, true, 2_048);
 
-        let draw_signature =
-            Self::create_command_signature(&mut device, device::CommandSignature::Draw);
-
+        let draw_signature = Self::create_command_signature(device, device::CommandSignature::Draw);
         let draw_indexed_signature =
-            Self::create_command_signature(&mut device, device::CommandSignature::DrawIndexed);
-
+            Self::create_command_signature(device, device::CommandSignature::DrawIndexed);
         let dispatch_signature =
-            Self::create_command_signature(&mut device, device::CommandSignature::Dispatch);
+            Self::create_command_signature(device, device::CommandSignature::Dispatch);
 
         let signatures = CmdSignatures {
             draw: draw_signature,
             draw_indexed: draw_indexed_signature,
             dispatch: dispatch_signature,
         };
-        let service_pipes = internal::ServicePipes::new(device.clone());
+        let service_pipes = internal::ServicePipes::new(device);
         let shared = Shared {
             signatures,
             service_pipes,
@@ -635,24 +618,53 @@ impl Device {
     ///
     /// Required for FFI with libraries like RenderDoc.
     pub unsafe fn as_raw(&self) -> *mut d3d12::ID3D12Device {
-        self.raw.as_raw()
+        self.raw.as_mut_ptr()
     }
 }
 
 impl Drop for Device {
     fn drop(&mut self) {
         *self.open.lock().unwrap() = false;
-        for queue in &mut self.queues {
-            unsafe {
-                (*queue.idle_fence).Release();
-                handleapi::CloseHandle(queue.idle_event);
+
+        unsafe {
+            for queue in &mut self.queues {
+                queue.destroy();
             }
+
+            self.shared.destroy();
+            self.heap_srv_cbv_uav.lock().unwrap().destroy();
+            self.heap_sampler.lock().unwrap().destroy();
+            self.rtv_pool.lock().unwrap().destroy();
+            self.dsv_pool.lock().unwrap().destroy();
+            self.srv_uav_pool.lock().unwrap().destroy();
+            self.sampler_pool.lock().unwrap().destroy();
+
+            for pool in &*self.descriptor_update_pools.lock().unwrap() {
+                pool.destroy();
+            }
+
+            // Debug tracking alive objects
+            let (debug_device, hr_debug) = self.raw.cast::<d3d12sdklayers::ID3D12DebugDevice>();
+            if winerror::SUCCEEDED(hr_debug) {
+                debug_device.ReportLiveDeviceObjects(d3d12sdklayers::D3D12_RLDO_DETAIL);
+                debug_device.destroy();
+            }
+
+            self.raw.destroy();
         }
     }
 }
 
 pub struct Instance {
-    pub(crate) factory: ComPtr<dxgi1_4::IDXGIFactory4>,
+    pub(crate) factory: native::WeakPtr<dxgi1_4::IDXGIFactory4>,
+}
+
+impl Drop for Instance {
+    fn drop(&mut self) {
+        unsafe {
+            self.factory.destroy();
+        }
+    }
 }
 
 unsafe impl Send for Instance {}
@@ -672,21 +684,21 @@ impl Instance {
             };
 
             if winerror::SUCCEEDED(hr) {
-                unsafe { (*debug_controller).EnableDebugLayer() };
                 unsafe {
+                    (*debug_controller).EnableDebugLayer();
                     (*debug_controller).Release();
                 }
             }
         }
 
         // Create DXGI factory
-        let mut dxgi_factory: *mut dxgi1_4::IDXGIFactory4 = ptr::null_mut();
+        let mut dxgi_factory = native::WeakPtr::<dxgi1_4::IDXGIFactory4>::null();
 
         let hr = unsafe {
             dxgi1_3::CreateDXGIFactory2(
                 dxgi1_3::DXGI_CREATE_FACTORY_DEBUG,
                 &dxgi1_4::IDXGIFactory4::uuidof(),
-                &mut dxgi_factory as *mut *mut _ as *mut *mut _,
+                dxgi_factory.mut_void(),
             )
         };
 
@@ -695,7 +707,7 @@ impl Instance {
         }
 
         Instance {
-            factory: unsafe { ComPtr::from_raw(dxgi_factory) },
+            factory: dxgi_factory,
         }
     }
 }
@@ -711,17 +723,26 @@ impl hal::Instance for Instance {
         let mut adapters = Vec::new();
         loop {
             let adapter = {
-                let mut adapter: *mut dxgi::IDXGIAdapter1 = ptr::null_mut();
-                let hr = unsafe {
+                let mut adapter1 = native::WeakPtr::<dxgi::IDXGIAdapter1>::null();
+                let hr1 = unsafe {
                     self.factory
-                        .EnumAdapters1(cur_index, &mut adapter as *mut *mut _)
+                        .EnumAdapters1(cur_index, adapter1.mut_void() as *mut *mut _)
                 };
 
-                if hr == winerror::DXGI_ERROR_NOT_FOUND {
+                if hr1 == winerror::DXGI_ERROR_NOT_FOUND {
                     break;
                 }
 
-                unsafe { ComPtr::from_raw(adapter as *mut dxgi1_2::IDXGIAdapter2) }
+                let (adapter2, hr2) = unsafe { adapter1.cast::<dxgi1_2::IDXGIAdapter2>() };
+                if !winerror::SUCCEEDED(hr2) {
+                    error!("Failed casting to Adapter2");
+                    break;
+                }
+
+                unsafe {
+                    adapter1.destroy();
+                }
+                adapter2
             };
 
             cur_index += 1;
@@ -729,20 +750,11 @@ impl hal::Instance for Instance {
             // Check for D3D12 support
             // Create temporaty device to get physical device information
             let device = {
-                let mut device = ptr::null_mut();
-                let hr = unsafe {
-                    d3d12::D3D12CreateDevice(
-                        adapter.as_raw() as *mut _,
-                        d3dcommon::D3D_FEATURE_LEVEL_11_0,
-                        &d3d12::ID3D12Device::uuidof(),
-                        &mut device as *mut *mut _ as *mut *mut _,
-                    )
-                };
+                let (device, hr) = native::Device::create(adapter, native::FeatureLevel::L11_0);
                 if !winerror::SUCCEEDED(hr) {
                     continue;
                 }
-
-                unsafe { ComPtr::<d3d12::ID3D12Device>::from_raw(device) }
+                device
             };
 
             // We have found a possible adapter
@@ -998,18 +1010,18 @@ impl hal::Instance for Instance {
                 // Get the IDXGIAdapter3 from the created device to query video memory information.
                 let adapter_id = unsafe { device.GetAdapterLuid() };
                 let adapter = {
-                    let mut adapter: *mut dxgi1_4::IDXGIAdapter3 = ptr::null_mut();
+                    let mut adapter = native::WeakPtr::<dxgi1_4::IDXGIAdapter3>::null();
                     unsafe {
                         assert_eq!(
                             winerror::S_OK,
                             self.factory.EnumAdapterByLuid(
                                 adapter_id,
                                 &dxgi1_4::IDXGIAdapter3::uuidof(),
-                                &mut adapter as *mut *mut _ as *mut *mut _,
+                                adapter.mut_void(),
                             )
                         );
-                        ComPtr::from_raw(adapter)
                     }
+                    adapter
                 };
 
                 let query_memory = |segment: dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP| unsafe {
@@ -1030,6 +1042,10 @@ impl hal::Instance for Instance {
                     _ => vec![local],
                 }
             };
+
+            unsafe {
+                device.destroy();
+            }
 
             let physical_device = PhysicalDevice {
                 adapter,
