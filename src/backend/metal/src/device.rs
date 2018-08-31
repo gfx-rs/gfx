@@ -588,6 +588,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
             // and those need to operate on sizes being multiples of 4.
             non_coherent_atom_size: 4,
+            max_sampler_anisotropy: 16.,
         }
     }
 }

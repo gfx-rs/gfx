@@ -359,6 +359,7 @@ impl hal::Instance for Instance {
                 framebuffer_stencil_samples_count: 1,    // TODO
                 max_color_attachments: 1,                // TODO
                 non_coherent_atom_size: 1,               // TODO
+                max_sampler_anisotropy: 16.,
             };
 
             let features = get_features(device.clone(), feature_level);

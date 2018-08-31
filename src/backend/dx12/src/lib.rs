@@ -1078,6 +1078,7 @@ impl hal::Instance for Instance {
                     framebuffer_stencil_samples_count: 0b101,
                     max_color_attachments: 1, // TODO
                     non_coherent_atom_size: 1, //TODO: confirm
+                    max_sampler_anisotropy: 16.,
                 },
                 format_properties: Arc::new(format_properties),
                 private_caps: Capabilities {
