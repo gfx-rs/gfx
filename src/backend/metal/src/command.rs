@@ -38,7 +38,7 @@ const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
 /// Enable an optimization to have multi-layered render passed
 /// with clear operations set up to implement our `clear_image`
 /// Note: currently doesn't work, needs a repro case for Apple
-const CLEAR_IMAGE_ARRAY: bool = false;
+const CLEAR_IMAGE_ARRAY: bool = false && cfg!(target_os = "macos");
 /// Number of frames to average when reporting the performance counters.
 const COUNTERS_REPORT_WINDOW: usize = 0;
 
