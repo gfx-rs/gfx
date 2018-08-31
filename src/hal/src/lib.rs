@@ -226,7 +226,7 @@ bitflags! {
 }
 
 /// Resource limits of a particular graphics device.
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
     /// Maximum supported texture size.
@@ -274,6 +274,8 @@ pub struct Limits {
     pub max_color_attachments: usize,
     /// Size and alignment in bytes that bounds concurrent access to host-mapped device memory.
     pub non_coherent_atom_size: usize,
+    /// Maximum degree of sampler anisotropy.
+    pub max_sampler_anisotropy: f32,
 }
 
 /// Describes the type of geometric primitives,
