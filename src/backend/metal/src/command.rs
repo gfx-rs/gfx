@@ -1131,8 +1131,7 @@ impl EncoderState {
 }
 
 fn div(a: u32, b: u32) -> u32 {
-    assert_eq!(a % b, 0);
-    a / b
+    (a + b - 1) / b
 }
 
 fn compute_pitches(
