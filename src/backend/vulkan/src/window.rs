@@ -13,7 +13,7 @@ use hal::format::Format;
 use winit;
 
 use conv;
-use {VK_ENTRY, Backend, Instance, PhysicalDevice, QueueFamily, RawInstance};
+use {ENTRY, Backend, Instance, PhysicalDevice, QueueFamily, RawInstance};
 
 
 pub struct Surface {
@@ -44,12 +44,12 @@ impl Instance {
     pub fn create_surface_from_xlib(
         &self, dpy: *mut vk::Display, window: vk::Window
     ) -> Surface {
-        let entry = VK_ENTRY
+        let entry = ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
 
-        if !self.extensions.contains(&vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME) {
-            panic!("Vulkan driver does not support VK_KHR_XLIB_SURFACE");
+        if !self.extensions.contains(&ext::XlibSurface::name().to_str().unwrap()) {
+            panic!("Vulkan driver does not support KHR_XLIB_SURFACE");
         }
 
         let surface = {
@@ -57,7 +57,7 @@ impl Instance {
                 .expect("XlibSurface::new() failed");
 
             let info = vk::XlibSurfaceCreateInfoKHR {
-                s_type: vk::StructureType::XlibSurfaceCreateInfoKhr,
+                s_type: vk::StructureType::XLIB_SURFACE_CREATE_INFO_KHR,
                 p_next: ptr::null(),
                 flags: vk::XlibSurfaceCreateFlagsKHR::empty(),
                 window,
@@ -86,12 +86,12 @@ impl Instance {
     pub fn create_surface_from_xcb(
         &self, connection: *mut vk::xcb_connection_t, window: vk::xcb_window_t
     ) -> Surface {
-        let entry = VK_ENTRY
+        let entry = ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
 
-        if !self.extensions.contains(&vk::VK_KHR_XCB_SURFACE_EXTENSION_NAME) {
-            panic!("Vulkan driver does not support VK_KHR_XCB_SURFACE");
+        if !self.extensions.contains(&ext::XcbSurface::name().to_str().unwrap()) {
+            panic!("Vulkan driver does not support KHR_XCB_SURFACE");
         }
 
         let surface = {
@@ -99,7 +99,7 @@ impl Instance {
                 .expect("XcbSurface::new() failed");
 
             let info = vk::XcbSurfaceCreateInfoKHR {
-                s_type: vk::StructureType::XcbSurfaceCreateInfoKhr,
+                s_type: vk::StructureType::XCB_SURFACE_CREATE_INFO_KHR,
                 p_next: ptr::null(),
                 flags: vk::XcbSurfaceCreateFlagsKHR::empty(),
                 window,
@@ -131,12 +131,12 @@ impl Instance {
     pub fn create_surface_from_wayland(
         &self, display: *mut c_void, surface: *mut c_void, width: Size, height: Size
     ) -> Surface {
-        let entry = VK_ENTRY
+        let entry = ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
 
-        if !self.extensions.contains(&vk::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME) {
-            panic!("Vulkan driver does not support VK_KHR_WAYLAND_SURFACE");
+        if !self.extensions.contains(&ext::WaylandSurface::name().to_str().unwrap()) {
+            panic!("Vulkan driver does not support KHR_WAYLAND_SURFACE");
         }
 
         let surface = {
@@ -144,7 +144,7 @@ impl Instance {
                 .expect("WaylandSurface failed");
 
             let info = vk::WaylandSurfaceCreateInfoKHR {
-                s_type: vk::StructureType::WaylandSurfaceCreateInfoKhr,
+                s_type: vk::StructureType::WAYLAND_SURFACE_CREATE_INFO_KHR,
                 p_next: ptr::null(),
                 flags: vk::WaylandSurfaceCreateFlagsKHR::empty(),
                 display: display as *mut _,
@@ -162,7 +162,7 @@ impl Instance {
     pub fn create_surface_android(
         &self, window: *const c_void, width: Size, height: Size
     ) -> Surface {
-        let entry = VK_ENTRY
+        let entry = ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
 
@@ -171,7 +171,7 @@ impl Instance {
                 .expect("AndroidSurface failed");
 
             let info = vk::AndroidSurfaceCreateInfoKHR {
-                s_type: vk::StructureType::AndroidSurfaceCreateInfoKhr,
+                s_type: vk::StructureType::ANDROID_SURFACE_CREATE_INFO_KHR,
                 p_next: ptr::null(),
                 flags: vk::AndroidSurfaceCreateFlagsKHR::empty(),
                 window: window as *const _ as *mut _,
@@ -188,12 +188,12 @@ impl Instance {
     pub fn create_surface_from_hwnd(
         &self, hinstance: *mut c_void, hwnd: *mut c_void
     ) -> Surface {
-        let entry = VK_ENTRY
+        let entry = ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
 
-        if !self.extensions.contains(&vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME) {
-            panic!("Vulkan driver does not support VK_KHR_WIN32_SURFACE");
+        if !self.extensions.contains(&ext::Win32Surface::name().to_str().unwrap()) {
+            panic!("Vulkan driver does not support KHR_WIN32_SURFACE");
         }
 
         let surface = {
@@ -202,7 +202,7 @@ impl Instance {
 
             unsafe {
                 let info = vk::Win32SurfaceCreateInfoKHR {
-                    s_type: vk::StructureType::Win32SurfaceCreateInfoKhr,
+                    s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
                     p_next: ptr::null(),
                     flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
                     hinstance: hinstance as *mut _,
@@ -235,7 +235,7 @@ impl Instance {
         {
             use winit::os::unix::WindowExt;
 
-            if self.extensions.contains(&vk::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME) {
+            if self.extensions.contains(&ext::WaylandSurface::name().to_str().unwrap()) {
                 if let Some(display) = window.get_wayland_display() {
                     let display: *mut c_void = display as *mut _;
                     let surface: *mut c_void = window.get_wayland_surface().unwrap() as *mut _;
@@ -243,7 +243,7 @@ impl Instance {
                     return self.create_surface_from_wayland(display, surface, px.width as _, px.height as _);
                 }
             }
-            if self.extensions.contains(&vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME) {
+            if self.extensions.contains(&ext::XlibSurface::name().to_str().unwrap()) {
                 if let Some(display) = window.get_xlib_display() {
                     let window = window.get_xlib_window().unwrap();
                     return self.create_surface_from_xlib(display as _, window);
@@ -273,7 +273,7 @@ impl Instance {
     fn create_surface_from_vk_surface_khr(
         &self, surface: vk::SurfaceKHR, width: Size, height: Size, samples: NumSamples
     ) -> Surface {
-        let entry = VK_ENTRY
+        let entry = ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
 
@@ -347,9 +347,9 @@ impl hal::Surface<Backend> for Surface {
 
         let formats = match formats[0].format {
             // If pSurfaceFormats includes just one entry, whose value for format is
-            // VK_FORMAT_UNDEFINED, surface has no preferred format. In this case, the application
+            // FORMAT_UNDEFINED, surface has no preferred format. In this case, the application
             // can use any valid VkFormat value.
-            vk::Format::Undefined => None,
+            vk::Format::UNDEFINED => None,
             _ => {
                 Some(formats
                     .into_iter()
@@ -403,9 +403,9 @@ impl hal::Swapchain<Backend> for Swapchain {
 
         match index {
             Ok(i) => Ok(i),
-            Err(vk::Result::NotReady) => Err(hal::AcquireError::NotReady),
-            Err(vk::Result::SuboptimalKhr) | Err(vk::Result::ErrorOutOfDateKhr) => Err(hal::AcquireError::OutOfDate),
-            Err(vk::Result::ErrorSurfaceLostKhr) => Err(hal::AcquireError::SurfaceLost),
+            Err(vk::Result::NOT_READY) => Err(hal::AcquireError::NotReady),
+            Err(vk::Result::SUBOPTIMAL_KHR) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(hal::AcquireError::OutOfDate),
+            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => Err(hal::AcquireError::SurfaceLost),
             _ => panic!("Failed to acquire image."),
         }
     }

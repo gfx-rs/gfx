@@ -22,8 +22,8 @@ pub struct CommandBuffer {
 
 fn map_subpass_contents(contents: com::SubpassContents) -> vk::SubpassContents {
     match contents {
-        com::SubpassContents::Inline => vk::SubpassContents::Inline,
-        com::SubpassContents::SecondaryBuffers => vk::SubpassContents::SecondaryCommandBuffers,
+        com::SubpassContents::Inline => vk::SubpassContents::INLINE,
+        com::SubpassContents::SecondaryBuffers => vk::SubpassContents::SECONDARY_COMMAND_BUFFERS,
     }
 }
 
@@ -85,18 +85,18 @@ impl CommandBuffer {
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(&mut self, flags: com::CommandBufferFlags, info: com::CommandBufferInheritanceInfo<Backend>) {
         let inheritance_info = vk::CommandBufferInheritanceInfo {
-            s_type: vk::StructureType::CommandBufferInheritanceInfo,
+            s_type: vk::StructureType::COMMAND_BUFFER_INHERITANCE_INFO,
             p_next: ptr::null(),
-            render_pass: info.subpass.map_or(vk::types::RenderPass::null(), |subpass| subpass.main_pass.raw),
+            render_pass: info.subpass.map_or(vk::RenderPass::null(), |subpass| subpass.main_pass.raw),
             subpass: info.subpass.map_or(0, |subpass| subpass.index as u32),
-            framebuffer: info.framebuffer.map_or(vk::types::Framebuffer::null(), |buffer| buffer.raw),
-            occlusion_query_enable: if info.occlusion_query_enable { vk::VK_TRUE } else { vk::VK_FALSE },
+            framebuffer: info.framebuffer.map_or(vk::Framebuffer::null(), |buffer| buffer.raw),
+            occlusion_query_enable: if info.occlusion_query_enable { vk::TRUE } else { vk::FALSE },
             query_flags: conv::map_query_control_flags(info.occlusion_query_flags),
             pipeline_statistics: conv::map_pipeline_statistics(info.pipeline_statistics),
         };
 
         let info = vk::CommandBufferBeginInfo {
-            s_type: vk::StructureType::CommandBufferBeginInfo,
+            s_type: vk::StructureType::COMMAND_BUFFER_BEGIN_INFO,
             p_next: ptr::null(),
             flags: conv::map_command_buffer_flags(flags),
             p_inheritance_info: &inheritance_info,
@@ -115,7 +115,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     fn reset(&mut self, release_resources: bool) {
         let flags = if release_resources {
-            vk::COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT
+            vk::CommandBufferResetFlags::RELEASE_RESOURCES
         } else {
             vk::CommandBufferResetFlags::empty()
         };
@@ -148,7 +148,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .collect();
 
         let info = vk::RenderPassBeginInfo {
-            s_type: vk::StructureType::RenderPassBeginInfo,
+            s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
             p_next: ptr::null(),
             render_pass: render_pass.raw,
             framebuffer: frame_buffer.raw,
@@ -197,7 +197,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             match *barrier.borrow() {
                 memory::Barrier::AllBuffers(ref access) => {
                     global_bars.push(vk::MemoryBarrier {
-                        s_type: vk::StructureType::MemoryBarrier,
+                        s_type: vk::StructureType::MEMORY_BARRIER,
                         p_next: ptr::null(),
                         src_access_mask: conv::map_buffer_access(access.start),
                         dst_access_mask: conv::map_buffer_access(access.end),
@@ -205,7 +205,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
                 memory::Barrier::AllImages(ref access) => {
                     global_bars.push(vk::MemoryBarrier {
-                        s_type: vk::StructureType::MemoryBarrier,
+                        s_type: vk::StructureType::MEMORY_BARRIER,
                         p_next: ptr::null(),
                         src_access_mask: conv::map_image_access(access.start),
                         dst_access_mask: conv::map_image_access(access.end),
@@ -213,28 +213,28 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
                 memory::Barrier::Buffer { ref states, target} => {
                     buffer_bars.push(vk::BufferMemoryBarrier {
-                        s_type: vk::StructureType::BufferMemoryBarrier,
+                        s_type: vk::StructureType::BUFFER_MEMORY_BARRIER,
                         p_next: ptr::null(),
                         src_access_mask: conv::map_buffer_access(states.start),
                         dst_access_mask: conv::map_buffer_access(states.end),
-                        src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
-                        dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                        src_queue_family_index: vk::QUEUE_FAMILY_IGNORED, // TODO
+                        dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED, // TODO
                         buffer: target.raw,
                         offset: 0,
-                        size: vk::VK_WHOLE_SIZE,
+                        size: vk::WHOLE_SIZE,
                     });
                 }
                 memory::Barrier::Image { ref states, target, ref range } => {
                     let subresource_range = conv::map_subresource_range(range);
                     image_bars.push(vk::ImageMemoryBarrier {
-                        s_type: vk::StructureType::ImageMemoryBarrier,
+                        s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
                         p_next: ptr::null(),
                         src_access_mask: conv::map_image_access(states.start.0),
                         dst_access_mask: conv::map_image_access(states.end.0),
                         old_layout: conv::map_image_layout(states.start.1),
                         new_layout: conv::map_image_layout(states.end.1),
-                        src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
-                        dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                        src_queue_family_index: vk::QUEUE_FAMILY_IGNORED, // TODO
+                        dst_queue_family_index: vk::QUEUE_FAMILY_IGNORED, // TODO
                         image: target.raw,
                         subresource_range,
                     });
@@ -365,18 +365,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 match *clear.borrow() {
                     com::AttachmentClear::Color { index, value } => {
                         vk::ClearAttachment {
-                            aspect_mask: vk::IMAGE_ASPECT_COLOR_BIT,
+                            aspect_mask: vk::ImageAspectFlags::COLOR,
                             color_attachment: index as _,
                             clear_value: vk::ClearValue { color: conv::map_clear_color(value) },
                         }
                     }
                     com::AttachmentClear::DepthStencil { depth, stencil } => {
                         vk::ClearAttachment {
-                            aspect_mask: if depth.is_some() { vk::IMAGE_ASPECT_DEPTH_BIT } else { vk::ImageAspectFlags::empty() } |
-                                if stencil.is_some() { vk::IMAGE_ASPECT_STENCIL_BIT } else { vk::ImageAspectFlags::empty() },
+                            aspect_mask: if depth.is_some() { vk::ImageAspectFlags::DEPTH } else { vk::ImageAspectFlags::empty() } |
+                                if stencil.is_some() { vk::ImageAspectFlags::STENCIL } else { vk::ImageAspectFlags::empty() },
                             color_attachment: 0,
                             clear_value: vk::ClearValue {
-                                depth: vk::ClearDepthStencilValue {
+                                depth_stencil: vk::ClearDepthStencilValue {
                                     depth: depth.unwrap_or_default(),
                                     stencil: stencil.unwrap_or_default(),
                                 },
@@ -591,7 +591,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe {
             self.device.0.cmd_bind_pipeline(
                 self.raw,
-                vk::PipelineBindPoint::Graphics,
+                vk::PipelineBindPoint::GRAPHICS,
                 pipeline.0,
             )
         }
@@ -610,7 +610,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
         self.bind_descriptor_sets(
-            vk::PipelineBindPoint::Graphics,
+            vk::PipelineBindPoint::GRAPHICS,
             layout,
             first_set,
             sets,
@@ -622,7 +622,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unsafe {
             self.device.0.cmd_bind_pipeline(
                 self.raw,
-                vk::PipelineBindPoint::Compute,
+                vk::PipelineBindPoint::COMPUTE,
                 pipeline.0,
             )
         }
@@ -641,7 +641,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
         self.bind_descriptor_sets(
-            vk::PipelineBindPoint::Compute,
+            vk::PipelineBindPoint::COMPUTE,
             layout,
             first_set,
             sets,
@@ -930,7 +930,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             self.device.0.cmd_push_constants(
                 self.raw,
                 layout.raw,
-                vk::SHADER_STAGE_COMPUTE_BIT,
+                vk::ShaderStageFlags::COMPUTE,
                 offset * 4,
                 memory::cast_slice(constants),
             );

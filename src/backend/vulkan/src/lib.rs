@@ -52,32 +52,44 @@ mod pool;
 mod result;
 mod window;
 
-const LAYERS: &'static [&'static str] = &[#[cfg(debug_assertions)]
-"VK_LAYER_LUNARG_standard_validation"];
-const EXTENSIONS: &'static [&'static str] = &[#[cfg(debug_assertions)]
-"VK_EXT_debug_report"];
-const DEVICE_EXTENSIONS: &'static [&'static str] = &[vk::VK_KHR_SWAPCHAIN_EXTENSION_NAME];
-const SURFACE_EXTENSIONS: &'static [&'static str] = &[
-    vk::VK_KHR_SURFACE_EXTENSION_NAME,
-    // Platform-specific WSI extensions
-    vk::VK_KHR_XLIB_SURFACE_EXTENSION_NAME,
-    vk::VK_KHR_XCB_SURFACE_EXTENSION_NAME,
-    vk::VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME,
-    vk::VK_KHR_MIR_SURFACE_EXTENSION_NAME,
-    vk::VK_KHR_ANDROID_SURFACE_EXTENSION_NAME,
-    vk::VK_KHR_WIN32_SURFACE_EXTENSION_NAME,
-];
+//TODO: confirm whether #[cfg...] is properly placed
+fn get_layer_names() -> Vec<&'static str> {
+    vec![#[cfg(debug_assertions)]
+        "VK_LAYER_LUNARG_standard_validation"]
+}
+
+fn get_extension_names() -> Vec<&'static str> {
+    vec![#[cfg(debug_assertions)]
+        "VK_EXT_debug_report"]
+}
+
+fn get_device_extension_names() -> Vec<&'static str> {
+    vec![ext::Swapchain::name().to_str().unwrap()]
+}
+
+fn get_surface_extension_names() -> Vec<&'static str> {
+    vec![
+        ext::Surface::name().to_str().unwrap(),
+        // Platform-specific WSI extensions
+        ext::XlibSurface::name().to_str().unwrap(),
+        ext::XcbSurface::name().to_str().unwrap(),
+        ext::WaylandSurface::name().to_str().unwrap(),
+        ext::MirSurface::name().to_str().unwrap(),
+        ext::AndroidSurface::name().to_str().unwrap(),
+        ext::Win32Surface::name().to_str().unwrap(),
+    ]
+}
 
 #[cfg(not(feature = "use-rtld-next"))]
 lazy_static! {
     // Entry function pointers
-    pub static ref VK_ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
+    pub static ref ENTRY: Result<Entry<V1_0>, LoadingError> = Entry::new();
 }
 
 #[cfg(feature = "use-rtld-next")]
 lazy_static! {
     // Entry function pointers
-    pub static ref VK_ENTRY: Result<EntryCustom<V1_0, ()>, LoadingError>
+    pub static ref ENTRY: Result<EntryCustom<V1_0, ()>, LoadingError>
         = EntryCustom::new_custom(
             || Ok(()),
             |_, name| unsafe {
@@ -114,16 +126,16 @@ pub struct Instance {
 }
 
 fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
-    if flags.subset(vk::QUEUE_GRAPHICS_BIT | vk::QUEUE_COMPUTE_BIT) {
+    if flags.subset(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE) {
         // TRANSFER_BIT optional
         QueueType::General
-    } else if flags.subset(vk::QUEUE_GRAPHICS_BIT) {
+    } else if flags.subset(vk::QueueFlags::GRAPHICS) {
         // TRANSFER_BIT optional
         QueueType::Graphics
-    } else if flags.subset(vk::QUEUE_COMPUTE_BIT) {
+    } else if flags.subset(vk::QueueFlags::COMPUTE) {
         // TRANSFER_BIT optional
         QueueType::Compute
-    } else if flags.subset(vk::QUEUE_TRANSFER_BIT) {
+    } else if flags.subset(vk::QueueFlags::TRANSFER) {
         QueueType::Transfer
     } else {
         // TODO: present only queues?
@@ -137,33 +149,33 @@ extern "system" fn callback(
     _object: u64,
     _location: usize,
     _msg_code: i32,
-    layer_prefix: *const vk::types::c_char,
-    description: *const vk::types::c_char,
-    _user_data: *mut vk::types::c_void,
+    layer_prefix: *const std::os::raw::c_char,
+    description: *const std::os::raw::c_char,
+    _user_data: *mut std::os::raw::c_void,
 ) -> vk::Bool32 {
     unsafe {
         let level = match type_ {
-            vk::DEBUG_REPORT_ERROR_BIT_EXT => log::Level::Error,
-            vk::DEBUG_REPORT_DEBUG_BIT_EXT => log::Level::Debug,
+            vk::DebugReportFlagsEXT::ERROR => log::Level::Error,
+            vk::DebugReportFlagsEXT::DEBUG => log::Level::Debug,
             _ => log::Level::Warn,
         };
         let layer_prefix = CStr::from_ptr(layer_prefix).to_str().unwrap();
         let description = CStr::from_ptr(description).to_str().unwrap();
         log!(level, "[{}] {}", layer_prefix, description);
-        vk::VK_FALSE
+        vk::FALSE
     }
 }
 
 impl Instance {
     pub fn create(name: &str, version: u32) -> Self {
         // TODO: return errors instead of panic
-        let entry = VK_ENTRY
+        let entry = ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
 
         let app_name = CString::new(name).unwrap();
         let app_info = vk::ApplicationInfo {
-            s_type: vk::StructureType::ApplicationInfo,
+            s_type: vk::StructureType::APPLICATION_INFO,
             p_next: ptr::null(),
             p_application_name: app_name.as_ptr(),
             application_version: version,
@@ -181,9 +193,9 @@ impl Instance {
             .expect("Unable to enumerate instance layers");
 
         // Check our xtensions against the available extensions
-        let extensions = SURFACE_EXTENSIONS
+        let extensions = get_surface_extension_names()
             .iter()
-            .chain(EXTENSIONS.iter())
+            .chain(get_extension_names().iter())
             .filter_map(|&ext| {
                 instance_extensions
                     .iter()
@@ -200,7 +212,7 @@ impl Instance {
             .collect::<Vec<&str>>();
 
         // Check requested layers against the available layers
-        let layers = LAYERS
+        let layers = get_layer_names()
             .iter()
             .filter_map(|&layer| {
                 instance_layers
@@ -227,7 +239,7 @@ impl Instance {
             let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
 
             let create_info = vk::InstanceCreateInfo {
-                s_type: vk::StructureType::InstanceCreateInfo,
+                s_type: vk::StructureType::INSTANCE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::InstanceCreateFlags::empty(),
                 p_application_info: &app_info,
@@ -245,11 +257,11 @@ impl Instance {
         let debug_report = {
             let ext = ext::DebugReport::new(entry, &instance).unwrap();
             let info = vk::DebugReportCallbackCreateInfoEXT {
-                s_type: vk::StructureType::DebugReportCallbackCreateInfoExt,
+                s_type: vk::StructureType::DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
                 p_next: ptr::null(),
-                flags: vk::DEBUG_REPORT_WARNING_BIT_EXT
-                    | vk::DEBUG_REPORT_PERFORMANCE_WARNING_BIT_EXT
-                    | vk::DEBUG_REPORT_ERROR_BIT_EXT,
+                flags: vk::DebugReportFlagsEXT::WARNING
+                    | vk::DebugReportFlagsEXT::PERFORMANCE_WARNING
+                    | vk::DebugReportFlagsEXT::ERROR,
                 pfn_callback: callback,
                 p_user_data: ptr::null_mut(),
             };
@@ -287,12 +299,13 @@ impl hal::Instance for Instance {
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
                     device_type: match properties.device_type {
-                        ash::vk::PhysicalDeviceType::Other => DeviceType::Other,
-                        ash::vk::PhysicalDeviceType::IntegratedGpu => DeviceType::IntegratedGpu,
-                        ash::vk::PhysicalDeviceType::DiscreteGpu => DeviceType::DiscreteGpu,
-                        ash::vk::PhysicalDeviceType::VirtualGpu => DeviceType::VirtualGpu,
-                        ash::vk::PhysicalDeviceType::Cpu => DeviceType::Cpu,
-                    },                    
+                        ash::vk::PhysicalDeviceType::INTEGRATED_GPU => DeviceType::IntegratedGpu,
+                        ash::vk::PhysicalDeviceType::DISCRETE_GPU => DeviceType::DiscreteGpu,
+                        ash::vk::PhysicalDeviceType::VIRTUAL_GPU => DeviceType::VirtualGpu,
+                        ash::vk::PhysicalDeviceType::CPU => DeviceType::Cpu,
+                        //TODO: confirm if it is correct to bunch _ with OTHER
+                        ash::vk::PhysicalDeviceType::OTHER | _ => DeviceType::Other,
+                    },
                 };
                 let physical_device = PhysicalDevice {
                     instance: self.raw.clone(),
@@ -354,7 +367,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let family_infos = families
             .iter()
             .map(|&(family, priorities)| vk::DeviceQueueCreateInfo {
-                s_type: vk::StructureType::DeviceQueueCreateInfo,
+                s_type: vk::StructureType::DEVICE_QUEUE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::DeviceQueueCreateFlags::empty(),
                 queue_family_index: family.index,
@@ -368,7 +381,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         // Create device
         let device_raw = {
-            let cstrings = DEVICE_EXTENSIONS
+            let cstrings = get_device_extension_names()
                 .iter()
                 .map(|&s| CString::new(s).unwrap())
                 .collect::<Vec<_>>();
@@ -378,7 +391,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             // TODO: derive from `features`
             let enabled_features = unsafe { mem::zeroed() };
             let info = vk::DeviceCreateInfo {
-                s_type: vk::StructureType::DeviceCreateInfo,
+                s_type: vk::StructureType::DEVICE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::DeviceCreateFlags::empty(),
                 queue_create_info_count: family_infos.len() as u32,
@@ -402,7 +415,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
-        let swapchain_fn = vk::SwapchainFn::load(|name| unsafe {
+        let swapchain_fn = vk::KhrSwapchainFn::load(|name| unsafe {
             mem::transmute(
                 self.instance
                     .0
@@ -441,7 +454,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
         let properties = self.instance.0.get_physical_device_format_properties(
             self.handle,
-            format.map_or(vk::Format::Undefined, conv::map_format),
+            format.map_or(vk::Format::UNDEFINED, conv::map_format),
         );
 
         format::Properties {
@@ -463,9 +476,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             self.handle,
             conv::map_format(format),
             match dimensions {
-                1 => vk::ImageType::Type1d,
-                2 => vk::ImageType::Type2d,
-                3 => vk::ImageType::Type3d,
+                1 => vk::ImageType::TYPE_1D,
+                2 => vk::ImageType::TYPE_2D,
+                3 => vk::ImageType::TYPE_3D,
                 _ => panic!("Unexpected image dimensionality: {}", dimensions),
             },
             conv::map_tiling(tiling),
@@ -483,7 +496,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 sample_count_mask: props.sample_counts.flags() as _,
                 max_resource_size: props.max_resource_size as _,
             }),
-            Err(vk::Result::ErrorFormatNotSupported) => None,
+            Err(vk::Result::ERROR_FORMAT_NOT_SUPPORTED) => None,
             Err(other) => {
                 error!("Unexpected error in `image_format_properties`: {:?}", other);
                 None
@@ -508,31 +521,31 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
                 if mem
                     .property_flags
-                    .intersects(vk::MEMORY_PROPERTY_DEVICE_LOCAL_BIT)
+                    .intersects(vk::MemoryPropertyFlags::DEVICE_LOCAL)
                 {
                     type_flags |= Properties::DEVICE_LOCAL;
                 }
                 if mem
                     .property_flags
-                    .intersects(vk::MEMORY_PROPERTY_HOST_COHERENT_BIT)
+                    .intersects(vk::MemoryPropertyFlags::HOST_COHERENT)
                 {
                     type_flags |= Properties::COHERENT;
                 }
                 if mem
                     .property_flags
-                    .intersects(vk::MEMORY_PROPERTY_HOST_CACHED_BIT)
+                    .intersects(vk::MemoryPropertyFlags::HOST_CACHED)
                 {
                     type_flags |= Properties::CPU_CACHED;
                 }
                 if mem
                     .property_flags
-                    .intersects(vk::MEMORY_PROPERTY_HOST_VISIBLE_BIT)
+                    .intersects(vk::MemoryPropertyFlags::HOST_VISIBLE)
                 {
                     type_flags |= Properties::CPU_VISIBLE;
                 }
                 if mem
                     .property_flags
-                    .intersects(vk::MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT)
+                    .intersects(vk::MemoryPropertyFlags::LAZILY_ALLOCATED)
                 {
                     type_flags |= Properties::LAZILY_ALLOCATED;
                 }
@@ -649,7 +662,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let max_group_size = limits.max_compute_work_group_size;
 
         Limits {
-            max_texture_size: limits.max_image_dimension3d as _,
+            max_texture_size: limits.max_image_dimension3_d as _,
             max_texel_elements: limits.max_texel_buffer_elements as _,
             max_patch_size: limits.max_tessellation_patch_size as PatchSize,
             max_viewports: limits.max_viewports as _,
@@ -705,7 +718,7 @@ pub type RawCommandQueue = Arc<vk::Queue>;
 pub struct CommandQueue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
-    swapchain_fn: vk::SwapchainFn,
+    swapchain_fn: vk::KhrSwapchainFn,
 }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
@@ -739,7 +752,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             .collect::<Vec<_>>();
 
         let info = vk::SubmitInfo {
-            s_type: vk::StructureType::SubmitInfo,
+            s_type: vk::StructureType::SUBMIT_INFO,
             p_next: ptr::null(),
             wait_semaphore_count: waits.len() as u32,
             p_wait_semaphores: waits.as_ptr(),
@@ -781,7 +794,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
 
         let info = vk::PresentInfoKHR {
-            s_type: vk::StructureType::PresentInfoKhr,
+            s_type: vk::StructureType::PRESENT_INFO_KHR,
             p_next: ptr::null(),
             wait_semaphore_count: semaphores.len() as _,
             p_wait_semaphores: semaphores.as_ptr(),
@@ -792,8 +805,8 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         };
 
         match unsafe { self.swapchain_fn.queue_present_khr(*self.raw, &info) } {
-            vk::Result::Success => Ok(()),
-            vk::Result::SuboptimalKhr | vk::Result::ErrorOutOfDateKhr => Err(()),
+            vk::Result::SUCCESS => Ok(()),
+            vk::Result::SUBOPTIMAL_KHR | vk::Result::ERROR_OUT_OF_DATE_KHR => Err(()),
             _ => panic!("Failed to present frame"),
         }
     }

@@ -27,7 +27,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
 
     fn allocate(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
         let info = vk::CommandBufferAllocateInfo {
-            s_type: vk::StructureType::CommandBufferAllocateInfo,
+            s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
             p_next: ptr::null(),
             command_pool: self.raw,
             level: conv::map_command_buffer_level(level),
