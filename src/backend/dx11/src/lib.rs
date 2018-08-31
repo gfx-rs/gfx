@@ -25,6 +25,8 @@ use hal::{
 use hal::{
     DrawCount, IndexCount, InstanceCount, SwapImageIndex, VertexCount, VertexOffset, WorkGroupCount,
 };
+use hal::format::ChannelType;
+use hal::command::{ClearColor, ClearColorRaw};
 
 use range_alloc::RangeAllocator;
 
@@ -90,8 +92,8 @@ mod shader;
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub(crate) struct ViewInfo {
-    #[derivative(Debug = "ignore")]
-    resource: *mut d3d11::ID3D11Resource,
+    #[derivative(Debug="ignore")]
+    resource: ComPtr<d3d11::ID3D11Resource>,
     kind: image::Kind,
     flags: image::StorageFlags,
     view_kind: image::ViewKind,
@@ -317,13 +319,11 @@ impl hal::Instance for Instance {
                         heap_index: 0,
                     },
                     hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
+                        properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
                         heap_index: 1,
                     },
                     hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE
-                            | Properties::COHERENT
-                            | Properties::CPU_CACHED,
+                        properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
                         heap_index: 1,
                     },
                 ],
@@ -819,26 +819,38 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
-struct AttachmentClear {
+pub struct AttachmentClear {
     subpass_id: Option<pass::SubpassId>,
-    value: Option<command::ClearValueRaw>,
-    stencil_value: Option<u32>,
+    attachment_id: usize,
+    raw: command::AttachmentClear,
 }
 
 #[derive(Debug, Clone)]
-struct RenderPassCache {
-    render_pass: RenderPass,
-    framebuffer: Framebuffer,
-    attachment_clear_values: Vec<AttachmentClear>,
-    current_subpass: usize,
+pub struct RenderPassCache {
+    pub render_pass: RenderPass,
+    pub framebuffer: Framebuffer,
+    pub attachment_clear_values: Vec<AttachmentClear>,
+    pub target_rect: pso::Rect,
+    pub current_subpass: usize,
 }
 
 impl RenderPassCache {
-    pub fn advance_subpass(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
-        let subpass = &self.render_pass.subpasses[self.current_subpass];
+    pub fn start_subpass(&mut self, internal: &mut internal::Internal, context: &ComPtr<d3d11::ID3D11DeviceContext>, cache: &mut CommandBufferState) {
+        let attachments = self.attachment_clear_values.iter().filter(|clear| clear.subpass_id == Some(self.current_subpass)).map(|clear| clear.raw);
 
-        let color_views = subpass
-            .color_attachments
+        cache.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::VIEWPORTS);
+        internal.clear_attachments(
+            context,
+            attachments,
+            &[pso::ClearRect {
+                rect: self.target_rect,
+                layers: 0..1
+            }],
+            &self
+        );
+
+        let subpass = &self.render_pass.subpasses[self.current_subpass];
+        let color_views = subpass.color_attachments
             .iter()
             .map(|&(id, _)| {
                 self.framebuffer.attachments[id]
@@ -849,61 +861,293 @@ impl RenderPassCache {
             })
             .collect::<Vec<_>>();
         let ds_view = match subpass.depth_stencil_attachment {
-            Some((id, _)) => self.framebuffer.attachments[id]
-                .dsv_handle
-                .clone()
-                .unwrap()
-                .as_raw(),
-            None => ptr::null_mut(),
+            Some((id, _)) => Some(self.framebuffer.attachments[id].dsv_handle.clone().unwrap().as_raw()),
+            None => None,
         };
 
-        unsafe {
-            context.OMSetRenderTargets(color_views.len() as UINT, color_views.as_ptr(), ds_view);
-        }
+        cache.set_render_targets(&color_views, ds_view);
+        cache.bind(context);
+    }
 
-        // performs clears for all the attachments first used in this subpass
-        for (view, clear) in self
-            .framebuffer
-            .attachments
-            .iter()
-            .zip(self.attachment_clear_values.iter())
-        {
-            if clear.subpass_id != Some(self.current_subpass) {
-                continue;
-            }
-
-            if let (Some(ref handle), Some(cv)) = (&view.rtv_handle, clear.value) {
-                unsafe {
-                    context.ClearRenderTargetView(handle.as_raw(), &cv.color.float32);
-                }
-            }
-
-            if let Some(ref handle) = view.dsv_handle {
-                let mut flags = 0;
-
-                let depth = clear.value.map(|cv| unsafe { cv.depth_stencil.depth });
-
-                let depth = if let Some(value) = depth {
-                    flags |= d3d11::D3D11_CLEAR_DEPTH;
-                    value
-                } else {
-                    0f32
-                };
-
-                let stencil = if let Some(value) = clear.stencil_value {
-                    flags |= d3d11::D3D11_CLEAR_STENCIL;
-                    value as u8
-                } else {
-                    0
-                };
-
-                unsafe {
-                    context.ClearDepthStencilView(handle.as_raw(), flags, depth, stencil);
-                }
-            }
-        }
-
+    pub fn next_subpass(&mut self) {
         self.current_subpass += 1;
+    }
+}
+
+bitflags! {
+    struct DirtyStateFlag : u32 {
+        const RENDER_TARGETS = (1 << 1);
+        const VERTEX_BUFFERS = (1 << 2);
+        const GRAPHICS_PIPELINE = (1 << 3);
+        const VIEWPORTS = (1 << 4);
+        const BLEND_STATE = (1 << 5);
+    }
+}
+
+#[derive(Derivative, Clone)]
+#[derivative(Debug)]
+pub struct CommandBufferState {
+    dirty_flag: DirtyStateFlag,
+
+    render_target_len: u32,
+    render_targets: [*mut d3d11::ID3D11RenderTargetView; 8],
+    depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
+    graphics_pipeline: Option<GraphicsPipeline>,
+
+    // a bitmask that keeps track of what vertex buffer bindings have been "bound" into
+    // our vec
+    bound_bindings: u32,
+    // a bitmask that hold the required binding slots to be bound for the currently
+    // bound pipeline
+    required_bindings: Option<u32>,
+    // the highest binding number in currently bound pipeline
+    max_bindings: Option<u32>,
+    #[derivative(Debug="ignore")]
+    viewports: Vec<d3d11::D3D11_VIEWPORT>,
+    vertex_buffers: Vec<*mut d3d11::ID3D11Buffer>,
+    vertex_offsets: Vec<u32>,
+    vertex_strides: Vec<u32>,
+    blend_factor: Option<[f32; 4]>,
+    // we can only support one face (rather, both faces must have the same value)
+    stencil_ref: Option<pso::StencilValue>,
+    stencil_read_mask: Option<pso::StencilValue>,
+    stencil_write_mask: Option<pso::StencilValue>,
+    current_blend: Option<*mut d3d11::ID3D11BlendState>,
+}
+
+impl CommandBufferState {
+    fn new() -> Self {
+        CommandBufferState {
+            dirty_flag: DirtyStateFlag::empty(),
+            render_target_len: 0,
+            render_targets: [ptr::null_mut(); 8],
+            depth_target: None,
+            graphics_pipeline: None,
+            bound_bindings: 0,
+            required_bindings: None,
+            max_bindings: None,
+            viewports: Vec::new(),
+            vertex_buffers: Vec::new(),
+            vertex_offsets: Vec::new(),
+            vertex_strides: Vec::new(),
+            blend_factor: None,
+            stencil_ref: None,
+            stencil_read_mask: None,
+            stencil_write_mask: None,
+            current_blend: None,
+        }
+    }
+
+    fn clear(&mut self) {
+        self.render_target_len = 0;
+        self.depth_target = None;
+        self.graphics_pipeline = None;
+        self.bound_bindings = 0;
+        self.required_bindings = None;
+        self.max_bindings = None;
+        self.viewports.clear();
+        self.vertex_buffers.clear();
+        self.vertex_offsets.clear();
+        self.vertex_strides.clear();
+        self.blend_factor = None;
+        self.stencil_ref = None;
+        self.stencil_read_mask = None;
+        self.stencil_write_mask = None;
+        self.current_blend = None;
+    }
+
+    pub fn set_vertex_buffer(&mut self, index: usize, offset: u32, buffer: *mut d3d11::ID3D11Buffer) {
+        self.bound_bindings |= 1 << index as u32;
+
+        if index >= self.vertex_buffers.len() {
+            self.vertex_buffers.push(buffer);
+            self.vertex_offsets.push(offset);
+        } else {
+            self.vertex_buffers[index] = buffer;
+            self.vertex_offsets[index] = offset;
+        }
+
+        self.dirty_flag.insert(DirtyStateFlag::VERTEX_BUFFERS);
+    }
+
+    pub fn bind_vertex_buffers(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if let Some(binding_count) = self.max_bindings {
+            if self.vertex_buffers.len() >= binding_count as usize &&
+               self.vertex_strides.len() >= binding_count as usize
+            {
+                unsafe {
+                    context.IASetVertexBuffers(
+                        0,
+                        binding_count,
+                        self.vertex_buffers.as_ptr(),
+                        self.vertex_strides.as_ptr(),
+                        self.vertex_offsets.as_ptr(),
+                    );
+                }
+
+                self.dirty_flag.remove(DirtyStateFlag::VERTEX_BUFFERS);
+            }
+        }
+    }
+
+    pub fn set_viewports(&mut self, viewports: &[d3d11::D3D11_VIEWPORT]) {
+        self.viewports.clear();
+        self.viewports.extend(viewports);
+
+        self.dirty_flag.insert(DirtyStateFlag::VIEWPORTS);
+    }
+
+    pub fn bind_viewports(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if let Some(ref pipeline) = self.graphics_pipeline {
+            if let Some(ref viewport) = pipeline.baked_states.viewport {
+                unsafe {
+                    context.RSSetViewports(1, [conv::map_viewport(&viewport)].as_ptr());
+                }
+            } else {
+                unsafe {
+                    context.RSSetViewports(self.viewports.len() as u32, self.viewports.as_ptr());
+                }
+            }
+        } else {
+            unsafe {
+                context.RSSetViewports(self.viewports.len() as u32, self.viewports.as_ptr());
+            }
+        }
+
+        self.dirty_flag.remove(DirtyStateFlag::VIEWPORTS);
+    }
+
+    pub fn set_render_targets(&mut self, render_targets: &[*mut d3d11::ID3D11RenderTargetView], depth_target: Option<*mut d3d11::ID3D11DepthStencilView>) {
+        for (idx, &rt) in render_targets.iter().enumerate() {
+            self.render_targets[idx] = rt;
+        }
+
+        self.render_target_len = render_targets.len() as u32;
+        self.depth_target = depth_target;
+
+        self.dirty_flag.insert(DirtyStateFlag::RENDER_TARGETS);
+    }
+
+    pub fn bind_render_targets(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        unsafe {
+            context.OMSetRenderTargets(
+                self.render_target_len,
+                self.render_targets.as_ptr(),
+                if let Some(dsv) = self.depth_target {
+                    dsv
+                } else {
+                    ptr::null_mut()
+                }
+            );
+        }
+
+        self.dirty_flag.remove(DirtyStateFlag::RENDER_TARGETS);
+    }
+
+    pub fn set_blend_factor(&mut self, factor: [f32; 4]) {
+        self.blend_factor = Some(factor);
+
+        self.dirty_flag.insert(DirtyStateFlag::BLEND_STATE);
+    }
+
+    pub fn bind_blend_state(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if let Some(blend) = self.current_blend {
+            let blend_color = if let Some(ref pipeline) = self.graphics_pipeline {
+                pipeline.baked_states.blend_color.or(self.blend_factor).unwrap_or([0f32; 4])
+            } else {
+                self.blend_factor.unwrap_or([0f32; 4])
+            };
+
+            // TODO: MSAA
+            unsafe {
+                context.OMSetBlendState(blend, &blend_color, !0);
+            }
+
+            self.dirty_flag.remove(DirtyStateFlag::BLEND_STATE);
+        }
+    }
+
+
+    pub fn set_graphics_pipeline(&mut self, pipeline: GraphicsPipeline) {
+        self.graphics_pipeline = Some(pipeline);
+
+        self.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE);
+    }
+
+    pub fn bind_graphics_pipeline(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if let Some(ref pipeline) = self.graphics_pipeline {
+            self.vertex_strides.clear();
+            self.vertex_strides.extend(&pipeline.strides);
+
+            self.required_bindings = Some(pipeline.required_bindings);
+            self.max_bindings = Some(pipeline.max_vertex_bindings);
+        };
+
+        self.bind_vertex_buffers(context);
+
+        if let Some(ref pipeline) = self.graphics_pipeline {
+            unsafe {
+                context.IASetPrimitiveTopology(pipeline.topology);
+                context.IASetInputLayout(pipeline.input_layout.as_raw());
+
+                context.VSSetShader(pipeline.vs.as_raw(), ptr::null_mut(), 0);
+                if let Some(ref ps) = pipeline.ps {
+                    context.PSSetShader(ps.as_raw(), ptr::null_mut(), 0);
+                }
+                if let Some(ref gs) = pipeline.gs {
+                    context.GSSetShader(gs.as_raw(), ptr::null_mut(), 0);
+                }
+                if let Some(ref hs) = pipeline.hs {
+                    context.HSSetShader(hs.as_raw(), ptr::null_mut(), 0);
+                }
+                if let Some(ref ds) = pipeline.ds {
+                    context.DSSetShader(ds.as_raw(), ptr::null_mut(), 0);
+                }
+
+                context.RSSetState(pipeline.rasterizer_state.as_raw());
+                if let Some(ref viewport) = pipeline.baked_states.viewport {
+                    context.RSSetViewports(1, [conv::map_viewport(&viewport)].as_ptr());
+                }
+                if let Some(ref scissor) = pipeline.baked_states.scissor {
+                    context.RSSetScissorRects(1, [conv::map_rect(&scissor)].as_ptr());
+                }
+
+
+
+                if let Some((ref state, reference)) = pipeline.depth_stencil_state {
+                    let stencil_ref = if let pso::State::Static(reference) = reference {
+                        reference
+                    } else {
+                        self.stencil_ref.unwrap_or(0)
+                    };
+
+                    context.OMSetDepthStencilState(state.as_raw(), stencil_ref);
+                }
+                self.current_blend = Some(pipeline.blend_state.as_raw());
+            }
+        };
+
+        self.bind_blend_state(context);
+
+        self.dirty_flag.remove(DirtyStateFlag::GRAPHICS_PIPELINE);
+    }
+
+    pub fn bind(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
+        if self.dirty_flag.contains(DirtyStateFlag::RENDER_TARGETS) {
+            self.bind_render_targets(context);
+        }
+
+        if self.dirty_flag.contains(DirtyStateFlag::GRAPHICS_PIPELINE) {
+            self.bind_graphics_pipeline(context);
+        }
+
+        if self.dirty_flag.contains(DirtyStateFlag::VERTEX_BUFFERS) {
+            self.bind_vertex_buffers(context);
+        }
+
+        if self.dirty_flag.contains(DirtyStateFlag::VIEWPORTS) {
+            self.bind_viewports(context);
+        }
     }
 }
 
@@ -924,23 +1168,10 @@ pub struct CommandBuffer {
     flush_coherent_memory: Vec<MemoryFlush>,
     invalidate_coherent_memory: Vec<MemoryInvalidate>,
 
-    // TODO: clearly mark these as runtime state, eg. `State` struct
-    // TODO: reset state
-
     // holds information about the active render pass
     render_pass_cache: Option<RenderPassCache>,
 
-    // a bitmask that keeps track of what vertex buffer bindings have been "bound" into
-    // our vec
-    bound_bindings: u32,
-    // a bitmask that hold the required binding slots to be bound for the currently
-    // bound pipeline
-    required_bindings: Option<u32>,
-    // the highest binding number in currently bound pipeline
-    max_bindings: Option<u32>,
-    vertex_buffers: Vec<*mut d3d11::ID3D11Buffer>,
-    vertex_offsets: Vec<u32>,
-    vertex_strides: Vec<u32>,
+    cache: CommandBufferState,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -960,35 +1191,12 @@ impl CommandBuffer {
             flush_coherent_memory: Vec::new(),
             invalidate_coherent_memory: Vec::new(),
             render_pass_cache: None,
-            bound_bindings: 0,
-            required_bindings: None,
-            max_bindings: None,
-            vertex_buffers: Vec::new(),
-            vertex_offsets: Vec::new(),
-            vertex_strides: Vec::new(),
+            cache: CommandBufferState::new(),
         }
     }
 
     fn as_raw_list(&self) -> ComPtr<d3d11::ID3D11CommandList> {
         self.list.clone().unwrap().clone()
-    }
-
-    fn set_vertex_buffers(&self) {
-        if let Some(binding_count) = self.max_bindings {
-            if self.vertex_buffers.len() >= binding_count as usize
-                && self.vertex_strides.len() >= binding_count as usize
-            {
-                unsafe {
-                    self.context.IASetVertexBuffers(
-                        0,
-                        binding_count,
-                        self.vertex_buffers.as_ptr(),
-                        self.vertex_strides.as_ptr(),
-                        self.vertex_offsets.as_ptr(),
-                    );
-                }
-            }
-        }
     }
 
     unsafe fn bind_vertex_descriptor(
@@ -1117,24 +1325,32 @@ impl CommandBuffer {
     }
 
     fn defer_coherent_flush(&mut self, buffer: &Buffer) {
-        self.flush_coherent_memory.push(MemoryFlush {
-            host_memory: buffer.host_ptr,
-            sync_range: SyncRange::Whole,
-
-            buffer: buffer.internal.raw,
-        });
+        if !self.flush_coherent_memory.iter().any(|m| m.buffer == buffer.internal.raw) {
+            self.flush_coherent_memory.push(MemoryFlush {
+                host_memory: buffer.host_ptr,
+                sync_range: SyncRange::Whole,
+                buffer: buffer.internal.raw
+            });
+        }
     }
 
     fn defer_coherent_invalidate(&mut self, buffer: &Buffer) {
-        self.invalidate_coherent_memory.push(MemoryInvalidate {
-            working_buffer: Some(self.internal.working_buffer.clone()),
-            working_buffer_size: self.internal.working_buffer_size,
+        if !self.invalidate_coherent_memory.iter().any(|m| m.buffer == buffer.internal.raw) {
+            self.invalidate_coherent_memory.push(MemoryInvalidate {
+                working_buffer: Some(self.internal.working_buffer.clone()),
+                working_buffer_size: self.internal.working_buffer_size,
+                host_memory: buffer.host_ptr,
+                sync_range: buffer.bound_range.clone(),
+                buffer: buffer.internal.raw
+            });
+        }
+    }
 
-            host_memory: buffer.host_ptr,
-            sync_range: buffer.bound_range.clone(),
-
-            buffer: buffer.internal.raw,
-        });
+    fn reset(&mut self) {
+        self.flush_coherent_memory.clear();
+        self.invalidate_coherent_memory.clear();
+        self.render_pass_cache = None;
+        self.cache.clear();
     }
 }
 
@@ -1142,8 +1358,9 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     fn begin(
         &mut self,
         _flags: command::CommandBufferFlags,
-        _info: command::CommandBufferInheritanceInfo<Backend>,
+        _info: command::CommandBufferInheritanceInfo<Backend>
     ) {
+        self.reset();
     }
 
     fn finish(&mut self) {
@@ -1160,22 +1377,14 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn reset(&mut self, _release_resources: bool) {
-        self.flush_coherent_memory.clear();
-        self.invalidate_coherent_memory.clear();
-        self.render_pass_cache = None;
-        self.bound_bindings = 0;
-        self.required_bindings = None;
-        self.max_bindings = None;
-        self.vertex_buffers.clear();
-        self.vertex_offsets.clear();
-        self.vertex_strides.clear();
+        self.reset();
     }
 
     fn begin_render_pass<T>(
         &mut self,
         render_pass: &RenderPass,
         framebuffer: &Framebuffer,
-        _target_rect: pso::Rect,
+        target_rect: pso::Rect,
         clear_values: T,
         _first_subpass: command::SubpassContents,
     ) where
@@ -1183,56 +1392,126 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<command::ClearValueRaw>,
     {
         let mut clear_iter = clear_values.into_iter();
-        let attachment_clears = render_pass
-            .attachments
-            .iter()
-            .enumerate()
-            .map(|(i, attachment)| {
-                let cv = if attachment.ops.load == pass::AttachmentLoadOp::Clear
-                    || attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear
-                {
-                    Some(*clear_iter.next().unwrap().borrow())
-                } else {
-                    None
-                };
+        let mut attachment_clears = Vec::new();
 
-                AttachmentClear {
-                    subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
-                    value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                        assert!(cv.is_some());
-                        cv
-                    } else {
-                        None
-                    },
-                    stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                        Some(unsafe { cv.unwrap().depth_stencil.stencil })
-                    } else {
-                        None
-                    },
+        for (idx, attachment) in render_pass.attachments.iter().enumerate() {
+            use pass::AttachmentLoadOp::*;
+
+            //let attachment = render_pass.attachments[attachment_ref];
+            let format = attachment.format.unwrap();
+            let channel_type = format.base_format().1;
+
+            fn typed_clear_color(ty: ChannelType, raw_clear: ClearColorRaw) -> ClearColor {
+
+                match ty {
+                    ChannelType::Unorm | ChannelType::Inorm | ChannelType::Ufloat |
+                    ChannelType::Float | ChannelType::Uscaled | ChannelType::Iscaled |
+                    ChannelType::Srgb => ClearColor::Float(unsafe { raw_clear.float32 }),
+
+                    ChannelType::Uint => ClearColor::Uint(unsafe { raw_clear.uint32 }),
+
+                    ChannelType::Int => ClearColor::Int(unsafe { raw_clear.int32 }),
                 }
-            })
-            .collect();
+            }
+
+            let subpass_id = render_pass.subpasses.iter().position(|sp| sp.is_using(idx));
+
+            if attachment.ops.load == Clear ||
+               attachment.stencil_ops.load == Clear
+            {
+                let raw_clear_value = *clear_iter.next().unwrap().borrow();
+
+                match (attachment.ops.load, attachment.stencil_ops.load) {
+                    (Clear, Clear) if format.is_depth() => {
+                        attachment_clears.push(AttachmentClear {
+                            subpass_id,
+                            attachment_id: idx,
+                            raw: command::AttachmentClear::DepthStencil {
+                                depth: Some(unsafe { raw_clear_value.depth_stencil.depth }),
+                                stencil: Some(unsafe { raw_clear_value.depth_stencil.stencil }),
+                            }
+                        });
+                    }
+                    (Clear, Clear) => {
+                        attachment_clears.push(AttachmentClear {
+                            subpass_id,
+                            attachment_id: idx,
+                            raw: command::AttachmentClear::Color {
+                                index: idx,
+                                value: typed_clear_color(channel_type, unsafe { raw_clear_value.color }),
+                            }
+                        });
+
+                        attachment_clears.push(AttachmentClear {
+                            subpass_id,
+                            attachment_id: idx,
+                            raw: command::AttachmentClear::DepthStencil {
+                                depth: None,
+                                stencil: Some(unsafe { raw_clear_value.depth_stencil.stencil }),
+                            }
+                        });
+                    },
+                    (Clear, _) if format.is_depth() => {
+                        attachment_clears.push(AttachmentClear {
+                            subpass_id,
+                            attachment_id: idx,
+                            raw: command::AttachmentClear::DepthStencil {
+                                depth: Some(unsafe { raw_clear_value.depth_stencil.depth }),
+                                stencil: None,
+                            }
+                        });
+                    }
+                    (Clear, _) => {
+                        attachment_clears.push(AttachmentClear {
+                            subpass_id,
+                            attachment_id: idx,
+                            raw: command::AttachmentClear::Color {
+                                index: idx,
+                                value: typed_clear_color(channel_type, unsafe { raw_clear_value.color }),
+                            }
+                        });
+                    },
+                    (_, Clear) => {
+                        attachment_clears.push(AttachmentClear {
+                            subpass_id,
+                            attachment_id: idx,
+                            raw: command::AttachmentClear::DepthStencil {
+                                depth: None,
+                                stencil: Some(unsafe { raw_clear_value.depth_stencil.stencil }),
+                            }
+                        });
+                    },
+                    _ => {},
+                }
+            }
+        }
 
         self.render_pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
             framebuffer: framebuffer.clone(),
             attachment_clear_values: attachment_clears,
+            target_rect,
             current_subpass: 0,
         });
 
         if let Some(ref mut current_render_pass) = self.render_pass_cache {
-            current_render_pass.advance_subpass(&self.context);
+            current_render_pass.start_subpass(&mut self.internal, &self.context, &mut self.cache);
         }
     }
 
     fn next_subpass(&mut self, _contents: command::SubpassContents) {
         if let Some(ref mut current_render_pass) = self.render_pass_cache {
             // TODO: resolve msaa
-            current_render_pass.advance_subpass(&self.context);
+            current_render_pass.next_subpass();
+            current_render_pass.start_subpass(&mut self.internal, &self.context, &mut self.cache);
         }
     }
 
     fn end_render_pass(&mut self) {
+        unsafe {
+            self.context.OMSetRenderTargets(8, [ptr::null_mut(); 8].as_ptr(), ptr::null_mut());
+        }
+
         self.render_pass_cache = None;
     }
 
@@ -1263,6 +1542,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         for range in subresource_ranges {
             let range = range.borrow();
 
+            // TODO: clear Int/Uint depending on format
             if range.aspects.contains(format::Aspects::COLOR) {
                 for layer in range.layers.clone() {
                     for level in range.levels.clone() {
@@ -1302,14 +1582,20 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_attachments<T, U>(&mut self, _clears: T, _rects: U)
+    fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
         T: IntoIterator,
         T::Item: Borrow<command::AttachmentClear>,
         U: IntoIterator,
         U::Item: Borrow<pso::ClearRect>,
     {
-        // unimplemented!()
+        if let Some(ref pass) = self.render_pass_cache {
+            self.cache.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::VIEWPORTS | DirtyStateFlag::RENDER_TARGETS);
+            self.internal.clear_attachments(&self.context, clears, rects, pass);
+            self.cache.bind(&self.context);
+        } else {
+            panic!("`clear_attachments` can only be called inside a renderpass")
+        }
     }
 
     fn resolve_image<T>(
@@ -1338,8 +1624,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ImageBlit>,
     {
+        self.cache.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE);
+
         self.internal
             .blit_2d_image(&self.context, src, dst, filter, regions);
+
+        self.cache.bind(&self.context);
     }
 
     fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
@@ -1357,32 +1647,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<Buffer>,
     {
-        if self.vertex_buffers.len() <= first_binding as usize {
-            self.vertex_buffers
-                .resize(first_binding as usize + 1, ptr::null_mut());
-            self.vertex_offsets.resize(first_binding as usize + 1, 0);
-        }
-
         for (i, (buf, offset)) in buffers.into_iter().enumerate() {
             let idx = i + first_binding as usize;
             let buf = buf.borrow();
 
-            self.bound_bindings |= 1 << idx as u32;
 
             if buf.ty == MemoryHeapFlags::HOST_COHERENT {
                 self.defer_coherent_flush(buf);
             }
 
-            if idx >= self.vertex_buffers.len() {
-                self.vertex_buffers.push(buf.internal.raw);
-                self.vertex_offsets.push(offset as u32);
-            } else {
-                self.vertex_buffers[idx] = buf.internal.raw;
-                self.vertex_offsets[idx] = offset as u32;
-            }
+            self.cache.set_vertex_buffer(idx, offset as u32, buf.internal.raw);
         }
 
-        self.set_vertex_buffers();
+        self.cache.bind_vertex_buffers(&self.context);
     }
 
     fn set_viewports<T>(&mut self, _first_viewport: u32, viewports: T)
@@ -1399,10 +1676,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             .collect::<Vec<_>>();
 
         // TODO: DX only lets us set all VPs at once, so cache in slice?
-        unsafe {
-            self.context
-                .RSSetViewports(viewports.len() as _, viewports.as_ptr());
-        }
+        self.cache.set_viewports(&viewports);
+        self.cache.bind_viewports(&self.context);
     }
 
     fn set_scissors<T>(&mut self, _first_scissor: u32, scissors: T)
@@ -1425,20 +1700,21 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_blend_constants(&mut self, _color: pso::ColorValue) {
-        // unimplemented!()
+    fn set_blend_constants(&mut self, color: pso::ColorValue) {
+        self.cache.set_blend_factor(color);
+        self.cache.bind_blend_state(&self.context);
     }
 
-    fn set_stencil_reference(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
-        // unimplemented!()
+    fn set_stencil_reference(&mut self, _faces: pso::Face, value: pso::StencilValue) {
+        self.cache.stencil_ref = Some(value);
     }
 
-    fn set_stencil_read_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
-        // unimplemented!();
+    fn set_stencil_read_mask(&mut self, _faces: pso::Face, value: pso::StencilValue) {
+        self.cache.stencil_read_mask = Some(value);
     }
 
-    fn set_stencil_write_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
-        // unimplemented!();
+    fn set_stencil_write_mask(&mut self, _faces: pso::Face, value: pso::StencilValue) {
+        self.cache.stencil_write_mask = Some(value);
     }
 
     fn set_depth_bounds(&mut self, _bounds: Range<f32>) {
@@ -1455,52 +1731,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_graphics_pipeline(&mut self, pipeline: &GraphicsPipeline) {
-        self.vertex_strides.clear();
-        self.vertex_strides.extend(&pipeline.strides);
-
-        self.required_bindings = Some(pipeline.required_bindings);
-        self.max_bindings = Some(pipeline.max_vertex_bindings);
-
-        self.set_vertex_buffers();
-
-        unsafe {
-            self.context.IASetPrimitiveTopology(pipeline.topology);
-            self.context
-                .IASetInputLayout(pipeline.input_layout.as_raw());
-
-            self.context
-                .VSSetShader(pipeline.vs.as_raw(), ptr::null_mut(), 0);
-            if let Some(ref ps) = pipeline.ps {
-                self.context.PSSetShader(ps.as_raw(), ptr::null_mut(), 0);
-            }
-
-            self.context.RSSetState(pipeline.rasterizer_state.as_raw());
-            if let Some(ref viewport) = pipeline.baked_states.viewport {
-                self.context
-                    .RSSetViewports(1, [conv::map_viewport(&viewport)].as_ptr());
-            }
-            if let Some(ref scissor) = pipeline.baked_states.scissor {
-                self.context
-                    .RSSetScissorRects(1, [conv::map_rect(&scissor)].as_ptr());
-            }
-
-            let blend_color = pipeline.baked_states.blend_color.unwrap_or([1f32; 4]);
-
-            // TODO: blend constants
-            self.context
-                .OMSetBlendState(pipeline.blend_state.as_raw(), &blend_color, !0);
-            if let Some((ref state, reference)) = pipeline.depth_stencil_state {
-                let stencil_ref = if let pso::State::Static(reference) = reference {
-                    reference
-                } else {
-                    0
-                    // unimplemented!()
-                };
-
-                self.context
-                    .OMSetDepthStencilState(state.as_raw(), stencil_ref);
-            }
-        }
+        self.cache.set_graphics_pipeline(pipeline.clone());
+        self.cache.bind_graphics_pipeline(&self.context);
     }
 
     fn bind_graphics_descriptor_sets<'a, I, J>(
@@ -1760,10 +1992,6 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
-        debug_assert!(
-            (self.bound_bindings | self.required_bindings.unwrap_or(!0)) == self.bound_bindings
-        );
-
         unsafe {
             self.context.DrawInstanced(
                 vertices.end - vertices.start,
@@ -1780,10 +2008,6 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     ) {
-        debug_assert!(
-            (self.bound_bindings | self.required_bindings.unwrap_or(!0)) == self.bound_bindings
-        );
-
         unsafe {
             self.context.DrawIndexedInstanced(
                 indices.end - indices.start,
@@ -1873,9 +2097,9 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
 bitflags! {
     struct MemoryHeapFlags: u64 {
-        const DEVICE_LOCAL = 1 << 0;
-        const HOST_NONCOHERENT = 1 << 1;
-        const HOST_COHERENT = 1 << 2;
+        const DEVICE_LOCAL = 0x1;
+        const HOST_NONCOHERENT = 0x4 | 0x8;
+        const HOST_COHERENT = 0x2 | 0x4 | 0x8;
     }
 }
 
@@ -2048,7 +2272,7 @@ pub struct Memory {
     properties: memory::Properties,
     size: u64,
 
-    mapped_ptr: RefCell<Option<*mut u8>>,
+    mapped_ptr: *mut u8,
 
     // staging buffer covering the whole memory region, if it's HOST_VISIBLE
     host_visible: Option<RefCell<Vec<u8>>>,
@@ -2079,7 +2303,7 @@ impl Memory {
 
         for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
             if let Some(range) = intersection(&range, &buffer_range) {
-                let ptr = self.mapped_ptr.borrow().unwrap();
+                let ptr = self.mapped_ptr;
 
                 // we need to handle 3 cases for updating buffers:
                 //
@@ -2140,7 +2364,7 @@ impl Memory {
                 MemoryInvalidate {
                     working_buffer: Some(working_buffer.clone()),
                     working_buffer_size,
-                    host_memory: self.mapped_ptr.borrow().unwrap(),
+                    host_memory: self.mapped_ptr,
                     sync_range: range.clone(),
                     buffer: buffer.raw,
                 }.do_invalidate(&context);
@@ -2287,9 +2511,9 @@ pub struct Image {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct InternalImage {
-    #[derivative(Debug = "ignore")]
-    raw: *mut d3d11::ID3D11Resource,
-    #[derivative(Debug = "ignore")]
+    #[derivative(Debug="ignore")]
+    raw: ComPtr<d3d11::ID3D11Resource>,
+    #[derivative(Debug="ignore")]
     copy_srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
     #[derivative(Debug = "ignore")]
     srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
@@ -2349,7 +2573,8 @@ impl Image {
 #[derive(Derivative, Clone)]
 #[derivative(Debug)]
 pub struct ImageView {
-    #[derivative(Debug = "ignore")]
+    format: format::Format,
+    #[derivative(Debug="ignore")]
     rtv_handle: Option<ComPtr<d3d11::ID3D11RenderTargetView>>,
     #[derivative(Debug = "ignore")]
     srv_handle: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
@@ -2388,12 +2613,17 @@ unsafe impl Sync for ComputePipeline {}
 ///
 /// [0]: https://msdn.microsoft.com/en-us/library/windows/desktop/ff476500(v=vs.85).aspx
 #[derive(Derivative)]
-#[derivative(Debug)]
+#[derivative(Debug, Clone)]
 pub struct GraphicsPipeline {
-    // TODO: gs, hs, ds
-    #[derivative(Debug = "ignore")]
+    #[derivative(Debug="ignore")]
     vs: ComPtr<d3d11::ID3D11VertexShader>,
-    #[derivative(Debug = "ignore")]
+    #[derivative(Debug="ignore")]
+    gs: Option<ComPtr<d3d11::ID3D11GeometryShader>>,
+    #[derivative(Debug="ignore")]
+    hs: Option<ComPtr<d3d11::ID3D11HullShader>>,
+    #[derivative(Debug="ignore")]
+    ds: Option<ComPtr<d3d11::ID3D11DomainShader>>,
+    #[derivative(Debug="ignore")]
     ps: Option<ComPtr<d3d11::ID3D11PixelShader>>,
     #[derivative(Debug = "ignore")]
     topology: d3d11::D3D11_PRIMITIVE_TOPOLOGY,

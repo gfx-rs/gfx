@@ -157,6 +157,16 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(DXGI_FORMAT_B8G8R8A8_UNORM),
             },
 
+            DXGI_FORMAT_A8_UNORM => DecomposedDxgiFormat {
+                typeless: format,
+                srv: Some(format),
+                rtv: Some(format),
+                uav: Some(format),
+                dsv: None,
+                copy_uav: Some(format),
+                copy_srv: Some(format),
+            },
+
             DXGI_FORMAT_R8_UNORM |
             DXGI_FORMAT_R8_SNORM |
             DXGI_FORMAT_R8_UINT |
@@ -532,7 +542,7 @@ fn map_blend_factor(factor: Factor) -> D3D11_BLEND {
 
 fn map_alpha_blend_factor(factor: Factor) -> D3D11_BLEND {
     match factor {
-        Factor::Zero |
+        Factor::Zero => D3D11_BLEND_ZERO,
         Factor::One => D3D11_BLEND_ONE,
         Factor::SrcColor |
         Factor::SrcAlpha => D3D11_BLEND_SRC_ALPHA,

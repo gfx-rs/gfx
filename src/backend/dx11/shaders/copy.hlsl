@@ -12,6 +12,7 @@ struct BufferImageCopy {
     uint4 BufferVars;
     uint4 ImageOffset;
     uint4 ImageExtent;
+    uint4 ImageSize;
 };
 
 cbuffer CopyConstants : register(b0) {
@@ -19,6 +20,15 @@ cbuffer CopyConstants : register(b0) {
     ImageCopy ImageCopies;
     BufferImageCopy BufferImageCopies;
 };
+
+
+uint3 GetDestBounds()
+{
+    return min(
+        BufferImageCopies.ImageOffset + BufferImageCopies.ImageExtent,
+        BufferImageCopies.ImageSize
+    );
+}
 
 uint3 GetImageCopyDst(uint3 dispatch_thread_id)
 {
@@ -205,13 +215,20 @@ void cs_copy_image2d_r32_image2d_r8g8b8a8(uint3 dispatch_thread_id : SV_Dispatch
     ImageCopyDstRgba[dst_idx] = Uint32ToUint8x4(ImageCopySrc[src_idx]);
 }
 
+#define COPY_NUM_THREAD_X 8
+#define COPY_NUM_THREAD_Y 8
+
 // Buffer<->Image copies
 
 // R32G32B32A32
-// TODO: correct, but slow
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r32g32b32a32(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
+        return;
+    }
+
     uint src_idx = GetBufferSrc128(dispatch_thread_id);
 
     ImageCopyDstRgba[dst_idx] = uint4(
@@ -222,12 +239,16 @@ void cs_copy_buffer_image2d_r32g32b32a32(uint3 dispatch_thread_id : SV_DispatchT
     );
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r32g32b32a32_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-    uint dst_idx = GetBufferDst128(dispatch_thread_id);
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
+        return;
+    }
 
     uint4 data = ImageCopySrc[src_idx];
+    uint dst_idx = GetBufferDst128(dispatch_thread_id);
 
     BufferCopyDst.Store(dst_idx,         data.x);
     BufferCopyDst.Store(dst_idx + 1 * 4, data.y);
@@ -236,9 +257,14 @@ void cs_copy_image2d_r32g32b32a32_buffer(uint3 dispatch_thread_id : SV_DispatchT
 }
 
 // R32G32
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r32g32(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
+        return;
+    }
+
     uint src_idx = GetBufferSrc64(dispatch_thread_id);
 
     ImageCopyDstRg[dst_idx] = uint2(
@@ -247,21 +273,30 @@ void cs_copy_buffer_image2d_r32g32(uint3 dispatch_thread_id : SV_DispatchThreadI
     );
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r32g32_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-    uint dst_idx = GetBufferDst64(dispatch_thread_id);
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
+        return;
+    }
 
     uint2 data = ImageCopySrc[src_idx].rg;
+    uint dst_idx = GetBufferDst64(dispatch_thread_id);
 
     BufferCopyDst.Store(dst_idx        , data.x);
     BufferCopyDst.Store(dst_idx + 1 * 4, data.y);
 }
 
 // R16G16B16A16
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r16g16b16a16(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
+        return;
+    }
+
     uint src_idx = GetBufferSrc64(dispatch_thread_id);
 
     ImageCopyDstRgba[dst_idx] = uint4(
@@ -270,82 +305,125 @@ void cs_copy_buffer_image2d_r16g16b16a16(uint3 dispatch_thread_id : SV_DispatchT
     );
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r16g16b16a16_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-    uint dst_idx = GetBufferDst64(dispatch_thread_id);
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
+        return;
+    }
 
     uint4 data = ImageCopySrc[src_idx];
+    uint dst_idx = GetBufferDst64(dispatch_thread_id);
 
     BufferCopyDst.Store(dst_idx,         Uint16x2ToUint32(data.xy));
     BufferCopyDst.Store(dst_idx + 1 * 4, Uint16x2ToUint32(data.zw));
 }
 
 // R32
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r32(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
+        return;
+    }
+
     uint src_idx = GetBufferSrc32(dispatch_thread_id);
 
     ImageCopyDstR[dst_idx] = BufferCopySrc.Load(src_idx);
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r32_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-    uint dst_idx = GetBufferDst32(dispatch_thread_id);
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
+        return;
+    }
+
+    uint dst_idx = GetBufferDst32(dispatch_thread_id);
 
     BufferCopyDst.Store(dst_idx, ImageCopySrc[src_idx].r);
 }
 
 // R16G16
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r16g16(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
+        return;
+    }
+
     uint src_idx = GetBufferSrc32(dispatch_thread_id);
 
     ImageCopyDstRg[dst_idx] = Uint32ToUint16x2(BufferCopySrc.Load(src_idx));
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r16g16_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-    uint dst_idx = GetBufferDst32(dispatch_thread_id);
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
+        return;
+    }
+
+    uint dst_idx = GetBufferDst32(dispatch_thread_id);
 
     BufferCopyDst.Store(dst_idx, Uint16x2ToUint32(ImageCopySrc[src_idx].xy));
 }
 
 // R8G8B8A8
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r8g8b8a8(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
+        return;
+    }
+
     uint src_idx = GetBufferSrc32(dispatch_thread_id);
 
     ImageCopyDstRgba[dst_idx] = Uint32ToUint8x4(BufferCopySrc.Load(src_idx));
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r8g8b8a8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-    uint dst_idx = GetBufferDst32(dispatch_thread_id);
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
+        return;
+    }
+
+    uint dst_idx = GetBufferDst32(dispatch_thread_id);
 
     BufferCopyDst.Store(dst_idx, Uint8x4ToUint32(ImageCopySrc[src_idx]));
 }
 
 // B8G8R8A8
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_b8g8r8a8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-    uint dst_idx = GetBufferDst32(dispatch_thread_id);
     uint3 src_idx = GetImageSrc(dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
+        return;
+    }
 
-    BufferCopyDst.Store(dst_idx, Uint8x4ToUint32(Float4ToUint8x4(ImageCopySrcBgra[src_idx])));
+    uint dst_idx = GetBufferDst32(dispatch_thread_id);
+
+    BufferCopyDst.Store(dst_idx, Uint8x4ToUint32(Float4ToUint8x4(ImageCopySrcBgra[src_idx].bgra)));
 }
 
 // R16
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r16(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-//    uint src_idx = BufferImageCopies.BufferVars.x + dispatch_thread_id.x + dispatch_thread_id.y * BufferImageCopies.BufferVars.y / 2;
     uint3 dst_idx = GetImageDst(uint3(2, 1, 0) * dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
+        return;
+    }
+
     uint src_idx = GetBufferSrc16(dispatch_thread_id);
     uint2 data = Uint32ToUint16x2(BufferCopySrc.Load(src_idx));
 
@@ -353,11 +431,15 @@ void cs_copy_buffer_image2d_r16(uint3 dispatch_thread_id : SV_DispatchThreadID) 
     ImageCopyDstR[dst_idx + uint3(1, 0, 0)] = data.y;
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r16_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-    //uint dst_idx = BufferImageCopies.BufferVars.x + dispatch_thread_id.x + dispatch_thread_id.y * BufferImageCopies.BufferVars.y / 2;
-    uint dst_idx = GetBufferDst16(dispatch_thread_id);
     uint3 src_idx = GetImageSrc(uint3(2, 1, 0) * dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
+        return;
+    }
+
+    uint dst_idx = GetBufferDst16(dispatch_thread_id);
 
     uint upper = ImageCopySrc[src_idx].r;
     uint lower = ImageCopySrc[src_idx + uint3(1, 0, 0)].r;
@@ -366,10 +448,14 @@ void cs_copy_image2d_r16_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) 
 }
 
 // R8G8
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r8g8(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-//    uint src_idx = BufferImageCopies.BufferVars.x + dispatch_thread_id.x + dispatch_thread_id.y * BufferImageCopies.BufferVars.y / 2;
     uint3 dst_idx = GetImageDst(uint3(2, 1, 0) * dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
+        return;
+    }
+
     uint src_idx = GetBufferSrc16(dispatch_thread_id);
 
     uint4 data = Uint32ToUint8x4(BufferCopySrc.Load(src_idx));
@@ -378,11 +464,15 @@ void cs_copy_buffer_image2d_r8g8(uint3 dispatch_thread_id : SV_DispatchThreadID)
     ImageCopyDstRg[dst_idx + uint3(1, 0, 0)] = data.zw;
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r8g8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-//    uint dst_idx = BufferImageCopies.BufferVars.x + dispatch_thread_id.x + dispatch_thread_id.y * BufferImageCopies.BufferVars.y / 2;
-    uint dst_idx = GetBufferDst16(dispatch_thread_id);
     uint3 src_idx = GetImageSrc(uint3(2, 1, 0) * dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
+        return;
+    }
+
+    uint dst_idx = GetBufferDst16(dispatch_thread_id);
 
     uint2 lower = ImageCopySrc[src_idx].xy;
     uint2 upper = ImageCopySrc[src_idx + uint3(1, 0, 0)].xy;
@@ -391,9 +481,14 @@ void cs_copy_image2d_r8g8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID)
 }
 
 // R8
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_buffer_image2d_r8(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     uint3 dst_idx = GetImageDst(uint3(4, 1, 0) * dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (dst_idx.x >= bounds.x || dst_idx.y >= bounds.y) {
+        return;
+    }
+
     uint src_idx = GetBufferSrc8(dispatch_thread_id);
     uint4 data = Uint32ToUint8x4(BufferCopySrc.Load(src_idx));
 
@@ -403,10 +498,15 @@ void cs_copy_buffer_image2d_r8(uint3 dispatch_thread_id : SV_DispatchThreadID) {
     ImageCopyDstR[dst_idx + uint3(3, 0, 0)] = data.w;
 }
 
-[numthreads(1, 1, 1)]
+[numthreads(COPY_NUM_THREAD_X, COPY_NUM_THREAD_Y, 1)]
 void cs_copy_image2d_r8_buffer(uint3 dispatch_thread_id : SV_DispatchThreadID) {
-    uint dst_idx = GetBufferDst8(dispatch_thread_id);
     uint3 src_idx = GetImageSrc(uint3(4, 1, 0) * dispatch_thread_id);
+    uint3 bounds = GetDestBounds();
+    if (src_idx.x >= bounds.x || src_idx.y >= bounds.y) {
+        return;
+    }
+
+    uint dst_idx = GetBufferDst8(dispatch_thread_id);
 
     BufferCopyDst.Store(dst_idx, Uint8x4ToUint32(uint4(
         ImageCopySrc[src_idx].r,
