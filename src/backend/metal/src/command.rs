@@ -22,7 +22,7 @@ use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
 
 use block::ConcreteBlock;
-use cocoa::foundation::{NSUInteger, NSRange};
+use cocoa::foundation::{NSRange, NSUInteger};
 use foreign_types::ForeignType;
 use metal::{self, MTLViewport, MTLScissorRect, MTLPrimitiveType, MTLIndexType, MTLSize};
 use objc::rc::autoreleasepool;
@@ -1131,8 +1131,7 @@ impl EncoderState {
 }
 
 fn div(a: u32, b: u32) -> u32 {
-    assert_eq!(a % b, 0);
-    a / b
+    (a + b - 1) / b
 }
 
 fn compute_pitches(
@@ -2468,13 +2467,25 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageBlit>
     {
-        let mut inner = self.inner.borrow_mut();
+        let CommandBufferInner {
+            ref mut retained_textures,
+            ref mut sink,
+            ..
+        } = *self.inner.borrow_mut();
+
+        let src_cubish = src.view_cube_as_2d();
+        let dst_cubish = dst.view_cube_as_2d();
+
         let vertices = &mut self.temp.blit_vertices;
         vertices.clear();
 
         let sampler = self.shared.service_pipes.sampler_states.get(filter);
         let ds_state;
-        let key = (dst.mtl_type, dst.mtl_format, src.format_desc.aspects, dst.shader_channel);
+        let key_mtl_type = match dst_cubish {
+            Some(_) => metal::MTLTextureType::D2Array,
+            None => dst.mtl_type,
+        };
+        let key = (key_mtl_type, dst.mtl_format, src.format_desc.aspects, dst.shader_channel);
         let pso = self.shared.service_pipes.blits.get(
             key,
             &self.shared.service_pipes.library,
@@ -2559,6 +2570,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // outside of a render pass, and the state will be reset automatically once
         // we enter the next pass.
 
+        let src_native = AsNative::from(src_cubish.as_ref().unwrap_or(&src.raw).as_ref());
         let prelude = [
             soft::RenderCommand::BindPipeline(&**pso),
             soft::RenderCommand::BindSamplers {
@@ -2569,7 +2581,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             soft::RenderCommand::BindTextures {
                 stage: pso::Stage::Fragment,
                 index: 0,
-                textures: &[Some(AsNative::from(src.raw.as_ref()))][..],
+                textures: &[Some(src_native)][..],
             },
         ];
 
@@ -2582,24 +2594,25 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         autoreleasepool(|| {
             let descriptor = metal::RenderPassDescriptor::new();
+            let dst_new = dst_cubish.as_ref().unwrap_or(&dst.raw);
             if src.format_desc.aspects.contains(Aspects::COLOR) {
                 descriptor
                     .color_attachments()
                     .object_at(0)
                     .unwrap()
-                    .set_texture(Some(&dst.raw));
+                    .set_texture(Some(dst_new));
             }
             if src.format_desc.aspects.contains(Aspects::DEPTH) {
                 descriptor
                     .depth_attachment()
                     .unwrap()
-                    .set_texture(Some(&dst.raw));
+                    .set_texture(Some(dst_new));
             }
             if src.format_desc.aspects.contains(Aspects::STENCIL) {
                 descriptor
                     .stencil_attachment()
                     .unwrap()
-                    .set_texture(Some(&dst.raw));
+                    .set_texture(Some(dst_new));
             }
 
             for ((aspects, level), list) in vertices.drain() {
@@ -2664,11 +2677,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     .chain(&extra)
                     .cloned();
 
-                inner
-                    .sink()
+                sink
+                    .as_mut()
+                    .unwrap()
                     .quick_render("blit_image", &descriptor, commands);
             }
         });
+
+        retained_textures.extend(src_cubish);
+        retained_textures.extend(dst_cubish);
     }
 
     fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {

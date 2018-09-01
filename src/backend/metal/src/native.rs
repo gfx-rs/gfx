@@ -18,7 +18,7 @@ use hal::format::{Aspects, Format, FormatDesc};
 use hal::pass::{Attachment, AttachmentLoadOp, AttachmentOps};
 use hal::range::RangeArg;
 
-use cocoa::foundation::{NSUInteger};
+use cocoa::foundation::{NSRange, NSUInteger};
 use metal;
 use parking_lot::{Mutex, RwLock};
 use smallvec::SmallVec;
@@ -355,6 +355,27 @@ impl Image {
     pub(crate) fn pitches(&self, level: image::Level) -> [buffer::Offset; 3] {
         let extent = self.kind.extent().at_level(level);
         Self::pitches_impl(extent, self.format_desc)
+    }
+    /// View this cube texture as a 2D array.
+    pub(crate) fn view_cube_as_2d(&self) -> Option<metal::Texture> {
+        match self.mtl_type {
+            metal::MTLTextureType::Cube |
+            metal::MTLTextureType::CubeArray => {
+                Some(self.raw.new_texture_view_from_slice(
+                    self.mtl_format,
+                    metal::MTLTextureType::D2Array,
+                    NSRange {
+                        location: 0,
+                        length: self.raw.mipmap_level_count(),
+                    },
+                    NSRange {
+                        location: 0,
+                        length: self.kind.num_layers() as _,
+                    },
+                ))
+            }
+            _ => None,
+        }
     }
 }
 
