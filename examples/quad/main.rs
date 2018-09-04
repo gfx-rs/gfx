@@ -21,21 +21,23 @@ extern crate glsl_to_spirv;
 extern crate image;
 extern crate winit;
 
-use hal::{buffer, command, format as f, image as i, memory as m, pass, pso, pool, window::Extent2D};
-use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
-use hal::{
-    DescriptorPool, FrameSync, Primitive,
-    Backbuffer, SwapchainConfig,
-};
 use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
 use hal::pass::Subpass;
 use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
 use hal::queue::Submission;
+use hal::{
+    buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
+};
+use hal::{Backbuffer, DescriptorPool, FrameSync, Primitive, SwapchainConfig};
+use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 
 use std::fs;
 use std::io::{Cursor, Read};
 
-const DIMS: Extent2D = Extent2D { width: 1024, height: 768 };
+const DIMS: Extent2D = Extent2D {
+    width: 1024,
+    height: 768,
+};
 
 const ENTRY_NAME: &str = "main";
 
@@ -47,13 +49,30 @@ struct Vertex {
 }
 
 const QUAD: [Vertex; 6] = [
-    Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0] },
-    Vertex { a_Pos: [  0.5, 0.33 ], a_Uv: [1.0, 1.0] },
-    Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0] },
-
-    Vertex { a_Pos: [ -0.5, 0.33 ], a_Uv: [0.0, 1.0] },
-    Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0] },
-    Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
+    Vertex {
+        a_Pos: [-0.5, 0.33],
+        a_Uv: [0.0, 1.0],
+    },
+    Vertex {
+        a_Pos: [0.5, 0.33],
+        a_Uv: [1.0, 1.0],
+    },
+    Vertex {
+        a_Pos: [0.5, -0.33],
+        a_Uv: [1.0, 0.0],
+    },
+    Vertex {
+        a_Pos: [-0.5, 0.33],
+        a_Uv: [0.0, 1.0],
+    },
+    Vertex {
+        a_Pos: [0.5, -0.33],
+        a_Uv: [1.0, 0.0],
+    },
+    Vertex {
+        a_Pos: [-0.5, -0.33],
+        a_Uv: [0.0, 0.0],
+    },
 ];
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
@@ -69,7 +88,10 @@ fn main() {
     let mut events_loop = winit::EventsLoop::new();
 
     let wb = winit::WindowBuilder::new()
-        .with_dimensions(winit::dpi::LogicalSize::new(DIMS.width as _, DIMS.height as _))
+        .with_dimensions(winit::dpi::LogicalSize::new(
+            DIMS.width as _,
+            DIMS.height as _,
+        ))
         .with_title("quad".to_string());
     // instantiate backend
     #[cfg(not(feature = "gl"))]
@@ -341,14 +363,13 @@ fn main() {
 
     let (caps, formats, _present_modes) = surface.compatibility(&mut adapter.physical_device);
     println!("formats: {:?}", formats);
-    let format = formats.
-        map_or(f::Format::Rgba8Srgb, |formats| {
-            formats
-                .iter()
-                .find(|format| format.base_format().1 == ChannelType::Srgb)
-                .map(|format| *format)
-                .unwrap_or(formats[0])
-        });
+    let format = formats.map_or(f::Format::Rgba8Srgb, |formats| {
+        formats
+            .iter()
+            .find(|format| format.base_format().1 == ChannelType::Srgb)
+            .map(|format| *format)
+            .unwrap_or(formats[0])
+    });
 
     let swap_config = SwapchainConfig::from_caps(&caps, format);
     println!("{:?}", swap_config);
@@ -414,8 +435,10 @@ fn main() {
         Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
     };
 
-    let pipeline_layout =
-        device.create_pipeline_layout(std::iter::once(&set_layout), &[(pso::ShaderStageFlags::VERTEX, 0..8)]);
+    let pipeline_layout = device.create_pipeline_layout(
+        std::iter::once(&set_layout),
+        &[(pso::ShaderStageFlags::VERTEX, 0..8)],
+    );
     let pipeline = {
         let vs_module = {
             let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
@@ -540,7 +563,9 @@ fn main() {
                     winit::WindowEvent::Resized(dims) => {
                         println!("resized to {:?}", dims);
                         #[cfg(feature = "gl")]
-                        surface.get_window().resize(dims.to_physical(surface.get_window().get_hidpi_factor()));
+                        surface
+                            .get_window()
+                            .resize(dims.to_physical(surface.get_window().get_hidpi_factor()));
                         recreate_swapchain = true;
                     }
                     _ => (),
@@ -552,14 +577,15 @@ fn main() {
         if recreate_swapchain {
             device.wait_idle().unwrap();
 
-            let (caps, formats, _present_modes) = surface.compatibility(&mut adapter.physical_device);
+            let (caps, formats, _present_modes) =
+                surface.compatibility(&mut adapter.physical_device);
             // Verify that previous format still exists so we may resuse it.
-            assert!(formats.iter().any(|fs| fs.contains(&format)));         
+            assert!(formats.iter().any(|fs| fs.contains(&format)));
 
             let swap_config = SwapchainConfig::from_caps(&caps, format);
-            println!("{:?}", swap_config);            
+            println!("{:?}", swap_config);
             let extent = swap_config.extent.to_extent();
-            
+
             // Clean up the old framebuffers, images and swapchain
             for framebuffer in framebuffers {
                 device.destroy_framebuffer(framebuffer);
@@ -569,7 +595,8 @@ fn main() {
             }
             device.destroy_swapchain(swap_chain);
 
-            let (new_swap_chain, new_backbuffer) = device.create_swapchain(&mut surface, swap_config, None);            
+            let (new_swap_chain, new_backbuffer) =
+                device.create_swapchain(&mut surface, swap_config, None);
             backbuffer = new_backbuffer;
             swap_chain = new_swap_chain;
 
@@ -604,7 +631,7 @@ fn main() {
             };
 
             framebuffers = new_framebuffers;
-            frame_images = new_frame_images;                       
+            frame_images = new_frame_images;
             viewport.rect.w = extent.width as _;
             viewport.rect.h = extent.height as _;
             recreate_swapchain = false;
