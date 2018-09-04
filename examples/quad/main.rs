@@ -103,7 +103,7 @@ fn main() {
     let limits = adapter.physical_device.limits();
 
     // Build a new device and associated command queues
-    let (mut device, mut queue_group) = adapter
+    let (device, mut queue_group) = adapter
         .open_with::<_, hal::Graphics>(1, |family| surface.supports_queue_family(family))
         .unwrap();
 
@@ -339,225 +339,7 @@ fn main() {
         device.wait_for_fence(&frame_fence, !0);
     }
 
-    let mut swap_chain;
-    let mut render_pass;
-    let mut framebuffers;
-    let mut frame_images;
-    let mut pipeline;
-    let mut pipeline_layout;
-    let mut extent;
-
-    {
-        let (
-            new_swap_chain,
-            new_render_pass,
-            new_framebuffers,
-            new_frame_images,
-            new_pipeline,
-            new_pipeline_layout,
-            new_extent,
-        ) = swapchain_stuff(
-            &mut surface,
-            &mut device,
-            &adapter.physical_device,
-            &set_layout,
-        );
-
-        swap_chain = new_swap_chain;
-        render_pass = new_render_pass;
-        framebuffers = new_framebuffers;
-        frame_images = new_frame_images;
-        pipeline = new_pipeline;
-        pipeline_layout = new_pipeline_layout;
-        extent = new_extent;
-    }
-
-    // Rendering setup
-    let mut viewport = pso::Viewport {
-        rect: pso::Rect {
-            x: 0,
-            y: 0,
-            w: extent.width as _,
-            h: extent.height as _,
-        },
-        depth: 0.0..1.0,
-    };
-
-    //
-    let mut running = true;
-    let mut recreate_swapchain = false;
-    while running {
-        events_loop.poll_events(|event| {
-            if let winit::Event::WindowEvent { event, .. } = event {
-                #[allow(unused_variables)]
-                match event {
-                    winit::WindowEvent::KeyboardInput {
-                        input:
-                            winit::KeyboardInput {
-                                virtual_keycode: Some(winit::VirtualKeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    }
-                    | winit::WindowEvent::CloseRequested => running = false,
-                    winit::WindowEvent::Resized(dims) => {
-                        println!("resized to {:?}", dims);
-                        #[cfg(feature = "gl")]
-                        surface.get_window().resize(dims.to_physical(surface.get_window().get_hidpi_factor()));
-                        recreate_swapchain = true;
-                    }
-                    _ => (),
-                }
-            }
-        });
-
-        if recreate_swapchain {
-            device.wait_idle().unwrap();
-
-            command_pool.reset();
-            device.destroy_graphics_pipeline(pipeline);
-            device.destroy_pipeline_layout(pipeline_layout);
-
-            for framebuffer in framebuffers {
-                device.destroy_framebuffer(framebuffer);
-            }
-
-            for (_, rtv) in frame_images {
-                device.destroy_image_view(rtv);
-            }
-            device.destroy_render_pass(render_pass);
-            device.destroy_swapchain(swap_chain);
-
-            let (
-                new_swap_chain,
-                new_render_pass,
-                new_framebuffers,
-                new_frame_images,
-                new_pipeline,
-                new_pipeline_layout,
-                new_extent,
-            ) = swapchain_stuff(
-                &mut surface,
-                &mut device,
-                &adapter.physical_device,
-                &set_layout,
-            );
-            swap_chain = new_swap_chain;
-            render_pass = new_render_pass;
-            framebuffers = new_framebuffers;
-            frame_images = new_frame_images;
-            pipeline = new_pipeline;
-            pipeline_layout = new_pipeline_layout;
-            extent = new_extent;
-
-            viewport.rect.w = extent.width as _;
-            viewport.rect.h = extent.height as _;
-            recreate_swapchain = false;
-        }
-
-        device.reset_fence(&frame_fence);
-        command_pool.reset();
-        let frame: hal::SwapImageIndex = {
-            match swap_chain.acquire_image(!0, FrameSync::Semaphore(&mut frame_semaphore)) {
-                Ok(i) => i,
-                Err(_) => {
-                    recreate_swapchain = true;
-                    continue;
-                }
-            }
-        };
-
-        // Rendering
-        let submit = {
-            let mut cmd_buffer = command_pool.acquire_command_buffer(false);
-
-            cmd_buffer.set_viewports(0, &[viewport.clone()]);
-            cmd_buffer.set_scissors(0, &[viewport.rect]);
-            cmd_buffer.bind_graphics_pipeline(&pipeline);
-            cmd_buffer.bind_vertex_buffers(0, Some((&vertex_buffer, 0)));
-            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, Some(&desc_set), &[]); //TODO
-
-            {
-                let mut encoder = cmd_buffer.begin_render_pass_inline(
-                    &render_pass,
-                    &framebuffers[frame as usize],
-                    viewport.rect,
-                    &[command::ClearValue::Color(command::ClearColor::Float([
-                        0.8, 0.8, 0.8, 1.0,
-                    ]))],
-                );
-                encoder.draw(0..6, 0..1);
-            }
-
-            cmd_buffer.finish()
-        };
-
-        let submission = Submission::new()
-            .wait_on(&[(&frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)])
-            .submit(Some(submit));
-        queue_group.queues[0].submit(submission, Some(&mut frame_fence));
-
-        // TODO: replace with semaphore
-        device.wait_for_fence(&frame_fence, !0);
-
-        // present frame
-        if let Err(_) = swap_chain.present(&mut queue_group.queues[0], frame, &[]) {
-            recreate_swapchain = true;
-        }
-    }
-
-    // cleanup!
-    device.destroy_command_pool(command_pool.into_raw());
-    device.destroy_descriptor_pool(desc_pool);
-    device.destroy_descriptor_set_layout(set_layout);
-
-    device.destroy_buffer(vertex_buffer);
-    device.destroy_buffer(image_upload_buffer);
-    device.destroy_image(image_logo);
-    device.destroy_image_view(image_srv);
-    device.destroy_sampler(sampler);
-    device.destroy_fence(frame_fence);
-    device.destroy_semaphore(frame_semaphore);
-    device.destroy_render_pass(render_pass);
-    device.free_memory(buffer_memory);
-    device.free_memory(image_memory);
-    device.free_memory(image_upload_memory);
-    device.destroy_graphics_pipeline(pipeline);
-    device.destroy_pipeline_layout(pipeline_layout);
-    for framebuffer in framebuffers {
-        device.destroy_framebuffer(framebuffer);
-    }
-    for (_, rtv) in frame_images {
-        device.destroy_image_view(rtv);
-    }
-
-    device.destroy_swapchain(swap_chain);
-}
-
-#[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")))]
-fn main() {
-    println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
-}
-
-#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
-fn swapchain_stuff(
-    surface: &mut <back::Backend as hal::Backend>::Surface,
-    device: &mut back::Device,
-    physical_device: &back::PhysicalDevice,
-    set_layout: &<back::Backend as hal::Backend>::DescriptorSetLayout,
-) -> (
-    <back::Backend as hal::Backend>::Swapchain,
-    <back::Backend as hal::Backend>::RenderPass,
-    std::vec::Vec<<back::Backend as hal::Backend>::Framebuffer>,
-    std::vec::Vec<(
-        <back::Backend as hal::Backend>::Image,
-        <back::Backend as hal::Backend>::ImageView,
-    )>,
-    <back::Backend as hal::Backend>::GraphicsPipeline,
-    <back::Backend as hal::Backend>::PipelineLayout,
-    i::Extent,
-) {
-    let (caps, formats, _present_modes) = surface.compatibility(physical_device);
+    let (caps, formats, _present_modes) = surface.compatibility(&mut adapter.physical_device);
     println!("formats: {:?}", formats);
     let format = formats.
         map_or(f::Format::Rgba8Srgb, |formats| {
@@ -571,7 +353,7 @@ fn swapchain_stuff(
     let swap_config = SwapchainConfig::from_caps(&caps, format);
     println!("{:?}", swap_config);
     let extent = swap_config.extent.to_extent();
-    let (swap_chain, backbuffer) = device.create_swapchain(surface, swap_config, None);
+    let (mut swap_chain, mut backbuffer) = device.create_swapchain(&mut surface, swap_config, None);
 
     let render_pass = {
         let attachment = pass::Attachment {
@@ -602,7 +384,7 @@ fn swapchain_stuff(
 
         device.create_render_pass(&[attachment], &[subpass], &[dependency])
     };
-    let (frame_images, framebuffers) = match backbuffer {
+    let (mut frame_images, mut framebuffers) = match backbuffer {
         Backbuffer::Images(images) => {
             let pairs = images
                 .into_iter()
@@ -633,7 +415,7 @@ fn swapchain_stuff(
     };
 
     let pipeline_layout =
-        device.create_pipeline_layout(Some(set_layout), &[(pso::ShaderStageFlags::VERTEX, 0..8)]);
+        device.create_pipeline_layout(std::iter::once(&set_layout), &[(pso::ShaderStageFlags::VERTEX, 0..8)]);
     let pipeline = {
         let vs_module = {
             let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
@@ -727,13 +509,195 @@ fn swapchain_stuff(
         pipeline.unwrap()
     };
 
-    (
-        swap_chain,
-        render_pass,
-        framebuffers,
-        frame_images,
-        pipeline,
-        pipeline_layout,
-        extent,
-    )
+    // Rendering setup
+    let mut viewport = pso::Viewport {
+        rect: pso::Rect {
+            x: 0,
+            y: 0,
+            w: extent.width as _,
+            h: extent.height as _,
+        },
+        depth: 0.0..1.0,
+    };
+
+    //
+    let mut running = true;
+    let mut recreate_swapchain = false;
+    while running {
+        events_loop.poll_events(|event| {
+            if let winit::Event::WindowEvent { event, .. } = event {
+                #[allow(unused_variables)]
+                match event {
+                    winit::WindowEvent::KeyboardInput {
+                        input:
+                            winit::KeyboardInput {
+                                virtual_keycode: Some(winit::VirtualKeyCode::Escape),
+                                ..
+                            },
+                        ..
+                    }
+                    | winit::WindowEvent::CloseRequested => running = false,
+                    winit::WindowEvent::Resized(dims) => {
+                        println!("resized to {:?}", dims);
+                        #[cfg(feature = "gl")]
+                        surface.get_window().resize(dims.to_physical(surface.get_window().get_hidpi_factor()));
+                        recreate_swapchain = true;
+                    }
+                    _ => (),
+                }
+            }
+        });
+
+        if recreate_swapchain {
+            device.wait_idle().unwrap();
+
+            let (caps, formats, _present_modes) = surface.compatibility(&mut adapter.physical_device);
+                println!("formats: {:?}", formats);
+                let format = formats.
+                    map_or(f::Format::Rgba8Srgb, |formats| {
+                        formats
+                            .iter()
+                            .find(|format| format.base_format().1 == ChannelType::Srgb)
+                            .map(|format| *format)
+                            .unwrap_or(formats[0])
+            });
+            
+            let swap_config = SwapchainConfig::from_caps(&caps, format);
+            println!("{:?}", swap_config);            
+            let extent = swap_config.extent.to_extent();
+            
+            for framebuffer in framebuffers {
+                device.destroy_framebuffer(framebuffer);
+            }
+            for (_, rtv) in frame_images {
+                device.destroy_image_view(rtv);
+            }
+            device.destroy_swapchain(swap_chain);
+
+            let (new_swap_chain, new_backbuffer) = device.create_swapchain(&mut surface, swap_config, None);
+            
+            backbuffer = new_backbuffer;
+            swap_chain = new_swap_chain;
+
+            let (new_frame_images, new_framebuffers) = match backbuffer {
+                Backbuffer::Images(images) => {
+                    let pairs = images
+                        .into_iter()
+                        .map(|image| {
+                            let rtv = device
+                                .create_image_view(
+                                    &image,
+                                    i::ViewKind::D2,
+                                    format,
+                                    Swizzle::NO,
+                                    COLOR_RANGE.clone(),
+                                )
+                                .unwrap();
+                            (image, rtv)
+                        })
+                        .collect::<Vec<_>>();
+                    let fbos = pairs
+                        .iter()
+                        .map(|&(_, ref rtv)| {
+                            device
+                                .create_framebuffer(&render_pass, Some(rtv), extent)
+                                .unwrap()
+                        })
+                        .collect();
+                    (pairs, fbos)
+                }
+                Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
+            };
+
+            framebuffers = new_framebuffers;
+            frame_images = new_frame_images;
+            
+           
+            viewport.rect.w = extent.width as _;
+            viewport.rect.h = extent.height as _;
+            recreate_swapchain = false;
+        }
+
+        device.reset_fence(&frame_fence);
+        command_pool.reset();
+        let frame: hal::SwapImageIndex = {
+            match swap_chain.acquire_image(!0, FrameSync::Semaphore(&mut frame_semaphore)) {
+                Ok(i) => i,
+                Err(_) => {
+                    recreate_swapchain = true;
+                    continue;
+                }
+            }
+        };
+
+        // Rendering
+        let submit = {
+            let mut cmd_buffer = command_pool.acquire_command_buffer(false);
+
+            cmd_buffer.set_viewports(0, &[viewport.clone()]);
+            cmd_buffer.set_scissors(0, &[viewport.rect]);
+            cmd_buffer.bind_graphics_pipeline(&pipeline);
+            cmd_buffer.bind_vertex_buffers(0, Some((&vertex_buffer, 0)));
+            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, Some(&desc_set), &[]); //TODO
+
+            {
+                let mut encoder = cmd_buffer.begin_render_pass_inline(
+                    &render_pass,
+                    &framebuffers[frame as usize],
+                    viewport.rect,
+                    &[command::ClearValue::Color(command::ClearColor::Float([
+                        0.8, 0.8, 0.8, 1.0,
+                    ]))],
+                );
+                encoder.draw(0..6, 0..1);
+            }
+
+            cmd_buffer.finish()
+        };
+
+        let submission = Submission::new()
+            .wait_on(&[(&frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)])
+            .submit(Some(submit));
+        queue_group.queues[0].submit(submission, Some(&mut frame_fence));
+
+        // TODO: replace with semaphore
+        device.wait_for_fence(&frame_fence, !0);
+
+        // present frame
+        if let Err(_) = swap_chain.present(&mut queue_group.queues[0], frame, &[]) {
+            recreate_swapchain = true;
+        }
+    }
+
+    // cleanup!
+    device.destroy_command_pool(command_pool.into_raw());
+    device.destroy_descriptor_pool(desc_pool);
+    device.destroy_descriptor_set_layout(set_layout);
+
+    device.destroy_buffer(vertex_buffer);
+    device.destroy_buffer(image_upload_buffer);
+    device.destroy_image(image_logo);
+    device.destroy_image_view(image_srv);
+    device.destroy_sampler(sampler);
+    device.destroy_fence(frame_fence);
+    device.destroy_semaphore(frame_semaphore);
+    device.destroy_render_pass(render_pass);
+    device.free_memory(buffer_memory);
+    device.free_memory(image_memory);
+    device.free_memory(image_upload_memory);
+    device.destroy_graphics_pipeline(pipeline);
+    device.destroy_pipeline_layout(pipeline_layout);
+    for framebuffer in framebuffers {
+        device.destroy_framebuffer(framebuffer);
+    }
+    for (_, rtv) in frame_images {
+        device.destroy_image_view(rtv);
+    }
+
+    device.destroy_swapchain(swap_chain);
+}
+
+#[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")))]
+fn main() {
+    println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
 }
