@@ -634,8 +634,7 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_command_pool(&self, _pool: CommandPool) {
-        // TODO:
-        // unimplemented!()
+        // automatic
     }
 
     fn create_render_pass<'a, IA, IS, ID>(
@@ -2131,11 +2130,9 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_compute_pipeline(&self, _pipeline: ComputePipeline) {
-        // unimplemented!()
     }
 
     fn destroy_framebuffer(&self, _fb: Framebuffer) {
-        //unimplemented!()
     }
 
     fn destroy_buffer(&self, _buffer: Buffer) {
@@ -2308,12 +2305,11 @@ impl hal::Device<Backend> for Device {
     }
 
     fn destroy_swapchain(&self, _swapchain: Swapchain) {
-        unimplemented!()
+        // automatic
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         Ok(())
         // unimplemented!()
     }
-
 }
