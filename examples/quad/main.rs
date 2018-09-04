@@ -548,24 +548,19 @@ fn main() {
             }
         });
 
+        // Window was resized so we must recreate swapchain and framebuffers
         if recreate_swapchain {
             device.wait_idle().unwrap();
 
             let (caps, formats, _present_modes) = surface.compatibility(&mut adapter.physical_device);
-                println!("formats: {:?}", formats);
-                let format = formats.
-                    map_or(f::Format::Rgba8Srgb, |formats| {
-                        formats
-                            .iter()
-                            .find(|format| format.base_format().1 == ChannelType::Srgb)
-                            .map(|format| *format)
-                            .unwrap_or(formats[0])
-            });
-            
+            // Verify that previous format still exists so we may resuse it.
+            assert!(formats.iter().any(|fs| fs.contains(&format)));         
+
             let swap_config = SwapchainConfig::from_caps(&caps, format);
             println!("{:?}", swap_config);            
             let extent = swap_config.extent.to_extent();
             
+            // Clean up the old framebuffers, images and swapchain
             for framebuffer in framebuffers {
                 device.destroy_framebuffer(framebuffer);
             }
@@ -574,8 +569,7 @@ fn main() {
             }
             device.destroy_swapchain(swap_chain);
 
-            let (new_swap_chain, new_backbuffer) = device.create_swapchain(&mut surface, swap_config, None);
-            
+            let (new_swap_chain, new_backbuffer) = device.create_swapchain(&mut surface, swap_config, None);            
             backbuffer = new_backbuffer;
             swap_chain = new_swap_chain;
 
@@ -610,9 +604,7 @@ fn main() {
             };
 
             framebuffers = new_framebuffers;
-            frame_images = new_frame_images;
-            
-           
+            frame_images = new_frame_images;                       
             viewport.rect.w = extent.width as _;
             viewport.rect.h = extent.height as _;
             recreate_swapchain = false;
