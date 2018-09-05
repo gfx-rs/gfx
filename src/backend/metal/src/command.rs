@@ -2113,6 +2113,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let base_extent = image.kind.extent();
 
         autoreleasepool(|| {
+            let raw = image.like.as_texture();
             for subresource_range in subresource_ranges {
                 let sub = subresource_range.borrow();
                 let descriptor = metal::RenderPassDescriptor::new();
@@ -2125,12 +2126,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 };
                 let texture = if CLEAR_IMAGE_ARRAY && sub.layers.start > 0 {
                     // aliasing is necessary for bulk-clearing all layers starting with 0
-                    let tex = image.raw.new_texture_view_from_slice(
+                    let tex = raw.new_texture_view_from_slice(
                         image.mtl_format,
                         image.mtl_type,
                         NSRange {
                             location: 0,
-                            length: image.raw.mipmap_level_count(),
+                            length: raw.mipmap_level_count(),
                         },
                         NSRange {
                             location: sub.layers.start as _,
@@ -2140,7 +2141,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     retained_textures.push(tex);
                     retained_textures.last().unwrap()
                 } else {
-                    &*image.raw
+                    raw
                 };
 
                 let color_attachment = if image.format_desc.aspects.contains(Aspects::COLOR) {
@@ -2570,7 +2571,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // outside of a render pass, and the state will be reset automatically once
         // we enter the next pass.
 
-        let src_native = AsNative::from(src_cubish.as_ref().unwrap_or(&src.raw).as_ref());
+        let src_native = AsNative::from(match src_cubish {
+            Some(ref tex) => tex.as_ref(),
+            None => src.like.as_texture(),
+        });
         let prelude = [
             soft::RenderCommand::BindPipeline(&**pso),
             soft::RenderCommand::BindSamplers {
@@ -2594,7 +2598,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         autoreleasepool(|| {
             let descriptor = metal::RenderPassDescriptor::new();
-            let dst_new = dst_cubish.as_ref().unwrap_or(&dst.raw);
+            let dst_new = match dst_cubish {
+                Some(ref tex) => tex.as_ref(),
+                None => dst.like.as_texture(),
+            };
             if src.format_desc.aspects.contains(Aspects::COLOR) {
                 descriptor
                     .color_attachments()
@@ -3321,7 +3328,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 blit_commands.push(soft::BlitCommand::CopyBuffer {
                     src: AsNative::from(src.raw.as_ref()),
                     dst: AsNative::from(dst.raw.as_ref()),
-                    region: r.clone(),
+                    region: com::BufferCopy {
+                        src: r.src + src.range.start,
+                        dst: r.dst + dst.range.start,
+                        size: r.size,
+                    },
                 });
             } else {
                 // not natively supported, going through compute shader
@@ -3336,12 +3347,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 0,
                     buffer: AsNative::from(dst.raw.as_ref()),
-                    offset: r.dst,
+                    offset: r.dst + dst.range.start,
                 });
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 1,
                     buffer: AsNative::from(src.raw.as_ref()),
-                    offset: r.src,
+                    offset: r.src + src.range.start,
                 });
                 compute_commands.push(soft::ComputeCommand::BindBufferData {
                     index: 2,
@@ -3369,44 +3380,88 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     fn copy_image<T>(
         &mut self,
         src: &native::Image,
-        _src_layout: Layout,
+        src_layout: Layout,
         dst: &native::Image,
-        _dst_layout: Layout,
+        dst_layout: Layout,
         regions: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
     {
-        let CommandBufferInner {
-            ref mut retained_textures,
-            ref mut sink,
-            ..
-        } = *self.inner.borrow_mut();
+        match (&src.like, &dst.like) {
+            (&native::ImageLike::Texture(ref src_raw), &native::ImageLike::Texture(ref dst_raw)) => {
+                let CommandBufferInner {
+                    ref mut retained_textures,
+                    ref mut sink,
+                    ..
+                } = *self.inner.borrow_mut();
 
-        let new_src = if src.mtl_format == dst.mtl_format {
-            &*src.raw
-        } else {
-            assert_eq!(src.format_desc.bits, dst.format_desc.bits);
-            let tex = src.raw.new_texture_view(dst.mtl_format);
-            retained_textures.push(tex);
-            retained_textures.last().unwrap()
-        };
+                let new_src = if src.mtl_format == dst.mtl_format {
+                    src_raw
+                } else {
+                    assert_eq!(src.format_desc.bits, dst.format_desc.bits);
+                    let tex = src_raw.new_texture_view(dst.mtl_format);
+                    retained_textures.push(tex);
+                    retained_textures.last().unwrap()
+                };
 
-        let commands = regions.into_iter().filter_map(|region| {
-            let r = region.borrow();
-            if r.extent.is_empty() {
-                None
-            } else {
-                Some(soft::BlitCommand::CopyImage {
-                    src: AsNative::from(new_src),
-                    dst: AsNative::from(dst.raw.as_ref()),
-                    region: r.clone(),
-                })
+                let commands = regions.into_iter().filter_map(|region| {
+                    let r = region.borrow();
+                    if r.extent.is_empty() {
+                        None
+                    } else {
+                        Some(soft::BlitCommand::CopyImage {
+                            src: AsNative::from(new_src.as_ref()),
+                            dst: AsNative::from(dst_raw.as_ref()),
+                            region: r.clone(),
+                        })
+                    }
+                });
+
+                sink
+                    .as_mut()
+                    .unwrap()
+                    .blit_commands(commands);
             }
-        });
-        sink.as_mut()
-            .unwrap()
-            .blit_commands(commands);
+            (&native::ImageLike::Buffer(ref src_buffer), &native::ImageLike::Texture(_)) => {
+                let src_extent = src.kind.extent();
+                self.copy_buffer_to_image(src_buffer, dst, dst_layout, regions.into_iter().map(|region| {
+                    let r = region.borrow();
+                    com::BufferImageCopy {
+                        buffer_offset: src.byte_offset(r.src_offset),
+                        buffer_width: src_extent.width,
+                        buffer_height: src_extent.height,
+                        image_layers: r.dst_subresource.clone(),
+                        image_offset: r.dst_offset,
+                        image_extent: r.extent,
+                    }
+                }))
+            }
+            (&native::ImageLike::Texture(_), &native::ImageLike::Buffer(ref dst_buffer)) => {
+                let dst_extent = dst.kind.extent();
+                self.copy_image_to_buffer(src, src_layout, dst_buffer, regions.into_iter().map(|region| {
+                    let r = region.borrow();
+                    com::BufferImageCopy {
+                        buffer_offset: dst.byte_offset(r.dst_offset),
+                        buffer_width: dst_extent.width,
+                        buffer_height: dst_extent.height,
+                        image_layers: r.src_subresource.clone(),
+                        image_offset: r.src_offset,
+                        image_extent: r.extent,
+                    }
+                }))
+            }
+            (&native::ImageLike::Buffer(ref src_buffer), &native::ImageLike::Buffer(ref dst_buffer)) => {
+                self.copy_buffer(src_buffer, dst_buffer, regions.into_iter().map(|region| {
+                    let r = region.borrow();
+                    com::BufferCopy {
+                        src: src.byte_offset(r.src_offset),
+                        dst: dst.byte_offset(r.dst_offset),
+                        size: src.byte_extent(r.extent),
+                    }
+                }))
+            }
+        }
     }
 
     fn copy_buffer_to_image<T>(
@@ -3419,24 +3474,40 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferImageCopy>,
     {
-        // FIXME: layout
-        let commands = regions.into_iter().filter_map(|region| {
-            let r = region.borrow();
-            if r.image_extent.is_empty() {
-                None
-            } else {
-                Some(soft::BlitCommand::CopyBufferToImage {
-                    src: AsNative::from(src.raw.as_ref()),
-                    dst: AsNative::from(dst.raw.as_ref()),
-                    dst_desc: dst.format_desc,
-                    region: r.clone(),
-                })
+        match dst.like {
+            native::ImageLike::Texture(ref dst_raw) => {
+                let commands = regions.into_iter().filter_map(|region| {
+                    let r = region.borrow();
+                    if r.image_extent.is_empty() {
+                        None
+                    } else {
+                        Some(soft::BlitCommand::CopyBufferToImage {
+                            src: AsNative::from(src.raw.as_ref()),
+                            dst: AsNative::from(dst_raw.as_ref()),
+                            dst_desc: dst.format_desc,
+                            region: com::BufferImageCopy {
+                                buffer_offset: r.buffer_offset + src.range.start,
+                                .. r.clone()
+                            },
+                        })
+                    }
+                });
+                self.inner
+                    .borrow_mut()
+                    .sink()
+                    .blit_commands(commands);
             }
-        });
-        self.inner
-            .borrow_mut()
-            .sink()
-            .blit_commands(commands);
+            native::ImageLike::Buffer(ref dst_buffer) => {
+                self.copy_buffer(src, dst_buffer, regions.into_iter().map(|region| {
+                    let r = region.borrow();
+                    com::BufferCopy {
+                        src: r.buffer_offset,
+                        dst: dst.byte_offset(r.image_offset),
+                        size: dst.byte_extent(r.image_extent),
+                    }
+                }))
+            }
+        }
     }
 
     fn copy_image_to_buffer<T>(
@@ -3449,24 +3520,40 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferImageCopy>,
     {
-        // FIXME: layout
-        let commands = regions.into_iter().filter_map(|region| {
-            let r = region.borrow();
-            if r.image_extent.is_empty() {
-                None
-            } else {
-                Some(soft::BlitCommand::CopyImageToBuffer {
-                    src: AsNative::from(src.raw.as_ref()),
-                    src_desc: src.format_desc,
-                    dst: AsNative::from(dst.raw.as_ref()),
-                    region: r.clone(),
-                })
+        match src.like {
+            native::ImageLike::Texture(ref src_raw) => {
+                let commands = regions.into_iter().filter_map(|region| {
+                    let r = region.borrow();
+                    if r.image_extent.is_empty() {
+                        None
+                    } else {
+                        Some(soft::BlitCommand::CopyImageToBuffer {
+                            src: AsNative::from(src_raw.as_ref()),
+                            src_desc: src.format_desc,
+                            dst: AsNative::from(dst.raw.as_ref()),
+                            region: com::BufferImageCopy {
+                                buffer_offset: r.buffer_offset + dst.range.start,
+                                .. r.clone()
+                            },
+                        })
+                    }
+                });
+                self.inner
+                    .borrow_mut()
+                    .sink()
+                    .blit_commands(commands);
             }
-        });
-        self.inner
-            .borrow_mut()
-            .sink()
-            .blit_commands(commands);
+            native::ImageLike::Buffer(ref src_buffer) => {
+                self.copy_buffer(src_buffer, dst, regions.into_iter().map(|region| {
+                    let r = region.borrow();
+                    com::BufferCopy {
+                        src: src.byte_offset(r.image_offset),
+                        dst: r.buffer_offset,
+                        size: src.byte_extent(r.image_extent),
+                    }
+                }))
+            }
+        }
     }
 
     fn draw(

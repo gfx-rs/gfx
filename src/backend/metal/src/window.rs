@@ -308,7 +308,7 @@ impl Device {
         let images = frames
             .iter()
             .map(|frame| native::Image {
-                raw: frame.texture.clone(),
+                like: native::ImageLike::Texture(frame.texture.clone()),
                 kind: image::Kind::D2(config.extent.width, config.extent.height, 1, 1),
                 format_desc,
                 shader_channel: Channel::Float,

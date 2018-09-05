@@ -36,11 +36,7 @@ else
 	endif
 	ifeq ($(UNAME_S),Darwin)
 		EXCLUDES+= --exclude gfx-backend-vulkan
-		ifeq ($(TARGET),$(filter $(TARGET),x86_64-apple-ios armv7-apple-ios))
-			EXCLUDES += --exclude gfx-backend-metal
-		else
-			FEATURES_HAL=metal
-		endif
+		FEATURES_HAL=metal
 	endif
 endif
 
