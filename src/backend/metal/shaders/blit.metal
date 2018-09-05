@@ -1,4 +1,4 @@
-#include "macros.metal"
+#include "macros.h"
 #include <metal_stdlib>
 using namespace metal;
 
