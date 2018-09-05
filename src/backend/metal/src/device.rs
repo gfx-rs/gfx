@@ -1949,7 +1949,7 @@ impl hal::Device<Backend> for Device {
         &self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
     ) -> Result<n::Buffer, BindError> {
         debug!("bind_buffer_memory of size {} at offset {}", buffer.size, offset);
-        let (raw, res_options, range) = match memory.heap {
+        let (raw, options, range) = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = conv::resource_options_from_storage_and_cache(
                     heap.storage_mode(),
@@ -1984,7 +1984,7 @@ impl hal::Device<Backend> for Device {
         Ok(n::Buffer {
             raw,
             range,
-            res_options,
+            options,
         })
     }
 
@@ -2024,7 +2024,7 @@ impl hal::Device<Backend> for Device {
         descriptor.set_height(row_count);
         descriptor.set_mipmap_level_count(1);
         descriptor.set_pixel_format(mtl_format);
-        descriptor.set_resource_options(buffer.res_options);
+        descriptor.set_resource_options(buffer.options);
         descriptor.set_storage_mode(buffer.raw.storage_mode());
         descriptor.set_usage(metal::MTLTextureUsage::ShaderRead);
 
@@ -2111,7 +2111,7 @@ impl hal::Device<Backend> for Device {
         let mip_sizes = (0 .. mip_levels)
             .map(|level| {
                 let pitches = n::Image::pitches_impl(extent.at_level(level), format_desc);
-                num_layers.unwrap_or(1) as buffer::Offset * pitches[2]
+                num_layers.unwrap_or(1) as buffer::Offset * pitches[3]
             })
             .collect();
 
@@ -2167,11 +2167,7 @@ impl hal::Device<Backend> for Device {
             memory::Requirements {
                 size: (image.mip_sizes[0] + mask) & !mask,
                 alignment: self.private_caps.buffer_alignment,
-                type_mask: if self.private_caps.shared_textures {
-                    MemoryTypes::all().bits()
-                } else {
-                    (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
-                },
+                type_mask: MemoryTypes::all().bits(),
             }
         } else {
             memory::Requirements {
@@ -2188,15 +2184,15 @@ impl hal::Device<Backend> for Device {
         let num_layers = image.kind.num_layers() as buffer::Offset;
         let level_offset = (0 .. sub.level).fold(0, |offset, level| {
             let pitches = image.pitches(level);
-            offset + num_layers * pitches[2]
+            offset + num_layers * pitches[3]
         });
         let pitches = image.pitches(sub.level);
-        let layer_offset = level_offset + sub.layer as buffer::Offset * pitches[2];
+        let layer_offset = level_offset + sub.layer as buffer::Offset * pitches[3];
         image::SubresourceFootprint {
-            slice: layer_offset .. layer_offset + pitches[2],
-            row_pitch: pitches[0] as _,
-            depth_pitch: pitches[1] as _,
-            array_pitch: pitches[2] as _,
+            slice: layer_offset .. layer_offset + pitches[3],
+            row_pitch: pitches[1] as _,
+            depth_pitch: pitches[2] as _,
+            array_pitch: pitches[3] as _,
         }
     }
 
@@ -2206,41 +2202,42 @@ impl hal::Device<Backend> for Device {
         let base = image.format.base_format();
         let format_desc = base.0.desc();
 
-        let raw = match memory.heap {
+        let like = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
                 let resource_options = conv::resource_options_from_storage_and_cache(
                     heap.storage_mode(),
                     heap.cpu_cache_mode());
                 image.texture_desc.set_resource_options(resource_options);
-                heap.new_texture(&image.texture_desc)
-                    .unwrap_or_else(|| {
-                        // TODO: disable hazard tracking?
-                        self.shared.device
-                            .lock()
-                            .new_texture(&image.texture_desc)
-                    })
+                n::ImageLike::Texture(
+                    heap.new_texture(&image.texture_desc)
+                        .unwrap_or_else(|| {
+                            // TODO: disable hazard tracking?
+                            self.shared.device
+                                .lock()
+                                .new_texture(&image.texture_desc)
+                        })
+                )
             },
-            n::MemoryHeap::Public(memory_type, ref cpu_buffer) => {
-                let row_size = image.kind.extent().width as u64 * (format_desc.bits as u64 / 8);
-                let align_mask = self.private_caps.buffer_alignment - 1;
-                let stride = (row_size + align_mask) & !align_mask;
-
-                let (storage_mode, cache_mode) = MemoryTypes::describe(memory_type.0);
-                image.texture_desc.set_storage_mode(storage_mode);
-                image.texture_desc.set_cpu_cache_mode(cache_mode);
-
-                cpu_buffer.new_texture_from_contents(&image.texture_desc, offset, stride)
+            n::MemoryHeap::Public(_memory_type, ref cpu_buffer) => {
+                assert_eq!(image.mip_sizes.len(), 1);
+                n::ImageLike::Buffer(n::Buffer {
+                    raw: cpu_buffer.clone(),
+                    range: offset .. offset + image.mip_sizes[0] as u64,
+                    options: MTLResourceOptions::StorageModeShared,
+                })
             }
             n::MemoryHeap::Private => {
                 image.texture_desc.set_storage_mode(MTLStorageMode::Private);
-                self.shared.device
-                    .lock()
-                    .new_texture(&image.texture_desc)
+                n::ImageLike::Texture(
+                    self.shared.device
+                        .lock()
+                        .new_texture(&image.texture_desc)
+                )
             }
         };
 
         Ok(n::Image {
-            raw,
+            like,
             kind: image.kind,
             format_desc,
             shader_channel: base.1.into(),
@@ -2273,10 +2270,11 @@ impl hal::Device<Backend> for Device {
                 return Err(image::ViewError::BadFormat);
             },
         };
+        let raw = image.like.as_texture();
 
         let full_range = image::SubresourceRange {
             aspects: image.format_desc.aspects,
-            levels: 0 .. image.raw.mipmap_level_count() as image::Level,
+            levels: 0 .. raw.mipmap_level_count() as image::Level,
             layers: 0 .. image.kind.num_layers(),
         };
         let view = if
@@ -2295,9 +2293,9 @@ impl hal::Device<Backend> for Device {
         {
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
-            image.raw.clone()
+            raw.to_owned()
         } else {
-            image.raw.new_texture_view_from_slice(
+            raw.new_texture_view_from_slice(
                 mtl_format,
                 conv::map_texture_type(kind),
                 NSRange {

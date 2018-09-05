@@ -333,8 +333,25 @@ unsafe impl Send for ComputePipeline {}
 unsafe impl Sync for ComputePipeline {}
 
 #[derive(Debug)]
+pub enum ImageLike {
+    /// This is a linearly tiled HOST-visible image, which is represented by a buffer.
+    Buffer(Buffer),
+    /// This is a regular image represented by a texture.
+    Texture(metal::Texture),
+}
+
+impl ImageLike {
+    pub fn as_texture(&self) -> &metal::TextureRef {
+        match *self {
+            ImageLike::Buffer(..) => panic!("Unexpected buffer-backed image"),
+            ImageLike::Texture(ref tex) => tex,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct Image {
-    pub(crate) raw: metal::Texture,
+    pub(crate) like: ImageLike,
     pub(crate) kind: image::Kind,
     pub(crate) format_desc: FormatDesc,
     pub(crate) shader_channel: Channel,
@@ -345,28 +362,39 @@ pub struct Image {
 impl Image {
     pub(crate) fn pitches_impl(
         extent: image::Extent, format_desc: FormatDesc
-    ) -> [buffer::Offset; 3] {
+    ) -> [buffer::Offset; 4] {
         let bytes_per_texel = format_desc.bits as image::Size >> 3;
         let row_pitch = extent.width * bytes_per_texel;
         let depth_pitch = extent.height * row_pitch;
         let array_pitch = extent.depth * depth_pitch;
-        [row_pitch as _, depth_pitch as _, array_pitch as _]
+        [bytes_per_texel as _, row_pitch as _, depth_pitch as _, array_pitch as _]
     }
-    pub(crate) fn pitches(&self, level: image::Level) -> [buffer::Offset; 3] {
+    pub(crate) fn pitches(&self, level: image::Level) -> [buffer::Offset; 4] {
         let extent = self.kind.extent().at_level(level);
         Self::pitches_impl(extent, self.format_desc)
+    }
+    pub(crate) fn byte_offset(&self, offset: image::Offset) -> buffer::Offset {
+        let pitches = Self::pitches_impl(self.kind.extent(), self.format_desc);
+        pitches[0] * offset.x as buffer::Offset +
+        pitches[1] * offset.y as buffer::Offset +
+        pitches[2] * offset.z as buffer::Offset
+    }
+    pub(crate) fn byte_extent(&self, extent: image::Extent) -> buffer::Offset {
+        let bytes_per_texel = self.format_desc.bits as image::Size >> 3;
+        (bytes_per_texel * extent.width * extent.height * extent.depth) as _
     }
     /// View this cube texture as a 2D array.
     pub(crate) fn view_cube_as_2d(&self) -> Option<metal::Texture> {
         match self.mtl_type {
             metal::MTLTextureType::Cube |
             metal::MTLTextureType::CubeArray => {
-                Some(self.raw.new_texture_view_from_slice(
+                let raw = self.like.as_texture();
+                Some(raw.new_texture_view_from_slice(
                     self.mtl_format,
                     metal::MTLTextureType::D2Array,
                     NSRange {
                         location: 0,
-                        length: self.raw.mipmap_level_count(),
+                        length: raw.mipmap_level_count(),
                     },
                     NSRange {
                         location: 0,
@@ -415,7 +443,7 @@ pub struct Semaphore {
 pub struct Buffer {
     pub(crate) raw: metal::Buffer,
     pub(crate) range: Range<u64>,
-    pub(crate) res_options: metal::MTLResourceOptions,
+    pub(crate) options: metal::MTLResourceOptions,
 }
 
 unsafe impl Send for Buffer {}
