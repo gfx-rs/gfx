@@ -55,7 +55,7 @@ fn main() {
         out_path.set_extension("air");
 
         let status = Command::new("xcrun")
-            .args(&["-sdk", sdk_name, "metal"])
+            .args(&["-sdk", sdk_name, "metal", "-c"])
             .arg(shader_path.as_os_str())
             .arg("-o")
             .arg(out_path.as_os_str())
