@@ -1642,7 +1642,10 @@ impl hal::Device<Backend> for Device {
         } else {
             for desc_range in descriptor_ranges {
                 let dr = desc_range.borrow();
-                counters.add_many(n::DescriptorContent::from(dr.ty), dr.count as pso::DescriptorBinding);
+                counters.add_many(
+                    n::DescriptorContent::from(dr.ty),
+                    dr.count as pso::DescriptorBinding,
+                );
             }
             n::DescriptorPool::new_emulated(counters)
         }
@@ -1741,80 +1744,46 @@ impl hal::Device<Backend> for Device {
         for write in write_iter {
             match *write.set {
                 n::DescriptorSet::Emulated { ref pool, ref layouts, ref resources } => {
-                    let mut counters = n::MultiStageResourceCounters {
-                        vs: resources.vs.map(|r| r.start),
-                        ps: resources.ps.map(|r| r.start),
-                        cs: resources.cs.map(|r| r.start),
-                    };
+                    let mut counters = resources.map(|r| r.start);
                     let mut start = None; //TODO: can pre-compute this
                     for (i, layout) in layouts.iter().enumerate() {
                         if layout.binding == write.binding && layout.array_index == write.array_offset {
                             start = Some(i);
                             break;
                         }
-                        counters.add(layout.stages, layout.content);
+                        counters.add(layout.content);
                     }
                     let mut data = pool.write();
-                    let mut stages = [
-                        (pso::ShaderStageFlags::VERTEX, &mut counters.vs),
-                        (pso::ShaderStageFlags::FRAGMENT, &mut counters.ps),
-                        (pso::ShaderStageFlags::COMPUTE, &mut counters.cs),
-                    ];
 
                     for (layout, descriptor) in layouts[start.unwrap() ..].iter().zip(write.descriptors) {
-                        trace!("\t{:?} at {:?}", layout, stages);
-                        // gather the data
-                        let (mut sampler, mut texture, mut buffer) = (None, None, None);
+                        trace!("\t{:?}", layout);
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sam) => {
                                 debug_assert!(!layout.content.contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
-                                sampler = Some(AsNative::from(sam.0.as_ref()));
+                                data.samplers[counters.samplers as usize] = Some(AsNative::from(sam.0.as_ref()));
                             }
                             pso::Descriptor::Image(tex, il) => {
-                                texture = Some((AsNative::from(tex.raw.as_ref()), il));
+                                data.textures[counters.textures as usize] = Some((AsNative::from(tex.raw.as_ref()), il));
                             }
                             pso::Descriptor::CombinedImageSampler(tex, il, sam) => {
                                 if !layout.content.contains(n::DescriptorContent::IMMUTABLE_SAMPLER) {
-                                    sampler = Some(AsNative::from(sam.0.as_ref()));
+                                    data.samplers[counters.samplers as usize] = Some(AsNative::from(sam.0.as_ref()));
                                 }
-                                texture = Some((AsNative::from(tex.raw.as_ref()), il));
+                                data.textures[counters.textures as usize] = Some((AsNative::from(tex.raw.as_ref()), il));
                             }
                             pso::Descriptor::UniformTexelBuffer(view) |
                             pso::Descriptor::StorageTexelBuffer(view) => {
-                                texture = Some((AsNative::from(view.raw.as_ref()), image::Layout::General));
+                                data.textures[counters.textures as usize] = Some((AsNative::from(view.raw.as_ref()), image::Layout::General));
                             }
                             pso::Descriptor::Buffer(buf, ref range) => {
                                 let start = buf.range.start + range.start.unwrap_or(0);
                                 if let Some(end) = range.end {
                                     debug_assert!(buf.range.start + end <= buf.range.end);
                                 };
-                                buffer = Some((AsNative::from(buf.raw.as_ref()), start));
+                                data.buffers[counters.buffers as usize] = Some((AsNative::from(buf.raw.as_ref()), start));
                             }
                         }
-                        // scatter over the per-stage resource data in the pool
-                        for &mut (stage_flags, ref mut count) in stages.iter_mut() {
-                            if !layout.stages.contains(stage_flags) {
-                                continue
-                            }
-                            if layout.content.contains(n::DescriptorContent::SAMPLER) {
-                                if sampler.is_some() {
-                                    data.samplers[count.samplers as usize] = sampler;
-                                }
-                                count.samplers += 1;
-                            }
-                            if layout.content.contains(n::DescriptorContent::TEXTURE) {
-                                if texture.is_some() {
-                                    data.textures[count.textures as usize] = texture;
-                                }
-                                count.textures += 1;
-                            }
-                            if layout.content.contains(n::DescriptorContent::BUFFER) {
-                                if buffer.is_some() {
-                                    data.buffers[count.buffers as usize] = buffer;
-                                }
-                                count.buffers += 1;
-                            }
-                        }
+                        counters.add(layout.content);
                     }
                 }
                 n::DescriptorSet::ArgumentBuffer { ref raw, offset, ref encoder, .. } => {

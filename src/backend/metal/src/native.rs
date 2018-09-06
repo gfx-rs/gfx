@@ -161,6 +161,15 @@ impl<T> ResourceData<T> {
     }
 }
 
+impl<T: Copy + Ord> ResourceData<Range<T>> {
+    pub fn expand(&mut self, point: ResourceData<T>) {
+        //TODO: modify `start` as well?
+        self.buffers.end = self.buffers.end.max(point.buffers);
+        self.textures.end = self.textures.end.max(point.textures);
+        self.samplers.end = self.samplers.end.max(point.samplers);
+    }
+}
+
 impl ResourceData<PoolResourceIndex> {
     pub fn new() -> Self {
         ResourceData {
@@ -209,20 +218,6 @@ pub struct MultiStageData<T> {
 }
 
 pub type MultiStageResourceCounters = MultiStageData<ResourceData<ResourceIndex>>;
-
-impl MultiStageResourceCounters {
-    pub fn add(&mut self, stages: pso::ShaderStageFlags, content: DescriptorContent) {
-        if stages.contains(pso::ShaderStageFlags::VERTEX) {
-            self.vs.add(content);
-        }
-        if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-            self.ps.add(content);
-        }
-        if stages.contains(pso::ShaderStageFlags::COMPUTE) {
-            self.cs.add(content);
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct DescriptorSetInfo {
@@ -515,20 +510,11 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 };
 
                 // step[1]: count the total number of descriptors needed
-                let mut counters = MultiStageResourceCounters {
-                    vs: ResourceData::new(),
-                    ps: ResourceData::new(),
-                    cs: ResourceData::new(),
-                };
+                let mut total = ResourceData::new();
                 for layout in layouts.iter() {
-                    counters.add(layout.stages, layout.content);
+                    total.add(layout.content);
                 }
-                debug!("\ttotal {:?}", counters);
-                let total = ResourceData {
-                    buffers: counters.vs.buffers + counters.ps.buffers + counters.cs.buffers,
-                    textures: counters.vs.textures + counters.ps.textures + counters.cs.textures,
-                    samplers: counters.vs.samplers + counters.ps.samplers + counters.cs.samplers,
-                };
+                debug!("\ttotal {:?}", total);
 
                 // step[2]: try to allocate the ranges from the pool
                 let sampler_range = if total.samplers != 0 {
@@ -586,52 +572,25 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 // step[3]: fill out immutable samplers
                 if !immutable_samplers.is_empty() {
                     let mut data = inner.write();
-                    let mut data_vs_index = sampler_range.start as usize;
-                    let mut data_ps_index = data_vs_index + counters.vs.samplers as usize;
-                    let mut data_cs_index = data_ps_index + counters.ps.samplers as usize;
+                    let mut data_iter = data.samplers[sampler_range.start as usize .. sampler_range.end as usize].iter_mut();
                     let mut sampler_iter = immutable_samplers.iter();
 
                     for layout in layouts.iter() {
                         if layout.content.contains(DescriptorContent::SAMPLER) {
-                            let value = if layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER) {
+                            *data_iter.next().unwrap() = if layout.content.contains(DescriptorContent::IMMUTABLE_SAMPLER) {
                                 Some(AsNative::from(sampler_iter.next().unwrap().as_ref()))
                             } else {
                                 None
                             };
-                            if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
-                                data.samplers[data_vs_index] = value;
-                                data_vs_index += 1;
-                            }
-                            if layout.stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-                                data.samplers[data_ps_index] = value;
-                                data_ps_index += 1;
-                            }
-                            if layout.stages.contains(pso::ShaderStageFlags::COMPUTE) {
-                                data.samplers[data_cs_index] = value;
-                                data_cs_index += 1;
-                            }
                         }
                     }
                     debug!("\tassigning {} immutable_samplers", immutable_samplers.len());
                 }
 
-                let resources = {
-                    let vs = ResourceData {
-                        buffers: buffer_range.start .. buffer_range.start + counters.vs.buffers,
-                        textures: texture_range.start .. texture_range.start + counters.vs.textures,
-                        samplers: sampler_range.start .. sampler_range.start + counters.vs.samplers,
-                    };
-                    let ps = ResourceData {
-                        buffers: vs.buffers.end .. vs.buffers.end + counters.ps.buffers,
-                        textures: vs.textures.end .. vs.textures.end + counters.ps.textures,
-                        samplers: vs.samplers.end .. vs.samplers.end + counters.ps.samplers,
-                    };
-                    let cs = ResourceData {
-                        buffers: ps.buffers.end .. buffer_range.end,
-                        textures: ps.textures.end .. texture_range.end,
-                        samplers: ps.samplers.end .. sampler_range.end,
-                    };
-                    MultiStageData { vs, ps, cs }
+                let resources = ResourceData {
+                    buffers: buffer_range,
+                    textures: texture_range,
+                    samplers: sampler_range,
                 };
 
                 Ok(DescriptorSet::Emulated {
@@ -670,26 +629,23 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                     match descriptor_set {
                         DescriptorSet::Emulated { resources, .. } => {
                             debug!("\t{:?} resources", resources);
-                            let sampler_range = resources.vs.samplers.start .. resources.cs.samplers.end;
-                            for sampler in &mut data.samplers[sampler_range.start as usize .. sampler_range.end as usize] {
+                            for sampler in &mut data.samplers[resources.samplers.start as usize .. resources.samplers.end as usize] {
                                 *sampler = None;
                             }
-                            if sampler_range.start != sampler_range.end {
-                                allocators.samplers.free_range(sampler_range);
+                            if resources.samplers.start != resources.samplers.end {
+                                allocators.samplers.free_range(resources.samplers);
                             }
-                            let texture_range = resources.vs.textures.start .. resources.cs.textures.end;
-                            for image in &mut data.textures[texture_range.start as usize .. texture_range.end as usize] {
+                            for image in &mut data.textures[resources.textures.start as usize .. resources.textures.end as usize] {
                                 *image = None;
                             }
-                            if texture_range.start != texture_range.end {
-                                allocators.textures.free_range(texture_range);
+                            if resources.textures.start != resources.textures.end {
+                                allocators.textures.free_range(resources.textures);
                             }
-                            let buffer_range = resources.vs.buffers.start .. resources.cs.buffers.end;
-                            for buffer in &mut data.buffers[buffer_range.start as usize .. buffer_range.end as usize] {
+                            for buffer in &mut data.buffers[resources.buffers.start as usize .. resources.buffers.end as usize] {
                                 *buffer = None;
                             }
-                            if buffer_range.start != buffer_range.end {
-                                allocators.buffers.free_range(buffer_range);
+                            if resources.buffers.start != resources.buffers.end {
+                                allocators.buffers.free_range(resources.buffers);
                             }
                         }
                         DescriptorSet::ArgumentBuffer{..} => {
@@ -812,7 +768,7 @@ pub enum DescriptorSet {
     Emulated {
         pool: Arc<RwLock<DescriptorPoolInner>>,
         layouts: Arc<Vec<DescriptorLayout>>,
-        resources: MultiStageData<ResourceData<Range<PoolResourceIndex>>>,
+        resources: ResourceData<Range<PoolResourceIndex>>,
     },
     ArgumentBuffer {
         raw: metal::Buffer,
