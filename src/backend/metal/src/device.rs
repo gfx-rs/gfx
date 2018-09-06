@@ -33,7 +33,7 @@ use metal::{self,
     CaptureManager
 };
 use objc::rc::autoreleasepool;
-use objc::runtime::Object;
+use objc::runtime::{BOOL, NO, Object};
 use parking_lot::Mutex;
 use smallvec::SmallVec;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
@@ -189,54 +189,69 @@ fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
     ShaderError::CompilationFailed(msg)
 }
 
-fn create_function_constants(specialization: &[pso::Specialization]) -> metal::FunctionConstantValues {
-    let constants_raw = metal::FunctionConstantValues::new();
-    for constant in specialization {
-        unsafe {
-            let (ty, value) = match constant.value {
-                pso::Constant::Bool(ref v) => (MTLDataType::Bool, v as *const _ as *const _),
-                pso::Constant::U32(ref v) => (MTLDataType::UInt, v as *const _ as *const _),
-                pso::Constant::I32(ref v) => (MTLDataType::Int, v as *const _ as *const _),
-                pso::Constant::F32(ref v) => (MTLDataType::Float, v as *const _ as *const _),
-                _ => panic!("Unsupported specialization constant type"),
-            };
-            constants_raw.set_constant_value_at_index(constant.id as u64, ty, value);
-        }
-    }
-    constants_raw
+#[derive(Clone, Debug)]
+enum FunctionError {
+    InvalidEntryPoint,
+    MissingRequiredSpecialization,
+    BadSpecialization,
 }
 
-fn get_final_function(library: &metal::LibraryRef, entry: &str, specialization: &[pso::Specialization]) -> Result<metal::Function, ()> {
-    let initial_constants = if specialization.is_empty() {
-        None
-    } else {
-        Some(create_function_constants(specialization))
-    };
+fn get_final_function(
+    library: &metal::LibraryRef, entry: &str, specialization: pso::Specialization
+) -> Result<metal::Function, FunctionError> {
+    type MTLFunctionConstant = Object;
 
     let mut mtl_function = library
-        .get_function(entry, initial_constants)
-        .map_err(|_| {
-            error!("Invalid vertex shader entry point");
-            ()
+        .get_function(entry, None)
+        .map_err(|e| {
+            error!("Function retrieval error {:?}", e);
+            FunctionError::InvalidEntryPoint
         })?;
-    let has_more_function_constants = unsafe {
-        let dictionary = mtl_function.function_constants_dictionary();
-        let count: NSUInteger = msg_send![dictionary, count];
-        count > 0
+
+    let dictionary = mtl_function.function_constants_dictionary();
+    let count: NSUInteger = unsafe {
+        msg_send![dictionary, count]
     };
-    if has_more_function_constants {
-        // TODO: check that all remaining function constants are optional, otherwise return an error
-        if specialization.is_empty() {
-            // These may be optional function constants, in which case we need to specialize the function with an empty set of constants
-            // or we'll get an error when we make the PSO
-            mtl_function = library
-                .get_function(entry, Some(create_function_constants(&[])))
-                .map_err(|_| {
-                    error!("Invalid vertex shader entry point");
-                    ()
-                })?;
+    if count == 0 {
+        return Ok(mtl_function)
+    }
+
+    let all_values: *mut Object = unsafe {
+        msg_send![dictionary, allValues]
+    };
+
+    let constants = metal::FunctionConstantValues::new();
+    for i in 0 .. count {
+        let object: *mut MTLFunctionConstant = unsafe {
+            msg_send![all_values, objectAtIndex: i]
+        };
+        let index: NSUInteger = unsafe {
+            msg_send![object, index]
+        };
+        let required: BOOL = unsafe {
+            msg_send![object, required]
+        };
+        match specialization.constants.iter().find(|c| c.id as NSUInteger == index) {
+            Some(c) => unsafe {
+                let ptr = &specialization.data[c.range.start as usize] as *const u8 as *const _;
+                let ty: MTLDataType = msg_send![object, type];
+                constants.set_constant_value_at_index(c.id as NSUInteger, ty, ptr);
+            }
+            None if required != NO => {
+                //TODO: get name
+                error!("Missing required specialization constant id {}", index);
+                return Err(FunctionError::MissingRequiredSpecialization)
+            }
+            None => {}
         }
     }
+
+    mtl_function = library
+        .get_function(entry, Some(constants))
+        .map_err(|e| {
+            error!("Specialized function retrieval error {:?}", e);
+            FunctionError::BadSpecialization
+        })?;
 
     Ok(mtl_function)
 }
@@ -552,6 +567,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         hal::Features::FORMAT_BC |
         hal::Features::PRECISE_OCCLUSION_QUERY |
         hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING |
+        hal::Features::VERTEX_STORES_AND_ATOMICS |
+        hal::Features::FRAGMENT_STORES_AND_ATOMICS |
         if self.private_caps.dual_source_blending { hal::Features::DUAL_SRC_BLENDING } else { hal::Features::empty() }
     }
 
@@ -775,8 +792,8 @@ impl Device {
             None => (ep.entry, metal::MTLSize { width: 0, height: 0, depth: 0 }),
         };
         let mtl_function = get_final_function(&lib, name, ep.specialization)
-            .map_err(|_| {
-                error!("Invalid shader entry point");
+            .map_err(|e| {
+                error!("Invalid shader entry point '{}': {:?}", name, e);
                 pso::CreationError::Other
             })?;
 

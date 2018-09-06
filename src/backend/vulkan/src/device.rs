@@ -333,7 +333,7 @@ impl d::Device<B> for Device {
         let mut info_dynamic_states        = Vec::with_capacity(descs.len());
         let mut color_attachments          = Vec::with_capacity(descs.len());
         let mut info_specializations       = Vec::with_capacity(descs.len() * NUM_STAGES);
-        let mut specialization_data        = Vec::with_capacity(descs.len() * NUM_STAGES);
+        let mut specialization_entries     = Vec::with_capacity(descs.len() * NUM_STAGES);
         let mut dynamic_states             = Vec::with_capacity(descs.len() * MAX_DYNAMIC_STATES);
         let mut viewports                  = Vec::with_capacity(descs.len());
         let mut scissors                   = Vec::with_capacity(descs.len());
@@ -345,20 +345,23 @@ impl d::Device<B> for Device {
             let p_name = string.as_ptr();
             c_strings.push(string);
 
-            let mut data = SmallVec::<[u8; 64]>::new();
-            let map_entries = conv::map_specialization_constants(
-                &source.specialization,
-                &mut data,
-            ).unwrap();
+            let map_entries = source.specialization.constants
+                .iter()
+                .map(|c| vk::SpecializationMapEntry {
+                    constant_id: c.id,
+                    offset: c.range.start as _,
+                    size: (c.range.end - c.range.start) as _,
+                })
+                .collect::<SmallVec<[_; 4]>>();
 
-            specialization_data.push((data, map_entries));
-            let &(ref data, ref map_entries) = specialization_data.last().unwrap();
+            specialization_entries.push(map_entries);
+            let map_entries = specialization_entries.last().unwrap();
 
             info_specializations.push(vk::SpecializationInfo {
                 map_entry_count: map_entries.len() as _,
                 p_map_entries: map_entries.as_ptr(),
-                data_size: data.len() as _,
-                p_data: data.as_ptr() as _,
+                data_size: source.specialization.data.len() as _,
+                p_data: source.specialization.data.as_ptr() as _,
             });
             let info = info_specializations.last().unwrap();
 
@@ -731,7 +734,7 @@ impl d::Device<B> for Device {
         let descs = descs.into_iter().collect::<Vec<_>>();
         let mut c_strings = Vec::new(); // hold the C strings temporarily
         let mut info_specializations = Vec::with_capacity(descs.len());
-        let mut specialization_data = Vec::with_capacity(descs.len());
+        let mut specialization_entries = Vec::with_capacity(descs.len());
 
         let infos = descs.iter().map(|desc| {
             let desc = desc.borrow();
@@ -739,20 +742,23 @@ impl d::Device<B> for Device {
             let p_name = string.as_ptr();
             c_strings.push(string);
 
-            let mut data = SmallVec::<[u8; 64]>::new();
-            let map_entries = conv::map_specialization_constants(
-                &desc.shader.specialization,
-                &mut data,
-            ).unwrap();
+            let map_entries = desc.shader.specialization.constants
+                .iter()
+                .map(|c| vk::SpecializationMapEntry {
+                    constant_id: c.id,
+                    offset: c.range.start as _,
+                    size: (c.range.end - c.range.start) as _,
+                })
+                .collect::<SmallVec<[_; 4]>>();
 
-            specialization_data.push((data, map_entries));
-            let &(ref data, ref map_entries) = specialization_data.last().unwrap();
+            specialization_entries.push(map_entries);
+            let map_entries = specialization_entries.last().unwrap();
 
             info_specializations.push(vk::SpecializationInfo {
                 map_entry_count: map_entries.len() as _,
                 p_map_entries: map_entries.as_ptr(),
-                data_size: data.len() as _,
-                p_data: data.as_ptr() as _,
+                data_size: desc.shader.specialization.data.len() as _,
+                p_data: desc.shader.specialization.data.as_ptr() as _,
             });
             let info = info_specializations.last().unwrap();
 

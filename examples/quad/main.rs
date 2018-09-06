@@ -23,7 +23,7 @@ extern crate winit;
 
 use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
 use hal::pass::Subpass;
-use hal::pso::{PipelineStage, ShaderStageFlags, Specialization};
+use hal::pso::{PipelineStage, ShaderStageFlags};
 use hal::queue::Submission;
 use hal::{
     buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
@@ -446,15 +446,25 @@ fn main() {
                 pso::EntryPoint::<back::Backend> {
                     entry: ENTRY_NAME,
                     module: &vs_module,
-                    specialization: &[Specialization {
-                        id: 0,
-                        value: pso::Constant::F32(0.8),
-                    }],
+                    specialization: pso::Specialization {
+                        constants: &[
+                            pso::SpecializationConstant {
+                                id: 0,
+                                range: 0 .. 4,
+                            },
+                        ],
+                        data: &[ // this is 0.8, trust me
+                            0xCD,
+                            0xCC,
+                            0x4C,
+                            0x3F,
+                        ],
+                    },
                 },
                 pso::EntryPoint::<back::Backend> {
                     entry: ENTRY_NAME,
                     module: &fs_module,
-                    specialization: &[],
+                    specialization: pso::Specialization::default(),
                 },
             );
 
