@@ -364,33 +364,6 @@ pub fn map_blend_op(
     }
 }
 
-pub fn map_specialization_constants(
-    specialization: &[pso::Specialization],
-    data: &mut SmallVec<[u8; 64]>,
-) -> Result<SmallVec<[vk::SpecializationMapEntry; 16]>, io::Error> {
-    specialization
-        .iter()
-        .map(|constant| {
-            let offset = data.len();
-            match constant.value {
-                pso::Constant::Bool(v) => { data.write_u32::<NativeEndian>(v as u32) }
-                pso::Constant::U32(v)  => { data.write_u32::<NativeEndian>(v) }
-                pso::Constant::U64(v)  => { data.write_u64::<NativeEndian>(v) }
-                pso::Constant::I32(v)  => { data.write_i32::<NativeEndian>(v) }
-                pso::Constant::I64(v)  => { data.write_i64::<NativeEndian>(v) }
-                pso::Constant::F32(v)  => { data.write_f32::<NativeEndian>(v) }
-                pso::Constant::F64(v)  => { data.write_f64::<NativeEndian>(v) }
-            }?;
-
-            Ok(vk::SpecializationMapEntry {
-                constant_id: constant.id,
-                offset: offset as _,
-                size: (data.len() - offset) as _,
-            })
-        })
-        .collect::<Result<_, _>>()
-}
-
 pub fn map_pipeline_statistics(
     statistics: query::PipelineStatistic,
 ) -> vk::QueryPipelineStatisticFlags {

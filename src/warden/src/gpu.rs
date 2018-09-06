@@ -645,7 +645,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     module: reshaders
                                         .get(shader)
                                         .expect(&format!("Missing shader: {}", shader)),
-                                    specialization: &[],
+                                    specialization: pso::Specialization::default(),
                                 })
                             }
                         };
@@ -656,7 +656,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     module: reshaders
                                         .get(&shaders.vertex)
                                         .expect(&format!("Missing vertex shader: {}", shaders.vertex)),
-                                    specialization: &[],
+                                    specialization: pso::Specialization::default(),
                                 },
                                 hull: entry(&shaders.hull),
                                 domain: entry(&shaders.domain),
@@ -691,7 +691,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 module: resources.shaders
                                     .get(shader)
                                     .expect(&format!("Missing compute shader: {}", shader)),
-                                specialization: &[],
+                                specialization: pso::Specialization::default(),
                             },
                             layout: resources.pipeline_layouts
                                 .get(layout)

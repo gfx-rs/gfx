@@ -493,26 +493,19 @@ impl Device {
                 let mut ast = Self::parse_spirv(raw_data)?;
                 let spec_constants = ast.get_specialization_constants().map_err(gen_query_error)?;
 
+                //TODO: move this out into `auxil`
                 for spec_constant in spec_constants {
-                    if let Some(constant) = source
-                        .specialization
+                    if let Some(constant) = source.specialization.constants
                         .iter()
                         .find(|c| c.id == spec_constant.constant_id)
                     {
                         // Override specialization constant values
-                        unsafe {
-                            let value = match constant.value {
-                                pso::Constant::Bool(v) => v as u64,
-                                pso::Constant::U32(v) => v as u64,
-                                pso::Constant::U64(v) => v,
-                                pso::Constant::I32(v) => *(&v as *const _ as *const u64),
-                                pso::Constant::I64(v) => *(&v as *const _ as *const u64),
-                                pso::Constant::F32(v) => *(&v as *const _ as *const u64),
-                                pso::Constant::F64(v) => *(&v as *const _ as *const u64),
-                            };
-                            ast.set_scalar_constant(spec_constant.id, value)
-                                .map_err(gen_query_error)?;
-                        }
+                        let value = source.specialization
+                            .data[constant.range.start as usize .. constant.range.end as usize]
+                            .iter()
+                            .fold(0u64, |u, &b| (u<<8) + b as u64);
+                        ast.set_scalar_constant(spec_constant.id, value)
+                            .map_err(gen_query_error)?;
                     }
                 }
 

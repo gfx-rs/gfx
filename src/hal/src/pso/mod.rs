@@ -5,6 +5,7 @@
 use {device, pass};
 use std::error::Error;
 use std::fmt;
+use std::ops::Range;
 
 mod compute;
 mod descriptor;
@@ -152,8 +153,8 @@ pub struct EntryPoint<'a, B: Backend> {
     pub entry: &'a str,
     /// Shader module reference.
     pub module: &'a B::ShaderModule,
-    /// Specialization info.
-    pub specialization: &'a [Specialization],
+    /// Specialization.
+    pub specialization: Specialization<'a>,
 }
 
 impl<'a, B: Backend> Clone for EntryPoint<'a, B> {
@@ -197,7 +198,7 @@ pub enum BasePipeline<'a, P: 'a> {
     None,
 }
 
-/// Specialization information for pipelines.
+/// Specialization constant for pipelines.
 /// 
 /// Specialization constants allow for easy configuration of 
 /// multiple similar pipelines. For example, there may be a 
@@ -208,24 +209,38 @@ pub enum BasePipeline<'a, P: 'a> {
 /// More importantly, they are fast to execute, since the driver 
 /// can optimize out the branch on that other PSO creation.
 #[derive(Debug, Clone)]
-pub struct Specialization {
+pub struct SpecializationConstant {
     /// Constant identifier in shader source.
     pub id: u32,
     /// Value to override specialization constant.
-    pub value: Constant,
+    pub range: Range<u16>,
 }
 
-/// Scalar specialization constant with value for overriding.
-#[allow(missing_docs)]
-#[derive(Debug, Clone)]
-pub enum Constant {
-    Bool(bool),
-    U32(u32),
-    U64(u64),
-    I32(i32),
-    I64(i64),
-    F32(f32),
-    F64(f64),
+/// Specialization information structure.
+#[derive(Debug, Copy)]
+pub struct Specialization<'a> {
+    /// Constant array.
+    pub constants: &'a [SpecializationConstant],
+    /// Raw data.
+    pub data: &'a [u8],
+}
+
+impl<'a> Default for Specialization<'a> {
+    fn default() -> Self {
+        Specialization {
+            constants: &[],
+            data: &[],
+        }
+    }
+}
+
+impl<'a> Clone for Specialization<'a> {
+    fn clone(&self) -> Self {
+        Specialization {
+            constants: self.constants,
+            data: self.data,
+        }
+    }
 }
 
 /// Pipeline state which may be static or dynamic.
