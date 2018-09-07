@@ -4,6 +4,7 @@ use internal::Channel;
 use native;
 
 use std::sync::Arc;
+use std::thread;
 
 use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
@@ -20,8 +21,9 @@ use objc::runtime::Object;
 pub type CAMetalLayer = *mut Object;
 
 pub struct Surface {
-    pub(crate) inner: Arc<SurfaceInner>,
-    pub(crate) has_swapchain: bool
+    inner: Arc<SurfaceInner>,
+    main_thread_id: thread::ThreadId,
+    has_swapchain: bool,
 }
 
 #[derive(Debug)]
@@ -40,6 +42,14 @@ impl Drop for SurfaceInner {
 }
 
 impl SurfaceInner {
+    pub(crate) fn into_surface(self) -> Surface {
+        Surface {
+            inner: Arc::new(self),
+            main_thread_id: thread::current().id(),
+            has_swapchain: false,
+        }
+    }
+
     fn next_frame<'a>(&self, frames: &'a [Frame]) -> Result<(usize, MutexGuard<'a, FrameInner>), ()> {
         let layer_ref = self.render_layer.lock();
         autoreleasepool(|| { // for the drawable
@@ -183,7 +193,12 @@ impl hal::Surface<Backend> for Surface {
     fn compatibility(
         &self, device: &PhysicalDevice,
     ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>) {
-        let current_extent = Some(self.inner.dimensions());
+        let current_extent = if self.main_thread_id == thread::current().id() {
+            Some(self.inner.dimensions())
+        } else {
+            warn!("Unable to get the current view dimensions on a non-main thread");
+            None
+        };
 
         let caps = hal::SurfaceCapabilities {
             //Note: this is hardcoded in `CAMetalLayer` documentation

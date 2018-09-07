@@ -206,19 +206,13 @@ impl Instance {
     }
 
     pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
-        window::Surface {
-            inner: Arc::new(self.create_from_nsview(nsview)),
-            has_swapchain: false,
-        }
+        self.create_from_nsview(nsview).into_surface()
     }
 
     #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
         use winit::os::macos::WindowExt;
-        window::Surface {
-            inner: Arc::new(self.create_from_nsview(window.get_nsview())),
-            has_swapchain: false,
-        }
+        self.create_from_nsview(window.get_nsview()).into_surface()
     }
 }
 
@@ -264,19 +258,13 @@ impl Instance {
     }
 
     pub fn create_surface_from_uiview(&self, uiview: *mut c_void) -> Surface {
-        window::Surface {
-            inner: Arc::new(self.create_from_uiview(uiview)),
-            has_swapchain: false,
-        }
+        self.create_from_uiview(uiview).into_surface()
     }
 
     #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
         use winit::os::ios::WindowExt;
-        window::Surface {
-            inner: Arc::new(self.create_from_uiview(window.get_uiview())),
-            has_swapchain: false,
-        }
+        self.create_from_uiview(window.get_uiview()).into_surface()
     }
 }
 
