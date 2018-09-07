@@ -4,7 +4,7 @@ use {
     BufferPtr, TexturePtr, SamplerPtr,
 };
 use {conversions as conv, native, soft, window};
-use internal::{BlitVertex, Channel, ClearKey, ClearVertex};
+use internal::{BlitVertex, ClearKey, ClearVertex};
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -15,9 +15,9 @@ use std::{cmp, iter, mem, slice, time};
 use hal::{buffer, command as com, error, memory, pool, pso, query};
 use hal::{DrawCount, SwapImageIndex, VertexCount, VertexOffset, InstanceCount, IndexCount, IndexType, WorkGroupCount};
 use hal::backend::FastHashMap;
-use hal::format::{Aspects, Format, FormatDesc};
+use hal::format::{Aspects, FormatDesc};
 use hal::image::{Extent, Filter, Layout, Level, SubresourceRange};
-use hal::pass::{AttachmentLoadOp, AttachmentOps};
+use hal::pass::{AttachmentLoadOp};
 use hal::queue::{RawCommandQueue, RawSubmission};
 use hal::range::RangeArg;
 
@@ -172,6 +172,7 @@ unsafe impl Sync for CommandBuffer {}
 struct Temp {
     clear_vertices: Vec<ClearVertex>,
     blit_vertices: FastHashMap<(Aspects, Level), Vec<BlitVertex>>,
+    clear_values: Vec<Option<com::ClearValueRaw>>,
 }
 
 type VertexBufferMaybeVec = Vec<Option<(pso::VertexBufferDesc, pso::ElemOffset)>>;
@@ -182,7 +183,14 @@ struct RenderPipelineState {
     ds_desc: pso::DepthStencilDesc,
     vertex_buffers: VertexBufferMaybeVec,
     attribute_buffer_index: ResourceIndex,
-    at_formats: Vec<Option<Format>>,
+    formats: native::SubpassFormats,
+}
+
+#[derive(Clone)]
+struct SubpassInfo {
+    descriptor: metal::RenderPassDescriptor,
+    combined_aspects: Aspects,
+    formats: native::SubpassFormats,
 }
 
 /// The current state of a command buffer, used for two distinct purposes:
@@ -212,8 +220,11 @@ struct State {
     stencil: native::StencilState<pso::StencilValue>,
     push_constants: Vec<u32>,
     vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
-    framebuffer_inner: native::FramebufferInner,
+    target_aspects: Aspects,
+    target_extent: Extent,
+    target_formats: native::SubpassFormats,
     visibility_query: (metal::MTLVisibilityResultMode, buffer::Offset),
+    pending_subpasses: Vec<SubpassInfo>,
 }
 
 impl State {
@@ -223,6 +234,7 @@ impl State {
         self.resources_cs.clear();
         self.push_constants.clear();
         self.vertex_buffers.clear();
+        self.pending_subpasses.clear();
     }
 
     fn clamp_scissor(sr: MTLScissorRect, extent: Extent) -> MTLScissorRect {
@@ -260,7 +272,7 @@ impl State {
             soft::RenderCommand::SetViewport(rect, depth.clone())
         });
         let com_scissor = self.scissors.map(|sr| soft::RenderCommand::SetScissor(
-            Self::clamp_scissor(sr, self.framebuffer_inner.extent)
+            Self::clamp_scissor(sr, self.target_extent)
         ));
         let com_blend = if aspects.contains(Aspects::COLOR) {
             self.blend_color.map(soft::RenderCommand::SetBlendColor)
@@ -399,10 +411,10 @@ impl State {
             None => return None,
         };
 
-        if !self.framebuffer_inner.aspects.contains(Aspects::DEPTH) {
+        if !self.target_aspects.contains(Aspects::DEPTH) {
             desc.depth = pso::DepthTest::Off;
         }
-        if !self.framebuffer_inner.aspects.contains(Aspects::STENCIL) {
+        if !self.target_aspects.contains(Aspects::STENCIL) {
             desc.stencil = pso::StencilTest::Off;
         }
 
@@ -477,7 +489,7 @@ impl State {
             height: rect.h as _,
         };
         self.scissors = Some(scissor);
-        let clamped = State::clamp_scissor(scissor, self.framebuffer_inner.extent);
+        let clamped = State::clamp_scissor(scissor, self.target_extent);
         soft::RenderCommand::SetScissor(clamped)
     }
 
@@ -1864,17 +1876,16 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 },
                 push_constants: Vec::new(),
                 vertex_buffers: Vec::new(),
-                framebuffer_inner: native::FramebufferInner {
-                    extent: Extent::default(),
-                    aspects: Aspects::empty(),
-                    colors: SmallVec::new(),
-                    depth_stencil: None,
-                },
+                target_aspects: Aspects::empty(),
+                target_extent: Extent::default(),
+                target_formats: native::SubpassFormats::default(),
                 visibility_query: (metal::MTLVisibilityResultMode::Disabled, 0),
+                pending_subpasses: Vec::new(),
             },
             temp: Temp {
                 clear_vertices: Vec::new(),
                 blit_vertices: FastHashMap::default(),
+                clear_values: Vec::new(),
             },
         }).collect();
 
@@ -1899,13 +1910,6 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             }
         }
     }
-}
-
-/// Sets up the load/store operations. Returns `true` if the clear color needs to be set.
-fn set_operations(attachment: &metal::RenderPassAttachmentDescriptorRef, ops: AttachmentOps) -> AttachmentLoadOp {
-    attachment.set_load_action(conv::map_load_operation(ops.load));
-    attachment.set_store_action(conv::map_store_operation(ops.store));
-    ops.load
 }
 
 impl CommandBuffer {
@@ -2255,7 +2259,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         U::Item: Borrow<pso::ClearRect>,
     {
         // gather vertices/polygons
-        let de = self.state.framebuffer_inner.extent;
+        let de = self.state.target_extent;
         let vertices = &mut self.temp.clear_vertices;
         vertices.clear();
 
@@ -2307,14 +2311,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         //  issue a PSO+color switch and a draw for each requested clear
         let mut key = ClearKey {
-            framebuffer_aspects: self.state.framebuffer_inner.aspects,
+            framebuffer_aspects: self.state.target_aspects,
             color_formats: [metal::MTLPixelFormat::Invalid; 1],
-            depth_stencil_format: self.state.framebuffer_inner.depth_stencil
+            depth_stencil_format: self.state.target_formats.depth_stencil
                 .unwrap_or(metal::MTLPixelFormat::Invalid),
             target_index: None,
         };
-        for (out, cat) in key.color_formats.iter_mut().zip(&self.state.framebuffer_inner.colors) {
-            *out = cat.mtl_format;
+        for (out, &(mtl_format, _)) in key.color_formats.iter_mut().zip(&self.state.target_formats.colors) {
+            *out = mtl_format;
         }
 
         for clear in clears {
@@ -2323,7 +2327,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             let (com_clear, target_index) = match *clear.borrow() {
                 com::AttachmentClear::Color { index, value } => {
-                    let cat = &self.state.framebuffer_inner.colors[index];
+                    let channel = self.state.target_formats.colors[index].1;
                     //Note: technically we should be able to derive the Channel from the
                     // `value` variant, but this is blocked by the portability that is
                     // always passing the attachment clears as `ClearColor::Float` atm.
@@ -2336,7 +2340,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             mem::size_of::<com::ClearColorRaw>() / WORD_SIZE,
                         )},
                     };
-                    (com, Some((index as u8, cat.channel)))
+                    (com, Some((index as u8, channel)))
                 }
                 com::AttachmentClear::DepthStencil { depth, stencil } => {
                     let mut aspects = Aspects::empty();
@@ -2862,26 +2866,124 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         framebuffer: &native::Framebuffer,
         _render_area: pso::Rect,
         clear_values: T,
-        _first_subpass: com::SubpassContents,
+        first_subpass_contents: com::SubpassContents,
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ClearValueRaw>,
     {
-        // FIXME: subpasses
-        let desc_guard;
-        let (rp_key, full_aspects) = render_pass.build_key(clear_values);
+        // fill out temporary clear values per attachment
+        self.temp.clear_values.clear();
+        self.temp.clear_values.extend(
+            render_pass.attachments.iter().zip(clear_values).map(|(rat, in_value)| {
+                if rat.ops.load == AttachmentLoadOp::Clear || rat.stencil_ops.load == AttachmentLoadOp::Clear {
+                    Some(in_value.borrow().clone())
+                } else {
+                    None
+                }
+            })
+        );
+        self.temp.clear_values.resize(render_pass.attachments.len(), None);
+
+        self.state.pending_subpasses.clear();
+        self.state.target_extent = framebuffer.extent;
+
+        //TODO: cache produced `RenderPassDescriptor` objects
+        // we stack the subpasses in the opposite order
+        for subpass in render_pass.subpasses.iter().rev() {
+            let mut combined_aspects = Aspects::empty();
+            let descriptor = metal::RenderPassDescriptor::new().to_owned();
+            descriptor.set_visibility_result_buffer(Some(&self.shared.visibility.buffer));
+            descriptor.set_render_target_array_length(framebuffer.extent.depth as _);
+
+            for (i, &(at_id, op_flags)) in subpass.colors.iter().enumerate() {
+                let rat = &render_pass.attachments[at_id];
+                let texture = &framebuffer.attachments[at_id];
+                let desc = descriptor
+                    .color_attachments()
+                    .object_at(i as _)
+                    .unwrap();
+
+                combined_aspects |= Aspects::COLOR;
+                desc.set_texture(Some(texture));
+
+                if op_flags.contains(native::SubpassOps::LOAD) {
+                    desc.set_load_action(conv::map_load_operation(rat.ops.load));
+                    if rat.ops.load == AttachmentLoadOp::Clear {
+                        let channel = subpass.target_formats.colors[i].1;
+                        let raw = unsafe { self.temp.clear_values[at_id].unwrap().color };
+                        desc.set_clear_color(channel.interpret(raw));
+                    }
+                }
+                if op_flags.contains(native::SubpassOps::STORE) {
+                    desc.set_store_action(conv::map_store_operation(rat.ops.store));
+                }
+            }
+
+            if let Some((at_id, op_flags)) = subpass.depth_stencil {
+                let rat = &render_pass.attachments[at_id];
+                let texture = &framebuffer.attachments[at_id];
+                let aspects = rat.format.unwrap().surface_desc().aspects;
+                combined_aspects |= aspects;
+
+                if aspects.contains(Aspects::DEPTH) {
+                    let desc = descriptor
+                        .depth_attachment()
+                        .unwrap();
+                    desc.set_texture(Some(texture));
+
+                    if op_flags.contains(native::SubpassOps::LOAD) {
+                        desc.set_load_action(conv::map_load_operation(rat.ops.load));
+                        if rat.ops.load == AttachmentLoadOp::Clear {
+                            let raw = unsafe { self.temp.clear_values[at_id].unwrap().depth_stencil };
+                            desc.set_clear_depth(raw.depth as f64);
+                        }
+                    }
+                    if op_flags.contains(native::SubpassOps::STORE) {
+                        desc.set_store_action(conv::map_store_operation(rat.ops.store));
+                    }
+                }
+                if aspects.contains(Aspects::STENCIL) {
+                    let desc = descriptor
+                        .stencil_attachment()
+                        .unwrap();
+                    desc.set_texture(Some(texture));
+
+                    if op_flags.contains(native::SubpassOps::LOAD) {
+                        desc.set_load_action(conv::map_load_operation(rat.stencil_ops.load));
+                        if rat.stencil_ops.load == AttachmentLoadOp::Clear {
+                            let raw = unsafe { self.temp.clear_values[at_id].unwrap().depth_stencil };
+                            desc.set_clear_stencil(raw.stencil);
+                        }
+                    }
+                    if op_flags.contains(native::SubpassOps::STORE) {
+                        desc.set_store_action(conv::map_store_operation(rat.stencil_ops.store));
+                    }
+                }
+            }
+
+            self.state.pending_subpasses.push(SubpassInfo {
+                descriptor,
+                combined_aspects,
+                formats: subpass.target_formats.clone(),
+            });
+        }
+
+        self.next_subpass(first_subpass_contents);
+    }
+
+    fn next_subpass(&mut self, _contents: com::SubpassContents) {
+        let sin = self.state.pending_subpasses.pop().unwrap();
 
         self.state.render_pso_is_compatible = match self.state.render_pso {
-            Some(ref ps) => ps.at_formats.len() == render_pass.attachments.len() &&
-                ps.at_formats.iter().zip(&render_pass.attachments).all(|(f, at)| *f == at.format),
-            _ => false
+            Some(ref ps) => ps.formats == sin.formats,
+            None => false,
         };
-
-        self.state.framebuffer_inner = framebuffer.inner.clone();
+        self.state.target_aspects = sin.combined_aspects;
+        self.state.target_formats.copy_from(&sin.formats);
 
         let ds_store = &self.shared.service_pipes.depth_stencil_states;
         let ds_state;
-        let com_ds = if full_aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
+        let com_ds = if sin.combined_aspects.intersects(Aspects::DEPTH | Aspects::STENCIL) {
             match self.state.build_depth_stencil() {
                 Some(desc) => {
                     ds_state = ds_store.get(desc, &self.shared.device);
@@ -2892,70 +2994,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         } else {
             None
         };
+
         let init_commands = self.state
-            .make_render_commands(full_aspects)
+            .make_render_commands(sin.combined_aspects)
             .chain(com_ds);
-
-        desc_guard = framebuffer.desc_storage
-            .get_or_create_with(&rp_key, || autoreleasepool(|| {
-                let mut clear_id = 0;
-                let mut num_colors = 0;
-                let rp_desc = unsafe {
-                    let desc: metal::RenderPassDescriptor = msg_send![framebuffer.descriptor, copy];
-                    msg_send![desc.as_ptr(), retain];
-                    desc
-                };
-
-                for rat in &render_pass.attachments {
-                    let (aspects, channel) = match rat.format {
-                        Some(format) => (format.surface_desc().aspects, Channel::from(format.base_format().1)),
-                        None => continue,
-                    };
-                    if aspects.contains(Aspects::COLOR) {
-                        let color_desc = rp_desc
-                            .color_attachments()
-                            .object_at(num_colors)
-                            .unwrap();
-                        if set_operations(color_desc, rat.ops) == AttachmentLoadOp::Clear {
-                            let d = &rp_key.clear_data[clear_id .. clear_id + 4];
-                            clear_id += 4;
-                            let raw = com::ClearColorRaw {
-                                uint32: [d[0], d[1], d[2], d[3]],
-                            };
-                            color_desc.set_clear_color(channel.interpret(raw));
-                        }
-                        num_colors += 1;
-                    }
-                    if aspects.contains(Aspects::DEPTH) {
-                        let depth_desc = rp_desc.depth_attachment().unwrap();
-                        if set_operations(depth_desc, rat.ops) == AttachmentLoadOp::Clear {
-                            let raw = unsafe { *(&rp_key.clear_data[clear_id] as *const _ as *const f32) };
-                            clear_id += 1;
-                            depth_desc.set_clear_depth(raw as f64);
-                        }
-                    }
-                    if aspects.contains(Aspects::STENCIL) {
-                        let stencil_desc = rp_desc.stencil_attachment().unwrap();
-                        if set_operations(stencil_desc, rat.stencil_ops) == AttachmentLoadOp::Clear {
-                            let raw = rp_key.clear_data[clear_id];
-                            clear_id += 1;
-                            stencil_desc.set_clear_stencil(raw);
-                        }
-                    }
-                }
-
-                rp_desc
-            }));
 
         self.inner
             .borrow_mut()
             .sink()
-            .switch_render(&**desc_guard)
+            .switch_render(&sin.descriptor)
             .issue_many(init_commands);
-    }
-
-    fn next_subpass(&mut self, _contents: com::SubpassContents) {
-        unimplemented!()
     }
 
     fn end_render_pass(&mut self) {
@@ -3006,8 +3054,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 ps.vertex_buffers.extend(pipeline.vertex_buffers.iter().cloned().map(Some));
                 ps.attribute_buffer_index = pipeline.attribute_buffer_index;
                 ps.ds_desc = pipeline.depth_stencil_desc.clone();
-                ps.at_formats.clear();
-                ps.at_formats.extend_from_slice(&pipeline.attachment_formats);
+                ps.formats.copy_from(&pipeline.attachment_formats);
                 true
             }
             None => {
@@ -3016,15 +3063,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     ds_desc: pipeline.depth_stencil_desc.clone(),
                     vertex_buffers: pipeline.vertex_buffers.iter().cloned().map(Some).collect(),
                     attribute_buffer_index: pipeline.attribute_buffer_index,
-                    at_formats: pipeline.attachment_formats.clone(),
+                    formats: pipeline.attachment_formats.clone(),
                 });
                 true
             }
         };
         if set_pipeline {
-            pre.issue(soft::RenderCommand::BindPipeline(&*pipeline.raw));
             self.state.rasterizer_state = pipeline.rasterizer_state.clone();
             self.state.primitive_type = pipeline.primitive_type;
+
+            pre.issue(soft::RenderCommand::BindPipeline(&*pipeline.raw));
             if let Some(ref rs) = pipeline.rasterizer_state {
                 pre.issue(soft::RenderCommand::SetRasterizerState(rs.clone()))
             }

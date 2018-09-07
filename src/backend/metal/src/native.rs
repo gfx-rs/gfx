@@ -3,9 +3,8 @@ use internal::{Channel, FastStorageMap};
 use range_alloc::RangeAllocator;
 use window::SwapchainImage;
 
-use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::{fmt, iter};
+use std::fmt;
 use std::ops::Range;
 use std::os::raw::{c_void, c_long};
 use std::sync::Arc;
@@ -13,9 +12,8 @@ use std::sync::Arc;
 use hal::{buffer, image, pso};
 use hal::{DescriptorPool as HalDescriptorPool, MemoryTypeId};
 use hal::backend::FastHashMap;
-use hal::command::{ClearColorRaw, ClearValueRaw};
-use hal::format::{Aspects, Format, FormatDesc};
-use hal::pass::{Attachment, AttachmentLoadOp, AttachmentOps};
+use hal::format::{Format, FormatDesc};
+use hal::pass::{Attachment, AttachmentId};
 use hal::range::RangeArg;
 
 use cocoa::foundation::{NSRange, NSUInteger};
@@ -52,92 +50,51 @@ impl fmt::Debug for ShaderModule {
 unsafe impl Send for ShaderModule {}
 unsafe impl Sync for ShaderModule {}
 
-#[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
-pub struct RenderPassKey {
-    // enough room for 4 color targets + depth/stencil
-    pub clear_data: SmallVec<[u32; 20]>,
-    operations: SmallVec<[AttachmentOps; 6]>,
+
+bitflags! {
+    /// Subpass attachment operations.
+    pub struct SubpassOps: u8 {
+        const LOAD = 0x0;
+        const STORE = 0x1;
+    }
+}
+
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct SubpassFormats {
+    pub colors: SmallVec<[(metal::MTLPixelFormat, Channel); 4]>,
+    pub depth_stencil: Option<metal::MTLPixelFormat>,
+}
+
+impl SubpassFormats {
+    pub fn copy_from(&mut self, other: &Self) {
+        self.colors.clear();
+        self.colors.extend_from_slice(&other.colors);
+        self.depth_stencil = other.depth_stencil;
+    }
+}
+
+#[derive(Debug)]
+pub struct Subpass {
+    pub colors: Vec<(AttachmentId, SubpassOps)>,
+    pub depth_stencil: Option<(AttachmentId, SubpassOps)>,
+    pub inputs: Vec<AttachmentId>,
+    pub target_formats: SubpassFormats,
 }
 
 #[derive(Debug)]
 pub struct RenderPass {
     pub(crate) attachments: Vec<Attachment>,
+    pub(crate) subpasses: Vec<Subpass>,
 }
 
 unsafe impl Send for RenderPass {}
 unsafe impl Sync for RenderPass {}
 
-impl RenderPass {
-    pub fn build_key<T>(&self, clear_values: T) -> (RenderPassKey, Aspects)
-    where
-        T: IntoIterator,
-        T::Item: Borrow<ClearValueRaw>,
-    {
-        let mut key = RenderPassKey::default();
-        let mut full_aspects = Aspects::empty();
-
-        let dummy_value = ClearValueRaw {
-            color: ClearColorRaw {
-                int32: [0; 4],
-            },
-        };
-        let clear_values_iter = clear_values
-            .into_iter()
-            .map(|c| *c.borrow())
-            .chain(iter::repeat(dummy_value));
-
-        for (rat, clear_value) in self.attachments.iter().zip(clear_values_iter) {
-            //TODO: avoid calling `surface_desc` as often
-            let aspects = match rat.format {
-                Some(format) => format.surface_desc().aspects,
-                None => continue,
-            };
-            full_aspects |= aspects;
-            let cv = clear_value.borrow();
-
-            if aspects.contains(Aspects::COLOR) {
-                key.operations.push(rat.ops);
-                if rat.ops.load == AttachmentLoadOp::Clear {
-                    key.clear_data.extend_from_slice(unsafe { &cv.color.uint32 });
-                }
-            }
-            if aspects.contains(Aspects::DEPTH) {
-                key.operations.push(rat.ops);
-                if rat.ops.load == AttachmentLoadOp::Clear {
-                    key.clear_data.push(unsafe { *(&cv.depth_stencil.depth as *const _ as *const u32) });
-                }
-            }
-            if aspects.contains(Aspects::STENCIL) {
-                key.operations.push(rat.stencil_ops);
-                if rat.stencil_ops.load == AttachmentLoadOp::Clear {
-                    key.clear_data.push(unsafe { cv.depth_stencil.stencil });
-                }
-            }
-        }
-
-        (key, full_aspects)
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct ColorAttachment {
-    pub mtl_format: metal::MTLPixelFormat,
-    pub channel: Channel,
-}
-
-#[derive(Clone, Debug)]
-pub struct FramebufferInner {
-    pub extent: image::Extent,
-    pub aspects: Aspects,
-    pub colors: SmallVec<[ColorAttachment; 4]>,
-    pub depth_stencil: Option<metal::MTLPixelFormat>,
-}
 
 #[derive(Debug)]
 pub struct Framebuffer {
-    pub(crate) descriptor: metal::RenderPassDescriptor,
-    pub(crate) desc_storage: FastStorageMap<RenderPassKey, metal::RenderPassDescriptor>,
-    pub(crate) inner: FramebufferInner,
+    pub(crate) extent: image::Extent,
+    pub(crate) attachments: Vec<metal::Texture>,
 }
 
 unsafe impl Send for Framebuffer {}
@@ -309,8 +266,8 @@ pub struct GraphicsPipeline {
     /// while Metal does not. Thus, we register extra vertex buffer bindings with
     /// adjusted offsets to cover this use case.
     pub(crate) vertex_buffers: VertexBufferVec,
-    /// Tracked attachment formats for figuring (roughly) renderpass compatibility.
-    pub(crate) attachment_formats: Vec<Option<Format>>,
+    /// Tracked attachment formats
+    pub(crate) attachment_formats: SubpassFormats,
 }
 
 unsafe impl Send for GraphicsPipeline {}

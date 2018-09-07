@@ -4,7 +4,7 @@ use {
     validate_line_width,
 };
 use {conversions as conv, command, native as n};
-use internal::FastStorageMap;
+use internal::{Channel, FastStorageMap};
 use native;
 use range_alloc::RangeAllocator;
 
@@ -15,7 +15,7 @@ use std::collections::hash_map::Entry;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
-use std::{cmp, mem, ptr, slice, thread, time};
+use std::{cmp, iter, mem, ptr, slice, thread, time};
 
 use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
 use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
@@ -35,7 +35,6 @@ use metal::{self,
 use objc::rc::autoreleasepool;
 use objc::runtime::{BOOL, NO, Object};
 use parking_lot::Mutex;
-use smallvec::SmallVec;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
 
@@ -865,7 +864,7 @@ impl hal::Device<Backend> for Device {
     fn create_render_pass<'a, IA, IS, ID>(
         &self,
         attachments: IA,
-        _subpasses: IS,
+        subpasses: IS,
         _dependencies: ID,
     ) -> n::RenderPass
     where
@@ -876,10 +875,71 @@ impl hal::Device<Backend> for Device {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
     {
+        let attachments: Vec<pass::Attachment> = attachments
+            .into_iter()
+            .map(|at| at.borrow().clone())
+            .collect();
+
+        let mut subpasses: Vec<n::Subpass> = subpasses
+            .into_iter()
+            .map(|sp| {
+                let sub = sp.borrow();
+                n::Subpass {
+                    colors: sub.colors
+                        .iter()
+                        .map(|&(id, _)| (id, n::SubpassOps::empty()))
+                        .collect(),
+                    depth_stencil: sub.depth_stencil
+                        .map(|&(id, _)| (id, n::SubpassOps::empty())),
+                    inputs: sub.inputs
+                        .iter()
+                        .map(|&(id, _)| id)
+                        .collect(),
+                    target_formats: n::SubpassFormats {
+                        colors: sub.colors
+                            .iter()
+                            .map(|&(id, _)| {
+                                let format = attachments[id].format.expect("No color format provided");
+                                let mtl_format = self.private_caps.map_format(format).expect("Unable to map color format!");
+                                (mtl_format, Channel::from(format.base_format().1))
+                            })
+                            .collect(),
+                        depth_stencil: sub.depth_stencil
+                            .map(|&(id, _)| {
+                                self.private_caps.map_format(
+                                    attachments[id].format.expect("No depth-stencil format provided")
+                                ).expect("Unable to map depth-stencil format!")
+                            }),
+                    },
+                }
+            })
+            .collect();
+
+        // sprinkle load operations
+        // an attachment receives LOAD flag on a subpass if it's the first sub-pass that uses it
+        let mut use_mask = 0u64;
+        for sub in subpasses.iter_mut() {
+            for &mut (id, ref mut ops) in sub.colors.iter_mut().chain(sub.depth_stencil.as_mut()) {
+                if use_mask & 1 << id == 0 {
+                    *ops |= n::SubpassOps::LOAD;
+                    use_mask ^= 1 << id;
+                }
+            }
+        }
+        // sprinkle store operations
+        // an attachment receives STORE flag on a subpass if it's the last sub-pass that uses it
+        for sub in subpasses.iter_mut().rev() {
+            for &mut (id, ref mut ops) in sub.colors.iter_mut().chain(sub.depth_stencil.as_mut()) {
+                if use_mask & 1 << id != 0 {
+                    *ops |= n::SubpassOps::STORE;
+                    use_mask ^= 1 << id;
+                }
+            }
+        }
+
         n::RenderPass {
-            attachments: attachments.into_iter()
-                .map(|at| at.borrow().clone())
-                .collect(),
+            attachments,
+            subpasses,
         }
     }
 
@@ -1111,7 +1171,10 @@ impl hal::Device<Backend> for Device {
         debug!("create_graphics_pipeline {:?}", pipeline_desc);
         let pipeline = metal::RenderPipelineDescriptor::new();
         let pipeline_layout = &pipeline_desc.layout;
-        let pass_descriptor = &pipeline_desc.subpass;
+        let (rp_attachments, subpass) = {
+            let pass::Subpass { main_pass, index } = pipeline_desc.subpass;
+            (&main_pass.attachments, &main_pass.subpasses[index])
+        };
 
         let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {
             hal::Primitive::PointList => (MTLPrimitiveTopologyClass::Point, MTLPrimitiveType::Point),
@@ -1144,7 +1207,7 @@ impl hal::Device<Backend> for Device {
             None => {
                 // TODO: This is a workaround for what appears to be a Metal validation bug
                 // A pixel format is required even though no attachments are provided
-                if pass_descriptor.main_pass.attachments.is_empty() {
+                if subpass.colors.is_empty() && subpass.depth_stencil.is_none() {
                     pipeline.set_depth_attachment_pixel_format(metal::MTLPixelFormat::Depth32Float);
                 }
                 None
@@ -1162,53 +1225,44 @@ impl hal::Device<Backend> for Device {
             return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(pso::Stage::Geometry)));
         }
 
-        let device = self.shared.device.lock();
-
-        // Copy color target info from Subpass
-        for (i, attachment) in pass_descriptor.main_pass.attachments.iter().enumerate() {
-            let format = attachment.format.expect("expected color format");
-            let mtl_format = match self.private_caps.map_format(format) {
-                Some(f) => f,
-                None => {
-                    error!("Unable to convert {:?} format", format);
-                    return Err(pso::CreationError::Other);
-                }
-            };
-            if format.is_color() {
-                pipeline
-                    .color_attachments()
-                    .object_at(i)
-                    .expect("too many color attachments")
-                    .set_pixel_format(mtl_format);
-            }
-            if format.is_depth() {
-                pipeline.set_depth_attachment_pixel_format(mtl_format);
-            }
-            if format.is_stencil() {
-                pipeline.set_stencil_attachment_pixel_format(mtl_format);
-            }
-        }
-
-        // Blending
-        for (i, color_desc) in pipeline_desc.blender.targets.iter().enumerate() {
-            let descriptor = pipeline
+        // Assign target formats
+        let blend_targets = pipeline_desc.blender.targets
+            .iter()
+            .chain(iter::repeat(&pso::ColorBlendDesc::EMPTY));
+        for (i, (&(mtl_format, _), &pso::ColorBlendDesc(mask, ref blend))) in subpass.target_formats.colors
+            .iter()
+            .zip(blend_targets)
+            .enumerate()
+        {
+            let desc = pipeline
                 .color_attachments()
                 .object_at(i)
                 .expect("too many color attachments");
-            descriptor.set_write_mask(conv::map_write_mask(color_desc.0));
 
-            if let pso::BlendState::On { ref color, ref alpha } = color_desc.1 {
-                descriptor.set_blending_enabled(true);
+            desc.set_pixel_format(mtl_format);
+            desc.set_write_mask(conv::map_write_mask(mask));
+
+            if let pso::BlendState::On { ref color, ref alpha } = *blend {
+                desc.set_blending_enabled(true);
                 let (color_op, color_src, color_dst) = conv::map_blend_op(color);
                 let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_op(alpha);
 
-                descriptor.set_rgb_blend_operation(color_op);
-                descriptor.set_source_rgb_blend_factor(color_src);
-                descriptor.set_destination_rgb_blend_factor(color_dst);
+                desc.set_rgb_blend_operation(color_op);
+                desc.set_source_rgb_blend_factor(color_src);
+                desc.set_destination_rgb_blend_factor(color_dst);
 
-                descriptor.set_alpha_blend_operation(alpha_op);
-                descriptor.set_source_alpha_blend_factor(alpha_src);
-                descriptor.set_destination_alpha_blend_factor(alpha_dst);
+                desc.set_alpha_blend_operation(alpha_op);
+                desc.set_source_alpha_blend_factor(alpha_src);
+                desc.set_destination_alpha_blend_factor(alpha_dst);
+            }
+        }
+        if let Some(mtl_format) = subpass.target_formats.depth_stencil {
+            let orig_format = rp_attachments[subpass.depth_stencil.unwrap().0].format.unwrap();
+            if orig_format.is_depth() {
+                pipeline.set_depth_attachment_pixel_format(mtl_format);
+            }
+            if orig_format.is_stencil() {
+                pipeline.set_stencil_attachment_pixel_format(mtl_format);
             }
         }
 
@@ -1316,14 +1370,10 @@ impl hal::Device<Backend> for Device {
             .unwrap_or(pso::State::Static(pso::DepthBias::default()));
 
         // prepare the depth-stencil state now
+        let device = self.shared.device.lock();
         self.shared.service_pipes
             .depth_stencil_states
             .prepare(&pipeline_desc.depth_stencil, &*device);
-
-        let attachment_formats = pass_descriptor.main_pass.attachments
-            .iter()
-            .map(|at| at.format)
-            .collect();
 
         device.new_render_pipeline_state(&pipeline)
             .map(|raw|
@@ -1340,7 +1390,7 @@ impl hal::Device<Backend> for Device {
                     depth_stencil_desc: pipeline_desc.depth_stencil.clone(),
                     baked_states: pipeline_desc.baked_states.clone(),
                     vertex_buffers,
-                    attachment_formats,
+                    attachment_formats: subpass.target_formats.clone(),
                 })
             .map_err(|err| {
                 error!("PSO creation failed: {}", err);
@@ -1381,70 +1431,18 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_framebuffer<I>(
-        &self, renderpass: &n::RenderPass, attachments: I, extent: image::Extent
+        &self, _render_pass: &n::RenderPass, attachments: I, extent: image::Extent
     ) -> Result<n::Framebuffer, FramebufferError>
     where
         I: IntoIterator,
         I::Item: Borrow<n::ImageView>
     {
-        let descriptor = metal::RenderPassDescriptor::new().to_owned();
-        descriptor.set_visibility_result_buffer(Some(&self.shared.visibility.buffer));
-        descriptor.set_render_target_array_length(extent.depth as NSUInteger);
-
-        let mut inner = n::FramebufferInner {
-            extent,
-            aspects: format::Aspects::empty(),
-            colors: SmallVec::new(),
-            depth_stencil: None,
-        };
-
-        autoreleasepool(|| { // for the attachments
-            for (rat, attachment) in renderpass.attachments.iter().zip(attachments) {
-                let format = match rat.format {
-                    Some(format) => format,
-                    None => continue,
-                };
-                let aspects = format.surface_desc().aspects;
-                inner.aspects |= aspects;
-
-                let at = attachment.borrow();
-                if aspects.contains(format::Aspects::COLOR) {
-                    descriptor
-                        .color_attachments()
-                        .object_at(inner.colors.len())
-                        .expect("too many color attachments")
-                        .set_texture(Some(&at.raw));
-                    inner.colors.push(native::ColorAttachment {
-                        mtl_format: at.mtl_format,
-                        channel: format.base_format().1.into(),
-                    });
-                }
-                if aspects.contains(format::Aspects::DEPTH) {
-                    assert_eq!(inner.depth_stencil, None);
-                    inner.depth_stencil = Some(at.mtl_format);
-                    descriptor
-                        .depth_attachment()
-                        .unwrap()
-                        .set_texture(Some(&at.raw));
-                }
-                if aspects.contains(format::Aspects::STENCIL) {
-                    if let Some(old_format) = inner.depth_stencil {
-                        assert_eq!(old_format, at.mtl_format);
-                    } else {
-                        inner.depth_stencil = Some(at.mtl_format);
-                    }
-                    descriptor
-                        .stencil_attachment()
-                        .unwrap()
-                        .set_texture(Some(&at.raw));
-                }
-            }
-        });
-
         Ok(n::Framebuffer {
-            descriptor,
-            desc_storage: FastStorageMap::default(),
-            inner,
+            extent,
+            attachments: attachments
+                .into_iter()
+                .map(|at| at.borrow().raw.clone())
+                .collect(),
         })
     }
 
