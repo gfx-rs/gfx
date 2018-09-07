@@ -503,6 +503,7 @@ impl Device {
                         let value = source.specialization
                             .data[constant.range.start as usize .. constant.range.end as usize]
                             .iter()
+                            .rev()
                             .fold(0u64, |u, &b| (u<<8) + b as u64);
                         ast.set_scalar_constant(spec_constant.id, value)
                             .map_err(gen_query_error)?;
