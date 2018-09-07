@@ -483,7 +483,7 @@ impl ServicePipes {
             buffers.object_at(2).unwrap().set_mutability(metal::MTLMutability::Immutable);
         }*/
 
-        device.new_compute_pipeline_state(&pipeline).unwrap()
+        unsafe { device.new_compute_pipeline_state(&pipeline) }.unwrap()
     }
 
     fn create_fill_buffer(
@@ -501,6 +501,6 @@ impl ServicePipes {
             buffers.object_at(1).unwrap().set_mutability(metal::MTLMutability::Immutable);
         }*/
 
-        device.new_compute_pipeline_state(&pipeline).unwrap()
+        unsafe { device.new_compute_pipeline_state(&pipeline) }.unwrap()
     }
 }

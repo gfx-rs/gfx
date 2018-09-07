@@ -24,7 +24,7 @@ bitflags = "1.0"
 log = { version = "0.4", features = ["release_max_level_error"] }
 winit = { version = "0.17", optional = true }
 dispatch = { version = "0.1", optional = true }
-metal = "0.12.1"
+metal = { version = "0.13.0", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"

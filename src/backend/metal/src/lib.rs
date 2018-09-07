@@ -150,25 +150,34 @@ impl hal::Instance for Instance {
     type Backend = Backend;
 
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
-        let mut devices = metal::Device::all();
-        devices.sort_by_key(|dev| (dev.is_low_power(), dev.is_headless()));
-        devices
+        let devices = metal::Device::all();
+        let mut adapters: Vec<hal::Adapter<Backend>> = devices
             .into_iter()
-            .map(|dev| hal::Adapter {
-                info: hal::AdapterInfo {
-                    name: dev.name().into(),
-                    vendor: 0,
-                    device: 0,
-                    device_type: if dev.is_low_power() {
-                        hal::adapter::DeviceType::IntegratedGpu
-                    } else {
-                        hal::adapter::DeviceType::DiscreteGpu
-                    },                    
-                },
-                physical_device: device::PhysicalDevice::new(Arc::new(Shared::new(dev))),
-                queue_families: vec![QueueFamily {}],
-            })
-            .collect()
+            .map(|dev| {
+                let name = dev.name().into();
+                let physical_device = device::PhysicalDevice::new(Arc::new(Shared::new(dev)));
+                hal::Adapter {
+                    info: hal::AdapterInfo {
+                        name,
+                        vendor: 0,
+                        device: 0,
+                        device_type: if physical_device.private_caps.low_power {
+                            hal::adapter::DeviceType::IntegratedGpu
+                        } else {
+                            hal::adapter::DeviceType::DiscreteGpu
+                        },
+                    },
+                    physical_device,
+                    queue_families: vec![QueueFamily {}],
+                }
+            }).collect();
+        adapters.sort_by_key(|adapt| {
+            (
+                adapt.physical_device.private_caps.low_power,
+                adapt.physical_device.private_caps.headless,
+            )
+        });
+        adapters
     }
 }
 
@@ -320,6 +329,8 @@ struct PrivateCapabilities {
     shared_textures: bool,
     base_instance: bool,
     dual_source_blending: bool,
+    low_power: bool,
+    headless: bool,
     format_depth24_stencil8: bool,
     format_depth32_stencil8_filter: bool,
     format_depth32_stencil8_none: bool,

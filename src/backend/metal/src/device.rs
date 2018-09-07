@@ -271,7 +271,7 @@ impl VisibilityShared {
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
     pub(crate) private_caps: PrivateCapabilities,
-    memory_types: [hal::MemoryType; 4],
+    memory_types: Vec<hal::MemoryType>,
     pub online_recording: OnlineRecording,
 }
 unsafe impl Send for Device {}
@@ -322,7 +322,7 @@ struct NSOperatingSystemVersion {
 
 pub struct PhysicalDevice {
     shared: Arc<Shared>,
-    memory_types: [hal::MemoryType; 4],
+    memory_types: Vec<hal::MemoryType>,
     pub(crate) private_caps: PrivateCapabilities,
 }
 unsafe impl Send for PhysicalDevice {}
@@ -374,6 +374,8 @@ impl PhysicalDevice {
                 shared_textures: !os_is_mac,
                 base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
                 dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
+                low_power: !os_is_mac || device.is_low_power(),
+                headless: os_is_mac && device.is_headless(),
                 format_depth24_stencil8: os_is_mac && device.d24_s8_supported(),
                 format_depth32_stencil8_filter: os_is_mac,
                 format_depth32_stencil8_none: !os_is_mac,
@@ -433,9 +435,8 @@ impl PhysicalDevice {
             }
         };
 
-        PhysicalDevice {
-            shared:  shared.clone(),
-            memory_types: [
+        let memory_types = if os_is_mac {
+            vec![
                 hal::MemoryType { // PRIVATE
                     properties: Properties::DEVICE_LOCAL,
                     heap_index: 0,
@@ -452,7 +453,22 @@ impl PhysicalDevice {
                     properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE | Properties::CPU_CACHED,
                     heap_index: 1,
                 },
-            ],
+            ]
+        } else {
+            vec![
+                hal::MemoryType { // PRIVATE
+                    properties: Properties::DEVICE_LOCAL,
+                    heap_index: 0,
+                },
+                hal::MemoryType { // SHARED
+                    properties: Properties::CPU_VISIBLE | Properties::COHERENT,
+                    heap_index: 1,
+                },
+            ]
+        };
+        PhysicalDevice {
+            shared:  shared.clone(),
+            memory_types,
             private_caps,
         }
     }
@@ -485,7 +501,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let device = Device {
             shared: self.shared.clone(),
             private_caps: self.private_caps.clone(),
-            memory_types: self.memory_types,
+            memory_types: self.memory_types.clone(),
             online_recording: OnlineRecording::default(),
         };
 
@@ -1348,21 +1364,20 @@ impl hal::Device<Backend> for Device {
         )?;
         pipeline.set_compute_function(Some(&cs_function));
 
-        self.shared.device
-            .lock()
-            .new_compute_pipeline_state(&pipeline)
-            .map(|raw| {
-                n::ComputePipeline {
-                    cs_lib,
-                    raw,
-                    work_group_size,
-                    pc_buffer_index: pipeline_desc.layout.push_constant_buffer_index.cs,
-                }
-            })
-            .map_err(|err| {
-                error!("PSO creation failed: {}", err);
-                pso::CreationError::Other
-            })
+        unsafe {
+            self.shared
+                .device
+                .lock()
+                .new_compute_pipeline_state(&pipeline)
+        }.map(|raw| n::ComputePipeline {
+            cs_lib,
+            raw,
+            work_group_size,
+            pc_buffer_index: pipeline_desc.layout.push_constant_buffer_index.cs,
+        }).map_err(|err| {
+            error!("PSO creation failed: {}", err);
+            pso::CreationError::Other
+        })
     }
 
     fn create_framebuffer<I>(
@@ -1470,7 +1485,7 @@ impl hal::Device<Backend> for Device {
         descriptor.set_address_mode_t(conv::map_wrap_mode(t));
         descriptor.set_address_mode_r(conv::map_wrap_mode(r));
 
-        descriptor.set_lod_bias(info.lod_bias.into());
+        unsafe { descriptor.set_lod_bias(info.lod_bias.into()) };
         descriptor.set_lod_min_clamp(info.lod_range.start.into());
         descriptor.set_lod_max_clamp(info.lod_range.end.into());
         
