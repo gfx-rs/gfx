@@ -453,12 +453,7 @@ fn main() {
                                 range: 0 .. 4,
                             },
                         ],
-                        data: &[ // this is 0.8, trust me
-                            0xCD,
-                            0xCC,
-                            0x4C,
-                            0x3F,
-                        ],
+                        data: unsafe { std::mem::transmute::<&f32, &[u8; 4]>(&0.8f32) },
                     },
                 },
                 pso::EntryPoint::<back::Backend> {
