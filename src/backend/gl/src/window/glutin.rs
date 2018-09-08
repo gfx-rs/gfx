@@ -192,7 +192,6 @@ pub fn config_context(
         .with_srgb(color_base.1 == f::ChannelType::Srgb)
 }
 
-
 pub struct Headless(pub glutin::HeadlessContext);
 
 unsafe impl Send for Headless {}

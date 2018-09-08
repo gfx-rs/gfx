@@ -197,11 +197,10 @@ impl CommandQueue {
     // a command buffer.
     fn reset_state(&mut self) {
         let gl = &self.share.context;
-        let priv_caps = &self.share.private_caps;
 
         // Bind default VAO
         if !self.state.vao {
-            if priv_caps.vertex_array {
+            if self.share.private_caps.vertex_array {
                 unsafe { gl.BindVertexArray(self.vao) };
             }
             self.state.vao = true
@@ -445,6 +444,7 @@ impl CommandQueue {
 
                 self.share.context.ClearBufferfi(target, 0, depth, stencil as _);
             }
+            com::Command::ClearTexture(_color) => unimplemented!(),
             com::Command::DrawBuffers(draw_buffers) => unsafe {
                 let draw_buffers = Self::get::<gl::types::GLenum>(data_buf, draw_buffers);
                 self.share.context.DrawBuffers(
@@ -671,7 +671,7 @@ impl CommandQueue {
             panic!("Error {:?} executing command: {:?}", err, cmd)
         }
     }
-    
+
     fn signal_fence(&mut self, fence: &native::Fence) {
         if self.share.private_caps.sync {
             let gl = &self.share.context;
