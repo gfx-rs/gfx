@@ -3381,6 +3381,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             depth: 1,
         };
 
+        let mut compute_datas = Vec::new();
         let mut inner = self.inner.borrow_mut();
         let mut blit_commands = Vec::new();
         let mut compute_commands = vec![ //TODO: get rid of heap
@@ -3389,7 +3390,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let r = region.borrow();
-            if r.size % WORD_SIZE as u64 == 0 {
+            if r.size % WORD_SIZE as u64 == 0 &&
+                r.src % WORD_SIZE as u64 == 0 &&
+                r.dst % WORD_SIZE as u64 == 0
+            {
                 blit_commands.push(soft::BlitCommand::CopyBuffer {
                     src: AsNative::from(src.raw.as_ref()),
                     dst: AsNative::from(dst.raw.as_ref()),
@@ -3400,8 +3404,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     },
                 });
             } else {
-                // not natively supported, going through compute shader
+                // not natively supported, going through a compute shader
                 assert_eq!(0, r.size >> 32);
+                let src_aligned = r.src & !(WORD_SIZE as u64 - 1);
+                let dst_aligned = r.dst & !(WORD_SIZE as u64 - 1);
+                let offsets = (r.src - src_aligned) | ((r.dst - dst_aligned) << 16);
+                let size_and_offsets = [r.size as u32, offsets as u32];
+                compute_datas.push(Box::new(size_and_offsets));
 
                 let wg_count = MTLSize {
                     width: (r.size + wg_size.width - 1) / wg_size.width,
@@ -3412,19 +3421,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 0,
                     buffer: AsNative::from(dst.raw.as_ref()),
-                    offset: r.dst + dst.range.start,
+                    offset: dst_aligned + dst.range.start,
                 });
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 1,
                     buffer: AsNative::from(src.raw.as_ref()),
-                    offset: r.src + src.range.start,
+                    offset: src_aligned + src.range.start,
                 });
                 compute_commands.push(soft::ComputeCommand::BindBufferData {
                     index: 2,
-                    words: unsafe { slice::from_raw_parts(
-                        &(r.size as u32) as *const u32,
-                        mem::size_of::<u32>() / WORD_SIZE,
-                    )},
+                    words: unsafe {
+                        // Rust doesn't see that compute_datas will not lose this item
+                        // and the boxed contents can't be moved otherwise.
+                        mem::transmute(&compute_datas.last().unwrap()[..])
+                    },
                 });
                 compute_commands.push(soft::ComputeCommand::Dispatch {
                     wg_size,
