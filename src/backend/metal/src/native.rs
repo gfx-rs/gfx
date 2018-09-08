@@ -182,13 +182,20 @@ pub struct DescriptorSetInfo {
     pub dynamic_buffers: Vec<MultiStageData<PoolResourceIndex>>,
 }
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PushConstantInfo {
+    pub count: u32,
+    pub buffer_index: ResourceIndex,
+}
+
 #[derive(Debug)]
 pub struct PipelineLayout {
     pub(crate) shader_compiler_options: msl::CompilerOptions,
     pub(crate) shader_compiler_options_point: msl::CompilerOptions,
     pub(crate) infos: Vec<DescriptorSetInfo>,
     pub(crate) total: MultiStageResourceCounters,
-    pub(crate) push_constant_buffer_index: MultiStageData<Option<ResourceIndex>>,
+    pub(crate) push_constants: MultiStageData<Option<PushConstantInfo>>,
+    pub(crate) total_push_constants: u32,
 }
 
 impl PipelineLayout {
@@ -255,8 +262,8 @@ pub struct GraphicsPipeline {
     pub(crate) raw: metal::RenderPipelineState,
     pub(crate) primitive_type: metal::MTLPrimitiveType,
     pub(crate) attribute_buffer_index: ResourceIndex,
-    pub(crate) vs_pc_buffer_index: Option<ResourceIndex>,
-    pub(crate) ps_pc_buffer_index: Option<ResourceIndex>,
+    pub(crate) vs_pc_info: Option<PushConstantInfo>,
+    pub(crate) ps_pc_info: Option<PushConstantInfo>,
     pub(crate) rasterizer_state: Option<RasterizerState>,
     pub(crate) depth_bias: pso::State<pso::DepthBias>,
     pub(crate) depth_stencil_desc: pso::DepthStencilDesc,
@@ -278,7 +285,7 @@ pub struct ComputePipeline {
     pub(crate) cs_lib: metal::Library,
     pub(crate) raw: metal::ComputePipelineState,
     pub(crate) work_group_size: metal::MTLSize,
-    pub(crate) pc_buffer_index: Option<ResourceIndex>,
+    pub(crate) pc_info: Option<PushConstantInfo>,
 }
 
 unsafe impl Send for ComputePipeline {}

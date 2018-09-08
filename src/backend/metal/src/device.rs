@@ -1115,11 +1115,23 @@ impl hal::Device<Backend> for Device {
                 ps: stage_infos[1].2.clone(),
                 cs: stage_infos[2].2.clone(),
             },
-            push_constant_buffer_index: n::MultiStageData {
-                vs: pc_buffers[0],
-                ps: pc_buffers[1],
-                cs: pc_buffers[2],
+            push_constants: n::MultiStageData {
+                vs: pc_buffers[0].map(|buffer_index| n::PushConstantInfo {
+                    count: pc_limits[0],
+                    buffer_index,
+                }),
+                ps: pc_buffers[1].map(|buffer_index| n::PushConstantInfo {
+                    count: pc_limits[1],
+                    buffer_index,
+                }),
+                cs: pc_buffers[2].map(|buffer_index| n::PushConstantInfo {
+                    count: pc_limits[2],
+                    buffer_index,
+                }),
             },
+            total_push_constants: pc_limits[0]
+                .max(pc_limits[1])
+                .max(pc_limits[2]),
         }
     }
 
@@ -1383,8 +1395,8 @@ impl hal::Device<Backend> for Device {
                     raw,
                     primitive_type,
                     attribute_buffer_index,
-                    vs_pc_buffer_index: pipeline_desc.layout.push_constant_buffer_index.vs,
-                    ps_pc_buffer_index: pipeline_desc.layout.push_constant_buffer_index.ps,
+                    vs_pc_info: pipeline_desc.layout.push_constants.vs,
+                    ps_pc_info: pipeline_desc.layout.push_constants.ps,
                     rasterizer_state,
                     depth_bias,
                     depth_stencil_desc: pipeline_desc.depth_stencil.clone(),
@@ -1423,7 +1435,7 @@ impl hal::Device<Backend> for Device {
             cs_lib,
             raw,
             work_group_size,
-            pc_buffer_index: pipeline_desc.layout.push_constant_buffer_index.cs,
+            pc_info: pipeline_desc.layout.push_constants.cs,
         }).map_err(|err| {
             error!("PSO creation failed: {}", err);
             pso::CreationError::Other
