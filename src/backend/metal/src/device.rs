@@ -1106,6 +1106,16 @@ impl hal::Device<Backend> for Device {
         let mut shader_compiler_options_point = shader_compiler_options.clone();
         shader_compiler_options_point.enable_point_size_builtin = true;
 
+        const LIMIT_MASK: u32 = 3;
+        // round up the limits alignment to 4, so that it matches MTL compiler logic
+        //TODO: figure out what and how exactly does the alignment. Clearly, it's not
+        // straightforward, given that value of 2 stays non-aligned.
+        for limit in &mut pc_limits {
+            if *limit > LIMIT_MASK {
+                *limit = (*limit + LIMIT_MASK) & !LIMIT_MASK;
+            }
+        }
+
         n::PipelineLayout {
             shader_compiler_options,
             shader_compiler_options_point,
