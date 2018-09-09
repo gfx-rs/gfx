@@ -312,11 +312,11 @@ impl State {
                     index: 0,
                     samplers: &resources.samplers[..],
                 };
-                let com_push_constants = resources.push_constants_buffer_id
-                    .map(|id| soft::RenderCommand::BindBufferData {
+                let com_push_constants = resources.push_constants
+                    .map(|pc| soft::RenderCommand::BindBufferData {
                         stage,
-                        index: id  as _,
-                        words: push_constants,
+                        index: pc.buffer_index as _,
+                        words: &push_constants[.. pc.count as usize],
                     });
                 iter::once(com_buffers)
                     .chain(iter::once(com_textures))
@@ -353,10 +353,10 @@ impl State {
             index: 0,
             samplers: &resources.samplers[..],
         };
-        let com_push_constants = resources.push_constants_buffer_id
-            .map(|id| soft::ComputeCommand::BindBufferData {
-                index: id as _,
-                words: self.push_constants.as_slice(),
+        let com_push_constants = resources.push_constants
+            .map(|pc| soft::ComputeCommand::BindBufferData {
+                index: pc.buffer_index as _,
+                words: &self.push_constants[.. pc.count as usize],
             });
 
         com_pso
@@ -443,29 +443,29 @@ impl State {
         soft::RenderCommand::SetDepthBias(*depth_bias)
     }
 
-    fn push_vs_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::RenderCommand<&'a soft::Ref>{
-        self.resources_vs.push_constants_buffer_id = Some(index);
+    fn push_vs_constants<'a>(&'a mut self, pc: native::PushConstantInfo) -> soft::RenderCommand<&'a soft::Ref>{
+        self.resources_vs.push_constants = Some(pc);
         soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Vertex,
-            index,
-            words: &self.push_constants,
+            index: pc.buffer_index,
+            words: &self.push_constants[.. pc.count as usize],
         }
     }
 
-    fn push_ps_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::RenderCommand<&'a soft::Ref> {
-        self.resources_ps.push_constants_buffer_id = Some(index);
+    fn push_ps_constants<'a>(&'a mut self, pc: native::PushConstantInfo) -> soft::RenderCommand<&'a soft::Ref> {
+        self.resources_ps.push_constants = Some(pc);
         soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Fragment,
-            index,
-            words: &self.push_constants,
+            index: pc.buffer_index,
+            words: &self.push_constants[.. pc.count as usize],
         }
     }
 
-    fn push_cs_constants<'a>(&'a mut self, index: ResourceIndex) -> soft::ComputeCommand<&'a soft::Ref> {
-        self.resources_cs.push_constants_buffer_id = Some(index);
+    fn push_cs_constants<'a>(&'a mut self, pc: native::PushConstantInfo) -> soft::ComputeCommand<&'a soft::Ref> {
+        self.resources_cs.push_constants = Some(pc);
         soft::ComputeCommand::BindBufferData {
-            index,
-            words: &self.push_constants,
+            index: pc.buffer_index,
+            words: &self.push_constants[.. pc.count as usize],
         }
     }
 
@@ -502,12 +502,13 @@ impl State {
         &mut self,
         offset: u32,
         constants: &[u32],
+        total: u32,
     ) {
         assert_eq!(offset % WORD_ALIGNMENT as u32, 0);
         let offset = (offset  / WORD_ALIGNMENT as u32) as usize;
         let data = &mut self.push_constants;
-        while data.len() < offset + constants.len() {
-            data.push(0);
+        if data.len() < total as usize {
+            data.resize(total as usize, 0);
         }
         data[offset .. offset + constants.len()].copy_from_slice(constants);
     }
@@ -526,7 +527,7 @@ struct StageResources {
     buffer_offsets: Vec<buffer::Offset>,
     textures: Vec<Option<TexturePtr>>,
     samplers: Vec<Option<SamplerPtr>>,
-    push_constants_buffer_id: Option<ResourceIndex>,
+    push_constants: Option<native::PushConstantInfo>,
 }
 
 impl StageResources {
@@ -536,7 +537,7 @@ impl StageResources {
             buffer_offsets: Vec::new(),
             textures: Vec::new(),
             samplers: Vec::new(),
-            push_constants_buffer_id: None,
+            push_constants: None,
         }
     }
 
@@ -545,7 +546,7 @@ impl StageResources {
         self.buffer_offsets.clear();
         self.textures.clear();
         self.samplers.clear();
-        self.push_constants_buffer_id = None;
+        self.push_constants = None;
     }
 
     fn pre_allocate_buffers(&mut self, count: usize) {
@@ -3095,16 +3096,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 });
             }
             // re-bind push constants
-            if let Some(index) = pipeline.vs_pc_buffer_index {
-                if Some(index) != self.state.resources_vs.push_constants_buffer_id
-                    || index >= old_attribute_buffer_index
+            if let Some(pc) = pipeline.vs_pc_info {
+                if Some(pc) != self.state.resources_vs.push_constants
+                    || pc.buffer_index >= old_attribute_buffer_index
                 {
-                    pre.issue(self.state.push_vs_constants(index));
+                    // if we don't have enough constants, then binding will follow
+                    if pc.count as usize <= self.state.push_constants.len() {
+                        pre.issue(self.state.push_vs_constants(pc));
+                    }
                 }
             }
-            if let Some(index) = pipeline.ps_pc_buffer_index {
-                if Some(index) != self.state.resources_ps.push_constants_buffer_id {
-                    pre.issue(self.state.push_ps_constants(index));
+            if let Some(pc) = pipeline.ps_pc_info {
+                if Some(pc) != self.state.resources_ps.push_constants {
+                    if pc.count as usize <= self.state.push_constants.len() {
+                        pre.issue(self.state.push_ps_constants(pc));
+                    }
                 }
             }
         } else {
@@ -3253,9 +3259,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         pre.issue(soft::ComputeCommand::BindPipeline(&*pipeline.raw));
 
-        if let Some(index) = pipeline.pc_buffer_index {
-            if Some(index) != self.state.resources_cs.push_constants_buffer_id {
-                pre.issue(self.state.push_cs_constants(index));
+        if let Some(pc) = pipeline.pc_info {
+            if Some(pc) != self.state.resources_cs.push_constants {
+                if pc.count as usize <= self.state.push_constants.len() {
+                    pre.issue(self.state.push_cs_constants(pc));
+                }
             }
         }
     }
@@ -3914,18 +3922,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         offset: u32,
         constants: &[u32],
     ) {
-        self.state.update_push_constants(offset, constants);
+        self.state.update_push_constants(offset, constants, layout.total_push_constants);
         if stages.intersects(pso::ShaderStageFlags::GRAPHICS) {
             let mut inner = self.inner.borrow_mut();
             let mut pre = inner.sink().pre_render();
             // Note: the whole range is re-uploaded, which may be inefficient
             if stages.contains(pso::ShaderStageFlags::VERTEX) {
-                let id = layout.push_constant_buffer_index.vs.unwrap();
-                pre.issue(self.state.push_vs_constants(id));
+                let pc = layout.push_constants.vs.unwrap();
+                pre.issue(self.state.push_vs_constants(pc));
             }
             if stages.contains(pso::ShaderStageFlags::FRAGMENT) {
-                let id = layout.push_constant_buffer_index.ps.unwrap();
-                pre.issue(self.state.push_ps_constants(id));
+                let pc = layout.push_constants.ps.unwrap();
+                pre.issue(self.state.push_ps_constants(pc));
             }
         }
     }
@@ -3936,15 +3944,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         offset: u32,
         constants: &[u32],
     ) {
-        self.state.update_push_constants(offset, constants);
-        let id = layout.push_constant_buffer_index.cs.unwrap();
+        self.state.update_push_constants(offset, constants, layout.total_push_constants);
+        let pc = layout.push_constants.cs.unwrap();
 
         // Note: the whole range is re-uploaded, which may be inefficient
         self.inner
             .borrow_mut()
             .sink()
             .pre_compute()
-            .issue(self.state.push_cs_constants(id));
+            .issue(self.state.push_cs_constants(pc));
     }
 
     fn execute_commands<I>(
