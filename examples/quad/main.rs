@@ -233,7 +233,7 @@ fn main() {
             ColorFormat::SELF,
             i::Tiling::Optimal,
             i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
-            i::StorageFlags::empty(),
+            i::ViewCapabilities::empty(),
         )
         .unwrap(); // TODO: usage
     let image_req = device.get_image_requirements(&image_unbound);

@@ -95,7 +95,7 @@ pub(crate) struct ViewInfo {
     #[derivative(Debug="ignore")]
     resource: ComPtr<d3d11::ID3D11Resource>,
     kind: image::Kind,
-    flags: image::StorageFlags,
+    caps: image::ViewCapabilities,
     view_kind: image::ViewKind,
     format: dxgiformat::DXGI_FORMAT,
     range: image::SubresourceRange,
@@ -538,7 +538,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         dimensions: u8,
         tiling: image::Tiling,
         usage: image::Usage,
-        storage_flags: image::StorageFlags,
+        view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         conv::map_format(format)?; //filter out unknown formats
 
@@ -604,7 +604,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     _ => return None,
                 },
                 sample_count_mask: if dimensions == 2
-                    && !storage_flags.contains(image::StorageFlags::CUBE_VIEW)
+                    && !view_caps.contains(image::ViewCapabilities::KIND_CUBE)
                     && (usage.contains(image::Usage::COLOR_ATTACHMENT)
                         | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
                 {
@@ -2491,7 +2491,7 @@ pub struct UnboundImage {
     format: format::Format,
     tiling: image::Tiling,
     usage: image::Usage,
-    flags: image::StorageFlags,
+    view_caps: image::ViewCapabilities,
     bind: d3d11::D3D11_BIND_FLAG,
     requirements: memory::Requirements,
 }
@@ -2502,7 +2502,7 @@ pub struct Image {
     kind: image::Kind,
     usage: image::Usage,
     format: format::Format,
-    storage_flags: image::StorageFlags,
+    view_caps: image::ViewCapabilities,
     decomposed_format: conv::DecomposedDxgiFormat,
     num_levels: image::Level,
     num_mips: image::Level,

@@ -85,7 +85,7 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
         dimensions: u8,
         tiling: image::Tiling,
         usage: image::Usage,
-        storage_flags: image::StorageFlags,
+        view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties>;
 
     /// Fetch details for the memory regions provided by the device.

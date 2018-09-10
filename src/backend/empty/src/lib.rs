@@ -68,7 +68,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn image_format_properties(
         &self, _: format::Format, _dim: u8, _: image:: Tiling,
-        _: image::Usage, _: image::StorageFlags,
+        _: image::Usage, _: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         unimplemented!()
     }
@@ -205,7 +205,7 @@ impl hal::Device<Backend> for Device {
         _: format::Format,
         _: image::Tiling,
         _: image::Usage,
-        _: image::StorageFlags,
+        _: image::ViewCapabilities,
     ) -> Result<(), image::CreationError> {
         unimplemented!()
     }

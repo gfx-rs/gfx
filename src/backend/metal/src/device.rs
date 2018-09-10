@@ -525,13 +525,13 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn image_format_properties(
         &self, format: format::Format, dimensions: u8, tiling: image::Tiling,
-        usage: image::Usage, storage_flags: image::StorageFlags,
+        usage: image::Usage, view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         if let image::Tiling::Linear = tiling {
             let format_desc = format.surface_desc();
             let host_usage = image::Usage::TRANSFER_SRC | image::Usage::TRANSFER_DST;
             if dimensions != 2 ||
-                !storage_flags.is_empty() ||
+                !view_caps.is_empty() ||
                 !host_usage.contains(usage) ||
                 format_desc.aspects != format::Aspects::COLOR ||
                 format_desc.is_compressed()
@@ -2068,12 +2068,12 @@ impl hal::Device<Backend> for Device {
         format: format::Format,
         tiling: image::Tiling,
         usage: image::Usage,
-        flags: image::StorageFlags,
+        flags: image::ViewCapabilities,
     ) -> Result<n::UnboundImage, image::CreationError> {
         debug!("create_image {:?} with {} mips of {:?} {:?} and usage {:?}",
             kind, mip_levels, format, tiling, usage);
 
-        let is_cube = flags.contains(image::StorageFlags::CUBE_VIEW);
+        let is_cube = flags.contains(image::ViewCapabilities::KIND_CUBE);
         let mtl_format = self.private_caps
             .map_format(format)
             .ok_or(image::CreationError::Format(format))?;

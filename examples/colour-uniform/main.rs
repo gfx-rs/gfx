@@ -1070,7 +1070,7 @@ impl<B: Backend> ImageState<B> {
                 ColorFormat::SELF,
                 i::Tiling::Optimal,
                 i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
-                i::StorageFlags::empty(),
+                i::ViewCapabilities::empty(),
             )
             .unwrap(); // TODO: usage
         let req = device.get_image_requirements(&unbound);
