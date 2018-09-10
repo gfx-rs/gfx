@@ -543,6 +543,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             // MTLRenderPassDescriptor texture must not be MTLTextureType1D
             return None;
         }
+        if dimensions == 3 && view_caps.contains(image::ViewCapabilities::KIND_2D_ARRAY) {
+            // Can't create 2D/2DArray views of 3D textures
+            return None;
+        }
         //TODO: actually query this data
         let max_dimension = 4096u32;
         let max_extent = image::Extent {

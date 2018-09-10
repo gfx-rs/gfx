@@ -390,7 +390,7 @@ bitflags!(
         /// Support creation of `Cube` and `CubeArray` kinds of views.
         const KIND_CUBE      = 0x00000010;
         /// Support creation of `D2Array` kind of view.
-        const KIND_ARRAY_2D  = 0x00000020;
+        const KIND_2D_ARRAY  = 0x00000020;
     }
 );
 
