@@ -2485,6 +2485,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let src_cubish = src.view_cube_as_2d();
         let dst_cubish = dst.view_cube_as_2d();
+        let dst_layers = dst.kind.num_layers();
 
         let vertices = &mut self.temp.blit_vertices;
         vertices.clear();
@@ -2666,7 +2667,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     },
                 ];
 
-                descriptor.set_render_target_array_length(ext.depth as _);
+                descriptor.set_render_target_array_length(dst_layers as _);
                 if aspects.contains(Aspects::COLOR) {
                     descriptor
                         .color_attachments()

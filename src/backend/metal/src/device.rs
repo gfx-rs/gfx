@@ -2072,12 +2072,12 @@ impl hal::Device<Backend> for Device {
         format: format::Format,
         tiling: image::Tiling,
         usage: image::Usage,
-        flags: image::ViewCapabilities,
+        view_caps: image::ViewCapabilities,
     ) -> Result<n::UnboundImage, image::CreationError> {
         debug!("create_image {:?} with {} mips of {:?} {:?} and usage {:?}",
             kind, mip_levels, format, tiling, usage);
 
-        let is_cube = flags.contains(image::ViewCapabilities::KIND_CUBE);
+        let is_cube = view_caps.contains(image::ViewCapabilities::KIND_CUBE);
         let mtl_format = self.private_caps
             .map_format(format)
             .ok_or(image::CreationError::Format(format))?;
@@ -2115,7 +2115,7 @@ impl hal::Device<Backend> for Device {
                 return Err(image::CreationError::Kind)
             }
             image::Kind::D3(..) => {
-                assert!(!is_cube);
+                assert!(!is_cube && !view_caps.contains(image::ViewCapabilities::KIND_2D_ARRAY));
                 (MTLTextureType::D3, None)
             }
         };
@@ -2296,25 +2296,18 @@ impl hal::Device<Backend> for Device {
             },
         };
         let raw = image.like.as_texture();
-
         let full_range = image::SubresourceRange {
             aspects: image.format_desc.aspects,
             levels: 0 .. raw.mipmap_level_count() as image::Level,
             layers: 0 .. image.kind.num_layers(),
         };
+        let mtl_type = conv::map_texture_type(kind);
+
         let view = if
             mtl_format == image.mtl_format &&
-            //kind == image::ViewKind::D2 && //TODO: find a better way to check this
+            mtl_type == image.mtl_type &&
             swizzle == format::Swizzle::NO &&
-            range == full_range &&
-            match (kind, image.kind) {
-                (image::ViewKind::D1, image::Kind::D1(..)) |
-                (image::ViewKind::D2, image::Kind::D2(..)) |
-                (image::ViewKind::D3, image::Kind::D3(..)) => true,
-                (image::ViewKind::D1Array, image::Kind::D1(_, layers)) if layers > 1 => true,
-                (image::ViewKind::D2Array, image::Kind::D2(_, _, layers, _)) if layers > 1 => true,
-                (_, _) => false, //TODO: expose more choices here?
-            }
+            range == full_range
         {
             // Some images are marked as framebuffer-only, and we can't create aliases of them.
             // Also helps working around Metal bugs with aliased array textures.
@@ -2322,7 +2315,7 @@ impl hal::Device<Backend> for Device {
         } else {
             raw.new_texture_view_from_slice(
                 mtl_format,
-                conv::map_texture_type(kind),
+                mtl_type,
                 NSRange {
                     location: range.levels.start as _,
                     length: (range.levels.end - range.levels.start) as _,

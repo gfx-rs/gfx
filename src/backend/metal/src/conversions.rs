@@ -10,7 +10,7 @@ impl PrivateCapabilities {
         use metal::MTLPixelFormat::*;
         use hal::format::Format as f;
         Some(match format {
-            f::B5g6r5Unorm    if self.format_b5 => B5G6R5Unorm,
+            f::R5g6b5Unorm    if self.format_b5 => B5G6R5Unorm,
             f::R5g5b5a1Unorm  if self.format_b5 => A1BGR5Unorm,
             f::A1r5g5b5Unorm  if self.format_b5 => BGR5A1Unorm,
             f::Rgba4Unorm     if self.format_b5 => ABGR4Unorm,
@@ -149,6 +149,7 @@ impl PrivateCapabilities {
             (Rgba8Unorm, Swizzle(B, G, R, A)) => Some(Pf::BGRA8Unorm),
             (Bgra8Unorm, Swizzle(B, G, R, A)) => Some(Pf::RGBA8Unorm),
             (Bgra8Srgb, Swizzle(B, G, R, A)) => Some(Pf::RGBA8Unorm_sRGB),
+            (B5g6r5Unorm, Swizzle(B, G, R, A)) if self.format_b5 => Some(Pf::B5G6R5Unorm),
             _ => {
                 let bits = format.base_format().0.describe_bits();
                 if swizzle != Swizzle::NO && !(bits.alpha == 0 && swizzle == Swizzle(R, G, B, One)) {
