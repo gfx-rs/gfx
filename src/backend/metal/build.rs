@@ -17,6 +17,10 @@ fn main() {
         panic!("unsupported target {}", target)
     };
     let arch = &target[..target.chars().position(|c| c == '-').unwrap()];
+    let is_debug = match env::var("PROFILE") {
+        Ok(profile) => profile == "debug",
+        Err(_) => false,
+    };
 
     let sdk_name = match (os, arch) {
         ("ios", "aarch64") => "iphoneos",
@@ -59,6 +63,7 @@ fn main() {
             .arg(shader_path.as_os_str())
             .arg("-o")
             .arg(out_path.as_os_str())
+            .args(if is_debug { &["-g", "-MO"][..] } else { &[] })
             .status()
             .expect("failed to execute metal compiler");
 
