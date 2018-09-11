@@ -37,7 +37,7 @@ const WORD_SIZE: usize = 4;
 const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
 /// Enable an optimization to have multi-layered render passed
 /// with clear operations set up to implement our `clear_image`
-/// Note: currently doesn't work, needs a repro case for Apple
+/// Note: multi-target clears don't appear to work properly on Intel GPUs
 const CLEAR_IMAGE_ARRAY: bool = false && cfg!(target_os = "macos");
 /// Number of frames to average when reporting the performance counters.
 const COUNTERS_REPORT_WINDOW: usize = 0;
@@ -867,22 +867,22 @@ impl CommandSink {
     }
 
     /// Switch the active encoder to render by starting a render pass.
-    fn switch_render<'a>(
-        &'a mut self,
-        descriptor: &'a metal::RenderPassDescriptorRef,
-    ) -> PreRender<'a> {
+    fn switch_render(
+        &mut self,
+        descriptor: metal::RenderPassDescriptor,
+    ) -> PreRender {
         //assert!(AutoReleasePool::is_active());
         self.stop_encoding();
 
         match *self {
             CommandSink::Immediate { ref cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
                 *num_passes += 1;
-                let encoder = cmd_buffer.new_render_command_encoder(descriptor);
+                let encoder = cmd_buffer.new_render_command_encoder(&descriptor);
                 *encoder_state = EncoderState::Render(encoder.to_owned());
                 PreRender::Immediate(encoder)
             }
             CommandSink::Deferred { ref mut is_encoding, ref mut journal } => {
-                let pass = soft::Pass::Render(descriptor.to_owned());
+                let pass = soft::Pass::Render(descriptor);
                 *is_encoding = true;
                 journal.passes.push((pass, journal.render_commands.len() .. 0));
                 PreRender::Deferred(&mut journal.resources, &mut journal.render_commands)
@@ -890,7 +890,7 @@ impl CommandSink {
             #[cfg(feature = "dispatch")]
             CommandSink::Remote { ref mut pass, ref capacity, .. } => {
                 let mut list = Vec::with_capacity(capacity.render);
-                *pass = Some(EncodePass::Render(list, descriptor.to_owned()));
+                *pass = Some(EncodePass::Render(list, descriptor));
                 match *pass {
                     Some(EncodePass::Render(ref mut list, _)) => PreRender::Deferred(list),
                     _ => unreachable!()
@@ -902,7 +902,7 @@ impl CommandSink {
     fn quick_render<'a, I>(
         &mut self,
         label: &str,
-        descriptor: &'a metal::RenderPassDescriptorRef,
+        descriptor: metal::RenderPassDescriptor,
         commands: I,
     )
     where
@@ -2125,8 +2125,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let raw = image.like.as_texture();
             for subresource_range in subresource_ranges {
                 let sub = subresource_range.borrow();
-                let descriptor = metal::RenderPassDescriptor::new();
-
                 let num_layers = (sub.layers.end - sub.layers.start) as u64;
                 let layers = if CLEAR_IMAGE_ARRAY {
                     0 .. 1
@@ -2153,66 +2151,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     raw
                 };
 
-                let color_attachment = if image.format_desc.aspects.contains(Aspects::COLOR) {
-                    let attachment = descriptor
-                        .color_attachments()
-                        .object_at(0)
-                        .unwrap();
-                    attachment.set_texture(Some(texture));
-                    attachment.set_store_action(metal::MTLStoreAction::Store);
-                    if sub.aspects.contains(Aspects::COLOR) {
-                        attachment.set_load_action(metal::MTLLoadAction::Clear);
-                        attachment.set_clear_color(clear_color.clone());
-                        Some(attachment)
-                    } else {
-                        attachment.set_load_action(metal::MTLLoadAction::Load);
-                        None
-                    }
-                } else {
-                    assert!(!sub.aspects.contains(Aspects::COLOR));
-                    None
-                };
-
-                let depth_attachment = if image.format_desc.aspects.contains(Aspects::DEPTH) {
-                    let attachment = descriptor
-                        .depth_attachment()
-                        .unwrap();
-                    attachment.set_texture(Some(texture));
-                    attachment.set_store_action(metal::MTLStoreAction::Store);
-                    if sub.aspects.contains(Aspects::DEPTH) {
-                        attachment.set_load_action(metal::MTLLoadAction::Clear);
-                        attachment.set_clear_depth(depth_stencil.depth as _);
-                        Some(attachment)
-                    } else {
-                        attachment.set_load_action(metal::MTLLoadAction::Load);
-                        None
-                    }
-                } else {
-                    assert!(!sub.aspects.contains(Aspects::DEPTH));
-                    None
-                };
-
-                let stencil_attachment = if image.format_desc.aspects.contains(Aspects::STENCIL) {
-                    let attachment = descriptor
-                        .stencil_attachment()
-                        .unwrap();
-                    attachment.set_texture(Some(texture));
-                    attachment.set_store_action(metal::MTLStoreAction::Store);
-                    if sub.aspects.contains(Aspects::STENCIL) {
-                        attachment.set_load_action(metal::MTLLoadAction::Clear);
-                        attachment.set_clear_stencil(depth_stencil.stencil);
-                        Some(attachment)
-                    } else {
-                        attachment.set_load_action(metal::MTLLoadAction::Load);
-                        None
-                    }
-                } else {
-                    assert!(!sub.aspects.contains(Aspects::STENCIL));
-                    None
-                };
-
                 for layer in layers {
                     for level in sub.levels.clone() {
+                        let descriptor = metal::RenderPassDescriptor::new().to_owned();
                         if base_extent.depth > 1 {
                             assert_eq!(sub.layers.end, 1);
                             let depth = base_extent.at_level(level).depth as u64;
@@ -2221,24 +2162,66 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             descriptor.set_render_target_array_length(num_layers);
                         };
 
-                        if let Some(attachment) = color_attachment {
+                        if image.format_desc.aspects.contains(Aspects::COLOR) {
+                            let attachment = descriptor
+                                .color_attachments()
+                                .object_at(0)
+                                .unwrap();
+                            attachment.set_texture(Some(texture));
                             attachment.set_level(level as _);
                             if !CLEAR_IMAGE_ARRAY {
                                 attachment.set_slice(layer as _);
                             }
-                        }
-                        if let Some(attachment) = depth_attachment {
+                            attachment.set_store_action(metal::MTLStoreAction::Store);
+                            if sub.aspects.contains(Aspects::COLOR) {
+                                attachment.set_load_action(metal::MTLLoadAction::Clear);
+                                attachment.set_clear_color(clear_color.clone());
+                            } else {
+                                attachment.set_load_action(metal::MTLLoadAction::Load);
+                            }
+                        } else {
+                            assert!(!sub.aspects.contains(Aspects::COLOR));
+                        };
+
+                        if image.format_desc.aspects.contains(Aspects::DEPTH) {
+                            let attachment = descriptor
+                                .depth_attachment()
+                                .unwrap();
+                            attachment.set_texture(Some(texture));
                             attachment.set_level(level as _);
                             if !CLEAR_IMAGE_ARRAY {
                                 attachment.set_slice(layer as _);
                             }
-                        }
-                        if let Some(attachment) = stencil_attachment {
+                            attachment.set_store_action(metal::MTLStoreAction::Store);
+                            if sub.aspects.contains(Aspects::DEPTH) {
+                                attachment.set_load_action(metal::MTLLoadAction::Clear);
+                                attachment.set_clear_depth(depth_stencil.depth as _);
+                            } else {
+                                attachment.set_load_action(metal::MTLLoadAction::Load);
+                            }
+                        } else {
+                            assert!(!sub.aspects.contains(Aspects::DEPTH));
+                        };
+
+                        if image.format_desc.aspects.contains(Aspects::STENCIL) {
+                            let attachment = descriptor
+                                .stencil_attachment()
+                                .unwrap();
+                            attachment.set_texture(Some(texture));
                             attachment.set_level(level as _);
                             if !CLEAR_IMAGE_ARRAY {
                                 attachment.set_slice(layer as _);
                             }
-                        }
+                            attachment.set_store_action(metal::MTLStoreAction::Store);
+                            if sub.aspects.contains(Aspects::STENCIL) {
+                                attachment.set_load_action(metal::MTLLoadAction::Clear);
+                                attachment.set_clear_stencil(depth_stencil.stencil);
+                            } else {
+                                attachment.set_load_action(metal::MTLLoadAction::Load);
+                            }
+                        } else {
+                            assert!(!sub.aspects.contains(Aspects::STENCIL));
+                        };
 
                         sink.as_mut()
                             .unwrap()
@@ -2485,6 +2468,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let src_cubish = src.view_cube_as_2d();
         let dst_cubish = dst.view_cube_as_2d();
+        let dst_layers = dst.kind.num_layers();
 
         let vertices = &mut self.temp.blit_vertices;
         vertices.clear();
@@ -2606,32 +2590,38 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
 
         autoreleasepool(|| {
-            let descriptor = metal::RenderPassDescriptor::new();
             let dst_new = match dst_cubish {
                 Some(ref tex) => tex.as_ref(),
                 None => dst.like.as_texture(),
             };
-            if src.format_desc.aspects.contains(Aspects::COLOR) {
-                descriptor
-                    .color_attachments()
-                    .object_at(0)
-                    .unwrap()
-                    .set_texture(Some(dst_new));
-            }
-            if src.format_desc.aspects.contains(Aspects::DEPTH) {
-                descriptor
-                    .depth_attachment()
-                    .unwrap()
-                    .set_texture(Some(dst_new));
-            }
-            if src.format_desc.aspects.contains(Aspects::STENCIL) {
-                descriptor
-                    .stencil_attachment()
-                    .unwrap()
-                    .set_texture(Some(dst_new));
-            }
 
             for ((aspects, level), list) in vertices.drain() {
+                let descriptor = metal::RenderPassDescriptor::new().to_owned();
+                descriptor.set_render_target_array_length(dst_layers as _);
+
+                if aspects.contains(Aspects::COLOR) {
+                    let att = descriptor
+                        .color_attachments()
+                        .object_at(0)
+                        .unwrap();
+                    att.set_texture(Some(dst_new));
+                    att.set_level(level as _);
+                }
+                if aspects.contains(Aspects::DEPTH) {
+                    let att = descriptor
+                        .depth_attachment()
+                        .unwrap();
+                    att.set_texture(Some(dst_new));
+                    att.set_level(level as _);
+                }
+                if aspects.contains(Aspects::STENCIL) {
+                    let att = descriptor
+                        .stencil_attachment()
+                        .unwrap();
+                    att.set_texture(Some(dst_new));
+                    att.set_level(level as _);
+                }
+
                 let ext = dst.kind.extent().at_level(level);
                 //Note: flipping Y coordinate of the destination here
                 let rect = pso::Rect {
@@ -2666,27 +2656,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     },
                 ];
 
-                descriptor.set_render_target_array_length(ext.depth as _);
-                if aspects.contains(Aspects::COLOR) {
-                    descriptor
-                        .color_attachments()
-                        .object_at(0)
-                        .unwrap()
-                        .set_level(level as _);
-                }
-                if aspects.contains(Aspects::DEPTH) {
-                    descriptor
-                        .depth_attachment()
-                        .unwrap()
-                        .set_level(level as _);
-                }
-                if aspects.contains(Aspects::STENCIL) {
-                    descriptor
-                        .stencil_attachment()
-                        .unwrap()
-                        .set_level(level as _);
-                }
-
                 let commands = prelude
                     .iter()
                     .chain(&com_ds)
@@ -2696,7 +2665,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 sink
                     .as_mut()
                     .unwrap()
-                    .quick_render("blit_image", &descriptor, commands);
+                    .quick_render("blit_image", descriptor, commands);
             }
         });
 
@@ -3003,7 +2972,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.inner
             .borrow_mut()
             .sink()
-            .switch_render(&sin.descriptor)
+            .switch_render(sin.descriptor)
             .issue_many(init_commands);
     }
 

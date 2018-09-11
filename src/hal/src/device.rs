@@ -355,7 +355,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Create a new image object
     fn create_image(
         &self, kind: image::Kind, mip_levels: image::Level, format: format::Format,
-        tiling: image::Tiling, usage: image::Usage, storage_flags: image::StorageFlags,
+        tiling: image::Tiling, usage: image::Usage, view_caps: image::ViewCapabilities,
     ) -> Result<B::UnboundImage, image::CreationError>;
 
     /// Get memory requirements for the unbound Image

@@ -1237,7 +1237,7 @@ impl hal::Device<Backend> for Device {
         format: format::Format,
         tiling: image::Tiling,
         usage: image::Usage,
-        flags: image::StorageFlags,
+        view_caps: image::ViewCapabilities,
     ) -> Result<UnboundImage, image::CreationError> {
         use image::Usage;
         //
@@ -1279,7 +1279,7 @@ impl hal::Device<Backend> for Device {
             format,
             tiling,
             usage,
-            flags,
+            view_caps,
             bind,
             requirements: memory::Requirements {
                 size: size,
@@ -1398,7 +1398,7 @@ impl hal::Device<Backend> for Device {
                     Usage: usage,
                     BindFlags: bind,
                     CPUAccessFlags: cpu,
-                    MiscFlags: if image.flags.contains(image::StorageFlags::CUBE_VIEW) {
+                    MiscFlags: if image.view_caps.contains(image::ViewCapabilities::KIND_CUBE) {
                         d3d11::D3D11_RESOURCE_MISC_TEXTURECUBE
                     } else {
                         0
@@ -1475,7 +1475,7 @@ impl hal::Device<Backend> for Device {
                 let view = ViewInfo {
                     resource: resource.clone(),
                     kind: image.kind,
-                    flags: image::StorageFlags::empty(),
+                    caps: image::ViewCapabilities::empty(),
                     view_kind,
                     // TODO: we should be using `uav_format` rather than `copy_uav_format`, and share
                     //       the UAVs when the formats are identical
@@ -1498,7 +1498,7 @@ impl hal::Device<Backend> for Device {
             let mut view = ViewInfo {
                 resource: resource.clone(),
                 kind: image.kind,
-                flags: image::StorageFlags::empty(),
+                caps: image::ViewCapabilities::empty(),
                 view_kind,
                 format: decomposed.copy_srv.unwrap(),
                 range: image::SubresourceRange {
@@ -1537,7 +1537,7 @@ impl hal::Device<Backend> for Device {
                     let view = ViewInfo {
                         resource: resource.clone(),
                         kind: image.kind,
-                        flags: image::StorageFlags::empty(),
+                        caps: image::ViewCapabilities::empty(),
                         view_kind,
                         format: decomposed.rtv.unwrap(),
                         range: image::SubresourceRange {
@@ -1560,7 +1560,7 @@ impl hal::Device<Backend> for Device {
                     let view = ViewInfo {
                         resource: resource.clone(),
                         kind: image.kind,
-                        flags: image::StorageFlags::empty(),
+                        caps: image::ViewCapabilities::empty(),
                         view_kind: image::ViewKind::D2,
                         format: decomposed.dsv.unwrap(),
                         range: image::SubresourceRange {
@@ -1592,7 +1592,7 @@ impl hal::Device<Backend> for Device {
             usage: image.usage,
             format: image.format,
             decomposed_format: decomposed,
-            storage_flags: image.flags,
+            view_caps: image.view_caps,
             num_levels: image.kind.num_levels(),
             num_mips: image.mip_levels as _,
             internal,
@@ -1610,7 +1610,7 @@ impl hal::Device<Backend> for Device {
         let info = ViewInfo {
             resource: image.internal.raw.clone(),
             kind: image.kind,
-            flags: image.storage_flags,
+            caps: image.view_caps,
             view_kind,
             format: conv::map_format(format)
                 .ok_or(image::ViewError::BadFormat)?,
@@ -1620,7 +1620,7 @@ impl hal::Device<Backend> for Device {
         let srv_info = ViewInfo {
             resource: image.internal.raw.clone(),
             kind: image.kind,
-            flags: image.storage_flags,
+            caps: image.view_caps,
             view_kind,
             format: conv::viewable_format(info.format),
             range,
@@ -2258,7 +2258,7 @@ impl hal::Device<Backend> for Device {
         let mut view_info = ViewInfo {
             resource: resource.clone(),
             kind,
-            flags: image::StorageFlags::empty(),
+            caps: image::ViewCapabilities::empty(),
             view_kind: image::ViewKind::D2,
             format: decomposed.rtv.unwrap(),
             // TODO: can these ever differ for backbuffer?
@@ -2292,7 +2292,7 @@ impl hal::Device<Backend> for Device {
                 kind,
                 usage: config.image_usage,
                 format: config.format,
-                storage_flags: image::StorageFlags::empty(),
+                view_caps: image::ViewCapabilities::empty(),
                 // NOTE: not the actual format of the backbuffer(s)
                 decomposed_format: decomposed.clone(),
                 num_levels: 1,

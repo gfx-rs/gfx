@@ -330,7 +330,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         dimensions: u8,
         tiling: image::Tiling,
         usage: image::Usage,
-        storage_flags: image::StorageFlags,
+        view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         conv::map_format(format)?; //filter out unknown formats
 
@@ -396,7 +396,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     _ => return None,
                 },
                 sample_count_mask: if dimensions == 2
-                    && !storage_flags.contains(image::StorageFlags::CUBE_VIEW)
+                    && !view_caps.contains(image::ViewCapabilities::KIND_CUBE)
                     && (usage.contains(image::Usage::COLOR_ATTACHMENT)
                         | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
                 {

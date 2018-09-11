@@ -457,7 +457,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         dimensions: u8,
         tiling: image::Tiling,
         usage: image::Usage,
-        storage_flags: image::StorageFlags,
+        view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         match self.instance.0.get_physical_device_image_format_properties(
             self.handle,
@@ -470,7 +470,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             },
             conv::map_tiling(tiling),
             conv::map_image_usage(usage),
-            conv::map_image_flags(storage_flags),
+            conv::map_view_capabilities(view_caps),
         ) {
             Ok(props) => Some(image::FormatProperties {
                 max_extent: image::Extent {

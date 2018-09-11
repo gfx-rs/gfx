@@ -191,7 +191,7 @@ pub struct Image {
     pub(crate) surface_type: format::SurfaceType,
     pub(crate) kind: image::Kind,
     pub(crate) usage: image::Usage,
-    pub(crate) storage_flags: image::StorageFlags,
+    pub(crate) view_caps: image::ViewCapabilities,
     #[derivative(Debug="ignore")]
     pub(crate) descriptor: d3d12::D3D12_RESOURCE_DESC,
     pub(crate) bytes_per_block: u8,

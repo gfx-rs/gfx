@@ -1015,9 +1015,9 @@ impl d::Device<B> for Device {
         format: format::Format,
         tiling: image::Tiling,
         usage: image::Usage,
-        storage_flags: image::StorageFlags,
+        view_caps: image::ViewCapabilities,
     ) -> Result<UnboundImage, image::CreationError> {
-        let flags = conv::map_image_flags(storage_flags);
+        let flags = conv::map_view_capabilities(view_caps);
         let extent = conv::map_extent(kind.extent());
         let array_layers = kind.num_layers();
         let samples = kind.num_samples() as u32;

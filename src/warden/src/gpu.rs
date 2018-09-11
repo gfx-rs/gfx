@@ -305,7 +305,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     raw::Resource::Image { kind, num_levels, format, usage, ref data } => {
                         // allocate memory
                         let unbound = device.create_image(
-                            kind, num_levels, format, i::Tiling::Optimal, usage, i::StorageFlags::empty()
+                            kind, num_levels, format, i::Tiling::Optimal, usage, i::ViewCapabilities::empty()
                             ).unwrap();
                         let requirements = device.get_image_requirements(&unbound);
                         let memory_type = memory_types

@@ -1261,7 +1261,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let view_info = device::ViewInfo {
                             resource: attachment.resource,
                             kind: attachment.kind,
-                            flags: image::StorageFlags::empty(),
+                            caps: image::ViewCapabilities::empty(),
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
                             range: image::SubresourceRange {
@@ -1302,7 +1302,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let view_info = device::ViewInfo {
                             resource: attachment.resource,
                             kind: attachment.kind,
-                            flags: image::StorageFlags::empty(),
+                            caps: image::ViewCapabilities::empty(),
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
                             range: image::SubresourceRange {
@@ -1423,7 +1423,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             &ViewInfo {
                 resource: src.resource,
                 kind: src.kind,
-                flags: src.storage_flags,
+                caps: src.view_caps,
                 view_kind: image::ViewKind::D2Array, // TODO
                 format: src.descriptor.Format,
                 range: image::SubresourceRange {

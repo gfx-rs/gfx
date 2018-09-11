@@ -1,6 +1,4 @@
 use ash::vk;
-use byteorder::{NativeEndian, WriteBytesExt};
-use smallvec::SmallVec;
 
 use hal::{buffer, command, format, image, pass, pso, query};
 use hal::{IndexType, Primitive, PresentMode};
@@ -8,7 +6,7 @@ use hal::range::RangeArg;
 
 use native as n;
 
-use std::{io, mem};
+use std::mem;
 use std::borrow::Borrow;
 use std::ptr;
 
@@ -493,9 +491,9 @@ pub fn map_viewport(vp: &pso::Viewport) -> vk::Viewport {
     }
 }
 
-pub fn map_image_flags(flags: image::StorageFlags) -> vk::ImageCreateFlags {
+pub fn map_view_capabilities(caps: image::ViewCapabilities) -> vk::ImageCreateFlags {
     // the flag values have to match Vulkan
-    unsafe { mem::transmute(flags) }
+    unsafe { mem::transmute(caps) }
 }
 
 pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> PresentMode {

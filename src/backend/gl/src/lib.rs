@@ -300,7 +300,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         _dimensions: u8,
         _tiling: image::Tiling,
         _usage: image::Usage,
-        _storage_flags: image::StorageFlags,
+        _view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         None //TODO
     }

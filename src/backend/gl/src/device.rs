@@ -1042,7 +1042,7 @@ impl d::Device<B> for Device {
         format: Format,
         _tiling: i::Tiling,
         usage: i::Usage,
-        _flags: i::StorageFlags,
+        _view_caps: i::ViewCapabilities,
     ) -> Result<UnboundImage, i::CreationError> {
         let gl = &self.share.context;
 

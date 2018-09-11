@@ -77,7 +77,7 @@ pub(crate) fn shader_bytecode(shader: *mut d3dcommon::ID3DBlob) -> d3d12::D3D12_
 pub(crate) struct ViewInfo {
     pub(crate) resource: *mut d3d12::ID3D12Resource,
     pub(crate) kind: image::Kind,
-    pub(crate) flags: image::StorageFlags,
+    pub(crate) caps: image::ViewCapabilities,
     pub(crate) view_kind: image::ViewKind,
     pub(crate) format: dxgiformat::DXGI_FORMAT,
     pub(crate) range: image::SubresourceRange,
@@ -106,7 +106,7 @@ pub struct UnboundImage {
     kind: image::Kind,
     usage: image::Usage,
     tiling: image::Tiling,
-    storage_flags: image::StorageFlags,
+    view_caps: image::ViewCapabilities,
     //TODO: use hal::format::FormatDesc
     bytes_per_block: u8,
     // Dimension of a texel block (compressed formats).
@@ -834,7 +834,7 @@ impl Device {
 
         assert!(info.range.layers.end <= info.kind.num_layers());
         let is_msaa = info.kind.num_samples() > 1;
-        let is_cube = info.flags.contains(image::StorageFlags::CUBE_VIEW);
+        let is_cube = info.caps.contains(image::ViewCapabilities::KIND_CUBE);
 
         match info.view_kind {
             image::ViewKind::D1 => {
@@ -2133,7 +2133,7 @@ impl d::Device<B> for Device {
         format: format::Format,
         tiling: image::Tiling,
         usage: image::Usage,
-        flags: image::StorageFlags,
+        view_caps: image::ViewCapabilities,
     ) -> Result<UnboundImage, image::CreationError> {
         assert!(mip_levels <= kind.num_levels());
 
@@ -2209,7 +2209,7 @@ impl d::Device<B> for Device {
             kind,
             usage,
             tiling,
-            storage_flags: flags,
+            view_caps,
             bytes_per_block,
             block_dim,
             num_levels: mip_levels,
@@ -2290,7 +2290,7 @@ impl d::Device<B> for Device {
         let info = ViewInfo {
             resource: resource as *mut _,
             kind: image.kind,
-            flags: image::StorageFlags::empty(),
+            caps: image::ViewCapabilities::empty(),
             view_kind: match image.kind {
                 image::Kind::D1(..) => image::ViewKind::D1Array,
                 image::Kind::D2(..) => image::ViewKind::D2Array,
@@ -2331,7 +2331,7 @@ impl d::Device<B> for Device {
             surface_type: image.format.base_format().0,
             kind: image.kind,
             usage: image.usage,
-            storage_flags: image.storage_flags,
+            view_caps: image.view_caps,
             descriptor: image.desc,
             bytes_per_block: image.bytes_per_block,
             block_dim: image.block_dim,
@@ -2402,7 +2402,7 @@ impl d::Device<B> for Device {
         let info = ViewInfo {
             resource: image.resource,
             kind: image.kind,
-            flags: image.storage_flags,
+            caps: image.view_caps,
             view_kind,
             format: conv::map_format(format).ok_or(image::ViewError::BadFormat)?,
             range,
@@ -3207,7 +3207,7 @@ impl d::Device<B> for Device {
                     surface_type,
                     kind,
                     usage: config.image_usage,
-                    storage_flags: image::StorageFlags::empty(),
+                    view_caps: image::ViewCapabilities::empty(),
                     descriptor: d3d12::D3D12_RESOURCE_DESC {
                         Dimension: d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
                         Alignment: 0,
