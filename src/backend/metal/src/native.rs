@@ -210,6 +210,7 @@ impl PipelineLayout {
 pub struct ModuleInfo {
     pub library: metal::Library,
     pub entry_point_map: EntryPointMap,
+    pub rasterization_enabled: bool,
 }
 
 pub struct PipelineCache {
