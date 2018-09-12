@@ -340,7 +340,7 @@ impl Device {
             extent: config.extent,
             last_frame: 0,
             image_ready_callbacks: Vec::new(),
-            acquire_mode: AcquireMode::Wait,
+            acquire_mode: AcquireMode::Oldest,
         };
 
 
