@@ -652,7 +652,10 @@ impl Device {
     }
 
     pub fn create_shader_library_from_source<S>(
-        &self, source: S, version: LanguageVersion,
+        &self,
+        source: S,
+        version: LanguageVersion,
+        rasterization_enabled: bool,
     ) -> Result<n::ShaderModule, ShaderError> where S: AsRef<str> {
         let options = metal::CompileOptions::new();
         let msl_version = match version {
@@ -673,6 +676,7 @@ impl Device {
             .map(|library| n::ShaderModule::Compiled(n::ModuleInfo {
                 library,
                 entry_point_map: n::EntryPointMap::default(),
+                rasterization_enabled,
             }))
             .map_err(|e| ShaderError::CompilationFailed(e.into()))
     }
@@ -737,6 +741,9 @@ impl Device {
             });
         }
 
+        let rasterization_enabled = ast.is_rasterization_enabled()
+            .map_err(|_| ShaderError::CompilationFailed("Unknown compile error".into()))?;
+
         // done
         debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
@@ -751,6 +758,7 @@ impl Device {
         Ok(n::ModuleInfo {
             library,
             entry_point_map,
+            rasterization_enabled,
         })
     }
 
@@ -760,7 +768,7 @@ impl Device {
         layout: &n::PipelineLayout,
         primitive_class: MTLPrimitiveTopologyClass,
         pipeline_cache: Option<&n::PipelineCache>,
-    ) -> Result<(metal::Library, metal::Function, metal::MTLSize), pso::CreationError> {
+    ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool), pso::CreationError> {
         let device = &self.shared.device;
         let msl_version = self.private_caps.msl_version;
         let module_map;
@@ -812,7 +820,7 @@ impl Device {
                 pso::CreationError::Other
             })?;
 
-        Ok((lib, mtl_function, wg_size))
+        Ok((lib, mtl_function, wg_size, info.rasterization_enabled))
     }
 
     fn describe_argument(
@@ -1209,7 +1217,7 @@ impl hal::Device<Backend> for Device {
         pipeline.set_input_primitive_topology(primitive_class);
 
         // Vertex shader
-        let (vs_lib, vs_function, _) = self.load_shader(
+        let (vs_lib, vs_function, _, enable_rasterization) = self.load_shader(
             &pipeline_desc.shaders.vertex,
             pipeline_layout,
             primitive_class,
@@ -1221,7 +1229,7 @@ impl hal::Device<Backend> for Device {
         let fs_function;
         let fs_lib = match pipeline_desc.shaders.fragment {
             Some(ref ep) => {
-                let (lib, fun, _) = self.load_shader(ep, pipeline_layout, primitive_class, cache)?;
+                let (lib, fun, _, _) = self.load_shader(ep, pipeline_layout, primitive_class, cache)?;
                 fs_function = fun;
                 pipeline.set_fragment_function(Some(&fs_function));
                 Some(lib)
@@ -1246,6 +1254,8 @@ impl hal::Device<Backend> for Device {
         if pipeline_desc.shaders.geometry.is_some() {
             return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(pso::Stage::Geometry)));
         }
+
+        pipeline.set_rasterization_enabled(enable_rasterization);
 
         // Assign target formats
         let blend_targets = pipeline_desc.blender.targets
@@ -1428,7 +1438,7 @@ impl hal::Device<Backend> for Device {
         debug!("create_compute_pipeline {:?}", pipeline_desc);
         let pipeline = metal::ComputePipelineDescriptor::new();
 
-        let (cs_lib, cs_function, work_group_size) = self.load_shader(
+        let (cs_lib, cs_function, work_group_size, _) = self.load_shader(
             &pipeline_desc.shader,
             &pipeline_desc.layout,
             MTLPrimitiveTopologyClass::Unspecified,
