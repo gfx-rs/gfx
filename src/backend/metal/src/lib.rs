@@ -48,7 +48,6 @@ use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
 use foreign_types::ForeignTypeRef;
 use objc::runtime::{Class, Object};
-#[cfg(target_os = "ios")]
 use objc::runtime::{BOOL, YES};
 use parking_lot::{Condvar, Mutex};
 
@@ -194,18 +193,31 @@ impl Instance {
                 panic!("window does not have a valid contentView");
             }
 
+            let existing: *mut Object = msg_send![view, layer];
             let class = Class::get("CAMetalLayer").unwrap();
-            let render_layer: *mut Object = msg_send![class, new];
-            msg_send![view, setLayer: render_layer];
-            msg_send![view, retain];
-            let bounds: CGRect = msg_send![view, bounds];
-            msg_send![render_layer, setBounds: bounds];
+            let use_current = if existing.is_null() {
+                false
+            } else {
+                let result: BOOL = msg_send![existing, isKindOfClass:class];
+                result == YES
+            };
 
-            let window: *mut Object = msg_send![view, window];
-            if !window.is_null() {
-                let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
-                msg_send![render_layer, setContentsScale: scale_factor];
-            }
+            let render_layer: *mut Object = if use_current {
+                existing
+            } else {
+                let layer: *mut Object = msg_send![class, new];
+                msg_send![view, setLayer: layer];
+                msg_send![view, retain];
+                let bounds: CGRect = msg_send![view, bounds];
+                msg_send![layer, setBounds: bounds];
+
+                let window: *mut Object = msg_send![view, window];
+                if !window.is_null() {
+                    let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
+                    msg_send![layer, setContentsScale: scale_factor];
+                }
+                layer
+            };
 
             window::SurfaceInner {
                 view,
