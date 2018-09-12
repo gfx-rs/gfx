@@ -18,6 +18,9 @@ use objc::rc::autoreleasepool;
 use objc::runtime::Object;
 
 
+//TODO: make it a weak pointer, so that we know which
+// frames can be replaced if we receive an unknown
+// texture pointer by an acquired drawable.
 pub type CAMetalLayer = *mut Object;
 
 pub struct Surface {
@@ -27,9 +30,9 @@ pub struct Surface {
 }
 
 #[derive(Debug)]
-pub(crate) struct SurfaceInner {
-    pub(crate) view: *mut Object,
-    pub(crate) render_layer: Mutex<CAMetalLayer>,
+pub struct SurfaceInner {
+    view: *mut Object,
+    render_layer: Mutex<CAMetalLayer>,
 }
 
 unsafe impl Send for SurfaceInner {}
@@ -41,8 +44,16 @@ impl Drop for SurfaceInner {
     }
 }
 
+
 impl SurfaceInner {
-    pub(crate) fn into_surface(self) -> Surface {
+    pub fn new(view: *mut Object, layer: CAMetalLayer) -> Self {
+        SurfaceInner {
+            view,
+            render_layer: Mutex::new(layer),
+        }
+    }
+
+    pub fn into_surface(self) -> Surface {
         Surface {
             inner: Arc::new(self),
             main_thread_id: thread::current().id(),
@@ -72,7 +83,20 @@ impl SurfaceInner {
             }
         })
     }
+
+    fn dimensions(&self) -> Extent2D {
+        unsafe {
+            // NSView/UIView bounds are measured in DIPs
+            let bounds: CGRect = msg_send![self.view, bounds];
+            //let bounds_pixel: NSRect = msg_send![self.nsview, convertRectToBacking:bounds];
+            Extent2D {
+                width: bounds.size.width as _,
+                height: bounds.size.height as _,
+            }
+        }
+    }
 }
+
 
 #[derive(Debug)]
 struct FrameInner {
@@ -234,20 +258,6 @@ impl hal::Surface<Backend> for Surface {
     }
 }
 
-impl SurfaceInner {
-    fn dimensions(&self) -> Extent2D {
-        unsafe {
-            // NSView/UIView bounds are measured in DIPs
-            let bounds: CGRect = msg_send![self.view, bounds];
-            //let bounds_pixel: NSRect = msg_send![self.nsview, convertRectToBacking:bounds];
-            Extent2D {
-                width: bounds.size.width as _,
-                height: bounds.size.height as _,
-            }
-        }
-    }
-}
-
 impl Device {
     pub(crate) fn build_swapchain(
         &self,
@@ -342,7 +352,6 @@ impl Device {
             image_ready_callbacks: Vec::new(),
             acquire_mode: AcquireMode::Oldest,
         };
-
 
         (swapchain, Backbuffer::Images(images))
     }

@@ -219,10 +219,7 @@ impl Instance {
                 layer
             };
 
-            window::SurfaceInner {
-                view,
-                render_layer: Mutex::new(render_layer),
-            }
+            window::SurfaceInner::new(view, render_layer)
         }
     }
 
@@ -271,10 +268,7 @@ impl Instance {
             msg_send![view, setContentScaleFactor: scale_factor];
 
             msg_send![view, retain];
-            window::SurfaceInner {
-                view,
-                render_layer: Mutex::new(render_layer),
-            }
+            window::SurfaceInner::new(view, render_layer)
         }
     }
 
