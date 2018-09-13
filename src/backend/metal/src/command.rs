@@ -588,8 +588,11 @@ impl StageResources {
                     pool_offsets.textures += 1;
                 }
                 if layout.content.contains(native::DescriptorContent::BUFFER) {
-                    let (buffer, offset) = data.buffers[pool_offsets.buffers as usize].unwrap();
-                    self.buffers[res_offset.buffers as usize] = Some(buffer);
+                    let (buffer, offset) = match data.buffers[pool_offsets.buffers as usize] {
+                        Some((buffer, offset)) => (Some(buffer), offset),
+                        None => (None, 0),
+                    };
+                    self.buffers[res_offset.buffers as usize] = buffer;
                     self.buffer_offsets[res_offset.buffers as usize] = offset;
                     res_offset.buffers += 1;
                     pool_offsets.buffers += 1;
@@ -1782,8 +1785,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         for (swapchain, index) in swapchains {
             debug!("presenting frame {}", index);
-            let drawable = swapchain.borrow().take_drawable(index);
-            command_buffer.present_drawable(&drawable);
+            if let Ok(drawable) = swapchain.borrow().take_drawable(index) {
+                command_buffer.present_drawable(&drawable);
+            }
         }
 
         command_buffer.commit();

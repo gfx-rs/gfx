@@ -18,6 +18,9 @@ use objc::rc::autoreleasepool;
 use objc::runtime::Object;
 
 
+//TODO: make it a weak pointer, so that we know which
+// frames can be replaced if we receive an unknown
+// texture pointer by an acquired drawable.
 pub type CAMetalLayer = *mut Object;
 
 pub struct Surface {
@@ -27,9 +30,9 @@ pub struct Surface {
 }
 
 #[derive(Debug)]
-pub(crate) struct SurfaceInner {
-    pub(crate) view: *mut Object,
-    pub(crate) render_layer: Mutex<CAMetalLayer>,
+pub struct SurfaceInner {
+    view: *mut Object,
+    render_layer: Mutex<CAMetalLayer>,
 }
 
 unsafe impl Send for SurfaceInner {}
@@ -41,8 +44,22 @@ impl Drop for SurfaceInner {
     }
 }
 
+#[derive(Debug)]
+struct FrameNotFound {
+    drawable: metal::Drawable,
+    texture: metal::Texture,
+}
+
+
 impl SurfaceInner {
-    pub(crate) fn into_surface(self) -> Surface {
+    pub fn new(view: *mut Object, layer: CAMetalLayer) -> Self {
+        SurfaceInner {
+            view,
+            render_layer: Mutex::new(layer),
+        }
+    }
+
+    pub fn into_surface(self) -> Surface {
         Surface {
             inner: Arc::new(self),
             main_thread_id: thread::current().id(),
@@ -50,7 +67,7 @@ impl SurfaceInner {
         }
     }
 
-    fn next_frame<'a>(&self, frames: &'a [Frame]) -> Result<(usize, MutexGuard<'a, FrameInner>), ()> {
+    fn next_frame<'a>(&self, frames: &'a [Frame]) -> Result<(usize, MutexGuard<'a, FrameInner>), FrameNotFound> {
         let layer_ref = self.render_layer.lock();
         autoreleasepool(|| { // for the drawable
             let (drawable, texture_temp): (&metal::DrawableRef, &metal::TextureRef) = unsafe {
@@ -68,11 +85,27 @@ impl SurfaceInner {
                     debug!("next is frame[{}]", index);
                     Ok((index, frame))
                 }
-                None => Err(()),
+                None => Err(FrameNotFound {
+                    drawable: drawable.to_owned(),
+                    texture: texture_temp.to_owned(),
+                }),
             }
         })
     }
+
+    fn dimensions(&self) -> Extent2D {
+        unsafe {
+            // NSView/UIView bounds are measured in DIPs
+            let bounds: CGRect = msg_send![self.view, bounds];
+            //let bounds_pixel: NSRect = msg_send![self.nsview, convertRectToBacking:bounds];
+            Extent2D {
+                width: bounds.size.width as _,
+                height: bounds.size.height as _,
+            }
+        }
+    }
 }
+
 
 #[derive(Debug)]
 struct FrameInner {
@@ -81,6 +114,9 @@ struct FrameInner {
     /// If there is `None`, `available == false` means that the frame has already
     /// been acquired and the `drawable` will appear at some point.
     available: bool,
+    /// Stays true for as long as the drawable is circulating through the
+    /// CAMetalLayer's frame queue.
+    linked: bool,
     last_frame: usize,
 }
 
@@ -128,16 +164,23 @@ impl Drop for Swapchain {
 impl Swapchain {
     /// Returns the drawable for the specified swapchain image index,
     /// marks the index as free for future use.
-    pub(crate) fn take_drawable(&self, index: hal::SwapImageIndex) -> metal::Drawable {
+    pub(crate) fn take_drawable(&self, index: hal::SwapImageIndex) -> Result<metal::Drawable, ()> {
         let mut frame = self
             .frames[index as usize]
             .inner
             .lock();
-        assert!(!frame.available);
-        frame.available = true;
-        frame.drawable
-            .take()
-            .expect("Drawable has not been acquired!")
+        assert!(!frame.available && frame.linked);
+
+        match frame.drawable.take() {
+            Some(drawable) => {
+                frame.available = true;
+                Ok(drawable)
+            }
+            None => {
+                frame.linked = false;
+                Err(())
+            }
+        }
     }
 
     fn signal_sync(&self, sync: hal::FrameSync<Backend>) {
@@ -175,10 +218,21 @@ impl SwapchainImage {
         }
         // wait for new frames to come until we meet the chosen one
         let mut count = 1;
-        while self.surface.next_frame(&self.frames).unwrap().0 != self.index as usize {
-            count += 1;
-        }
-        debug!("Swapchain image is ready after {} frames", count);
+        loop {
+            match self.surface.next_frame(&self.frames) {
+                Ok((index, _)) if index == self.index as usize => {
+                    debug!("Swapchain image is ready after {} frames", count);
+                    break
+                }
+                Ok(_) => {
+                    count += 1;
+                }
+                Err(_e) => {
+                    debug!("Swapchain drawables are changed");
+                    break
+                }
+            }
+        }        
         count
     }
 }
@@ -231,20 +285,6 @@ impl hal::Surface<Backend> for Surface {
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         // we only expose one family atm, so it's compatible
         true
-    }
-}
-
-impl SurfaceInner {
-    fn dimensions(&self) -> Extent2D {
-        unsafe {
-            // NSView/UIView bounds are measured in DIPs
-            let bounds: CGRect = msg_send![self.view, bounds];
-            //let bounds_pixel: NSRect = msg_send![self.nsview, convertRectToBacking:bounds];
-            Extent2D {
-                width: bounds.size.width as _,
-                height: bounds.size.height as _,
-            }
-        }
     }
 }
 
@@ -313,6 +353,7 @@ impl Device {
                     inner: Mutex::new(FrameInner {
                         drawable,
                         available: true,
+                        linked: true,
                         last_frame: 0,
                     }),
                     texture: texture.to_owned(),
@@ -340,9 +381,8 @@ impl Device {
             extent: config.extent,
             last_frame: 0,
             image_ready_callbacks: Vec::new(),
-            acquire_mode: AcquireMode::Wait,
+            acquire_mode: AcquireMode::Oldest,
         };
-
 
         (swapchain, Backbuffer::Images(images))
     }
@@ -404,6 +444,9 @@ impl hal::Swapchain<Backend> for Swapchain {
                 }
 
                 let frame = self.frames[oldest_index].inner.lock();
+                if !frame.linked {
+                    return Err(hal::AcquireError::OutOfDate);
+                }
                 (oldest_index, frame)
             }
         };
