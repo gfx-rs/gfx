@@ -1785,8 +1785,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         for (swapchain, index) in swapchains {
             debug!("presenting frame {}", index);
-            let drawable = swapchain.borrow().take_drawable(index);
-            command_buffer.present_drawable(&drawable);
+            if let Ok(drawable) = swapchain.borrow().take_drawable(index) {
+                command_buffer.present_drawable(&drawable);
+            }
         }
 
         command_buffer.commit();
