@@ -2313,7 +2313,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let pso; // has to live at least as long as all the commands
             let depth_stencil;
 
-            let (com_clear, target_index) = match *clear.borrow() {
+            let borrowed_clear = clear.borrow();
+            //Note: ^ has to live at least as long as the command
+            let (com_clear, target_index) = match *borrowed_clear {
                 com::AttachmentClear::Color { index, value } => {
                     let channel = self.state.target_formats.colors[index].1;
                     //Note: technically we should be able to derive the Channel from the
