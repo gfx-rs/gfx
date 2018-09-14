@@ -2312,16 +2312,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         for clear in clears {
             let pso; // has to live at least as long as all the commands
             let depth_stencil;
+            let raw_value;
 
-            let borrowed_clear = clear.borrow();
-            //Note: ^ has to live at least as long as the command
-            let (com_clear, target_index) = match *borrowed_clear {
+            let (com_clear, target_index) = match *clear.borrow() {
                 com::AttachmentClear::Color { index, value } => {
                     let channel = self.state.target_formats.colors[index].1;
                     //Note: technically we should be able to derive the Channel from the
                     // `value` variant, but this is blocked by the portability that is
                     // always passing the attachment clears as `ClearColor::Float` atm.
-                    let raw_value = com::ClearColorRaw::from(value);
+                    raw_value = com::ClearColorRaw::from(value);
                     let com = soft::RenderCommand::BindBufferData {
                         stage: pso::Stage::Fragment,
                         index: 0,
