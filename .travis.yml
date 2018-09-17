@@ -32,6 +32,12 @@ before_install:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install sdl2; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew outdated cmake || brew upgrade cmake; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then rustup target add asmjs-unknown-emscripten ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then rustup target add wasm32-unknown-emscripten ; fi
+  # The binary emsdk packages don't work as they are built to expect GLIBCXX_3.4.21 which isn't
+  # installed in the build environment. Instead, use a docker image with emsdk installed.
+  # See https://kripken.github.io/emscripten-site/docs/compiling/Travis.html
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then scripts/travis-emscripten-docker-setup.sh ; fi
 
 addons:
   apt:
@@ -68,3 +74,5 @@ script:
   - cargo test -p gfx_window_glutin $HEADLESS_FEATURE
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --all --features vulkan; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --all --features metal; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker exec -it emscripten cargo test --all --target=asmjs-unknown-emscripten ; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker exec -it emscripten cargo test --all --target=wasm32-unknown-emscripten ; fi
