@@ -90,8 +90,7 @@ unsafe impl<'a, B: Backend, C, L: Level> Submittable<'a, B, C, L> for &'a Submit
 }
 
 /// A convenience alias for not typing out the full signature of a secondary command buffer.
-#[allow(type_alias_bounds)]
-pub type SecondaryCommandBuffer<'a, B: Backend, C, S: Shot = OneShot> = CommandBuffer<'a, B, C, S, Secondary>;
+pub type SecondaryCommandBuffer<'a, B, C, S = OneShot> = CommandBuffer<'a, B, C, S, Secondary>;
 
 /// A strongly-typed command buffer that will only implement methods that are valid for the operations
 /// it supports.
