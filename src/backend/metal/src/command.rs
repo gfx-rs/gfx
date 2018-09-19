@@ -1779,18 +1779,19 @@ impl RawCommandQueue<Backend> for CommandQueue {
         self.wait(wait_semaphores);
 
         let queue = self.shared.queue.lock();
-        let command_buffer = queue.raw.new_command_buffer();
-        command_buffer.set_label("present");
-        self.record_empty(command_buffer);
+        autoreleasepool(|| {
+            let command_buffer = queue.raw.new_command_buffer();
+            command_buffer.set_label("present");
+            self.record_empty(command_buffer);
 
-        for (swapchain, index) in swapchains {
-            debug!("presenting frame {}", index);
-            if let Ok(drawable) = swapchain.borrow().take_drawable(index) {
-                command_buffer.present_drawable(&drawable);
+            for (swapchain, index) in swapchains {
+                debug!("presenting frame {}", index);
+                if let Ok(drawable) = swapchain.borrow().take_drawable(index) {
+                    command_buffer.present_drawable(&drawable);
+                }
             }
-        }
-
-        command_buffer.commit();
+            command_buffer.commit();
+        });
 
         if let Some(ref mut counters) = self.perf_counters {
             counters.frame += 1;

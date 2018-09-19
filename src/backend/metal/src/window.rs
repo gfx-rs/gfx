@@ -3,6 +3,7 @@ use device::{Device, PhysicalDevice};
 use internal::Channel;
 use native;
 
+use std::ptr::NonNull;
 use std::sync::Arc;
 use std::thread;
 
@@ -31,7 +32,7 @@ pub struct Surface {
 
 #[derive(Debug)]
 pub struct SurfaceInner {
-    view: *mut Object,
+    view: Option<NonNull<Object>>,
     render_layer: Mutex<CAMetalLayer>,
 }
 
@@ -40,7 +41,13 @@ unsafe impl Sync for SurfaceInner {}
 
 impl Drop for SurfaceInner {
     fn drop(&mut self) {
-        unsafe { msg_send![self.view, release]; }
+        let object = match self.view {
+            Some(view) => view.as_ptr(),
+            None => *self.render_layer.lock(),
+        };
+        unsafe {
+            msg_send![object, release];
+        }
     }
 }
 
@@ -52,7 +59,7 @@ struct FrameNotFound {
 
 
 impl SurfaceInner {
-    pub fn new(view: *mut Object, layer: CAMetalLayer) -> Self {
+    pub fn new(view: Option<NonNull<Object>>, layer: CAMetalLayer) -> Self {
         SurfaceInner {
             view,
             render_layer: Mutex::new(layer),
@@ -94,14 +101,18 @@ impl SurfaceInner {
     }
 
     fn dimensions(&self) -> Extent2D {
-        unsafe {
-            // NSView/UIView bounds are measured in DIPs
-            let bounds: CGRect = msg_send![self.view, bounds];
-            //let bounds_pixel: NSRect = msg_send![self.nsview, convertRectToBacking:bounds];
-            Extent2D {
-                width: bounds.size.width as _,
-                height: bounds.size.height as _,
-            }
+        let size = match self.view {
+            Some(view) => unsafe {
+                let bounds: CGRect = msg_send![view.as_ptr(), bounds];
+                bounds.size
+            },
+            None => unsafe {
+                msg_send![*self.render_layer.lock(), drawableSize]
+            },
+        };
+        Extent2D {
+            width: size.width as _,
+            height: size.height as _,
         }
     }
 }
@@ -430,7 +441,9 @@ impl hal::Swapchain<Backend> for Swapchain {
                     hal::FrameSync::Semaphore(semaphore) => {
                         self.image_ready_callbacks.push(Arc::clone(&semaphore.image_ready));
                         let mut sw_image = semaphore.image_ready.lock();
-                        assert!(sw_image.is_none());
+                        if let Some(ref swi) = *sw_image {
+                            warn!("frame {} hasn't been waited upon", swi.index);
+                        }
                         *sw_image = Some(SwapchainImage {
                             frames: self.frames.clone(),
                             surface: self.surface.clone(),
