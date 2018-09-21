@@ -6,19 +6,17 @@ use winit;
 
 use winapi::shared::dxgi1_4;
 use winapi::shared::windef::{HWND, RECT};
-use winapi::um::d3d12;
 use winapi::um::winuser::GetClientRect;
-use wio::com::ComPtr;
 
 use hal::{self, format as f, image as i};
-use {native as n, Backend, Instance, PhysicalDevice, QueueFamily};
+use {native, resource as r, Backend, Instance, PhysicalDevice, QueueFamily};
 
 use std::os::raw::c_void;
 
 impl Instance {
     pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
         Surface {
-            factory: self.factory.clone(),
+            factory: self.factory,
             wnd_handle: hwnd as *mut _,
         }
     }
@@ -31,7 +29,7 @@ impl Instance {
 }
 
 pub struct Surface {
-    pub(crate) factory: ComPtr<dxgi1_4::IDXGIFactory4>,
+    pub(crate) factory: native::WeakPtr<dxgi1_4::IDXGIFactory4>,
     pub(crate) wnd_handle: HWND,
 }
 
@@ -106,14 +104,14 @@ impl hal::Surface<Backend> for Surface {
 }
 
 pub struct Swapchain {
-    pub(crate) inner: ComPtr<dxgi1_4::IDXGISwapChain3>,
+    pub(crate) inner: native::WeakPtr<dxgi1_4::IDXGISwapChain3>,
     pub(crate) next_frame: usize,
     pub(crate) frame_queue: VecDeque<usize>,
     #[allow(dead_code)]
-    pub(crate) rtv_heap: n::DescriptorHeap,
+    pub(crate) rtv_heap: r::DescriptorHeap,
     // need to associate raw image pointers with the swapchain so they can be properly released
     // when the swapchain is destroyed
-    pub(crate) _resources: Vec<ComPtr<d3d12::ID3D12Resource>>,
+    pub(crate) resources: Vec<native::Resource>,
 }
 
 impl hal::Swapchain<Backend> for Swapchain {
