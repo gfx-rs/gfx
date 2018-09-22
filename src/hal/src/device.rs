@@ -103,7 +103,7 @@ impl fmt::Display for ShaderError {
             ShaderError::InterfaceMismatch(ref msg)
                 => write!(f, "shader interface mismatch: {}", msg),
             ShaderError::UnsupportedStage(stage)
-                => write!(f, "shader stage {} is unsupported", stage),
+                => write!(f, "shader stage \"{}\" is unsupported", stage),
         }
     }
 }
