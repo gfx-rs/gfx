@@ -25,7 +25,7 @@ pub struct Surface {
     pub(crate) samples: NumSamples,
 }
 
-pub struct RawSurface {
+pub(crate) struct RawSurface {
     pub(crate) handle: vk::SurfaceKHR,
     functor: ext::Surface,
     pub(crate) instance: Arc<RawInstance>,
