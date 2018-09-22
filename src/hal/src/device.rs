@@ -93,21 +93,34 @@ pub enum ShaderError {
     UnsupportedStage(pso::Stage),
 }
 
+impl fmt::Display for ShaderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            ShaderError::CompilationFailed(ref msg)
+                => write!(f, "shader compilation failed: {}", msg),
+            ShaderError::MissingEntryPoint(ref msg)
+                => write!(f, "shader is missing an entry point: {}", msg),
+            ShaderError::InterfaceMismatch(ref msg)
+                => write!(f, "shader interface mismatch: {}", msg),
+            ShaderError::UnsupportedStage(stage)
+                => write!(f, "shader stage {} is unsupported", stage),
+        }
+    }
+}
+
+impl Error for ShaderError {}
+
 /// An error from creating a framebuffer.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FramebufferError;
 
 impl fmt::Display for FramebufferError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description())
+        write!(f, "Error creating framebuffer")
     }
 }
 
-impl Error for FramebufferError {
-    fn description(&self) -> &str {
-        "Error creating framebuffer"
-    }
-}
+impl Error for FramebufferError {}
 
 
 /// # Overview
