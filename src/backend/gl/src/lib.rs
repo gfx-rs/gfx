@@ -127,6 +127,9 @@ impl ResourceView {
             owned: true,
         }
     }
+    pub fn gl_texture(&self) -> Texture {
+        self.object
+    }
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
