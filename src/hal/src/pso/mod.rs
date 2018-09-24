@@ -1,6 +1,6 @@
 //! Raw Pipeline State Objects
 //!
-//! This module contains items used to create and manage Pipelines. 
+//! This module contains items used to create and manage Pipelines.
 
 use {device, pass};
 use std::error::Error;
@@ -145,6 +145,19 @@ impl From<Stage> for ShaderStageFlags {
     }
 }
 
+impl fmt::Display for Stage {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str(match self {
+            Stage::Vertex => "vertex",
+            Stage::Hull => "hull",
+            Stage::Domain => "domain",
+            Stage::Geometry => "geometry",
+            Stage::Fragment => "fragment",
+            Stage::Compute => "compute"
+        })
+    }
+}
+
 
 /// Shader entry point.
 #[derive(Debug, Copy)]
@@ -184,7 +197,7 @@ bitflags!(
 
 /// A reference to a parent pipeline.  The assumption is that
 /// a parent and derivative/child pipeline have most settings
-/// in common, and one may be switched for another more quickly 
+/// in common, and one may be switched for another more quickly
 /// than entirely unrelated pipelines would be.
 #[derive(Debug)]
 pub enum BasePipeline<'a, P: 'a> {
@@ -199,14 +212,14 @@ pub enum BasePipeline<'a, P: 'a> {
 }
 
 /// Specialization constant for pipelines.
-/// 
-/// Specialization constants allow for easy configuration of 
-/// multiple similar pipelines. For example, there may be a 
+///
+/// Specialization constants allow for easy configuration of
+/// multiple similar pipelines. For example, there may be a
 /// boolean exposed to the shader that switches the specularity on/off
 /// provided via a specialization constant.
-/// That would produce separate PSO's for the "on" and "off" states 
-/// but they share most of the internal stuff and are fast to produce. 
-/// More importantly, they are fast to execute, since the driver 
+/// That would produce separate PSO's for the "on" and "off" states
+/// but they share most of the internal stuff and are fast to produce.
+/// More importantly, they are fast to execute, since the driver
 /// can optimize out the branch on that other PSO creation.
 #[derive(Debug, Clone)]
 pub struct SpecializationConstant {
