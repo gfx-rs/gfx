@@ -18,11 +18,11 @@ fn main() {
     };
     let arch = &target[..target.chars().position(|c| c == '-').unwrap()];
 
-    let sdk_name = match (os, arch) {
-        ("ios", "aarch64") => "iphoneos",
+    let (sdk_name, platform_args): (_, &[_]) = match (os, arch) {
+        ("ios", "aarch64") => ("iphoneos", &["-mios-version-min=8.0"]),
         ("ios", "armv7s") | ("ios", "armv7") => panic!("32-bit iOS does not have metal support"),
         ("ios", "i386") | ("ios", "x86_64") => panic!("iOS simulator does not have metal support"),
-        ("darwin", _) => "macosx",
+        ("darwin", _) => ("macosx", &["-mmacosx-version-min=10.11"]),
         _ => panic!("unsupported target {}", target),
     };
 
@@ -59,6 +59,7 @@ fn main() {
             .arg(shader_path.as_os_str())
             .arg("-o")
             .arg(out_path.as_os_str())
+            .args(platform_args)
             .status()
             .expect("failed to execute metal compiler");
 
