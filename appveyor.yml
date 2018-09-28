@@ -21,7 +21,8 @@ skip_commits:
     - LICENSE-APACHE
     - LICENSE-MIT
     - '*.md'
-    - src/backend/metal/*
+    # TODO: this breaks bors on metal only commits
+    #- src/backend/metal/**/*
 
 install:
   - curl -sSf -o rustup-init.exe https://win.rustup.rs
