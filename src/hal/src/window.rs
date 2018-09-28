@@ -53,11 +53,52 @@ use Backend;
 use image;
 use format::Format;
 use queue::CommandQueue;
+use device;
 
 use std::any::Any;
 use std::borrow::Borrow;
 use std::ops::Range;
 
+/// Error occurred during swapchain creation.
+#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+pub enum CreationError {
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
+    /// Device is lost
+    #[fail(display = "{}", _0)]
+    DeviceLost(device::DeviceLost),
+    /// Surface is lost
+    #[fail(display = "{}", _0)]
+    SurfaceLost(device::SurfaceLost),
+    /// Window in use
+    #[fail(display = "{}", _0)]
+    WindowInUse(device::WindowInUse),
+}
+
+impl From<device::OutOfMemory> for CreationError {
+    fn from(error: device::OutOfMemory) -> Self {
+        CreationError::OutOfMemory(error)
+    }
+}
+
+impl From<device::DeviceLost> for CreationError {
+    fn from(error: device::DeviceLost) -> Self {
+        CreationError::DeviceLost(error)
+    }
+}
+
+impl From<device::SurfaceLost> for CreationError {
+    fn from(error: device::SurfaceLost) -> Self {
+        CreationError::SurfaceLost(error)
+    }
+}
+
+impl From<device::WindowInUse> for CreationError {
+    fn from(error: device::WindowInUse) -> Self {
+        CreationError::WindowInUse(error)
+    }
+}
 
 /// An extent describes the size of a rectangle, such as
 /// a window or texture. It is not used for referring to a
@@ -289,7 +330,6 @@ pub enum Backbuffer<B: Backend> {
     Framebuffer(B::Framebuffer),
 }
 
-
 /// Error on acquiring the next image from a swapchain.
 #[derive(Debug)]
 pub enum AcquireError {
@@ -298,7 +338,7 @@ pub enum AcquireError {
     /// The swapchain is no longer in sync with the surface, needs to be re-created.
     OutOfDate,
     /// The surface was lost, and the swapchain is no longer usable.
-    SurfaceLost,
+    SurfaceLost(device::SurfaceLost),
 }
 
 /// The `Swapchain` is the backend representation of the surface.

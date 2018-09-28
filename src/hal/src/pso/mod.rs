@@ -3,7 +3,6 @@
 //! This module contains items used to create and manage Pipelines.
 
 use {device, pass};
-use std::error::Error;
 use std::fmt;
 use std::ops::Range;
 
@@ -22,34 +21,21 @@ pub use self::output_merger::*;
 use Backend;
 
 /// Error types happening upon PSO creation on the device side.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Fail)]
 pub enum CreationError {
     /// Unknown other error.
+    #[fail(display = "Unknown other error")]
     Other,
     /// Invalid subpass (not part of renderpass).
+    #[fail(display = "Invalid subpass index: {}", _0)]
     InvalidSubpass(pass::SubpassId),
     /// Shader compilation error.
+    #[fail(display = "Shader compilation error: {}", _0)]
     Shader(device::ShaderError),
-}
 
-impl fmt::Display for CreationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            CreationError::InvalidSubpass(id) => write!(f, "{}: {:?}", self.description(), id),
-            CreationError::Shader(ref err) => write!(f, "{}: {:?}", self.description(), err),
-            _ => write!(f, "{}", self.description()),
-        }
-    }
-}
-
-impl Error for CreationError {
-    fn description(&self) -> &str {
-        match *self {
-            CreationError::Other => "Unknown other error.",
-            CreationError::InvalidSubpass(_) => "Invalid subpass index.",
-            CreationError::Shader(_) => "Shader compilation error.",
-        }
-    }
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
 }
 
 bitflags!(

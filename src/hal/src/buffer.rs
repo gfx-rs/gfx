@@ -6,8 +6,7 @@
 //! They can be used as shader resources, vertex buffers, index buffers or for
 //! specifying the action commands for indirect execution.
 
-use {format, IndexType, Backend};
-
+use {device, format, IndexType, Backend};
 
 /// An offset inside a buffer, in bytes.
 pub type Offset = u64;
@@ -18,14 +17,10 @@ pub type State = Access;
 /// Error creating a buffer.
 #[derive(Fail, Debug, Clone, PartialEq, Eq)]
 pub enum CreationError {
-    /// Memory allocation on the host side failed.
-    /// This could be caused by a lack of memory.
-    #[fail(display = "Host memory allocation failed.")]
-    OutOfHostMemory,
-    /// Memory allocation on the device side failed.
-    /// This could be caused by a lack of memory.
-    #[fail(display = "Device memory allocation failed.")]
-    OutOfDeviceMemory,
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
+
     /// Requested buffer usage is not supported.
     ///
     /// Older GL version don't support constant buffers or multiple usage flags.
@@ -36,23 +31,31 @@ pub enum CreationError {
     },
 }
 
+impl From<device::OutOfMemory> for CreationError {
+    fn from(error: device::OutOfMemory) -> Self {
+        CreationError::OutOfMemory(error)
+    }
+}
+
 /// Error creating a buffer view.
 #[derive(Fail, Debug, Clone, PartialEq, Eq)]
 pub enum ViewCreationError {
-    /// Memory allocation on the host side failed.
-    /// This could be caused by a lack of memory.
-    #[fail(display = "Host memory allocation failed.")]
-    OutOfHostMemory,
-    /// Memory allocation on the device side failed.
-    /// This could be caused by a lack of memory.
-    #[fail(display = "Device memory allocation failed.")]
-    OutOfDeviceMemory,
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
+
     /// Buffer view format is not supported.
     #[fail(display = "Buffer view format unsupported ({:?}).", format)]
     UnsupportedFormat {
         /// Unsupported format passed on view creation.
         format: Option<format::Format>,
     },
+}
+
+impl From<device::OutOfMemory> for ViewCreationError {
+    fn from(error: device::OutOfMemory) -> Self {
+        ViewCreationError::OutOfMemory(error)
+    }
 }
 
 bitflags!(

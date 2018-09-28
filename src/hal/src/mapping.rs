@@ -1,37 +1,31 @@
 #![deny(missing_docs, missing_copy_implementations)]
 
 //! Memory mapping
-use std::error::Error as StdError;
-use std::fmt;
 use std::ops::{self, Range};
 use Backend;
+use device;
 
 // TODO
 /// Error accessing a mapping.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Fail)]
 pub enum Error {
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
     /// The requested mapping access did not match the expected usage.
+    #[fail(display = "The requested mapping access did not match the expected usage")]
     InvalidAccess,
     /// The requested mapping range is outside of the resource.
+    #[fail(display = "The requested mapping range is outside of the resource")]
     OutOfBounds,
-    /// There is not enough memory to provide the requested mapping.
-    OutOfMemory,
+    /// Failed to map memory range.
+    #[fail(display = "Unable to allocate an appropriately sized contiguous virtual address")]
+    MappingFailed,
 }
 
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description())
-    }
-}
-
-impl StdError for Error {
-    fn description(&self) -> &str {
-        use self::Error::*;
-        match *self {
-            InvalidAccess => "The requested mapping access did not match the expected usage",
-            OutOfBounds => "The requested mapping range is outside of the resource",
-            OutOfMemory => "Not enough physical or virtual memory",
-        }
+impl From<device::OutOfMemory> for Error {
+    fn from(error: device::OutOfMemory) -> Self {
+        Error::OutOfMemory(error)
     }
 }
 
