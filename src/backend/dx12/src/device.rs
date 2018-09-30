@@ -1052,15 +1052,9 @@ impl d::Device<B> for Device {
         _create_flags: CommandPoolCreateFlags,
     ) -> RawCommandPool {
         let list_type = QUEUE_FAMILIES[family.0].native_type();
-        let (command_allocator, hr) = self.raw.create_command_allocator(list_type);
-
-        // TODO: error handling
-        if !winerror::SUCCEEDED(hr) {
-            error!("error on command allocator creation: {:x}", hr);
-        }
 
         RawCommandPool {
-            raw: command_allocator,
+            allocators: Vec::new(),
             device: self.raw,
             list_type,
             shared: self.shared.clone(),
@@ -1068,9 +1062,7 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_command_pool(&self, pool: RawCommandPool) {
-        unsafe {
-            pool.raw.destroy();
-        }
+        pool.destroy();
     }
 
     fn create_render_pass<'a, IA, IS, ID>(
