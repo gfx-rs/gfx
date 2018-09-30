@@ -337,7 +337,7 @@ pub enum IndexType {
 /// An instantiated backend.
 ///
 /// Any startup the backend needs to perform will be done when creating the type that implements
-/// this type.
+/// `Instance`.
 ///
 /// # Examples
 ///
