@@ -839,6 +839,6 @@ pub struct Instance;
 impl hal::Instance for Instance {
     type Backend = Backend;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
-        unimplemented!()
+        vec![]
     }
 }
