@@ -21,7 +21,7 @@ use native::command_list::IndirectArgument;
 use native::descriptor;
 use native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
 
-use pool::RawCommandPool;
+use pool::{CommandPoolAllocator, RawCommandPool};
 use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
 use {
@@ -1049,18 +1049,26 @@ impl d::Device<B> for Device {
     fn create_command_pool(
         &self,
         family: QueueFamilyId,
-        _create_flags: CommandPoolCreateFlags,
+        create_flags: CommandPoolCreateFlags,
     ) -> RawCommandPool {
         let list_type = QUEUE_FAMILIES[family.0].native_type();
-        let (command_allocator, hr) = self.raw.create_command_allocator(list_type);
 
-        // TODO: error handling
-        if !winerror::SUCCEEDED(hr) {
-            error!("error on command allocator creation: {:x}", hr);
-        }
+        let allocator = if create_flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
+            // Allocators are created per individual ID3D12GraphicsCommandList
+            CommandPoolAllocator::Individual(Vec::new())
+        } else {
+            let (command_allocator, hr) = self.raw.create_command_allocator(list_type);
+
+            // TODO: error handling
+            if !winerror::SUCCEEDED(hr) {
+                error!("error on command allocator creation: {:x}", hr);
+            }
+
+            CommandPoolAllocator::Shared(command_allocator)
+        };
 
         RawCommandPool {
-            raw: command_allocator,
+            allocator,
             device: self.raw,
             list_type,
             shared: self.shared.clone(),
@@ -1068,9 +1076,7 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_command_pool(&self, pool: RawCommandPool) {
-        unsafe {
-            pool.raw.destroy();
-        }
+        pool.destroy();
     }
 
     fn create_render_pass<'a, IA, IS, ID>(

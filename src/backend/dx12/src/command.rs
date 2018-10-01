@@ -1044,7 +1044,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn reset(&mut self, _release_resources: bool) {
+    fn reset(&mut self, release_resources: bool) {
+        if release_resources {
+            unsafe { self.allocator.Reset(); }
+        }
         self.reset();
     }
 
