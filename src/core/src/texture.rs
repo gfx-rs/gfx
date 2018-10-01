@@ -491,12 +491,16 @@ pub struct SamplerInfo {
     /// This bias is added to every computed mipmap level (N + lod_bias). For
     /// example, if it would select mipmap level 2 and lod_bias is 1, it will
     /// use mipmap level 3.
+    #[cfg_attr(feature = "serialize", serde(default = "SamplerInfo::def_lod_bias"))]
     pub lod_bias: Lod,
     /// This range is used to clamp LOD level used for sampling.
+    #[cfg_attr(feature = "serialize", serde(default = "SamplerInfo::def_lod_range"))]
     pub lod_range: (Lod, Lod),
     /// Comparison mode, used primary for a shadow map.
+    #[cfg_attr(feature = "serialize", serde(default))]
     pub comparison: Option<state::Comparison>,
     /// Border color is used when one of the wrap modes is set to border.
+    #[cfg_attr(feature = "serialize", serde(default = "SamplerInfo::def_border"))]
     pub border: PackedColor,
 }
 
@@ -507,11 +511,23 @@ impl SamplerInfo {
         SamplerInfo {
             filter: filter,
             wrap_mode: (wrap, wrap, wrap),
-            lod_bias: Lod(0),
-            lod_range: (Lod(-8000), Lod(8000)),
+            lod_bias: Self::def_lod_bias(),
+            lod_range: Self::def_lod_range(),
             comparison: None,
-            border: PackedColor(0),
+            border: Self::def_border(),
         }
+    }
+
+    fn def_lod_bias() -> Lod {
+        Lod(0)
+    }
+
+    fn def_lod_range() -> (Lod, Lod) {
+        (Lod(-8000), Lod(8000))
+    }
+
+    fn def_border() -> PackedColor {
+        PackedColor(0)
     }
 }
 
