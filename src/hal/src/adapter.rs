@@ -126,7 +126,7 @@ pub struct AdapterInfo {
     /// PCI id of the adapter
     pub device: usize,
     /// Type of device
-    pub device_type: DeviceType, 
+    pub device_type: DeviceType,
 }
 
 /// The list of `Adapter` instances is obtained by calling `Instance::enumerate_adapters()`.
@@ -145,7 +145,7 @@ pub struct Adapter<B: Backend> {
 
 impl<B: Backend> Adapter<B> {
     /// Open the physical device with `count` queues from some active queue family. The family is
-    /// the first that both provides the capability `C`, supports at least `count' queues, and for
+    /// the first that both provides the capability `C`, supports at least `count` queues, and for
     /// which `selector` returns true.
     ///
     /// # Examples

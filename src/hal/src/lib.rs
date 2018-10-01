@@ -334,7 +334,29 @@ pub enum IndexType {
     U32,
 }
 
-/// Basic backend instance trait.
+/// An instantiated backend.
+///
+/// Any startup the backend needs to perform will be done when creating the type that implements
+/// `Instance`.
+///
+/// # Examples
+///
+/// ```rust
+/// # extern crate gfx_backend_empty;
+/// # extern crate gfx_hal;
+/// use gfx_backend_empty as backend;
+/// use gfx_hal as hal;
+///
+/// // Create a concrete instance of our backend (this is backend-dependent and may be more
+/// // complicated for some backends).
+/// let instance = backend::Instance;
+/// // We can get a list of the available adapters, which are either physical graphics
+/// // devices, or virtual adapters. Because we are using the dummy `empty` backend,
+/// // there will be nothing in this list.
+/// for (idx, adapter) in hal::Instance::enumerate_adapters(&instance).iter().enumerate() {
+///     println!("Adapter {}: {:?}", idx, adapter.info);
+/// }
+/// ```
 pub trait Instance: Any + Send + Sync {
     /// Associated backend type of this instance.
     type Backend: Backend;
