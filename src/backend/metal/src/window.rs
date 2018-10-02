@@ -27,7 +27,6 @@ pub type CAMetalLayer = *mut Object;
 pub struct Surface {
     inner: Arc<SurfaceInner>,
     main_thread_id: thread::ThreadId,
-    has_swapchain: bool,
 }
 
 #[derive(Debug)]
@@ -70,7 +69,6 @@ impl SurfaceInner {
         Surface {
             inner: Arc::new(self),
             main_thread_id: thread::current().id(),
-            has_swapchain: false,
         }
     }
 
@@ -304,6 +302,7 @@ impl Device {
         &self,
         surface: &mut Surface,
         config: SwapchainConfig,
+        old_swapchain: Option<Swapchain>,
     ) -> (Swapchain, Backbuffer<Backend>) {
         info!("build_swapchain {:?}", config);
 
@@ -324,10 +323,11 @@ impl Device {
             caps.has_version_at_least(11, 0)
         };
         let can_set_display_sync = is_mac && caps.has_version_at_least(10, 13);
-        let device = self.shared.device.lock();
-        let device_raw: &metal::DeviceRef = &*device;
+
+        let cmd_queue = self.shared.queue.lock();
 
         unsafe {
+            let device_raw = self.shared.device.lock().as_ptr();
             msg_send![render_layer, setDevice: device_raw];
             msg_send![render_layer, setPixelFormat: mtl_format];
             msg_send![render_layer, setFramebufferOnly: framebuffer_only];
@@ -351,11 +351,27 @@ impl Device {
                 };
                 trace!("\tframe[{}] = {:?}", index, texture);
 
-                let drawable = if index == 0 && surface.has_swapchain {
+                let drawable = if index == 0 {
                     // when resizing, this trick frees up the currently shown frame
-                    // HACK: the has_swapchain is unfortunate, and might not be
-                    //       correct in all cases.
-                    drawable.present();
+                    match old_swapchain {
+                        Some(ref old) => {
+                            let cmd_buffer = cmd_queue.spawn_temp();
+                            self.shared.service_pipes.simple_blit(
+                                &self.shared.device,
+                                cmd_buffer,
+                                &old.frames[0].texture,
+                                texture,
+                            );
+                            cmd_buffer.present_drawable(drawable);
+                            cmd_buffer.set_label("build_swapchain");
+                            cmd_buffer.commit();
+                            cmd_buffer.wait_until_completed();
+                        }
+                        None => {
+                            // this will look as a black frame
+                            drawable.present();
+                        }
+                    }
                     None
                 } else {
                     Some(drawable.to_owned())
@@ -383,8 +399,6 @@ impl Device {
                 mtl_type: metal::MTLTextureType::D2,
             })
             .collect();
-
-        surface.has_swapchain = true;
 
         let swapchain = Swapchain {
             frames: Arc::new(frames),
