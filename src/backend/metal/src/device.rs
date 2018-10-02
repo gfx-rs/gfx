@@ -2491,10 +2491,7 @@ impl hal::Device<Backend> for Device {
         config: hal::SwapchainConfig,
         old_swapchain: Option<Swapchain>,
     ) -> (Swapchain, hal::Backbuffer<Backend>) {
-        if let Some(_swapchain) = old_swapchain {
-            //swapchain is dropped here
-        }
-        self.build_swapchain(surface, config)
+        self.build_swapchain(surface, config, old_swapchain)
     }
 
     fn destroy_swapchain(&self, _swapchain: Swapchain) {

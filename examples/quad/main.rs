@@ -573,6 +573,9 @@ fn main() {
             println!("{:?}", swap_config);
             let extent = swap_config.extent.to_extent();
 
+            let (new_swap_chain, new_backbuffer) =
+                device.create_swapchain(&mut surface, swap_config, Some(swap_chain));
+
             // Clean up the old framebuffers, images and swapchain
             for framebuffer in framebuffers {
                 device.destroy_framebuffer(framebuffer);
@@ -580,10 +583,7 @@ fn main() {
             for (_, rtv) in frame_images {
                 device.destroy_image_view(rtv);
             }
-            device.destroy_swapchain(swap_chain);
 
-            let (new_swap_chain, new_backbuffer) =
-                device.create_swapchain(&mut surface, swap_config, None);
             backbuffer = new_backbuffer;
             swap_chain = new_swap_chain;
 
