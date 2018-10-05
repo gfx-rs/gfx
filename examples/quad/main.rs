@@ -166,6 +166,9 @@ fn main() {
         .iter()
         .enumerate()
         .position(|(id, mem_type)| {
+            // type_mask is a bit field where each bit represents a memory type. If the bit is set
+            // to 1 it means we can use that type for our buffer. So this code finds the first
+            // memory type that has a `1` (or, is allowed), and is visible to the CPU.
             buffer_req.type_mask & (1 << id) != 0
                 && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
         })
