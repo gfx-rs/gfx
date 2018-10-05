@@ -2968,8 +2968,12 @@ impl d::Device<B> for Device {
         &self,
         surface: &mut w::Surface,
         config: hal::SwapchainConfig,
-        _old_swapchain: Option<w::Swapchain>,
+        old_swapchain: Option<w::Swapchain>,
     ) -> (w::Swapchain, hal::Backbuffer<B>) {
+        if let Some(old_swapchain) = old_swapchain {
+            self.destroy_swapchain(old_swapchain);
+        }
+
         let mut swap_chain1 = native::WeakPtr::<dxgi1_2::IDXGISwapChain1>::null();
 
         let format = match config.format {
