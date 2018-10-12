@@ -129,20 +129,28 @@ impl Factory {
                               -> Result<h::RawBuffer<R>, buffer::CreationError> {
         use data::{map_bind, map_usage};
 
+        // we are not allowed to pass size=0, 
+        // otherwise it panics at self.share.handles.borrow_mut().make_buffer(buf, info, mapping)
+        let _size = if info.size == 0 {
+            1
+        } else {
+            info.size
+        };
+
         let (subind, size) = match info.role {
             buffer::Role::Vertex   =>
-                (d3d11::D3D11_BIND_VERTEX_BUFFER, info.size),
+                (d3d11::D3D11_BIND_VERTEX_BUFFER, _size),
             buffer::Role::Index    => {
                 if info.stride != 2 && info.stride != 4 {
                     error!("Only U16 and U32 index buffers are allowed");
                     return Err(buffer::CreationError::Other);
                 }
-                (d3d11::D3D11_BIND_INDEX_BUFFER, info.size)
+                (d3d11::D3D11_BIND_INDEX_BUFFER, _size)
             },
             buffer::Role::Constant  => // 16 bit alignment
-                (d3d11::D3D11_BIND_CONSTANT_BUFFER, (info.size + 0xF) & !0xF),
+                (d3d11::D3D11_BIND_CONSTANT_BUFFER, (_size + 0xF) & !0xF),
             buffer::Role::Staging =>
-                (0, info.size)
+                (0, _size)
         };
 
         assert!(size >= info.size);
