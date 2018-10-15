@@ -18,7 +18,7 @@ extern crate winit;
 #[macro_use] extern crate gfx;
 extern crate gfx_app;
 
-use rand::Rng;
+use rand::{FromEntropy, RngCore};
 pub use gfx_app::ColorFormat;
 
 const QUAD_VERTICES: [Vertex; 4] = [
@@ -60,7 +60,7 @@ fn fill_instances(instances: &mut [Instance], instances_per_length: u32, size: f
 
     let begin = -1. + gap + (size /2.);
     let mut translate = [begin, begin];
-    let mut rng = rand::StdRng::new().unwrap();
+    let mut rng = rand::StdRng::from_entropy();
 
     let length = instances_per_length as usize;
     for x in 0..length {

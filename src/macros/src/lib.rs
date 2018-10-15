@@ -1,33 +1,39 @@
 #![recursion_limit = "192"]
 
 extern crate proc_macro;
+extern crate proc_macro2;
 extern crate syn;
-#[macro_use] extern crate quote;
+#[macro_use]
+extern crate quote;
 
-use proc_macro::TokenStream;
-
+use proc_macro2::TokenStream;
 
 #[proc_macro_derive(VertexData)]
-pub fn vertex(input: TokenStream) -> TokenStream {
-    let s = input.to_string();
-    let ast = syn::parse_macro_input(&s).unwrap();
-    let gen = structure(ast, quote!(gfx::format::Formatted), quote!(gfx::format::Format));
-    gen.parse().unwrap()
+pub fn vertex(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = syn::parse(input).unwrap();
+    let gen = structure(
+        ast,
+        quote!(gfx::format::Formatted),
+        quote!(gfx::format::Format),
+    );
+    gen.into()
 }
 
 #[proc_macro_derive(ConstantBuffer)]
-pub fn constant(input: TokenStream) -> TokenStream {
-    let s = input.to_string();
-    let ast = syn::parse_macro_input(&s).unwrap();
-    let gen = structure(ast, quote!(gfx::shade::Formatted), quote!(gfx::shade::ConstFormat));
-    gen.parse().unwrap()
+pub fn constant(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let ast = syn::parse(input).unwrap();
+    let gen = structure(
+        ast,
+        quote!(gfx::shade::Formatted),
+        quote!(gfx::shade::ConstFormat),
+    );
+    gen.into()
 }
 
-fn structure(ast: syn::DeriveInput, ty_compile: quote::Tokens, ty_run: quote::Tokens)
-             -> quote::Tokens {
+fn structure(ast: syn::DeriveInput, ty_compile: TokenStream, ty_run: TokenStream) -> TokenStream {
     let name = &ast.ident;
-    let fields = match ast.body {
-        syn::Body::Struct(syn::VariantData::Struct(ref fields)) => fields,
+    let fields = match ast.data {
+        syn::Data::Struct(syn::DataStruct { ref fields, .. }) => fields,
         _ => panic!("gfx-rs custom derives can only be casted on structs"),
     };
     let match_name = fields.iter().map(|field| {
@@ -42,7 +48,7 @@ fn structure(ast: syn::DeriveInput, ty_compile: quote::Tokens, ty_run: quote::To
     });
     quote! {
         unsafe impl gfx::traits::Pod for #name {}
-        
+
         impl gfx::pso::buffer::Structure<#ty_run> for #name {
             fn query(field_name: &str) -> Option<gfx::pso::buffer::Element<#ty_run>> {
                 use std::mem::{size_of, transmute};
