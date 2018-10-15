@@ -126,7 +126,7 @@ path = "examples/render_target/main.rs"
 [dev-dependencies]
 cgmath = "0.16"
 gfx_gl = "0.5"
-rand = "0.4"
+rand = "0.5"
 genmesh = "0.5"
 noise = "0.2" #TODO: update
-image = "0.19"
+image = "0.20"
