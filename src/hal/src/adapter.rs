@@ -166,7 +166,7 @@ impl<B: Backend> Adapter<B> {
     /// Returns the same errors as `open` and `InitializationFailed` if no suitable
     /// queue family could be found.
     pub fn open_with<F, C>(
-        &mut self,
+        &self,
         count: usize,
         selector: F,
     ) -> Result<(B::Device, QueueGroup<B, C>), DeviceCreationError>
@@ -178,7 +178,7 @@ impl<B: Backend> Adapter<B> {
 
         let requested_family = self
             .queue_families
-            .drain(..)
+            .iter()
             .filter(|family| {
                 C::supported_by(family.queue_type())
                     && selector(&family)
@@ -188,7 +188,7 @@ impl<B: Backend> Adapter<B> {
 
         let priorities = vec![1.0; count];
         let (id, families) = match requested_family {
-            Some(ref family) => (family.id(), [(family, priorities.as_slice())]),
+            Some(family) => (family.id(), [(family, priorities.as_slice())]),
             _ => return Err(DeviceCreationError::InitializationFailed),
         };
 
