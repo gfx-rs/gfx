@@ -200,11 +200,11 @@ impl DepthStencilStates {
     }
 
     // TODO: avoid locking for writes every time
-    pub fn get<'a>(
-        &'a self,
+    pub fn get(
+        &self,
         desc: pso::DepthStencilDesc,
         device: &Mutex<metal::Device>,
-    ) -> FastStorageGuard<'a, metal::DepthStencilState> {
+    ) -> FastStorageGuard<metal::DepthStencilState> {
         self.map
             .get_or_create_with(&desc, || {
                 let raw_desc = Self::create_desc(&desc)
