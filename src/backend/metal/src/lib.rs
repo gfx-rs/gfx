@@ -431,7 +431,7 @@ fn validate_line_width(width: f32) {
 
 trait AsNative {
     type Native;
-    fn from(&Self::Native) -> Self;
+    fn from(native: &Self::Native) -> Self;
     fn as_native(&self) -> &Self::Native;
 }
 
