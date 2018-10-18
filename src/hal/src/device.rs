@@ -374,7 +374,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// The buffer shouldn't be destroyed before any submitted command buffer,
     /// which references the images, has finished execution.
-    fn destroy_buffer(&self, B::Buffer);
+    fn destroy_buffer(&self, buffer: B::Buffer);
 
     /// Create a new buffer view object
     fn create_buffer_view<R: RangeArg<u64>>(
@@ -411,9 +411,9 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Bind device memory to an image object
     fn bind_image_memory(
         &self,
-        &B::Memory,
+        memory: &B::Memory,
         offset: u64,
-        B::UnboundImage,
+        image: B::UnboundImage,
     ) -> Result<B::Image, BindError>;
 
     /// Destroy an image.
