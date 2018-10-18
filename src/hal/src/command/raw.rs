@@ -208,7 +208,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
 
     /// Bind the index buffer view, making it the "current" one that draw commands
     /// will operate on.
-    fn bind_index_buffer(&mut self, buffer::IndexBufferView<B>);
+    fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<B>);
 
     /// Bind the vertex buffer set, making it the "current" one that draw commands
     /// will operate on.
@@ -276,7 +276,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue);
 
     /// Set the blend constant values dynamically.
-    fn set_blend_constants(&mut self, pso::ColorValue);
+    fn set_blend_constants(&mut self, color: pso::ColorValue);
 
     /// Set the depth bounds test values dynamically.
     fn set_depth_bounds(&mut self, bounds: Range<f32>);
@@ -320,7 +320,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     ///
     /// - Command buffer must be in recording state.
     /// - Only queues with graphics capability support this function.
-    fn bind_graphics_pipeline(&mut self, &B::GraphicsPipeline);
+    fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline);
 
     /// Takes an iterator of graphics `DescriptorSet`'s, and binds them to the command buffer.
     /// `first_set` is the index that the first descriptor is mapped to in the command buffer.
@@ -345,7 +345,7 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     ///
     /// - Command buffer must be in recording state.
     /// - Only queues with compute capability support this function.
-    fn bind_compute_pipeline(&mut self, &B::ComputePipeline);
+    fn bind_compute_pipeline(&mut self, pipeline: &B::ComputePipeline);
 
     /// Takes an iterator of compute `DescriptorSet`'s, and binds them to the command buffer,
     /// `first_set` is the index that the first descriptor is mapped to in the command buffer.
