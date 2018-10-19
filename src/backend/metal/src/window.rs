@@ -171,6 +171,12 @@ impl Drop for Swapchain {
 }
 
 impl Swapchain {
+    fn clear_drawables(&self) {
+        for frame in self.frames.iter() {
+            frame.inner.lock().drawable = None;
+        }
+    }
+
     /// Returns the drawable for the specified swapchain image index,
     /// marks the index as free for future use.
     pub(crate) fn take_drawable(&self, index: hal::SwapImageIndex) -> Result<metal::Drawable, ()> {
@@ -305,6 +311,9 @@ impl Device {
         old_swapchain: Option<Swapchain>,
     ) -> (Swapchain, Backbuffer<Backend>) {
         info!("build_swapchain {:?}", config);
+        if let Some(ref sc) = old_swapchain {
+            sc.clear_drawables();
+        }
 
         let caps = &self.private_caps;
         let mtl_format = caps
