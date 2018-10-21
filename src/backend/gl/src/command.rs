@@ -88,6 +88,8 @@ pub enum Command {
     ClearBufferColorI(DrawBuffer, [i32; 4]),
     /// Clear depth-stencil drawbuffer of bound framebuffer.
     ClearBufferDepthStencil(Option<pso::DepthValue>, Option<pso::StencilValue>),
+    /// Clear the currently bound texture with the given color.
+    ClearTexture([f32; 4]),
 
     /// Set list of color attachments for drawing.
     /// The buffer slice contains a list of `GLenum`.
@@ -209,7 +211,7 @@ pub struct RawCommandBuffer {
     pub(crate) id: u64,
     individual_reset: bool,
 
-    fbo: n::FrameBuffer,
+    fbo: Option<n::FrameBuffer>,
     /// The framebuffer to use for rendering to the main targets (0 by default).
     ///
     /// Use this to set the framebuffer that will be used for the screen display targets created
@@ -231,7 +233,7 @@ pub struct RawCommandBuffer {
 
 impl RawCommandBuffer {
     pub(crate) fn new(
-        fbo: n::FrameBuffer,
+        fbo: Option<n::FrameBuffer>,
         limits: Limits,
         memory: Arc<Mutex<BufferMemory>>,
     ) -> Self {
@@ -629,23 +631,36 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         //  2.  < GL 4.4: glClearBuffer
         //  3. >= GL 4.4: glClearTexSubImage
 
-        // 2. ClearBuffer
-        // TODO: reset color mask
-        let fbo = self.fbo;
-        let view = match image.kind {
-            n::ImageKind::Surface(id) => n::ImageView::Surface(id),
-            n::ImageKind::Texture(id) => n::ImageView::Texture(id, 0), //TODO
-        };
-        self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
-        self.push_cmd(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, view));
-        self.push_cmd(Command::SetDrawColorBuffers(1));
+        match self.fbo {
+            Some(fbo) => {
+                // TODO: reset color mask
+                // 2. ClearBuffer
+                let view = match image.kind {
+                    n::ImageKind::Surface(id) => n::ImageView::Surface(id),
+                    n::ImageKind::Texture(id) => n::ImageView::Texture(id, 0), //TODO
+                };
+                self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
+                self.push_cmd(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, view));
+                self.push_cmd(Command::SetDrawColorBuffers(1));
 
-        match image.channel {
-            ChannelType::Unorm | ChannelType::Inorm | ChannelType::Ufloat |
-            ChannelType::Float | ChannelType::Srgb | ChannelType::Uscaled |
-            ChannelType::Iscaled => self.push_cmd(Command::ClearBufferColorF(0, unsafe { color.float32 })),
-            ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, unsafe { color.uint32 })),
-            ChannelType::Int => self.push_cmd(Command::ClearBufferColorI(0, unsafe { color.int32 })),
+                match image.channel {
+                    ChannelType::Unorm | ChannelType::Inorm | ChannelType::Ufloat |
+                    ChannelType::Float | ChannelType::Srgb | ChannelType::Uscaled |
+                    ChannelType::Iscaled => self.push_cmd(Command::ClearBufferColorF(0, unsafe { color.float32 })),
+                    ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, unsafe { color.uint32 })),
+                    ChannelType::Int => self.push_cmd(Command::ClearBufferColorI(0, unsafe { color.int32 })),
+                }
+            }
+            None => {
+                // 1. glClear
+                let text = match image.kind {
+                    n::ImageKind::Texture(id) => id, //TODO
+                    n::ImageKind::Surface(_id) => unimplemented!(),
+                };
+
+                self.push_cmd(Command::BindTexture(0, text));
+                self.push_cmd(Command::ClearTexture(unsafe { color.float32 }));
+            }
         }
     }
 

@@ -5,7 +5,7 @@ use std::ops::Range;
 use std::{ptr, mem, slice};
 use std::sync::{Arc, Mutex, RwLock};
 
-use gl;
+use {gl, GlContainer};
 use gl::types::{GLint, GLenum, GLfloat};
 
 use hal::{self as c, device as d, error, image as i, memory, pass, pso, buffer, mapping, query};
@@ -32,19 +32,19 @@ fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
     d::ShaderError::CompilationFailed(msg)
 }
 
-fn get_shader_iv(gl: &gl::Gl, name: n::Shader, query: GLenum) -> gl::types::GLint {
+fn get_shader_iv(gl: &GlContainer, name: n::Shader, query: GLenum) -> gl::types::GLint {
     let mut iv = 0;
     unsafe { gl.GetShaderiv(name, query, &mut iv) };
     iv
 }
 
-fn get_program_iv(gl: &gl::Gl, name: n::Program, query: GLenum) -> gl::types::GLint {
+fn get_program_iv(gl: &GlContainer, name: n::Program, query: GLenum) -> gl::types::GLint {
     let mut iv = 0;
     unsafe { gl.GetProgramiv(name, query, &mut iv) };
     iv
 }
 
-fn get_shader_log(gl: &gl::Gl, name: n::Shader) -> String {
+fn get_shader_log(gl: &GlContainer, name: n::Shader) -> String {
     let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
     if length > 0 {
         let mut log = String::with_capacity(length as usize);
@@ -60,7 +60,7 @@ fn get_shader_log(gl: &gl::Gl, name: n::Shader) -> String {
     }
 }
 
-pub fn get_program_log(gl: &gl::Gl, name: n::Program) -> String {
+pub(crate) fn get_program_log(gl: &GlContainer, name: n::Program) -> String {
     let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
     if length > 0 {
         let mut log = String::with_capacity(length as usize);
@@ -76,13 +76,18 @@ pub fn get_program_log(gl: &gl::Gl, name: n::Program) -> String {
     }
 }
 
-fn create_fbo_internal(gl: &gl::Gl) -> gl::types::GLuint {
-    let mut name = 0 as n::FrameBuffer;
-    unsafe {
-        gl.GenFramebuffers(1, &mut name);
+fn create_fbo_internal(share: &Starc<Share>) -> Option<gl::types::GLuint> {
+    if share.private_caps.framebuffer {
+        let gl = &share.context;
+        let mut name = 0 as n::FrameBuffer;
+        unsafe {
+            gl.GenFramebuffers(1, &mut name);
+        }
+        info!("\tCreated frame buffer {}", name);
+        Some(name)
+    } else {
+        None
     }
-    info!("\tCreated frame buffer {}", name);
-    name
 }
 
 #[derive(Debug)]
@@ -162,7 +167,7 @@ impl Device {
         }
     }
 
-    fn bind_target_compat(gl: &gl::Gl, point: GLenum, attachment: GLenum, view: &n::ImageView) {
+    fn bind_target_compat(gl: &GlContainer, point: GLenum, attachment: GLenum, view: &n::ImageView) {
         match *view {
             n::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
@@ -178,7 +183,7 @@ impl Device {
         }
     }
 
-    fn bind_target(gl: &gl::Gl, point: GLenum, attachment: GLenum, view: &n::ImageView) {
+    fn bind_target(gl: &GlContainer, point: GLenum, attachment: GLenum, view: &n::ImageView) {
         match *view {
             n::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
@@ -422,7 +427,7 @@ impl d::Device<B> for Device {
         _family: QueueFamilyId,
         flags: CommandPoolCreateFlags,
     ) -> RawCommandPool {
-        let fbo = create_fbo_internal(&self.share.context);
+        let fbo = create_fbo_internal(&self.share);
         let limits = self.share.limits.into();
         let memory = if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
             BufferMemory::Individual {
@@ -443,9 +448,11 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_command_pool(&self, pool: RawCommandPool) {
-        let gl = &self.share.context;
         unsafe {
-            gl.DeleteFramebuffers(1, &pool.fbo);
+            if let Some(fbo) = pool.fbo {
+                let gl = &self.share.context;
+                gl.DeleteFramebuffers(1, &fbo);
+            }
         }
     }
 
@@ -1427,7 +1434,7 @@ impl d::Device<B> for Device {
     }
 }
 
-pub fn wait_fence(fence: &n::Fence, gl: &gl::Gl, timeout_ns: u64) -> GLenum {
+pub(crate) fn wait_fence(fence: &n::Fence, gl: &GlContainer, timeout_ns: u64) -> GLenum {
     // TODO:
     // This can be called by multiple objects wanting to ensure they have exclusive
     // access to a resource. How much does this call costs ? The status of the fence

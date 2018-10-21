@@ -17,7 +17,7 @@ extern crate spirv_cross;
 use std::cell::Cell;
 use std::fmt;
 use std::ops::Deref;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 
 use hal::queue::{QueueFamilyId, Queues};
@@ -38,6 +38,25 @@ mod window;
 
 #[cfg(feature = "glutin")]
 pub use window::glutin::{config_context, Headless, Surface, Swapchain};
+
+pub(crate) struct GlContainer {
+    context: gl::Gl,
+}
+
+impl GlContainer {
+    fn make_current(&self) {
+        // Unimplemented
+    }
+}
+
+impl Deref for GlContainer {
+    type Target = gl::Gl;
+    fn deref(&self) -> &gl::Gl {
+        #[cfg(feature = "glutin")]
+        self.make_current();
+        &self.context
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
@@ -107,7 +126,7 @@ impl Error {
 
 /// Internal struct of shared data between the physical and logical device.
 struct Share {
-    context: gl::Gl,
+    context: GlContainer,
     info: Info,
     features: hal::Features,
     legacy_features: info::LegacyFeatures,
@@ -155,11 +174,37 @@ impl<T: ?Sized> fmt::Debug for Starc<T> {
 }
 
 impl<T> Starc<T> {
+    #[inline]
     fn new(value: T) -> Self {
         Starc {
             arc: Arc::new(value),
             thread: thread::current().id(),
         }
+    }
+
+    #[inline]
+    pub fn try_unwrap(self) -> Result<T, Self> {
+        let a = Arc::try_unwrap(self.arc);
+        let thread = self.thread;
+        a.map_err(|a|
+            Starc {
+                arc: a,
+                thread: thread,
+            }
+        )
+    }
+
+    #[inline]
+    pub fn downgrade(this: &Starc<T>) -> Wstarc<T> {
+        Wstarc {
+            weak: Arc::downgrade(&this.arc),
+            thread: this.thread,
+        }
+    }
+
+    #[inline]
+    pub fn get_mut(this: &mut Starc<T>) -> Option<&mut T> {
+        Arc::get_mut(&mut this.arc)
     }
 }
 
@@ -174,6 +219,25 @@ impl<T: ?Sized> Deref for Starc<T> {
     }
 }
 
+/// Single-threaded `Weak`.
+/// Wrapper for `Weak` that allows you to `Send` it even if `T: !Sync`.
+/// Yet internal data cannot be accessed outside of the thread where it was created.
+pub struct Wstarc<T: ?Sized> {
+    weak: Weak<T>,
+    thread: ThreadId,
+}
+impl<T> Wstarc<T> {
+    pub fn upgrade(&self) -> Option<Starc<T>> {
+        let thread = self.thread;
+        self.weak.upgrade().map(|arc| Starc {
+            arc,
+            thread,
+        })
+    }
+}
+unsafe impl<T: ?Sized> Send for Wstarc<T> {}
+unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
+
 #[derive(Debug)]
 pub struct PhysicalDevice(Starc<Share>);
 
@@ -182,7 +246,10 @@ impl PhysicalDevice {
     where
         F: FnMut(&str) -> *const std::os::raw::c_void,
     {
-        let gl = gl::Gl::load_with(fn_proc);
+        let gl = GlContainer {
+            context: gl::Gl::load_with(fn_proc),
+        };
+
         // query information
         let (info, features, legacy_features, limits, private_caps) = info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
@@ -216,7 +283,7 @@ impl PhysicalDevice {
                 name,
                 vendor: 0,                                          // TODO
                 device: 0,                                          // TODO
-                device_type: hal::adapter::DeviceType::DiscreteGpu, // TODO Is there a way to detect this?                
+                device_type: hal::adapter::DeviceType::DiscreteGpu, // TODO Is there a way to detect this?
             },
             physical_device: PhysicalDevice(Starc::new(share)),
             queue_families: vec![QueueFamily],

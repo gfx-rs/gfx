@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
-use gl;
+use {gl, GlContainer, Error};
 use hal::{Features, Limits};
 
 /// A version number for a specific component of an OpenGL implementation
@@ -112,7 +112,7 @@ const EMPTY_STRING: &'static str = "";
 /// Get a statically allocated string from the implementation using
 /// `glGetString`. Fails if it `GLenum` cannot be handled by the
 /// implementation's `gl.GetString` function.
-fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
+fn get_string(gl: &GlContainer, name: gl::types::GLenum) -> &'static str {
     let ptr = unsafe { gl.GetString(name) } as *const i8;
     if !ptr.is_null() {
         // This should be safe to mark as statically allocated because
@@ -124,10 +124,16 @@ fn get_string(gl: &gl::Gl, name: gl::types::GLenum) -> &'static str {
     }
 }
 
-fn get_usize(gl: &gl::Gl, name: gl::types::GLenum) -> usize {
+fn get_usize(gl: &GlContainer, name: gl::types::GLenum) -> Result<usize, Error> {
     let mut value = 0 as gl::types::GLint;
     unsafe { gl.GetIntegerv(name, &mut value) };
-    value as usize
+
+    let err = Error::from_error_code(unsafe { gl.GetError() });
+    if err != Error::NoError {
+        Err(err)
+    } else {
+        Ok(value as usize)
+    }
 }
 
 unsafe fn c_str_as_static_str(c_str: *const i8) -> &'static str {
@@ -145,7 +151,7 @@ pub struct PlatformName {
 }
 
 impl PlatformName {
-    fn get(gl: &gl::Gl) -> Self {
+    fn get(gl: &GlContainer) -> Self {
         PlatformName {
             vendor: get_string(gl, gl::VENDOR),
             renderer: get_string(gl, gl::RENDERER),
@@ -239,12 +245,12 @@ pub enum Requirement {
 }
 
 impl Info {
-    fn get(gl: &gl::Gl) -> Info {
+    fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
         let version = Version::parse(get_string(gl, gl::VERSION)).unwrap();
         let shading_language = Version::parse(get_string(gl, gl::SHADING_LANGUAGE_VERSION)).unwrap();
         let extensions = if version >= Version::new(3, 0, None, "") {
-            let num_exts = get_usize(gl, gl::NUM_EXTENSIONS) as gl::types::GLuint;
+            let num_exts = get_usize(gl, gl::NUM_EXTENSIONS).unwrap() as gl::types::GLuint;
             (0..num_exts)
                 .map(|i| unsafe { c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8) })
                 .collect()
@@ -295,13 +301,13 @@ impl Info {
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
-pub fn query_all(gl: &gl::Gl) -> (Info, Features, LegacyFeatures, Limits, PrivateCaps) {
+pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Limits, PrivateCaps) {
     use self::Requirement::*;
     let info = Info::get(gl);
 
     let mut limits = Limits {
-        max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE),
-        max_texel_elements: get_usize(gl, gl::MAX_TEXTURE_BUFFER_SIZE),
+        max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE).unwrap_or(64),
+        max_texel_elements: get_usize(gl, gl::MAX_TEXTURE_BUFFER_SIZE).unwrap_or(0),
         max_viewports: 1,
         min_buffer_copy_offset_alignment: 1,
         min_buffer_copy_pitch_alignment: 1,
@@ -315,10 +321,10 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, LegacyFeatures, Limits, Privat
         Core(4,0),
         Ext("GL_ARB_tessellation_shader"),
     ]) {
-        limits.max_patch_size = get_usize(gl, gl::MAX_PATCH_VERTICES) as _;
+        limits.max_patch_size = get_usize(gl, gl::MAX_PATCH_VERTICES).unwrap_or(0) as _;
     }
     if info.is_supported(&[Core(4,1)]) { // TODO: extension
-        limits.max_viewports = get_usize(gl, gl::MAX_VIEWPORTS);
+        limits.max_viewports = get_usize(gl, gl::MAX_VIEWPORTS).unwrap_or(0);
     }
 
     if false && info.is_supported(&[ //TODO: enable when compute is implemented
@@ -439,10 +445,12 @@ pub fn query_all(gl: &gl::Gl) -> (Info, Features, LegacyFeatures, Limits, Privat
     let private = PrivateCaps {
         vertex_array:                       info.is_supported(&[Core(3,0),
                                                                 Es  (3,0),
-                                                                Ext ("GL_ARB_vertex_array_object")]),
+                                                                Ext ("GL_ARB_vertex_array_object")])
+                                                                && gl.GenVertexArrays.is_loaded(),
         framebuffer:                        info.is_supported(&[Core(3,0),
                                                                 Es  (2,0),
-                                                                Ext ("GL_ARB_framebuffer_object")]),
+                                                                Ext ("GL_ARB_framebuffer_object")])
+                                                                && gl.GenFramebuffers.is_loaded(),
         framebuffer_texture:                info.is_supported(&[Core(3,0)]), //TODO: double check
         buffer_role_change:                 !info.version.is_embedded,
         image_storage:                      info.is_supported(&[Core(3,2),
