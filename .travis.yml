@@ -33,6 +33,10 @@ matrix:
       osx_image: xcode9
       rust: nightly
 
+    # Windows 64bit
+    - os: windows
+      rust: stable
+
 branches:
   except:
     - staging.tmp
