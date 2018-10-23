@@ -825,7 +825,7 @@ impl Device {
                     "Cube views are not supported for the image, kind: {:?}",
                     info.kind
                 );
-                return Err(image::ViewError::BadKind);
+                return Err(image::ViewError::BadKind(info.view_kind));
             }
         }
 
@@ -953,7 +953,7 @@ impl d::Device<B> for Device {
         &self,
         mem_type: hal::MemoryTypeId,
         size: u64,
-    ) -> Result<r::Memory, d::OutOfMemory> {
+    ) -> Result<r::Memory, d::AllocationError> {
         let mem_type = mem_type.0;
         let mem_base_id = mem_type % NUM_HEAP_PROPERTIES;
         let heap_property = &self.heap_properties[mem_base_id];
@@ -990,7 +990,7 @@ impl d::Device<B> for Device {
                 .CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), heap.mut_void())
         };
         if hr == winerror::E_OUTOFMEMORY {
-            return Err(d::OutOfMemory);
+            return Err(d::OutOfMemory::OutOfDeviceMemory.into());
         }
         assert_eq!(winerror::S_OK, hr);
 
@@ -1050,7 +1050,7 @@ impl d::Device<B> for Device {
         &self,
         family: QueueFamilyId,
         create_flags: CommandPoolCreateFlags,
-    ) -> RawCommandPool {
+    ) -> Result<RawCommandPool, d::OutOfMemory> {
         let list_type = QUEUE_FAMILIES[family.0].native_type();
 
         let allocator = if create_flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
@@ -1067,12 +1067,12 @@ impl d::Device<B> for Device {
             CommandPoolAllocator::Shared(command_allocator)
         };
 
-        RawCommandPool {
+        Ok(RawCommandPool {
             allocator,
             device: self.raw,
             list_type,
             shared: self.shared.clone(),
-        }
+        })
     }
 
     fn destroy_command_pool(&self, pool: RawCommandPool) {
@@ -1084,7 +1084,7 @@ impl d::Device<B> for Device {
         attachments: IA,
         subpasses: IS,
         dependencies: ID,
-    ) -> r::RenderPass
+    ) -> Result<r::RenderPass, d::OutOfMemory>
     where
         IA: IntoIterator,
         IA::Item: Borrow<pass::Attachment>,
@@ -1273,14 +1273,14 @@ impl d::Device<B> for Device {
             }
         }
 
-        rp
+        Ok(rp)
     }
 
     fn create_pipeline_layout<IS, IR>(
         &self,
         sets: IS,
         push_constant_ranges: IR,
-    ) -> r::PipelineLayout
+    ) -> Result<r::PipelineLayout, d::OutOfMemory>
     where
         IS: IntoIterator,
         IS::Item: Borrow<r::DescriptorSetLayout>,
@@ -1424,28 +1424,29 @@ impl d::Device<B> for Device {
             signature_raw.destroy();
         }
 
-        r::PipelineLayout {
+        Ok(r::PipelineLayout {
             raw: signature,
             tables: set_tables,
             root_constants,
             num_parameter_slots: parameters.len(),
-        }
+        })
     }
 
-    fn create_pipeline_cache(&self) -> () {
-        ()
+    fn create_pipeline_cache(&self) -> Result<(), d::OutOfMemory> {
+        Ok(())
     }
 
     fn destroy_pipeline_cache(&self, _: ()) {
         //empty
     }
 
-    fn merge_pipeline_caches<I>(&self, _: &(), _: I)
+    fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<()>,
     {
         //empty
+        Ok(())
     }
 
     fn create_graphics_pipeline<'a>(
@@ -1771,7 +1772,7 @@ impl d::Device<B> for Device {
         _renderpass: &r::RenderPass,
         attachments: I,
         extent: image::Extent,
-    ) -> Result<r::Framebuffer, d::FramebufferError>
+    ) -> Result<r::Framebuffer, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<r::ImageView>,
@@ -2273,7 +2274,7 @@ impl d::Device<B> for Device {
             kind: image.kind,
             caps: image.view_caps,
             view_kind,
-            format: conv::map_format(format).ok_or(image::ViewError::BadFormat)?,
+            format: conv::map_format(format).ok_or(image::ViewError::BadFormat(format))?,
             range,
         };
 
@@ -2301,7 +2302,7 @@ impl d::Device<B> for Device {
                 Some(
                     self.view_image_as_depth_stencil(ViewInfo {
                         format: conv::map_format_dsv(format.base_format().0)
-                            .ok_or(image::ViewError::BadFormat)?,
+                            .ok_or(image::ViewError::BadFormat(format))?,
                         ..info
                     })?,
                 )
@@ -2316,7 +2317,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_sampler(&self, info: image::SamplerInfo) -> r::Sampler {
+    fn create_sampler(&self, info: image::SamplerInfo) -> Result<r::Sampler, d::AllocationError> {
         let handle = self.sampler_pool.lock().unwrap().alloc_handle();
 
         let op = match info.comparison {
@@ -2347,10 +2348,10 @@ impl d::Device<B> for Device {
             info.lod_range.start.into()..info.lod_range.end.into(),
         );
 
-        r::Sampler { handle }
+        Ok(r::Sampler { handle })
     }
 
-    fn create_descriptor_pool<I>(&self, max_sets: usize, descriptor_pools: I) -> r::DescriptorPool
+    fn create_descriptor_pool<I>(&self, max_sets: usize, descriptor_pools: I) -> Result<r::DescriptorPool, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
@@ -2416,28 +2417,28 @@ impl d::Device<B> for Device {
             }
         };
 
-        r::DescriptorPool {
+        Ok(r::DescriptorPool {
             heap_srv_cbv_uav,
             heap_sampler,
             pools: descriptor_pools,
             max_size: max_sets as _,
-        }
+        })
     }
 
     fn create_descriptor_set_layout<I, J>(
         &self,
         bindings: I,
         _immutable_samplers: J,
-    ) -> r::DescriptorSetLayout
+    ) -> Result<r::DescriptorSetLayout, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
         J: IntoIterator,
         J::Item: Borrow<r::Sampler>,
     {
-        r::DescriptorSetLayout {
+        Ok(r::DescriptorSetLayout {
             bindings: bindings.into_iter().map(|b| b.borrow().clone()).collect(),
-        }
+        })
     }
 
     fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
@@ -2707,7 +2708,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a r::Memory, R)>,
@@ -2736,9 +2737,11 @@ impl d::Device<B> for Device {
                 }
             }
         }
+
+        Ok(())
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a r::Memory, R)>,
@@ -2768,24 +2771,27 @@ impl d::Device<B> for Device {
                 }
             }
         }
+
+        Ok(())
     }
 
-    fn create_semaphore(&self) -> r::Semaphore {
-        let fence = self.create_fence(false);
-        r::Semaphore { raw: fence.raw }
+    fn create_semaphore(&self) -> Result<r::Semaphore, d::OutOfMemory> {
+        let fence = self.create_fence(false)?;
+        Ok(r::Semaphore { raw: fence.raw })
     }
 
-    fn create_fence(&self, signalled: bool) -> r::Fence {
-        r::Fence {
+    fn create_fence(&self, signalled: bool) -> Result<r::Fence, d::OutOfMemory> {
+        Ok(r::Fence {
             raw: self.create_raw_fence(signalled),
-        }
+        })
     }
 
-    fn reset_fence(&self, fence: &r::Fence) {
+    fn reset_fence(&self, fence: &r::Fence) -> Result<(), d::OutOfMemory> {
         assert_eq!(winerror::S_OK, fence.raw.signal(0));
+        Ok(())
     }
 
-    fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ns: u64) -> bool
+    fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ns: u64) -> Result<bool, d::OomOrDeviceLost>
     where
         I: IntoIterator,
         I::Item: Borrow<r::Fence>,
@@ -2826,14 +2832,14 @@ impl d::Device<B> for Device {
         const WAIT_OBJECT_LAST: u32 = winbase::WAIT_OBJECT_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         const WAIT_ABANDONED_LAST: u32 = winbase::WAIT_ABANDONED_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         match hr {
-            winbase::WAIT_OBJECT_0...WAIT_OBJECT_LAST => true,
-            winbase::WAIT_ABANDONED_0...WAIT_ABANDONED_LAST => true, //TODO?
-            winerror::WAIT_TIMEOUT => false,
+            winbase::WAIT_OBJECT_0...WAIT_OBJECT_LAST => Ok(true),
+            winbase::WAIT_ABANDONED_0...WAIT_ABANDONED_LAST => Ok(true), //TODO?
+            winerror::WAIT_TIMEOUT => Ok(false),
             _ => panic!("Unexpected wait status 0x{:X}", hr),
         }
     }
 
-    fn get_fence_status(&self, _fence: &r::Fence) -> bool {
+    fn get_fence_status(&self, _fence: &r::Fence) -> Result<bool, d::DeviceLost> {
         unimplemented!()
     }
 
@@ -2850,7 +2856,7 @@ impl d::Device<B> for Device {
         &self,
         query_ty: query::Type,
         count: query::Id,
-    ) -> Result<r::QueryPool, query::Error> {
+    ) -> Result<r::QueryPool, query::CreationError> {
         let heap_ty = match query_ty {
             query::Type::Occlusion => native::query::HeapType::Occlusion,
             query::Type::PipelineStatistics(_) => native::query::HeapType::PipelineStatistics,
@@ -2879,7 +2885,7 @@ impl d::Device<B> for Device {
         _data: &mut [u8],
         _stride: buffer::Offset,
         _flags: query::ResultFlags,
-    ) -> Result<bool, query::Error> {
+    ) -> Result<bool, d::OomOrDeviceLost> {
         unimplemented!()
     }
 
@@ -2969,7 +2975,7 @@ impl d::Device<B> for Device {
         surface: &mut w::Surface,
         config: hal::SwapchainConfig,
         old_swapchain: Option<w::Swapchain>,
-    ) -> (w::Swapchain, hal::Backbuffer<B>) {
+    ) -> Result<(w::Swapchain, hal::Backbuffer<B>), hal::window::CreationError> {
         if let Some(old_swapchain) = old_swapchain {
             self.destroy_swapchain(old_swapchain);
         }
@@ -3108,7 +3114,7 @@ impl d::Device<B> for Device {
             resources,
         };
 
-        (swapchain, hal::Backbuffer::Images(images))
+        Ok((swapchain, hal::Backbuffer::Images(images)))
     }
 
     fn destroy_swapchain(&self, swapchain: w::Swapchain) {
@@ -3124,7 +3130,7 @@ impl d::Device<B> for Device {
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         for queue in &self.queues {
             queue.wait_idle()?;
-        }
+        } 
         Ok(())
     }
 }

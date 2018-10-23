@@ -111,8 +111,9 @@ fn main() {
         .open_with::<_, hal::Graphics>(1, |family| surface.supports_queue_family(family))
         .unwrap();
 
-    let mut command_pool =
-        device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
+    let mut command_pool = device
+        .create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16)
+        .expect("Can't create command pool");
 
     // Setup renderpass and pipeline
     let set_layout = device.create_descriptor_set_layout(
@@ -133,7 +134,7 @@ fn main() {
             },
         ],
         &[],
-    );
+    ).expect("Can't create descriptor set layout");
 
     // Descriptors
     let mut desc_pool = device.create_descriptor_pool(
@@ -148,7 +149,7 @@ fn main() {
                 count: 1,
             },
         ],
-    );
+    ).expect("Can't create descriptor pool");
     let desc_set = desc_pool.allocate_set(&set_layout).unwrap();
 
     // Buffer allocations
@@ -188,7 +189,7 @@ fn main() {
             .acquire_mapping_writer::<Vertex>(&buffer_memory, 0..buffer_req.size)
             .unwrap();
         vertices[0..QUAD.len()].copy_from_slice(&QUAD);
-        device.release_mapping_writer(vertices);
+        device.release_mapping_writer(vertices).unwrap();
     }
 
     // Image
@@ -226,7 +227,7 @@ fn main() {
             let dest_base = y * row_pitch as usize;
             data[dest_base..dest_base + row.len()].copy_from_slice(row);
         }
-        device.release_mapping_writer(data);
+        device.release_mapping_writer(data).unwrap();
     }
 
     let image_unbound = device
@@ -265,7 +266,9 @@ fn main() {
         )
         .unwrap();
 
-    let sampler = device.create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp));
+    let sampler = device
+        .create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
+        .expect("Can't create sampler");
 
     device.write_descriptor_sets(vec![
         pso::DescriptorSetWrite {
@@ -282,8 +285,8 @@ fn main() {
         },
     ]);
 
-    let mut frame_semaphore = device.create_semaphore();
-    let mut frame_fence = device.create_fence(false); // TODO: remove
+    let mut frame_semaphore = device.create_semaphore().expect("Can't create semaphore");
+    let mut frame_fence = device.create_fence(false).expect("Can't create fence"); // TODO: remove
 
     // copy buffer to texture
     {
@@ -343,7 +346,7 @@ fn main() {
         let submission = Submission::new().submit(Some(submit));
         queue_group.queues[0].submit(submission, Some(&mut frame_fence));
 
-        device.wait_for_fence(&frame_fence, !0);
+        device.wait_for_fence(&frame_fence, !0).expect("Can't wait for fence");
     }
 
     let (caps, formats, _present_modes) = surface.compatibility(&mut adapter.physical_device);
@@ -359,7 +362,9 @@ fn main() {
     let swap_config = SwapchainConfig::from_caps(&caps, format);
     println!("{:?}", swap_config);
     let extent = swap_config.extent.to_extent();
-    let (mut swap_chain, mut backbuffer) = device.create_swapchain(&mut surface, swap_config, None);
+    let (mut swap_chain, mut backbuffer) = device
+        .create_swapchain(&mut surface, swap_config, None)
+        .expect("Can't create swapchain");
 
     let render_pass = {
         let attachment = pass::Attachment {
@@ -388,7 +393,9 @@ fn main() {
                 ..(i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
         };
 
-        device.create_render_pass(&[attachment], &[subpass], &[dependency])
+        device
+            .create_render_pass(&[attachment], &[subpass], &[dependency])
+            .expect("Can't create render pass")
     };
     let (mut frame_images, mut framebuffers) = match backbuffer {
         Backbuffer::Images(images) => {
@@ -423,7 +430,7 @@ fn main() {
     let pipeline_layout = device.create_pipeline_layout(
         std::iter::once(&set_layout),
         &[(pso::ShaderStageFlags::VERTEX, 0..8)],
-    );
+    ).expect("Can't create pipeline layout");
     let pipeline = {
         let vs_module = {
             let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
@@ -576,8 +583,9 @@ fn main() {
             println!("{:?}", swap_config);
             let extent = swap_config.extent.to_extent();
 
-            let (new_swap_chain, new_backbuffer) =
-                device.create_swapchain(&mut surface, swap_config, Some(swap_chain));
+            let (new_swap_chain, new_backbuffer) = device
+                .create_swapchain(&mut surface, swap_config, Some(swap_chain))
+                .expect("Can't create swapchain");
 
             // Clean up the old framebuffers, images and swapchain
             for framebuffer in framebuffers {
@@ -627,7 +635,7 @@ fn main() {
             recreate_swapchain = false;
         }
 
-        device.reset_fence(&frame_fence);
+        device.reset_fence(&frame_fence).unwrap();
         command_pool.reset();
         let frame: hal::SwapImageIndex = {
             match swap_chain.acquire_image(!0, FrameSync::Semaphore(&mut frame_semaphore)) {
@@ -670,7 +678,7 @@ fn main() {
         queue_group.queues[0].submit(submission, Some(&mut frame_fence));
 
         // TODO: replace with semaphore
-        device.wait_for_fence(&frame_fence, !0);
+        device.wait_for_fence(&frame_fence, !0).unwrap();
 
         // present frame
         if let Err(_) = swap_chain.present(&mut queue_group.queues[0], frame, &[]) {

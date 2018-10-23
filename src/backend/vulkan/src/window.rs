@@ -405,7 +405,7 @@ impl hal::Swapchain<Backend> for Swapchain {
             Ok(i) => Ok(i),
             Err(vk::Result::NotReady) => Err(hal::AcquireError::NotReady),
             Err(vk::Result::SuboptimalKhr) | Err(vk::Result::ErrorOutOfDateKhr) => Err(hal::AcquireError::OutOfDate),
-            Err(vk::Result::ErrorSurfaceLostKhr) => Err(hal::AcquireError::SurfaceLost),
+            Err(vk::Result::ErrorSurfaceLostKhr) => Err(hal::AcquireError::SurfaceLost(hal::device::SurfaceLost)),
             _ => panic!("Failed to acquire image."),
         }
     }

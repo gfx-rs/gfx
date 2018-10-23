@@ -180,7 +180,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             &queue_group,
             hal::pool::CommandPoolCreateFlags::empty(),
             1 + raw.jobs.len(),
-        );
+        )?;
 
         // create resources
         let mut resources = Resources::<B> {
@@ -258,7 +258,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     .unwrap()
                                     .read_exact(&mut mapping)
                                     .unwrap();
-                                device.release_mapping_writer(mapping);
+                                device.release_mapping_writer(mapping).unwrap();
                             }
                             // add init commands
                             let final_state = b::Access::SHADER_READ;
@@ -382,7 +382,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     file.read_exact(&mut mapping[dest_range])
                                         .unwrap();
                                 }
-                                device.release_mapping_writer(mapping);
+                                device.release_mapping_writer(mapping).unwrap();
                             }
                             // add init commands
                             let final_state = (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal);
@@ -502,7 +502,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             });
 
                         let rp = RenderPass {
-                            handle: device.create_render_pass(raw_atts, raw_subs, raw_deps),
+                            handle: device.create_render_pass(raw_atts, raw_subs, raw_deps)?,
                             attachments: attachments.keys().cloned().collect(),
                             subpasses: subpasses.keys().cloned().collect(),
                         };
@@ -541,12 +541,12 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     raw::Resource::DescriptorSetLayout { ref bindings, ref immutable_samplers } => {
                         assert!(immutable_samplers.is_empty()); //TODO! requires changing the order,
                         // since samples are expect to be all read by this point
-                        let layout = device.create_descriptor_set_layout(bindings, &[]);
+                        let layout = device.create_descriptor_set_layout(bindings, &[])?;
                         let binding_indices = bindings.iter().map(|dsb| dsb.binding).collect();
                         resources.desc_set_layouts.insert(name.clone(), (binding_indices, layout));
                     }
                     raw::Resource::DescriptorPool { capacity, ref ranges } => {
-                        let pool = device.create_descriptor_pool(capacity, ranges);
+                        let pool = device.create_descriptor_pool(capacity, ranges)?;
                         resources.desc_pools.insert(name.clone(), pool);
                     }
                     _ => {}
@@ -603,7 +603,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             let layouts = set_layouts
                                 .iter()
                                 .map(|sl| &resources.desc_set_layouts[sl].1);
-                            device.create_pipeline_layout(layouts, push_constant_ranges)
+                            device.create_pipeline_layout(layouts, push_constant_ranges)?
                         };
                         resources.pipeline_layouts.insert(name.clone(), layout);
                     }
@@ -1065,7 +1065,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             &self.queue_group,
             hal::pool::CommandPoolCreateFlags::empty(),
             1,
-        );
+        ).expect("Can't create command pool");
         let copy_submit = {
             let mut cmd_buffer = command_pool.acquire_command_buffer(false);
             let pre_barrier = memory::Barrier::Buffer {
@@ -1101,11 +1101,11 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             cmd_buffer.finish()
         };
 
-        let copy_fence = self.device.create_fence(false);
+        let copy_fence = self.device.create_fence(false).expect("Can't create copy-fence");
         let submission = hal::queue::Submission::new()
             .submit(Some(copy_submit));
         self.queue_group.queues[0].submit(submission, Some(&copy_fence));
-        self.device.wait_for_fence(&copy_fence, !0);
+        self.device.wait_for_fence(&copy_fence, !0).unwrap();
         self.device.destroy_fence(copy_fence);
         self.device.destroy_command_pool(command_pool.into_raw());
 
@@ -1159,7 +1159,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             &self.queue_group,
             hal::pool::CommandPoolCreateFlags::empty(),
             1,
-        );
+        ).expect("Can't create command pool");
         let copy_submit = {
             let mut cmd_buffer = command_pool.acquire_command_buffer(false);
             let pre_barrier = memory::Barrier::Image {
@@ -1209,11 +1209,11 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             cmd_buffer.finish()
         };
 
-        let copy_fence = self.device.create_fence(false);
+        let copy_fence = self.device.create_fence(false).expect("Can't create copy-fence");
         let submission = hal::queue::Submission::new()
             .submit(Some(copy_submit));
         self.queue_group.queues[0].submit(submission, Some(&copy_fence));
-        self.device.wait_for_fence(&copy_fence, !0);
+        self.device.wait_for_fence(&copy_fence, !0).unwrap();
         self.device.destroy_fence(copy_fence);
         self.device.destroy_command_pool(command_pool.into_raw());
 

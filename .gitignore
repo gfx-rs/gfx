@@ -2,6 +2,9 @@
 .DS_Store
 .vscode/
 .#*
+*.iml
+.idea
+
 
 # Compiled
 /doc

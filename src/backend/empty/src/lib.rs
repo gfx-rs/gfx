@@ -115,7 +115,7 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
 /// Dummy device doing nothing.
 pub struct Device;
 impl hal::Device<Backend> for Device {
-    fn create_command_pool(&self, _: queue::QueueFamilyId, _: pool::CommandPoolCreateFlags) -> RawCommandPool {
+    fn create_command_pool(&self, _: queue::QueueFamilyId, _: pool::CommandPoolCreateFlags) -> Result<RawCommandPool, device::OutOfMemory> {
         unimplemented!()
     }
 
@@ -123,11 +123,11 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn allocate_memory(&self, _: hal::MemoryTypeId, _: u64) -> Result<(), device::OutOfMemory> {
+    fn allocate_memory(&self, _: hal::MemoryTypeId, _: u64) -> Result<(), device::AllocationError> {
         unimplemented!()
     }
 
-    fn create_render_pass<'a ,IA, IS, ID>(&self, _: IA, _: IS, _: ID) -> ()
+    fn create_render_pass<'a ,IA, IS, ID>(&self, _: IA, _: IS, _: ID) -> Result<(), device::OutOfMemory>
     where
         IA: IntoIterator,
         IA::Item: Borrow<pass::Attachment>,
@@ -139,7 +139,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_pipeline_layout<IS, IR>(&self, _: IS, _: IR) -> ()
+    fn create_pipeline_layout<IS, IR>(&self, _: IS, _: IR) -> Result<(), device::OutOfMemory>
     where
         IS: IntoIterator,
         IS::Item: Borrow<()>,
@@ -149,7 +149,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_pipeline_cache(&self) -> () {
+    fn create_pipeline_cache(&self) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
@@ -157,7 +157,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn merge_pipeline_caches<I>(&self, _: &(), _: I)
+    fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<()>,
@@ -167,7 +167,7 @@ impl hal::Device<Backend> for Device {
 
     fn create_framebuffer<I>(
         &self, _: &(), _: I, _: image::Extent
-    ) -> Result<(), device::FramebufferError>
+    ) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<()>,
@@ -179,7 +179,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_sampler(&self, _: image::SamplerInfo) -> () {
+    fn create_sampler(&self, _: image::SamplerInfo) -> Result<(), device::AllocationError> {
         unimplemented!()
     }
     fn create_buffer(&self, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
@@ -233,7 +233,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_descriptor_pool<I>(&self, _: usize, _: I) -> DescriptorPool
+    fn create_descriptor_pool<I>(&self, _: usize, _: I) -> Result<DescriptorPool, device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
@@ -241,7 +241,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_descriptor_set_layout<I, J>(&self, _: I, _: J) -> ()
+    fn create_descriptor_set_layout<I, J>(&self, _: I, _: J) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
@@ -268,19 +268,19 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_semaphore(&self) -> () {
+    fn create_semaphore(&self) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
-    fn create_fence(&self, _: bool) -> () {
+    fn create_fence(&self, _: bool) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
-    fn get_fence_status(&self, _: &()) -> bool {
+    fn get_fence_status(&self, _: &()) -> Result<bool, device::DeviceLost> {
         unimplemented!()
     }
 
-    fn create_query_pool(&self, _: query::Type, _: u32) -> Result<(), query::Error> {
+    fn create_query_pool(&self, _: query::Type, _: u32) -> Result<(), query::CreationError> {
         unimplemented!()
     }
 
@@ -292,7 +292,7 @@ impl hal::Device<Backend> for Device {
         &self, _: &(), _: Range<query::Id>,
         _: &mut [u8], _: buffer::Offset,
         _: query::ResultFlags,
-    ) -> Result<bool, query::Error> {
+    ) -> Result<bool, device::OomOrDeviceLost> {
         unimplemented!()
     }
 
@@ -304,7 +304,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn flush_mapped_memory_ranges<'a, I, R>(&self, _: I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a (), R)>,
@@ -313,7 +313,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _: I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a (), R)>,
@@ -384,7 +384,7 @@ impl hal::Device<Backend> for Device {
         _: &mut Surface,
         _: hal::SwapchainConfig,
         _: Option<Swapchain>,
-    ) -> (Swapchain, hal::Backbuffer<Backend>) {
+    ) -> Result<(Swapchain, hal::Backbuffer<Backend>), hal::window::CreationError> {
         unimplemented!()
     }
 

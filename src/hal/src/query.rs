@@ -4,13 +4,28 @@
 //! operation as it is running.
 
 use Backend;
-
+use device::OutOfMemory;
 
 /// A query identifier.
 pub type Id = u32;
 
-/// Generic query error;
-pub type Error = ();
+/// Query creation error.
+#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+pub enum CreationError {
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(OutOfMemory),
+
+    /// Query type unsupported.
+    #[fail(display = "Query type ({:?}) unsupported", _0)]
+    Unsupported(Type),
+}
+
+impl From<OutOfMemory> for CreationError {
+    fn from(error: OutOfMemory) -> Self {
+        CreationError::OutOfMemory(error)
+    }
+}
 
 /// A `Query` object has a particular identifier and saves its results to a given `QueryPool`.
 /// It is passed as a parameter to the command buffer's query methods.

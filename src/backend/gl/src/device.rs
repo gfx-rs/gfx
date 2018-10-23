@@ -413,7 +413,7 @@ impl Device {
 impl d::Device<B> for Device {
     fn allocate_memory(
         &self, _mem_type: c::MemoryTypeId, size: u64,
-    ) -> Result<n::Memory, d::OutOfMemory> {
+    ) -> Result<n::Memory, d::AllocationError> {
         // TODO
         Ok(n::Memory {
             properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
@@ -426,7 +426,7 @@ impl d::Device<B> for Device {
         &self,
         _family: QueueFamilyId,
         flags: CommandPoolCreateFlags,
-    ) -> RawCommandPool {
+    ) -> Result<RawCommandPool, d::OutOfMemory> {
         let fbo = create_fbo_internal(&self.share);
         let limits = self.share.limits.into();
         let memory = if flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
@@ -440,11 +440,11 @@ impl d::Device<B> for Device {
 
         // Ignoring `TRANSIENT` hint, unsure how to make use of this.
 
-        RawCommandPool {
+        Ok(RawCommandPool {
             fbo,
             limits,
             memory: Arc::new(Mutex::new(memory)),
-        }
+        })
     }
 
     fn destroy_command_pool(&self, pool: RawCommandPool) {
@@ -458,7 +458,7 @@ impl d::Device<B> for Device {
 
     fn create_render_pass<'a, IA, IS, ID>(
         &self, attachments: IA, subpasses: IS, _dependencies: ID
-    ) -> n::RenderPass
+    ) -> Result<n::RenderPass, d::OutOfMemory>
     where
         IA: IntoIterator,
         IA::Item: Borrow<pass::Attachment>,
@@ -485,13 +485,13 @@ impl d::Device<B> for Device {
                 })
                 .collect();
 
-        n::RenderPass {
+        Ok(n::RenderPass {
             attachments: attachments.into_iter().map(|attachment| attachment.borrow().clone()).collect::<Vec<_>>(),
             subpasses,
-        }
+        })
     }
 
-    fn create_pipeline_layout<IS, IR>(&self, layouts: IS, _: IR) -> n::PipelineLayout
+    fn create_pipeline_layout<IS, IR>(&self, layouts: IS, _: IR) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
         IS: IntoIterator,
         IS::Item: Borrow<n::DescriptorSetLayout>,
@@ -539,25 +539,26 @@ impl d::Device<B> for Device {
                 })
             });
 
-        n::PipelineLayout {
+        Ok(n::PipelineLayout {
             desc_remap_data: Arc::new(RwLock::new(drd)),
-        }
+        })
     }
 
-    fn create_pipeline_cache(&self) -> () {
-        ()
+    fn create_pipeline_cache(&self) -> Result<(), d::OutOfMemory> {
+        Ok(())
     }
 
     fn destroy_pipeline_cache(&self, _: ()) {
         //empty
     }
 
-    fn merge_pipeline_caches<I>(&self, _: &(), _: I)
+    fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<()>,
     {
         //empty
+        Ok(())
     }
 
     fn create_graphics_pipeline<'a>(
@@ -748,13 +749,13 @@ impl d::Device<B> for Device {
         pass: &n::RenderPass,
         attachments: I,
         _extent: i::Extent,
-    ) -> Result<n::FrameBuffer, d::FramebufferError>
+    ) -> Result<n::FrameBuffer, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<n::ImageView>,
     {
         if !self.share.private_caps.framebuffer {
-            return Err(d::FramebufferError);
+            return Err(d::OutOfMemory::OutOfHostMemory);
         }
 
         let gl = &self.share.context;
@@ -807,9 +808,9 @@ impl d::Device<B> for Device {
         Ok(n::ShaderModule::Spirv(raw_data.into()))
     }
 
-    fn create_sampler(&self, info: i::SamplerInfo) -> n::FatSampler {
+    fn create_sampler(&self, info: i::SamplerInfo) -> Result<n::FatSampler, d::AllocationError> {
         if !self.share.legacy_features.contains(LegacyFeatures::SAMPLER_OBJECTS) {
-            return n::FatSampler::Info(info);
+            return Ok(n::FatSampler::Info(info));
         }
 
         let gl = &self.share.context;
@@ -860,11 +861,11 @@ impl d::Device<B> for Device {
             }
         }
 
-        if let Err(err) = self.share.check() {
-            panic!("Error {:?} creating sampler: {:?}", err, info)
+        if let Err(_) = self.share.check() {
+            Err(d::AllocationError::OutOfMemory(d::OutOfMemory::OutOfHostMemory))
+        } else {
+            Ok(n::FatSampler::Sampler(name))
         }
-
-        n::FatSampler::Sampler(name)
     }
 
     fn create_buffer(
@@ -1017,17 +1018,17 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn flush_mapped_memory_ranges<'a, I, R>(&self, _: I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, _: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
-        // unimplemented!()
         warn!("memory range invalidation not implemented!");
+        Ok(())
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _ranges: I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
@@ -1165,15 +1166,15 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_descriptor_pool<I>(&self, _: usize, _: I) -> n::DescriptorPool
+    fn create_descriptor_pool<I>(&self, _: usize, _: I) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        n::DescriptorPool { }
+        Ok(n::DescriptorPool { })
     }
 
-    fn create_descriptor_set_layout<I, J>(&self, layout: I, _: J) -> n::DescriptorSetLayout
+    fn create_descriptor_set_layout<I, J>(&self, layout: I, _: J) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
@@ -1181,7 +1182,7 @@ impl d::Device<B> for Device {
         J::Item: Borrow<n::FatSampler>,
     {
         // Just return it
-        layout.into_iter().map(|l| l.borrow().clone()).collect()
+        Ok(layout.into_iter().map(|l| l.borrow().clone()).collect())
     }
 
     fn write_descriptor_sets<'a, I, J>(&self, writes: I)
@@ -1263,27 +1264,27 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_semaphore(&self) -> n::Semaphore {
-        n::Semaphore
+    fn create_semaphore(&self) -> Result<n::Semaphore, d::OutOfMemory> {
+        Ok(n::Semaphore)
     }
 
-    fn create_fence(&self, signalled: bool) -> n::Fence {
+    fn create_fence(&self, signalled: bool) -> Result<n::Fence, d::OutOfMemory> {
         let sync = if signalled && self.share.private_caps.sync {
             let gl = &self.share.context;
             unsafe { gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0) }
         } else {
             ptr::null()
         };
-        n::Fence::new(sync)
+        Ok(n::Fence::new(sync))
     }
 
-    fn reset_fences<I>(&self, fences: I)
+    fn reset_fences<I>(&self, fences: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
     {
         if !self.share.private_caps.sync {
-            return
+            return Err(d::OutOfMemory::OutOfHostMemory);
         }
 
         let gl = &self.share.context;
@@ -1297,25 +1298,26 @@ impl d::Device<B> for Device {
             }
             fence.0.set(ptr::null())
         }
+        Ok(())
     }
 
-    fn wait_for_fence(&self, fence: &n::Fence, timeout_ns: u64) -> bool {
+    fn wait_for_fence(&self, fence: &n::Fence, timeout_ns: u64) -> Result<bool, d::OomOrDeviceLost> {
         if !self.share.private_caps.sync {
-            return true;
+            return Ok(true);
         }
         match wait_fence(fence, &self.share.context, timeout_ns) {
-            gl::TIMEOUT_EXPIRED => false,
+            gl::TIMEOUT_EXPIRED => Ok(false),
             gl::WAIT_FAILED => {
                 if let Err(err) = self.share.check() {
                     error!("Error when waiting on fence: {:?}", err);
                 }
-                false
+                Ok(false)
             }
-            _ => true,
+            _ => Ok(true),
         }
     }
 
-    fn get_fence_status(&self, _: &n::Fence) -> bool {
+    fn get_fence_status(&self, _: &n::Fence) -> Result<bool, d::DeviceLost> {
         unimplemented!()
     }
 
@@ -1323,7 +1325,7 @@ impl d::Device<B> for Device {
         // Nothing to do
     }
 
-    fn create_query_pool(&self, _ty: query::Type, _count: query::Id) -> Result<(), query::Error> {
+    fn create_query_pool(&self, _ty: query::Type, _count: query::Id) -> Result<(), query::CreationError> {
         unimplemented!()
     }
 
@@ -1335,7 +1337,7 @@ impl d::Device<B> for Device {
         &self, _pool: &(), _queries: Range<query::Id>,
         _data: &mut [u8], _stride: buffer::Offset,
         _flags: query::ResultFlags,
-    ) -> Result<bool, query::Error> {
+    ) -> Result<bool, d::OomOrDeviceLost> {
         unimplemented!()
     }
 
@@ -1420,8 +1422,8 @@ impl d::Device<B> for Device {
         surface: &mut Surface,
         config: c::SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
-    ) -> (Swapchain, c::Backbuffer<B>) {
-        self.create_swapchain_impl(surface, config)
+    ) -> Result<(Swapchain, c::Backbuffer<B>), c::window::CreationError> {
+        Ok(self.create_swapchain_impl(surface, config))
     }
 
     fn destroy_swapchain(&self, _swapchain: Swapchain) {
