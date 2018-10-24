@@ -71,9 +71,11 @@ fn main() {
                 }
             ],
             &[],
-        );
+        ).expect("Can't create descriptor set layout");
 
-        let pipeline_layout = device.create_pipeline_layout(Some(&set_layout), &[]);
+        let pipeline_layout = device
+            .create_pipeline_layout(Some(&set_layout), &[])
+            .expect("Can't create pipeline layout");
         let entry_point = pso::EntryPoint {
             entry: "main",
             module: &shader,
@@ -91,7 +93,7 @@ fn main() {
                     count: 1,
                 },
             ],
-        );
+        ).expect("Can't create descriptor pool");
         (pipeline_layout, pipeline, set_layout, desc_pool)
     };
 
@@ -107,7 +109,7 @@ fn main() {
     {
         let mut writer = device.acquire_mapping_writer::<u32>(&staging_memory, 0..staging_size).unwrap();
         writer[0..numbers.len()].copy_from_slice(&numbers);
-        device.release_mapping_writer(writer);
+        device.release_mapping_writer(writer).expect("Can't relase mapping writer");
     }
 
     let (device_memory, device_buffer, _device_buffer_size) = create_buffer::<back::Backend>(
@@ -131,8 +133,12 @@ fn main() {
         }
     ));
 
-    let mut command_pool = device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16);
-    let fence = device.create_fence(false);
+    let mut command_pool = device
+        .create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16)
+        .expect("Can't create command pool");
+    let fence = device
+        .create_fence(false)
+        .expect("Can't create fence");
     let submission = queue::Submission::new().submit(Some({
         let mut command_buffer = command_pool.acquire_command_buffer(false);
         command_buffer.copy_buffer(&staging_buffer, &device_buffer, &[command::BufferCopy { src: 0, dst: 0, size: stride * numbers.len() as u64}]);
@@ -159,7 +165,7 @@ fn main() {
         command_buffer.finish()
     }));
     queue_group.queues[0].submit(submission, Some(&fence));
-    device.wait_for_fence(&fence, !0);
+    device.wait_for_fence(&fence, !0).unwrap();
 
     {
         let reader = device.acquire_mapping_reader::<u32>(&staging_memory, 0..staging_size).unwrap();

@@ -149,7 +149,7 @@ impl<B: Backend> RendererState<B> {
             }],
         );
 
-        let mut img_desc_pool = Some(device.borrow().device.create_descriptor_pool(
+        let mut img_desc_pool = device.borrow().device.create_descriptor_pool(
             1, // # of sets
             &[
                 pso::DescriptorRangeDesc {
@@ -161,15 +161,15 @@ impl<B: Backend> RendererState<B> {
                     count: 1,
                 },
             ],
-        ));
+        ).ok();
 
-        let mut uniform_desc_pool = Some(device.borrow().device.create_descriptor_pool(
+        let mut uniform_desc_pool = device.borrow().device.create_descriptor_pool(
             1, // # of sets
             &[pso::DescriptorRangeDesc {
                 ty: pso::DescriptorType::UniformBuffer,
                 count: 1,
             }],
-        ));
+        ).ok();
 
         let image_desc = image_desc.create_desc_set(img_desc_pool.as_mut().unwrap());
         let uniform_desc = uniform_desc.create_desc_set(uniform_desc_pool.as_mut().unwrap());
@@ -185,7 +185,7 @@ impl<B: Backend> RendererState<B> {
             &device.borrow().queues,
             pool::CommandPoolCreateFlags::empty(),
             16,
-        );
+        ).expect("Can't create staging command pool");
 
         let image = ImageState::new::<hal::Graphics>(
             image_desc,
@@ -499,8 +499,8 @@ impl<B: Backend> RendererState<B> {
             self.device
                 .borrow()
                 .device
-                .wait_for_fence(framebuffer_fence, !0);
-            self.device.borrow().device.reset_fence(framebuffer_fence);
+                .wait_for_fence(framebuffer_fence, !0).unwrap();
+            self.device.borrow().device.reset_fence(framebuffer_fence).unwrap();
             command_pool.reset();
 
             // Rendering
@@ -729,10 +729,11 @@ impl<B: Backend> RenderPassState<B> {
                 .borrow()
                 .device
                 .create_render_pass(&[attachment], &[subpass], &[dependency])
+                .ok()
         };
 
         RenderPassState {
-            render_pass: Some(render_pass),
+            render_pass,
             device,
         }
     }
@@ -804,7 +805,7 @@ impl<B: Backend> BufferState<B> {
                     .acquire_mapping_writer::<T>(&memory, 0..size)
                     .unwrap();
                 data_target[0..data_source.len()].copy_from_slice(data_source);
-                device.release_mapping_writer(data_target);
+                device.release_mapping_writer(data_target).unwrap();
             }
         }
 
@@ -831,7 +832,7 @@ impl<B: Backend> BufferState<B> {
             .acquire_mapping_writer::<T>(self.memory.as_ref().unwrap(), offset..self.size)
             .unwrap();
         data_target[0..data_source.len()].copy_from_slice(data_source);
-        device.release_mapping_writer(data_target);
+        device.release_mapping_writer(data_target).unwrap();
     }
 
     fn new_texture(
@@ -887,7 +888,7 @@ impl<B: Backend> BufferState<B> {
                         .copy_from_slice(data_source_slice);
                 }
 
-                device.release_mapping_writer(data_target);
+                device.release_mapping_writer(data_target).unwrap();
             }
         }
 
@@ -970,10 +971,11 @@ impl<B: Backend> DescSetLayout<B> {
         let desc_set_layout = device
             .borrow()
             .device
-            .create_descriptor_set_layout(bindings, &[]);
+            .create_descriptor_set_layout(bindings, &[])
+            .ok();
 
         DescSetLayout {
-            layout: Some(desc_set_layout),
+            layout: desc_set_layout,
             device,
         }
     }
@@ -1099,8 +1101,9 @@ impl<B: Backend> ImageState<B> {
             )
             .unwrap();
 
-        let sampler =
-            device.create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp));
+        let sampler = device
+            .create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
+            .expect("Can't create sampler");
 
         desc.write_to_state(
             vec![
@@ -1118,7 +1121,9 @@ impl<B: Backend> ImageState<B> {
             device,
         );
 
-        let mut transfered_image_fence = device.create_fence(false);
+        let mut transfered_image_fence = device
+            .create_fence(false)
+            .expect("Can't create fence");
 
         // copy buffer to texture
         {
@@ -1192,7 +1197,7 @@ impl<B: Backend> ImageState<B> {
 
     fn wait_for_transfer_completion(&self) {
         let device = &self.desc.layout.device.borrow().device;
-        device.wait_for_fence(self.transfered_image_fence.as_ref().unwrap(), !0);
+        device.wait_for_fence(self.transfered_image_fence.as_ref().unwrap(), !0).unwrap();
     }
 
     fn get_layout(&self) -> &B::DescriptorSetLayout {
@@ -1206,7 +1211,7 @@ impl<B: Backend> Drop for ImageState<B> {
             let device = &self.desc.layout.device.borrow().device;
 
             let fence = self.transfered_image_fence.take().unwrap();
-            device.wait_for_fence(&fence, !0);
+            device.wait_for_fence(&fence, !0).unwrap();
             device.destroy_fence(fence);
 
             device.destroy_sampler(self.sampler.take().unwrap());
@@ -1236,8 +1241,9 @@ impl<B: Backend> PipelineState<B> {
         IS::Item: std::borrow::Borrow<B::DescriptorSetLayout>,
     {
         let device = &device_ptr.borrow().device;
-        let pipeline_layout =
-            device.create_pipeline_layout(desc_layouts, &[(pso::ShaderStageFlags::VERTEX, 0..8)]);
+        let pipeline_layout = device
+            .create_pipeline_layout(desc_layouts, &[(pso::ShaderStageFlags::VERTEX, 0..8)])
+            .expect("Can't create pipeline layout");
 
         let pipeline = {
             let vs_module = {
@@ -1384,7 +1390,7 @@ impl<B: Backend> SwapchainState<B> {
             &mut backend.surface,
             swap_config,
             None,
-        );
+        ).expect("Can't create swapchain");
 
         let swapchain = SwapchainState {
             swapchain: Some(swapchain),
@@ -1474,15 +1480,15 @@ impl<B: Backend> FramebufferState<B> {
         let mut present_semaphores: Vec<B::Semaphore> = vec![];
 
         for _ in 0..iter_count {
-            fences.push(device.borrow().device.create_fence(true));
+            fences.push(device.borrow().device.create_fence(true).unwrap());
             command_pools.push(device.borrow().device.create_command_pool_typed(
                 &device.borrow().queues,
                 pool::CommandPoolCreateFlags::empty(),
                 16,
-            ));
+            ).expect("Can't create command pool"));
 
-            acquire_semaphores.push(device.borrow().device.create_semaphore());
-            present_semaphores.push(device.borrow().device.create_semaphore());
+            acquire_semaphores.push(device.borrow().device.create_semaphore().unwrap());
+            present_semaphores.push(device.borrow().device.create_semaphore().unwrap());
         }
 
         FramebufferState {
@@ -1546,7 +1552,7 @@ impl<B: Backend> Drop for FramebufferState<B> {
         let device = &self.device.borrow().device;
 
         for fence in self.framebuffer_fences.take().unwrap() {
-            device.wait_for_fence(&fence, !0);
+            device.wait_for_fence(&fence, !0).unwrap();
             device.destroy_fence(fence);
         }
 

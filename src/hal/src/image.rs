@@ -2,10 +2,9 @@
 //!
 //! An image is a block of GPU memory representing a grid of texels.
 
-use std::error::Error;
-use std::fmt;
 use std::ops::Range;
 
+use device;
 use format;
 use buffer::Offset as RawOffset;
 use pso::Comparison;
@@ -89,131 +88,79 @@ pub enum Tiling {
 }
 
 /// Pure image object creation error.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Fail)]
 pub enum CreationError {
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
     /// The format is not supported by the device.
+    #[fail(display = "Failed to map a given format ({:?}) to the device", _0)]
     Format(format::Format),
     /// The kind doesn't support a particular operation.
+    #[fail(display = "The kind doesn't support a particular operation")]
     Kind,
     /// Failed to map a given multisampled kind to the device.
+    #[fail(display = "Failed to map a given multisampled kind ({}) to the device", _0)]
     Samples(NumSamples),
     /// Unsupported size in one of the dimensions.
+    #[fail(display = "Unsupported size ({}) in one of the dimensions", _0)]
     Size(Size),
     /// The given data has a different size than the target image slice.
+    #[fail(display = "The given data has a different size ({}) than the target image slice", _0)]
     Data(usize),
     /// The mentioned usage mode is not supported
+    #[fail(display = "The expected image usage mode ({:?}) is not supported by a graphic API", _0)]
     Usage(Usage),
 }
 
-impl fmt::Display for CreationError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            CreationError::Format(format) => write!(f, "{}: {:?}", self.description(), format),
-            CreationError::Samples(aa) => write!(f, "{}: {:?}", self.description(), aa),
-            CreationError::Size(size) => write!(f, "{}: {}", self.description(), size),
-            CreationError::Data(data) => write!(f, "{}: {}", self.description(), data),
-            CreationError::Usage(usage) => write!(f, "{}: {:?}", self.description(), usage),
-            _ => write!(f, "{}", self.description()),
-        }
-    }
-}
-
-impl Error for CreationError {
-    fn description(&self) -> &str {
-        match *self {
-            CreationError::Format(..) => "Failed to map a given format to the device",
-            CreationError::Kind => "The kind doesn't support a particular operation",
-            CreationError::Samples(_) => "Failed to map a given multisampled kind to the device",
-            CreationError::Size(_) => "Unsupported size in one of the dimensions",
-            CreationError::Data(_) => "The given data has a different size than the target image slice",
-            CreationError::Usage(_) => "The expected image usage mode is not supported by a graphic API",
-        }
+impl From<device::OutOfMemory> for CreationError {
+    fn from(error: device::OutOfMemory) -> Self {
+        CreationError::OutOfMemory(error)
     }
 }
 
 /// Error creating an `ImageView`.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq, Fail)]
 pub enum ViewError {
     /// The required usage flag is not present in the image.
+    #[fail(display = "The required usage flag ({:?}) is not present in the image", _0)]
     Usage(Usage),
     /// Selected mip levels doesn't exist.
+    #[fail(display = "Selected mip level ({}) doesn't exist", _0)]
     Level(Level),
     /// Selected array layer doesn't exist.
+    #[fail(display = "Selected mip layer ({}) doesn't exist", _0)]
     Layer(LayerError),
     /// An incompatible format was requested for the view.
-    BadFormat,
+    #[fail(display = "An incompatible format ({:?}) was requested for the view", _0)]
+    BadFormat(format::Format),
     /// Unsupported view kind.
-    BadKind,
+    #[fail(display = "An incompatible kind ({:?}) was requested for the view", _0)]
+    BadKind(ViewKind),
+    /// Out of either Host or Device memory
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
     /// The backend refused for some reason.
+    #[fail(display = "The backend refused for some reason")]
     Unsupported,
 }
 
-impl fmt::Display for ViewError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let description = self.description();
-        match *self {
-            ViewError::Usage(usage) => write!(f, "{}: {:?}", description, usage),
-            ViewError::Level(level) => write!(f, "{}: {}", description, level),
-            ViewError::Layer(ref layer) => write!(f, "{}: {}", description, layer),
-            _ => write!(f, "{}", description)
-        }
+impl From<device::OutOfMemory> for ViewError {
+    fn from(error: device::OutOfMemory) -> Self {
+        ViewError::OutOfMemory(error)
     }
 }
-
-impl Error for ViewError {
-    fn description(&self) -> &str {
-        match *self {
-            ViewError::Usage(_) =>
-                "The required usage flag is not present in the image",
-            ViewError::Level(_) =>
-                "Selected mip level doesn't exist",
-            ViewError::Layer(_) =>
-                "Selected array layer doesn't exist",
-            ViewError::BadKind =>
-                "An incompatible kind was requested for the view",
-            ViewError::BadFormat =>
-                "An incompatible format was requested for the view",
-            ViewError::Unsupported =>
-                "The backend refused for some reason",
-        }
-    }
-
-    fn cause(&self) -> Option<&Error> {
-        match *self {
-            ViewError::Layer(ref e) => Some(e),
-            _ => None,
-        }
-    }
-}
-
 
 /// An error associated with selected image layer.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Fail)]
 pub enum LayerError {
     /// The source image kind doesn't support array slices.
+    #[fail(display = "The source image kind ({:?}) doesn't support array slices", _0)]
     NotExpected(Kind),
     /// Selected layer is outside of the provided range.
+    #[fail(display = "Selected layers ({:?}) are outside of the provided range", _0)]
     OutOfBounds(Range<Layer>),
 }
-
-impl fmt::Display for LayerError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match *self {
-            LayerError::NotExpected(kind) => write!(f, "{}: {:?}", self.description(), kind),
-            LayerError::OutOfBounds(ref range) => write!(f, "{}: {:?}", self.description(), range),
-        }
-    }
-}
-
-impl Error for LayerError {
-    fn description(&self) -> &str {
-        match *self {
-            LayerError::NotExpected(_) => "The source image kind doesn't support array slices",
-            LayerError::OutOfBounds(_) => "Selected layers are outside of the provided range",
-        }
-    }
-}
-
 
 /// How to [filter](https://en.wikipedia.org/wiki/Texture_filtering) the
 /// image when sampling. They correspond to increasing levels of quality,

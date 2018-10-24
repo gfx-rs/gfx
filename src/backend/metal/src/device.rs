@@ -17,8 +17,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{cmp, iter, mem, ptr, slice, thread, time};
 
-use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query};
-use hal::device::{BindError, OutOfMemory, FramebufferError, ShaderError};
+use hal::{self, error, image, pass, format, mapping, memory, buffer, pso, query, window};
+use hal::device::{BindError, OutOfMemory, ShaderError, AllocationError, DeviceLost, OomOrDeviceLost};
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::{QueueFamilyId, Queues};
@@ -864,8 +864,8 @@ impl Device {
 impl hal::Device<Backend> for Device {
     fn create_command_pool(
         &self, _family: QueueFamilyId, _flags: CommandPoolCreateFlags
-    ) -> command::CommandPool {
-        command::CommandPool::new(&self.shared, self.online_recording.clone())
+    ) -> Result<command::CommandPool, OutOfMemory> {
+        Ok(command::CommandPool::new(&self.shared, self.online_recording.clone()))
     }
 
     fn destroy_command_pool(&self, mut pool: command::CommandPool) {
@@ -878,7 +878,7 @@ impl hal::Device<Backend> for Device {
         attachments: IA,
         subpasses: IS,
         _dependencies: ID,
-    ) -> n::RenderPass
+    ) -> Result<n::RenderPass, OutOfMemory>
     where
         IA: IntoIterator,
         IA::Item: Borrow<pass::Attachment>,
@@ -949,17 +949,17 @@ impl hal::Device<Backend> for Device {
             }
         }
 
-        n::RenderPass {
+        Ok(n::RenderPass {
             attachments,
             subpasses,
-        }
+        })
     }
 
     fn create_pipeline_layout<IS, IR>(
         &self,
         set_layouts: IS,
         push_constant_ranges: IR,
-    ) -> n::PipelineLayout
+    ) -> Result<n::PipelineLayout, OutOfMemory>
     where
         IS: IntoIterator,
         IS::Item: Borrow<n::DescriptorSetLayout>,
@@ -1128,7 +1128,7 @@ impl hal::Device<Backend> for Device {
             }
         }
 
-        n::PipelineLayout {
+        Ok(n::PipelineLayout {
             shader_compiler_options,
             shader_compiler_options_point,
             infos,
@@ -1154,20 +1154,20 @@ impl hal::Device<Backend> for Device {
             total_push_constants: pc_limits[0]
                 .max(pc_limits[1])
                 .max(pc_limits[2]),
-        }
+        })
     }
 
-    fn create_pipeline_cache(&self) -> n::PipelineCache {
-        n::PipelineCache {
+    fn create_pipeline_cache(&self) -> Result<n::PipelineCache, OutOfMemory> {
+        Ok(n::PipelineCache {
             modules: FastStorageMap::default(),
-        }
+        })
     }
 
     fn destroy_pipeline_cache(&self, _cache: n::PipelineCache) {
         //drop
     }
 
-    fn merge_pipeline_caches<I>(&self, target: &n::PipelineCache, sources: I)
+    fn merge_pipeline_caches<I>(&self, target: &n::PipelineCache, sources: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<n::PipelineCache>,
@@ -1195,6 +1195,8 @@ impl hal::Device<Backend> for Device {
                 }
             }
         }
+
+        Ok(())
     }
 
     fn create_graphics_pipeline<'a>(
@@ -1468,7 +1470,7 @@ impl hal::Device<Backend> for Device {
 
     fn create_framebuffer<I>(
         &self, _render_pass: &n::RenderPass, attachments: I, extent: image::Extent
-    ) -> Result<n::Framebuffer, FramebufferError>
+    ) -> Result<n::Framebuffer, OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<n::ImageView>
@@ -1497,7 +1499,7 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn create_sampler(&self, info: image::SamplerInfo) -> n::Sampler {
+    fn create_sampler(&self, info: image::SamplerInfo) -> Result<n::Sampler, AllocationError> {
         let descriptor = metal::SamplerDescriptor::new();
 
         descriptor.set_min_filter(conv::map_filter(info.min_filter));
@@ -1545,11 +1547,11 @@ impl hal::Device<Backend> for Device {
             });
         }
 
-        n::Sampler(
+        Ok(n::Sampler(
             self.shared.device
             .lock()
             .new_sampler(&descriptor)
-        )
+        ))
     }
 
     fn destroy_sampler(&self, _sampler: n::Sampler) {
@@ -1573,7 +1575,7 @@ impl hal::Device<Backend> for Device {
         debug!("unmap_memory of size {}", memory.size);
     }
 
-    fn flush_mapped_memory_ranges<'a, I, R>(&self, iter: I)
+    fn flush_mapped_memory_ranges<'a, I, R>(&self, iter: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
@@ -1597,9 +1599,11 @@ impl hal::Device<Backend> for Device {
                 n::MemoryHeap::Private => panic!("Can't map private memory!"),
             };
         }
+
+        Ok(())
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, iter: I)
+    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, iter: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
@@ -1639,10 +1643,12 @@ impl hal::Device<Backend> for Device {
             cmd_buffer.commit();
             cmd_buffer.wait_until_completed();
         }
+
+        Ok(())
     }
 
-    fn create_semaphore(&self) -> n::Semaphore {
-        n::Semaphore {
+    fn create_semaphore(&self) -> Result<n::Semaphore, OutOfMemory> {
+        Ok(n::Semaphore {
             // Semaphore synchronization between command buffers of the same queue
             // is useless, don't bother even creating one.
             system: if self.private_caps.exposed_queues > 1 {
@@ -1651,10 +1657,10 @@ impl hal::Device<Backend> for Device {
                 None
             },
             image_ready: Arc::new(Mutex::new(None)),
-        }
+        })
     }
 
-    fn create_descriptor_pool<I>(&self, _max_sets: usize, descriptor_ranges: I) -> n::DescriptorPool
+    fn create_descriptor_pool<I>(&self, _max_sets: usize, descriptor_ranges: I) -> Result<n::DescriptorPool, OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
@@ -1684,10 +1690,10 @@ impl hal::Device<Backend> for Device {
             let total_size = encoder.encoded_length();
             let raw = device.new_buffer(total_size, MTLResourceOptions::empty());
 
-            n::DescriptorPool::ArgumentBuffer {
+            Ok(n::DescriptorPool::ArgumentBuffer {
                 raw,
                 range_allocator: RangeAllocator::new(0..total_size),
-            }
+            })
         } else {
             for desc_range in descriptor_ranges {
                 let dr = desc_range.borrow();
@@ -1696,13 +1702,13 @@ impl hal::Device<Backend> for Device {
                     dr.count as pso::DescriptorBinding,
                 );
             }
-            n::DescriptorPool::new_emulated(counters)
+            Ok(n::DescriptorPool::new_emulated(counters))
         }
     }
 
     fn create_descriptor_set_layout<I, J>(
         &self, binding_iter: I, immutable_samplers: J
-    ) -> n::DescriptorSetLayout
+    ) -> Result<n::DescriptorSetLayout, OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
@@ -1724,7 +1730,7 @@ impl hal::Device<Backend> for Device {
                 .lock()
                 .new_argument_encoder(&arg_array);
 
-            n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags)
+            Ok(n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags))
         } else {
             struct TempSampler {
                 sampler: metal::SamplerState,
@@ -1776,10 +1782,10 @@ impl hal::Device<Backend> for Device {
                 }
             });
 
-            n::DescriptorSetLayout::Emulated(
+            Ok(n::DescriptorSetLayout::Emulated(
                 Arc::new(desc_layouts),
                 tmp_samplers.into_iter().map(|ts| ts.sampler).collect()
-            )
+            ))
         }
     }
 
@@ -1900,7 +1906,7 @@ impl hal::Device<Backend> for Device {
     fn destroy_semaphore(&self, _semaphore: n::Semaphore) {
     }
 
-    fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, OutOfMemory> {
+    fn allocate_memory(&self, memory_type: hal::MemoryTypeId, size: u64) -> Result<n::Memory, AllocationError> {
         let (storage, cache) = MemoryTypes::describe(memory_type.0);
         let device = self.shared.device.lock();
         debug!("allocate_memory type {:?} of size {}", memory_type, size);
@@ -2302,7 +2308,7 @@ impl hal::Device<Backend> for Device {
             Some(f) => f,
             None => {
                 error!("failed to swizzle format {:?} with {:?}", format, swizzle);
-                return Err(image::ViewError::BadFormat);
+                return Err(image::ViewError::BadFormat(format));
             },
         };
         let raw = image.like.as_texture();
@@ -2343,13 +2349,14 @@ impl hal::Device<Backend> for Device {
     fn destroy_image_view(&self, _view: n::ImageView) {
     }
 
-    fn create_fence(&self, signaled: bool) -> n::Fence {
-        n::Fence(RefCell::new(n::FenceInner::Idle { signaled }))
+    fn create_fence(&self, signaled: bool) -> Result<n::Fence, OutOfMemory> {
+        Ok(n::Fence(RefCell::new(n::FenceInner::Idle { signaled })))
     }
-    fn reset_fence(&self, fence: &n::Fence) {
+    fn reset_fence(&self, fence: &n::Fence) -> Result<(), OutOfMemory> {
         *fence.0.borrow_mut() = n::FenceInner::Idle { signaled: false };
+        Ok(())
     }
-    fn wait_for_fence(&self, fence: &n::Fence, timeout_ns: u64) -> bool {
+    fn wait_for_fence(&self, fence: &n::Fence, timeout_ns: u64) -> Result<bool, OomOrDeviceLost> {
         fn to_ns(duration: time::Duration) -> u64 {
             duration.as_secs() * 1_000_000_000 + duration.subsec_nanos() as u64
         }
@@ -2357,40 +2364,40 @@ impl hal::Device<Backend> for Device {
         debug!("wait_for_fence {:?} for {} ms", fence, timeout_ns);
         let inner = fence.0.borrow();
         let cmd_buf = match *inner {
-            native::FenceInner::Idle { signaled } => return signaled,
+            native::FenceInner::Idle { signaled } => return Ok(signaled),
             native::FenceInner::Pending(ref cmd_buf) => cmd_buf,
         };
         if timeout_ns == !0 {
             cmd_buf.wait_until_completed();
-            return true
+            return Ok(true)
         }
 
         let start = time::Instant::now();
         loop {
             if let metal::MTLCommandBufferStatus::Completed = cmd_buf.status() {
-                return true
+                return Ok(true);
             }
             if to_ns(start.elapsed()) >= timeout_ns {
-                return false;
+                return Ok(false);
             }
             thread::sleep(time::Duration::from_millis(1));
         }
     }
-    fn get_fence_status(&self, fence: &n::Fence) -> bool {
-        match *fence.0.borrow() {
+    fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, DeviceLost> {
+        Ok(match *fence.0.borrow() {
             native::FenceInner::Idle { signaled } => signaled,
             native::FenceInner::Pending(ref cmd_buf) => match cmd_buf.status() {
                 metal::MTLCommandBufferStatus::Completed => true,
                 _ => false,
             },
-        }
+        })
     }
     fn destroy_fence(&self, _fence: n::Fence) {
     }
 
     fn create_query_pool(
         &self, ty: query::Type, count: query::Id
-    ) -> Result<n::QueryPool, query::Error> {
+    ) -> Result<n::QueryPool, query::CreationError> {
         match ty {
             query::Type::Occlusion => {
                 let range = self.shared.visibility.allocator
@@ -2398,12 +2405,13 @@ impl hal::Device<Backend> for Device {
                     .allocate_range(count)
                     .map_err(|_| {
                         error!("Not enough space to allocate an occlusion query pool");
+                        OutOfMemory::OutOfHostMemory
                     })?;
                 Ok(n::QueryPool::Occlusion(range))
             }
             _ => {
                 error!("Only occlusion queries are currently supported");
-                Err(())
+                Err(query::CreationError::Unsupported(ty))
             }
         }
     }
@@ -2422,7 +2430,7 @@ impl hal::Device<Backend> for Device {
         &self, pool: &n::QueryPool, queries: Range<query::Id>,
         data: &mut [u8], stride: buffer::Offset,
         flags: query::ResultFlags,
-    ) -> Result<bool, query::Error> {
+    ) -> Result<bool, OomOrDeviceLost> {
         let is_ready = match *pool {
             native::QueryPool::Occlusion(ref pool_range) => {
                 let visibility = &self.shared.visibility;
@@ -2490,8 +2498,8 @@ impl hal::Device<Backend> for Device {
         surface: &mut Surface,
         config: hal::SwapchainConfig,
         old_swapchain: Option<Swapchain>,
-    ) -> (Swapchain, hal::Backbuffer<Backend>) {
-        self.build_swapchain(surface, config, old_swapchain)
+    ) -> Result<(Swapchain, hal::Backbuffer<Backend>), window::CreationError> {
+        Ok(self.build_swapchain(surface, config, old_swapchain))
     }
 
     fn destroy_swapchain(&self, _swapchain: Swapchain) {
