@@ -10,6 +10,7 @@ use command::{
 use queue::capability::{Supports, Graphics};
 
 use std::any::Any;
+use std::fmt;
 use std::marker::PhantomData;
 
 bitflags!(
@@ -25,7 +26,7 @@ bitflags!(
 );
 
 /// The allocated command buffers are associated with the creating command queue.
-pub trait RawCommandPool<B: Backend>: Any + Send + Sync {
+pub trait RawCommandPool<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Reset the command pool and the corresponding command buffers.
     ///
     /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)

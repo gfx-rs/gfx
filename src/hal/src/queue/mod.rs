@@ -13,6 +13,7 @@ pub mod submission;
 use std::any::Any;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
+use std::fmt;
 
 use error::HostExecutionError;
 use window::SwapImageIndex;
@@ -44,7 +45,7 @@ pub enum QueueType {
 
 /// `RawCommandQueue` are abstractions to the internal GPU execution engines.
 /// Commands are executed on the the device by submitting command buffers to queues.
-pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
+pub trait RawCommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Submit command buffers to queue for execution.
     /// `fence` will be signalled after submission and _must_ be unsignalled.
     ///

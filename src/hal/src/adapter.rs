@@ -7,6 +7,7 @@
 //! that has the properties specified.
 
 use std::any::Any;
+use std::fmt;
 
 use error::DeviceCreationError;
 use queue::{Capability, QueueGroup};
@@ -50,7 +51,7 @@ pub struct MemoryProperties {
 }
 
 /// Represents a physical device (such as a GPU) capable of supporting the given backend.
-pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
+pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Create a new logical device.
     ///
     /// # Errors

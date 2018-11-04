@@ -57,6 +57,7 @@ use device;
 
 use std::any::Any;
 use std::borrow::Borrow;
+use std::fmt;
 use std::ops::Range;
 
 /// Error occurred during swapchain creation.
@@ -165,7 +166,7 @@ pub struct SurfaceCapabilities {
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
 /// on the display.
-pub trait Surface<B: Backend>: Any + Send + Sync {
+pub trait Surface<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Retrieve the surface image kind.
     fn kind(&self) -> image::Kind;
 
@@ -343,7 +344,7 @@ pub enum AcquireError {
 
 /// The `Swapchain` is the backend representation of the surface.
 /// It consists of multiple buffers, which will be presented on the surface.
-pub trait Swapchain<B: Backend>: Any + Send + Sync {
+pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Acquire a new swapchain image for rendering. This needs to be called before presenting.
     ///
     /// May fail according to one of the reasons indicated in `AcquireError` enum.
