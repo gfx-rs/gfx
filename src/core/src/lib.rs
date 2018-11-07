@@ -117,6 +117,8 @@ pub enum ShaderSet<R: Resources> {
     Geometry(VertexShader<R>, GeometryShader<R>, PixelShader<R>),
     /// Tessellated TODO: Tessellated, TessellatedGeometry, TransformFeedback
     Tessellated(VertexShader<R>, HullShader<R>, DomainShader<R>, PixelShader<R>),
+    /// Tessellated TODO: Tessellated, TessellatedGeometry, TransformFeedback
+    TessellatedGeometry(VertexShader<R>, HullShader<R>, DomainShader<R>, GeometryShader<R>, PixelShader<R>),
 }
 
 impl<R: Resources> ShaderSet<R> {
@@ -127,6 +129,7 @@ impl<R: Resources> ShaderSet<R> {
             ShaderSet::Simple(..) => Usage::VERTEX | Usage::PIXEL,
             ShaderSet::Geometry(..) => Usage::VERTEX | Usage::GEOMETRY | Usage::PIXEL,
             ShaderSet::Tessellated(..) => Usage::VERTEX | Usage::HULL | Usage::DOMAIN | Usage::PIXEL,
+            ShaderSet::TessellatedGeometry(..) => Usage::VERTEX | Usage::HULL | Usage::DOMAIN | Usage::GEOMETRY | Usage::PIXEL,
         }
     }
 }
