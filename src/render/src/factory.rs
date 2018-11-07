@@ -234,6 +234,37 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
         Ok(ShaderSet::Tessellated(vs, hs, ds, ps))
     }
 
+    /// Creates a `ShaderSet` from the supplied vertex, hull, domain, geometry and pixel
+    /// shader source code. Mainly used for testing.
+    fn create_shader_set_tessellation_with_geometry(&mut self, vs_code: &[u8], hs_code: &[u8], ds_code: &[u8], gs_code: &[u8], ps_code: &[u8])
+                         -> Result<ShaderSet<R>, ProgramError> {
+        let vs = match self.create_shader_vertex(vs_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Vertex(e)),
+        };
+
+        let hs = match self.create_shader_hull(hs_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Hull(e)),
+        };
+
+        let ds = match self.create_shader_domain(ds_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Domain(e)),
+        };
+
+        let gs = match self.create_shader_geometry(gs_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Geometry(e)),
+        };
+
+        let ps = match self.create_shader_pixel(ps_code) {
+            Ok(s) => s,
+            Err(e) => return Err(ProgramError::Pixel(e)),
+        };
+        Ok(ShaderSet::TessellatedGeometry(vs, hs, ds, gs, ps))
+    }
+
     /// Creates a basic shader `Program` from the supplied vertex and pixel shader source code.
     fn link_program(&mut self, vs_code: &[u8], ps_code: &[u8])
                     -> Result<handle::Program<R>, ProgramError> {

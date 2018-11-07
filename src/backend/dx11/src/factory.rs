@@ -541,7 +541,26 @@ impl core::Factory<R> for Factory {
                     ps: ps.object as *mut d3d11::ID3D11PixelShader,
                     vs_hash: vs.code_hash,
                 }
+            },
+            &core::ShaderSet::TessellatedGeometry(ref vs, ref hs, ref ds, ref gs, ref ps) => {
+                let (vs, hs, ds, gs, ps) = (vs.reference(fh), hs.reference(fh), ds.reference(fh), gs.reference(fh), ps.reference(fh));
+
+                populate_info(&mut info, Stage::Vertex, vs.reflection);
+                populate_info(&mut info, Stage::Hull,   hs.reflection);
+                populate_info(&mut info, Stage::Domain, ds.reflection);
+                populate_info(&mut info, Stage::Geometry, gs.reflection);
+                populate_info(&mut info, Stage::Pixel,  ps.reflection);
+                unsafe { (*vs.object).AddRef(); (*hs.object).AddRef(); (*ds.object).AddRef(); (*gs.object).AddRef(); (*ps.object).AddRef(); }
+                Program {
+                    vs: vs.object as *mut d3d11::ID3D11VertexShader,
+                    hs: hs.object as *mut d3d11::ID3D11HullShader,
+                    ds: ds.object as *mut d3d11::ID3D11DomainShader,
+                    gs: gs.object as *mut d3d11::ID3D11GeometryShader,
+                    ps: ps.object as *mut d3d11::ID3D11PixelShader,
+                    vs_hash: vs.code_hash,
+                }
             }
+
         };
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
