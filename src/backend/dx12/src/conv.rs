@@ -1,7 +1,7 @@
-use { validate_line_width };
+use validate_line_width;
 
-use std::mem;
 use spirv_cross::spirv;
+use std::mem;
 
 use winapi::shared::basetsd::UINT8;
 use winapi::shared::dxgiformat::*;
@@ -10,10 +10,10 @@ use winapi::um::d3d12::*;
 use winapi::um::d3dcommon::*;
 
 use hal::format::{Format, ImageFeature, SurfaceType};
-use hal::{buffer, image, pso, Primitive};
 use hal::pso::DescriptorSetLayoutBinding;
+use hal::{buffer, image, pso, Primitive};
 
-use native::descriptor::{DescriptorRange, DescriptorRangeType};
+use native::descriptor::{Binding, DescriptorRange, DescriptorRangeType};
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::Format::*;
 
@@ -116,15 +116,13 @@ pub fn map_format_dsv(surface: SurfaceType) -> Option<DXGI_FORMAT> {
 pub fn map_topology_type(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY_TYPE {
     use hal::Primitive::*;
     match primitive {
-        PointList  => D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
-        LineList |
-        LineStrip |
-        LineListAdjacency |
-        LineStripAdjacency => D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE,
-        TriangleList |
-        TriangleStrip |
-        TriangleListAdjacency |
-        TriangleStripAdjacency => D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
+        PointList => D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
+        LineList | LineStrip | LineListAdjacency | LineStripAdjacency => {
+            D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE
+        }
+        TriangleList | TriangleStrip | TriangleListAdjacency | TriangleStripAdjacency => {
+            D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
+        }
         PatchList(_) => D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH,
     }
 }
@@ -141,17 +139,19 @@ pub fn map_topology(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY {
         TriangleListAdjacency  => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
         TriangleStrip          => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
         TriangleStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-        PatchList(num) => { assert!(num != 0);
+        PatchList(num) => {
+            assert!(num != 0);
             D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + (num as u32) - 1
-        },
+        }
     }
 }
 
 pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
-    use hal::pso::PolygonMode::*;
     use hal::pso::FrontFace::*;
+    use hal::pso::PolygonMode::*;
 
-    let bias = match rasterizer.depth_bias { //TODO: support dynamic depth bias
+    let bias = match rasterizer.depth_bias {
+        //TODO: support dynamic depth bias
         Some(pso::State::Static(db)) => db,
         Some(_) | None => pso::DepthBias::default(),
     };
@@ -161,11 +161,11 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
             Point => {
                 error!("Point rasterization is not supported");
                 D3D12_FILL_MODE_WIREFRAME
-            },
+            }
             Line(width) => {
                 validate_line_width(width);
                 D3D12_FILL_MODE_WIREFRAME
-            },
+            }
             Fill => D3D12_FILL_MODE_SOLID,
         },
         CullMode: match rasterizer.cull_face {
@@ -182,10 +182,11 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
         DepthBiasClamp: bias.clamp,
         SlopeScaledDepthBias: bias.slope_factor,
         DepthClipEnable: !rasterizer.depth_clamping as _,
-        MultisampleEnable: FALSE, // TODO: currently not supported
-        ForcedSampleCount: 0, // TODO: currently not supported
+        MultisampleEnable: FALSE,     // TODO: currently not supported
+        ForcedSampleCount: 0,         // TODO: currently not supported
         AntialiasedLineEnable: FALSE, // TODO: currently not supported
-        ConservativeRaster: if rasterizer.conservative { // TODO: check support
+        ConservativeRaster: if rasterizer.conservative {
+            // TODO: check support
             D3D12_CONSERVATIVE_RASTERIZATION_MODE_ON
         } else {
             D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF
@@ -227,7 +228,6 @@ fn map_blend_op(operation: pso::BlendOp) -> (D3D12_BLEND_OP, D3D12_BLEND, D3D12_
     }
 }
 
-
 pub fn map_render_targets(
     color_targets: &[pso::ColorBlendDesc],
 ) -> [D3D12_RENDER_TARGET_BLEND_DESC; 8] {
@@ -245,7 +245,8 @@ pub fn map_render_targets(
     };
     let mut targets = [dummy_target; 8];
 
-    for (target, &pso::ColorBlendDesc(mask, blend)) in targets.iter_mut().zip(color_targets.iter()) {
+    for (target, &pso::ColorBlendDesc(mask, blend)) in targets.iter_mut().zip(color_targets.iter())
+    {
         target.RenderTargetWriteMask = mask.bits() as UINT8;
         if let pso::BlendState::On { color, alpha } = blend {
             let (color_op, color_src, color_dst) = map_blend_op(color);
@@ -270,18 +271,34 @@ pub fn map_depth_stencil(dsi: &pso::DepthStencilDesc) -> D3D12_DEPTH_STENCIL_DES
     };
 
     let (stencil_on, front, back, read_mask, write_mask) = match dsi.stencil {
-        pso::StencilTest::On { ref front, ref back } => {
+        pso::StencilTest::On {
+            ref front,
+            ref back,
+        } => {
             if front.mask_read != back.mask_read || front.mask_write != back.mask_write {
-                error!("Different masks on stencil front ({:?}) and back ({:?}) are not supported", front, back);
+                error!(
+                    "Different masks on stencil front ({:?}) and back ({:?}) are not supported",
+                    front, back
+                );
             }
-            (TRUE, map_stencil_side(front), map_stencil_side(back), front.mask_read, front.mask_write)
-        },
+            (
+                TRUE,
+                map_stencil_side(front),
+                map_stencil_side(back),
+                front.mask_read,
+                front.mask_write,
+            )
+        }
         pso::StencilTest::Off => unsafe { mem::zeroed() },
     };
 
     D3D12_DEPTH_STENCIL_DESC {
         DepthEnable: depth_on,
-        DepthWriteMask: if depth_write {D3D12_DEPTH_WRITE_MASK_ALL} else {D3D12_DEPTH_WRITE_MASK_ZERO},
+        DepthWriteMask: if depth_write {
+            D3D12_DEPTH_WRITE_MASK_ALL
+        } else {
+            D3D12_DEPTH_WRITE_MASK_ZERO
+        },
         DepthFunc: depth_func,
         StencilEnable: stencil_on,
         StencilReadMask: match read_mask {
@@ -369,11 +386,11 @@ pub fn map_filter(
     let min = map_filter_type(min_filter);
     let mip = map_filter_type(mip_filter);
 
-    (min & D3D12_FILTER_TYPE_MASK) << D3D12_MIN_FILTER_SHIFT |
-    (mag & D3D12_FILTER_TYPE_MASK) << D3D12_MAG_FILTER_SHIFT |
-    (mip & D3D12_FILTER_TYPE_MASK) << D3D12_MIP_FILTER_SHIFT |
-    (reduction & D3D12_FILTER_REDUCTION_TYPE_MASK) << D3D12_FILTER_REDUCTION_TYPE_SHIFT |
-    map_anisotropic(anisotropic)
+    (min & D3D12_FILTER_TYPE_MASK) << D3D12_MIN_FILTER_SHIFT
+        | (mag & D3D12_FILTER_TYPE_MASK) << D3D12_MAG_FILTER_SHIFT
+        | (mip & D3D12_FILTER_TYPE_MASK) << D3D12_MIP_FILTER_SHIFT
+        | (reduction & D3D12_FILTER_REDUCTION_TYPE_MASK) << D3D12_FILTER_REDUCTION_TYPE_SHIFT
+        | map_anisotropic(anisotropic)
 }
 
 pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATES {
@@ -396,7 +413,8 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
     if access.contains(Access::INDEX_BUFFER_READ) {
         state |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
     }
-    if access.contains(Access::VERTEX_BUFFER_READ) || access.contains(Access::CONSTANT_BUFFER_READ) {
+    if access.contains(Access::VERTEX_BUFFER_READ) || access.contains(Access::CONSTANT_BUFFER_READ)
+    {
         state |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
     if access.contains(Access::INDIRECT_COMMAND_READ) {
@@ -404,13 +422,17 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
     }
     if access.contains(Access::SHADER_READ) {
         // SHADER_READ only allows SRV access
-        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+            | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
 
     state
 }
 
-pub fn map_image_resource_state(access: image::Access, layout: image::Layout) -> D3D12_RESOURCE_STATES {
+pub fn map_image_resource_state(
+    access: image::Access,
+    layout: image::Layout,
+) -> D3D12_RESOURCE_STATES {
     use self::image::Access;
     // `D3D12_RESOURCE_STATE_PRESENT` is the same as COMMON (general state)
     if layout == image::Layout::Present {
@@ -424,7 +446,9 @@ pub fn map_image_resource_state(access: image::Access, layout: image::Layout) ->
     if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_WRITE) {
         return D3D12_RESOURCE_STATE_DEPTH_WRITE;
     }
-    if access.contains(Access::COLOR_ATTACHMENT_READ) || access.contains(Access::COLOR_ATTACHMENT_WRITE) {
+    if access.contains(Access::COLOR_ATTACHMENT_READ)
+        || access.contains(Access::COLOR_ATTACHMENT_WRITE)
+    {
         return D3D12_RESOURCE_STATE_RENDER_TARGET;
     }
 
@@ -453,7 +477,8 @@ pub fn map_image_resource_state(access: image::Access, layout: image::Layout) ->
         // SHADER_READ only allows SRV access
         // Already handled the `SHADER_WRITE` write case above.
         assert!(!access.contains(Access::SHADER_WRITE));
-        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+            | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     }
 
     state
@@ -484,8 +509,10 @@ pub fn map_descriptor_range(
             },
         },
         bind.count as _,
-        bind.binding as _,
-        register_space,
+        Binding {
+            register: bind.binding as _,
+            space: register_space,
+        },
         D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
     )
 }
