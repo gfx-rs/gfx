@@ -68,8 +68,10 @@ impl ServicePipes {
         let descriptor_range = [descriptor::DescriptorRange::new(
             descriptor::DescriptorRangeType::SRV,
             1,
-            0,
-            0,
+            native::descriptor::Binding {
+                register: 0,
+                space: 0,
+            },
             0,
         )];
 
@@ -80,16 +82,20 @@ impl ServicePipes {
             ),
             descriptor::RootParameter::constants(
                 descriptor::ShaderVisibility::All,
-                0,
-                0,
+                native::descriptor::Binding {
+                    register: 0,
+                    space: 0,
+                },
                 (mem::size_of::<BlitData>() / 4) as _,
             ),
         ];
 
         let static_samplers = [descriptor::StaticSampler::new(
             descriptor::ShaderVisibility::PS,
-            0,
-            0,
+            native::descriptor::Binding {
+                register: 0,
+                space: 0,
+            },
             filter,
             [
                 d3d12::D3D12_TEXTURE_ADDRESS_MODE_CLAMP,

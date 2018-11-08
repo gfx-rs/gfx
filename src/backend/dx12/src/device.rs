@@ -392,8 +392,7 @@ impl Device {
                 } else {
                     None
                 }
-            })
-            .collect();
+            }).collect();
         ast.set_compiler_options(&compile_options)
             .map_err(gen_unexpected_error)?;
         ast.set_root_constant_layout(root_constant_layout)
@@ -426,20 +425,24 @@ impl Device {
             }
             r::ShaderModule::Spirv(ref raw_data) => {
                 let mut ast = Self::parse_spirv(raw_data)?;
-                let spec_constants = ast.get_specialization_constants().map_err(gen_query_error)?;
+                let spec_constants = ast
+                    .get_specialization_constants()
+                    .map_err(gen_query_error)?;
 
                 //TODO: move this out into `auxil`
                 for spec_constant in spec_constants {
-                    if let Some(constant) = source.specialization.constants
+                    if let Some(constant) = source
+                        .specialization
+                        .constants
                         .iter()
                         .find(|c| c.id == spec_constant.constant_id)
                     {
                         // Override specialization constant values
-                        let value = source.specialization
-                            .data[constant.range.start as usize .. constant.range.end as usize]
+                        let value = source.specialization.data
+                            [constant.range.start as usize..constant.range.end as usize]
                             .iter()
                             .rev()
-                            .fold(0u64, |u, &b| (u<<8) + b as u64);
+                            .fold(0u64, |u, &b| (u << 8) + b as u64);
                         ast.set_scalar_constant(spec_constant.id, value)
                             .map_err(gen_query_error)?;
                     }
@@ -1128,8 +1131,7 @@ impl d::Device<B> for Device {
                     att.layouts.start,
                 ),
                 barrier_start_index: 0,
-            })
-            .collect::<Vec<_>>();
+            }).collect::<Vec<_>>();
 
         // Fill out subpass known layouts
         for (sid, sub) in subpasses.iter().enumerate() {
@@ -1310,8 +1312,7 @@ impl d::Device<B> for Device {
                     stages: constant.stages,
                     range: constant.range.start..constant.range.end,
                 }
-            })
-            .collect::<Vec<_>>();
+            }).collect::<Vec<_>>();
 
         // guarantees that no re-allocation is done, and our pointers are valid
         let mut parameters = Vec::with_capacity(root_constants.len() + sets.len() * 2);
@@ -1319,8 +1320,10 @@ impl d::Device<B> for Device {
         for root_constant in root_constants.iter() {
             parameters.push(native::descriptor::RootParameter::constants(
                 native::descriptor::ShaderVisibility::All, // TODO
-                root_constant.range.start as _,
-                ROOT_CONSTANT_SPACE,
+                native::descriptor::Binding {
+                    register: root_constant.range.start as _,
+                    space: ROOT_CONSTANT_SPACE,
+                },
                 (root_constant.range.end - root_constant.range.start) as _,
             ));
         }
@@ -1347,8 +1350,7 @@ impl d::Device<B> for Device {
                 }
 
                 sum
-            })
-            .sum();
+            }).sum();
         let mut ranges = Vec::with_capacity(total);
         let mut set_tables = Vec::with_capacity(sets.len());
 
@@ -1381,8 +1383,7 @@ impl d::Device<B> for Device {
                     .filter(|bind| {
                         bind.ty == pso::DescriptorType::Sampler
                             || bind.ty == pso::DescriptorType::CombinedImageSampler
-                    })
-                    .map(|bind| {
+                    }).map(|bind| {
                         conv::map_descriptor_range(bind, (table_space_offset + i) as u32, true)
                     }),
             );
@@ -1571,8 +1572,7 @@ impl d::Device<B> for Device {
                     InputSlotClass: slot_class,
                     InstanceDataStepRate: buffer_desc.rate as _,
                 }))
-            })
-            .collect::<Result<Vec<_>, _>>()?;
+            }).collect::<Result<Vec<_>, _>>()?;
 
         // TODO: check maximum number of rtvs
         // Get associated subpass information
@@ -1653,8 +1653,7 @@ impl d::Device<B> for Device {
                     desc.subpass.main_pass.attachments[att_ref.0]
                         .format
                         .and_then(|f| conv::map_format_dsv(f.base_format().0))
-                })
-                .unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN),
+                }).unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN),
             SampleDesc: sample_desc,
             NodeMask: 0,
             CachedPSO: d3d12::D3D12_CACHED_PIPELINE_STATE {
@@ -2216,8 +2215,7 @@ impl d::Device<B> for Device {
                             },
                             ..info.clone()
                         }).unwrap()
-                    })
-                    .collect()
+                    }).collect()
             } else {
                 Vec::new()
             },
@@ -2233,8 +2231,7 @@ impl d::Device<B> for Device {
                             },
                             ..info.clone()
                         }).unwrap()
-                    })
-                    .collect()
+                    }).collect()
             } else {
                 Vec::new()
             },
@@ -2250,8 +2247,7 @@ impl d::Device<B> for Device {
                             },
                             ..info.clone()
                         }).unwrap()
-                    })
-                    .collect()
+                    }).collect()
             } else {
                 Vec::new()
             },
@@ -2351,7 +2347,11 @@ impl d::Device<B> for Device {
         Ok(r::Sampler { handle })
     }
 
-    fn create_descriptor_pool<I>(&self, max_sets: usize, descriptor_pools: I) -> Result<r::DescriptorPool, d::OutOfMemory>
+    fn create_descriptor_pool<I>(
+        &self,
+        max_sets: usize,
+        descriptor_pools: I,
+    ) -> Result<r::DescriptorPool, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
@@ -2519,8 +2519,9 @@ impl d::Device<B> for Device {
                             // CBVs without going out-of-bounds.
                             let size = ((end - start) + 255) & !255;
                             let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
-                                BufferLocation: unsafe { (*buffer.resource).GetGPUVirtualAddress() }
-                                    + start,
+                                BufferLocation: unsafe {
+                                    (*buffer.resource).GetGPUVirtualAddress()
+                                } + start,
                                 SizeInBytes: size as _,
                             };
                             unsafe {
@@ -2791,7 +2792,12 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ns: u64) -> Result<bool, d::OomOrDeviceLost>
+    fn wait_for_fences<I>(
+        &self,
+        fences: I,
+        wait: d::WaitFor,
+        timeout_ns: u64,
+    ) -> Result<bool, d::OomOrDeviceLost>
     where
         I: IntoIterator,
         I::Item: Borrow<r::Fence>,
@@ -2799,14 +2805,12 @@ impl d::Device<B> for Device {
         let fences = fences.into_iter().collect::<Vec<_>>();
         let mut events = self.events.lock().unwrap();
         for _ in events.len()..fences.len() {
-            events.push(unsafe {
-                synchapi::CreateEventA(ptr::null_mut(), FALSE, FALSE, ptr::null())
-            });
+            events.push(native::Event::create(false, false));
         }
 
         for (&event, fence) in events.iter().zip(fences.iter()) {
             assert_eq!(winerror::S_OK, unsafe {
-                synchapi::ResetEvent(event);
+                synchapi::ResetEvent(event.0);
                 fence.borrow().raw.set_event_on_completion(event, 1)
             });
         }
@@ -2826,7 +2830,12 @@ impl d::Device<B> for Device {
                 }
             };
 
-            synchapi::WaitForMultipleObjects(fences.len() as u32, events.as_ptr(), all, timeout_ms)
+            synchapi::WaitForMultipleObjects(
+                fences.len() as u32,
+                events.as_ptr() as *const _,
+                all,
+                timeout_ms,
+            )
         };
 
         const WAIT_OBJECT_LAST: u32 = winbase::WAIT_OBJECT_0 + winnt::MAXIMUM_WAIT_OBJECTS;
@@ -3103,8 +3112,7 @@ impl d::Device<B> for Device {
                     clear_dv: Vec::new(),
                     clear_sv: Vec::new(),
                 }
-            })
-            .collect();
+            }).collect();
 
         let swapchain = w::Swapchain {
             inner: swap_chain3,
@@ -3130,7 +3138,7 @@ impl d::Device<B> for Device {
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         for queue in &self.queues {
             queue.wait_idle()?;
-        } 
+        }
         Ok(())
     }
 }

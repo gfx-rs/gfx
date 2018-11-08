@@ -2,7 +2,7 @@
 extern crate bitflags;
 #[macro_use]
 extern crate derivative;
-extern crate d3d12_rs as native;
+extern crate d3d12 as native;
 extern crate gfx_hal as hal;
 #[macro_use]
 extern crate log;
@@ -29,9 +29,9 @@ use hal::adapter::DeviceType;
 use hal::queue::{QueueFamilyId, Queues};
 use hal::{error, format as f, image, memory, Features, Limits, QueueType, SwapImageIndex};
 
-use winapi::shared::minwindef::{FALSE, TRUE};
+use winapi::shared::minwindef::TRUE;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
-use winapi::um::{d3d12, d3d12sdklayers, handleapi, synchapi, winbase, winnt};
+use winapi::um::{d3d12, d3d12sdklayers, handleapi, synchapi, winbase};
 use winapi::Interface;
 
 use std::borrow::Borrow;
@@ -229,14 +229,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .map(|&(&family, priorities)| {
                 let mut group = hal::backend::RawQueueGroup::new(family);
 
-                let create_idle_event = || unsafe {
-                    synchapi::CreateEventA(
-                        ptr::null_mut(),
-                        TRUE, // Want to manually reset in case multiple threads wait for idle
-                        FALSE,
-                        ptr::null(),
-                    )
-                };
+                let create_idle_event = || native::Event::create(true, false);
 
                 match family {
                     QueueFamily::Present => {
@@ -277,8 +270,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 }
 
                 group
-            })
-            .collect();
+            }).collect();
 
         *open_guard = true;
 
@@ -408,12 +400,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 pub struct CommandQueue {
     pub(crate) raw: native::CommandQueue,
     idle_fence: native::Fence,
-    idle_event: winnt::HANDLE,
+    idle_event: native::sync::Event,
 }
 
 impl CommandQueue {
     unsafe fn destroy(&self) {
-        handleapi::CloseHandle(self.idle_event);
+        handleapi::CloseHandle(self.idle_event.0);
         self.idle_fence.destroy();
         self.raw.destroy();
     }
@@ -434,7 +426,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         // Reset idle fence and event
         // That's safe here due to exclusive access to the queue
         self.idle_fence.signal(0);
-        synchapi::ResetEvent(self.idle_event);
+        synchapi::ResetEvent(self.idle_event.0);
 
         // TODO: semaphores
         let mut lists = submission
@@ -475,7 +467,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         );
 
         unsafe {
-            synchapi::WaitForSingleObject(self.idle_event, winbase::INFINITE);
+            synchapi::WaitForSingleObject(self.idle_event.0, winbase::INFINITE);
         }
 
         Ok(())
@@ -537,7 +529,7 @@ pub struct Device {
     // CPU/GPU descriptor heaps
     heap_srv_cbv_uav: Mutex<resource::DescriptorHeap>,
     heap_sampler: Mutex<resource::DescriptorHeap>,
-    events: Mutex<Vec<winnt::HANDLE>>,
+    events: Mutex<Vec<native::Event>>,
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
     // Required for swapchain creation. Only a single queue supports presentation.
@@ -778,7 +770,7 @@ impl hal::Instance for Instance {
                     DeviceType::VirtualGpu
                 } else {
                     DeviceType::DiscreteGpu
-                },                
+                },
             };
 
             let mut features: d3d12::D3D12_FEATURE_DATA_D3D12_OPTIONS = unsafe { mem::zeroed() };
@@ -836,11 +828,12 @@ impl hal::Instance for Instance {
                     )
                 });
                 let can_buffer = 0 != data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BUFFER;
-                let can_image = 0 != data.Support1
-                    & (d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D
-                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D
-                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
-                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE);
+                let can_image = 0
+                    != data.Support1
+                        & (d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D
+                            | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D
+                            | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
+                            | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE);
                 let can_linear = can_image && !format.surface_desc().is_compressed();
                 if can_image {
                     props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
