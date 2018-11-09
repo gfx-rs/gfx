@@ -100,7 +100,7 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
             .. gfx_app::shade::Source::empty()
         };
         let gs = gfx_app::shade::Source {
-            glsl_150: include_bytes!("shader/terrain.glslg"), //e = geometry
+            glsl_150: include_bytes!("shader/terrain.glslg"), //g = geometry
             .. gfx_app::shade::Source::empty()
         };
         let ps = gfx_app::shade::Source {
@@ -132,22 +132,22 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
         let (vbuf, slice) = factory.create_vertex_buffer_with_slice(&vertex_data, &index_data[..]);
 
-		let set = if let Ok(gs) = gs.select(backend) {
-	        factory.create_shader_set_tessellation_with_geometry(
-	            &vs.select(backend).unwrap(),
-	            &hs.select(backend).unwrap(),
-	            &ds.select(backend).unwrap(),
-				&gs,
-	            &ps.select(backend).unwrap()
-	        )
-		} else {
-	        factory.create_shader_set_tessellation(
-	            &vs.select(backend).unwrap(),
-	            &hs.select(backend).unwrap(),
-	            &ds.select(backend).unwrap(),
-	            &ps.select(backend).unwrap()
-	        )
-		}.unwrap();
+        let set = if let Ok(gs) = gs.select(backend) {
+            factory.create_shader_set_tessellation_with_geometry(
+                &vs.select(backend).unwrap(),
+                &hs.select(backend).unwrap(),
+                &ds.select(backend).unwrap(),
+                &gs,
+                &ps.select(backend).unwrap()
+            )
+        } else {
+            factory.create_shader_set_tessellation(
+                &vs.select(backend).unwrap(),
+                &hs.select(backend).unwrap(),
+                &ds.select(backend).unwrap(),
+                &ps.select(backend).unwrap()
+            )
+        }.unwrap();
         let mut fillmode = gfx::state::Rasterizer::new_fill();
         fillmode.method = gfx::state::RasterMethod::Line(1);
         App {
