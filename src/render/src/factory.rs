@@ -178,14 +178,8 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// Creates a `ShaderSet` from the supplied vertex and pixel shader source code.
     fn create_shader_set(&mut self, vs_code: &[u8], ps_code: &[u8])
                          -> Result<ShaderSet<R>, ProgramError> {
-        let vs = match self.create_shader_vertex(vs_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Vertex(e)),
-        };
-        let ps = match self.create_shader_pixel(ps_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Pixel(e)),
-        };
+        let vs = self.create_shader_vertex(vs_code).map_err(ProgramError::Vertex)?;
+        let ps = self.create_shader_pixel(ps_code).map_err(ProgramError::Pixel)?;
         Ok(ShaderSet::Simple(vs, ps))
     }
 
@@ -193,18 +187,9 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// shader source code. Mainly used for testing.
     fn create_shader_set_geometry(&mut self, vs_code: &[u8], gs_code: &[u8], ps_code: &[u8])
                          -> Result<ShaderSet<R>, ProgramError> {
-        let vs = match self.create_shader_vertex(vs_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Vertex(e)),
-        };
-        let gs = match self.create_shader_geometry(gs_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Geometry(e)),
-        };
-        let ps = match self.create_shader_pixel(ps_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Pixel(e)),
-        };
+        let vs = self.create_shader_vertex(vs_code).map_err(ProgramError::Vertex)?;
+        let gs = self.create_shader_geometry(gs_code).map_err(ProgramError::Geometry)?;
+        let ps = self.create_shader_pixel(ps_code).map_err(ProgramError::Pixel)?;
         Ok(ShaderSet::Geometry(vs, gs, ps))
     }
 
@@ -212,25 +197,10 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// shader source code. Mainly used for testing.
     fn create_shader_set_tessellation(&mut self, vs_code: &[u8], hs_code: &[u8], ds_code: &[u8], ps_code: &[u8])
                          -> Result<ShaderSet<R>, ProgramError> {
-        let vs = match self.create_shader_vertex(vs_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Vertex(e)),
-        };
-
-        let hs = match self.create_shader_hull(hs_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Hull(e)),
-        };
-
-        let ds = match self.create_shader_domain(ds_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Domain(e)),
-        };
-
-        let ps = match self.create_shader_pixel(ps_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Pixel(e)),
-        };
+        let vs = self.create_shader_vertex(vs_code).map_err(ProgramError::Vertex)?;
+        let hs = self.create_shader_hull(hs_code).map_err(ProgramError::Hull)?;
+        let ds = self.create_shader_domain(ds_code).map_err(ProgramError::Domain)?;
+        let ps = self.create_shader_pixel(ps_code).map_err(ProgramError::Pixel)?;
         Ok(ShaderSet::Tessellated(vs, hs, ds, ps))
     }
 
@@ -238,30 +208,11 @@ pub trait FactoryExt<R: Resources>: Factory<R> {
     /// shader source code. Mainly used for testing.
     fn create_shader_set_tessellation_with_geometry(&mut self, vs_code: &[u8], hs_code: &[u8], ds_code: &[u8], gs_code: &[u8], ps_code: &[u8])
                          -> Result<ShaderSet<R>, ProgramError> {
-        let vs = match self.create_shader_vertex(vs_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Vertex(e)),
-        };
-
-        let hs = match self.create_shader_hull(hs_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Hull(e)),
-        };
-
-        let ds = match self.create_shader_domain(ds_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Domain(e)),
-        };
-
-        let gs = match self.create_shader_geometry(gs_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Geometry(e)),
-        };
-
-        let ps = match self.create_shader_pixel(ps_code) {
-            Ok(s) => s,
-            Err(e) => return Err(ProgramError::Pixel(e)),
-        };
+        let vs = self.create_shader_vertex(vs_code).map_err(ProgramError::Vertex)?;
+        let hs = self.create_shader_hull(hs_code).map_err(ProgramError::Hull)?;
+        let ds = self.create_shader_domain(ds_code).map_err(ProgramError::Domain)?;
+        let gs = self.create_shader_geometry(gs_code).map_err(ProgramError::Geometry)?;
+        let ps = self.create_shader_pixel(ps_code).map_err(ProgramError::Pixel)?;
         Ok(ShaderSet::TessellatedGeometry(vs, hs, ds, gs, ps))
     }
 
