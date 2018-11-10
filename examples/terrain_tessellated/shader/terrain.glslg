@@ -1,0 +1,60 @@
+#version 150 core
+
+layout(triangles) in;
+layout(triangle_strip, max_vertices=3) out;
+
+layout (std140)
+uniform Locals {
+    mat4 u_Model;
+    mat4 u_View;
+    mat4 u_Proj;
+};
+
+in block {
+    vec3 pos;
+    vec3 color;
+} v_In[];
+
+out vec3 v_Color;
+
+out gl_PerVertex {
+    vec4 gl_Position;
+    float gl_PointSize;
+    float gl_ClipDistance[];
+};
+
+struct V {
+    vec3 pos;
+    vec3 color;
+};
+
+V read_vertex(int i) {
+    V v;
+    v.pos = v_In[i].pos;
+    v.color = v_In[i].color;
+    return v;
+}
+
+void emit_vertex(V v) {
+    v_Color =  v.color;
+    gl_Position = u_Proj * u_View * u_Model * vec4(v.pos, 1.0);
+    gl_ClipDistance[0] = 1.0;
+    EmitVertex();
+}
+
+void main() {
+    V v0 = read_vertex(0);
+    V v1 = read_vertex(1);
+    V v2 = read_vertex(2);
+
+    // shrink each triangle inwards by 50%
+    vec3 bc = (v0.pos + v1.pos + v2.pos) / 3;
+    v0.pos = (v0.pos - bc) * 0.5 + bc;
+    v1.pos = (v1.pos - bc) * 0.5 + bc;
+    v2.pos = (v2.pos - bc) * 0.5 + bc;
+
+    emit_vertex(v0);
+    emit_vertex(v1);
+    emit_vertex(v2);
+    EndPrimitive();
+}

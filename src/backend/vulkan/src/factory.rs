@@ -409,6 +409,7 @@ impl core::Factory<R> for Factory {
                 }
             },
             core::ShaderSet::Tessellated(..) => unimplemented!(),
+            core::ShaderSet::TessellatedGeometry(..) => unimplemented!(),
         };
 
         Ok(self.share.handles.lock().unwrap().make_program(prog, info))

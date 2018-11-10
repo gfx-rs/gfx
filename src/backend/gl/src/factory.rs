@@ -224,6 +224,14 @@ impl Factory {
                 shaders[3] = *ps.reference(&mut handler);
                 &shaders[..4]
             },
+            &d::ShaderSet::TessellatedGeometry(ref vs, ref hs, ref ds, ref gs, ref ps) => {
+                shaders[0] = *vs.reference(&mut handler);
+                shaders[1] = *hs.reference(&mut handler);
+                shaders[2] = *ds.reference(&mut handler);
+                shaders[3] = *gs.reference(&mut handler);
+                shaders[4] = *ps.reference(&mut handler);
+                &shaders[..5]
+            },
         };
         let result = create_program(&self.share.context, &self.share.capabilities,
                                     &self.share.private_caps, shader_slice, usage);

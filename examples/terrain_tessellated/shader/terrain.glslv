@@ -5,7 +5,7 @@ in vec3 a_Color;
 
 out block {
     vec3 pos;
-	vec3 color;
+    vec3 color;
 } Out;
 
 void main() {
