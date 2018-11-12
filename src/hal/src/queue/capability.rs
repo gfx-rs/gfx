@@ -50,7 +50,11 @@ impl Capability for Compute {
 impl Capability for Transfer {
     fn supported_by(qt: QueueType) -> bool {
         match qt {
-            _ => true
+            QueueType::General |
+            QueueType::Compute |
+            QueueType::Graphics |
+            QueueType::Transfer => true,
+            _ => false,
         }
     }
 }

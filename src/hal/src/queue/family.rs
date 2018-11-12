@@ -3,7 +3,7 @@
 use Backend;
 use backend::RawQueueGroup;
 use queue::{CommandQueue, QueueType};
-use queue::capability::{Capability, Graphics, Compute};
+use queue::capability::{Capability, Graphics, Compute, Transfer};
 
 use std::any::Any;
 use std::fmt::Debug;
@@ -20,9 +20,13 @@ pub trait QueueFamily: Debug + Any + Send + Sync {
     fn supports_graphics(&self) -> bool {
         Graphics::supported_by(self.queue_type())
     }
-    /// Returns true if the queue supports graphics operations.
+    /// Returns true if the queue supports compute operations.
     fn supports_compute(&self) -> bool {
         Compute::supported_by(self.queue_type())
+    }
+    /// Returns true if the queue supports transfer operations.
+    fn supports_transfer(&self) -> bool {
+        Transfer::supported_by(self.queue_type())
     }
     /// Returns the queue family ID.
     fn id(&self) -> QueueFamilyId;
