@@ -1699,6 +1699,10 @@ impl d::Device<B> for Device {
 
         let result = unsafe { functor.create_swapchain_khr(&info, None) };
 
+        if old_swapchain != vk::SwapchainKHR::null() {
+            unsafe { functor.destroy_swapchain_khr(old_swapchain, None) }
+        }
+
         let swapchain_raw = match result {
             Ok(swapchain_raw) => swapchain_raw,
             Err(vk::Result::ErrorOutOfHostMemory) => return Err(d::OutOfMemory::OutOfHostMemory.into()),
