@@ -1,6 +1,6 @@
 [package]
 name = "gfx_app"
-version = "0.7.0"
+version = "0.8.0"
 description = "GFX example application framework"
 homepage = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
@@ -42,7 +42,7 @@ optional = true
 
 [dependencies.gfx_window_vulkan]
 path = "src/window/vulkan"
-version = "0.7"
+version = "0.8"
 optional = true
 
 [dependencies.gfx_device_metal]
@@ -52,12 +52,12 @@ optional = true
 
 [dependencies.gfx_window_metal]
 path = "src/window/metal"
-version = "0.7"
+version = "0.8"
 optional = true
 
 [target.'cfg(windows)'.dependencies]
 gfx_device_dx11 = { path = "src/backend/dx11", version = "0.7" }
-gfx_window_dxgi = { path = "src/window/dxgi", version = "0.16" }
+gfx_window_dxgi = { path = "src/window/dxgi", version = "0.17" }
 
 [[example]]
 name = "blend"
