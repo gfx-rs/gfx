@@ -15,7 +15,7 @@
 use std::os::raw::c_void;
 
 use device_gl::{Device, Factory, Resources as Res, create as gl_create, create_main_targets_raw};
-use glutin::{GlContext, HeadlessContext};
+use glutin::{GlContext, Context};
 
 use core::format::{Format, DepthFormat, RenderFormat};
 use core::handle::{DepthStencilView, RawDepthStencilView, RawRenderTargetView, RenderTargetView};
@@ -38,19 +38,21 @@ use core::texture::Dimensions;
 /// use gfx_core::format::{DepthStencil, Rgba8};
 /// use gfx_core::texture::AaMode;
 /// use gfx_window_glutin::init_headless;
-/// use glutin::HeadlessRendererBuilder;
+/// use glutin::{Context, ContextBuilder, EventsLoop};
 ///
 /// # fn main() {
 /// let dim = (256, 256, 8, AaMode::Multi(4));
 ///
-/// let context = HeadlessRendererBuilder::new(dim.0 as u32, dim.1 as u32)
-///     .build()
+/// let events_loop = EventsLoop::new();
+/// let context_builder = ContextBuilder::new()
+///     .with_hardware_acceleration(Some(false));
+/// let context = Context::new(&events_loop, context_builder, false)
 ///     .expect("Failed to build headless context");
 ///
 /// let (mut device, _, _, _) = init_headless::<Rgba8, DepthStencil>(&context, dim);
 /// # }
 /// ```
-pub fn init_headless<Cf, Df>(context: &HeadlessContext, dim: Dimensions)
+pub fn init_headless<Cf, Df>(context: &Context, dim: Dimensions)
                              -> (Device, Factory,
                                  RenderTargetView<Res, Cf>, DepthStencilView<Res, Df>)
     where
@@ -66,7 +68,7 @@ pub fn init_headless<Cf, Df>(context: &HeadlessContext, dim: Dimensions)
 /// Raw version of [`init_headless`].
 ///
 /// [`init_headless`]: fn.init_headless.html
-pub fn init_headless_raw(context: &HeadlessContext, dim: Dimensions, color: Format, depth: Format)
+pub fn init_headless_raw(context: &Context, dim: Dimensions, color: Format, depth: Format)
                          -> (Device, Factory,
                              RawRenderTargetView<Res>, RawDepthStencilView<Res>)
 {
@@ -92,12 +94,14 @@ mod tests {
 
     #[test]
     fn test_headless() {
-        use glutin::{HeadlessRendererBuilder};
+        use glutin::{ContextBuilder, EventsLoop};
 
         let dim = (256, 256, 8, AaMode::Multi(4));
 
-        let context: HeadlessContext = HeadlessRendererBuilder::new(dim.0 as u32, dim.1 as u32)
-            .build()
+        let events_loop = EventsLoop::new();
+        let context_builder = ContextBuilder::new()
+            .with_hardware_acceleration(Some(false));
+        let context = Context::new(&events_loop, context_builder, false)
             .expect("Failed to build headless context");
 
         let (mut device, _, _, _) = init_headless::<Rgba8, DepthStencil>(&context, dim);
