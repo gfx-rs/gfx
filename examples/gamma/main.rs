@@ -23,7 +23,6 @@ use gfx::traits::{Factory, FactoryExt};
 use gfx::Device;
 use gfx::memory::Typed;
 use gfx::format::{Formatted, SurfaceTyped};
-use glutin::GlContext;
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;

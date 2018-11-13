@@ -20,7 +20,7 @@ extern crate glutin;
 
 use gfx::traits::FactoryExt;
 use gfx::Device;
-use glutin::{GlContext, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use glutin::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;

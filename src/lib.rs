@@ -115,7 +115,6 @@ pub fn launch_gl3<A>(window: winit::WindowBuilder) where
 A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>
 {
     use gfx::traits::Device;
-    use glutin::GlContext;
 
     env_logger::init();
     #[cfg(target_os = "emscripten")]
