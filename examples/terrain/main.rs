@@ -19,7 +19,6 @@ extern crate gfx_app;
 extern crate genmesh;
 extern crate noise;
 extern crate rand;
-extern crate winit;
 
 pub use gfx::format::{DepthStencil};
 pub use gfx_app::{ColorFormat, DepthFormat};
