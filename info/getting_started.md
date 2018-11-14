@@ -1,18 +1,17 @@
 # Getting Started
 
+## macOS Dependencies
+
+Install the newest XCode from the App Store. This installs the required `metal` developer tools.
+
 ## Vulkan Dependencies
 
 First, install the x11 and Vulkan dev libraries.
 
-For Fedora
-
 ```bash
+# Fedora
 sudo dnf install -y libX11-devel vulkan
-```
-
-For Ubuntu
-
-```bash
+# Ubuntu
 sudo apt install -y libx11-dev libvulkan-dev libxcb1-dev xorg-dev
 ```
 
@@ -27,7 +26,11 @@ To run an example, simply use `cargo run` and specify the backend with `--featur
 ```bash
 git clone https://github.com/gfx-rs/gfx
 cd gfx/examples
+# macOS
+cargo run --bin quad --features metal
+# vulkan
 cargo run --bin quad --features vulkan
+# Windows
 cargo run --bin compute --features dx12 1 2 3 4
 ```
 
