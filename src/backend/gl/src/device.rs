@@ -410,6 +410,58 @@ impl Device {
     }
 }
 
+pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamInt>(
+    share: &Starc<Share>,
+    info: &i::SamplerInfo,
+    mut set_param_float: SetParamFloat,
+    mut set_param_float_vec: SetParamFloatVec,
+    mut set_param_int: SetParamInt,
+)
+where
+    SetParamFloat: FnMut(GLenum, GLfloat),
+    SetParamFloatVec: FnMut(GLenum, &[GLfloat]),
+    SetParamInt: FnMut(GLenum, GLint),
+{
+    let (min, mag) = conv::filter_to_gl(info.mag_filter, info.min_filter, info.mip_filter);
+    match info.anisotropic {
+        i::Anisotropic::On(fac) if fac > 1 => {
+            if share.private_caps.sampler_anisotropy_ext {
+                set_param_float(gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat);
+            } else if share.features.contains(c::Features::SAMPLER_ANISOTROPY) {
+                set_param_float(gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat);
+            }
+        }
+        _ => ()
+    }
+
+    set_param_int(gl::TEXTURE_MIN_FILTER, min as GLint);
+    set_param_int(gl::TEXTURE_MAG_FILTER, mag as GLint);
+
+    let (s, t, r) = info.wrap_mode;
+    set_param_int(gl::TEXTURE_WRAP_S, conv::wrap_to_gl(s) as GLint);
+    set_param_int(gl::TEXTURE_WRAP_T, conv::wrap_to_gl(t) as GLint);
+    set_param_int(gl::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as GLint);
+
+    if share.legacy_features.contains(LegacyFeatures::SAMPLER_LOD_BIAS) {
+        set_param_float(gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
+    }
+    if share.legacy_features.contains(LegacyFeatures::SAMPLER_BORDER_COLOR) {
+        let border: [f32; 4] = info.border.into();
+        set_param_float_vec(gl::TEXTURE_BORDER_COLOR, &border);
+    }
+
+    set_param_float(gl::TEXTURE_MIN_LOD, info.lod_range.start.into());
+    set_param_float(gl::TEXTURE_MAX_LOD, info.lod_range.end.into());
+
+    match info.comparison {
+        None => set_param_int(gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
+        Some(cmp) => {
+            set_param_int(gl::TEXTURE_COMPARE_MODE, gl::COMPARE_REF_TO_TEXTURE as GLint);
+            set_param_int(gl::TEXTURE_COMPARE_FUNC, state::map_comparison(cmp) as GLint);
+        }
+    }
+}
+
 impl d::Device<B> for Device {
     fn allocate_memory(
         &self, _mem_type: c::MemoryTypeId, size: u64,
@@ -816,49 +868,16 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         let mut name = 0 as n::Sampler;
 
-        let (min, mag) = conv::filter_to_gl(info.mag_filter, info.min_filter, info.mip_filter);
 
         unsafe {
             gl.GenSamplers(1, &mut name);
-
-            match info.anisotropic {
-                i::Anisotropic::On(fac) if fac > 1 => {
-                    if self.share.private_caps.sampler_anisotropy_ext {
-                        gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat);
-                    } else if self.share.features.contains(c::Features::SAMPLER_ANISOTROPY) {
-                        // TODO: Uncomment once `gfx_gl` supports GL 4.6
-                        // gl.SamplerParameterf(name, gl::TEXTURE_MAX_ANISOTROPY, fac as GLfloat);
-                    }
-                }
-                _ => ()
-            }
-
-            gl.SamplerParameteri(name, gl::TEXTURE_MIN_FILTER, min as GLint);
-            gl.SamplerParameteri(name, gl::TEXTURE_MAG_FILTER, mag as GLint);
-
-            let (s, t, r) = info.wrap_mode;
-            gl.SamplerParameteri(name, gl::TEXTURE_WRAP_S, conv::wrap_to_gl(s) as GLint);
-            gl.SamplerParameteri(name, gl::TEXTURE_WRAP_T, conv::wrap_to_gl(t) as GLint);
-            gl.SamplerParameteri(name, gl::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as GLint);
-
-            if self.share.legacy_features.contains(LegacyFeatures::SAMPLER_LOD_BIAS) {
-                gl.SamplerParameterf(name, gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
-            }
-            if self.share.legacy_features.contains(LegacyFeatures::SAMPLER_BORDER_COLOR) {
-                let border: [f32; 4] = info.border.into();
-                gl.SamplerParameterfv(name, gl::TEXTURE_BORDER_COLOR, &border[0]);
-            }
-
-            gl.SamplerParameterf(name, gl::TEXTURE_MIN_LOD, info.lod_range.start.into());
-            gl.SamplerParameterf(name, gl::TEXTURE_MAX_LOD, info.lod_range.end.into());
-
-            match info.comparison {
-                None => gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
-                Some(cmp) => {
-                    gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_MODE, gl::COMPARE_REF_TO_TEXTURE as GLint);
-                    gl.SamplerParameteri(name, gl::TEXTURE_COMPARE_FUNC, state::map_comparison(cmp) as GLint);
-                }
-            }
+            set_sampler_info(
+                &self.share,
+                &info,
+                |a, b| gl.SamplerParameterf(name, a, b),
+                |a, b| gl.SamplerParameterfv(name, a, &b[0]),
+                |a, b| gl.SamplerParameteri(name, a, b),
+            );
         }
 
         if let Err(_) = self.share.check() {
@@ -1054,9 +1073,9 @@ impl d::Device<B> for Device {
     ) -> Result<UnboundImage, i::CreationError> {
         let gl = &self.share.context;
 
-        let int_format = match format {
-            Format::Rgba8Unorm => gl::RGBA8,
-            Format::Rgba8Srgb => gl::SRGB8_ALPHA8,
+        let (int_format, iformat, itype) = match format {
+            Format::Rgba8Unorm => (gl::RGBA8, gl::RGBA, gl::UNSIGNED_BYTE),
+            Format::Rgba8Srgb => (gl::SRGB8_ALPHA8, gl::RGBA, gl::UNSIGNED_BYTE),
             _ => unimplemented!()
         };
 
@@ -1071,7 +1090,28 @@ impl d::Device<B> for Device {
             match kind {
                 i::Kind::D2(w, h, 1, 1) => unsafe {
                     gl.BindTexture(gl::TEXTURE_2D, name);
-                    gl.TexStorage2D(gl::TEXTURE_2D, num_levels as _, int_format, w as _, h as _);
+                    if self.share.private_caps.image_storage {
+                        gl.TexStorage2D(gl::TEXTURE_2D, num_levels as _, int_format, w as _, h as _);
+                    } else {
+                        gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAX_LEVEL, (num_levels - 1) as _);
+                        let mut w = w;
+                        let mut h = h;
+                        for i in 0..num_levels {
+                            gl.TexImage2D(
+                                gl::TEXTURE_2D,
+                                i as _,
+                                int_format as _,
+                                w as _,
+                                h as _,
+                                0,
+                                iformat,
+                                itype,
+                                std::ptr::null(),
+                            );
+                            w = std::cmp::max(w / 2, 1);
+                            h = std::cmp::max(h / 2, 1);
+                        }
+                    }
                 }
                 _ => unimplemented!(),
             };
@@ -1227,7 +1267,9 @@ impl d::Device<B> for Device {
                             n::FatSampler::Sampler(sampler) =>
                                 bindings
                                 .push(n::DescSetBindings::Sampler(binding, *sampler)),
-                            n::FatSampler::Info(_) => unimplemented!(),
+                            n::FatSampler::Info(info) =>
+                                bindings
+                                .push(n::DescSetBindings::SamplerInfo(binding, info.clone())),
                         }
                     }
                     pso::Descriptor::Image(view, _layout) => {
@@ -1244,7 +1286,9 @@ impl d::Device<B> for Device {
                             n::FatSampler::Sampler(sampler) =>
                                 bindings
                                 .push(n::DescSetBindings::Sampler(binding, *sampler)),
-                            n::FatSampler::Info(_) => unimplemented!(),
+                            n::FatSampler::Info(info) =>
+                                bindings
+                                .push(n::DescSetBindings::SamplerInfo(binding, info.clone())),
                         }
                     }
                     pso::Descriptor::UniformTexelBuffer(_view) => unimplemented!(),
@@ -1283,17 +1327,15 @@ impl d::Device<B> for Device {
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
     {
-        if !self.share.private_caps.sync {
-            return Err(d::OutOfMemory::OutOfHostMemory);
-        }
-
         let gl = &self.share.context;
         for fence in fences {
             let fence = fence.borrow();
             let sync = fence.0.get();
-            unsafe {
-                if gl.IsSync(sync) == gl::TRUE {
-                    gl.DeleteSync(sync);
+            if !sync.is_null() {
+                unsafe {
+                    if self.share.private_caps.sync && gl.IsSync(sync) == gl::TRUE {
+                        gl.DeleteSync(sync);
+                    }
                 }
             }
             fence.0.set(ptr::null())
@@ -1305,7 +1347,7 @@ impl d::Device<B> for Device {
         if !self.share.private_caps.sync {
             return Ok(true);
         }
-        match wait_fence(fence, &self.share.context, timeout_ns) {
+        match wait_fence(fence, &self.share, timeout_ns) {
             gl::TIMEOUT_EXPIRED => Ok(false),
             gl::WAIT_FAILED => {
                 if let Err(err) = self.share.check() {
@@ -1409,7 +1451,11 @@ impl d::Device<B> for Device {
 
     fn destroy_fence(&self, fence: n::Fence) {
         unsafe {
-            self.share.context.DeleteSync(fence.0.get());
+            let gl = &self.share.context;
+            let sync = fence.0.get();
+            if self.share.private_caps.sync && gl.IsSync(sync) == gl::TRUE {
+                gl.DeleteSync(sync);
+            }
         }
     }
 
@@ -1436,10 +1482,19 @@ impl d::Device<B> for Device {
     }
 }
 
-pub(crate) fn wait_fence(fence: &n::Fence, gl: &GlContainer, timeout_ns: u64) -> GLenum {
+pub(crate) fn wait_fence(fence: &n::Fence, share: &Starc<Share>, timeout_ns: u64) -> GLenum {
     // TODO:
     // This can be called by multiple objects wanting to ensure they have exclusive
     // access to a resource. How much does this call costs ? The status of the fence
     // could be cached to avoid calling this more than once (in core or in the backend ?).
-    unsafe { gl.ClientWaitSync(fence.0.get(), gl::SYNC_FLUSH_COMMANDS_BIT, timeout_ns) }
+    let gl = &share.context;
+    unsafe {
+        if share.private_caps.sync {
+            gl.ClientWaitSync(fence.0.get(), gl::SYNC_FLUSH_COMMANDS_BIT, timeout_ns)
+        } else {
+            // We fallback to waiting for *everything* to finish
+            gl.Flush();
+            gl::CONDITION_SATISFIED
+        }
+    }
 }

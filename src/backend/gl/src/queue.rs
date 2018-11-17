@@ -8,7 +8,7 @@ use hal::error;
 use gl;
 use smallvec::SmallVec;
 
-use {command as com, native, state, window};
+use {command as com, native, state, window, device};
 use info::LegacyFeatures;
 use {Backend, Share};
 
@@ -564,6 +564,20 @@ impl CommandQueue {
                 let gl = &self.share.context;
                 gl.BindSampler(index, sampler);
             }
+            com::Command::SetTextureSamplerSettings(index, texture, ref sinfo) => unsafe {
+                let gl = &self.share.context;
+                gl.ActiveTexture(gl::TEXTURE0 + index);
+                gl.BindTexture(gl::TEXTURE_2D, texture);
+
+                // TODO: Optimization: only change texture properties that have changed.
+                device::set_sampler_info(
+                    &self.share,
+                    &sinfo,
+                    |a, b| gl.TexParameterf(gl::TEXTURE_2D, a, b),
+                    |a, b| gl.TexParameterfv(gl::TEXTURE_2D, a, &b[0]),
+                    |a, b| gl.TexParameteri(gl::TEXTURE_2D, a, b),
+                );
+            }
             /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
                 self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
@@ -674,9 +688,11 @@ impl CommandQueue {
 
     fn signal_fence(&mut self, fence: &native::Fence) {
         if self.share.private_caps.sync {
-            let gl = &self.share.context;
-            let sync = unsafe {
-                gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
+            let sync = if self.share.private_caps.sync {
+                let gl = &self.share.context;
+                unsafe { gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0) }
+            } else {
+                ptr::null()
             };
 
             fence.0.set(sync);

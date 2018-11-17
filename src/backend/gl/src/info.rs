@@ -253,6 +253,7 @@ impl Info {
             let num_exts = get_usize(gl, gl::NUM_EXTENSIONS).unwrap() as gl::types::GLuint;
             (0..num_exts)
                 .map(|i| unsafe { c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8) })
+                .filter(|_| false)
                 .collect()
         } else {
             // Fallback
@@ -453,7 +454,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
                                                                 && gl.GenFramebuffers.is_loaded(),
         framebuffer_texture:                info.is_supported(&[Core(3,0)]), //TODO: double check
         buffer_role_change:                 !info.version.is_embedded,
-        image_storage:                      info.is_supported(&[Core(3,2),
+        image_storage:                      info.is_supported(&[Core(4,2),
                                                                 Ext ("GL_ARB_texture_storage")]),
         buffer_storage:                     info.is_supported(&[Core(4,4),
                                                                 Ext ("GL_ARB_buffer_storage")]),

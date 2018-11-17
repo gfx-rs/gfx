@@ -114,6 +114,7 @@ pub enum Command {
     BindBufferRange(gl::types::GLenum, gl::types::GLuint, n::RawBuffer, gl::types::GLintptr, gl::types::GLsizeiptr),
     BindTexture(gl::types::GLenum, n::Texture),
     BindSampler(gl::types::GLuint, n::Texture),
+    SetTextureSamplerSettings(gl::types::GLuint, n::Texture, image::SamplerInfo),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -901,7 +902,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         for desc_set in sets {
             let desc_set = desc_set.borrow();
-            for new_binding in &*desc_set.bindings.lock().unwrap() {
+            let bindings = desc_set.bindings.lock().unwrap();
+            for new_binding in &*bindings {
                 match new_binding {
                     n::DescSetBindings::Buffer {ty: btype, binding, buffer, offset, size} => {
                         let btype = match btype {
@@ -931,6 +933,42 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                             self.push_cmd(Command::BindSampler(
                                 *binding,
                                 *sampler,
+                            ))
+                        }
+                    }
+                    n::DescSetBindings::SamplerInfo(binding, sinfo) => {
+                        let mut all_txts = drd
+                            .get_binding(n::BindingTypes::Images, set, *binding).unwrap()
+                            .into_iter()
+                            .flat_map(|binding|
+                                bindings
+                                    .iter()
+                                    .filter_map(move |b|
+                                        if let n::DescSetBindings::Texture(b, t) = b {
+                                            let nbs = drd.get_binding(n::BindingTypes::Images, set, *b)?;
+                                            if nbs.contains(binding) {
+                                                Some((*binding, *t))
+                                            } else {
+                                                None
+                                            }
+                                        } else { None }
+                                    )
+                            )
+                            .collect::<Vec<_>>();
+
+                        // TODO: Check that other samplers aren't using the same
+                        // textures as in `all_txts` unless all the bindings of that
+                        // texture are gonna be unbound or the two samplers have
+                        // identical properties.
+
+                        all_txts.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+                        all_txts.dedup_by(|a, b| a.1 == b.1);
+
+                        for (binding, txt) in all_txts {
+                            self.push_cmd(Command::SetTextureSamplerSettings(
+                                binding,
+                                txt,
+                                sinfo.clone(),
                             ))
                         }
                     }
