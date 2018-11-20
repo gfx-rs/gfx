@@ -29,7 +29,6 @@ else
 	UNAME_S:=$(shell uname -s)
 	EXCLUDES+= --exclude gfx-backend-dx12
 	EXCLUDES+= --exclude gfx-backend-dx11
-	GLUTIN_HEADLESS_FEATURE="--features headless" #TODO?
 	ifeq ($(UNAME_S),Linux)
 		EXCLUDES+= --exclude gfx-backend-metal
 		FEATURES_HAL=vulkan
