@@ -26,7 +26,7 @@ shared_library = { version = "0.1.9", optional = true }
 ash = "0.24.4"
 gfx-hal = { path = "../../hal", version = "0.1" }
 smallvec = "0.6"
-winit = { version = "0.17", optional = true }
+winit = { version = "0.18", optional = true }
 glsl-to-spirv = { version = "0.1", optional = true }
 
 [target.'cfg(windows)'.dependencies]

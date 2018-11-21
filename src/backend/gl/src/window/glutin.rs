@@ -32,11 +32,11 @@
 //!
 //! use gfx_hal::Instance;
 //! use gfx_backend_gl::Headless;
-//! use glutin::{HeadlessRendererBuilder};
+//! use glutin::{Context, ContextBuilder, EventsLoop};
 //!
 //! fn main() {
-//!     let context = HeadlessRendererBuilder::new(256, 256)
-//!         .build()
+//!     let events_loop = EventsLoop::new();
+//!     let context = Context::new(&events_loop, ContextBuilder::new(), false)
 //!         .expect("Failed to build headless context");
 //!     let headless = Headless(context);
 //!     let _adapters = headless.enumerate_adapters();
@@ -192,7 +192,7 @@ pub fn config_context(
         .with_srgb(color_base.1 == f::ChannelType::Srgb)
 }
 
-pub struct Headless(pub glutin::HeadlessContext);
+pub struct Headless(pub glutin::Context);
 
 unsafe impl Send for Headless {}
 unsafe impl Sync for Headless {}
