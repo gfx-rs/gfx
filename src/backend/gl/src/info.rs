@@ -253,7 +253,6 @@ impl Info {
             let num_exts = get_usize(gl, gl::NUM_EXTENSIONS).unwrap() as gl::types::GLuint;
             (0..num_exts)
                 .map(|i| unsafe { c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8) })
-                .filter(|_| false)
                 .collect()
         } else {
             // Fallback
