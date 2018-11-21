@@ -315,6 +315,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .legacy_features
             .contains(info::LegacyFeatures::SRGB_COLOR)
         {
+            // TODO: Find way to emulate this on older Opengl versions.
             unsafe {
                 gl.Enable(gl::FRAMEBUFFER_SRGB);
             }

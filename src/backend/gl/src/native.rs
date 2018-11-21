@@ -151,7 +151,7 @@ pub enum ImageView {
     TextureLayer(Texture, i::Level, i::Layer),
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub(crate) enum DescSetBindings {
     Buffer {
         ty: BindingTypes,
@@ -162,6 +162,7 @@ pub(crate) enum DescSetBindings {
     },
     Texture(pso::DescriptorBinding, Texture),
     Sampler(pso::DescriptorBinding, Sampler),
+    SamplerInfo(pso::DescriptorBinding, i::SamplerInfo),
 }
 
 #[derive(Clone, Debug)]
