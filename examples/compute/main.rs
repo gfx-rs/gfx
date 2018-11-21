@@ -36,7 +36,6 @@ fn main() {
         .collect();
     let stride = std::mem::size_of::<u32>() as u64;
 
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
     let instance = back::Instance::create("gfx-rs compute", 1);
 
     let mut adapter = instance.enumerate_adapters().into_iter()
