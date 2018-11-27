@@ -49,14 +49,15 @@
 //!
 //! DOC TODO
 
-use Backend;
-use image;
-use format::Format;
-use queue::CommandQueue;
 use device;
+use format::Format;
+use image;
+use queue::CommandQueue;
+use Backend;
 
 use std::any::Any;
 use std::borrow::Borrow;
+use std::cmp::{max, min};
 use std::ops::Range;
 
 /// Error occurred during swapchain creation.
@@ -186,7 +187,8 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
     /// If formats is `None` than the surface has no preferred format and the
     /// application may use any desired format.
     fn compatibility(
-        &self, physical_device: &B::PhysicalDevice
+        &self,
+        physical_device: &B::PhysicalDevice,
     ) -> (SurfaceCapabilities, Option<Vec<Format>>, Vec<PresentMode>);
 }
 
@@ -282,12 +284,28 @@ impl SwapchainConfig {
     }
 
     /// Create a swapchain configuration based on the capabilities
-    /// returned from a physical device query.
-    pub fn from_caps(caps: &SurfaceCapabilities, format: Format) -> Self {
+    /// returned from a physical device query. If the surface does not
+    /// specify a current size, default_extent is clamped and used instead.
+    pub fn from_caps(caps: &SurfaceCapabilities, format: Format, default_extent: Extent2D) -> Self {
+        let clamped_extent = match caps.current_extent {
+            Some(current) => current,
+            None => {
+                let (min_width, max_width) = (caps.extents.start.width, caps.extents.end.width - 1);
+                let (min_height, max_height) =
+                    (caps.extents.start.height, caps.extents.end.height - 1);
+
+                // clamp the default_extent to within the allowed surface sizes
+                let width = min(max_width, max(default_extent.width, min_width));
+                let height = min(max_height, max(default_extent.height, min_height));
+
+                Extent2D { width, height }
+            }
+        };
+
         SwapchainConfig {
             present_mode: PresentMode::Fifo,
             format,
-            extent: caps.current_extent.unwrap_or(caps.extents.start),
+            extent: clamped_extent,
             image_count: caps.image_count.start,
             image_layers: 1,
             image_usage: image::Usage::COLOR_ATTACHMENT,
@@ -361,7 +379,9 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     ///
     /// ```
     fn acquire_image(
-        &mut self, timeout_ns: u64, sync: FrameSync<B>
+        &mut self,
+        timeout_ns: u64,
+        sync: FrameSync<B>,
     ) -> Result<SwapImageIndex, AcquireError>;
 
     /// Present one acquired image.

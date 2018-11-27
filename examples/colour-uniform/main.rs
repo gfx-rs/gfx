@@ -1,11 +1,21 @@
 #![cfg_attr(
-    not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")),
+    not(any(
+        feature = "vulkan",
+        feature = "dx12",
+        feature = "metal",
+        feature = "gl"
+    )),
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
 
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12 as back;
-#[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")))]
+#[cfg(not(any(
+    feature = "vulkan",
+    feature = "dx12",
+    feature = "metal",
+    feature = "gl"
+)))]
 extern crate gfx_backend_empty as back;
 #[cfg(feature = "gl")]
 extern crate gfx_backend_gl as back;
@@ -36,9 +46,9 @@ use std::mem::size_of;
 use std::rc::Rc;
 
 use hal::{
-    buffer, command, format as f, image as i, memory as m, pass, pool, pso, Adapter, Backbuffer,
-    Backend, DescriptorPool, Device, FrameSync, Instance, Limits, MemoryType, PhysicalDevice,
-    Primitive, QueueGroup, Surface, Swapchain, SwapchainConfig, window::Extent2D,
+    buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
+    Adapter, Backbuffer, Backend, DescriptorPool, Device, FrameSync, Instance, Limits, MemoryType,
+    PhysicalDevice, Primitive, QueueGroup, Surface, Swapchain, SwapchainConfig,
 };
 
 use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
@@ -50,7 +60,10 @@ use std::fs;
 use std::io::Read;
 
 const ENTRY_NAME: &str = "main";
-const DIMS: Extent2D = Extent2D { width: 1024, height: 768 };
+const DIMS: Extent2D = Extent2D {
+    width: 1024,
+    height: 768,
+};
 
 #[derive(Debug, Clone, Copy)]
 struct Vertex {
@@ -59,13 +72,30 @@ struct Vertex {
 }
 
 const QUAD: [Vertex; 6] = [
-    Vertex { a_pos: [ -0.5, 0.33 ], a_uv: [0.0, 1.0] },
-    Vertex { a_pos: [  0.5, 0.33 ], a_uv: [1.0, 1.0] },
-    Vertex { a_pos: [  0.5,-0.33 ], a_uv: [1.0, 0.0] },
-
-    Vertex { a_pos: [ -0.5, 0.33 ], a_uv: [0.0, 1.0] },
-    Vertex { a_pos: [  0.5,-0.33 ], a_uv: [1.0, 0.0] },
-    Vertex { a_pos: [ -0.5,-0.33 ], a_uv: [0.0, 0.0] },
+    Vertex {
+        a_pos: [-0.5, 0.33],
+        a_uv: [0.0, 1.0],
+    },
+    Vertex {
+        a_pos: [0.5, 0.33],
+        a_uv: [1.0, 1.0],
+    },
+    Vertex {
+        a_pos: [0.5, -0.33],
+        a_uv: [1.0, 0.0],
+    },
+    Vertex {
+        a_pos: [-0.5, 0.33],
+        a_uv: [0.0, 1.0],
+    },
+    Vertex {
+        a_pos: [0.5, -0.33],
+        a_uv: [1.0, 0.0],
+    },
+    Vertex {
+        a_pos: [-0.5, -0.33],
+        a_uv: [0.0, 0.0],
+    },
 ];
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
@@ -85,7 +115,6 @@ impl SurfaceTrait for <back::Backend as hal::Backend>::Surface {
         self.get_window()
     }
 }
-
 
 struct RendererState<B: Backend> {
     uniform_desc_pool: Option<B::DescriptorPool>,
@@ -149,27 +178,33 @@ impl<B: Backend> RendererState<B> {
             }],
         );
 
-        let mut img_desc_pool = device.borrow().device.create_descriptor_pool(
-            1, // # of sets
-            &[
-                pso::DescriptorRangeDesc {
-                    ty: pso::DescriptorType::SampledImage,
-                    count: 1,
-                },
-                pso::DescriptorRangeDesc {
-                    ty: pso::DescriptorType::Sampler,
-                    count: 1,
-                },
-            ],
-        ).ok();
+        let mut img_desc_pool = device
+            .borrow()
+            .device
+            .create_descriptor_pool(
+                1, // # of sets
+                &[
+                    pso::DescriptorRangeDesc {
+                        ty: pso::DescriptorType::SampledImage,
+                        count: 1,
+                    },
+                    pso::DescriptorRangeDesc {
+                        ty: pso::DescriptorType::Sampler,
+                        count: 1,
+                    },
+                ],
+            ).ok();
 
-        let mut uniform_desc_pool = device.borrow().device.create_descriptor_pool(
-            1, // # of sets
-            &[pso::DescriptorRangeDesc {
-                ty: pso::DescriptorType::UniformBuffer,
-                count: 1,
-            }],
-        ).ok();
+        let mut uniform_desc_pool = device
+            .borrow()
+            .device
+            .create_descriptor_pool(
+                1, // # of sets
+                &[pso::DescriptorRangeDesc {
+                    ty: pso::DescriptorType::UniformBuffer,
+                    count: 1,
+                }],
+            ).ok();
 
         let image_desc = image_desc.create_desc_set(img_desc_pool.as_mut().unwrap());
         let uniform_desc = uniform_desc.create_desc_set(uniform_desc_pool.as_mut().unwrap());
@@ -181,11 +216,14 @@ impl<B: Backend> RendererState<B> {
             .unwrap()
             .to_rgba();
 
-        let mut staging_pool = device.borrow().device.create_command_pool_typed(
-            &device.borrow().queues,
-            pool::CommandPoolCreateFlags::empty(),
-            16,
-        ).expect("Can't create staging command pool");
+        let mut staging_pool = device
+            .borrow()
+            .device
+            .create_command_pool_typed(
+                &device.borrow().queues,
+                pool::CommandPoolCreateFlags::empty(),
+                16,
+            ).expect("Can't create staging command pool");
 
         let image = ImageState::new::<hal::Graphics>(
             image_desc,
@@ -218,15 +256,9 @@ impl<B: Backend> RendererState<B> {
             .device
             .destroy_command_pool(staging_pool.into_raw());
 
-        let mut swapchain = Some(SwapchainState::new(
-            &mut backend,
-            Rc::clone(&device),
-        ));
+        let mut swapchain = Some(SwapchainState::new(&mut backend, Rc::clone(&device)));
 
-        let render_pass = RenderPassState::new(
-            swapchain.as_ref().unwrap(),
-            Rc::clone(&device),
-        );
+        let render_pass = RenderPassState::new(swapchain.as_ref().unwrap(), Rc::clone(&device));
 
         let framebuffer = FramebufferState::new(
             Rc::clone(&device),
@@ -269,10 +301,8 @@ impl<B: Backend> RendererState<B> {
             Rc::clone(&self.device),
         ));
 
-        self.render_pass = RenderPassState::new(
-            self.swapchain.as_ref().unwrap(),
-            Rc::clone(&self.device),
-        );
+        self.render_pass =
+            RenderPassState::new(self.swapchain.as_ref().unwrap(), Rc::clone(&self.device));
 
         self.framebuffer = FramebufferState::new(
             Rc::clone(&self.device),
@@ -350,14 +380,9 @@ impl<B: Backend> RendererState<B> {
                             | winit::WindowEvent::CloseRequested => running = false,
                             winit::WindowEvent::Resized(dims) => {
                                 #[cfg(feature = "gl")]
-                                backend
-                                    .surface
-                                    .get_window_t()
-                                    .resize(
-                                        dims.to_physical(
-                                            backend.surface.get_window_t().get_hidpi_factor()
-                                        )
-                                    );
+                                backend.surface.get_window_t().resize(dims.to_physical(
+                                    backend.surface.get_window_t().get_hidpi_factor(),
+                                ));
                                 recreate_swapchain = true;
                             }
                             winit::WindowEvent::KeyboardInput {
@@ -424,7 +449,11 @@ impl<B: Backend> RendererState<B> {
                                                 Color::Blue => b = cur_value as f32 / 255.0,
                                                 Color::Alpha => a = cur_value as f32 / 255.0,
                                             }
-                                            uniform.buffer.as_mut().unwrap().update_data(0, &[r, g, b, a]);
+                                            uniform
+                                                .buffer
+                                                .as_mut()
+                                                .unwrap()
+                                                .update_data(0, &[r, g, b, a]);
                                             cur_value = 0;
 
                                             println!("Colour updated!");
@@ -499,8 +528,13 @@ impl<B: Backend> RendererState<B> {
             self.device
                 .borrow()
                 .device
-                .wait_for_fence(framebuffer_fence, !0).unwrap();
-            self.device.borrow().device.reset_fence(framebuffer_fence).unwrap();
+                .wait_for_fence(framebuffer_fence, !0)
+                .unwrap();
+            self.device
+                .borrow()
+                .device
+                .reset_fence(framebuffer_fence)
+                .unwrap();
             command_pool.reset();
 
             // Rendering
@@ -510,14 +544,14 @@ impl<B: Backend> RendererState<B> {
                 cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
                 cmd_buffer.set_scissors(0, &[self.viewport.rect]);
                 cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
-                cmd_buffer.bind_vertex_buffers(
-                    0,
-                    Some((self.vertex_buffer.get_buffer(), 0)),
-                );
+                cmd_buffer.bind_vertex_buffers(0, Some((self.vertex_buffer.get_buffer(), 0)));
                 cmd_buffer.bind_graphics_descriptor_sets(
                     self.pipeline.pipeline_layout.as_ref().unwrap(),
                     0,
-                    vec![self.image.desc.set.as_ref().unwrap(), self.uniform.desc.as_ref().unwrap().set.as_ref().unwrap()],
+                    vec![
+                        self.image.desc.set.as_ref().unwrap(),
+                        self.uniform.desc.as_ref().unwrap().set.as_ref().unwrap(),
+                    ],
                     &[],
                 ); //TODO
 
@@ -543,11 +577,18 @@ impl<B: Backend> RendererState<B> {
             self.device.borrow_mut().queues.queues[0].submit(submission, Some(framebuffer_fence));
 
             // present frame
-            if let Err(_) = self.swapchain.as_ref().unwrap().swapchain.as_ref().unwrap().present(
-                &mut self.device.borrow_mut().queues.queues[0],
-                frame,
-                Some(&*image_present),
-            ) {
+            if let Err(_) = self
+                .swapchain
+                .as_ref()
+                .unwrap()
+                .swapchain
+                .as_ref()
+                .unwrap()
+                .present(
+                    &mut self.device.borrow_mut().queues.queues[0],
+                    frame,
+                    Some(&*image_present),
+                ) {
                 recreate_swapchain = true;
                 continue;
             }
@@ -580,8 +621,10 @@ impl WindowState {
         let events_loop = winit::EventsLoop::new();
 
         let wb = winit::WindowBuilder::new()
-            .with_dimensions(winit::dpi::LogicalSize::new(DIMS.width as _, DIMS.height as _))
-            .with_title("quad".to_string());
+            .with_dimensions(winit::dpi::LogicalSize::new(
+                DIMS.width as _,
+                DIMS.height as _,
+            )).with_title("quad".to_string());
 
         WindowState {
             events_loop,
@@ -600,7 +643,10 @@ struct BackendState<B: Backend> {
 
 #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
 fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend>, back::Instance) {
-    let window = window_state.wb.take().unwrap()
+    let window = window_state
+        .wb
+        .take()
+        .unwrap()
         .build(&window_state.events_loop)
         .unwrap();
     let instance = back::Instance::create("gfx-rs quad", 1);
@@ -620,12 +666,8 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
 fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend>, ()) {
     let window = {
         let builder =
-            back::config_context(
-                back::glutin::ContextBuilder::new(),
-                ColorFormat::SELF,
-                None,
-            )
-            .with_vsync(true);
+            back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
+                .with_vsync(true);
         back::glutin::GlWindow::new(
             window_state.wb.take().unwrap(),
             builder,
@@ -686,7 +728,11 @@ impl<B: Backend> DeviceState<B> {
             .open_with::<_, ::hal::Graphics>(1, |family| surface.supports_queue_family(family))
             .unwrap();
 
-        DeviceState { device, queues, physical_device: adapter.physical_device }
+        DeviceState {
+            device,
+            queues,
+            physical_device: adapter.physical_device,
+        }
     }
 }
 
@@ -791,8 +837,7 @@ impl<B: Backend> BufferState<B> {
                 .position(|(id, mem_type)| {
                     mem_req.type_mask & (1 << id) != 0
                         && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
-                })
-                .unwrap()
+                }).unwrap()
                 .into();
 
             memory = device.allocate_memory(upload_type, mem_req.size).unwrap();
@@ -865,8 +910,7 @@ impl<B: Backend> BufferState<B> {
                 .position(|(id, mem_type)| {
                     mem_reqs.type_mask & (1 << id) != 0
                         && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
-                })
-                .unwrap()
+                }).unwrap()
                 .into();
 
             memory = device.allocate_memory(upload_type, mem_reqs.size).unwrap();
@@ -942,7 +986,10 @@ impl<B: Backend> Uniform<B> {
             vec![DescSetWrite {
                 binding,
                 array_offset: 0,
-                descriptors: Some(pso::Descriptor::Buffer(buffer.as_ref().unwrap().get_buffer(), None..None)),
+                descriptors: Some(pso::Descriptor::Buffer(
+                    buffer.as_ref().unwrap().get_buffer(),
+                    None..None,
+                )),
             }],
             &mut device.borrow_mut().device,
         );
@@ -981,7 +1028,9 @@ impl<B: Backend> DescSetLayout<B> {
     }
 
     fn create_desc_set(self, desc_pool: &mut B::DescriptorPool) -> DescSet<B> {
-        let desc_set = desc_pool.allocate_set(self.layout.as_ref().unwrap()).unwrap();
+        let desc_set = desc_pool
+            .allocate_set(self.layout.as_ref().unwrap())
+            .unwrap();
         DescSet {
             layout: self,
             set: Some(desc_set),
@@ -1024,8 +1073,7 @@ impl<B: Backend> DescSet<B> {
                 array_offset: d.array_offset,
                 descriptors: d.descriptors,
                 set,
-            })
-            .collect();
+            }).collect();
         device.write_descriptor_sets(write);
     }
 
@@ -1073,8 +1121,7 @@ impl<B: Backend> ImageState<B> {
                 i::Tiling::Optimal,
                 i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
                 i::ViewCapabilities::empty(),
-            )
-            .unwrap(); // TODO: usage
+            ).unwrap(); // TODO: usage
         let req = device.get_image_requirements(&unbound);
 
         let device_type = adapter
@@ -1084,8 +1131,7 @@ impl<B: Backend> ImageState<B> {
             .position(|(id, memory_type)| {
                 req.type_mask & (1 << id) != 0
                     && memory_type.properties.contains(m::Properties::DEVICE_LOCAL)
-            })
-            .unwrap()
+            }).unwrap()
             .into();
 
         let memory = device.allocate_memory(device_type, req.size).unwrap();
@@ -1098,8 +1144,7 @@ impl<B: Backend> ImageState<B> {
                 ColorFormat::SELF,
                 Swizzle::NO,
                 COLOR_RANGE.clone(),
-            )
-            .unwrap();
+            ).unwrap();
 
         let sampler = device
             .create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
@@ -1121,9 +1166,7 @@ impl<B: Backend> ImageState<B> {
             device,
         );
 
-        let mut transfered_image_fence = device
-            .create_fence(false)
-            .expect("Can't create fence");
+        let mut transfered_image_fence = device.create_fence(false).expect("Can't create fence");
 
         // copy buffer to texture
         {
@@ -1197,7 +1240,9 @@ impl<B: Backend> ImageState<B> {
 
     fn wait_for_transfer_completion(&self) {
         let device = &self.desc.layout.device.borrow().device;
-        device.wait_for_fence(self.transfered_image_fence.as_ref().unwrap(), !0).unwrap();
+        device
+            .wait_for_fence(self.transfered_image_fence.as_ref().unwrap(), !0)
+            .unwrap();
     }
 
     fn get_layout(&self) -> &B::DescriptorSetLayout {
@@ -1248,20 +1293,22 @@ impl<B: Backend> PipelineState<B> {
         let pipeline = {
             let vs_module = {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.vert").unwrap();
-                let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
-                    .unwrap()
-                    .bytes()
-                    .map(|b| b.unwrap())
-                    .collect();
+                let spirv: Vec<u8> =
+                    glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
+                        .unwrap()
+                        .bytes()
+                        .map(|b| b.unwrap())
+                        .collect();
                 device.create_shader_module(&spirv).unwrap()
             };
             let fs_module = {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.frag").unwrap();
-                let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
-                    .unwrap()
-                    .bytes()
-                    .map(|b| b.unwrap())
-                    .collect();
+                let spirv: Vec<u8> =
+                    glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
+                        .unwrap()
+                        .bytes()
+                        .map(|b| b.unwrap())
+                        .collect();
                 device.create_shader_module(&spirv).unwrap()
             };
 
@@ -1271,12 +1318,7 @@ impl<B: Backend> PipelineState<B> {
                         entry: ENTRY_NAME,
                         module: &vs_module,
                         specialization: pso::Specialization {
-                            constants: &[
-                                pso::SpecializationConstant {
-                                    id: 0,
-                                    range: 0 .. 4,
-                                },
-                            ],
+                            constants: &[pso::SpecializationConstant { id: 0, range: 0..4 }],
                             data: unsafe { std::mem::transmute::<&f32, &[u8; 4]>(&0.8f32) },
                         },
                     },
@@ -1368,29 +1410,27 @@ struct SwapchainState<B: Backend> {
 }
 
 impl<B: Backend> SwapchainState<B> {
-    fn new(
-        backend: &mut BackendState<B>,
-        device: Rc<RefCell<DeviceState<B>>>,
-    ) -> Self {
-        let (caps, formats, _present_modes) = backend.surface.compatibility(&device.borrow().physical_device);
+    fn new(backend: &mut BackendState<B>, device: Rc<RefCell<DeviceState<B>>>) -> Self {
+        let (caps, formats, _present_modes) = backend
+            .surface
+            .compatibility(&device.borrow().physical_device);
         println!("formats: {:?}", formats);
-        let format = formats
-            .map_or(f::Format::Rgba8Srgb, |formats| {
-                formats
-                    .iter()
-                    .find(|format| format.base_format().1 == ChannelType::Srgb)
-                    .map(|format| *format)
-                    .unwrap_or(formats[0])
-            });
+        let format = formats.map_or(f::Format::Rgba8Srgb, |formats| {
+            formats
+                .iter()
+                .find(|format| format.base_format().1 == ChannelType::Srgb)
+                .map(|format| *format)
+                .unwrap_or(formats[0])
+        });
 
         println!("Surface format: {:?}", format);
-        let swap_config = SwapchainConfig::from_caps(&caps, format);
+        let swap_config = SwapchainConfig::from_caps(&caps, format, DIMS);
         let extent = swap_config.extent.to_extent();
-        let (swapchain, backbuffer) = device.borrow().device.create_swapchain(
-            &mut backend.surface,
-            swap_config,
-            None,
-        ).expect("Can't create swapchain");
+        let (swapchain, backbuffer) = device
+            .borrow()
+            .device
+            .create_swapchain(&mut backend.surface, swap_config, None)
+            .expect("Can't create swapchain");
 
         let swapchain = SwapchainState {
             swapchain: Some(swapchain),
@@ -1448,21 +1488,21 @@ impl<B: Backend> FramebufferState<B> {
                                 swapchain.format,
                                 Swizzle::NO,
                                 COLOR_RANGE.clone(),
-                            )
-                            .unwrap();
+                            ).unwrap();
                         (image, rtv)
-                    })
-                    .collect::<Vec<_>>();
+                    }).collect::<Vec<_>>();
                 let fbos = pairs
                     .iter()
                     .map(|&(_, ref rtv)| {
                         device
                             .borrow()
                             .device
-                            .create_framebuffer(render_pass.render_pass.as_ref().unwrap(), Some(rtv), extent)
-                            .unwrap()
-                    })
-                    .collect();
+                            .create_framebuffer(
+                                render_pass.render_pass.as_ref().unwrap(),
+                                Some(rtv),
+                                extent,
+                            ).unwrap()
+                    }).collect();
                 (pairs, fbos)
             }
             Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
@@ -1481,11 +1521,16 @@ impl<B: Backend> FramebufferState<B> {
 
         for _ in 0..iter_count {
             fences.push(device.borrow().device.create_fence(true).unwrap());
-            command_pools.push(device.borrow().device.create_command_pool_typed(
-                &device.borrow().queues,
-                pool::CommandPoolCreateFlags::empty(),
-                16,
-            ).expect("Can't create command pool"));
+            command_pools.push(
+                device
+                    .borrow()
+                    .device
+                    .create_command_pool_typed(
+                        &device.borrow().queues,
+                        pool::CommandPoolCreateFlags::empty(),
+                        16,
+                    ).expect("Can't create command pool"),
+            );
 
             acquire_semaphores.push(device.borrow().device.create_semaphore().unwrap());
             present_semaphores.push(device.borrow().device.create_semaphore().unwrap());
@@ -1578,19 +1623,28 @@ impl<B: Backend> Drop for FramebufferState<B> {
     }
 }
 
-#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
+#[cfg(any(
+    feature = "vulkan",
+    feature = "dx12",
+    feature = "metal",
+    feature = "gl"
+))]
 fn main() {
     env_logger::init();
 
     let mut window = WindowState::new();
     let (backend, _instance) = create_backend(&mut window);
 
-    let mut renderer_state =
-        RendererState::new(backend, window);
+    let mut renderer_state = RendererState::new(backend, window);
     renderer_state.mainloop();
 }
 
-#[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")))]
+#[cfg(not(any(
+    feature = "vulkan",
+    feature = "dx12",
+    feature = "metal",
+    feature = "gl"
+)))]
 fn main() {
     println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
 }
