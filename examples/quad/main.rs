@@ -1,5 +1,10 @@
 #![cfg_attr(
-    not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")),
+    not(any(
+        feature = "vulkan",
+        feature = "dx12",
+        feature = "metal",
+        feature = "gl"
+    )),
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
 
@@ -63,7 +68,12 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     layers: 0..1,
 };
 
-#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl"))]
+#[cfg(any(
+    feature = "vulkan",
+    feature = "dx12",
+    feature = "metal",
+    feature = "gl"
+))]
 fn main() {
     env_logger::init();
 
@@ -73,8 +83,7 @@ fn main() {
         .with_dimensions(winit::dpi::LogicalSize::new(
             DIMS.width as _,
             DIMS.height as _,
-        ))
-        .with_title("quad".to_string());
+        )).with_title("quad".to_string());
     // instantiate backend
     #[cfg(not(feature = "gl"))]
     let (_window, _instance, mut adapters, mut surface) = {
@@ -116,40 +125,42 @@ fn main() {
         .expect("Can't create command pool");
 
     // Setup renderpass and pipeline
-    let set_layout = device.create_descriptor_set_layout(
-        &[
-            pso::DescriptorSetLayoutBinding {
-                binding: 0,
-                ty: pso::DescriptorType::SampledImage,
-                count: 1,
-                stage_flags: ShaderStageFlags::FRAGMENT,
-                immutable_samplers: false,
-            },
-            pso::DescriptorSetLayoutBinding {
-                binding: 1,
-                ty: pso::DescriptorType::Sampler,
-                count: 1,
-                stage_flags: ShaderStageFlags::FRAGMENT,
-                immutable_samplers: false,
-            },
-        ],
-        &[],
-    ).expect("Can't create descriptor set layout");
+    let set_layout = device
+        .create_descriptor_set_layout(
+            &[
+                pso::DescriptorSetLayoutBinding {
+                    binding: 0,
+                    ty: pso::DescriptorType::SampledImage,
+                    count: 1,
+                    stage_flags: ShaderStageFlags::FRAGMENT,
+                    immutable_samplers: false,
+                },
+                pso::DescriptorSetLayoutBinding {
+                    binding: 1,
+                    ty: pso::DescriptorType::Sampler,
+                    count: 1,
+                    stage_flags: ShaderStageFlags::FRAGMENT,
+                    immutable_samplers: false,
+                },
+            ],
+            &[],
+        ).expect("Can't create descriptor set layout");
 
     // Descriptors
-    let mut desc_pool = device.create_descriptor_pool(
-        1, // sets
-        &[
-            pso::DescriptorRangeDesc {
-                ty: pso::DescriptorType::SampledImage,
-                count: 1,
-            },
-            pso::DescriptorRangeDesc {
-                ty: pso::DescriptorType::Sampler,
-                count: 1,
-            },
-        ],
-    ).expect("Can't create descriptor pool");
+    let mut desc_pool = device
+        .create_descriptor_pool(
+            1, // sets
+            &[
+                pso::DescriptorRangeDesc {
+                    ty: pso::DescriptorType::SampledImage,
+                    count: 1,
+                },
+                pso::DescriptorRangeDesc {
+                    ty: pso::DescriptorType::Sampler,
+                    count: 1,
+                },
+            ],
+        ).expect("Can't create descriptor pool");
     let desc_set = desc_pool.allocate_set(&set_layout).unwrap();
 
     // Buffer allocations
@@ -172,8 +183,7 @@ fn main() {
             // memory type that has a `1` (or, is allowed), and is visible to the CPU.
             buffer_req.type_mask & (1 << id) != 0
                 && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
-        })
-        .unwrap()
+        }).unwrap()
         .into();
 
     let buffer_memory = device
@@ -238,8 +248,7 @@ fn main() {
             i::Tiling::Optimal,
             i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
             i::ViewCapabilities::empty(),
-        )
-        .unwrap(); // TODO: usage
+        ).unwrap(); // TODO: usage
     let image_req = device.get_image_requirements(&image_unbound);
 
     let device_type = memory_types
@@ -248,8 +257,7 @@ fn main() {
         .position(|(id, memory_type)| {
             image_req.type_mask & (1 << id) != 0
                 && memory_type.properties.contains(m::Properties::DEVICE_LOCAL)
-        })
-        .unwrap()
+        }).unwrap()
         .into();
     let image_memory = device.allocate_memory(device_type, image_req.size).unwrap();
 
@@ -263,8 +271,7 @@ fn main() {
             ColorFormat::SELF,
             Swizzle::NO,
             COLOR_RANGE.clone(),
-        )
-        .unwrap();
+        ).unwrap();
 
     let sampler = device
         .create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
@@ -346,7 +353,9 @@ fn main() {
         let submission = Submission::new().submit(Some(submit));
         queue_group.queues[0].submit(submission, Some(&mut frame_fence));
 
-        device.wait_for_fence(&frame_fence, !0).expect("Can't wait for fence");
+        device
+            .wait_for_fence(&frame_fence, !0)
+            .expect("Can't wait for fence");
     }
 
     let (caps, formats, _present_modes) = surface.compatibility(&mut adapter.physical_device);
@@ -359,9 +368,10 @@ fn main() {
             .unwrap_or(formats[0])
     });
 
-    let swap_config = SwapchainConfig::from_caps(&caps, format);
+    let swap_config = SwapchainConfig::from_caps(&caps, format, DIMS);
     println!("{:?}", swap_config);
     let extent = swap_config.extent.to_extent();
+
     let (mut swap_chain, mut backbuffer) = device
         .create_swapchain(&mut surface, swap_config, None)
         .expect("Can't create swapchain");
@@ -409,28 +419,26 @@ fn main() {
                             format,
                             Swizzle::NO,
                             COLOR_RANGE.clone(),
-                        )
-                        .unwrap();
+                        ).unwrap();
                     (image, rtv)
-                })
-                .collect::<Vec<_>>();
+                }).collect::<Vec<_>>();
             let fbos = pairs
                 .iter()
                 .map(|&(_, ref rtv)| {
                     device
                         .create_framebuffer(&render_pass, Some(rtv), extent)
                         .unwrap()
-                })
-                .collect();
+                }).collect();
             (pairs, fbos)
         }
         Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
     };
 
-    let pipeline_layout = device.create_pipeline_layout(
-        std::iter::once(&set_layout),
-        &[(pso::ShaderStageFlags::VERTEX, 0..8)],
-    ).expect("Can't create pipeline layout");
+    let pipeline_layout = device
+        .create_pipeline_layout(
+            std::iter::once(&set_layout),
+            &[(pso::ShaderStageFlags::VERTEX, 0..8)],
+        ).expect("Can't create pipeline layout");
     let pipeline = {
         let vs_module = {
             let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
@@ -457,12 +465,7 @@ fn main() {
                     entry: ENTRY_NAME,
                     module: &vs_module,
                     specialization: pso::Specialization {
-                        constants: &[
-                            pso::SpecializationConstant {
-                                id: 0,
-                                range: 0 .. 4,
-                            },
-                        ],
+                        constants: &[pso::SpecializationConstant { id: 0, range: 0..4 }],
                         data: unsafe { std::mem::transmute::<&f32, &[u8; 4]>(&0.8f32) },
                     },
                 },
@@ -543,6 +546,10 @@ fn main() {
     //
     let mut running = true;
     let mut recreate_swapchain = false;
+    let mut resize_dims = Extent2D {
+        width: 0,
+        height: 0,
+    };
     while running {
         events_loop.poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
@@ -564,6 +571,8 @@ fn main() {
                             .get_window()
                             .resize(dims.to_physical(surface.get_window().get_hidpi_factor()));
                         recreate_swapchain = true;
+                        resize_dims.width = dims.width as u32;
+                        resize_dims.height = dims.height as u32;
                     }
                     _ => (),
                 }
@@ -579,7 +588,7 @@ fn main() {
             // Verify that previous format still exists so we may resuse it.
             assert!(formats.iter().any(|fs| fs.contains(&format)));
 
-            let swap_config = SwapchainConfig::from_caps(&caps, format);
+            let swap_config = SwapchainConfig::from_caps(&caps, format, resize_dims);
             println!("{:?}", swap_config);
             let extent = swap_config.extent.to_extent();
 
@@ -610,19 +619,16 @@ fn main() {
                                     format,
                                     Swizzle::NO,
                                     COLOR_RANGE.clone(),
-                                )
-                                .unwrap();
+                                ).unwrap();
                             (image, rtv)
-                        })
-                        .collect::<Vec<_>>();
+                        }).collect::<Vec<_>>();
                     let fbos = pairs
                         .iter()
                         .map(|&(_, ref rtv)| {
                             device
                                 .create_framebuffer(&render_pass, Some(rtv), extent)
                                 .unwrap()
-                        })
-                        .collect();
+                        }).collect();
                     (pairs, fbos)
                 }
                 Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
@@ -716,7 +722,12 @@ fn main() {
     device.destroy_swapchain(swap_chain);
 }
 
-#[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")))]
+#[cfg(not(any(
+    feature = "vulkan",
+    feature = "dx12",
+    feature = "metal",
+    feature = "gl"
+)))]
 fn main() {
     println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
 }
