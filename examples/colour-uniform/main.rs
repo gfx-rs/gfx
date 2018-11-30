@@ -1292,7 +1292,7 @@ impl<B: Backend> PipelineState<B> {
 
         let pipeline = {
             let vs_module = {
-                let glsl = fs::read_to_string("colour-uniform/data/quad.vert").unwrap();
+                let glsl = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/colour-uniform/data/quad.vert")).unwrap();
                 let spirv: Vec<u8> =
                     glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
                         .unwrap()
@@ -1302,7 +1302,7 @@ impl<B: Backend> PipelineState<B> {
                 device.create_shader_module(&spirv).unwrap()
             };
             let fs_module = {
-                let glsl = fs::read_to_string("colour-uniform/data/quad.frag").unwrap();
+                let glsl = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/colour-uniform/data/quad.frag")).unwrap();
                 let spirv: Vec<u8> =
                     glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
                         .unwrap()

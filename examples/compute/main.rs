@@ -50,7 +50,7 @@ fn main() {
         .open_with::<_, Compute>(1, |_family| true)
         .unwrap();
 
-    let glsl = fs::read_to_string("compute/shader/collatz.comp").unwrap();
+    let glsl = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/compute/shader/collatz.comp")).unwrap();
     let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Compute)
         .unwrap()
         .bytes()
