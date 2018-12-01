@@ -69,7 +69,8 @@ pub fn main() {
         .with_gl(glutin::GlRequest::Specific(api, version))
         .with_vsync(true);
     let (window, mut device, mut factory, main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_config, context, &events_loop);
+        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_config, context, &events_loop)
+            .expect("Failed to create window");
     let mut encoder = gfx::Encoder::from(factory.create_command_buffer());
 
     let pso = factory.create_pipeline_simple(&vs_code, &fs_code, pipe::new())
