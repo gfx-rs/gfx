@@ -123,7 +123,8 @@ impl GFX {
         use gfx::traits::FactoryExt;
 
         let (window, device, mut factory, main_color, _) =
-            gfx_window_glutin::init::<ColorFormat, DepthStencil>(window, context, events_loop);
+            gfx_window_glutin::init::<ColorFormat, DepthStencil>(window, context, events_loop)
+	        .expect("Failed to create window");
         let encoder: gfx::Encoder<_,_> = factory.create_command_buffer().into();
 
         let pso = factory.create_pipeline_simple(
