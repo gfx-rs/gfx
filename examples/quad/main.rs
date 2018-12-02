@@ -461,7 +461,7 @@ fn main() {
 
         let pipeline = {
             let (vs_entry, fs_entry) = (
-                pso::EntryPoint::<back::Backend> {
+                pso::EntryPoint {
                     entry: ENTRY_NAME,
                     module: &vs_module,
                     specialization: pso::Specialization {
@@ -469,7 +469,7 @@ fn main() {
                         data: unsafe { std::mem::transmute::<&f32, &[u8; 4]>(&0.8f32) },
                     },
                 },
-                pso::EntryPoint::<back::Backend> {
+                pso::EntryPoint {
                     entry: ENTRY_NAME,
                     module: &fs_module,
                     specialization: pso::Specialization::default(),
