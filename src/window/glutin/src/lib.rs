@@ -24,7 +24,7 @@ pub use headless::{init_headless, init_headless_raw};
 use core::{format, handle, texture};
 use core::memory::Typed;
 use device_gl::Resources as R;
-use glutin::GlContext;
+use glutin::{CreationError, GlContext};
 
 #[cfg(feature = "headless")]
 mod headless;
@@ -50,7 +50,8 @@ pub mod emscripten;
 ///     let window_builder = glutin::WindowBuilder::new().with_title("Example".to_string());
 ///     let context = glutin::ContextBuilder::new();
 ///     let (window, device, factory, rtv, stv) =
-///         gfx_window_glutin::init::<Rgba8, DepthStencil>(window_builder, context, &events_loop);
+///         gfx_window_glutin::init::<Rgba8, DepthStencil>(window_builder, context, &events_loop)
+///             .expect("Failed to create window");
 ///
 ///     // your code
 /// }
@@ -58,8 +59,8 @@ pub mod emscripten;
 pub fn init<Cf, Df>(window: glutin::WindowBuilder,
                     context: glutin::ContextBuilder,
                     events_loop: &glutin::EventsLoop) ->
-            (glutin::GlWindow, device_gl::Device, device_gl::Factory,
-            handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>)
+            Result<(glutin::GlWindow, device_gl::Device, device_gl::Factory,
+            handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>), CreationError>
 where
     Cf: format::RenderFormat,
     Df: format::DepthFormat,
@@ -69,8 +70,9 @@ where
         context,
         events_loop,
         Cf::get_format(),
-        Df::get_format());
-    (window, device, factory, Typed::new(color_view), Typed::new(ds_view))
+        Df::get_format())?;
+
+    Ok((window, device, factory, Typed::new(color_view), Typed::new(ds_view)))
 }
 
 /// Initialize with an existing Glutin window.
@@ -126,8 +128,8 @@ pub fn init_raw(window: glutin::WindowBuilder,
                 events_loop: &glutin::EventsLoop,
                 color_format: format::Format,
                 ds_format: format::Format) ->
-                (glutin::GlWindow, device_gl::Device, device_gl::Factory,
-                handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)
+                Result<(glutin::GlWindow, device_gl::Device, device_gl::Factory,
+                handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>), CreationError>
 {
     let window = {
         let color_total_bits = color_format.0.get_total_bits();
@@ -141,12 +143,12 @@ pub fn init_raw(window: glutin::WindowBuilder,
             .with_pixel_format(color_total_bits - alpha_bits, alpha_bits)
             .with_srgb(color_format.1 == format::ChannelType::Srgb);
 
-        glutin::GlWindow::new(window, context, &events_loop).unwrap()
+        glutin::GlWindow::new(window, context, &events_loop)?
     };
 
     let (device, factory, color_view, ds_view) = init_existing_raw(&window, color_format, ds_format);
 
-    (window, device, factory, color_view, ds_view)
+    Ok((window, device, factory, color_view, ds_view))
 }
 
 /// Initialize with an existing Glutin window. Raw version.
