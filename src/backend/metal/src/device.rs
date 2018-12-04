@@ -1023,10 +1023,15 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn create_pipeline_cache(&self) -> Result<n::PipelineCache, OutOfMemory> {
+    unsafe fn create_pipeline_cache(&self, _data: Option<&[u8]>) -> Result<n::PipelineCache, OutOfMemory> {
         Ok(n::PipelineCache {
             modules: FastStorageMap::default(),
         })
+    }
+
+    unsafe fn get_pipeline_cache_data(&self, cache: &n::PipelineCache) -> Result<Vec<u8>, OutOfMemory> {
+        //empty
+        Ok(Vec::new())
     }
 
     unsafe fn destroy_pipeline_cache(&self, _cache: n::PipelineCache) {

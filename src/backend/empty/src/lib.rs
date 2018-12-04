@@ -171,7 +171,11 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_pipeline_cache(&self) -> Result<(), device::OutOfMemory> {
+    unsafe fn create_pipeline_cache(&self, _data: Option<&[u8]>) -> Result<(), device::OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn get_pipeline_cache_data(&self, _cache: &()) -> Result<Vec<u8>, device::OutOfMemory> {
         unimplemented!()
     }
 
