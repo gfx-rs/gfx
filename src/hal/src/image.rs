@@ -8,7 +8,7 @@ use std::ops::Range;
 
 use format;
 use buffer::Offset as RawOffset;
-use pso::Comparison;
+use pso::{Comparison, Rect};
 
 
 /// Dimension size.
@@ -45,6 +45,15 @@ impl Extent {
             width: 1.max(self.width >> level),
             height: 1.max(self.height >> level),
             depth: 1.max(self.depth >> level),
+        }
+    }
+    /// Get a rectangle for the full area of extent.
+    pub fn rect(&self) -> Rect {
+        Rect {
+            x: 0,
+            y: 0,
+            w: self.width as i16,
+            h: self.height as i16,
         }
     }
 }

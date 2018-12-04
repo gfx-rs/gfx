@@ -48,6 +48,13 @@ impl AttachmentOps {
         load: AttachmentLoadOp::DontCare,
         store: AttachmentStoreOp::DontCare,
     };
+
+    /// Specifies `Load` for load op and `Store` for store op.
+    pub const PRESERVE: Self = AttachmentOps {
+        load: AttachmentLoadOp::Load,
+        store: AttachmentStoreOp::Store,
+    };
+
     /// Convenience function to create a new `AttachmentOps`.
     pub fn new(load: AttachmentLoadOp, store: AttachmentStoreOp) -> Self {
         AttachmentOps {
