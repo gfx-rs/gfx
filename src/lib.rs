@@ -131,7 +131,8 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
         .with_vsync(true);
     let mut events_loop = glutin::EventsLoop::new();
     let (window, mut device, mut factory, main_color, main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop);
+        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop)
+	    .expect("Failed to create window");
     let mut current_size = window
         .get_inner_size()
         .unwrap()
