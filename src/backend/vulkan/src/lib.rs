@@ -552,10 +552,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn features(&self) -> Features {
         // see https://github.com/gfx-rs/gfx/issues/1930
-        let is_windows_intel_kaby = cfg!(windows)
+        let is_windows_intel_dual_src_bug = cfg!(windows)
             && self.properties.vendor_id == info::intel::VENDOR
-            && self.properties.device_id & info::intel::DEVICE_KABY_LAKE_MASK
-                == info::intel::DEVICE_KABY_LAKE_MASK;
+            && (self.properties.device_id & info::intel::DEVICE_KABY_LAKE_MASK
+                == info::intel::DEVICE_KABY_LAKE_MASK
+                || self.properties.device_id & info::intel::DEVICE_SKY_LAKE_MASK
+                    == info::intel::DEVICE_SKY_LAKE_MASK);
 
         let features = self.instance.0.get_physical_device_features(self.handle);
         let mut bits = Features::empty();
@@ -581,7 +583,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         if features.sample_rate_shading != 0 {
             bits |= Features::SAMPLE_RATE_SHADING;
         }
-        if features.dual_src_blend != 0 && !is_windows_intel_kaby {
+        if features.dual_src_blend != 0 && !is_windows_intel_dual_src_bug {
             bits |= Features::DUAL_SRC_BLENDING;
         }
         if features.logic_op != 0 {
