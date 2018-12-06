@@ -1112,7 +1112,6 @@ impl hal::Device<Backend> for Device {
             MTLLanguageVersion::V2_0 => msl::Version::V2_0,
         };
         shader_compiler_options.enable_point_size_builtin = false;
-        shader_compiler_options.resolve_specialized_array_lengths = true;
         shader_compiler_options.vertex.invert_y = true;
         shader_compiler_options.resource_binding_overrides = res_overrides;
         let mut shader_compiler_options_point = shader_compiler_options.clone();
@@ -1492,7 +1491,6 @@ impl hal::Device<Backend> for Device {
         } else {
             let mut options = msl::CompilerOptions::default();
             options.enable_point_size_builtin = false;
-            options.resolve_specialized_array_lengths = true;
             options.vertex.invert_y = true;
             let info = Self::compile_shader_library(&self.shared.device, raw_data, &options, self.private_caps.msl_version)?;
             n::ShaderModule::Compiled(info)
