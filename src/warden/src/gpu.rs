@@ -59,12 +59,14 @@ impl<B: hal::Backend> Buffer<B> {
     fn barrier_to(&self, access: b::Access) -> memory::Barrier<B> {
         memory::Barrier::Buffer {
             states: self.stable_state .. access,
+            families: None,
             target: &self.handle,
         }
     }
     fn barrier_from(&self, access: b::Access) -> memory::Barrier<B> {
         memory::Barrier::Buffer {
             states: access .. self.stable_state,
+            families: None,
             target: &self.handle,
         }
     }
@@ -84,6 +86,7 @@ impl<B: hal::Backend> Image<B> {
         memory::Barrier::Image {
             states: self.stable_state .. (access, layout),
             target: &self.handle,
+            families: None,
             range: self.range.clone(),
         }
     }
@@ -91,6 +94,7 @@ impl<B: hal::Backend> Image<B> {
         memory::Barrier::Image {
             states: (access, layout) .. self.stable_state,
             target: &self.handle,
+            families: None,
             range: self.range.clone(),
         }
     }
@@ -229,6 +233,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             if false { //TODO
                                 let buffer_barrier = memory::Barrier::Buffer {
                                     states: b::Access::empty() .. access,
+                                    families: None,
                                     target: &buffer,
                                 };
                                 init_cmd.pipeline_barrier(
@@ -264,6 +269,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             let final_state = b::Access::SHADER_READ;
                             let pre_barrier = memory::Barrier::Buffer {
                                 states: b::Access::empty() .. b::Access::TRANSFER_WRITE,
+                                families: None,
                                 target: &buffer,
                             };
                             init_cmd.pipeline_barrier(
@@ -283,6 +289,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             );
                             let post_barrier = memory::Barrier::Buffer {
                                 states: b::Access::TRANSFER_WRITE .. final_state,
+                                families: None,
                                 target: &buffer,
                             };
                             init_cmd.pipeline_barrier(
@@ -333,6 +340,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 let image_barrier = memory::Barrier::Image {
                                     states: (i::Access::empty(), i::Layout::Undefined) .. (access, layout),
                                     target: &image,
+                                    families: None,
                                     range: i::SubresourceRange {
                                         aspects,
                                         .. COLOR_RANGE.clone()
@@ -390,6 +398,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 states: (i::Access::empty(), i::Layout::Undefined) ..
                                         (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                                 target: &image,
+                                families: None,
                                 range: COLOR_RANGE.clone(), //TODO
                             };
                             init_cmd.pipeline_barrier(
@@ -420,6 +429,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             let post_barrier = memory::Barrier::Image {
                                 states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal) .. final_state,
                                 target: &image,
+                                families: None,
                                 range: COLOR_RANGE.clone(), //TODO
                             };
                             init_cmd.pipeline_barrier(
@@ -1070,6 +1080,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             let mut cmd_buffer = command_pool.acquire_command_buffer(false);
             let pre_barrier = memory::Barrier::Buffer {
                 states: buffer.stable_state .. b::Access::TRANSFER_READ,
+                families: None,
                 target: &buffer.handle,
             };
             cmd_buffer.pipeline_barrier(
@@ -1091,6 +1102,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 
             let post_barrier = memory::Barrier::Buffer {
                 states: b::Access::TRANSFER_READ .. buffer.stable_state,
+                families: None,
                 target: &buffer.handle,
             };
             cmd_buffer.pipeline_barrier(
@@ -1165,6 +1177,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             let pre_barrier = memory::Barrier::Image {
                 states: image.stable_state .. (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
                 target: &image.handle,
+                families: None,
                 range: COLOR_RANGE.clone(), //TODO
             };
             cmd_buffer.pipeline_barrier(
@@ -1199,6 +1212,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             let post_barrier = memory::Barrier::Image {
                 states: (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal) .. image.stable_state,
                 target: &image.handle,
+                families: None,
                 range: COLOR_RANGE.clone(), //TODO
             };
             cmd_buffer.pipeline_barrier(

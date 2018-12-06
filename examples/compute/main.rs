@@ -146,6 +146,7 @@ fn main() {
             memory::Dependencies::empty(),
             Some(memory::Barrier::Buffer {
                 states: buffer::Access::TRANSFER_WRITE .. buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
+                families: None,
                 target: &device_buffer
             }),
         );
@@ -157,6 +158,7 @@ fn main() {
             memory::Dependencies::empty(),
             Some(memory::Barrier::Buffer {
                 states: buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE .. buffer::Access::TRANSFER_READ,
+                families: None,
                 target: &device_buffer
             }),
         );

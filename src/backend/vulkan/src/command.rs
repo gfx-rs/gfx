@@ -211,21 +211,29 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         dst_access_mask: conv::map_image_access(access.end),
                     });
                 }
-                memory::Barrier::Buffer { ref states, target} => {
+                memory::Barrier::Buffer { ref states, target, ref families, } => {
+                    let families = match families {
+                        Some(f) => f.start.0 as u32 .. f.end.0 as u32,
+                        None => vk::VK_QUEUE_FAMILY_IGNORED..vk::VK_QUEUE_FAMILY_IGNORED,
+                    };
                     buffer_bars.push(vk::BufferMemoryBarrier {
                         s_type: vk::StructureType::BufferMemoryBarrier,
                         p_next: ptr::null(),
                         src_access_mask: conv::map_buffer_access(states.start),
                         dst_access_mask: conv::map_buffer_access(states.end),
-                        src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
-                        dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                        src_queue_family_index: families.start,
+                        dst_queue_family_index: families.end,
                         buffer: target.raw,
                         offset: 0,
                         size: vk::VK_WHOLE_SIZE,
                     });
                 }
-                memory::Barrier::Image { ref states, target, ref range } => {
+                memory::Barrier::Image { ref states, target, ref range, ref families, } => {
                     let subresource_range = conv::map_subresource_range(range);
+                    let families = match families {
+                        Some(f) => f.start.0 as u32 .. f.end.0 as u32,
+                        None => vk::VK_QUEUE_FAMILY_IGNORED..vk::VK_QUEUE_FAMILY_IGNORED,
+                    };
                     image_bars.push(vk::ImageMemoryBarrier {
                         s_type: vk::StructureType::ImageMemoryBarrier,
                         p_next: ptr::null(),
@@ -233,8 +241,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         dst_access_mask: conv::map_image_access(states.end.0),
                         old_layout: conv::map_image_layout(states.start.1),
                         new_layout: conv::map_image_layout(states.end.1),
-                        src_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
-                        dst_queue_family_index: vk::VK_QUEUE_FAMILY_IGNORED, // TODO
+                        src_queue_family_index: families.start,
+                        dst_queue_family_index: families.end,
                         image: target.raw,
                         subresource_range,
                     });

@@ -304,6 +304,7 @@ fn main() {
                 states: (i::Access::empty(), i::Layout::Undefined)
                     ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                 target: &image_logo,
+                families: None,
                 range: COLOR_RANGE.clone(),
             };
 
@@ -339,6 +340,7 @@ fn main() {
                 states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
                     ..(i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
                 target: &image_logo,
+                families: None,
                 range: COLOR_RANGE.clone(),
             };
             cmd_buffer.pipeline_barrier(
