@@ -415,13 +415,13 @@ unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(
+    unsafe fn submit<'a, T, IC>(
         &mut self,
-        submission: hal::queue::RawSubmission<Backend, IC>,
+        submission: hal::queue::Submission<'a, Backend, IC>,
         fence: Option<&resource::Fence>,
     ) where
-        IC: IntoIterator,
-        IC::Item: Borrow<command::CommandBuffer>,
+        T: 'a + Borrow<command::CommandBuffer>,
+        IC: IntoIterator<Item = &'a T>,
     {
         // Reset idle fence and event
         // That's safe here due to exclusive access to the queue
@@ -430,7 +430,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
         // TODO: semaphores
         let mut lists = submission
-            .cmd_buffers
+            .command_buffers
             .into_iter()
             .map(|buf| buf.borrow().as_raw_list())
             .collect::<Vec<_>>();

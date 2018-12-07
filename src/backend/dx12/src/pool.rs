@@ -86,18 +86,15 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn allocate(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
+    fn allocate_one(&mut self, level: command::RawLevel) -> CommandBuffer {
         // TODO: Implement secondary buffers
         assert_eq!(level, command::RawLevel::Primary);
-        (0..num)
-            .map(|_| {
-                let (command_list, command_allocator) = self.create_command_list();
-                CommandBuffer::new(command_list, command_allocator, self.shared.clone())
-            })
-            .collect()
+        let (command_list, command_allocator) = self.create_command_list();
+        CommandBuffer::new(command_list, command_allocator, self.shared.clone())
     }
 
-    unsafe fn free(&mut self, cbufs: Vec<CommandBuffer>) {
+    unsafe fn free<I>(&mut self, cbufs: I)
+    where I: IntoIterator<Item = CommandBuffer> {
         for mut cbuf in cbufs {
             cbuf.destroy();
         }

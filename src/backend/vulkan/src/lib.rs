@@ -292,7 +292,7 @@ impl hal::Instance for Instance {
                         ash::vk::PhysicalDeviceType::DiscreteGpu => DeviceType::DiscreteGpu,
                         ash::vk::PhysicalDeviceType::VirtualGpu => DeviceType::VirtualGpu,
                         ash::vk::PhysicalDeviceType::Cpu => DeviceType::Cpu,
-                    },                    
+                    },
                 };
                 let physical_device = PhysicalDevice {
                     instance: self.raw.clone(),
@@ -711,16 +711,16 @@ pub struct CommandQueue {
 }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(
+    unsafe fn submit<'a, T, IC>(
         &mut self,
-        submission: hal::queue::RawSubmission<Backend, IC>,
+        submission: hal::queue::Submission<'a, Backend, IC>,
         fence: Option<&native::Fence>,
     ) where
-        IC: IntoIterator,
-        IC::Item: Borrow<command::CommandBuffer>,
+        T: 'a + Borrow<command::CommandBuffer>,
+        IC: IntoIterator<Item = &'a T>,
     {
         let buffers = submission
-            .cmd_buffers
+            .command_buffers
             .into_iter()
             .map(|cmd| cmd.borrow().raw)
             .collect::<Vec<_>>();

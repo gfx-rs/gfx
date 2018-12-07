@@ -701,17 +701,17 @@ impl CommandQueue {
 }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(
+    unsafe fn submit<'a, T, IC>(
         &mut self,
-        submit_info: hal::queue::RawSubmission<Backend, IC>,
+        submit_info: hal::queue::Submission<'a, Backend, IC>,
         fence: Option<&native::Fence>,
     ) where
-        IC: IntoIterator,
-        IC::Item: Borrow<com::RawCommandBuffer>,
+        T: 'a + Borrow<com::RawCommandBuffer>,
+        IC: IntoIterator<Item = &'a T>,
     {
         use pool::BufferMemory;
         {
-            for buf in submit_info.cmd_buffers {
+            for buf in submit_info.command_buffers {
                 let cb = buf.borrow();
                 let memory = cb
                     .memory
@@ -744,8 +744,6 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
-        use glutin::GlContext;
-
         for swapchain in swapchains {
             swapchain.0
                 .borrow()

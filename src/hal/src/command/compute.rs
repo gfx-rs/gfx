@@ -7,7 +7,7 @@ use buffer::Offset;
 use queue::capability::{Compute, Supports};
 use super::{CommandBuffer, DescriptorSetOffset, RawCommandBuffer, Shot, Level};
 
-impl<'a, B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
+impl<B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn bind_compute_pipeline(&mut self, pipeline: &B::ComputePipeline) {
         self.raw.bind_compute_pipeline(pipeline)

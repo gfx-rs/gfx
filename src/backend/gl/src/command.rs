@@ -1252,12 +1252,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn execute_commands<I>(
+    fn execute_commands<'a, T, I>(
         &mut self,
         _buffers: I,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<RawCommandBuffer>
+        T: 'a + Borrow<RawCommandBuffer>,
+        I: IntoIterator<Item = &'a T>,
     {
         unimplemented!()
     }

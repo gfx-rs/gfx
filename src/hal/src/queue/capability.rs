@@ -54,7 +54,6 @@ impl Capability for Transfer {
             QueueType::Compute |
             QueueType::Graphics |
             QueueType::Transfer => true,
-            _ => false,
         }
     }
 }

@@ -24,9 +24,6 @@ extern crate gfx_backend_metal as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
 
-#[cfg(feature = "gl")]
-use back::glutin::GlContext;
-
 #[macro_use]
 extern crate log;
 extern crate env_logger;
@@ -222,8 +219,8 @@ impl<B: Backend> RendererState<B> {
             .create_command_pool_typed(
                 &device.borrow().queues,
                 pool::CommandPoolCreateFlags::empty(),
-                16,
-            ).expect("Can't create staging command pool");
+            )
+            .expect("Can't create staging command pool");
 
         let image = ImageState::new::<hal::Graphics>(
             image_desc,
@@ -538,42 +535,44 @@ impl<B: Backend> RendererState<B> {
             command_pool.reset();
 
             // Rendering
-            let submit = {
-                let mut cmd_buffer = command_pool.acquire_command_buffer(false);
+            let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
+            cmd_buffer.begin();
 
-                cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
-                cmd_buffer.set_scissors(0, &[self.viewport.rect]);
-                cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
-                cmd_buffer.bind_vertex_buffers(0, Some((self.vertex_buffer.get_buffer(), 0)));
-                cmd_buffer.bind_graphics_descriptor_sets(
-                    self.pipeline.pipeline_layout.as_ref().unwrap(),
-                    0,
-                    vec![
-                        self.image.desc.set.as_ref().unwrap(),
-                        self.uniform.desc.as_ref().unwrap().set.as_ref().unwrap(),
-                    ],
-                    &[],
-                ); //TODO
+            cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
+            cmd_buffer.set_scissors(0, &[self.viewport.rect]);
+            cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
+            cmd_buffer.bind_vertex_buffers(
+                0,
+                Some((self.vertex_buffer.get_buffer(), 0)),
+            );
+            cmd_buffer.bind_graphics_descriptor_sets(
+                self.pipeline.pipeline_layout.as_ref().unwrap(),
+                0,
+                vec![
+                	self.image.desc.set.as_ref().unwrap(),
+                	self.uniform.desc.as_ref().unwrap().set.as_ref().unwrap(),
+                ],
+                &[],
+            ); //TODO
 
-                {
-                    let mut encoder = cmd_buffer.begin_render_pass_inline(
-                        self.render_pass.render_pass.as_ref().unwrap(),
-                        framebuffer,
-                        self.viewport.rect,
-                        &[command::ClearValue::Color(command::ClearColor::Float([
-                            cr, cg, cb, 1.0,
-                        ]))],
-                    );
-                    encoder.draw(0..6, 0..1);
-                }
+            {
+                let mut encoder = cmd_buffer.begin_render_pass_inline(
+                    self.render_pass.render_pass.as_ref().unwrap(),
+                    framebuffer,
+                    self.viewport.rect,
+                    &[command::ClearValue::Color(command::ClearColor::Float([
+                        cr, cg, cb, 1.0,
+                    ]))],
+                );
+                encoder.draw(0..6, 0..1);
+            }
+            cmd_buffer.finish();
 
-                cmd_buffer.finish()
+            let submission = Submission {
+                command_buffers: Some(&cmd_buffer),
+                wait_semaphores: &[(&*image_acquired, PipelineStage::BOTTOM_OF_PIPE)],
+                signal_semaphores: &[&*image_present],
             };
-
-            let submission = Submission::new()
-                .wait_on(&[(&*image_acquired, PipelineStage::BOTTOM_OF_PIPE)])
-                .signal(&[&*image_present])
-                .submit(Some(submit));
             self.device.borrow_mut().queues.queues[0].submit(submission, Some(framebuffer_fence));
 
             // present frame
@@ -723,7 +722,7 @@ struct DeviceState<B: Backend> {
 }
 
 impl<B: Backend> DeviceState<B> {
-    fn new(mut adapter: Adapter<B>, surface: &B::Surface) -> Self {
+    fn new(adapter: Adapter<B>, surface: &B::Surface) -> Self {
         let (device, queues) = adapter
             .open_with::<_, ::hal::Graphics>(1, |family| surface.supports_queue_family(family))
             .unwrap();
@@ -1170,62 +1169,65 @@ impl<B: Backend> ImageState<B> {
 
         // copy buffer to texture
         {
-            let submit = {
-                let mut cmd_buffer = staging_pool.acquire_command_buffer(false);
+            let mut cmd_buffer = staging_pool.acquire_command_buffer::<command::OneShot>();
+            cmd_buffer.begin();
 
-                let image_barrier = m::Barrier::Image {
-                    states: (i::Access::empty(), i::Layout::Undefined)
-                        ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
-                    target: &image,
-                    families: None,
-                    range: COLOR_RANGE.clone(),
-                };
-
-                cmd_buffer.pipeline_barrier(
-                    PipelineStage::TOP_OF_PIPE..PipelineStage::TRANSFER,
-                    m::Dependencies::empty(),
-                    &[image_barrier],
-                );
-
-                cmd_buffer.copy_buffer_to_image(
-                    buffer.as_ref().unwrap().get_buffer(),
-                    &image,
-                    i::Layout::TransferDstOptimal,
-                    &[command::BufferImageCopy {
-                        buffer_offset: 0,
-                        buffer_width: row_pitch / (stride as u32),
-                        buffer_height: dims.height as u32,
-                        image_layers: i::SubresourceLayers {
-                            aspects: f::Aspects::COLOR,
-                            level: 0,
-                            layers: 0..1,
-                        },
-                        image_offset: i::Offset { x: 0, y: 0, z: 0 },
-                        image_extent: i::Extent {
-                            width: dims.width,
-                            height: dims.height,
-                            depth: 1,
-                        },
-                    }],
-                );
-
-                let image_barrier = m::Barrier::Image {
-                    states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
-                        ..(i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
-                    target: &image,
-                    families: None,
-                    range: COLOR_RANGE.clone(),
-                };
-                cmd_buffer.pipeline_barrier(
-                    PipelineStage::TRANSFER..PipelineStage::FRAGMENT_SHADER,
-                    m::Dependencies::empty(),
-                    &[image_barrier],
-                );
-
-                cmd_buffer.finish()
+            let image_barrier = m::Barrier::Image {
+                states: (i::Access::empty(), i::Layout::Undefined)
+                    ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                target: &image,
+                families: None,
+                range: COLOR_RANGE.clone(),
             };
 
-            let submission = Submission::new().submit(Some(submit));
+            cmd_buffer.pipeline_barrier(
+                PipelineStage::TOP_OF_PIPE..PipelineStage::TRANSFER,
+                m::Dependencies::empty(),
+                &[image_barrier],
+            );
+
+            cmd_buffer.copy_buffer_to_image(
+                buffer.as_ref().unwrap().get_buffer(),
+                &image,
+                i::Layout::TransferDstOptimal,
+                &[command::BufferImageCopy {
+                    buffer_offset: 0,
+                    buffer_width: row_pitch / (stride as u32),
+                    buffer_height: dims.height as u32,
+                    image_layers: i::SubresourceLayers {
+                        aspects: f::Aspects::COLOR,
+                        level: 0,
+                        layers: 0..1,
+                    },
+                    image_offset: i::Offset { x: 0, y: 0, z: 0 },
+                    image_extent: i::Extent {
+                        width: dims.width,
+                        height: dims.height,
+                        depth: 1,
+                    },
+                }],
+            );
+
+            let image_barrier = m::Barrier::Image {
+                states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
+                    ..(i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
+                target: &image,
+                families: None,
+                range: COLOR_RANGE.clone(),
+            };
+            cmd_buffer.pipeline_barrier(
+                PipelineStage::TRANSFER..PipelineStage::FRAGMENT_SHADER,
+                m::Dependencies::empty(),
+                &[image_barrier],
+            );
+
+            cmd_buffer.finish();
+
+            let submission = Submission {
+                command_buffers: Some(&cmd_buffer),
+                wait_semaphores: &[],
+                signal_semaphores: &[],
+            };
             device_state.queues.queues[0].submit(submission, Some(&mut transfered_image_fence));
         }
 
@@ -1530,8 +1532,8 @@ impl<B: Backend> FramebufferState<B> {
                     .create_command_pool_typed(
                         &device.borrow().queues,
                         pool::CommandPoolCreateFlags::empty(),
-                        16,
-                    ).expect("Can't create command pool"),
+                    )
+                    .expect("Can't create command pool"),
             );
 
             acquire_semaphores.push(device.borrow().device.create_semaphore().unwrap());

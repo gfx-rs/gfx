@@ -755,16 +755,16 @@ unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(
+    unsafe fn submit<'a, T, IC>(
         &mut self,
-        submission: hal::queue::RawSubmission<Backend, IC>,
+        submission: hal::queue::Submission<'a, Backend, IC>,
         fence: Option<&Fence>,
     ) where
-        IC: IntoIterator,
-        IC::Item: Borrow<CommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
+        IC: IntoIterator<Item = &'a T>,
     {
         let _scope = debug_scope!(&self.context, "Submit(fence={:?})", fence);
-        for cmd_buf in submission.cmd_buffers {
+        for cmd_buf in submission.command_buffers {
             let cmd_buf = cmd_buf.borrow();
 
             let _scope = debug_scope!(
@@ -2087,10 +2087,10 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn execute_commands<I>(&mut self, _buffers: I)
+    fn execute_commands<'a, T, I>(&mut self, _buffers: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<CommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
+        I: IntoIterator<Item = &'a T>,
     {
         unimplemented!()
     }
@@ -2387,13 +2387,12 @@ impl hal::pool::RawCommandPool<Backend> for CommandPool {
         //unimplemented!()
     }
 
-    fn allocate(&mut self, num: usize, _level: command::RawLevel) -> Vec<CommandBuffer> {
-        (0..num)
-            .map(|_| CommandBuffer::create_deferred(self.device.clone(), self.internal.clone()))
-            .collect()
+    fn allocate_one(&mut self, _level: command::RawLevel) -> CommandBuffer {
+        CommandBuffer::create_deferred(self.device.clone(), self.internal.clone())
     }
 
-    unsafe fn free(&mut self, _cbufs: Vec<CommandBuffer>) {
+    unsafe fn free<I>(&mut self, _cbufs: I)
+    where I: IntoIterator<Item = CommandBuffer> {
         // TODO:
         // unimplemented!()
     }

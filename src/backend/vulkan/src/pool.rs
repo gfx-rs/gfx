@@ -25,7 +25,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         });
     }
 
-    fn allocate(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
+    fn allocate_vec(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
         let info = vk::CommandBufferAllocateInfo {
             s_type: vk::StructureType::CommandBufferAllocateInfo,
             p_next: ptr::null(),
@@ -49,11 +49,13 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             }).collect()
     }
 
-    unsafe fn free(&mut self, cbufs: Vec<CommandBuffer>) {
-        let buffers: SmallVec<[vk::CommandBuffer; 16]> =
-            cbufs.into_iter()
-                 .map(|buffer| buffer.raw)
-                 .collect();
+    unsafe fn free<I>(&mut self, cbufs: I)
+    where I: IntoIterator<Item = CommandBuffer>
+    {
+        let buffers: SmallVec<[vk::CommandBuffer; 16]> = cbufs
+            .into_iter()
+            .map(|buffer| buffer.raw)
+            .collect();
         self.device.0.free_command_buffers(self.raw, &buffers);
     }
 }

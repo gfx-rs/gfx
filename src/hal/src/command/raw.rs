@@ -117,7 +117,7 @@ impl<'a, B: Backend> Default for CommandBufferInheritanceInfo<'a, B> {
 
 /// A trait that describes all the operations that must be
 /// provided by a `Backend`'s command buffer.
-pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
+pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// Begins recording commands to a command buffer.
     fn begin(&mut self, flags: CommandBufferFlags, inheritance_info: CommandBufferInheritanceInfo<B>);
 
@@ -533,10 +533,10 @@ pub trait RawCommandBuffer<B: Backend>: Clone + Any + Send + Sync {
     );
 
     /// Execute the given secondary command buffers.
-    fn execute_commands<I>(
+    fn execute_commands<'a, T, I>(
         &mut self,
-        buffers: I,
+        cmd_buffers: I,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<B::CommandBuffer>;
+        T: 'a + Borrow<B::CommandBuffer>,
+        I: IntoIterator<Item = &'a T>;
 }

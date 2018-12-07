@@ -60,7 +60,7 @@ pub struct BufferImageCopy {
 }
 
 
-impl<'a, B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
+impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
     pub fn pipeline_barrier<'i, T>(
         &mut self,

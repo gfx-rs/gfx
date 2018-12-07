@@ -74,11 +74,11 @@ bitflags!(
     }
 );
 
-// DOC TODO: Could be better, but I don't know how to do this without 
+// DOC TODO: Could be better, but I don't know how to do this without
 // trying to explain the whole synchronization model.
 /// A [memory barrier](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#synchronization-memory-barriers)
 /// type for either buffers or images.
-#[allow(missing_docs)] 
+#[allow(missing_docs)]
 #[derive(Clone, Debug)]
 pub enum Barrier<'a, B: Backend> {
     /// Applies the given access flags to all buffers in the range.
@@ -109,6 +109,18 @@ pub enum Barrier<'a, B: Backend> {
         /// A `SubresourceRange` that defines which section of an image the barrier applies to.
         range: image::SubresourceRange,
     },
+}
+
+impl<'a, B: Backend> Barrier<'a , B> {
+    /// Create a barrier for the whole buffer between the given states.
+    pub fn whole_buffer(target: &'a B::Buffer, states: Range<buffer::State>) -> Self {
+        Barrier::Buffer {
+            states,
+            target,
+            families: None,
+            range: None .. None,
+        }
+    }
 }
 
 /// Memory requirements for a certain resource (buffer/image).

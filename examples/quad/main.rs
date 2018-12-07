@@ -19,9 +19,6 @@ extern crate gfx_backend_metal as back;
 extern crate gfx_backend_vulkan as back;
 extern crate gfx_hal as hal;
 
-#[cfg(feature = "gl")]
-use back::glutin::GlContext;
-
 extern crate glsl_to_spirv;
 extern crate image;
 extern crate winit;
@@ -121,7 +118,7 @@ fn main() {
         .unwrap();
 
     let mut command_pool = device
-        .create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16)
+        .create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
         .expect("Can't create command pool");
 
     // Setup renderpass and pipeline
@@ -297,62 +294,65 @@ fn main() {
 
     // copy buffer to texture
     {
-        let submit = {
-            let mut cmd_buffer = command_pool.acquire_command_buffer(false);
+        let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
+        cmd_buffer.begin();
 
-            let image_barrier = m::Barrier::Image {
-                states: (i::Access::empty(), i::Layout::Undefined)
-                    ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
-                target: &image_logo,
-                families: None,
-                range: COLOR_RANGE.clone(),
-            };
-
-            cmd_buffer.pipeline_barrier(
-                PipelineStage::TOP_OF_PIPE..PipelineStage::TRANSFER,
-                m::Dependencies::empty(),
-                &[image_barrier],
-            );
-
-            cmd_buffer.copy_buffer_to_image(
-                &image_upload_buffer,
-                &image_logo,
-                i::Layout::TransferDstOptimal,
-                &[command::BufferImageCopy {
-                    buffer_offset: 0,
-                    buffer_width: row_pitch / (image_stride as u32),
-                    buffer_height: height as u32,
-                    image_layers: i::SubresourceLayers {
-                        aspects: f::Aspects::COLOR,
-                        level: 0,
-                        layers: 0..1,
-                    },
-                    image_offset: i::Offset { x: 0, y: 0, z: 0 },
-                    image_extent: i::Extent {
-                        width,
-                        height,
-                        depth: 1,
-                    },
-                }],
-            );
-
-            let image_barrier = m::Barrier::Image {
-                states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
-                    ..(i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
-                target: &image_logo,
-                families: None,
-                range: COLOR_RANGE.clone(),
-            };
-            cmd_buffer.pipeline_barrier(
-                PipelineStage::TRANSFER..PipelineStage::FRAGMENT_SHADER,
-                m::Dependencies::empty(),
-                &[image_barrier],
-            );
-
-            cmd_buffer.finish()
+        let image_barrier = m::Barrier::Image {
+            states: (i::Access::empty(), i::Layout::Undefined)
+                ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+            target: &image_logo,
+            families: None,
+            range: COLOR_RANGE.clone(),
         };
 
-        let submission = Submission::new().submit(Some(submit));
+        cmd_buffer.pipeline_barrier(
+            PipelineStage::TOP_OF_PIPE..PipelineStage::TRANSFER,
+            m::Dependencies::empty(),
+            &[image_barrier],
+        );
+
+        cmd_buffer.copy_buffer_to_image(
+            &image_upload_buffer,
+            &image_logo,
+            i::Layout::TransferDstOptimal,
+            &[command::BufferImageCopy {
+                buffer_offset: 0,
+                buffer_width: row_pitch / (image_stride as u32),
+                buffer_height: height as u32,
+                image_layers: i::SubresourceLayers {
+                    aspects: f::Aspects::COLOR,
+                    level: 0,
+                    layers: 0..1,
+                },
+                image_offset: i::Offset { x: 0, y: 0, z: 0 },
+                image_extent: i::Extent {
+                    width,
+                    height,
+                    depth: 1,
+                },
+            }],
+        );
+
+        let image_barrier = m::Barrier::Image {
+            states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
+                ..(i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
+            target: &image_logo,
+            families: None,
+            range: COLOR_RANGE.clone(),
+        };
+        cmd_buffer.pipeline_barrier(
+            PipelineStage::TRANSFER..PipelineStage::FRAGMENT_SHADER,
+            m::Dependencies::empty(),
+            &[image_barrier],
+        );
+
+        cmd_buffer.finish();
+
+        let submission = Submission {
+            command_buffers: Some(&cmd_buffer),
+            wait_semaphores: &[],
+            signal_semaphores: &[],
+        };
         queue_group.queues[0].submit(submission, Some(&mut frame_fence));
 
         device
@@ -656,8 +656,9 @@ fn main() {
         };
 
         // Rendering
-        let submit = {
-            let mut cmd_buffer = command_pool.acquire_command_buffer(false);
+        let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
+        {
+            cmd_buffer.begin();
 
             cmd_buffer.set_viewports(0, &[viewport.clone()]);
             cmd_buffer.set_scissors(0, &[viewport.rect]);
@@ -677,16 +678,19 @@ fn main() {
                 encoder.draw(0..6, 0..1);
             }
 
-            cmd_buffer.finish()
-        };
+            cmd_buffer.finish();
 
-        let submission = Submission::new()
-            .wait_on(&[(&frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)])
-            .submit(Some(submit));
-        queue_group.queues[0].submit(submission, Some(&mut frame_fence));
+            let submission = Submission {
+                command_buffers: Some(&cmd_buffer),
+                wait_semaphores: &[(&frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)],
+                signal_semaphores: &[],
+            };
+            queue_group.queues[0].submit(submission, Some(&mut frame_fence));
+        }
 
         // TODO: replace with semaphore
         device.wait_for_fence(&frame_fence, !0).unwrap();
+        command_pool.free(Some(cmd_buffer));
 
         // present frame
         if let Err(_) = swap_chain.present(&mut queue_group.queues[0], frame, &[]) {

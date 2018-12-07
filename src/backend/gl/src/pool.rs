@@ -78,18 +78,18 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn allocate(
-        &mut self, num: usize, _level: hal::command::RawLevel
-    ) -> Vec<RawCommandBuffer> { // TODO: Implement secondary buffers
-        (0..num).map(|_|
-                RawCommandBuffer::new(
-                    self.fbo,
-                    self.limits,
-                    self.memory.clone()))
-                .collect()
+    fn allocate_one(
+        &mut self, _level: hal::command::RawLevel
+    ) -> RawCommandBuffer { // TODO: Implement secondary buffers
+        RawCommandBuffer::new(
+            self.fbo,
+            self.limits,
+            self.memory.clone(),
+        )
     }
 
-    unsafe fn free(&mut self, buffers: Vec<RawCommandBuffer>) {
+    unsafe fn free<I>(&mut self, buffers: I)
+    where I: IntoIterator<Item = RawCommandBuffer> {
         let mut memory = self
             .memory
             .try_lock()

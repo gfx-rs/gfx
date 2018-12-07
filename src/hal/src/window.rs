@@ -52,7 +52,7 @@
 use device;
 use format::Format;
 use image;
-use queue::CommandQueue;
+use queue::{Capability, CommandQueue};
 use Backend;
 
 use std::any::Any;
@@ -405,6 +405,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     where
         &'a Self: Borrow<B::Swapchain>,
         Self: Sized + 'a,
+        C: Capability,
         IW: IntoIterator,
         IW::Item: Borrow<B::Semaphore>,
     {
