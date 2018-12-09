@@ -2,7 +2,7 @@
 
 use std::mem;
 use std::ops::Range;
-use {buffer, image};
+use {buffer, image, queue};
 use Backend;
 
 /// A trait for plain-old-data types.
@@ -91,6 +91,9 @@ pub enum Barrier<'a, B: Backend> {
         states: Range<buffer::State>,
         /// The buffer the barrier controls.
         target: &'a B::Buffer,
+        /// The source and destination Queue family IDs, for a [queue family ownership transfer](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#synchronization-queue-transfers)
+        /// Can be `None` to indicate no ownership transfer.
+        families: Option<Range<queue::QueueFamilyId>>,
     },
     /// A memory barrier that defines access to (a subset of) an image.
     Image {
@@ -98,6 +101,9 @@ pub enum Barrier<'a, B: Backend> {
         states: Range<image::State>,
         /// The image the barrier controls.
         target: &'a B::Image,
+        /// The source and destination Queue family IDs, for a [queue family ownership transfer](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#synchronization-queue-transfers)
+        /// Can be `None` to indicate no ownership transfer.
+        families: Option<Range<queue::QueueFamilyId>>,
         /// A `SubresourceRange` that defines which section of an image the barrier applies to.
         range: image::SubresourceRange,
     },

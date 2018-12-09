@@ -1163,7 +1163,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     };
                     raw_barriers.push(bar);
                 }
-                memory::Barrier::Buffer { ref states, target } => {
+                memory::Barrier::Buffer { ref states, target, ref families, } => {
+                    // TODO: Implement queue family ownership transitions for dx12
+                    if let Some(f) = families {
+                        if f.start.0 != f.end.0 {
+                            unimplemented!("Queue family resource ownership transitions are not implemented for DX12 (attempted transition from queue family {} to {}", f.start.0, f.end.0);
+                        }
+                    }
                     let state_src = conv::map_buffer_resource_state(states.start);
                     let state_dst = conv::map_buffer_resource_state(states.end);
 
@@ -1183,8 +1189,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 memory::Barrier::Image {
                     ref states,
                     target,
+                    ref families,
                     ref range,
                 } => {
+                    // TODO: Implement queue family ownership transitions for dx12
+                    if let Some(f) = families {
+                        if f.start.0 != f.end.0 {
+                            unimplemented!("Queue family resource ownership transitions are not implemented for DX12 (attempted transition from queue family {} to {}", f.start.0, f.end.0);
+                        }
+                    }
                     let _ = range; //TODO: use subresource range
                     let state_src = conv::map_image_resource_state(states.start.0, states.start.1);
                     let state_dst = conv::map_image_resource_state(states.end.0, states.end.1);
