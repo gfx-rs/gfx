@@ -211,7 +211,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         dst_access_mask: conv::map_image_access(access.end),
                     });
                 }
-                memory::Barrier::Buffer { ref states, target, ref families, } => {
+                memory::Barrier::Buffer { ref states, target, ref range, ref families, } => {
                     let families = match families {
                         Some(f) => f.start.0 as u32 .. f.end.0 as u32,
                         None => vk::VK_QUEUE_FAMILY_IGNORED..vk::VK_QUEUE_FAMILY_IGNORED,
@@ -224,8 +224,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         src_queue_family_index: families.start,
                         dst_queue_family_index: families.end,
                         buffer: target.raw,
-                        offset: 0,
-                        size: vk::VK_WHOLE_SIZE,
+                        offset: range.start,
+                        size: range.end - range.start,
                     });
                 }
                 memory::Barrier::Image { ref states, target, ref range, ref families, } => {

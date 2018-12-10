@@ -1163,7 +1163,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     };
                     raw_barriers.push(bar);
                 }
-                memory::Barrier::Buffer { ref states, target, ref families, } => {
+                memory::Barrier::Buffer { ref states, target, ref families, ref range, } => {
                     // TODO: Implement queue family ownership transitions for dx12
                     if let Some(f) = families {
                         if f.start.0 != f.end.0 {
