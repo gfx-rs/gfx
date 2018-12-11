@@ -61,6 +61,7 @@ impl<B: hal::Backend> Buffer<B> {
             states: self.stable_state .. access,
             families: None,
             target: &self.handle,
+            range: None .. None,
         }
     }
     fn barrier_from(&self, access: b::Access) -> memory::Barrier<B> {
@@ -68,6 +69,7 @@ impl<B: hal::Backend> Buffer<B> {
             states: access .. self.stable_state,
             families: None,
             target: &self.handle,
+            range: None .. None,
         }
     }
 }
@@ -235,6 +237,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     states: b::Access::empty() .. access,
                                     families: None,
                                     target: &buffer,
+                                    range: None .. None,
                                 };
                                 init_cmd.pipeline_barrier(
                                     pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::BOTTOM_OF_PIPE,
@@ -271,6 +274,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 states: b::Access::empty() .. b::Access::TRANSFER_WRITE,
                                 families: None,
                                 target: &buffer,
+                                range: None .. None,
                             };
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
@@ -291,6 +295,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 states: b::Access::TRANSFER_WRITE .. final_state,
                                 families: None,
                                 target: &buffer,
+                                range: None .. None,
                             };
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
@@ -1082,6 +1087,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 states: buffer.stable_state .. b::Access::TRANSFER_READ,
                 families: None,
                 target: &buffer.handle,
+                range: None .. None,
             };
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
@@ -1104,6 +1110,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 states: b::Access::TRANSFER_READ .. buffer.stable_state,
                 families: None,
                 target: &buffer.handle,
+                range: None .. None,
             };
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,

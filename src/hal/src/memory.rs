@@ -95,7 +95,7 @@ pub enum Barrier<'a, B: Backend> {
         /// Can be `None` to indicate no ownership transfer.
         families: Option<Range<queue::QueueFamilyId>>,
         /// Range of the buffer the barrier applies to.
-        range: Range<u64>,
+        range: Range<Option<u64>>,
     },
     /// A memory barrier that defines access to (a subset of) an image.
     Image {

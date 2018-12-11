@@ -224,8 +224,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         src_queue_family_index: families.start,
                         dst_queue_family_index: families.end,
                         buffer: target.raw,
-                        offset: range.start,
-                        size: range.end - range.start,
+                        offset: range.start.unwrap_or(0),
+                        size: range.end.map_or(vk::VK_WHOLE_SIZE, |end| end - range.start.unwrap_or(0)),
                     });
                 }
                 memory::Barrier::Image { ref states, target, ref range, ref families, } => {
