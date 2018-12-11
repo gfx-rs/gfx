@@ -36,8 +36,8 @@ pub use self::queue::{
     Capability, Supports, General, Graphics, Compute, Transfer,
 };
 pub use self::window::{
-    AcquireError, Backbuffer, SwapImageIndex, FrameSync, PresentMode,
-    Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,
+    AcquireError, Backbuffer, CompositeAlpha, SwapImageIndex, FrameSync,
+    PresentMode, Surface, SurfaceCapabilities, Swapchain, SwapchainConfig,
 };
 
 pub mod adapter;

@@ -816,7 +816,7 @@ impl hal::Surface<Backend> for Surface {
 
     fn compatibility(
         &self, _: &PhysicalDevice,
-    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>) {
+    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>, Vec<hal::CompositeAlpha>) {
         unimplemented!()
     }
 

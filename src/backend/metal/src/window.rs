@@ -247,7 +247,7 @@ impl SwapchainImage {
                     break
                 }
             }
-        }        
+        }
         count
     }
 }
@@ -261,7 +261,7 @@ impl hal::Surface<Backend> for Surface {
 
     fn compatibility(
         &self, device: &PhysicalDevice,
-    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>) {
+    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>, Vec<hal::CompositeAlpha>) {
         let current_extent = if self.main_thread_id == thread::current().id() {
             Some(self.inner.dimensions())
         } else {
@@ -293,8 +293,11 @@ impl hal::Surface<Backend> for Surface {
         } else {
             vec![hal::PresentMode::Fifo]
         };
+        let composite_alphas = vec![
+            hal::CompositeAlpha::Inherit, //TODO
+        ];
 
-        (caps, Some(formats), present_modes)
+        (caps, Some(formats), present_modes, composite_alphas)
     }
 
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {

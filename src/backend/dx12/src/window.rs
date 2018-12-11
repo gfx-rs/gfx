@@ -71,6 +71,7 @@ impl hal::Surface<Backend> for Surface {
         hal::SurfaceCapabilities,
         Option<Vec<f::Format>>,
         Vec<hal::PresentMode>,
+        Vec<hal::CompositeAlpha>,
     ) {
         let (width, height) = self.get_extent();
         let extent = hal::window::Extent2D { width, height };
@@ -98,8 +99,11 @@ impl hal::Surface<Backend> for Surface {
         let present_modes = vec![
             hal::PresentMode::Fifo, //TODO
         ];
+        let composite_alphas = vec![
+            hal::CompositeAlpha::Inherit, //TODO
+        ];
 
-        (capabilities, Some(formats), present_modes)
+        (capabilities, Some(formats), present_modes, composite_alphas)
     }
 }
 
