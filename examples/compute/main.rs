@@ -147,7 +147,8 @@ fn main() {
             Some(memory::Barrier::Buffer {
                 states: buffer::Access::TRANSFER_WRITE .. buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
                 families: None,
-                target: &device_buffer
+                target: &device_buffer,
+                range: None .. None,
             }),
         );
         command_buffer.bind_compute_pipeline(&pipeline);
@@ -159,7 +160,8 @@ fn main() {
             Some(memory::Barrier::Buffer {
                 states: buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE .. buffer::Access::TRANSFER_READ,
                 families: None,
-                target: &device_buffer
+                target: &device_buffer,
+                range: None .. None,
             }),
         );
         command_buffer.copy_buffer(&device_buffer, &staging_buffer, &[command::BufferCopy { src: 0, dst: 0, size: stride * numbers.len() as u64}]);
