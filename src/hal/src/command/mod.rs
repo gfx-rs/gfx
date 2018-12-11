@@ -103,7 +103,7 @@ impl<'a, B: Backend, C, S: Shot, L: Level> CommandBuffer<'a, B, C, S, L> {
     /// Create a new typed command buffer from a raw command pool.
     pub unsafe fn new(raw: &'a mut B::CommandBuffer) -> Self {
         CommandBuffer {
-            raw: raw,
+            raw,
             _marker: PhantomData,
         }
     }
