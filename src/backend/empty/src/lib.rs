@@ -186,6 +186,10 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
+    fn create_buffer_auto(&self, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
+        unimplemented!()
+    }
+
     fn get_buffer_requirements(&self, _: &()) -> memory::Requirements {
         unimplemented!()
     }
@@ -199,6 +203,18 @@ impl hal::Device<Backend> for Device {
     }
 
     fn create_image(
+        &self,
+        _: image::Kind,
+        _: image::Level,
+        _: format::Format,
+        _: image::Tiling,
+        _: image::Usage,
+        _: image::ViewCapabilities,
+    ) -> Result<(), image::CreationError> {
+        unimplemented!()
+    }
+
+    fn create_image_auto(
         &self,
         _: image::Kind,
         _: image::Level,

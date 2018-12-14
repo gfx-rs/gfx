@@ -381,6 +381,13 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         usage: buffer::Usage,
     ) -> Result<B::UnboundBuffer, buffer::CreationError>;
 
+    /// Create a new buffer (bound).
+    fn create_buffer_auto(
+        &self,
+        size: u64,
+        usage: buffer::Usage,
+    ) -> Result<B::Buffer, buffer::CreationError>;
+
     /// Get memory requirements for the unbound buffer
     fn get_buffer_requirements(&self, buf: &B::UnboundBuffer) -> Requirements;
 
@@ -413,7 +420,9 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     /// Destroy a buffer view object
     fn destroy_buffer_view(&self, view: B::BufferView);
 
-    /// Create a new image object
+    /// Create a new image object (unbound).
+    ///
+    /// The created buffer won't have associated memory until `bind_image_memory` is called.
     fn create_image(
         &self,
         kind: image::Kind,
@@ -423,6 +432,17 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
     ) -> Result<B::UnboundImage, image::CreationError>;
+
+    /// Create a new image object (bound).
+    fn create_image_auto(
+        &self,
+        kind: image::Kind,
+        mip_levels: image::Level,
+        format: format::Format,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        view_caps: image::ViewCapabilities,
+    ) -> Result<B::Image, image::CreationError>;
 
     /// Get memory requirements for the unbound Image
     fn get_image_requirements(&self, image: &B::UnboundImage) -> Requirements;
