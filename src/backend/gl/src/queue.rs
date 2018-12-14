@@ -744,8 +744,6 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         IW: IntoIterator,
         IW::Item: Borrow<native::Semaphore>,
     {
-        use glutin::GlContext;
-
         for swapchain in swapchains {
             swapchain.0
                 .borrow()

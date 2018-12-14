@@ -921,6 +921,20 @@ impl d::Device<B> for Device {
         })
     }
 
+    fn create_buffer_auto(
+        &self, size: u64, usage: buffer::Usage,
+    ) -> Result<n::Buffer, buffer::CreationError> {
+        let unbound = self.create_buffer(size, usage)?;
+        debug_assert_ne!(unbound.requirements.type_mask & 1, 0);
+        match self.allocate_memory(c::MemoryTypeId(0), unbound.requirements.size) {
+            Ok(mem) => Ok(self.bind_buffer_memory(&mem, 0, unbound).unwrap()),
+            Err(e) => {
+                error!("Unable to auto-allocate memory: {:?}", e);
+                Err(buffer::CreationError::OutOfMemory(d::OutOfMemory::OutOfDeviceMemory))
+            }
+        }
+    }
+
     fn get_buffer_requirements(&self, unbound: &UnboundBuffer) -> memory::Requirements {
         unbound.requirements
     }
@@ -1148,6 +1162,26 @@ impl d::Device<B> for Device {
                 type_mask: 0x7,
             }
         })
+    }
+
+    fn create_image_auto(
+        &self,
+        kind: i::Kind,
+        num_levels: i::Level,
+        format: Format,
+        tiling: i::Tiling,
+        usage: i::Usage,
+        view_caps: i::ViewCapabilities,
+    ) -> Result<n::Image, i::CreationError> {
+        let unbound = self.create_image(kind, num_levels, format, tiling, usage, view_caps)?;
+        debug_assert_ne!(unbound.requirements.type_mask & 1, 0);
+        match self.allocate_memory(c::MemoryTypeId(0), unbound.requirements.size) {
+            Ok(mem) => Ok(self.bind_image_memory(&mem, 0, unbound).unwrap()),
+            Err(e) => {
+                error!("Unable to auto-allocate memory: {:?}", e);
+                Err(i::CreationError::OutOfMemory(d::OutOfMemory::OutOfDeviceMemory))
+            }
+        }
     }
 
     fn get_image_requirements(&self, unbound: &UnboundImage) -> memory::Requirements {
