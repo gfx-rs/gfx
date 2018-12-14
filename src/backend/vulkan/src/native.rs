@@ -26,6 +26,7 @@ pub struct Memory {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Buffer {
     pub(crate) raw: vk::Buffer,
+    pub(crate) memory: Option<vk::DeviceMemory>,
 }
 
 unsafe impl Sync for Buffer {}
@@ -39,6 +40,7 @@ pub struct BufferView {
 #[derive(Debug, Hash, PartialEq, Eq)]
 pub struct Image {
     pub(crate) raw: vk::Image,
+    pub(crate) memory: Option<vk::DeviceMemory>,
     pub(crate) ty: vk::ImageType,
     pub(crate) flags: vk::ImageCreateFlags,
     pub(crate) extent: vk::Extent3D,

@@ -22,6 +22,9 @@ extern crate xcb;
 #[cfg(feature = "glsl-to-spirv")]
 extern crate glsl_to_spirv;
 
+#[cfg(feature = "vk-mem")]
+extern crate vk_mem;
+
 use ash::extensions as ext;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
@@ -292,13 +295,15 @@ impl hal::Instance for Instance {
                         ash::vk::PhysicalDeviceType::DiscreteGpu => DeviceType::DiscreteGpu,
                         ash::vk::PhysicalDeviceType::VirtualGpu => DeviceType::VirtualGpu,
                         ash::vk::PhysicalDeviceType::Cpu => DeviceType::Cpu,
-                    },                    
+                    },
                 };
+
                 let physical_device = PhysicalDevice {
                     instance: self.raw.clone(),
                     handle: device,
                     properties,
                 };
+
                 let queue_families = self
                     .raw
                     .0
@@ -311,6 +316,7 @@ impl hal::Instance for Instance {
                         index: i as u32,
                     })
                     .collect();
+
                 hal::Adapter {
                     info,
                     physical_device,
@@ -391,8 +397,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             };
 
             unsafe {
-                self.instance
-                    .0
+                self.instance.0
                     .create_device(self.handle, &info, None)
                     .map_err(|err| match err {
                         ash::DeviceError::LoadError(err) => panic!("{:?}", err),
@@ -404,8 +409,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         let swapchain_fn = vk::SwapchainFn::load(|name| unsafe {
             mem::transmute(
-                self.instance
-                    .0
+                self.instance.0
                     .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
             )
         }).unwrap();

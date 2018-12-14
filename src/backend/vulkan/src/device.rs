@@ -1007,10 +1007,30 @@ impl d::Device<B> for Device {
         };
 
         match result {
-            Ok(raw) => Ok(UnboundBuffer(n::Buffer { raw })),
+            Ok(raw) => Ok(UnboundBuffer(n::Buffer { raw, memory: None })),
             Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
             _ => unreachable!(),
+        }
+    }
+
+    fn create_buffer_auto(&self, size: u64, usage: buffer::Usage) -> Result<n::Buffer, buffer::CreationError> {
+        let unbound = self.create_buffer(size, usage)?;
+        let reqs = self.get_buffer_requirements(&unbound);
+        if reqs.type_mask == 0 {
+            error!("No supported memory types for a buffer!");
+            return Err(buffer::CreationError::OutOfMemory(d::OutOfMemory::OutOfDeviceMemory));
+        }
+        let mem_type = MemoryTypeId(reqs.type_mask.trailing_zeros() as usize);
+        match self.allocate_memory(mem_type, reqs.size) {
+            Ok(mem) => Ok(n::Buffer {
+                memory: Some(mem.raw),
+                .. self.bind_buffer_memory(&mem, 0, unbound).unwrap()
+            }),
+            Err(e) => {
+                error!("Unable to auto-allocate memory: {:?}", e);
+                Err(buffer::CreationError::OutOfMemory(d::OutOfMemory::OutOfDeviceMemory))
+            }
         }
     }
 
@@ -1026,12 +1046,13 @@ impl d::Device<B> for Device {
 
     fn bind_buffer_memory(&self, memory: &n::Memory, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, d::BindError> {
         let result = unsafe {
-            self.raw.0.bind_buffer_memory((buffer.0).raw, memory.raw, offset)
+            self.raw.0.bind_buffer_memory(buffer.0.raw, memory.raw, offset)
         };
 
         match result {
             Ok(()) => Ok(n::Buffer {
                 raw: buffer.0.raw,
+                memory: None,
             }),
             Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
@@ -1107,10 +1128,38 @@ impl d::Device<B> for Device {
         };
 
         match result {
-            Ok(raw) => Ok(UnboundImage(n::Image{ raw, ty: image_type, flags, extent })),
+            Ok(raw) => Ok(UnboundImage(n::Image{ raw, memory: None, ty: image_type, flags, extent })),
             Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
             _ => unreachable!(),
+        }
+    }
+
+    fn create_image_auto(
+        &self,
+        kind: image::Kind,
+        mip_levels: image::Level,
+        format: format::Format,
+        tiling: image::Tiling,
+        usage: image::Usage,
+        view_caps: image::ViewCapabilities,
+    ) -> Result<n::Image, image::CreationError> {
+        let unbound = self.create_image(kind, mip_levels, format, tiling, usage, view_caps)?;
+        let reqs = self.get_image_requirements(&unbound);
+        if reqs.type_mask == 0 {
+            error!("No supported memory types for an image!");
+            return Err(image::CreationError::OutOfMemory(d::OutOfMemory::OutOfDeviceMemory));
+        }
+        let mem_type = MemoryTypeId(reqs.type_mask.trailing_zeros() as usize);
+        match self.allocate_memory(mem_type, reqs.size) {
+            Ok(mem) => Ok(n::Image {
+                memory: Some(mem.raw),
+                .. self.bind_image_memory(&mem, 0, unbound).unwrap()
+            }),
+            Err(e) => {
+                error!("Unable to auto-allocate memory: {:?}", e);
+                Err(image::CreationError::OutOfMemory(d::OutOfMemory::OutOfDeviceMemory))
+            }
         }
     }
 
@@ -1732,6 +1781,7 @@ impl d::Device<B> for Device {
             .map(|image| {
                 n::Image {
                     raw: image,
+                    memory: None,
                     ty: vk::ImageType::Type2d,
                     flags: vk::ImageCreateFlags::empty(),
                     extent: vk::Extent3D {
@@ -1780,6 +1830,9 @@ impl d::Device<B> for Device {
 
     fn destroy_buffer(&self, buffer: n::Buffer) {
         unsafe { self.raw.0.destroy_buffer(buffer.raw, None); }
+        if let Some(memory) = buffer.memory {
+            unsafe { self.raw.0.free_memory(memory, None); }
+        }
     }
 
     fn destroy_buffer_view(&self, view: n::BufferView) {
@@ -1788,6 +1841,9 @@ impl d::Device<B> for Device {
 
     fn destroy_image(&self, image: n::Image) {
         unsafe { self.raw.0.destroy_image(image.raw, None); }
+        if let Some(memory) = image.memory {
+            unsafe { self.raw.0.free_memory(memory, None); }
+        }
     }
 
     fn destroy_image_view(&self, view: n::ImageView) {
