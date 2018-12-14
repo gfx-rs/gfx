@@ -22,7 +22,7 @@ bitflags = "1"
 derivative = "1"
 d3d12 = { git = "https://github.com/gfx-rs/d3d12-rs.git", rev = "ee01154" }
 gfx-hal = { path = "../../hal", version = "0.1" }
-log = { version = "0.4", features = ["release_max_level_error"] }
+log = { version = "0.4" }
 smallvec = "0.6"
 spirv_cross = "0.12.0"
 winapi = { version = "0.3", features = ["basetsd","d3d12","d3d12sdklayers","d3d12shader","d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4","dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
