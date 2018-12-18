@@ -262,6 +262,8 @@ pub struct Device {
     info: Info,
     share: Rc<Share>,
     vao: ArrayBuffer,
+    /// Temporary handles to keep alive for the frame.
+    /// Note: this manager is not meant for resource creation or cleanup!
     frame_handles: handle::Manager<Resources>,
     max_resource_count: Option<usize>,
     reset: Vec<Command>,
@@ -904,7 +906,8 @@ impl Device {
         let fence = unsafe {
             gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
         };
-        self.frame_handles.make_fence(Fence(fence))
+
+        self.share.handles.borrow_mut().make_fence(Fence(fence))
     }
 
     // MappingKind::Persistent
