@@ -166,10 +166,10 @@ fn main() {
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = QUAD.len() as u64 * buffer_stride;
 
-    let buffer_unbound = device
+    let mut vertex_buffer = device
         .create_buffer(buffer_len, buffer::Usage::VERTEX)
         .unwrap();
-    let buffer_req = device.get_buffer_requirements(&buffer_unbound);
+    let buffer_req = device.get_buffer_requirements(&vertex_buffer);
 
     let upload_type = memory_types
         .iter()
@@ -186,8 +186,8 @@ fn main() {
     let buffer_memory = device
         .allocate_memory(upload_type, buffer_req.size)
         .unwrap();
-    let vertex_buffer = device
-        .bind_buffer_memory(&buffer_memory, 0, buffer_unbound)
+    device
+        .bind_buffer_memory(&buffer_memory, 0, &mut vertex_buffer)
         .unwrap();
 
     // TODO: check transitions: read/write mapping and vertex buffer read
@@ -212,15 +212,15 @@ fn main() {
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;
 
-    let image_buffer_unbound = device
+    let mut image_upload_buffer = device
         .create_buffer(upload_size, buffer::Usage::TRANSFER_SRC)
         .unwrap();
-    let image_mem_reqs = device.get_buffer_requirements(&image_buffer_unbound);
+    let image_mem_reqs = device.get_buffer_requirements(&image_upload_buffer);
     let image_upload_memory = device
         .allocate_memory(upload_type, image_mem_reqs.size)
         .unwrap();
-    let image_upload_buffer = device
-        .bind_buffer_memory(&image_upload_memory, 0, image_buffer_unbound)
+    device
+        .bind_buffer_memory(&image_upload_memory, 0, &mut image_upload_buffer)
         .unwrap();
 
     // copy image data into staging buffer
@@ -237,7 +237,7 @@ fn main() {
         device.release_mapping_writer(data).unwrap();
     }
 
-    let image_unbound = device
+    let mut image_logo = device
         .create_image(
             kind,
             1,
@@ -246,7 +246,7 @@ fn main() {
             i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
             i::ViewCapabilities::empty(),
         ).unwrap(); // TODO: usage
-    let image_req = device.get_image_requirements(&image_unbound);
+    let image_req = device.get_image_requirements(&image_logo);
 
     let device_type = memory_types
         .iter()
@@ -258,8 +258,8 @@ fn main() {
         .into();
     let image_memory = device.allocate_memory(device_type, image_req.size).unwrap();
 
-    let image_logo = device
-        .bind_image_memory(&image_memory, 0, image_unbound)
+    device
+        .bind_image_memory(&image_memory, 0, &mut image_logo)
         .unwrap();
     let image_srv = device
         .create_image_view(

@@ -198,7 +198,7 @@ fn create_buffer<B: Backend>(
     stride: u64,
     len: u64,
 ) -> (B::Memory, B::Buffer, u64) {
-    let buffer = device.create_buffer(stride * len, usage).unwrap();
+    let mut buffer = device.create_buffer(stride * len, usage).unwrap();
     let requirements = device.get_buffer_requirements(&buffer);
 
     let ty = memory_types
@@ -212,7 +212,7 @@ fn create_buffer<B: Backend>(
         .into();
 
     let memory = device.allocate_memory(ty, requirements.size).unwrap();
-    let buffer = device.bind_buffer_memory(&memory, 0, buffer).unwrap();
+    device.bind_buffer_memory(&memory, 0, &mut buffer).unwrap();
 
     (memory, buffer, requirements.size)
 }

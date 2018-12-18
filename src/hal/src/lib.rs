@@ -386,10 +386,8 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type Memory:              fmt::Debug + Any + Send + Sync;
     type CommandPool:         pool::RawCommandPool<Self>;
 
-    type UnboundBuffer:       fmt::Debug + Any + Send + Sync;
     type Buffer:              fmt::Debug + Any + Send + Sync;
     type BufferView:          fmt::Debug + Any + Send + Sync;
-    type UnboundImage:        fmt::Debug + Any + Send + Sync;
     type Image:               fmt::Debug + Any + Send + Sync;
     type ImageView:           fmt::Debug + Any + Send + Sync;
     type Sampler:             fmt::Debug + Any + Send + Sync;

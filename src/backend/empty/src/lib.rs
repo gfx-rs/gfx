@@ -32,10 +32,8 @@ impl hal::Backend for Backend {
     type RenderPass = ();
     type Framebuffer = ();
 
-    type UnboundBuffer = ();
     type Buffer = ();
     type BufferView = ();
-    type UnboundImage = ();
     type Image = ();
     type ImageView = ();
     type Sampler = ();
@@ -194,7 +192,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn bind_buffer_memory(&self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
+    fn bind_buffer_memory(&self, _: &(), _: u64, _: &mut ()) -> Result<(), device::BindError> {
         unimplemented!()
     }
 
@@ -222,7 +220,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn bind_image_memory(&self, _: &(), _: u64, _: ()) -> Result<(), device::BindError> {
+    fn bind_image_memory(&self, _: &(), _: u64, _: &mut ()) -> Result<(), device::BindError> {
         unimplemented!()
     }
 

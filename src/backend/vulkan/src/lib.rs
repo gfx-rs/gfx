@@ -837,10 +837,8 @@ impl hal::Backend for Backend {
     type RenderPass = native::RenderPass;
     type Framebuffer = native::Framebuffer;
 
-    type UnboundBuffer = device::UnboundBuffer;
     type Buffer = native::Buffer;
     type BufferView = native::BufferView;
-    type UnboundImage = device::UnboundImage;
     type Image = native::Image;
     type ImageView = native::ImageView;
     type Sampler = native::Sampler;
