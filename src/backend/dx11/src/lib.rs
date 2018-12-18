@@ -89,6 +89,8 @@ mod internal;
 mod range_alloc;
 mod shader;
 
+pub use device::Device;
+
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
 pub(crate) struct ViewInfo {
