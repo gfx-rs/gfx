@@ -164,7 +164,7 @@ impl Factory {
             bind: Bind::RENDER_TARGET,
             usage: Usage::Data,
         };
-        let tex = self.frame_handles.make_texture(raw_tex, tex_desc);
+        let tex = self.share.handles.lock().unwrap().make_texture(raw_tex, tex_desc);
         let view_desc = t::RenderDesc {
             channel: format.1,
             level: 0,
