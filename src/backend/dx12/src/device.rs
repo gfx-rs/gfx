@@ -1790,7 +1790,7 @@ impl d::Device<B> for Device {
         &self,
         mut size: u64,
         usage: buffer::Usage,
-    ) -> Result<UnboundBuffer, buffer::CreationError> {
+    ) -> Result<r::Buffer, buffer::CreationError> {
         if usage.contains(buffer::Usage::UNIFORM) {
             // Constant buffer view sizes need to be aligned.
             // Coupled with the offset alignment we can enforce an aligned CBV size
@@ -1814,30 +1814,34 @@ impl d::Device<B> for Device {
             type_mask: MEM_TYPE_MASK << type_mask_shift,
         };
 
-        Ok(UnboundBuffer {
+        Ok(r::Buffer::Unbound(r::BufferUnbound {
             requirements,
             usage,
-        })
+        }))
     }
 
-    fn get_buffer_requirements(&self, buffer: &UnboundBuffer) -> Requirements {
-        buffer.requirements
+    fn get_buffer_requirements(&self, buffer: &r::Buffer) -> Requirements {
+        match buffer {
+            r::Buffer::Unbound(b) => b.requirements,
+            r::Buffer::Bound(b) => b.requirements,
+        }
     }
 
     fn bind_buffer_memory(
         &self,
         memory: &r::Memory,
         offset: u64,
-        buffer: UnboundBuffer,
-    ) -> Result<r::Buffer, d::BindError> {
-        if buffer.requirements.type_mask & (1 << memory.type_id) == 0 {
+        buffer: &mut r::Buffer,
+    ) -> Result<(), d::BindError> {
+        let buffer_unbound = *buffer.expect_unbound();
+        if buffer_unbound.requirements.type_mask & (1 << memory.type_id) == 0 {
             error!(
                 "Bind memory failure: supported mask 0x{:x}, given id {}",
-                buffer.requirements.type_mask, memory.type_id
+                buffer_unbound.requirements.type_mask, memory.type_id
             );
             return Err(d::BindError::WrongMemory);
         }
-        if offset + buffer.requirements.size > memory.size {
+        if offset + buffer_unbound.requirements.size > memory.size {
             return Err(d::BindError::OutOfBounds);
         }
 
@@ -1845,7 +1849,7 @@ impl d::Device<B> for Device {
         let desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: d3d12::D3D12_RESOURCE_DIMENSION_BUFFER,
             Alignment: 0,
-            Width: buffer.requirements.size,
+            Width: buffer_unbound.requirements.size,
             Height: 1,
             DepthOrArraySize: 1,
             MipLevels: 1,
@@ -1855,7 +1859,7 @@ impl d::Device<B> for Device {
                 Quality: 0,
             },
             Layout: d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-            Flags: conv::map_buffer_flags(buffer.usage),
+            Flags: conv::map_buffer_flags(buffer_unbound.usage),
         };
 
         assert_eq!(winerror::S_OK, unsafe {
@@ -1870,7 +1874,7 @@ impl d::Device<B> for Device {
             )
         });
 
-        let clear_uav = if buffer.usage.contains(buffer::Usage::TRANSFER_DST) {
+        let clear_uav = if buffer_unbound.usage.contains(buffer::Usage::TRANSFER_DST) {
             let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
             let mut view_desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                 Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
@@ -1880,7 +1884,7 @@ impl d::Device<B> for Device {
 
             *unsafe { view_desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
                 FirstElement: 0,
-                NumElements: (buffer.requirements.size / 4) as _,
+                NumElements: (buffer_unbound.requirements.size / 4) as _,
                 StructureByteStride: 0,
                 CounterOffsetInBytes: 0,
                 Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
@@ -1899,11 +1903,13 @@ impl d::Device<B> for Device {
             None
         };
 
-        Ok(r::Buffer {
+        *buffer = r::Buffer::Bound(r::BufferBound {
             resource,
-            size_in_bytes: buffer.requirements.size as _,
+            requirements: buffer_unbound.requirements,
             clear_uav,
-        })
+        });
+
+        Ok(())
     }
 
     fn create_buffer_view<R: RangeArg<u64>>(
@@ -1912,6 +1918,7 @@ impl d::Device<B> for Device {
         format: Option<format::Format>,
         range: R,
     ) -> Result<r::BufferView, buffer::ViewCreationError> {
+        let buffer = buffer.expect_bound();
         let buffer_features = {
             let idx = format.map(|fmt| fmt as usize).unwrap_or(0);
             self.format_properties[idx].buffer_features
@@ -1922,7 +1929,7 @@ impl d::Device<B> for Device {
         };
 
         let start = *range.start().unwrap_or(&0);
-        let end = *range.end().unwrap_or(&(buffer.size_in_bytes as _));
+        let end = *range.end().unwrap_or(&(buffer.requirements.size as _));
 
         let bytes_per_texel = (format_desc.bits / 8) as u64;
         // Check if it adheres to the texel buffer offset limit
@@ -2003,7 +2010,7 @@ impl d::Device<B> for Device {
         tiling: image::Tiling,
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
-    ) -> Result<UnboundImage, image::CreationError> {
+    ) -> Result<r::Image, image::CreationError> {
         assert!(mip_levels <= kind.num_levels());
 
         let base_format = format.base_format();
@@ -2066,7 +2073,7 @@ impl d::Device<B> for Device {
             MEM_TYPE_IMAGE_SHIFT
         };
 
-        Ok(UnboundImage {
+        Ok(r::Image::Unbound(r::ImageUnbound {
             dsv_format: conv::map_format_dsv(base_format.0).unwrap_or(desc.Format),
             desc,
             requirements: memory::Requirements {
@@ -2082,11 +2089,14 @@ impl d::Device<B> for Device {
             bytes_per_block,
             block_dim,
             num_levels: mip_levels,
-        })
+        }))
     }
 
-    fn get_image_requirements(&self, image: &UnboundImage) -> Requirements {
-        image.requirements
+    fn get_image_requirements(&self, image: &r::Image) -> Requirements {
+        match image {
+            r::Image::Bound(i) => i.requirements,
+            r::Image::Unbound(i) => i.requirements,
+        }
     }
 
     fn get_image_subresource_footprint(
@@ -2096,11 +2106,14 @@ impl d::Device<B> for Device {
     ) -> image::SubresourceFootprint {
         let mut num_rows = 0;
         let mut total_bytes = 0;
+        let desc = match image {
+            r::Image::Bound(i) => i.descriptor,
+            r::Image::Unbound(i) => i.desc,
+        };
         let footprint = unsafe {
             let mut footprint = mem::zeroed();
-            let desc = (*image.resource).GetDesc();
             self.raw.GetCopyableFootprints(
-                &desc,
+                image.get_desc(),
                 image.calc_subresource(sub.level as _, sub.layer as _, 0),
                 1,
                 0,
@@ -2126,29 +2139,30 @@ impl d::Device<B> for Device {
         &self,
         memory: &r::Memory,
         offset: u64,
-        image: UnboundImage,
-    ) -> Result<r::Image, d::BindError> {
+        image: &mut r::Image,
+    ) -> Result<(), d::BindError> {
         use self::image::Usage;
 
-        if image.requirements.type_mask & (1 << memory.type_id) == 0 {
+        let image_unbound = *image.expect_unbound();
+        if image_unbound.requirements.type_mask & (1 << memory.type_id) == 0 {
             error!(
                 "Bind memory failure: supported mask 0x{:x}, given id {}",
-                image.requirements.type_mask, memory.type_id
+                image_unbound.requirements.type_mask, memory.type_id
             );
             return Err(d::BindError::WrongMemory);
         }
-        if offset + image.requirements.size > memory.size {
+        if offset + image_unbound.requirements.size > memory.size {
             return Err(d::BindError::OutOfBounds);
         }
 
         let mut resource = native::Resource::null();
-        let num_layers = image.kind.num_layers();
+        let num_layers = image_unbound.kind.num_layers();
 
         assert_eq!(winerror::S_OK, unsafe {
             self.raw.clone().CreatePlacedResource(
                 memory.heap.as_mut_ptr(),
                 offset,
-                &image.desc,
+                &image_unbound.desc,
                 d3d12::D3D12_RESOURCE_STATE_COMMON,
                 ptr::null(),
                 &d3d12::ID3D12Resource::uuidof(),
@@ -2158,14 +2172,14 @@ impl d::Device<B> for Device {
 
         let info = ViewInfo {
             resource,
-            kind: image.kind,
+            kind: image_unbound.kind,
             caps: image::ViewCapabilities::empty(),
-            view_kind: match image.kind {
+            view_kind: match image_unbound.kind {
                 image::Kind::D1(..) => image::ViewKind::D1Array,
                 image::Kind::D2(..) => image::ViewKind::D2Array,
                 image::Kind::D3(..) => image::ViewKind::D3,
             },
-            format: image.desc.Format,
+            format: image_unbound.desc.Format,
             range: image::SubresourceRange {
                 aspects: Aspects::empty(),
                 levels: 0..0,
@@ -2176,34 +2190,34 @@ impl d::Device<B> for Device {
         //TODO: the clear_Xv is incomplete. We should support clearing images created without XXX_ATTACHMENT usage.
         // for this, we need to check the format and force the `RENDER_TARGET` flag behind the user's back
         // if the format supports being rendered into, allowing us to create clear_Xv
-        let format_properties = &self.format_properties[image.format as usize];
-        let props = match image.tiling {
+        let format_properties = &self.format_properties[image_unbound.format as usize];
+        let props = match image_unbound.tiling {
             image::Tiling::Optimal => format_properties.optimal_tiling,
             image::Tiling::Linear => format_properties.linear_tiling,
         };
-        let can_clear_color = image
+        let can_clear_color = image_unbound
             .usage
             .intersects(Usage::TRANSFER_DST | Usage::COLOR_ATTACHMENT)
             && props.contains(format::ImageFeature::COLOR_ATTACHMENT);
-        let can_clear_depth = image
+        let can_clear_depth = image_unbound
             .usage
             .intersects(Usage::TRANSFER_DST | Usage::DEPTH_STENCIL_ATTACHMENT)
             && props.contains(format::ImageFeature::DEPTH_STENCIL_ATTACHMENT);
-        let aspects = image.format.surface_desc().aspects;
+        let aspects = image_unbound.format.surface_desc().aspects;
 
-        Ok(r::Image {
+        *image = r::Image::Bound(r::ImageBound {
             resource: resource,
             place: r::Place::Heap {
                 raw: memory.heap.clone(),
                 offset,
             },
-            surface_type: image.format.base_format().0,
-            kind: image.kind,
-            usage: image.usage,
-            view_caps: image.view_caps,
-            descriptor: image.desc,
-            bytes_per_block: image.bytes_per_block,
-            block_dim: image.block_dim,
+            surface_type: image_unbound.format.base_format().0,
+            kind: image_unbound.kind,
+            usage: image_unbound.usage,
+            view_caps: image_unbound.view_caps,
+            descriptor: image_unbound.desc,
+            bytes_per_block: image_unbound.bytes_per_block,
+            block_dim: image_unbound.block_dim,
             clear_cv: if aspects.contains(Aspects::COLOR) && can_clear_color {
                 (0..num_layers)
                     .map(|layer| {
@@ -2223,7 +2237,7 @@ impl d::Device<B> for Device {
                 (0..num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(ViewInfo {
-                            format: image.dsv_format,
+                            format: image_unbound.dsv_format,
                             range: image::SubresourceRange {
                                 aspects: Aspects::DEPTH,
                                 levels: 0..1, //TODO?
@@ -2239,7 +2253,7 @@ impl d::Device<B> for Device {
                 (0..num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(ViewInfo {
-                            format: image.dsv_format,
+                            format: image_unbound.dsv_format,
                             range: image::SubresourceRange {
                                 aspects: Aspects::STENCIL,
                                 levels: 0..1, //TODO?
@@ -2251,7 +2265,10 @@ impl d::Device<B> for Device {
             } else {
                 Vec::new()
             },
-        })
+            requirements: image_unbound.requirements,
+        });
+
+        Ok(())
     }
 
     fn create_image_view(
@@ -2262,6 +2279,7 @@ impl d::Device<B> for Device {
         _swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<r::ImageView, image::ViewError> {
+        let image = image.expect_bound();
         let mip_levels = (range.levels.start, range.levels.end);
         let layers = (range.layers.start, range.layers.end);
 
@@ -2472,6 +2490,7 @@ impl d::Device<B> for Device {
                 }
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
+                        let buffer = buffer.expect_bound();
                         if update_pool_index == descriptor_update_pools.len() {
                             let max_size = 1u64 << 12; //arbitrary
                             descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
@@ -2487,7 +2506,7 @@ impl d::Device<B> for Device {
                             update_pool_index += 1;
                         }
                         let start = range.start.unwrap_or(0);
-                        let end = range.end.unwrap_or(buffer.size_in_bytes as _);
+                        let end = range.end.unwrap_or(buffer.requirements.size as _);
 
                         if bind_info.is_uav {
                             assert_eq!((end - start) % 4, 0);
@@ -2935,8 +2954,11 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_buffer(&self, buffer: r::Buffer) {
-        unsafe {
-            buffer.resource.destroy();
+        match buffer {
+            r::Buffer::Bound(buffer) => unsafe {
+                buffer.resource.destroy();
+            }
+            r::Buffer::Unbound(_) => {}
         }
     }
 
@@ -2945,8 +2967,11 @@ impl d::Device<B> for Device {
     }
 
     fn destroy_image(&self, image: r::Image) {
-        unsafe {
-            image.resource.destroy();
+        match image {
+            r::Image::Bound(image) => unsafe {
+                image.resource.destroy();
+            }
+            r::Image::Unbound(_) => {}
         }
     }
 
@@ -3087,7 +3112,7 @@ impl d::Device<B> for Device {
                 let block_dim = format_desc.dim;
                 let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
 
-                r::Image {
+                r::Image::Bound(r::ImageBound {
                     resource,
                     place: r::Place::SwapChain,
                     surface_type,
@@ -3111,7 +3136,13 @@ impl d::Device<B> for Device {
                     clear_cv: vec![rtv_handle],
                     clear_dv: Vec::new(),
                     clear_sv: Vec::new(),
-                }
+                    // Dummy values, image is already bound
+                    requirements: memory::Requirements {
+                        alignment: 1,
+                        size: 1,
+                        type_mask: MEM_TYPE_MASK,
+                    },
+                })
             }).collect();
 
         let swapchain = w::Swapchain {

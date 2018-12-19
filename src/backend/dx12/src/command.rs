@@ -827,7 +827,7 @@ impl CommandBuffer {
         barrier
     }
 
-    fn split_buffer_copy(copies: &mut Vec<Copy>, r: &com::BufferImageCopy, image: &r::Image) {
+    fn split_buffer_copy(copies: &mut Vec<Copy>, r: &com::BufferImageCopy, image: &r::ImageBound) {
         let buffer_width = if r.buffer_width == 0 {
             r.image_extent.width
         } else {
@@ -1173,6 +1173,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         continue;
                     }
 
+                    let target = target.expect_bound();
                     let bar = Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                         pResource: target.resource.as_mut_ptr(),
                         Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
@@ -1202,6 +1203,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         continue;
                     }
 
+                    let target = target.expect_bound();
                     let mut bar =
                         Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                             pResource: target.resource.as_mut_ptr(),
@@ -1281,6 +1283,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<image::SubresourceRange>,
     {
+        let image = image.expect_bound();
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
             assert_eq!(sub.levels, 0..1); //TODO
@@ -1418,6 +1421,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageResolve>,
     {
+        let src = src.expect_bound();
+        let dst = dst.expect_bound();
         assert_eq!(src.descriptor.Format, dst.descriptor.Format);
 
         {
@@ -1484,6 +1489,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::ImageBlit>,
     {
         let device = self.shared.service_pipes.device.clone();
+        let src = src.expect_bound();
+        let dst = dst.expect_bound();
 
         // TODO: Resource barriers for src.
         // TODO: depth or stencil images not supported so far
@@ -1713,14 +1720,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
+        let buffer = ibv.buffer.expect_bound();
         let format = match ibv.index_type {
             IndexType::U16 => dxgiformat::DXGI_FORMAT_R16_UINT,
             IndexType::U32 => dxgiformat::DXGI_FORMAT_R32_UINT,
         };
-        let location = ibv.buffer.resource.gpu_virtual_address();
+        let location = buffer.resource.gpu_virtual_address();
         self.raw.set_index_buffer(
             location + ibv.offset,
-            ibv.buffer.size_in_bytes - ibv.offset as u32,
+            (buffer.requirements.size - ibv.offset) as u32,
             format,
         );
     }
@@ -1736,10 +1744,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .into_iter()
             .zip(self.vertex_buffer_views[first_binding as _..].iter_mut())
         {
-            let b = buffer.borrow();
+            let b = buffer.borrow().expect_bound();
             let base = unsafe { (*b.resource).GetGPUVirtualAddress() };
             view.BufferLocation = base + offset;
-            view.SizeInBytes = b.size_in_bytes - offset as u32;
+            view.SizeInBytes = (b.requirements.size - offset) as u32;
         }
     }
 
@@ -1944,6 +1952,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn dispatch_indirect(&mut self, buffer: &r::Buffer, offset: buffer::Offset) {
+        let buffer = buffer.expect_bound();
         self.set_compute_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
@@ -1961,13 +1970,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     where
         R: RangeArg<buffer::Offset>,
     {
+        let buffer = buffer.expect_bound();
         assert!(
             buffer.clear_uav.is_some(),
             "Buffer needs to be created with usage `TRANSFER_DST`"
         );
         let bytes_per_unit = 4;
         let start = *range.start().unwrap_or(&0) as i32;
-        let end = *range.end().unwrap_or(&(buffer.size_in_bytes as u64)) as i32;
+        let end = *range.end().unwrap_or(&(buffer.requirements.size as u64)) as i32;
         if start % 4 != 0 || end % 4 != 0 {
             warn!("Fill buffer bounds have to be multiples of 4");
         }
@@ -2023,6 +2033,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferCopy>,
     {
+        let src = src.expect_bound();
+        let dst = dst.expect_bound();
         // copy each region
         for region in regions {
             let region = region.borrow();
@@ -2051,6 +2063,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
     {
+        let src = src.expect_bound();
+        let dst = dst.expect_bound();
         let mut src_image = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: src.resource.as_mut_ptr(),
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
@@ -2185,6 +2199,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferImageCopy>,
     {
+        let buffer = buffer.expect_bound();
+        let image = image.expect_bound();
         assert!(self.copies.is_empty());
 
         for region in regions {
@@ -2251,6 +2267,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<com::BufferImageCopy>,
     {
+        let image = image.expect_bound();
+        let buffer = buffer.expect_bound();
         assert!(self.copies.is_empty());
 
         for region in regions {
@@ -2341,6 +2359,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         stride: u32,
     ) {
         assert_eq!(stride, 16);
+        let buffer = buffer.expect_bound();
         self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
@@ -2362,6 +2381,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         stride: u32,
     ) {
         assert_eq!(stride, 20);
+        let buffer = buffer.expect_bound();
         self.set_graphics_bind_point();
         unsafe {
             self.raw.ExecuteIndirect(
