@@ -18,7 +18,6 @@ use hal::{
     Backend, Compute, Device, DescriptorPool, Instance, PhysicalDevice, QueueFamily,
 };
 use hal::{pso, memory, buffer, pool, command};
-use hal::queue::Submission;
 
 extern crate glsl_to_spirv;
 
@@ -167,12 +166,7 @@ fn main() {
         command_buffer.copy_buffer(&device_buffer, &staging_buffer, &[command::BufferCopy { src: 0, dst: 0, size: stride * numbers.len() as u64}]);
         command_buffer.finish();
 
-        let submission = Submission {
-            command_buffers: Some(&command_buffer),
-            wait_semaphores: &[],
-            signal_semaphores: &[],
-        };
-        queue_group.queues[0].submit(submission, Some(&fence));
+        queue_group.queues[0].submit_nosemaphores(Some(&command_buffer), Some(&fence));
     }
     device.wait_for_fence(&fence, !0).unwrap();
     command_pool.free(Some(command_buffer));

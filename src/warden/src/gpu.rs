@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::fs::File;
 use std::path::PathBuf;
-use std::{slice};
+use std::{iter, slice};
 
 use hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
 use hal::{Device, DescriptorPool, PhysicalDevice};
@@ -1037,12 +1037,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     .submission
             });
 
-        let submission = hal::queue::Submission {
-            command_buffers: Some(&self.init_submit).into_iter().chain(submits),
-            wait_semaphores: &[],
-            signal_semaphores: &[],
-        };
-        self.queue_group.queues[0].submit(submission, None);
+        let command_buffers = iter::once(&self.init_submit).chain(submits);
+        self.queue_group.queues[0].submit_nosemaphores(command_buffers, None);
     }
 
     pub fn fetch_buffer(&mut self, name: &str) -> FetchGuard<B> {
@@ -1103,12 +1099,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let copy_fence = self.device
         	.create_fence(false)
         	.expect("Can't create copy-fence");
-        let submission = hal::queue::Submission {
-            command_buffers: Some(&cmd_buffer),
-            wait_semaphores: &[],
-            signal_semaphores: &[],
-        };
-        self.queue_group.queues[0].submit(submission, Some(&copy_fence));
+        self.queue_group.queues[0].submit_nosemaphores(iter::once(&cmd_buffer), Some(&copy_fence));
         self.device.wait_for_fence(&copy_fence, !0).unwrap();
         self.device.destroy_fence(copy_fence);
         self.device.destroy_command_pool(command_pool.into_raw());
@@ -1220,12 +1211,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let copy_fence = self.device
         	.create_fence(false)
         	.expect("Can't create copy-fence");
-        let submission = hal::queue::Submission {
-            command_buffers: Some(&cmd_buffer),
-            wait_semaphores: &[],
-            signal_semaphores: &[],
-        };
-        self.queue_group.queues[0].submit(submission, Some(&copy_fence));
+        self.queue_group.queues[0].submit_nosemaphores(iter::once(&cmd_buffer), Some(&copy_fence));
         self.device.wait_for_fence(&copy_fence, !0).unwrap();
         self.device.destroy_fence(copy_fence);
         self.device.destroy_command_pool(command_pool.into_raw());

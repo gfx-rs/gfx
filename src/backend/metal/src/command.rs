@@ -1593,10 +1593,10 @@ impl CommandQueue {
         }
     }
 
-    fn wait<I>(&mut self, wait_semaphores: I)
+    fn wait<'a, T, I>(&mut self, wait_semaphores: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<native::Semaphore>,
+        T: 'a + Borrow<native::Semaphore>,
+        I: IntoIterator<Item = &'a T>,
     {
         for semaphore in wait_semaphores {
             let sem = semaphore.borrow();
@@ -1616,20 +1616,24 @@ impl CommandQueue {
 }
 
 impl RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, IC>(
-        &mut self, submit: Submission<'a, Backend, IC>, fence: Option<&native::Fence>
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+        &mut self, submit: Submission<Ic, Iw, Is>, fence: Option<&native::Fence>
     )
     where
         T: 'a + Borrow<CommandBuffer>,
-        IC: IntoIterator<Item = &'a T>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<native::Semaphore>,
+        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
         debug!("submitting with fence {:?}", fence);
-        self.wait(submit.wait_semaphores.iter().map(|&(s, _)| s));
+        let Submission { command_buffers, wait_semaphores, signal_semaphores } = submit;
+        self.wait(wait_semaphores.into_iter().map(|(s, _)| s));
 
         const BLOCK_BUCKET: usize = 4;
-        let system_semaphores = submit.signal_semaphores
+        let system_semaphores = signal_semaphores
             .into_iter()
-            .filter_map(|sem| sem.system.clone())
+            .filter_map(|sem| sem.borrow().system.clone())
             .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
 
         #[allow(unused_mut)]
@@ -1640,7 +1644,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             let cmd_queue = self.shared.queue.lock();
             let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
 
-            for buffer in submit.command_buffers {
+            for buffer in command_buffers {
                 let mut inner = buffer.borrow().inner.borrow_mut();
                 let CommandBufferInner {
                     ref sink,
@@ -1769,12 +1773,12 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, S, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
+     fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, SwapImageIndex)>,
-        S: Borrow<window::Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<native::Semaphore>,
+        W: 'a + Borrow<window::Swapchain>,
+        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
+        S: 'a + Borrow<native::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         self.wait(wait_semaphores);
 

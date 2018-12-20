@@ -37,8 +37,9 @@ struct Dimensions<T> {
     height: T,
 }
 
+use std::{fs, iter};
 use std::cell::RefCell;
-use std::io::Cursor;
+use std::io::{Cursor, Read};
 use std::mem::size_of;
 use std::rc::Rc;
 
@@ -53,8 +54,6 @@ use hal::pass::Subpass;
 use hal::pso::{PipelineStage, ShaderStageFlags};
 use hal::queue::Submission;
 
-use std::fs;
-use std::io::Read;
 
 const ENTRY_NAME: &str = "main";
 const DIMS: Extent2D = Extent2D {
@@ -569,9 +568,9 @@ impl<B: Backend> RendererState<B> {
             cmd_buffer.finish();
 
             let submission = Submission {
-                command_buffers: Some(&cmd_buffer),
-                wait_semaphores: &[(&*image_acquired, PipelineStage::BOTTOM_OF_PIPE)],
-                signal_semaphores: &[&*image_present],
+                command_buffers: iter::once(&cmd_buffer),
+                wait_semaphores: iter::once((&*image_acquired, PipelineStage::BOTTOM_OF_PIPE)),
+                signal_semaphores: iter::once(&*image_present),
             };
             self.device.borrow_mut().queues.queues[0].submit(submission, Some(framebuffer_fence));
 
@@ -1223,12 +1222,10 @@ impl<B: Backend> ImageState<B> {
 
             cmd_buffer.finish();
 
-            let submission = Submission {
-                command_buffers: Some(&cmd_buffer),
-                wait_semaphores: &[],
-                signal_semaphores: &[],
-            };
-            device_state.queues.queues[0].submit(submission, Some(&mut transfered_image_fence));
+            device_state.queues.queues[0].submit_nosemaphores(
+                iter::once(&cmd_buffer),
+                Some(&mut transfered_image_fence),
+            );
         }
 
         ImageState {

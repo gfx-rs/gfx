@@ -348,12 +348,7 @@ fn main() {
 
         cmd_buffer.finish();
 
-        let submission = Submission {
-            command_buffers: Some(&cmd_buffer),
-            wait_semaphores: &[],
-            signal_semaphores: &[],
-        };
-        queue_group.queues[0].submit(submission, Some(&mut frame_fence));
+        queue_group.queues[0].submit_nosemaphores(Some(&cmd_buffer), Some(&mut frame_fence));
 
         device
             .wait_for_fence(&frame_fence, !0)
@@ -682,7 +677,7 @@ fn main() {
 
             let submission = Submission {
                 command_buffers: Some(&cmd_buffer),
-                wait_semaphores: &[(&frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)],
+                wait_semaphores: Some((&frame_semaphore, PipelineStage::BOTTOM_OF_PIPE)),
                 signal_semaphores: &[],
             };
             queue_group.queues[0].submit(submission, Some(&mut frame_fence));
@@ -693,7 +688,7 @@ fn main() {
         command_pool.free(Some(cmd_buffer));
 
         // present frame
-        if let Err(_) = swap_chain.present(&mut queue_group.queues[0], frame, &[]) {
+        if let Err(_) = swap_chain.present_nosemaphores(&mut queue_group.queues[0], frame) {
             recreate_swapchain = true;
         }
     }

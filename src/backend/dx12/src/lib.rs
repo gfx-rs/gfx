@@ -26,6 +26,7 @@ mod window;
 
 use descriptors_cpu::DescriptorCpuPool;
 use hal::adapter::DeviceType;
+use hal::pso::PipelineStage;
 use hal::queue::{QueueFamilyId, Queues};
 use hal::{error, format as f, image, memory, Features, Limits, QueueType, SwapImageIndex};
 
@@ -415,13 +416,16 @@ unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, IC>(
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        submission: hal::queue::Submission<'a, Backend, IC>,
+        submission: hal::queue::Submission<Ic, Iw, Is>,
         fence: Option<&resource::Fence>,
     ) where
         T: 'a + Borrow<command::CommandBuffer>,
-        IC: IntoIterator<Item = &'a T>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<resource::Semaphore>,
+        Iw: IntoIterator<Item = (&'a S, PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
         // Reset idle fence and event
         // That's safe here due to exclusive access to the queue
@@ -442,12 +446,12 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, SwapImageIndex)>,
-        S: Borrow<window::Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<resource::Semaphore>,
+        W: 'a + Borrow<window::Swapchain>,
+        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
+        S: 'a + Borrow<resource::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         // TODO: semaphores
         for (swapchain, _) in swapchains {

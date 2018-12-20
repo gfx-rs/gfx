@@ -755,13 +755,16 @@ unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, IC>(
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        submission: hal::queue::Submission<'a, Backend, IC>,
+        submission: hal::queue::Submission<Ic, Iw, Is>,
         fence: Option<&Fence>,
     ) where
         T: 'a + Borrow<CommandBuffer>,
-        IC: IntoIterator<Item = &'a T>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<Semaphore>,
+        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
         let _scope = debug_scope!(&self.context, "Submit(fence={:?})", fence);
         for cmd_buf in submission.command_buffers {
@@ -796,12 +799,12 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, SwapImageIndex)>,
-        S: Borrow<Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<Semaphore>,
+        W: 'a + Borrow<Swapchain>,
+        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
+        S: 'a + Borrow<Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         for (swapchain, _idx) in swapchains {
             unsafe {

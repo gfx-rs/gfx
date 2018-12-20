@@ -89,20 +89,24 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 /// Dummy command queue doing nothing.
 pub struct RawCommandQueue;
 impl queue::RawCommandQueue<Backend> for RawCommandQueue {
-    unsafe fn submit<'a, T, IC>(&mut self, _: queue::Submission<'a, Backend, IC>, _: Option<&()>)
-    where
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+        &mut self, _: queue::Submission<Ic, Iw, Is>, _: Option<&()>
+    ) where
         T: 'a + Borrow<RawCommandBuffer>,
-        IC: IntoIterator<Item = &'a T>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<()>,
+        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
         unimplemented!()
     }
 
-    fn present<IS, S, IW>(&mut self, _: IS, _: IW) -> Result<(), ()>
+    fn present<'a, W, Is, S, Iw>(&mut self, _: Is, _: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, hal::SwapImageIndex)>,
-        S: Borrow<Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<()>,
+        W: 'a + Borrow<Swapchain>,
+        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
+        S: 'a + Borrow<()>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         unimplemented!()
     }

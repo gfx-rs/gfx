@@ -9,6 +9,7 @@
 pub mod capability;
 pub mod family;
 
+use std::iter;
 use std::any::Any;
 use std::borrow::Borrow;
 use std::marker::PhantomData;
@@ -43,13 +44,13 @@ pub enum QueueType {
 }
 
 /// Submission information for a command queue.
-pub struct Submission<'a, B: Backend + 'a, I> {
+pub struct Submission<Ic, Iw, Is> {
     /// Command buffers to submit.
-    pub command_buffers: I,
+    pub command_buffers: Ic,
     /// Semaphores to wait being signalled before submission.
-    pub wait_semaphores: &'a [(&'a B::Semaphore, pso::PipelineStage)],
+    pub wait_semaphores: Iw,
     /// Semaphores which get signalled after submission.
-    pub signal_semaphores: &'a [&'a B::Semaphore],
+    pub signal_semaphores: Is,
 }
 
 /// `RawCommandQueue` are abstractions to the internal GPU execution engines.
@@ -61,24 +62,27 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
     /// Unsafe because it's not checked that the queue can process the submitted command buffers.
     /// Trying to submit compute commands to a graphics queue will result in undefined behavior.
     /// Each queue implements safe wrappers according to their supported functionalities!
-    unsafe fn submit<'a, T, I>(
-        &mut self, submission: Submission<'a, B, I>, fence: Option<&B::Fence>
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+        &mut self, submission: Submission<Ic, Iw, Is>, fence: Option<&B::Fence>
     ) where
         T: 'a + Borrow<B::CommandBuffer>,
-        I: IntoIterator<Item = &'a T>;
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<B::Semaphore>,
+        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>;
 
     /// Presents the result of the queue to the given swapchains, after waiting on all the
     /// semaphores given in `wait_semaphores`. A given swapchain must not appear in this
     /// list more than once.
     ///
     /// Unsafe for the same reasons as `submit()`.
-    fn present<IS, S, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
+    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
     where
         Self: Sized,
-        IS: IntoIterator<Item = (S, SwapImageIndex)>,
-        S: Borrow<B::Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<B::Semaphore>;
+        W: 'a + Borrow<B::Swapchain>,
+        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
+        S: 'a + Borrow<B::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>;
 
     /// Wait for the queue to idle.
     fn wait_idle(&self) -> Result<(), HostExecutionError>;
@@ -115,27 +119,45 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
 
     /// Submits the submission command buffers to the queue for execution.
     /// `fence` will be signalled after submission and _must_ be unsignalled.
-    pub fn submit<'a, T, I>(&mut self,
-        submission: Submission<'a, B, I>,
+    pub fn submit<'a, T, Ic, S, Iw, Is>(&mut self,
+        submission: Submission<Ic, Iw, Is>,
         fence: Option<&B::Fence>,
     ) where
         T: 'a + Submittable<B, C, Primary>,
-        I: IntoIterator<Item = &'a T>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<B::Semaphore>,
+        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
         unsafe {
             self.0.submit(submission, fence)
         }
     }
 
+    /// Submit command buffers without any semaphore waits or singals.
+    pub fn submit_nosemaphores<'a, T, I>(
+        &mut self, command_buffers: I, fence: Option<&B::Fence>
+    ) where
+        T: 'a + Submittable<B, C, Primary>,
+        I: IntoIterator<Item = &'a T>
+    {
+        let submission = Submission {
+            command_buffers,
+            wait_semaphores: iter::empty(),
+            signal_semaphores: iter::empty(),
+        };
+        self.submit::<_, _, B::Semaphore, _, _>(submission, fence)
+    }
+
     /// Presents the result of the queue to the given swapchains, after waiting on all the
     /// semaphores given in `wait_semaphores`. A given swapchain must not appear in this
     /// list more than once.
-    pub fn present<IS, S, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
+    pub fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, SwapImageIndex)>,
-        S: Borrow<B::Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<B::Semaphore>
+        W: 'a + Borrow<B::Swapchain>,
+        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
+        S: 'a + Borrow<B::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         self.0.present(swapchains, wait_semaphores)
     }

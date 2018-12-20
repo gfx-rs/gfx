@@ -30,6 +30,7 @@ use ash::{Entry, LoadingError};
 
 use hal::adapter::DeviceType;
 use hal::error::{DeviceCreationError, HostExecutionError};
+use hal::pso::PipelineStage;
 use hal::{format, image, memory, queue};
 use hal::{Features, Limits, PatchSize, QueueType, SwapImageIndex};
 
@@ -711,33 +712,34 @@ pub struct CommandQueue {
 }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit<'a, T, IC>(
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        submission: hal::queue::Submission<'a, Backend, IC>,
+        submission: hal::queue::Submission<Ic, Iw, Is>,
         fence: Option<&native::Fence>,
     ) where
         T: 'a + Borrow<command::CommandBuffer>,
-        IC: IntoIterator<Item = &'a T>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<native::Semaphore>,
+        Iw: IntoIterator<Item = (&'a S, PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
+        //TODO: avoid heap allocations
+        let mut waits = Vec::new();
+        let mut stages = Vec::new();
+
         let buffers = submission
             .command_buffers
             .into_iter()
             .map(|cmd| cmd.borrow().raw)
             .collect::<Vec<_>>();
-        let waits = submission
-            .wait_semaphores
-            .iter()
-            .map(|&(ref semaphore, _)| semaphore.0)
-            .collect::<Vec<_>>();
-        let stages = submission
-            .wait_semaphores
-            .iter()
-            .map(|&(_, stage)| conv::map_pipeline_stage(stage))
-            .collect::<Vec<_>>();
+        for (semaphore, stage) in submission.wait_semaphores {
+            waits.push(semaphore.borrow().0);
+            stages.push(conv::map_pipeline_stage(stage));
+        }
         let signals = submission
             .signal_semaphores
-            .iter()
-            .map(|semaphore| semaphore.0)
+            .into_iter()
+            .map(|semaphore| semaphore.borrow().0)
             .collect::<Vec<_>>();
 
         let info = vk::SubmitInfo {
@@ -763,12 +765,12 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         assert_eq!(Ok(()), result);
     }
 
-    fn present<IS, S, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
+    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, SwapImageIndex)>,
-        S: Borrow<window::Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<native::Semaphore>,
+        W: 'a + Borrow<window::Swapchain>,
+        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
+        S: 'a + Borrow<native::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         let semaphores = wait_semaphores
             .into_iter()
