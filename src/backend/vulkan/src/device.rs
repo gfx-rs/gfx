@@ -1691,7 +1691,7 @@ impl d::Device<B> for Device {
             queue_family_index_count: 0,
             p_queue_family_indices: ptr::null(),
             pre_transform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-            composite_alpha: vk::COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            composite_alpha: vk::CompositeAlphaFlagsKHR::from_flags(1 << config.composite_alpha as u32).unwrap(),
             present_mode: unsafe { mem::transmute(config.present_mode) },
             clipped: 1,
             old_swapchain,

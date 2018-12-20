@@ -297,10 +297,12 @@ impl hal::Surface<Backend> for Surface {
 
     fn compatibility(
         &self, physical_device: &PhysicalDevice
-    ) -> (hal::SurfaceCapabilities, Option<Vec<Format>>, Vec<hal::PresentMode>) {
+    ) -> (hal::SurfaceCapabilities, Option<Vec<Format>>, Vec<hal::PresentMode>, Vec<hal::CompositeAlpha>) {
+        use std::mem;
+
         // Capabilities
-        let caps =
-            self.raw.functor.get_physical_device_surface_capabilities_khr(
+        let caps = self.raw.functor
+            .get_physical_device_surface_capabilities_khr(
                 physical_device.handle,
                 self.raw.handle,
             )
@@ -359,8 +361,8 @@ impl hal::Surface<Backend> for Surface {
             }
         };
 
-        let present_modes =
-            self.raw.functor.get_physical_device_surface_present_modes_khr(
+        let present_modes = self.raw.functor
+            .get_physical_device_surface_present_modes_khr(
                 physical_device.handle,
                 self.raw.handle,
             ).expect("Unable to query present modes");
@@ -369,7 +371,16 @@ impl hal::Surface<Backend> for Surface {
             .map(conv::map_vk_present_mode)
             .collect();
 
-        (capabilities, formats, present_modes)
+        let composite_alphas = (0u32 .. 10u32)
+            .filter(|i| {
+                vk::CompositeAlphaFlagsKHR::from_flags(1u32<<i)
+                    .map(|flag| caps.supported_composite_alpha.intersects(flag))
+                    .unwrap_or(false)
+            })
+            .map(|i| unsafe { mem::transmute(i) })
+            .collect();
+
+        (capabilities, formats, present_modes, composite_alphas)
     }
 
     fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {

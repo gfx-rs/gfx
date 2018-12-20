@@ -189,7 +189,7 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
     fn compatibility(
         &self,
         physical_device: &B::PhysicalDevice,
-    ) -> (SurfaceCapabilities, Option<Vec<Format>>, Vec<PresentMode>);
+    ) -> (SurfaceCapabilities, Option<Vec<Format>>, Vec<PresentMode>, Vec<CompositeAlpha>);
 }
 
 /// Index of an image in the swapchain.
@@ -229,6 +229,20 @@ pub enum PresentMode {
     Relaxed = 3,
 }
 
+/// Specifies the composition of the swapchain with regards to alpha component.
+#[repr(C)]
+#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
+pub enum CompositeAlpha {
+    /// Ignore alpha and treat it as 1.0 at all times.
+    Opaque = 0,
+    /// Use the alpha, expect the color to already be multiplied by it.
+    PreMultiplied = 1,
+    /// Use the alpha, let the compositor multiply the color by it.
+    PostMultiplied = 2,
+    /// Default to native system settings.
+    Inherit = 3,
+}
+
 /// Contains all the data necessary to create a new `Swapchain`:
 /// color, depth, and number of images.
 ///
@@ -249,6 +263,8 @@ pub enum PresentMode {
 pub struct SwapchainConfig {
     /// Presentation mode.
     pub present_mode: PresentMode,
+    /// Alpha composition mode.
+    pub composite_alpha: CompositeAlpha,
     /// Format of the backbuffer images.
     pub format: Format,
     /// Requested image extent. Must be in
@@ -275,6 +291,7 @@ impl SwapchainConfig {
     pub fn new(width: u32, height: u32, format: Format, image_count: SwapImageIndex) -> Self {
         SwapchainConfig {
             present_mode: PresentMode::Fifo,
+            composite_alpha: CompositeAlpha::Inherit,
             format,
             extent: Extent2D { width, height },
             image_count,
@@ -304,6 +321,7 @@ impl SwapchainConfig {
 
         SwapchainConfig {
             present_mode: PresentMode::Fifo,
+            composite_alpha: CompositeAlpha::Inherit,
             format,
             extent: clamped_extent,
             image_count: caps.image_count.start,
