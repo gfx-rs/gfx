@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::sync::{Arc, Mutex, RwLock};
 
 use hal::{format, image as i, pass, pso};
-use hal::memory::Properties;
+use hal::memory::{Properties, Requirements};
 use hal::backend::FastHashMap;
 
 use gl;
@@ -25,7 +25,7 @@ pub const DEFAULT_FRAMEBUFFER: FrameBuffer = 0;
 pub struct Buffer {
     pub(crate) raw: RawBuffer,
     pub(crate) target: gl::types::GLenum,
-    pub(crate) size: u64,
+    pub(crate) requirements: Requirements,
 }
 
 #[derive(Debug)]
@@ -123,11 +123,12 @@ pub struct ComputePipeline {
     pub(crate) program: Program,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(Copy, Clone, Debug)]
 pub struct Image {
     pub(crate) kind: ImageKind,
     // Required for clearing operations
     pub(crate) channel: format::ChannelType,
+    pub(crate) requirements: Requirements,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
