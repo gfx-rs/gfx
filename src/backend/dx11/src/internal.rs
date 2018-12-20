@@ -68,7 +68,7 @@ struct PartialClearInfo {
 const COPY_THREAD_GROUP_X: u32 = 8;
 const COPY_THREAD_GROUP_Y: u32 = 8;
 
-// Holds everything we need for fallback implementations of features that are not in DX. 
+// Holds everything we need for fallback implementations of features that are not in DX.
 //
 // TODO: maybe get rid of `Clone`? there's _a lot_ of refcounts here and it is used as a singleton
 //       anyway :s
@@ -137,7 +137,7 @@ pub struct Internal {
     // internal constant buffer that is used by internal shaders
     internal_buffer: ComPtr<d3d11::ID3D11Buffer>,
 
-    // public buffer that is used as intermediate storage for some operations (memory invalidation) 
+    // public buffer that is used as intermediate storage for some operations (memory invalidation)
     pub working_buffer: ComPtr<d3d11::ID3D11Buffer>,
     pub working_buffer_size: u64,
 }
@@ -595,12 +595,12 @@ impl Internal {
                 // TODO: layer subresources
                 unsafe {
                     context.CopySubresourceRegion(
-                        dst.internal.raw.as_raw() as _,
+                        dst.internal.raw,
                         src.calc_subresource(info.src_subresource.level as _, 0),
                         info.dst_offset.x as _,
                         info.dst_offset.y as _,
                         info.dst_offset.z as _,
-                        src.internal.raw.as_raw() as _,
+                        src.internal.raw,
                         dst.calc_subresource(info.dst_subresource.level as _, 0),
                         &d3d11::D3D11_BOX {
                             left:   info.src_offset.x as _,
@@ -716,7 +716,7 @@ impl Internal {
 
                 unsafe {
                     context.UpdateSubresource(
-                        dst.internal.raw.as_raw(),
+                        dst.internal.raw,
                         dst.calc_subresource(info.image_layers.level as _, info.image_layers.layers.start as _),
                         &d3d11::D3D11_BOX {
                             left:   info.image_offset.x as _,

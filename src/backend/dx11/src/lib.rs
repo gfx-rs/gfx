@@ -93,7 +93,7 @@ mod shader;
 #[derivative(Debug)]
 pub(crate) struct ViewInfo {
     #[derivative(Debug="ignore")]
-    resource: ComPtr<d3d11::ID3D11Resource>,
+    resource: *mut d3d11::ID3D11Resource,
     kind: image::Kind,
     caps: image::ViewCapabilities,
     view_kind: image::ViewKind,
@@ -2455,21 +2455,13 @@ pub struct Framebuffer {
     layers: image::Layer,
 }
 
-#[derive(Debug)]
-pub struct UnboundBuffer {
-    usage: buffer::Usage,
-    bind: d3d11::D3D11_BIND_FLAG,
-    size: u64,
-    needs_disjoint_cb: bool,
-    requirements: memory::Requirements,
-}
 
 #[derive(Clone, Debug)]
 pub struct InternalBuffer {
     raw: *mut d3d11::ID3D11Buffer,
     // TODO: need to sync between `raw` and `disjoint_cb`, same way as we do with
     // `MemoryFlush/Invalidate`
-    disjoint_cb: Option<*mut d3d11::ID3D11Buffer>,
+    disjoint_cb: Option<*mut d3d11::ID3D11Buffer>, // if unbound this buffer might be null.
     srv: Option<*mut d3d11::ID3D11ShaderResourceView>,
     uav: Option<*mut d3d11::ID3D11UnorderedAccessView>,
     usage: buffer::Usage,
@@ -2479,10 +2471,11 @@ pub struct InternalBuffer {
 #[derivative(Debug)]
 pub struct Buffer {
     internal: InternalBuffer,
-    ty: MemoryHeapFlags,
-    host_ptr: *mut u8,
-    bound_range: Range<u64>,
-    size: u64,
+    ty: MemoryHeapFlags, // empty if unbound
+    host_ptr: *mut u8, // null if unbound
+    bound_range: Range<u64>, // 0 if unbound
+    requirements: memory::Requirements,
+    bind: d3d11::D3D11_BIND_FLAG,
 }
 
 unsafe impl Send for Buffer {}
@@ -2490,17 +2483,6 @@ unsafe impl Sync for Buffer {}
 
 #[derive(Debug)]
 pub struct BufferView;
-#[derive(Debug)]
-pub struct UnboundImage {
-    kind: image::Kind,
-    mip_levels: image::Level,
-    format: format::Format,
-    tiling: image::Tiling,
-    usage: image::Usage,
-    view_caps: image::ViewCapabilities,
-    bind: d3d11::D3D11_BIND_FLAG,
-    requirements: memory::Requirements,
-}
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -2510,16 +2492,18 @@ pub struct Image {
     format: format::Format,
     view_caps: image::ViewCapabilities,
     decomposed_format: conv::DecomposedDxgiFormat,
-    num_levels: image::Level,
-    num_mips: image::Level,
+    mip_levels: image::Level,
     internal: InternalImage,
+    tiling: image::Tiling,
+    bind: d3d11::D3D11_BIND_FLAG,
+    requirements: memory::Requirements,
 }
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct InternalImage {
     #[derivative(Debug="ignore")]
-    raw: ComPtr<d3d11::ID3D11Resource>,
+    raw: *mut d3d11::ID3D11Resource,
     #[derivative(Debug="ignore")]
     copy_srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
     #[derivative(Debug = "ignore")]
@@ -2543,7 +2527,7 @@ unsafe impl Sync for Image {}
 
 impl Image {
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT) -> UINT {
-        mip_level + (layer * self.num_mips as UINT)
+        mip_level + (layer * self.mip_levels as UINT)
     }
 
     pub fn get_uav(
@@ -2964,10 +2948,8 @@ impl hal::Backend for Backend {
     type RenderPass = RenderPass;
     type Framebuffer = Framebuffer;
 
-    type UnboundBuffer = UnboundBuffer;
     type Buffer = Buffer;
     type BufferView = BufferView;
-    type UnboundImage = UnboundImage;
     type Image = Image;
 
     type ImageView = ImageView;
