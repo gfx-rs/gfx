@@ -200,9 +200,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             match *resource {
                 raw::Resource::Buffer { size, usage, ref data } => {
                     // allocate memory
-                    let unbound = device.create_buffer(size as _, usage)
+                    let mut buffer = device.create_buffer(size as _, usage)
                         .unwrap();
-                    let requirements = device.get_buffer_requirements(&unbound);
+                    let requirements = device.get_buffer_requirements(&buffer);
                     let memory_type = memory_types
                         .iter()
                         .enumerate()
@@ -214,7 +214,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         .into();
                     let memory = device.allocate_memory(memory_type, requirements.size)
                         .unwrap();
-                    let buffer = device.bind_buffer_memory(&memory, 0, unbound)
+                    device.bind_buffer_memory(&memory, 0, &mut buffer)
                         .unwrap();
 
                     // process initial data for the buffer
@@ -233,13 +233,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         // calculate required sizes
                         let upload_size = align(size as _, limits.min_buffer_copy_pitch_alignment);
                         // create upload buffer
-                        let unbound_buffer = device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
+                        let mut upload_buffer = device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
                             .unwrap();
-                        let upload_req = device.get_buffer_requirements(&unbound_buffer);
+                        let upload_req = device.get_buffer_requirements(&upload_buffer);
                         assert_ne!(upload_req.type_mask & (1 << upload_type.0), 0);
                         let upload_memory = device.allocate_memory(upload_type, upload_req.size)
                             .unwrap();
-                        let upload_buffer = device.bind_buffer_memory(&upload_memory, 0, unbound_buffer)
+                        device.bind_buffer_memory(&memory, 0, &mut upload_buffer)
                             .unwrap();
                         // write the data
                         {
@@ -291,10 +291,10 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 }
                 raw::Resource::Image { kind, num_levels, format, usage, ref data } => {
                     // allocate memory
-                    let unbound = device.create_image(
+                    let mut image = device.create_image(
                         kind, num_levels, format, i::Tiling::Optimal, usage, i::ViewCapabilities::empty()
                         ).unwrap();
-                    let requirements = device.get_image_requirements(&unbound);
+                    let requirements = device.get_image_requirements(&image);
                     let memory_type = memory_types
                         .iter()
                         .enumerate()
@@ -306,7 +306,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         .into();
                     let memory = device.allocate_memory(memory_type, requirements.size)
                         .unwrap();
-                    let image = device.bind_image_memory(&memory, 0, unbound)
+                    device.bind_image_memory(&memory, 0, &mut image)
                         .unwrap();
 
                     // process initial data for the image
@@ -351,13 +351,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
                         let upload_size = (row_pitch as u64 * h as u64 * d as u64) / block_height as u64;
                         // create upload buffer
-                        let unbound_buffer = device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
+                        let mut upload_buffer = device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
                             .unwrap();
-                        let upload_req = device.get_buffer_requirements(&unbound_buffer);
+                        let upload_req = device.get_buffer_requirements(&upload_buffer);
                         assert_ne!(upload_req.type_mask & (1 << upload_type.0), 0);
                         let upload_memory = device.allocate_memory(upload_type, upload_req.size)
                             .unwrap();
-                        let upload_buffer = device.bind_buffer_memory(&upload_memory, 0, unbound_buffer)
+						device.bind_buffer_memory(&upload_memory, 0, &mut upload_buffer)
                             .unwrap();
                         // write the data
                         {
@@ -1049,13 +1049,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 
         let down_size = align(buffer.size as u64, limits.min_buffer_copy_pitch_alignment);
 
-        let unbound_buffer = self.device.create_buffer(down_size, b::Usage::TRANSFER_DST)
+        let mut down_buffer = self.device.create_buffer(down_size, b::Usage::TRANSFER_DST)
             .unwrap();
-        let down_req = self.device.get_buffer_requirements(&unbound_buffer);
+        let down_req = self.device.get_buffer_requirements(&down_buffer);
         assert_ne!(down_req.type_mask & (1<<self.download_type.0), 0);
         let down_memory = self.device.allocate_memory(self.download_type, down_req.size)
             .unwrap();
-        let down_buffer = self.device.bind_buffer_memory(&down_memory, 0, unbound_buffer)
+        self.device.bind_buffer_memory(&down_memory, 0, &mut down_buffer)
             .unwrap();
 
         let mut command_pool = self.device
@@ -1141,13 +1141,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
         let down_size = (row_pitch * height * depth as u64) / block_height as u64;
 
-        let unbound_buffer = self.device.create_buffer(down_size, b::Usage::TRANSFER_DST)
+        let mut down_buffer = self.device.create_buffer(down_size, b::Usage::TRANSFER_DST)
             .unwrap();
-        let down_req = self.device.get_buffer_requirements(&unbound_buffer);
+        let down_req = self.device.get_buffer_requirements(&down_buffer);
         assert_ne!(down_req.type_mask & (1<<self.download_type.0), 0);
         let down_memory = self.device.allocate_memory(self.download_type, down_req.size)
             .unwrap();
-        let down_buffer = self.device.bind_buffer_memory(&down_memory, 0, unbound_buffer)
+        self.device.bind_buffer_memory(&down_memory, 0, &mut down_buffer)
             .unwrap();
 
         let mut command_pool = self.device
