@@ -53,7 +53,7 @@ impl BufferSlice {
 }
 
 ///
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum Command {
     Dispatch(hal::WorkGroupCount),
     DispatchIndirect(gl::types::GLuint, buffer::Offset),
@@ -101,7 +101,7 @@ pub enum Command {
     SetPatchSize(gl::types::GLint),
     BindProgram(gl::types::GLuint),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
-    BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei, n::VertexAttribFunction),
+    BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
     CopyBufferToTexture(n::RawBuffer, n::Texture, command::BufferImageCopy),
@@ -136,7 +136,6 @@ pub struct RenderPassCache {
 }
 
 // Cache current states of the command buffer
-#[derive(Clone)]
 struct Cache {
     // Active primitive topology, set by the current pipeline.
     primitive: Option<gl::types::GLenum>,
@@ -203,7 +202,6 @@ impl From<hal::Limits> for Limits {
 ///
 /// If you want to display your rendered results to a framebuffer created externally, see the
 /// `display_fb` field.
-#[derive(Clone)]
 pub struct RawCommandBuffer {
     pub(crate) memory: Arc<Mutex<BufferMemory>>,
     pub(crate) buf: BufferSlice,
@@ -381,7 +379,7 @@ impl RawCommandBuffer {
                         &self.id,
                         &mut self.memory,
                         &mut self.buf,
-                        Command::BindAttribute(*attribute, handle, desc.stride as _, attribute.vertex_attrib_fn)
+                        Command::BindAttribute(attribute.clone(), handle, desc.stride as _),
                     );
                 }
                 _ => error!("No vertex buffer description bound at {}", binding),

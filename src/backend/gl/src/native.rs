@@ -260,7 +260,7 @@ pub struct PipelineLayout {
 // No inter-queue synchronization required for GL.
 pub struct Semaphore;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Debug)]
 pub struct AttributeDesc {
     pub(crate) location: gl::types::GLuint,
     pub(crate) offset: u32,

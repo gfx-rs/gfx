@@ -60,7 +60,6 @@ struct AttachmentClear {
     stencil_value: Option<u32>,
 }
 
-#[derive(Clone)]
 pub struct RenderPassCache {
     render_pass: r::RenderPass,
     framebuffer: r::Framebuffer,
@@ -90,7 +89,6 @@ enum RootElement {
 }
 
 /// Virtual data storage for the current root signature memory.
-#[derive(Clone)]
 struct UserData {
     data: [RootElement; ROOT_SIGNATURE_SIZE],
     dirty_mask: u64,
@@ -141,7 +139,6 @@ impl UserData {
     }
 }
 
-#[derive(Clone)]
 struct PipelineCache {
     // Bound pipeline and root signature.
     // Changed on bind pipeline calls.
@@ -268,7 +265,6 @@ struct Copy {
     copy_extent: image::Extent,
 }
 
-#[derive(Clone)]
 pub struct CommandBuffer {
     raw: native::GraphicsCommandList,
     allocator: native::CommandAllocator,

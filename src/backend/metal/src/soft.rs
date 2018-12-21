@@ -50,6 +50,8 @@ impl<'a> Resources for &'a Ref {
     type ComputePipeline = &'a metal::ComputePipelineStateRef;
 }
 
+//TODO: Remove `Clone` from here, blocked by arguments of `quick_render` and
+// `quick_compute` which currently use `cloned()` iteration.
 #[derive(Clone, Debug)]
 pub enum RenderCommand<R: Resources> {
     SetViewport(hal::pso::Rect, Range<f32>),
@@ -112,7 +114,7 @@ pub enum RenderCommand<R: Resources> {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum BlitCommand {
     FillBuffer {
         dst: BufferPtr,

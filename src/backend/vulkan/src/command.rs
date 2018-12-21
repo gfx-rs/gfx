@@ -14,7 +14,7 @@ use hal::range::RangeArg;
 use {conv, native as n};
 use {Backend, RawDevice};
 
-#[derive(Clone)]
+
 pub struct CommandBuffer {
     pub raw: vk::CommandBuffer,
     pub device: Arc<RawDevice>,

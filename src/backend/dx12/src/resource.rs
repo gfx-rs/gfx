@@ -22,7 +22,7 @@ pub enum ShaderModule {
 unsafe impl Send for ShaderModule {}
 unsafe impl Sync for ShaderModule {}
 
-#[derive(Debug, Hash, Clone)]
+#[derive(Clone, Debug, Hash)]
 pub struct BarrierDesc {
     pub(crate) attachment_id: pass::AttachmentId,
     pub(crate) states: Range<d3d12::D3D12_RESOURCE_STATES>,
@@ -52,7 +52,7 @@ impl BarrierDesc {
     }
 }
 
-#[derive(Debug, Hash, Clone)]
+#[derive(Clone, Debug, Hash)]
 pub struct SubpassDesc {
     pub(crate) color_attachments: Vec<pass::AttachmentRef>,
     pub(crate) depth_stencil_attachment: Option<pass::AttachmentRef>,
@@ -75,7 +75,7 @@ impl SubpassDesc {
     }
 }
 
-#[derive(Debug, Hash, Clone)]
+#[derive(Clone, Debug, Hash)]
 pub struct RenderPass {
     pub(crate) attachments: Vec<pass::Attachment>,
     pub(crate) subpasses: Vec<SubpassDesc>,
