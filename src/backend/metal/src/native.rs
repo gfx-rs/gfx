@@ -167,7 +167,7 @@ impl ResourceData<PoolResourceIndex> {
 }
 
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct MultiStageData<T> {
     pub vs: T,
     pub ps: T,
@@ -182,7 +182,7 @@ pub struct DescriptorSetInfo {
     pub dynamic_buffers: Vec<MultiStageData<PoolResourceIndex>>,
 }
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct PushConstantInfo {
     pub count: u32,
     pub buffer_index: ResourceIndex,
@@ -242,7 +242,7 @@ impl Default for RasterizerState {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct StencilState<T> {
     pub front_reference: T,
     pub back_reference: T,

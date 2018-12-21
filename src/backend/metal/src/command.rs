@@ -156,7 +156,6 @@ impl CommandPool {
     }
 }
 
-#[derive(Clone)]
 pub struct CommandBuffer {
     shared: Arc<Shared>,
     pool_shared: PoolSharedPtr,
@@ -168,7 +167,6 @@ pub struct CommandBuffer {
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 
-#[derive(Clone)]
 struct Temp {
     clear_vertices: Vec<ClearVertex>,
     blit_vertices: FastHashMap<(Aspects, Level), Vec<BlitVertex>>,
@@ -177,7 +175,6 @@ struct Temp {
 
 type VertexBufferMaybeVec = Vec<Option<(pso::VertexBufferDesc, pso::ElemOffset)>>;
 
-#[derive(Clone)]
 struct RenderPipelineState {
     raw: metal::RenderPipelineState,
     ds_desc: pso::DepthStencilDesc,
@@ -186,7 +183,6 @@ struct RenderPipelineState {
     formats: native::SubpassFormats,
 }
 
-#[derive(Clone)]
 struct SubpassInfo {
     descriptor: metal::RenderPassDescriptor,
     combined_aspects: Aspects,
@@ -198,7 +194,6 @@ struct SubpassInfo {
 ///   2. avoid redundant state settings
 /// Note that these two usages are distinct and operate in technically different
 /// spaces (1 - Vulkan, 2 - Metal), so be careful not to confuse them.
-#[derive(Clone)]
 struct State {
     // Note: this could be `MTLViewport` but we have to patch the depth separately.
     viewport: Option<(pso::Rect, Range<f32>)>,
@@ -521,7 +516,7 @@ impl State {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 struct StageResources {
     buffers: Vec<Option<BufferPtr>>,
     buffer_offsets: Vec<buffer::Offset>,
@@ -1067,7 +1062,7 @@ impl CommandSink {
 }
 
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct IndexBuffer<B> {
     buffer: B,
     offset: u32,
@@ -1317,7 +1312,7 @@ where
                 );
             }
         }
-        Cmd::DrawIndexed { primitive_type, index, ref indices, base_vertex, ref instances } => {
+        Cmd::DrawIndexed { primitive_type, ref index, ref indices, base_vertex, ref instances } => {
             let index_count = (indices.end - indices.start) as _;
             let index_type = match index.stride {
                 2 => MTLIndexType::UInt16,
@@ -1363,7 +1358,7 @@ where
                 offset,
             );
         }
-        Cmd::DrawIndexedIndirect { primitive_type, index, buffer, offset } => {
+        Cmd::DrawIndexedIndirect { primitive_type, ref index, buffer, offset } => {
             let index_type = match index.stride {
                 2 => MTLIndexType::UInt16,
                 4 => MTLIndexType::UInt32,
@@ -3649,7 +3644,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let command = soft::RenderCommand::DrawIndexed {
             primitive_type: self.state.primitive_type,
-            index: self.state.index_buffer.expect("must bind index buffer"),
+            index: self.state.index_buffer.clone().expect("must bind index buffer"),
             indices,
             base_vertex,
             instances,
@@ -3698,7 +3693,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let commands = (0 .. count)
             .map(|i| soft::RenderCommand::DrawIndexedIndirect {
                 primitive_type: self.state.primitive_type,
-                index: self.state.index_buffer.expect("must bind index buffer"),
+                index: self.state.index_buffer.clone().expect("must bind index buffer"),
                 buffer: AsNative::from(buffer.raw.as_ref()),
                 offset: offset + (i * stride) as buffer::Offset,
             });

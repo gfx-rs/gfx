@@ -23,7 +23,7 @@ use hal::{
     buffer, command, error, format, image, memory, pass, pso, query, Features, Limits, QueueType,
 };
 use hal::{
-    DrawCount, IndexCount, InstanceCount, SwapImageIndex, VertexCount, VertexOffset, WorkGroupCount,
+    DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount,
 };
 use hal::format::ChannelType;
 use hal::command::{ClearColor, ClearColorRaw};
@@ -89,7 +89,7 @@ mod internal;
 mod range_alloc;
 mod shader;
 
-#[derive(Clone, Derivative)]
+#[derive(Derivative)]
 #[derivative(Debug)]
 pub(crate) struct ViewInfo {
     #[derivative(Debug="ignore")]
@@ -825,7 +825,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 }
 
-#[derive(Derivative, Clone)]
+#[derive(Derivative)]
 #[derivative(Debug)]
 pub struct AttachmentClear {
     subpass_id: Option<pass::SubpassId>,
@@ -833,7 +833,7 @@ pub struct AttachmentClear {
     raw: command::AttachmentClear,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct RenderPassCache {
     pub render_pass: RenderPass,
     pub framebuffer: Framebuffer,
@@ -892,7 +892,7 @@ bitflags! {
     }
 }
 
-#[derive(Derivative, Clone)]
+#[derive(Derivative)]
 #[derivative(Debug)]
 pub struct CommandBufferState {
     dirty_flag: DirtyStateFlag,
@@ -1159,7 +1159,7 @@ impl CommandBufferState {
     }
 }
 
-#[derive(Derivative, Clone)]
+#[derive(Derivative)]
 #[derivative(Debug)]
 pub struct CommandBuffer {
     // TODO: better way of sharing
@@ -2111,20 +2111,20 @@ bitflags! {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 enum SyncRange {
     Whole,
     Partial(Range<u64>),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct MemoryFlush {
     host_memory: *mut u8,
     sync_range: SyncRange,
     buffer: *mut d3d11::ID3D11Buffer,
 }
 
-#[derive(Derivative, Clone)]
+#[derive(Derivative)]
 #[derivative(Debug)]
 pub struct MemoryInvalidate {
     #[derivative(Debug = "ignore")]
@@ -2424,7 +2424,7 @@ impl ::std::fmt::Debug for ShaderModule {
 unsafe impl Send for ShaderModule {}
 unsafe impl Sync for ShaderModule {}
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct SubpassDesc {
     pub color_attachments: Vec<pass::AttachmentRef>,
     pub depth_stencil_attachment: Option<pass::AttachmentRef>,
@@ -2443,13 +2443,13 @@ impl SubpassDesc {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct RenderPass {
     pub attachments: Vec<pass::Attachment>,
     pub subpasses: Vec<SubpassDesc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct Framebuffer {
     attachments: Vec<ImageView>,
     layers: image::Layer,
@@ -2464,7 +2464,7 @@ pub struct UnboundBuffer {
     requirements: memory::Requirements,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct InternalBuffer {
     raw: *mut d3d11::ID3D11Buffer,
     // TODO: need to sync between `raw` and `disjoint_cb`, same way as we do with
@@ -2577,8 +2577,8 @@ impl Image {
     }
 }
 
-#[derive(Derivative, Clone)]
-#[derivative(Debug)]
+#[derive(Derivative)]
+#[derivative(Clone, Debug)]
 pub struct ImageView {
     format: format::Format,
     #[derivative(Debug="ignore")]
@@ -2594,7 +2594,7 @@ pub struct ImageView {
 unsafe impl Send for ImageView {}
 unsafe impl Sync for ImageView {}
 
-#[derive(Derivative, Clone)]
+#[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Sampler {
     #[derivative(Debug = "ignore")]
@@ -2620,7 +2620,7 @@ unsafe impl Sync for ComputePipeline {}
 ///
 /// [0]: https://msdn.microsoft.com/en-us/library/windows/desktop/ff476500(v=vs.85).aspx
 #[derive(Derivative)]
-#[derivative(Debug, Clone)]
+#[derivative(Clone, Debug)]
 pub struct GraphicsPipeline {
     #[derivative(Debug="ignore")]
     vs: ComPtr<d3d11::ID3D11VertexShader>,

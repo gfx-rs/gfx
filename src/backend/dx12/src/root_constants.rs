@@ -10,7 +10,7 @@ use std::borrow::Borrow;
 use std::cmp::Ordering;
 use std::ops::Range;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RootConstant {
     pub stages: pso::ShaderStageFlags,
     pub range: Range<u32>,
