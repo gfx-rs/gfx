@@ -588,7 +588,7 @@ fn main() {
 
             let (caps, formats, _present_modes, _composite_alphas) =
                 surface.compatibility(&mut adapter.physical_device);
-            // Verify that previous format still exists so we may resuse it.
+            // Verify that previous format still exists so we may reuse it.
             assert!(formats.iter().any(|fs| fs.contains(&format)));
 
             let swap_config = SwapchainConfig::from_caps(&caps, format, resize_dims);
