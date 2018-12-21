@@ -759,16 +759,19 @@ unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        submission: hal::queue::RawSubmission<Backend, IC>,
+        submission: hal::queue::Submission<Ic, Iw, Is>,
         fence: Option<&Fence>,
     ) where
-        IC: IntoIterator,
-        IC::Item: Borrow<CommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<Semaphore>,
+        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
         let _scope = debug_scope!(&self.context, "Submit(fence={:?})", fence);
-        for cmd_buf in submission.cmd_buffers {
+        for cmd_buf in submission.command_buffers {
             let cmd_buf = cmd_buf.borrow();
 
             let _scope = debug_scope!(
@@ -800,12 +803,12 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, SwapImageIndex)>,
-        S: Borrow<Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<Semaphore>,
+        W: 'a + Borrow<Swapchain>,
+        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
+        S: 'a + Borrow<Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         for (swapchain, _idx) in swapchains {
             unsafe {
@@ -2091,10 +2094,10 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn execute_commands<I>(&mut self, _buffers: I)
+    fn execute_commands<'a, T, I>(&mut self, _buffers: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<CommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
+        I: IntoIterator<Item = &'a T>,
     {
         unimplemented!()
     }
@@ -2391,13 +2394,12 @@ impl hal::pool::RawCommandPool<Backend> for CommandPool {
         //unimplemented!()
     }
 
-    fn allocate(&mut self, num: usize, _level: command::RawLevel) -> Vec<CommandBuffer> {
-        (0..num)
-            .map(|_| CommandBuffer::create_deferred(self.device.clone(), self.internal.clone()))
-            .collect()
+    fn allocate_one(&mut self, _level: command::RawLevel) -> CommandBuffer {
+        CommandBuffer::create_deferred(self.device.clone(), self.internal.clone())
     }
 
-    unsafe fn free(&mut self, _cbufs: Vec<CommandBuffer>) {
+    unsafe fn free<I>(&mut self, _cbufs: I)
+    where I: IntoIterator<Item = CommandBuffer> {
         // TODO:
         // unimplemented!()
     }

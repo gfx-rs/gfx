@@ -963,14 +963,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn execute_commands<'a, I>(
+    fn execute_commands<'a, T, I>(
         &mut self,
         buffers: I,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<CommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
+        I: IntoIterator<Item = &'a T>,
     {
-        let command_buffers = buffers.into_iter().map(|b| b.borrow().raw).collect::<Vec<_>>();
+        let command_buffers = buffers
+            .into_iter()
+            .map(|b| b.borrow().raw)
+            .collect::<Vec<_>>();
         unsafe { self.device.0.cmd_execute_commands(self.raw, &command_buffers); }
     }
 }

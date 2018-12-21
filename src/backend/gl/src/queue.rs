@@ -701,17 +701,20 @@ impl CommandQueue {
 }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        submit_info: hal::queue::RawSubmission<Backend, IC>,
+        submit_info: hal::queue::Submission<Ic, Iw, Is>,
         fence: Option<&native::Fence>,
     ) where
-        IC: IntoIterator,
-        IC::Item: Borrow<com::RawCommandBuffer>,
+        T: 'a + Borrow<com::RawCommandBuffer>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<native::Semaphore>,
+        Iw: IntoIterator<Item = (&'a S, hal::pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
         use pool::BufferMemory;
         {
-            for buf in submit_info.cmd_buffers {
+            for buf in submit_info.command_buffers {
                 let cb = buf.borrow();
                 let memory = cb
                     .memory
@@ -737,15 +740,13 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 
     #[cfg(feature = "glutin")]
-    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, hal::SwapImageIndex)>,
-        S: Borrow<window::glutin::Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<native::Semaphore>,
+        W: 'a + Borrow<window::glutin::Swapchain>,
+        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
+        S: 'a + Borrow<native::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
-        use glutin::GlContext;
-
         for swapchain in swapchains {
             swapchain.0
                 .borrow()

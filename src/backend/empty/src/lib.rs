@@ -89,20 +89,24 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 /// Dummy command queue doing nothing.
 pub struct RawCommandQueue;
 impl queue::RawCommandQueue<Backend> for RawCommandQueue {
-    unsafe fn submit_raw<IC>(&mut self, _: queue::RawSubmission<Backend, IC>, _: Option<&()>)
-    where
-        IC: IntoIterator,
-        IC::Item: Borrow<RawCommandBuffer>,
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+        &mut self, _: queue::Submission<Ic, Iw, Is>, _: Option<&()>
+    ) where
+        T: 'a + Borrow<RawCommandBuffer>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<()>,
+        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
         unimplemented!()
     }
 
-    fn present<IS, S, IW>(&mut self, _: IS, _: IW) -> Result<(), ()>
+    fn present<'a, W, Is, S, Iw>(&mut self, _: Is, _: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, hal::SwapImageIndex)>,
-        S: Borrow<Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<()>,
+        W: 'a + Borrow<Swapchain>,
+        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
+        S: 'a + Borrow<()>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         unimplemented!()
     }
@@ -418,11 +422,9 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         unimplemented!()
     }
 
-    fn allocate(&mut self, _: usize, _: command::RawLevel) -> Vec<RawCommandBuffer> {
-        unimplemented!()
-    }
-
-    unsafe fn free(&mut self, _: Vec<RawCommandBuffer>) {
+    unsafe fn free<I>(&mut self, _: I)
+    where I: IntoIterator<Item = RawCommandBuffer>
+    {
         unimplemented!()
     }
 }
@@ -779,16 +781,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn execute_commands<I>(
+    fn execute_commands<'a, T, I>(
         &mut self,
         _: I,
     ) where
-        I: IntoIterator,
-        I::Item: Borrow<RawCommandBuffer>
+        T: 'a + Borrow<RawCommandBuffer>,
+        I: IntoIterator<Item = &'a T>,
     {
         unimplemented!()
     }
-
 }
 
 // Dummy descriptor pool.

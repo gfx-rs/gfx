@@ -18,7 +18,7 @@ use hal::backend::FastHashMap;
 use hal::format::{Aspects, FormatDesc};
 use hal::image::{Extent, Filter, Layout, Level, SubresourceRange};
 use hal::pass::{AttachmentLoadOp};
-use hal::queue::{RawCommandQueue, RawSubmission};
+use hal::queue::{RawCommandQueue, Submission};
 use hal::range::RangeArg;
 
 use block::ConcreteBlock;
@@ -1593,10 +1593,10 @@ impl CommandQueue {
         }
     }
 
-    fn wait<I>(&mut self, wait_semaphores: I)
+    fn wait<'a, T, I>(&mut self, wait_semaphores: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<native::Semaphore>,
+        T: 'a + Borrow<native::Semaphore>,
+        I: IntoIterator<Item = &'a T>,
     {
         for semaphore in wait_semaphores {
             let sem = semaphore.borrow();
@@ -1616,20 +1616,24 @@ impl CommandQueue {
 }
 
 impl RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(
-        &mut self, submit: RawSubmission<Backend, IC>, fence: Option<&native::Fence>
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+        &mut self, submit: Submission<Ic, Iw, Is>, fence: Option<&native::Fence>
     )
     where
-        IC: IntoIterator,
-        IC::Item: Borrow<CommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<native::Semaphore>,
+        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
         debug!("submitting with fence {:?}", fence);
-        self.wait(submit.wait_semaphores.iter().map(|&(s, _)| s));
+        let Submission { command_buffers, wait_semaphores, signal_semaphores } = submit;
+        self.wait(wait_semaphores.into_iter().map(|(s, _)| s));
 
         const BLOCK_BUCKET: usize = 4;
-        let system_semaphores = submit.signal_semaphores
+        let system_semaphores = signal_semaphores
             .into_iter()
-            .filter_map(|sem| sem.system.clone())
+            .filter_map(|sem| sem.borrow().system.clone())
             .collect::<SmallVec<[_; BLOCK_BUCKET]>>();
 
         #[allow(unused_mut)]
@@ -1640,7 +1644,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             let cmd_queue = self.shared.queue.lock();
             let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
 
-            for buffer in submit.cmd_buffers {
+            for buffer in command_buffers {
                 let mut inner = buffer.borrow().inner.borrow_mut();
                 let CommandBufferInner {
                     ref sink,
@@ -1769,12 +1773,12 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, S, IW>(&mut self, swapchains: IS, wait_semaphores: IW) -> Result<(), ()>
+     fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, SwapImageIndex)>,
-        S: Borrow<window::Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<native::Semaphore>,
+        W: 'a + Borrow<window::Swapchain>,
+        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
+        S: 'a + Borrow<native::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         self.wait(wait_semaphores);
 
@@ -1839,24 +1843,25 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate(
-        &mut self, num: usize, _level: com::RawLevel
-    ) -> Vec<CommandBuffer> {
+    fn allocate_one(&mut self, _level: com::RawLevel) -> CommandBuffer {
         //TODO: fail with OOM if we allocate more actual command buffers
         // than our mega-queue supports.
         //TODO: Implement secondary buffers
-        let buffers: Vec<_> = (0..num).map(|_| CommandBuffer {
+        let inner = Arc::new(RefCell::new(CommandBufferInner {
+            sink: None,
+            backup_journal: None,
+            #[cfg(feature = "dispatch")]
+            backup_capacity: None,
+            retained_buffers: Vec::new(),
+            retained_textures: Vec::new(),
+            active_visibility_queries: Vec::new(),
+        }));
+        self.allocated.push(Arc::clone(&inner));
+
+        CommandBuffer {
             shared: Arc::clone(&self.shared),
             pool_shared: Arc::clone(&self.pool_shared),
-            inner: Arc::new(RefCell::new(CommandBufferInner {
-                sink: None,
-                backup_journal: None,
-                #[cfg(feature = "dispatch")]
-                backup_capacity: None,
-                retained_buffers: Vec::new(),
-                retained_textures: Vec::new(),
-                active_visibility_queries: Vec::new(),
-            })),
+            inner,
             state: State {
                 viewport: None,
                 scissors: None,
@@ -1893,19 +1898,16 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 blit_vertices: FastHashMap::default(),
                 clear_values: Vec::new(),
             },
-        }).collect();
-
-        self.allocated.extend(buffers.iter().map(|buf| buf.inner.clone()));
-        buffers
+        }
     }
 
     /// Free command buffers which are allocated from this pool.
-    unsafe fn free(&mut self, mut buffers: Vec<CommandBuffer>) {
+    unsafe fn free<I>(&mut self, cmd_buffers: I)
+    where I: IntoIterator<Item = CommandBuffer>
+    {
         use hal::command::RawCommandBuffer;
-        for buf in &mut buffers {
-            buf.reset(true);
-        }
-        for cmd_buf in buffers {
+        for mut cmd_buf in cmd_buffers {
+            cmd_buf.reset(true);
             match self.allocated.iter_mut().position(|b| Arc::ptr_eq(b, &cmd_buf.inner)) {
                 Some(index) => {
                     self.allocated.swap_remove(index);
@@ -3940,12 +3942,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue(self.state.push_cs_constants(pc));
     }
 
-    fn execute_commands<I>(
-        &mut self,
-        _buffers: I,
-    ) where
-        I: IntoIterator,
-        I::Item: Borrow<CommandBuffer>
+    fn execute_commands<'a, T, I>(&mut self, _cmd_buffers: I,)
+    where
+        T: 'a + Borrow<CommandBuffer>,
+        I: IntoIterator<Item = &'a T>,
     {
         unimplemented!()
     }

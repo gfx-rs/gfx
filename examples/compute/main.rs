@@ -17,7 +17,7 @@ use std::str::FromStr;
 use hal::{
     Backend, Compute, Device, DescriptorPool, Instance, PhysicalDevice, QueueFamily,
 };
-use hal::{queue, pso, memory, buffer, pool, command};
+use hal::{pso, memory, buffer, pool, command};
 
 extern crate glsl_to_spirv;
 
@@ -38,7 +38,7 @@ fn main() {
 
     let instance = back::Instance::create("gfx-rs compute", 1);
 
-    let mut adapter = instance.enumerate_adapters().into_iter()
+    let adapter = instance.enumerate_adapters().into_iter()
         .find(|a| a.queue_families
             .iter()
             .any(|family| family.supports_compute())
@@ -133,13 +133,12 @@ fn main() {
     ));
 
     let mut command_pool = device
-        .create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty(), 16)
-        .expect("Can't create command pool");
-    let fence = device
-        .create_fence(false)
-        .expect("Can't create fence");
-    let submission = queue::Submission::new().submit(Some({
-        let mut command_buffer = command_pool.acquire_command_buffer(false);
+    	.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
+    	.expect("Can't create command pool");
+    let fence = device.create_fence(false).unwrap();
+    let mut command_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
+    {
+        command_buffer.begin();
         command_buffer.copy_buffer(&staging_buffer, &device_buffer, &[command::BufferCopy { src: 0, dst: 0, size: stride * numbers.len() as u64}]);
         command_buffer.pipeline_barrier(
             pso::PipelineStage::TRANSFER .. pso::PipelineStage::COMPUTE_SHADER,
@@ -165,10 +164,12 @@ fn main() {
             }),
         );
         command_buffer.copy_buffer(&device_buffer, &staging_buffer, &[command::BufferCopy { src: 0, dst: 0, size: stride * numbers.len() as u64}]);
-        command_buffer.finish()
-    }));
-    queue_group.queues[0].submit(submission, Some(&fence));
+        command_buffer.finish();
+
+        queue_group.queues[0].submit_nosemaphores(Some(&command_buffer), Some(&fence));
+    }
     device.wait_for_fence(&fence, !0).unwrap();
+    command_pool.free(Some(command_buffer));
 
     {
         let reader = device.acquire_mapping_reader::<u32>(&staging_memory, 0..staging_size).unwrap();

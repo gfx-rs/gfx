@@ -26,6 +26,7 @@ mod window;
 
 use descriptors_cpu::DescriptorCpuPool;
 use hal::adapter::DeviceType;
+use hal::pso::PipelineStage;
 use hal::queue::{QueueFamilyId, Queues};
 use hal::{error, format as f, image, memory, Features, Limits, QueueType, SwapImageIndex};
 
@@ -415,13 +416,16 @@ unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
-    unsafe fn submit_raw<IC>(
+    unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        submission: hal::queue::RawSubmission<Backend, IC>,
+        submission: hal::queue::Submission<Ic, Iw, Is>,
         fence: Option<&resource::Fence>,
     ) where
-        IC: IntoIterator,
-        IC::Item: Borrow<command::CommandBuffer>,
+        T: 'a + Borrow<command::CommandBuffer>,
+        Ic: IntoIterator<Item = &'a T>,
+        S: 'a + Borrow<resource::Semaphore>,
+        Iw: IntoIterator<Item = (&'a S, PipelineStage)>,
+        Is: IntoIterator<Item = &'a S>,
     {
         // Reset idle fence and event
         // That's safe here due to exclusive access to the queue
@@ -430,7 +434,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
         // TODO: semaphores
         let mut lists = submission
-            .cmd_buffers
+            .command_buffers
             .into_iter()
             .map(|buf| buf.borrow().as_raw_list())
             .collect::<Vec<_>>();
@@ -442,12 +446,12 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<IS, S, IW>(&mut self, swapchains: IS, _wait_semaphores: IW) -> Result<(), ()>
+    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
     where
-        IS: IntoIterator<Item = (S, SwapImageIndex)>,
-        S: Borrow<window::Swapchain>,
-        IW: IntoIterator,
-        IW::Item: Borrow<resource::Semaphore>,
+        W: 'a + Borrow<window::Swapchain>,
+        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
+        S: 'a + Borrow<resource::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         // TODO: semaphores
         for (swapchain, _) in swapchains {

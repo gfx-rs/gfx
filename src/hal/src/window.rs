@@ -52,9 +52,10 @@
 use device;
 use format::Format;
 use image;
-use queue::CommandQueue;
+use queue::{Capability, CommandQueue};
 use Backend;
 
+use std::iter;
 use std::any::Any;
 use std::borrow::Borrow;
 use std::cmp::{max, min};
@@ -414,18 +415,31 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// ```no_run
     ///
     /// ```
-    fn present<'a, C, IW>(
+    fn present<'a, C, S, Iw>(
         &'a self,
         present_queue: &mut CommandQueue<B, C>,
         image_index: SwapImageIndex,
-        wait_semaphores: IW,
+        wait_semaphores: Iw,
     ) -> Result<(), ()>
     where
-        &'a Self: Borrow<B::Swapchain>,
-        Self: Sized + 'a,
-        IW: IntoIterator,
-        IW::Item: Borrow<B::Semaphore>,
+        Self: 'a + Sized + Borrow<B::Swapchain>,
+        C: Capability,
+        S: 'a + Borrow<B::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
-        present_queue.present(Some((self, image_index)), wait_semaphores)
+        present_queue.present(iter::once((self, image_index)), wait_semaphores)
+    }
+
+    /// Present one acquired image without any semaphore synchronization.
+    fn present_nosemaphores<'a, C>(
+        &'a self,
+        present_queue: &mut CommandQueue<B, C>,
+        image_index: SwapImageIndex,
+    ) -> Result<(), ()>
+    where
+        Self: 'a + Sized + Borrow<B::Swapchain>,
+        C: Capability,
+    {
+        self.present::<_, B::Semaphore, _>(present_queue, image_index, iter::empty())
     }
 }

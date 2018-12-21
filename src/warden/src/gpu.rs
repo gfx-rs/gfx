@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::fs::File;
 use std::path::PathBuf;
-use std::{slice};
+use std::{iter, slice};
 
 use hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
 use hal::{Device, DescriptorPool, PhysicalDevice};
@@ -57,20 +57,10 @@ pub struct Buffer<B: hal::Backend> {
 
 impl<B: hal::Backend> Buffer<B> {
     fn barrier_to(&self, access: b::Access) -> memory::Barrier<B> {
-        memory::Barrier::Buffer {
-            states: self.stable_state .. access,
-            families: None,
-            target: &self.handle,
-            range: None .. None,
-        }
+        memory::Barrier::whole_buffer(&self.handle, self.stable_state .. access)
     }
     fn barrier_from(&self, access: b::Access) -> memory::Barrier<B> {
-        memory::Barrier::Buffer {
-            states: access .. self.stable_state,
-            families: None,
-            target: &self.handle,
-            range: None .. None,
-        }
+        memory::Barrier::whole_buffer(&self.handle, access .. self.stable_state)
     }
 }
 
@@ -124,13 +114,13 @@ pub struct Resources<B: hal::Backend> {
 }
 
 pub struct Job<B: hal::Backend, C> {
-    submission: c::Submit<B, C, c::MultiShot, c::Primary>,
+    submission: c::CommandBuffer<B, C, c::MultiShot, c::Primary>,
 }
 
 pub struct Scene<B: hal::Backend, C> {
     pub resources: Resources<B>,
     pub jobs: HashMap<String, Job<B, C>>,
-    init_submit: c::Submit<B, C, c::MultiShot, c::Primary>,
+    init_submit: c::CommandBuffer<B, C, c::MultiShot, c::Primary>,
     device: B::Device,
     queue_group: hal::QueueGroup<B, C>,
     command_pool: Option<hal::CommandPool<B, C>>,
@@ -149,7 +139,7 @@ fn align(x: u64, y: u64) -> u64 {
 
 impl<B: hal::Backend> Scene<B, hal::General> {
     pub fn new(
-        mut adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: PathBuf
+        adapter: hal::Adapter<B>, raw: &raw::Scene, data_path: PathBuf
     ) -> Result<Self, Error> {
         info!("creating Scene from {:?}", data_path);
         let memory_types = adapter
@@ -185,7 +175,6 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let mut command_pool = device.create_command_pool_typed(
             &queue_group,
             hal::pool::CommandPoolCreateFlags::empty(),
-            1 + raw.jobs.len(),
         )?;
 
         // create resources
@@ -204,533 +193,527 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             compute_pipelines: HashMap::new(),
         };
         let mut upload_buffers = HashMap::new();
-        let init_submit = {
-            let mut init_cmd = command_pool.acquire_command_buffer(false);
+        let mut init_cmd = command_pool.acquire_command_buffer::<c::MultiShot>();
+        init_cmd.begin(false);
+        // Pass[1]: images, buffers, passes, descriptor set layouts/pools
+        for (name, resource) in &raw.resources {
+            match *resource {
+                raw::Resource::Buffer { size, usage, ref data } => {
+                    // allocate memory
+                    let unbound = device.create_buffer(size as _, usage)
+                        .unwrap();
+                    let requirements = device.get_buffer_requirements(&unbound);
+                    let memory_type = memory_types
+                        .iter()
+                        .enumerate()
+                        .position(|(id, mt)| {
+                            requirements.type_mask & (1 << id) != 0 &&
+                            mt.properties.contains(memory::Properties::DEVICE_LOCAL)
+                        })
+                        .unwrap()
+                        .into();
+                    let memory = device.allocate_memory(memory_type, requirements.size)
+                        .unwrap();
+                    let buffer = device.bind_buffer_memory(&memory, 0, unbound)
+                        .unwrap();
 
-            // Pass[1]: images, buffers, passes, descriptor set layouts/pools
-            for (name, resource) in &raw.resources {
-                match *resource {
-                    raw::Resource::Buffer { size, usage, ref data } => {
-                        // allocate memory
-                        let unbound = device.create_buffer(size as _, usage)
-                            .unwrap();
-                        let requirements = device.get_buffer_requirements(&unbound);
-                        let memory_type = memory_types
-                            .iter()
-                            .enumerate()
-                            .position(|(id, mt)| {
-                                requirements.type_mask & (1 << id) != 0 &&
-                                mt.properties.contains(memory::Properties::DEVICE_LOCAL)
-                            })
-                            .unwrap()
-                            .into();
-                        let memory = device.allocate_memory(memory_type, requirements.size)
-                            .unwrap();
-                        let buffer = device.bind_buffer_memory(&memory, 0, unbound)
-                            .unwrap();
-
-                        // process initial data for the buffer
-                        let stable_state = if data.is_empty() {
-                            let access = b::Access::SHADER_READ; //TODO
-                            if false { //TODO
-                                let buffer_barrier = memory::Barrier::Buffer {
-                                    states: b::Access::empty() .. access,
-                                    families: None,
-                                    target: &buffer,
-                                    range: None .. None,
-                                };
-                                init_cmd.pipeline_barrier(
-                                    pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                                    memory::Dependencies::empty(),
-                                    &[buffer_barrier],
-                                );
-                            }
-                            access
-                        } else {
-                            // calculate required sizes
-                            let upload_size = align(size as _, limits.min_buffer_copy_pitch_alignment);
-                            // create upload buffer
-                            let unbound_buffer = device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
-                                .unwrap();
-                            let upload_req = device.get_buffer_requirements(&unbound_buffer);
-                            assert_ne!(upload_req.type_mask & (1 << upload_type.0), 0);
-                            let upload_memory = device.allocate_memory(upload_type, upload_req.size)
-                                .unwrap();
-                            let upload_buffer = device.bind_buffer_memory(&upload_memory, 0, unbound_buffer)
-                                .unwrap();
-                            // write the data
-                            {
-                                let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0 .. size as _)
-                                    .unwrap();
-                                File::open(data_path.join(data))
-                                    .unwrap()
-                                    .read_exact(&mut mapping)
-                                    .unwrap();
-                                device.release_mapping_writer(mapping).unwrap();
-                            }
-                            // add init commands
-                            let final_state = b::Access::SHADER_READ;
-                            let pre_barrier = memory::Barrier::Buffer {
-                                states: b::Access::empty() .. b::Access::TRANSFER_WRITE,
-                                families: None,
-                                target: &buffer,
-                                range: None .. None,
-                            };
+                    // process initial data for the buffer
+                    let stable_state = if data.is_empty() {
+                        let access = b::Access::SHADER_READ; //TODO
+                        if false { //TODO
+                            let buffer_barrier = memory::Barrier::whole_buffer(&buffer, b::Access::empty() .. access);
                             init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::BOTTOM_OF_PIPE,
                                 memory::Dependencies::empty(),
-                                &[pre_barrier],
+                                &[buffer_barrier],
                             );
-                            let copy = c::BufferCopy {
-                                src: 0,
-                                dst: 0,
-                                size: size as _,
-                            };
-                            init_cmd.copy_buffer(
-                                &upload_buffer,
-                                &buffer,
-                                &[copy],
-                            );
-                            let post_barrier = memory::Barrier::Buffer {
-                                states: b::Access::TRANSFER_WRITE .. final_state,
-                                families: None,
-                                target: &buffer,
-                                range: None .. None,
-                            };
-                            init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                                memory::Dependencies::empty(),
-                                &[post_barrier],
-                            );
-                            // done
-                            upload_buffers.insert(name.clone(), (upload_buffer, upload_memory));
-                            final_state
-                        };
-
-                        resources.buffers.insert(name.clone(), Buffer {
-                            handle: buffer,
-                            _memory: memory,
-                            size,
-                            stable_state,
-                        });
-                    }
-                    raw::Resource::Image { kind, num_levels, format, usage, ref data } => {
-                        // allocate memory
-                        let unbound = device.create_image(
-                            kind, num_levels, format, i::Tiling::Optimal, usage, i::ViewCapabilities::empty()
-                            ).unwrap();
-                        let requirements = device.get_image_requirements(&unbound);
-                        let memory_type = memory_types
-                            .iter()
-                            .enumerate()
-                            .position(|(id, mt)| {
-                                requirements.type_mask & (1 << id) != 0 &&
-                                mt.properties.contains(memory::Properties::DEVICE_LOCAL)
-                            })
-                            .unwrap()
-                            .into();
-                        let memory = device.allocate_memory(memory_type, requirements.size)
-                            .unwrap();
-                        let image = device.bind_image_memory(&memory, 0, unbound)
-                            .unwrap();
-
-                        // process initial data for the image
-                        let stable_state = if data.is_empty() {
-                            let (aspects, access, layout) = if format.is_color() {
-                                (f::Aspects::COLOR, i::Access::COLOR_ATTACHMENT_WRITE, i::Layout::ColorAttachmentOptimal)
-                            } else {
-                                (f::Aspects::DEPTH | f::Aspects::STENCIL, i::Access::DEPTH_STENCIL_ATTACHMENT_WRITE, i::Layout::DepthStencilAttachmentOptimal)
-                            };
-                            if false { //TODO
-                                let image_barrier = memory::Barrier::Image {
-                                    states: (i::Access::empty(), i::Layout::Undefined) .. (access, layout),
-                                    target: &image,
-                                    families: None,
-                                    range: i::SubresourceRange {
-                                        aspects,
-                                        .. COLOR_RANGE.clone()
-                                    },
-                                };
-                                init_cmd.pipeline_barrier(
-                                    pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                                    memory::Dependencies::empty(),
-                                    &[image_barrier],
-                                );
-                            }
-                            (access, layout)
-                        } else {
-                            // calculate required sizes
-                            let extent = kind.extent();
-                            assert_eq!(kind.num_samples(), 1);
-
-                            let base_format = format.base_format();
-                            let format_desc = base_format.0.desc();
-                            let (block_width, block_height) = format_desc.dim;
-
-                            // Width and height need to be multiple of the block dimensions.
-                            let w = align(extent.width as _, block_width as _);
-                            let h = align(extent.height as _, block_height as _);
-                            let d = extent.depth;
-
-                            let width_bytes = (format_desc.bits as u64 * w) / (8 * block_width as u64);
-                            let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
-                            let upload_size = (row_pitch as u64 * h as u64 * d as u64) / block_height as u64;
-                            // create upload buffer
-                            let unbound_buffer = device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
-                                .unwrap();
-                            let upload_req = device.get_buffer_requirements(&unbound_buffer);
-                            assert_ne!(upload_req.type_mask & (1 << upload_type.0), 0);
-                            let upload_memory = device.allocate_memory(upload_type, upload_req.size)
-                                .unwrap();
-                            let upload_buffer = device.bind_buffer_memory(&upload_memory, 0, unbound_buffer)
-                                .unwrap();
-                            // write the data
-                            {
-                                let mut file = File::open(data_path.join(data))
-                                    .unwrap();
-                                let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0..upload_size)
-                                    .unwrap();
-                                for y in 0 .. (h as usize * d as usize) {
-                                    let dest_range = y * row_pitch as usize .. y * row_pitch as usize + width_bytes as usize;
-                                    file.read_exact(&mut mapping[dest_range])
-                                        .unwrap();
-                                }
-                                device.release_mapping_writer(mapping).unwrap();
-                            }
-                            // add init commands
-                            let final_state = (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal);
-                            let pre_barrier = memory::Barrier::Image {
-                                states: (i::Access::empty(), i::Layout::Undefined) ..
-                                        (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
-                                target: &image,
-                                families: None,
-                                range: COLOR_RANGE.clone(), //TODO
-                            };
-                            init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
-                                memory::Dependencies::empty(),
-                                &[pre_barrier],
-                            );
-
-                            let buffer_width = (row_pitch as u32 * 8) / format_desc.bits as u32;
-                            let copy = c::BufferImageCopy {
-                                buffer_offset: 0,
-                                buffer_width,
-                                buffer_height: h as u32,
-                                image_layers: i::SubresourceLayers {
-                                    aspects: f::Aspects::COLOR,
-                                    level: 0,
-                                    layers: 0 .. 1,
-                                },
-                                image_offset: i::Offset::ZERO,
-                                image_extent: extent,
-                            };
-                            init_cmd.copy_buffer_to_image(
-                                &upload_buffer,
-                                &image,
-                                i::Layout::TransferDstOptimal,
-                                &[copy],
-                            );
-                            let post_barrier = memory::Barrier::Image {
-                                states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal) .. final_state,
-                                target: &image,
-                                families: None,
-                                range: COLOR_RANGE.clone(), //TODO
-                            };
-                            init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                                memory::Dependencies::empty(),
-                                &[post_barrier],
-                            );
-                            // done
-                            upload_buffers.insert(name.clone(), (upload_buffer, upload_memory));
-                            final_state
-                        };
-
-                        resources.images.insert(name.clone(), Image {
-                            handle: image,
-                            _memory: memory,
-                            kind,
-                            format,
-                            range: COLOR_RANGE.clone(),
-                            stable_state,
-                        });
-                    }
-                    raw::Resource::RenderPass { ref attachments, ref subpasses, ref dependencies } => {
-                        let att_ref = |aref: &raw::AttachmentRef| {
-                            let id = attachments.keys().position(|s| s == &aref.0).unwrap();
-                            (id, aref.1)
-                        };
-                        let subpass_ref = |s: &String| {
-                            if s.is_empty() {
-                                hal::pass::SubpassRef::External
-                            } else {
-                                let id = subpasses.keys().position(|sp| s == sp).unwrap();
-                                hal::pass::SubpassRef::Pass(id)
-                            }
-                        };
-
-                        let raw_atts = attachments.values().cloned();
-                        let temp = subpasses
-                            .values()
-                            .map(|sp| {
-                                let colors = sp.colors
-                                    .iter()
-                                    .map(&att_ref)
-                                    .collect::<Vec<_>>();
-                                let ds = sp.depth_stencil
-                                    .as_ref()
-                                    .map(&att_ref);
-                                let inputs = sp.inputs
-                                    .iter()
-                                    .map(&att_ref)
-                                    .collect::<Vec<_>>();
-                                let preserves = sp.preserves
-                                    .iter()
-                                    .map(|sp| {
-                                        attachments.keys().position(|s| s == sp).unwrap()
-                                    })
-                                    .collect::<Vec<_>>();
-                                let resolves = sp.resolves
-                                    .iter()
-                                    .map(&att_ref)
-                                    .collect::<Vec<_>>();
-                                (colors, ds, inputs, preserves, resolves)
-                            })
-                            .collect::<Vec<_>>();
-                        let raw_subs = temp
-                            .iter()
-                            .map(|t| hal::pass::SubpassDesc {
-                                colors: &t.0,
-                                depth_stencil: t.1.as_ref(),
-                                inputs: &t.2,
-                                preserves: &t.3,
-                                resolves: &t.4,
-                            })
-                            .collect::<Vec<_>>();
-                        let raw_deps = dependencies
-                            .iter()
-                            .map(|dep| hal::pass::SubpassDependency {
-                                passes: subpass_ref(&dep.passes.start) .. subpass_ref(&dep.passes.end),
-                                stages: dep.stages.clone(),
-                                accesses: dep.accesses.clone(),
-                            });
-
-                        let rp = RenderPass {
-                            handle: device.create_render_pass(raw_atts, raw_subs, raw_deps)?,
-                            attachments: attachments.keys().cloned().collect(),
-                            subpasses: subpasses.keys().cloned().collect(),
-                        };
-                        resources.render_passes.insert(name.clone(), rp);
-                    }
-                    raw::Resource::Shader(ref local_path) => {
-                        #[cfg(feature = "glsl-to-spirv")]
-                        fn transpile(mut file: File, ty: glsl_to_spirv::ShaderType) -> File {
-                            let mut code = String::new();
-                            file.read_to_string(&mut code).unwrap();
-                            glsl_to_spirv::compile(&code, ty).unwrap()
                         }
-                        let full_path = data_path.join(local_path);
-                        let base_file = File::open(&full_path)
+                        access
+                    } else {
+                        // calculate required sizes
+                        let upload_size = align(size as _, limits.min_buffer_copy_pitch_alignment);
+                        // create upload buffer
+                        let unbound_buffer = device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
                             .unwrap();
-                        let mut file = match &*full_path
-                            .extension()
-                            .unwrap()
-                            .to_string_lossy()
+                        let upload_req = device.get_buffer_requirements(&unbound_buffer);
+                        assert_ne!(upload_req.type_mask & (1 << upload_type.0), 0);
+                        let upload_memory = device.allocate_memory(upload_type, upload_req.size)
+                            .unwrap();
+                        let upload_buffer = device.bind_buffer_memory(&upload_memory, 0, unbound_buffer)
+                            .unwrap();
+                        // write the data
                         {
-                            "spirv" => base_file,
-                            #[cfg(feature = "glsl-to-spirv")]
-                            "vert" => transpile(base_file, glsl_to_spirv::ShaderType::Vertex),
-                            #[cfg(feature = "glsl-to-spirv")]
-                            "frag" => transpile(base_file, glsl_to_spirv::ShaderType::Fragment),
-                            #[cfg(feature = "glsl-to-spirv")]
-                            "comp" => transpile(base_file, glsl_to_spirv::ShaderType::Compute),
-                            other => panic!("Unknown shader extension: {}", other),
-                        };
-                        let mut spirv = Vec::new();
-                        file.read_to_end(&mut spirv).unwrap();
-                        let module = device.create_shader_module(&spirv)
-                            .unwrap();
-                        resources.shaders.insert(name.clone(), module);
-                    }
-                    raw::Resource::DescriptorSetLayout { ref bindings, ref immutable_samplers } => {
-                        assert!(immutable_samplers.is_empty()); //TODO! requires changing the order,
-                        // since samples are expect to be all read by this point
-                        let layout = device.create_descriptor_set_layout(bindings, &[])?;
-                        let binding_indices = bindings.iter().map(|dsb| dsb.binding).collect();
-                        resources.desc_set_layouts.insert(name.clone(), (binding_indices, layout));
-                    }
-                    raw::Resource::DescriptorPool { capacity, ref ranges } => {
-                        let pool = device.create_descriptor_pool(capacity, ranges)?;
-                        resources.desc_pools.insert(name.clone(), pool);
-                    }
-                    _ => {}
-                }
-            }
-
-            // Pass[2]: image & buffer views, descriptor sets, pipeline layouts
-            for (name, resource) in &raw.resources {
-                match *resource {
-                    raw::Resource::ImageView { ref image, kind, format, swizzle, ref range } => {
-                        let image = &resources.images[image].handle;
-                        let view = device.create_image_view(image, kind, format, swizzle, range.clone())
-                            .unwrap();
-                        resources.image_views.insert(name.clone(), view);
-                    }
-                    raw::Resource::DescriptorSet { ref pool, ref layout, ref data } => {
-                        // create a descriptor set
-                        let (ref binding_indices, ref set_layout) = resources.desc_set_layouts[layout];
-                        let desc_set = resources.desc_pools
-                            .get_mut(pool)
-                            .expect(&format!("Missing descriptor pool: {}", pool))
-                            .allocate_set(set_layout)
-                            .expect(&format!("Failed to allocate set with layout: {:?}", set_layout));
-                        resources.desc_sets.insert(name.clone(), desc_set);
-                        // fill it up
-                        let set = &resources.desc_sets[name];
-                        let writes = binding_indices
-                            .iter()
-                            .zip(data)
-                            .map(|(&binding, range)| hal::pso::DescriptorSetWrite {
-                                set,
-                                binding,
-                                array_offset: 0,
-                                descriptors: match *range {
-                                    raw::DescriptorRange::Buffers(ref names) => {
-                                        names
-                                            .iter()
-                                            .map(|s| {
-                                                let buf = resources.buffers
-                                                    .get(s)
-                                                    .expect(&format!("Missing buffer: {}", s));
-                                                hal::pso::Descriptor::Buffer(&buf.handle, None .. None)
-                                            })
-                                    }
-                                    raw::DescriptorRange::Images(_) => {
-                                        unimplemented!()
-                                    }
-                                },
-                            });
-                        device.write_descriptor_sets(writes);
-                    }
-                    raw::Resource::PipelineLayout { ref set_layouts, ref push_constant_ranges } => {
-                        let layout = {
-                            let layouts = set_layouts
-                                .iter()
-                                .map(|sl| &resources.desc_set_layouts[sl].1);
-                            device.create_pipeline_layout(layouts, push_constant_ranges)?
-                        };
-                        resources.pipeline_layouts.insert(name.clone(), layout);
-                    }
-                    _ => {}
-                }
-            }
-
-            // Pass[3]: framebuffers and pipelines
-            for (name, resource) in &raw.resources {
-                match *resource {
-                    raw::Resource::Framebuffer { ref pass, ref views, extent } => {
-                        let rp = &resources.render_passes[pass];
-                        let framebuffer = {
-                            let image_views = rp.attachments
-                                .iter()
-                                .map(|s| {
-                                    let entry = views
-                                        .iter()
-                                        .find(|entry| entry.0 == s)
-                                        .unwrap();
-                                    &resources.image_views[entry.1]
-                                });
-                            device.create_framebuffer(&rp.handle, image_views, extent)
+                            let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0 .. size as _)
+                                .unwrap();
+                            File::open(data_path.join(data))
                                 .unwrap()
+                                .read_exact(&mut mapping)
+                                .unwrap();
+                            device.release_mapping_writer(mapping).unwrap();
+                        }
+                        // add init commands
+                        let final_state = b::Access::SHADER_READ;
+                        let pre_barrier = memory::Barrier::whole_buffer(&buffer,
+                            b::Access::empty() .. b::Access::TRANSFER_WRITE);
+                        init_cmd.pipeline_barrier(
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                            memory::Dependencies::empty(),
+                            &[pre_barrier],
+                        );
+                        let copy = c::BufferCopy {
+                            src: 0,
+                            dst: 0,
+                            size: size as _,
                         };
-                        resources.framebuffers.insert(name.clone(), (framebuffer, extent));
-                    }
-                    raw::Resource::GraphicsPipeline {
-                        ref shaders, ref rasterizer, ref vertex_buffers, ref attributes,
-                        ref input_assembler, ref blender, depth_stencil, ref layout, ref subpass,
-                    } => {
-                        let reshaders = &resources.shaders;
-                        let entry = |shader: &String| -> Option<pso::EntryPoint<B>> {
-                            if shader.is_empty() {
-                                None
-                            } else {
-                                Some(pso::EntryPoint {
-                                    entry: "main",
-                                    module: reshaders
-                                        .get(shader)
-                                        .expect(&format!("Missing shader: {}", shader)),
-                                    specialization: pso::Specialization::default(),
-                                })
-                            }
+                        init_cmd.copy_buffer(
+                            &upload_buffer,
+                            &buffer,
+                            &[copy],
+                        );
+                        let post_barrier = memory::Barrier::whole_buffer(&buffer,
+                            b::Access::TRANSFER_WRITE .. final_state);
+                        init_cmd.pipeline_barrier(
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                            memory::Dependencies::empty(),
+                            &[post_barrier],
+                        );
+                        // done
+                        upload_buffers.insert(name.clone(), (upload_buffer, upload_memory));
+                        final_state
+                    };
+
+                    resources.buffers.insert(name.clone(), Buffer {
+                        handle: buffer,
+                        _memory: memory,
+                        size,
+                        stable_state,
+                    });
+                }
+                raw::Resource::Image { kind, num_levels, format, usage, ref data } => {
+                    // allocate memory
+                    let unbound = device.create_image(
+                        kind, num_levels, format, i::Tiling::Optimal, usage, i::ViewCapabilities::empty()
+                        ).unwrap();
+                    let requirements = device.get_image_requirements(&unbound);
+                    let memory_type = memory_types
+                        .iter()
+                        .enumerate()
+                        .position(|(id, mt)| {
+                            requirements.type_mask & (1 << id) != 0 &&
+                            mt.properties.contains(memory::Properties::DEVICE_LOCAL)
+                        })
+                        .unwrap()
+                        .into();
+                    let memory = device.allocate_memory(memory_type, requirements.size)
+                        .unwrap();
+                    let image = device.bind_image_memory(&memory, 0, unbound)
+                        .unwrap();
+
+                    // process initial data for the image
+                    let stable_state = if data.is_empty() {
+                        let (aspects, access, layout) = if format.is_color() {
+                            (f::Aspects::COLOR, i::Access::COLOR_ATTACHMENT_WRITE, i::Layout::ColorAttachmentOptimal)
+                        } else {
+                            (f::Aspects::DEPTH | f::Aspects::STENCIL, i::Access::DEPTH_STENCIL_ATTACHMENT_WRITE, i::Layout::DepthStencilAttachmentOptimal)
                         };
-                        let desc = pso::GraphicsPipelineDesc {
-                            shaders: pso::GraphicsShaderSet {
-                                vertex: pso::EntryPoint {
-                                    entry: "main",
-                                    module: reshaders
-                                        .get(&shaders.vertex)
-                                        .expect(&format!("Missing vertex shader: {}", shaders.vertex)),
-                                    specialization: pso::Specialization::default(),
+                        if false { //TODO
+                            let image_barrier = memory::Barrier::Image {
+                                states: (i::Access::empty(), i::Layout::Undefined) .. (access, layout),
+                                target: &image,
+                                families: None,
+                                range: i::SubresourceRange {
+                                    aspects,
+                                    .. COLOR_RANGE.clone()
                                 },
-                                hull: entry(&shaders.hull),
-                                domain: entry(&shaders.domain),
-                                geometry: entry(&shaders.geometry),
-                                fragment: entry(&shaders.fragment),
-                            },
-                            rasterizer: rasterizer.clone(),
-                            vertex_buffers: vertex_buffers.clone(),
-                            attributes: attributes.clone(),
-                            input_assembler: input_assembler.clone(),
-                            blender: blender.clone(),
-                            depth_stencil: depth_stencil.clone(),
-                            baked_states: pso::BakedStates::default(), //TODO
-                            multisampling: None, // TODO
-                            layout: &resources.pipeline_layouts[layout],
-                            subpass: hal::pass::Subpass {
-                                main_pass: &resources.render_passes[&subpass.parent].handle,
-                                index: subpass.index,
-                            },
-                            flags: pso::PipelineCreationFlags::empty(),
-                            parent: pso::BasePipeline::None,
-                        };
-                        let pso = device.create_graphics_pipelines(&[desc], None)
-                            .swap_remove(0)
+                            };
+                            init_cmd.pipeline_barrier(
+                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                                memory::Dependencies::empty(),
+                                &[image_barrier],
+                            );
+                        }
+                        (access, layout)
+                    } else {
+                        // calculate required sizes
+                        let extent = kind.extent();
+                        assert_eq!(kind.num_samples(), 1);
+
+                        let base_format = format.base_format();
+                        let format_desc = base_format.0.desc();
+                        let (block_width, block_height) = format_desc.dim;
+
+                        // Width and height need to be multiple of the block dimensions.
+                        let w = align(extent.width as _, block_width as _);
+                        let h = align(extent.height as _, block_height as _);
+                        let d = extent.depth;
+
+                        let width_bytes = (format_desc.bits as u64 * w) / (8 * block_width as u64);
+                        let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
+                        let upload_size = (row_pitch as u64 * h as u64 * d as u64) / block_height as u64;
+                        // create upload buffer
+                        let unbound_buffer = device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
                             .unwrap();
-                        resources.graphics_pipelines.insert(name.clone(), pso);
+                        let upload_req = device.get_buffer_requirements(&unbound_buffer);
+                        assert_ne!(upload_req.type_mask & (1 << upload_type.0), 0);
+                        let upload_memory = device.allocate_memory(upload_type, upload_req.size)
+                            .unwrap();
+                        let upload_buffer = device.bind_buffer_memory(&upload_memory, 0, unbound_buffer)
+                            .unwrap();
+                        // write the data
+                        {
+                            let mut file = File::open(data_path.join(data))
+                                .unwrap();
+                            let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0..upload_size)
+                                .unwrap();
+                            for y in 0 .. (h as usize * d as usize) {
+                                let dest_range = y * row_pitch as usize .. y * row_pitch as usize + width_bytes as usize;
+                                file.read_exact(&mut mapping[dest_range])
+                                    .unwrap();
+                            }
+                            device.release_mapping_writer(mapping).unwrap();
+                        }
+                        // add init commands
+                        let final_state = (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal);
+                        let pre_barrier = memory::Barrier::Image {
+                            states: (i::Access::empty(), i::Layout::Undefined) ..
+                                    (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                            families: None,
+                            target: &image,
+                            range: COLOR_RANGE.clone(), //TODO
+                        };
+                        init_cmd.pipeline_barrier(
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                            memory::Dependencies::empty(),
+                            &[pre_barrier],
+                        );
+
+                        let buffer_width = (row_pitch as u32 * 8) / format_desc.bits as u32;
+                        let copy = c::BufferImageCopy {
+                            buffer_offset: 0,
+                            buffer_width,
+                            buffer_height: h as u32,
+                            image_layers: i::SubresourceLayers {
+                                aspects: f::Aspects::COLOR,
+                                level: 0,
+                                layers: 0 .. 1,
+                            },
+                            image_offset: i::Offset::ZERO,
+                            image_extent: extent,
+                        };
+                        init_cmd.copy_buffer_to_image(
+                            &upload_buffer,
+                            &image,
+                            i::Layout::TransferDstOptimal,
+                            &[copy],
+                        );
+                        let post_barrier = memory::Barrier::Image {
+                            states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal) .. final_state,
+                            families: None,
+                            target: &image,
+                            range: COLOR_RANGE.clone(), //TODO
+                        };
+                        init_cmd.pipeline_barrier(
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                            memory::Dependencies::empty(),
+                            &[post_barrier],
+                        );
+                        // done
+                        upload_buffers.insert(name.clone(), (upload_buffer, upload_memory));
+                        final_state
+                    };
+
+                    resources.images.insert(name.clone(), Image {
+                        handle: image,
+                        _memory: memory,
+                        kind,
+                        format,
+                        range: COLOR_RANGE.clone(),
+                        stable_state,
+                    });
+                }
+                raw::Resource::RenderPass { ref attachments, ref subpasses, ref dependencies } => {
+                    let att_ref = |aref: &raw::AttachmentRef| {
+                        let id = attachments.keys().position(|s| s == &aref.0).unwrap();
+                        (id, aref.1)
+                    };
+                    let subpass_ref = |s: &String| {
+                        if s.is_empty() {
+                            hal::pass::SubpassRef::External
+                        } else {
+                            let id = subpasses.keys().position(|sp| s == sp).unwrap();
+                            hal::pass::SubpassRef::Pass(id)
+                        }
+                    };
+
+                    let raw_atts = attachments.values().cloned();
+                    let temp = subpasses
+                        .values()
+                        .map(|sp| {
+                            let colors = sp.colors
+                                .iter()
+                                .map(&att_ref)
+                                .collect::<Vec<_>>();
+                            let ds = sp.depth_stencil
+                                .as_ref()
+                                .map(&att_ref);
+                            let inputs = sp.inputs
+                                .iter()
+                                .map(&att_ref)
+                                .collect::<Vec<_>>();
+                            let preserves = sp.preserves
+                                .iter()
+                                .map(|sp| {
+                                    attachments.keys().position(|s| s == sp).unwrap()
+                                })
+                                .collect::<Vec<_>>();
+                            let resolves = sp.resolves
+                                .iter()
+                                .map(&att_ref)
+                                .collect::<Vec<_>>();
+                            (colors, ds, inputs, preserves, resolves)
+                        })
+                        .collect::<Vec<_>>();
+                    let raw_subs = temp
+                        .iter()
+                        .map(|t| hal::pass::SubpassDesc {
+                            colors: &t.0,
+                            depth_stencil: t.1.as_ref(),
+                            inputs: &t.2,
+                            preserves: &t.3,
+                            resolves: &t.4,
+                        })
+                        .collect::<Vec<_>>();
+                    let raw_deps = dependencies
+                        .iter()
+                        .map(|dep| hal::pass::SubpassDependency {
+                            passes: subpass_ref(&dep.passes.start) .. subpass_ref(&dep.passes.end),
+                            stages: dep.stages.clone(),
+                            accesses: dep.accesses.clone(),
+                        });
+
+                    let rp = RenderPass {
+                        handle: device
+                            .create_render_pass(raw_atts, raw_subs, raw_deps)
+                            .expect("Render pass creation failure"),
+                        attachments: attachments.keys().cloned().collect(),
+                        subpasses: subpasses.keys().cloned().collect(),
+                    };
+                    resources.render_passes.insert(name.clone(), rp);
+                }
+                raw::Resource::Shader(ref local_path) => {
+                    #[cfg(feature = "glsl-to-spirv")]
+                    fn transpile(mut file: File, ty: glsl_to_spirv::ShaderType) -> File {
+                        let mut code = String::new();
+                        file.read_to_string(&mut code).unwrap();
+                        glsl_to_spirv::compile(&code, ty).unwrap()
                     }
-                    raw::Resource::ComputePipeline { ref shader, ref layout } => {
-                        let desc = pso::ComputePipelineDesc {
-                            shader: pso::EntryPoint {
+                    let full_path = data_path.join(local_path);
+                    let base_file = File::open(&full_path)
+                        .unwrap();
+                    let mut file = match &*full_path
+                        .extension()
+                        .unwrap()
+                        .to_string_lossy()
+                    {
+                        "spirv" => base_file,
+                        #[cfg(feature = "glsl-to-spirv")]
+                        "vert" => transpile(base_file, glsl_to_spirv::ShaderType::Vertex),
+                        #[cfg(feature = "glsl-to-spirv")]
+                        "frag" => transpile(base_file, glsl_to_spirv::ShaderType::Fragment),
+                        #[cfg(feature = "glsl-to-spirv")]
+                        "comp" => transpile(base_file, glsl_to_spirv::ShaderType::Compute),
+                        other => panic!("Unknown shader extension: {}", other),
+                    };
+                    let mut spirv = Vec::new();
+                    file.read_to_end(&mut spirv).unwrap();
+                    let module = device.create_shader_module(&spirv)
+                        .unwrap();
+                    resources.shaders.insert(name.clone(), module);
+                }
+                raw::Resource::DescriptorSetLayout { ref bindings, ref immutable_samplers } => {
+                    assert!(immutable_samplers.is_empty()); //TODO! requires changing the order,
+                    // since samples are expect to be all read by this point
+                    let layout = device
+                        .create_descriptor_set_layout(bindings, &[])
+                        .expect("Descriptor set layout creation failure!");
+                    let binding_indices = bindings.iter().map(|dsb| dsb.binding).collect();
+                    resources.desc_set_layouts.insert(name.clone(), (binding_indices, layout));
+                }
+                raw::Resource::DescriptorPool { capacity, ref ranges } => {
+                    let pool = device
+                        .create_descriptor_pool(capacity, ranges)
+                        .expect("Descriptor pool creation failure!");
+                    resources.desc_pools.insert(name.clone(), pool);
+                }
+                _ => {}
+            }
+        }
+
+        // Pass[2]: image & buffer views, descriptor sets, pipeline layouts
+        for (name, resource) in &raw.resources {
+            match *resource {
+                raw::Resource::ImageView { ref image, kind, format, swizzle, ref range } => {
+                    let image = &resources.images[image].handle;
+                    let view = device.create_image_view(image, kind, format, swizzle, range.clone())
+                        .unwrap();
+                    resources.image_views.insert(name.clone(), view);
+                }
+                raw::Resource::DescriptorSet { ref pool, ref layout, ref data } => {
+                    // create a descriptor set
+                    let (ref binding_indices, ref set_layout) = resources.desc_set_layouts[layout];
+                    let desc_set = resources.desc_pools
+                        .get_mut(pool)
+                        .expect(&format!("Missing descriptor pool: {}", pool))
+                        .allocate_set(set_layout)
+                        .expect(&format!("Failed to allocate set with layout: {:?}", set_layout));
+                    resources.desc_sets.insert(name.clone(), desc_set);
+                    // fill it up
+                    let set = &resources.desc_sets[name];
+                    let writes = binding_indices
+                        .iter()
+                        .zip(data)
+                        .map(|(&binding, range)| hal::pso::DescriptorSetWrite {
+                            set,
+                            binding,
+                            array_offset: 0,
+                            descriptors: match *range {
+                                raw::DescriptorRange::Buffers(ref names) => {
+                                    names
+                                        .iter()
+                                        .map(|s| {
+                                            let buf = resources.buffers
+                                                .get(s)
+                                                .expect(&format!("Missing buffer: {}", s));
+                                            hal::pso::Descriptor::Buffer(&buf.handle, None .. None)
+                                        })
+                                }
+                                raw::DescriptorRange::Images(_) => {
+                                    unimplemented!()
+                                }
+                            },
+                        });
+                    device.write_descriptor_sets(writes);
+                }
+                raw::Resource::PipelineLayout { ref set_layouts, ref push_constant_ranges } => {
+                    let layout = {
+                        let layouts = set_layouts
+                            .iter()
+                            .map(|sl| &resources.desc_set_layouts[sl].1);
+                        device
+                        	.create_pipeline_layout(layouts, push_constant_ranges)
+                        	.unwrap()
+                    };
+                    resources.pipeline_layouts.insert(name.clone(), layout);
+                }
+                _ => {}
+            }
+        }
+
+        // Pass[3]: framebuffers and pipelines
+        for (name, resource) in &raw.resources {
+            match *resource {
+                raw::Resource::Framebuffer { ref pass, ref views, extent } => {
+                    let rp = &resources.render_passes[pass];
+                    let framebuffer = {
+                        let image_views = rp.attachments
+                            .iter()
+                            .map(|s| {
+                                let entry = views
+                                    .iter()
+                                    .find(|entry| entry.0 == s)
+                                    .unwrap();
+                                &resources.image_views[entry.1]
+                            });
+                        device.create_framebuffer(&rp.handle, image_views, extent)
+                            .unwrap()
+                    };
+                    resources.framebuffers.insert(name.clone(), (framebuffer, extent));
+                }
+                raw::Resource::GraphicsPipeline {
+                    ref shaders, ref rasterizer, ref vertex_buffers, ref attributes,
+                    ref input_assembler, ref blender, depth_stencil, ref layout, ref subpass,
+                } => {
+                    let reshaders = &resources.shaders;
+                    let entry = |shader: &String| -> Option<pso::EntryPoint<B>> {
+                        if shader.is_empty() {
+                            None
+                        } else {
+                            Some(pso::EntryPoint {
                                 entry: "main",
-                                module: resources.shaders
+                                module: reshaders
                                     .get(shader)
-                                    .expect(&format!("Missing compute shader: {}", shader)),
+                                    .expect(&format!("Missing shader: {}", shader)),
+                                specialization: pso::Specialization::default(),
+                            })
+                        }
+                    };
+                    let desc = pso::GraphicsPipelineDesc {
+                        shaders: pso::GraphicsShaderSet {
+                            vertex: pso::EntryPoint {
+                                entry: "main",
+                                module: reshaders
+                                    .get(&shaders.vertex)
+                                    .expect(&format!("Missing vertex shader: {}", shaders.vertex)),
                                 specialization: pso::Specialization::default(),
                             },
-                            layout: resources.pipeline_layouts
-                                .get(layout)
-                                .expect(&format!("Missing pipeline layout: {}", layout)),
-                            flags: pso::PipelineCreationFlags::empty(),
-                            parent: pso::BasePipeline::None,
-                        };
-                        let pso = device.create_compute_pipelines(&[desc], None)
-                            .swap_remove(0)
-                            .unwrap();
-                        resources.compute_pipelines.insert(name.clone(), (layout.clone(), pso));
-                    }
-                    _ => {}
+                            hull: entry(&shaders.hull),
+                            domain: entry(&shaders.domain),
+                            geometry: entry(&shaders.geometry),
+                            fragment: entry(&shaders.fragment),
+                        },
+                        rasterizer: rasterizer.clone(),
+                        vertex_buffers: vertex_buffers.clone(),
+                        attributes: attributes.clone(),
+                        input_assembler: input_assembler.clone(),
+                        blender: blender.clone(),
+                        depth_stencil: depth_stencil.clone(),
+                        baked_states: pso::BakedStates::default(), //TODO
+                        multisampling: None, // TODO
+                        layout: &resources.pipeline_layouts[layout],
+                        subpass: hal::pass::Subpass {
+                            main_pass: &resources.render_passes[&subpass.parent].handle,
+                            index: subpass.index,
+                        },
+                        flags: pso::PipelineCreationFlags::empty(),
+                        parent: pso::BasePipeline::None,
+                    };
+                    let pso = device.create_graphics_pipelines(&[desc], None)
+                        .swap_remove(0)
+                        .unwrap();
+                    resources.graphics_pipelines.insert(name.clone(), pso);
                 }
+                raw::Resource::ComputePipeline { ref shader, ref layout } => {
+                    let desc = pso::ComputePipelineDesc {
+                        shader: pso::EntryPoint {
+                            entry: "main",
+                            module: resources.shaders
+                                .get(shader)
+                                .expect(&format!("Missing compute shader: {}", shader)),
+                            specialization: pso::Specialization::default(),
+                        },
+                        layout: resources.pipeline_layouts
+                            .get(layout)
+                            .expect(&format!("Missing pipeline layout: {}", layout)),
+                        flags: pso::PipelineCreationFlags::empty(),
+                        parent: pso::BasePipeline::None,
+                    };
+                    let pso = device.create_compute_pipelines(&[desc], None)
+                        .swap_remove(0)
+                        .unwrap();
+                    resources.compute_pipelines.insert(name.clone(), (layout.clone(), pso));
+                }
+                _ => {}
             }
+        }
 
-            init_cmd.finish()
-        };
+        init_cmd.finish();
 
         // fill up command buffers
         let mut jobs = HashMap::new();
         for (name, job) in &raw.jobs {
             use raw::TransferCommand as Tc;
-            let mut command_buf = command_pool.acquire_command_buffer(false);
+            let mut command_buf = command_pool.acquire_command_buffer::<c::MultiShot>();
+            command_buf.begin(false);
             match *job {
                 raw::Job::Transfer(ref command) => match *command {
                     Tc::CopyBuffer { ref src, ref dst, ref regions } => {
@@ -1018,8 +1001,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 }
             }
 
+            command_buf.finish();
             jobs.insert(name.clone(), Job {
-                submission: command_buf.finish(),
+                submission: command_buf,
             });
         }
 
@@ -1027,7 +1011,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         Ok(Scene {
             resources,
             jobs,
-            init_submit,
+            init_submit: init_cmd,
             device,
             queue_group,
             command_pool: Some(command_pool),
@@ -1053,10 +1037,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     .submission
             });
 
-        let submission = hal::queue::Submission::new()
-            .submit(Some(&self.init_submit))
-            .submit(submits);
-        self.queue_group.queues[0].submit(submission, None);
+        let command_buffers = iter::once(&self.init_submit).chain(submits);
+        self.queue_group.queues[0].submit_nosemaphores(command_buffers, None);
     }
 
     pub fn fetch_buffer(&mut self, name: &str) -> FetchGuard<B> {
@@ -1076,19 +1058,17 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let down_buffer = self.device.bind_buffer_memory(&down_memory, 0, unbound_buffer)
             .unwrap();
 
-        let mut command_pool = self.device.create_command_pool_typed(
-            &self.queue_group,
-            hal::pool::CommandPoolCreateFlags::empty(),
-            1,
-        ).expect("Can't create command pool");
-        let copy_submit = {
-            let mut cmd_buffer = command_pool.acquire_command_buffer(false);
-            let pre_barrier = memory::Barrier::Buffer {
-                states: buffer.stable_state .. b::Access::TRANSFER_READ,
-                families: None,
-                target: &buffer.handle,
-                range: None .. None,
-            };
+        let mut command_pool = self.device
+	        .create_command_pool_typed(
+	            &self.queue_group,
+	            hal::pool::CommandPoolCreateFlags::empty(),
+	        )
+	        .expect("Can't create command pool");
+        let mut cmd_buffer = command_pool.acquire_command_buffer::<c::OneShot>();
+        {
+            cmd_buffer.begin();
+            let pre_barrier = memory::Barrier::whole_buffer(&buffer.handle,
+                buffer.stable_state .. b::Access::TRANSFER_READ);
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                 memory::Dependencies::empty(),
@@ -1106,24 +1086,20 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 &[copy],
             );
 
-            let post_barrier = memory::Barrier::Buffer {
-                states: b::Access::TRANSFER_READ .. buffer.stable_state,
-                families: None,
-                target: &buffer.handle,
-                range: None .. None,
-            };
+            let post_barrier = memory::Barrier::whole_buffer(&buffer.handle,
+                b::Access::TRANSFER_READ .. buffer.stable_state);
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                 memory::Dependencies::empty(),
                 &[post_barrier],
             );
             cmd_buffer.finish()
-        };
+        }
 
-        let copy_fence = self.device.create_fence(false).expect("Can't create copy-fence");
-        let submission = hal::queue::Submission::new()
-            .submit(Some(copy_submit));
-        self.queue_group.queues[0].submit(submission, Some(&copy_fence));
+        let copy_fence = self.device
+        	.create_fence(false)
+        	.expect("Can't create copy-fence");
+        self.queue_group.queues[0].submit_nosemaphores(iter::once(&cmd_buffer), Some(&copy_fence));
         self.device.wait_for_fence(&copy_fence, !0).unwrap();
         self.device.destroy_fence(copy_fence);
         self.device.destroy_command_pool(command_pool.into_raw());
@@ -1174,13 +1150,15 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let down_buffer = self.device.bind_buffer_memory(&down_memory, 0, unbound_buffer)
             .unwrap();
 
-        let mut command_pool = self.device.create_command_pool_typed(
-            &self.queue_group,
-            hal::pool::CommandPoolCreateFlags::empty(),
-            1,
-        ).expect("Can't create command pool");
-        let copy_submit = {
-            let mut cmd_buffer = command_pool.acquire_command_buffer(false);
+        let mut command_pool = self.device
+        	.create_command_pool_typed(
+	            &self.queue_group,
+	            hal::pool::CommandPoolCreateFlags::empty(),
+	        )
+	        .expect("Can't create command pool");
+        let mut cmd_buffer = command_pool.acquire_command_buffer::<c::OneShot>();
+        {
+            cmd_buffer.begin();
             let pre_barrier = memory::Barrier::Image {
                 states: image.stable_state .. (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
                 target: &image.handle,
@@ -1227,13 +1205,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 memory::Dependencies::empty(),
                 &[post_barrier],
             );
-            cmd_buffer.finish()
-        };
+            cmd_buffer.finish();
+        }
 
-        let copy_fence = self.device.create_fence(false).expect("Can't create copy-fence");
-        let submission = hal::queue::Submission::new()
-            .submit(Some(copy_submit));
-        self.queue_group.queues[0].submit(submission, Some(&copy_fence));
+        let copy_fence = self.device
+        	.create_fence(false)
+        	.expect("Can't create copy-fence");
+        self.queue_group.queues[0].submit_nosemaphores(iter::once(&cmd_buffer), Some(&copy_fence));
         self.device.wait_for_fence(&copy_fence, !0).unwrap();
         self.device.destroy_fence(copy_fence);
         self.device.destroy_command_pool(command_pool.into_raw());

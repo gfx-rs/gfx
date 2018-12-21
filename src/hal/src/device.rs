@@ -203,12 +203,9 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         &self,
         group: &QueueGroup<B, C>,
         flags: CommandPoolCreateFlags,
-        max_buffers: usize,
     ) -> Result<CommandPool<B, C>, OutOfMemory> {
         let raw = self.create_command_pool(group.family(), flags)?;
-        let mut pool = unsafe { CommandPool::new(raw) };
-        pool.reserve(max_buffers);
-        Ok(pool)
+        Ok(unsafe { CommandPool::new(raw) })
     }
 
     /// Destroy a command pool.

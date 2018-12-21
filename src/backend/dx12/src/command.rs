@@ -2485,12 +2485,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         Self::push_constants(&mut self.comp_pipeline.user_data, layout, offset, constants);
     }
 
-    fn execute_commands<I>(&mut self, buffers: I)
+    fn execute_commands<'a, T, I>(&mut self, cmd_buffers: I)
     where
-        I: IntoIterator,
-        I::Item: Borrow<CommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
+        I: IntoIterator<Item = &'a T>,
     {
-        for _cmd_buf in buffers {
+        for _cmd_buf in cmd_buffers {
             error!("TODO: execute_commands");
         }
     }

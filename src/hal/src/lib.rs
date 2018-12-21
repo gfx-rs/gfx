@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+#![deny(missing_docs, unused)]
 
 //! Low-level graphics abstraction for Rust. Mostly operates on data, not types.
 //! Designed for use by libraries and higher-level abstractions only.
@@ -7,7 +7,6 @@
 extern crate bitflags;
 #[macro_use]
 extern crate failure;
-extern crate smallvec;
 extern crate fxhash;
 
 #[cfg(feature = "mint")]
