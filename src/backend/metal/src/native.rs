@@ -12,7 +12,7 @@ use std::sync::Arc;
 use hal::{buffer, image, pso};
 use hal::{DescriptorPool as HalDescriptorPool, MemoryTypeId};
 use hal::backend::FastHashMap;
-use hal::format::{Format, FormatDesc};
+use hal::format::FormatDesc;
 use hal::pass::{Attachment, AttachmentId};
 use hal::range::RangeArg;
 
@@ -294,6 +294,12 @@ unsafe impl Sync for ComputePipeline {}
 
 #[derive(Debug)]
 pub enum ImageLike {
+    /// This image has not yet been bound to memory.
+    Unbound {
+        descriptor: metal::TextureDescriptor,
+        mip_sizes: Vec<buffer::Offset>,
+        host_visible: bool,
+    },
     /// This is a linearly tiled HOST-visible image, which is represented by a buffer.
     Buffer(Buffer),
     /// This is a regular image represented by a texture.
@@ -303,7 +309,8 @@ pub enum ImageLike {
 impl ImageLike {
     pub fn as_texture(&self) -> &metal::TextureRef {
         match *self {
-            ImageLike::Buffer(..) => panic!("Unexpected buffer-backed image"),
+            ImageLike::Unbound { .. } |
+            ImageLike::Buffer(..) => panic!("Expected bound image!"),
             ImageLike::Texture(ref tex) => tex,
         }
     }
@@ -400,14 +407,30 @@ pub struct Semaphore {
 }
 
 #[derive(Debug)]
-pub struct Buffer {
-    pub(crate) raw: metal::Buffer,
-    pub(crate) range: Range<u64>,
-    pub(crate) options: metal::MTLResourceOptions,
+pub enum Buffer {
+    Unbound {
+        size: u64,
+        usage: buffer::Usage,
+    },
+    Bound {
+        raw: metal::Buffer,
+        range: Range<u64>,
+        options: metal::MTLResourceOptions,
+    },
 }
 
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
+
+impl Buffer {
+    //TODO: consider returning `AsNative`?
+    pub fn as_bound(&self) -> (&metal::BufferRef, &Range<u64>) {
+        match *self {
+            Buffer::Unbound { .. } => panic!("Expected bound buffer!"),
+            Buffer::Bound { ref raw, ref range, .. } => (raw, range),
+        }
+    }
+}
 
 
 #[derive(Debug)]
@@ -774,25 +797,6 @@ pub(crate) enum MemoryHeap {
     Public(MemoryTypeId, metal::Buffer),
     Native(metal::Heap),
 }
-
-#[derive(Debug)]
-pub struct UnboundBuffer {
-    pub(crate) size: u64,
-    pub(crate) usage: buffer::Usage,
-}
-unsafe impl Send for UnboundBuffer {}
-unsafe impl Sync for UnboundBuffer {}
-
-#[derive(Debug)]
-pub struct UnboundImage {
-    pub(crate) texture_desc: metal::TextureDescriptor,
-    pub(crate) format: Format,
-    pub(crate) kind: image::Kind,
-    pub(crate) mip_sizes: Vec<u64>,
-    pub(crate) host_visible: bool,
-}
-unsafe impl Send for UnboundImage {}
-unsafe impl Sync for UnboundImage {}
 
 #[derive(Debug)]
 pub enum QueryPool {
