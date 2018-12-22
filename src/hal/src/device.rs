@@ -376,22 +376,21 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         &self,
         size: u64,
         usage: buffer::Usage,
-    ) -> Result<B::UnboundBuffer, buffer::CreationError>;
+    ) -> Result<B::Buffer, buffer::CreationError>;
 
-    /// Get memory requirements for the unbound buffer
-    fn get_buffer_requirements(&self, buf: &B::UnboundBuffer) -> Requirements;
+    /// Get memory requirements for the buffer
+    fn get_buffer_requirements(&self, buf: &B::Buffer) -> Requirements;
 
     /// Bind memory to a buffer.
     ///
-    /// The unbound buffer will be consumed because the binding is *immutable*.
     /// Be sure to check that there is enough memory available for the buffer.
     /// Use `get_buffer_requirements` to acquire the memory requirements.
     fn bind_buffer_memory(
         &self,
         memory: &B::Memory,
         offset: u64,
-        buf: B::UnboundBuffer,
-    ) -> Result<B::Buffer, BindError>;
+        buf: &mut B::Buffer,
+    ) -> Result<(), BindError>;
 
     /// Destroy a buffer.
     ///
@@ -419,10 +418,10 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         tiling: image::Tiling,
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
-    ) -> Result<B::UnboundImage, image::CreationError>;
+    ) -> Result<B::Image, image::CreationError>;
 
-    /// Get memory requirements for the unbound Image
-    fn get_image_requirements(&self, image: &B::UnboundImage) -> Requirements;
+    /// Get memory requirements for the Image
+    fn get_image_requirements(&self, image: &B::Image) -> Requirements;
 
     ///
     fn get_image_subresource_footprint(
@@ -436,8 +435,8 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         &self,
         memory: &B::Memory,
         offset: u64,
-        image: B::UnboundImage,
-    ) -> Result<B::Image, BindError>;
+        image: &mut B::Image,
+    ) -> Result<(), BindError>;
 
     /// Destroy an image.
     ///

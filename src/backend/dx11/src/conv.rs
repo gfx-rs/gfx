@@ -125,6 +125,16 @@ pub struct DecomposedDxgiFormat {
 }
 
 impl DecomposedDxgiFormat {
+    pub const UNKNOWN: DecomposedDxgiFormat = DecomposedDxgiFormat {
+        typeless: DXGI_FORMAT_UNKNOWN,
+        srv: None,
+        rtv: None,
+        uav: None,
+        dsv: None,
+        copy_uav: None,
+        copy_srv: None,
+    };
+
     // TODO: we probably want to pass in usage flags or similar to allow for our `typeless_format`
     //       field to only contain the input format (eg. depth only rather than typeless likely
     //       improves perf since the driver doesn't need to expose internals)

@@ -22,12 +22,6 @@ use {conv, native as n, result, window as w};
 use pool::RawCommandPool;
 
 
-#[derive(Debug)]
-pub struct UnboundBuffer(n::Buffer);
-
-#[derive(Debug)]
-pub struct UnboundImage(n::Image);
-
 impl Device {
     #[cfg(feature = "glsl-to-spirv")]
     pub fn create_shader_module_from_glsl(
@@ -990,7 +984,7 @@ impl d::Device<B> for Device {
     }
 
     ///
-    fn create_buffer(&self, size: u64, usage: buffer::Usage) -> Result<UnboundBuffer, buffer::CreationError> {
+    fn create_buffer(&self, size: u64, usage: buffer::Usage) -> Result<n::Buffer, buffer::CreationError> {
         let info = vk::BufferCreateInfo {
             s_type: vk::StructureType::BufferCreateInfo,
             p_next: ptr::null(),
@@ -1007,15 +1001,15 @@ impl d::Device<B> for Device {
         };
 
         match result {
-            Ok(raw) => Ok(UnboundBuffer(n::Buffer { raw })),
+            Ok(raw) => Ok(n::Buffer { raw }),
             Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
             _ => unreachable!(),
         }
     }
 
-    fn get_buffer_requirements(&self, buffer: &UnboundBuffer) -> Requirements {
-        let req = self.raw.0.get_buffer_memory_requirements((buffer.0).raw);
+    fn get_buffer_requirements(&self, buffer: &n::Buffer) -> Requirements {
+        let req = self.raw.0.get_buffer_memory_requirements(buffer.raw);
 
         Requirements {
             size: req.size,
@@ -1024,15 +1018,13 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn bind_buffer_memory(&self, memory: &n::Memory, offset: u64, buffer: UnboundBuffer) -> Result<n::Buffer, d::BindError> {
+    fn bind_buffer_memory(&self, memory: &n::Memory, offset: u64, buffer: &mut n::Buffer) -> Result<(), d::BindError> {
         let result = unsafe {
-            self.raw.0.bind_buffer_memory((buffer.0).raw, memory.raw, offset)
+            self.raw.0.bind_buffer_memory(buffer.raw, memory.raw, offset)
         };
 
         match result {
-            Ok(()) => Ok(n::Buffer {
-                raw: buffer.0.raw,
-            }),
+            Ok(()) => Ok(()),
             Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
             _ => unreachable!(),
@@ -1073,7 +1065,7 @@ impl d::Device<B> for Device {
         tiling: image::Tiling,
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
-    ) -> Result<UnboundImage, image::CreationError> {
+    ) -> Result<n::Image, image::CreationError> {
         let flags = conv::map_view_capabilities(view_caps);
         let extent = conv::map_extent(kind.extent());
         let array_layers = kind.num_layers();
@@ -1107,15 +1099,15 @@ impl d::Device<B> for Device {
         };
 
         match result {
-            Ok(raw) => Ok(UnboundImage(n::Image{ raw, ty: image_type, flags, extent })),
+            Ok(raw) => Ok(n::Image { raw, ty: image_type, flags, extent }),
             Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
             _ => unreachable!(),
         }
     }
 
-    fn get_image_requirements(&self, image: &UnboundImage) -> Requirements {
-        let req = self.raw.0.get_image_memory_requirements(image.0.raw);
+    fn get_image_requirements(&self, image: &n::Image) -> Requirements {
+        let req = self.raw.0.get_image_memory_requirements(image.raw);
 
         Requirements {
             size: req.size,
@@ -1138,15 +1130,15 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn bind_image_memory(&self, memory: &n::Memory, offset: u64, image: UnboundImage) -> Result<n::Image, d::BindError> {
+    fn bind_image_memory(&self, memory: &n::Memory, offset: u64, image: &mut n::Image) -> Result<(), d::BindError> {
         // TODO: error handling
         // TODO: check required type
         let result = unsafe {
-            self.raw.0.bind_image_memory(image.0.raw, memory.raw, offset)
+            self.raw.0.bind_image_memory(image.raw, memory.raw, offset)
         };
 
         match result {
-            Ok(()) => Ok(image.0),
+            Ok(()) => Ok(()),
             Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
             _ => unreachable!(),

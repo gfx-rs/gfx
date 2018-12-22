@@ -812,7 +812,7 @@ impl<B: Backend> BufferState<B> {
         T: Copy,
     {
         let memory: B::Memory;
-        let buffer: B::Buffer;
+        let mut buffer: B::Buffer;
         let size: u64;
 
         let stride = size_of::<T>() as u64;
@@ -821,8 +821,8 @@ impl<B: Backend> BufferState<B> {
         {
             let device = &device_ptr.borrow().device;
 
-            let unbound = device.create_buffer(upload_size, usage).unwrap();
-            let mem_req = device.get_buffer_requirements(&unbound);
+            buffer = device.create_buffer(upload_size, usage).unwrap();
+            let mem_req = device.get_buffer_requirements(&buffer);
 
             // A note about performance: Using CPU_VISIBLE memory is convenient because it can be
             // directly memory mapped and easily updated by the CPU, but it is very slow and so should
@@ -839,7 +839,7 @@ impl<B: Backend> BufferState<B> {
                 .into();
 
             memory = device.allocate_memory(upload_type, mem_req.size).unwrap();
-            buffer = device.bind_buffer_memory(&memory, 0, unbound).unwrap();
+            device.bind_buffer_memory(&memory, 0, &mut buffer).unwrap();
             size = mem_req.size;
 
             // TODO: check transitions: read/write mapping and vertex buffer read
@@ -894,12 +894,12 @@ impl<B: Backend> BufferState<B> {
         let upload_size = (height * row_pitch) as u64;
 
         let memory: B::Memory;
-        let buffer: B::Buffer;
+        let mut buffer: B::Buffer;
         let size: u64;
 
         {
-            let unbound = device.create_buffer(upload_size, usage).unwrap();
-            let mem_reqs = device.get_buffer_requirements(&unbound);
+            buffer = device.create_buffer(upload_size, usage).unwrap();
+            let mem_reqs = device.get_buffer_requirements(&buffer);
 
             let upload_type = adapter
                 .memory_types
@@ -912,7 +912,7 @@ impl<B: Backend> BufferState<B> {
                 .into();
 
             memory = device.allocate_memory(upload_type, mem_reqs.size).unwrap();
-            buffer = device.bind_buffer_memory(&memory, 0, unbound).unwrap();
+            device.bind_buffer_memory(&memory, 0, &mut buffer).unwrap();
             size = mem_reqs.size;
 
             // copy image data into staging buffer
@@ -1111,7 +1111,7 @@ impl<B: Backend> ImageState<B> {
         let device = &mut device_state.device;
 
         let kind = i::Kind::D2(dims.width as i::Size, dims.height as i::Size, 1, 1);
-        let unbound = device
+        let mut image = device
             .create_image(
                 kind,
                 1,
@@ -1120,7 +1120,7 @@ impl<B: Backend> ImageState<B> {
                 i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
                 i::ViewCapabilities::empty(),
             ).unwrap(); // TODO: usage
-        let req = device.get_image_requirements(&unbound);
+        let req = device.get_image_requirements(&image);
 
         let device_type = adapter
             .memory_types
@@ -1134,7 +1134,7 @@ impl<B: Backend> ImageState<B> {
 
         let memory = device.allocate_memory(device_type, req.size).unwrap();
 
-        let image = device.bind_image_memory(&memory, 0, unbound).unwrap();
+        device.bind_image_memory(&memory, 0, &mut image).unwrap();
         let image_view = device
             .create_image_view(
                 &image,

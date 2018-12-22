@@ -10,7 +10,7 @@ use gl::types::{GLint, GLenum, GLfloat};
 
 use hal::{self as c, device as d, error, image as i, memory, pass, pso, buffer, mapping, query};
 use hal::backend::FastHashMap;
-use hal::format::{ChannelType, Format, Swizzle};
+use hal::format::{Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::QueueFamilyId;
 use hal::range::RangeArg;
@@ -88,20 +88,6 @@ fn create_fbo_internal(share: &Starc<Share>) -> Option<gl::types::GLuint> {
     } else {
         None
     }
-}
-
-#[derive(Debug)]
-pub struct UnboundBuffer {
-    name: n::RawBuffer,
-    target: GLenum,
-    requirements: memory::Requirements,
-}
-
-#[derive(Debug)]
-pub struct UnboundImage {
-    image: n::ImageKind,
-    channel: ChannelType,
-    requirements: memory::Requirements,
 }
 
 /// GL device.
@@ -889,7 +875,7 @@ impl d::Device<B> for Device {
 
     fn create_buffer(
         &self, size: u64, usage: buffer::Usage,
-    ) -> Result<UnboundBuffer, buffer::CreationError> {
+    ) -> Result<n::Buffer, buffer::CreationError> {
         if !self.share.legacy_features.contains(LegacyFeatures::CONSTANT_BUFFER) &&
             usage.contains(buffer::Usage::UNIFORM) {
             return Err(buffer::CreationError::UnsupportedUsage { usage });
@@ -910,8 +896,8 @@ impl d::Device<B> for Device {
             gl.GenBuffers(1, &mut name);
         }
 
-        Ok(UnboundBuffer {
-            name,
+        Ok(n::Buffer {
+            raw: name,
             target,
             requirements: memory::Requirements {
                 size,
@@ -921,18 +907,18 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn get_buffer_requirements(&self, unbound: &UnboundBuffer) -> memory::Requirements {
-        unbound.requirements
+    fn get_buffer_requirements(&self, buffer: &n::Buffer) -> memory::Requirements {
+        buffer.requirements
     }
 
     fn bind_buffer_memory(
-        &self, memory: &n::Memory, offset: u64, unbound: UnboundBuffer,
-    ) -> Result<n::Buffer, d::BindError> {
+        &self, memory: &n::Memory, offset: u64, buffer: &mut n::Buffer,
+    ) -> Result<(), d::BindError> {
         let gl = &self.share.context;
-        let target = unbound.target;
+        let target = buffer.target;
 
         if offset == 0 {
-            memory.first_bound_buffer.set(unbound.name);
+            memory.first_bound_buffer.set(buffer.raw);
         } else {
             assert_ne!(0, memory.first_bound_buffer.get());
         }
@@ -945,9 +931,9 @@ impl d::Device<B> for Device {
             let flags = memory.map_flags();
             //TODO: use *Named calls to avoid binding
             unsafe {
-                gl.BindBuffer(target, unbound.name);
+                gl.BindBuffer(target, buffer.raw);
                 gl.BufferStorage(target,
-                    unbound.requirements.size as _,
+                    buffer.requirements.size as _,
                     ptr::null(),
                     flags,
                 );
@@ -965,9 +951,9 @@ impl d::Device<B> for Device {
                 gl::STATIC_DRAW
             };
             unsafe {
-                gl.BindBuffer(target, unbound.name);
+                gl.BindBuffer(target, buffer.raw);
                 gl.BufferData(target,
-                    unbound.requirements.size as _,
+                    buffer.requirements.size as _,
                     ptr::null(),
                     flags,
                 );
@@ -977,14 +963,10 @@ impl d::Device<B> for Device {
 
         if let Err(err) = self.share.check() {
             panic!("Error {:?} initializing buffer {:?}, memory {:?}",
-                err, unbound, memory.properties);
+                err, buffer, memory.properties);
         }
 
-        Ok(n::Buffer {
-            raw: unbound.name,
-            target,
-            size: unbound.requirements.size,
-        })
+        Ok(())
     }
 
     fn map_memory<R: RangeArg<u64>>(
@@ -1070,7 +1052,7 @@ impl d::Device<B> for Device {
         _tiling: i::Tiling,
         usage: i::Usage,
         _view_caps: i::ViewCapabilities,
-    ) -> Result<UnboundImage, i::CreationError> {
+    ) -> Result<n::Image, i::CreationError> {
         let gl = &self.share.context;
 
         let (int_format, iformat, itype) = match format {
@@ -1139,8 +1121,8 @@ impl d::Device<B> for Device {
                 err, kind, format);
         }
 
-        Ok(UnboundImage {
-            image,
+        Ok(n::Image {
+            kind: image,
             channel,
             requirements: memory::Requirements {
                 size,
@@ -1150,7 +1132,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn get_image_requirements(&self, unbound: &UnboundImage) -> memory::Requirements {
+    fn get_image_requirements(&self, unbound: &n::Image) -> memory::Requirements {
         unbound.requirements
     }
 
@@ -1161,12 +1143,9 @@ impl d::Device<B> for Device {
     }
 
     fn bind_image_memory(
-        &self, _memory: &n::Memory, _offset: u64, unbound: UnboundImage
-    ) -> Result<n::Image, d::BindError> {
-        Ok(n::Image {
-            kind: unbound.image,
-            channel: unbound.channel,
-        })
+        &self, _memory: &n::Memory, _offset: u64, _image: &mut n::Image
+    ) -> Result<(), d::BindError> {
+        Ok(())
     }
 
     fn create_image_view(
@@ -1241,7 +1220,7 @@ impl d::Device<B> for Device {
                 match descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
                         let start = range.start.unwrap_or(0);
-                        let end = range.end.unwrap_or(buffer.size);
+                        let end = range.end.unwrap_or(buffer.requirements.size);
                         let size = (end - start) as _;
 
                         bindings

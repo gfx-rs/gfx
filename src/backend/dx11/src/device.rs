@@ -24,7 +24,7 @@ use {
     Backend, Buffer, BufferView, CommandPool, ComputePipeline, DescriptorPool, DescriptorSetLayout,
     Fence, RawFence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer, InternalImage, Memory,
     PipelineLayout, QueryPool, RenderPass, Sampler, Semaphore, ShaderModule, Surface, Swapchain,
-    UnboundBuffer, UnboundImage, ViewInfo, PipelineBinding, Descriptor, MemoryHeapFlags, RegisterRemapping,
+    ViewInfo, PipelineBinding, Descriptor, MemoryHeapFlags, RegisterRemapping,
     RegisterMapping, SubpassDesc
 };
 
@@ -427,7 +427,7 @@ impl Device {
         let mut srv = ptr::null_mut();
         let hr = unsafe {
             self.raw.CreateShaderResourceView(
-                info.resource.as_raw(),
+                info.resource,
                 &desc,
                 &mut srv as *mut *mut _ as *mut *mut _
             )
@@ -494,7 +494,7 @@ impl Device {
         let mut uav = ptr::null_mut();
         let hr = unsafe {
             self.raw.CreateUnorderedAccessView(
-                info.resource.as_raw(),
+                info.resource,
                 &desc,
                 &mut uav as *mut *mut _ as *mut *mut _
             )
@@ -561,7 +561,7 @@ impl Device {
         let mut rtv = ptr::null_mut();
         let hr = unsafe {
             self.raw.CreateRenderTargetView(
-                info.resource.as_raw(),
+                info.resource,
                 &desc,
                 &mut rtv as *mut *mut _ as *mut *mut _
             )
@@ -591,7 +591,7 @@ impl Device {
         let mut dsv = ptr::null_mut();
         let hr = unsafe {
             self.raw.CreateDepthStencilView(
-                info.resource.as_raw(),
+                info.resource,
                 &desc,
                 &mut dsv as *mut *mut _ as *mut *mut _
             )
@@ -958,7 +958,7 @@ impl hal::Device<Backend> for Device {
         &self,
         size: u64,
         usage: buffer::Usage,
-    ) -> Result<UnboundBuffer, buffer::CreationError> {
+    ) -> Result<Buffer, buffer::CreationError> {
         use buffer::Usage;
 
         let mut bind = 0;
@@ -996,11 +996,22 @@ impl hal::Device<Backend> for Device {
             up_align(size, 4)
         };
 
-        Ok(UnboundBuffer {
-            usage,
+        Ok(Buffer {
+            internal: InternalBuffer {
+                raw: ptr::null_mut(),
+                disjoint_cb: if needs_disjoint_cb {
+                    Some(ptr::null_mut())
+                } else {
+                    None
+                },
+                srv: None,
+                uav: None,
+                usage,
+            },
+            ty: MemoryHeapFlags::empty(),
+            bound_range: 0..0,
+            host_ptr: ptr::null_mut(),
             bind,
-            size,
-            needs_disjoint_cb,
             requirements: memory::Requirements {
                 size,
                 alignment: 1,
@@ -1009,7 +1020,7 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn get_buffer_requirements(&self, buffer: &UnboundBuffer) -> memory::Requirements {
+    fn get_buffer_requirements(&self, buffer: &Buffer) -> memory::Requirements {
         buffer.requirements
     }
 
@@ -1017,12 +1028,12 @@ impl hal::Device<Backend> for Device {
         &self,
         memory: &Memory,
         offset: u64,
-        unbound_buffer: UnboundBuffer,
-    ) -> Result<Buffer, device::BindError> {
-        debug!("usage={:?}, props={:b}", unbound_buffer.usage, memory.properties);
+        buffer: &mut Buffer,
+    ) -> Result<(), device::BindError> {
+        debug!("usage={:?}, props={:b}", buffer.internal.usage, memory.properties);
 
         #[allow(non_snake_case)]
-        let MiscFlags = if unbound_buffer.bind & (d3d11::D3D11_BIND_SHADER_RESOURCE |
+        let MiscFlags = if buffer.bind & (d3d11::D3D11_BIND_SHADER_RESOURCE |
                                                   d3d11::D3D11_BIND_UNORDERED_ACCESS) != 0 {
             d3d11::D3D11_RESOURCE_MISC_BUFFER_ALLOW_RAW_VIEWS
         } else {
@@ -1039,12 +1050,12 @@ impl hal::Device<Backend> for Device {
             MemoryHeapFlags::DEVICE_LOCAL => {
                 // device local memory
                 let desc = d3d11::D3D11_BUFFER_DESC {
-                    ByteWidth: unbound_buffer.size as _,
+                    ByteWidth: buffer.requirements.size as _,
                     Usage: d3d11::D3D11_USAGE_DEFAULT,
-                    BindFlags: unbound_buffer.bind,
+                    BindFlags: buffer.requirements.size as _,
                     CPUAccessFlags: 0,
                     MiscFlags,
-                    StructureByteStride: if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
+                    StructureByteStride: if buffer.internal.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
                 };
 
                 let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
@@ -1068,13 +1079,13 @@ impl hal::Device<Backend> for Device {
             },
             MemoryHeapFlags::HOST_NONCOHERENT | MemoryHeapFlags::HOST_COHERENT => {
                 let desc = d3d11::D3D11_BUFFER_DESC {
-                    ByteWidth: unbound_buffer.size as _,
+                    ByteWidth: buffer.requirements.size as _,
                     // TODO: dynamic?
                     Usage: d3d11::D3D11_USAGE_DEFAULT,
-                    BindFlags: unbound_buffer.bind,
+                    BindFlags: buffer.bind,
                     CPUAccessFlags: 0,
                     MiscFlags,
-                    StructureByteStride: if unbound_buffer.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
+                    StructureByteStride: if buffer.internal.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
                 };
 
                 let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
@@ -1099,9 +1110,9 @@ impl hal::Device<Backend> for Device {
             _ => unimplemented!()
         };
 
-        let disjoint_cb = if unbound_buffer.needs_disjoint_cb {
+        let disjoint_cb = if buffer.internal.disjoint_cb.is_some() {
             let desc = d3d11::D3D11_BUFFER_DESC {
-                ByteWidth: unbound_buffer.size as _,
+                ByteWidth: buffer.requirements.size as _,
                 Usage: d3d11::D3D11_USAGE_DEFAULT,
                 BindFlags: d3d11::D3D11_BIND_CONSTANT_BUFFER,
                 CPUAccessFlags: 0,
@@ -1131,7 +1142,7 @@ impl hal::Device<Backend> for Device {
             None
         };
 
-        let srv = if unbound_buffer.bind & d3d11::D3D11_BIND_SHADER_RESOURCE != 0 {
+        let srv = if buffer.bind & d3d11::D3D11_BIND_SHADER_RESOURCE != 0 {
             let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC>() };
             desc.Format = dxgiformat::DXGI_FORMAT_R32_TYPELESS;
             desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_BUFFEREX;
@@ -1139,7 +1150,7 @@ impl hal::Device<Backend> for Device {
                 *desc.u.BufferEx_mut() = d3d11::D3D11_BUFFEREX_SRV {
                     FirstElement: 0,
                     // TODO: enforce alignment through HAL limits
-                    NumElements: unbound_buffer.size as u32 / 4,
+                    NumElements: buffer.requirements.size as u32 / 4,
                     Flags: d3d11::D3D11_BUFFEREX_SRV_FLAG_RAW,
                 };
             };
@@ -1164,14 +1175,14 @@ impl hal::Device<Backend> for Device {
             None
         };
 
-        let uav = if unbound_buffer.bind & d3d11::D3D11_BIND_UNORDERED_ACCESS != 0 {
+        let uav = if buffer.bind & d3d11::D3D11_BIND_UNORDERED_ACCESS != 0 {
             let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC>() };
             desc.Format = dxgiformat::DXGI_FORMAT_R32_TYPELESS;
             desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_BUFFER;
             unsafe {
                 *desc.u.Buffer_mut() = d3d11::D3D11_BUFFER_UAV {
                     FirstElement: 0,
-                    NumElements: unbound_buffer.size as u32 / 4,
+                    NumElements: buffer.requirements.size as u32 / 4,
                     Flags: d3d11::D3D11_BUFFER_UAV_FLAG_RAW
                 };
             };
@@ -1196,16 +1207,16 @@ impl hal::Device<Backend> for Device {
             None
         };
 
-        let buffer = InternalBuffer {
+        let internal = InternalBuffer {
             raw: raw.into_raw(),
             disjoint_cb,
             srv,
             uav,
-            usage: unbound_buffer.usage,
+            usage: buffer.internal.usage,
         };
-        let range = offset..unbound_buffer.size;
+        let range = offset..buffer.requirements.size;
 
-        memory.bind_buffer(range.clone(), buffer.clone());
+        memory.bind_buffer(range.clone(), internal.clone());
 
         let host_ptr = if let Some(vec) = &memory.host_visible {
             vec.borrow().as_ptr() as *mut _
@@ -1213,13 +1224,12 @@ impl hal::Device<Backend> for Device {
             ptr::null_mut()
         };
 
-        Ok(Buffer {
-            internal: buffer,
-            ty: memory.ty,
-            host_ptr,
-            bound_range: range,
-            size: unbound_buffer.size
-        })
+        buffer.internal = internal;
+        buffer.ty = memory.ty;
+        buffer.host_ptr = host_ptr;
+        buffer.bound_range = range;
+
+        Ok(())
     }
 
     fn create_buffer_view<R: RangeArg<u64>>(
@@ -1239,7 +1249,7 @@ impl hal::Device<Backend> for Device {
         tiling: image::Tiling,
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
-    ) -> Result<UnboundImage, image::CreationError> {
+    ) -> Result<Image, image::CreationError> {
         use image::Usage;
         //
         // TODO: create desc
@@ -1274,12 +1284,21 @@ impl hal::Device<Backend> for Device {
 
         debug!("{:b}", bind);
 
-        Ok(UnboundImage {
+        Ok(Image {
+            internal: InternalImage {
+                raw: ptr::null_mut(),
+                copy_srv: None,
+                srv: None,
+                unordered_access_views: Vec::new(),
+                depth_stencil_views: Vec::new(),
+                render_target_views: Vec::new(),
+            },
+            decomposed_format: conv::DecomposedDxgiFormat::UNKNOWN,
             kind,
             mip_levels,
             format,
-            tiling,
             usage,
+            tiling,
             view_caps,
             bind,
             requirements: memory::Requirements {
@@ -1290,7 +1309,7 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn get_image_requirements(&self, image: &UnboundImage) -> memory::Requirements {
+    fn get_image_requirements(&self, image: &Image) -> memory::Requirements {
         image.requirements
     }
 
@@ -1304,8 +1323,8 @@ impl hal::Device<Backend> for Device {
         &self,
         memory: &Memory,
         offset: u64,
-        image: UnboundImage,
-    ) -> Result<Image, device::BindError> {
+        image: &mut Image,
+    ) -> Result<(), device::BindError> {
         use memory::Properties;
         use image::Usage;
 
@@ -1368,7 +1387,7 @@ impl hal::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                (image::ViewKind::D1Array, unsafe { ComPtr::<d3d11::ID3D11Resource>::from_raw(resource) })
+                (image::ViewKind::D1Array, resource)
             },
             image::Kind::D2(width, height, layers, _) => {
                 let mut initial_datas = Vec::new();
@@ -1425,7 +1444,7 @@ impl hal::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                (image::ViewKind::D2Array, unsafe { ComPtr::from_raw(resource) })
+                (image::ViewKind::D2Array, resource)
             },
             image::Kind::D3(width, height, depth) => {
                 let initial_data = memory.host_visible.as_ref().map(|_p| d3d11::D3D11_SUBRESOURCE_DATA {
@@ -1465,7 +1484,7 @@ impl hal::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                (image::ViewKind::D3, unsafe { ComPtr::from_raw(resource) })
+                (image::ViewKind::D3, resource)
             },
         };
 
@@ -1474,7 +1493,7 @@ impl hal::Device<Backend> for Device {
         if image.usage.contains(Usage::TRANSFER_DST) && !compressed && !depth {
             for mip in 0..image.mip_levels {
                 let view = ViewInfo {
-                    resource: resource.clone(),
+                    resource: resource,
                     kind: image.kind,
                     caps: image::ViewCapabilities::empty(),
                     view_kind,
@@ -1497,7 +1516,7 @@ impl hal::Device<Backend> for Device {
 
         let (copy_srv, srv) = if image.usage.contains(image::Usage::TRANSFER_SRC) {
             let mut view = ViewInfo {
-                resource: resource.clone(),
+                resource: resource,
                 kind: image.kind,
                 caps: image::ViewCapabilities::empty(),
                 view_kind,
@@ -1536,7 +1555,7 @@ impl hal::Device<Backend> for Device {
             for layer in 0..image.kind.num_layers() {
                 for mip in 0..image.mip_levels {
                     let view = ViewInfo {
-                        resource: resource.clone(),
+                        resource: resource,
                         kind: image.kind,
                         caps: image::ViewCapabilities::empty(),
                         view_kind,
@@ -1559,7 +1578,7 @@ impl hal::Device<Backend> for Device {
             for layer in 0..image.kind.num_layers() {
                 for mip in 0..image.mip_levels {
                     let view = ViewInfo {
-                        resource: resource.clone(),
+                        resource: resource,
                         kind: image.kind,
                         caps: image::ViewCapabilities::empty(),
                         view_kind: image::ViewKind::D2,
@@ -1580,7 +1599,7 @@ impl hal::Device<Backend> for Device {
         }
 
         let internal = InternalImage {
-            raw: resource.clone(),
+            raw: resource,
             copy_srv,
             srv,
             unordered_access_views,
@@ -1588,16 +1607,10 @@ impl hal::Device<Backend> for Device {
             render_target_views,
         };
 
-        Ok(Image {
-            kind: image.kind,
-            usage: image.usage,
-            format: image.format,
-            decomposed_format: decomposed,
-            view_caps: image.view_caps,
-            num_levels: image.kind.num_levels(),
-            num_mips: image.mip_levels as _,
-            internal,
-        })
+        image.decomposed_format = decomposed;
+        image.internal = internal;
+
+        Ok(())
     }
 
     fn create_image_view(
@@ -1609,7 +1622,7 @@ impl hal::Device<Backend> for Device {
         range: image::SubresourceRange,
     ) -> Result<ImageView, image::ViewError> {
         let info = ViewInfo {
-            resource: image.internal.raw.clone(),
+            resource: image.internal.raw,
             kind: image.kind,
             caps: image.view_caps,
             view_kind,
@@ -1619,7 +1632,7 @@ impl hal::Device<Backend> for Device {
         };
 
         let srv_info = ViewInfo {
-            resource: image.internal.raw.clone(),
+            resource: image.internal.raw,
             kind: image.kind,
             caps: image.view_caps,
             view_kind,
@@ -2255,14 +2268,13 @@ impl hal::Device<Backend> for Device {
                 )
             };
             assert_eq!(hr, winerror::S_OK);
-
-            unsafe { ComPtr::from_raw(resource) }
+            resource
         };
 
         let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
 
         let mut view_info = ViewInfo {
-            resource: resource.clone(),
+            resource: resource,
             kind,
             caps: image::ViewCapabilities::empty(),
             view_kind: image::ViewKind::D2,
@@ -2286,7 +2298,7 @@ impl hal::Device<Backend> for Device {
             // only get write access to the first buffer in the case of `_SEQUENTIAL` flip model,
             // and read access to the rest
             let internal = InternalImage {
-                raw: resource.clone(),
+                raw: resource,
                 copy_srv: Some(copy_srv.clone()),
                 srv: None,
                 unordered_access_views: Vec::new(),
@@ -2301,9 +2313,15 @@ impl hal::Device<Backend> for Device {
                 view_caps: image::ViewCapabilities::empty(),
                 // NOTE: not the actual format of the backbuffer(s)
                 decomposed_format: decomposed.clone(),
-                num_levels: 1,
-                num_mips: 1,
-                internal
+                mip_levels: 1,
+                internal,
+                bind: 0, // TODO: ?
+                requirements: memory::Requirements { // values don't really matter
+                    size: 1,
+                    alignment: 1,
+                    type_mask: MemoryHeapFlags::DEVICE_LOCAL.bits(),
+                },
+                tiling: image::Tiling::Optimal,
             }
         }).collect();
 

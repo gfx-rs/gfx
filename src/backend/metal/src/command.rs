@@ -2004,25 +2004,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) where
         R: RangeArg<buffer::Offset>,
     {
+        let (raw, base_range) = buffer.as_bound();
         let mut inner = self.inner.borrow_mut();
 
-        let start = *range.start().unwrap_or(&0);
+        let start = base_range.start + *range.start().unwrap_or(&0);
         assert_eq!(start % WORD_ALIGNMENT, 0);
 
         let end = match range.end() {
-            Some(e) => {
+            Some(&e) => {
                 assert_eq!(e % WORD_ALIGNMENT, 0);
-                *e
+                base_range.start + e
             },
-            None => {
-                let len = buffer.raw.length();
-                len - len % WORD_ALIGNMENT
-            },
+            None => base_range.end,
         };
 
         if (data & 0xFF) * 0x1010101 == data {
             let command = soft::BlitCommand::FillBuffer {
-                dst: AsNative::from(buffer.raw.as_ref()),
+                dst: AsNative::from(raw),
                 range: start .. end,
                 value: data as u8,
             };
@@ -2051,7 +2049,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 soft::ComputeCommand::BindPipeline(pso),
                 soft::ComputeCommand::BindBuffer {
                     index: 0,
-                    buffer: AsNative::from(buffer.raw.as_ref()),
+                    buffer: AsNative::from(raw),
                     offset: start,
                 },
                 soft::ComputeCommand::BindBufferData {
@@ -2074,6 +2072,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         offset: buffer::Offset,
         data: &[u8],
     ) {
+        let (dst_raw, dst_range) = dst.as_bound();
+        assert!(dst_range.start + offset + data.len() as buffer::Offset <= dst_range.end);
+
         let src = self.shared.device
             .lock()
             .new_buffer_with_data(
@@ -2087,10 +2088,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         {
             let command = soft::BlitCommand::CopyBuffer {
                 src: AsNative::from(src.as_ref()),
-                dst: AsNative::from(dst.raw.as_ref()),
+                dst: AsNative::from(dst_raw),
                 region: com::BufferCopy {
                     src: 0,
-                    dst: offset,
+                    dst: dst_range.start + offset,
                     size: data.len() as _,
                 },
             };
@@ -2677,10 +2678,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
-        let buffer = view.buffer.raw.clone();
+        let (raw, range) = view.buffer.as_bound();
+        assert!(range.start + view.offset < range.end); // conservative
         self.state.index_buffer = Some(IndexBuffer {
-            buffer: AsNative::from(buffer.as_ref()),
-            offset: view.offset as _,
+            buffer: AsNative::from(raw),
+            offset: (range.start + view.offset) as _,
             stride: match view.index_type {
                 IndexType::U16 => 2,
                 IndexType::U32 => 4,
@@ -2699,9 +2701,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
         for (i, (buffer, offset)) in buffers.into_iter().enumerate() {
             let b = buffer.borrow();
-            let buffer_ptr = AsNative::from(b.raw.as_ref());
+            let (raw, range) = b.as_bound();
+            let buffer_ptr = AsNative::from(raw);
             let index = first_binding as usize + i;
-            let value = Some((buffer_ptr, b.range.start + offset));
+            let value = Some((buffer_ptr, range.start + offset));
             if index >= self.state.vertex_buffers.len() {
                 debug_assert_eq!(index, self.state.vertex_buffers.len());
                 self.state.vertex_buffers.push(value);
@@ -3338,10 +3341,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             pre.issue_many(self.state.make_compute_commands());
         }
 
+        let (raw, range) = buffer.as_bound();
+        assert!(range.start + offset < range.end);
+
         pre.issue(soft::ComputeCommand::DispatchIndirect {
             wg_size: self.state.work_group_size,
-            buffer: AsNative::from(buffer.raw.as_ref()),
-            offset,
+            buffer: AsNative::from(raw),
+            offset: range.start + offset,
         });
     }
 
@@ -3361,6 +3367,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             depth: 1,
         };
 
+        let (src_raw, src_range) = src.as_bound();
+        let (dst_raw, dst_range) = dst.as_bound();
+
         let mut compute_datas = Vec::new();
         let mut inner = self.inner.borrow_mut();
         let mut blit_commands = Vec::new();
@@ -3375,11 +3384,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 r.dst % WORD_SIZE as u64 == 0
             {
                 blit_commands.push(soft::BlitCommand::CopyBuffer {
-                    src: AsNative::from(src.raw.as_ref()),
-                    dst: AsNative::from(dst.raw.as_ref()),
+                    src: AsNative::from(src_raw),
+                    dst: AsNative::from(dst_raw),
                     region: com::BufferCopy {
-                        src: r.src + src.range.start,
-                        dst: r.dst + dst.range.start,
+                        src: r.src + src_range.start,
+                        dst: r.dst + dst_range.start,
                         size: r.size,
                     },
                 });
@@ -3400,13 +3409,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 0,
-                    buffer: AsNative::from(dst.raw.as_ref()),
-                    offset: dst_aligned + dst.range.start,
+                    buffer: AsNative::from(dst_raw),
+                    offset: dst_aligned + dst_range.start,
                 });
                 compute_commands.push(soft::ComputeCommand::BindBuffer {
                     index: 1,
-                    buffer: AsNative::from(src.raw.as_ref()),
-                    offset: src_aligned + src.range.start,
+                    buffer: AsNative::from(src_raw),
+                    offset: src_aligned + src_range.start,
                 });
                 compute_commands.push(soft::ComputeCommand::BindBufferData {
                     index: 2,
@@ -3444,6 +3453,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::ImageCopy>,
     {
         match (&src.like, &dst.like) {
+            (&native::ImageLike::Unbound { .. }, _) |
+            (_, &native::ImageLike::Unbound { .. }) => {
+                panic!("Unexpected Image::Unbound");
+            }
             (&native::ImageLike::Texture(ref src_raw), &native::ImageLike::Texture(ref dst_raw)) => {
                 let CommandBufferInner {
                     ref mut retained_textures,
@@ -3530,18 +3543,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::BufferImageCopy>,
     {
         match dst.like {
+            native::ImageLike::Unbound { .. } => {
+                panic!("Unexpected Image::Unbound");
+            }
             native::ImageLike::Texture(ref dst_raw) => {
+                let (src_raw, src_range) = src.as_bound();
                 let commands = regions.into_iter().filter_map(|region| {
                     let r = region.borrow();
                     if r.image_extent.is_empty() {
                         None
                     } else {
                         Some(soft::BlitCommand::CopyBufferToImage {
-                            src: AsNative::from(src.raw.as_ref()),
+                            src: AsNative::from(src_raw),
                             dst: AsNative::from(dst_raw.as_ref()),
                             dst_desc: dst.format_desc,
                             region: com::BufferImageCopy {
-                                buffer_offset: r.buffer_offset + src.range.start,
+                                buffer_offset: r.buffer_offset + src_range.start,
                                 .. r.clone()
                             },
                         })
@@ -3576,7 +3593,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::BufferImageCopy>,
     {
         match src.like {
+            native::ImageLike::Unbound { .. } => {
+                panic!("Unexpected Image::Unbound");
+            }
             native::ImageLike::Texture(ref src_raw) => {
+                let (dst_raw, dst_range) = dst.as_bound();
                 let commands = regions.into_iter().filter_map(|region| {
                     let r = region.borrow();
                     if r.image_extent.is_empty() {
@@ -3585,9 +3606,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         Some(soft::BlitCommand::CopyImageToBuffer {
                             src: AsNative::from(src_raw.as_ref()),
                             src_desc: src.format_desc,
-                            dst: AsNative::from(dst.raw.as_ref()),
+                            dst: AsNative::from(dst_raw),
                             region: com::BufferImageCopy {
-                                buffer_offset: r.buffer_offset + dst.range.start,
+                                buffer_offset: r.buffer_offset + dst_range.start,
                                 .. r.clone()
                             },
                         })
@@ -3665,12 +3686,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         assert_eq!(offset % WORD_ALIGNMENT, 0);
         assert_eq!(stride % WORD_ALIGNMENT as u32, 0);
+        let (raw, range) = buffer.as_bound();
 
         let commands = (0 .. count)
             .map(|i| soft::RenderCommand::DrawIndirect {
                 primitive_type: self.state.primitive_type,
-                buffer: AsNative::from(buffer.raw.as_ref()),
-                offset: offset + (i * stride) as buffer::Offset,
+                buffer: AsNative::from(raw),
+                offset: range.start + offset + (i * stride) as buffer::Offset,
             });
 
         self.inner
@@ -3689,13 +3711,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         assert_eq!(offset % WORD_ALIGNMENT, 0);
         assert_eq!(stride % WORD_ALIGNMENT as u32, 0);
+        let (raw, range) = buffer.as_bound();
 
         let commands = (0 .. count)
             .map(|i| soft::RenderCommand::DrawIndexedIndirect {
                 primitive_type: self.state.primitive_type,
                 index: self.state.index_buffer.clone().expect("must bind index buffer"),
-                buffer: AsNative::from(buffer.raw.as_ref()),
-                offset: offset + (i * stride) as buffer::Offset,
+                buffer: AsNative::from(raw),
+                offset: range.start + offset + (i * stride) as buffer::Offset,
             });
 
         self.inner
@@ -3799,6 +3822,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         stride: buffer::Offset,
         flags: query::ResultFlags,
     ) {
+        let (raw, range) = buffer.as_bound();
         match *pool {
             native::QueryPool::Occlusion(ref pool_range) => {
                 let visibility = &self.shared.visibility;
@@ -3811,10 +3835,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     // if stride is matching, copy everything in one go
                     let com = soft::BlitCommand::CopyBuffer {
                         src: AsNative::from(visibility.buffer.as_ref()),
-                        dst: AsNative::from(buffer.raw.as_ref()),
+                        dst: AsNative::from(raw),
                         region: com::BufferCopy {
                             src: (pool_range.start + queries.start) as buffer::Offset * size_data,
-                            dst: buffer.range.start + offset,
+                            dst: range.start + offset,
                             size: (queries.end - queries.start) as buffer::Offset * size_data,
                         },
                     };
@@ -3831,10 +3855,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     };
                     let commands = (0 .. queries.end - queries.start).flat_map(|i| {
                         let absolute_index = (pool_range.start + queries.start + i) as buffer::Offset;
-                        let dst_offset = buffer.range.start + offset + i as buffer::Offset * stride;
+                        let dst_offset = range.start + offset + i as buffer::Offset * stride;
                         let com_data = soft::BlitCommand::CopyBuffer {
                             src: AsNative::from(visibility.buffer.as_ref()),
-                            dst: AsNative::from(buffer.raw.as_ref()),
+                            dst: AsNative::from(raw),
                             region: com::BufferCopy {
                                 src: absolute_index * size_data,
                                 dst: dst_offset,
@@ -3846,7 +3870,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             // Technically waiting is a no-op on a single queue. However,
                             // the client expects the availability to be set regardless.
                             let com = soft::BlitCommand::FillBuffer {
-                                dst: AsNative::from(buffer.raw.as_ref()),
+                                dst: AsNative::from(raw),
                                 range: dst_offset + size_payload .. dst_offset + 2 * size_payload,
                                 value: !0,
                             };
@@ -3854,7 +3878,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         } else if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
                             let com_avail = soft::BlitCommand::CopyBuffer {
                                 src: AsNative::from(visibility.buffer.as_ref()),
-                                dst: AsNative::from(buffer.raw.as_ref()),
+                                dst: AsNative::from(raw),
                                 region: com::BufferCopy {
                                     src: visibility.availability_offset + absolute_index * size_meta,
                                     dst: dst_offset + size_payload,
@@ -3864,7 +3888,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             // An extra padding is required if the client expects 64 bits availability without a wait
                             let com_pad = if flags.contains(query::ResultFlags::BITS_64) {
                                 Some(soft::BlitCommand::FillBuffer {
-                                    dst: AsNative::from(buffer.raw.as_ref()),
+                                    dst: AsNative::from(raw),
                                     range: dst_offset + size_payload + size_meta .. dst_offset + 2 * size_payload,
                                     value: 0,
                                 })

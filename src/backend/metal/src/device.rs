@@ -1828,12 +1828,14 @@ impl hal::Device<Backend> for Device {
                             pso::Descriptor::StorageTexelBuffer(view) => {
                                 data.textures[counters.textures as usize] = Some((AsNative::from(view.raw.as_ref()), image::Layout::General));
                             }
-                            pso::Descriptor::Buffer(buf, ref range) => {
-                                let start = buf.range.start + range.start.unwrap_or(0);
-                                if let Some(end) = range.end {
-                                    debug_assert!(buf.range.start + end <= buf.range.end);
-                                };
-                                data.buffers[counters.buffers as usize] = Some((AsNative::from(buf.raw.as_ref()), start));
+                            pso::Descriptor::Buffer(buf, ref desc_range) => {
+                                let (raw, range) = buf.as_bound();
+                                if let Some(end) = desc_range.end {
+                                    debug_assert!(range.start + end <= range.end);
+                                }
+                                let start = range.start + desc_range.start.unwrap_or(0);
+                                let pair = (AsNative::from(raw), start);
+                                data.buffers[counters.buffers as usize] = Some(pair);
                             }
                         }
                         counters.add(layout.content);
@@ -1854,8 +1856,9 @@ impl hal::Device<Backend> for Device {
                             pso::Descriptor::Image(image, _layout) => {
                                 encoder.set_textures(&[&image.raw], write.binding as _);
                             }
-                            pso::Descriptor::Buffer(buffer, ref range) => {
-                                encoder.set_buffer(&buffer.raw, buffer.range.start + range.start.unwrap_or(0), write.binding as _);
+                            pso::Descriptor::Buffer(buffer, ref desc_range) => {
+                                let (raw, range) = buffer.as_bound();
+                                encoder.set_buffer(raw, range.start + desc_range.start.unwrap_or(0), write.binding as _);
                             }
                             pso::Descriptor::CombinedImageSampler(..) |
                             pso::Descriptor::UniformTexelBuffer(..) |
@@ -1939,16 +1942,20 @@ impl hal::Device<Backend> for Device {
 
     fn create_buffer(
         &self, size: u64, usage: buffer::Usage
-    ) -> Result<n::UnboundBuffer, buffer::CreationError> {
+    ) -> Result<n::Buffer, buffer::CreationError> {
         debug!("create_buffer of size {} and usage {:?}", size, usage);
-        Ok(n::UnboundBuffer {
-            size,
+        Ok(n::Buffer::Unbound {
             usage,
+            size,
         })
     }
 
-    fn get_buffer_requirements(&self, buffer: &n::UnboundBuffer) -> memory::Requirements {
-        let mut max_size = buffer.size;
+    fn get_buffer_requirements(&self, buffer: &n::Buffer) -> memory::Requirements {
+        let (size, usage) = match *buffer {
+            n::Buffer::Unbound { size, usage } => (size, usage),
+            n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
+        };
+        let mut max_size = size;
         let mut max_alignment = self.private_caps.buffer_alignment;
 
         if self.private_caps.resource_heaps {
@@ -1959,7 +1966,7 @@ impl hal::Device<Backend> for Device {
                 let options = conv::resource_options_from_storage_and_cache(storage, cache);
                 let requirements = self.shared.device
                     .lock()
-                    .heap_buffer_size_and_align(buffer.size, options);
+                    .heap_buffer_size_and_align(size, options);
                 max_size = cmp::max(max_size, requirements.size);
                 max_alignment = cmp::max(max_alignment, requirements.align);
             }
@@ -1968,7 +1975,7 @@ impl hal::Device<Backend> for Device {
         // based on Metal validation error for view creation:
         // failed assertion `BytesPerRow of a buffer-backed texture with pixelFormat(XXX) must be aligned to 256 bytes
         const SIZE_MASK: u64 = 0xFF;
-        let supports_texel_view = buffer.usage.intersects(
+        let supports_texel_view = usage.intersects(
             buffer::Usage::UNIFORM_TEXEL |
             buffer::Usage::STORAGE_TEXEL
         );
@@ -1985,29 +1992,41 @@ impl hal::Device<Backend> for Device {
     }
 
     fn bind_buffer_memory(
-        &self, memory: &n::Memory, offset: u64, buffer: n::UnboundBuffer
-    ) -> Result<n::Buffer, BindError> {
-        debug!("bind_buffer_memory of size {} at offset {}", buffer.size, offset);
-        let (raw, options, range) = match memory.heap {
+        &self, memory: &n::Memory, offset: u64, buffer: &mut n::Buffer
+    ) -> Result<(), BindError> {
+        let size = match *buffer {
+            n::Buffer::Unbound { size, .. } => size,
+            n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
+        };
+        debug!("bind_buffer_memory of size {} at offset {}", size, offset);
+        *buffer = match memory.heap {
             n::MemoryHeap::Native(ref heap) => {
-                let resource_options = conv::resource_options_from_storage_and_cache(
+                let options = conv::resource_options_from_storage_and_cache(
                     heap.storage_mode(),
                     heap.cpu_cache_mode(),
                 );
-                let raw = heap.new_buffer(buffer.size, resource_options)
+                let raw = heap.new_buffer(size, options)
                     .unwrap_or_else(|| {
                         // TODO: disable hazard tracking?
                         self.shared.device
                             .lock()
-                            .new_buffer(buffer.size, resource_options)
+                            .new_buffer(size, options)
                     });
-                (raw, resource_options, 0 .. buffer.size) //TODO?
+                n::Buffer::Bound {
+                    raw,
+                    options,
+                    range: 0 .. size, //TODO?
+                }
             }
             n::MemoryHeap::Public(mt, ref cpu_buffer) => {
                 debug!("\tmapped to public heap with address {:?}", cpu_buffer.as_ptr());
                 let (storage, cache) = MemoryTypes::describe(mt.0);
                 let options = conv::resource_options_from_storage_and_cache(storage, cache);
-                (cpu_buffer.clone(), options, offset .. offset + buffer.size)
+                n::Buffer::Bound {
+                    raw: cpu_buffer.clone(),
+                    options,
+                    range: offset .. offset + size,
+                }
             }
             n::MemoryHeap::Private => {
                 //TODO: check for aliasing
@@ -2015,29 +2034,35 @@ impl hal::Device<Backend> for Device {
                     MTLResourceOptions::CPUCacheModeDefaultCache;
                 let raw = self.shared.device
                     .lock()
-                    .new_buffer(buffer.size, options);
-                (raw, options, 0 .. buffer.size)
+                    .new_buffer(size, options);
+                n::Buffer::Bound {
+                    raw,
+                    options,
+                    range: 0 .. size,
+                }
             }
         };
 
-        Ok(n::Buffer {
-            raw,
-            range,
-            options,
-        })
+        Ok(())
     }
 
     fn destroy_buffer(&self, buffer: n::Buffer) {
-        debug!("destroy_buffer {:?} occupying memory {:?}", buffer.raw.as_ptr(), buffer.range);
+        if let n::Buffer::Bound { raw, range, .. } = buffer {
+            debug!("destroy_buffer {:?} occupying memory {:?}", raw.as_ptr(), range);
+        }
     }
 
     fn create_buffer_view<R: RangeArg<u64>>(
         &self, buffer: &n::Buffer, format_maybe: Option<format::Format>, range: R
     ) -> Result<n::BufferView, buffer::ViewCreationError> {
-        let start = buffer.range.start + *range.start().unwrap_or(&0);
+        let (raw, base_range, options) = match *buffer {
+            n::Buffer::Bound { ref raw, ref range, options } => (raw, range, options),
+            n::Buffer::Unbound { .. } => panic!("Unexpected Buffer::Unbound"),
+        };
+        let start = base_range.start + *range.start().unwrap_or(&0);
         let end_rough = match range.end() {
-            Some(end) => buffer.range.start + end,
-            None => buffer.range.end,
+            Some(end) => base_range.start + end,
+            None => base_range.end,
         };
         let format = match format_maybe {
             Some(fmt) => fmt,
@@ -2063,15 +2088,15 @@ impl hal::Device<Backend> for Device {
         descriptor.set_height(row_count);
         descriptor.set_mipmap_level_count(1);
         descriptor.set_pixel_format(mtl_format);
-        descriptor.set_resource_options(buffer.options);
-        descriptor.set_storage_mode(buffer.raw.storage_mode());
+        descriptor.set_resource_options(options);
+        descriptor.set_storage_mode(raw.storage_mode());
         descriptor.set_usage(metal::MTLTextureUsage::ShaderRead);
 
         let align_mask = self.private_caps.buffer_alignment - 1;
         let stride = (col_count * (format_desc.bits as u64 / 8) + align_mask) & !align_mask;
 
         Ok(n::BufferView {
-            raw: buffer.raw.new_texture_from_contents(&descriptor, start, stride),
+            raw: raw.new_texture_from_contents(&descriptor, start, stride),
         })
     }
 
@@ -2087,7 +2112,7 @@ impl hal::Device<Backend> for Device {
         tiling: image::Tiling,
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
-    ) -> Result<n::UnboundImage, image::CreationError> {
+    ) -> Result<n::Image, image::CreationError> {
         debug!("create_image {:?} with {} mips of {:?} {:?} and usage {:?}",
             kind, mip_levels, format, tiling, usage);
 
@@ -2146,7 +2171,8 @@ impl hal::Device<Backend> for Device {
         descriptor.set_pixel_format(mtl_format);
         descriptor.set_usage(conv::map_texture_usage(usage, tiling));
 
-        let format_desc = format.surface_desc();
+        let base = format.base_format();
+        let format_desc = base.0.desc();
         let mip_sizes = (0 .. mip_levels)
             .map(|level| {
                 let pitches = n::Image::pitches_impl(extent.at_level(level), format_desc);
@@ -2161,22 +2187,34 @@ impl hal::Device<Backend> for Device {
             tiling == image::Tiling::Linear &&
             host_usage.contains(usage);
 
-        Ok(n::UnboundImage {
-            texture_desc: descriptor,
-            format,
+        Ok(n::Image {
+            like: n::ImageLike::Unbound {
+                descriptor,
+                mip_sizes,
+                host_visible,
+            },
             kind,
-            mip_sizes,
-            host_visible,
+            format_desc,
+            shader_channel: base.1.into(),
+            mtl_format,
+            mtl_type,
         })
     }
 
-    fn get_image_requirements(&self, image: &n::UnboundImage) -> memory::Requirements {
+    fn get_image_requirements(&self, image: &n::Image) -> memory::Requirements {
+        let (descriptor, mip_sizes, host_visible) = match image.like {
+            n::ImageLike::Unbound { ref descriptor, ref mip_sizes, host_visible } =>
+                (descriptor, mip_sizes, host_visible),
+            n::ImageLike::Texture(..) |
+            n::ImageLike::Buffer(..) => panic!("Expected Image::Unbound"),
+        };
+
         if self.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the image with, so we test them
             // all get the most stringent ones. Note we don't check Shared because heaps can't use it
             let mut max_size = 0;
             let mut max_alignment = 0;
-            let types = if image.host_visible {
+            let types = if host_visible {
                 MemoryTypes::all()
             } else {
                 MemoryTypes::PRIVATE
@@ -2186,12 +2224,12 @@ impl hal::Device<Backend> for Device {
                     continue
                 }
                 let (storage, cache_mode) = MemoryTypes::describe(i);
-                image.texture_desc.set_storage_mode(storage);
-                image.texture_desc.set_cpu_cache_mode(cache_mode);
+                descriptor.set_storage_mode(storage);
+                descriptor.set_cpu_cache_mode(cache_mode);
 
                 let requirements = self.shared.device
                     .lock()
-                    .heap_texture_size_and_align(&image.texture_desc);
+                    .heap_texture_size_and_align(descriptor);
                 max_size = cmp::max(max_size, requirements.size);
                 max_alignment = cmp::max(max_alignment, requirements.align);
             }
@@ -2200,17 +2238,17 @@ impl hal::Device<Backend> for Device {
                 alignment: max_alignment,
                 type_mask: types.bits(),
             }
-        } else if image.host_visible {
-            assert_eq!(image.mip_sizes.len(), 1);
+        } else if host_visible {
+            assert_eq!(mip_sizes.len(), 1);
             let mask = self.private_caps.buffer_alignment - 1;
             memory::Requirements {
-                size: (image.mip_sizes[0] + mask) & !mask,
+                size: (mip_sizes[0] + mask) & !mask,
                 alignment: self.private_caps.buffer_alignment,
                 type_mask: MemoryTypes::all().bits(),
             }
         } else {
             memory::Requirements {
-                size: image.mip_sizes.iter().sum(),
+                size: mip_sizes.iter().sum(),
                 alignment: 4,
                 type_mask: MemoryTypes::PRIVATE.bits(),
             }
@@ -2236,62 +2274,58 @@ impl hal::Device<Backend> for Device {
     }
 
     fn bind_image_memory(
-        &self, memory: &n::Memory, offset: u64, image: n::UnboundImage
-    ) -> Result<n::Image, BindError> {
-        let base = image.format.base_format();
-        let format_desc = base.0.desc();
+        &self, memory: &n::Memory, offset: u64, image: &mut n::Image
+    ) -> Result<(), BindError> {
+        let like = {
+            let (descriptor, mip_sizes) = match image.like {
+                n::ImageLike::Unbound { ref descriptor, ref mip_sizes, .. } =>
+                    (descriptor, mip_sizes),
+                n::ImageLike::Texture(..) |
+                n::ImageLike::Buffer(..) => panic!("Expected Image::Unbound"),
+            };
 
-        let like = match memory.heap {
-            n::MemoryHeap::Native(ref heap) => {
-                let resource_options = conv::resource_options_from_storage_and_cache(
-                    heap.storage_mode(),
-                    heap.cpu_cache_mode());
-                image.texture_desc.set_resource_options(resource_options);
-                n::ImageLike::Texture(
-                    heap.new_texture(&image.texture_desc)
-                        .unwrap_or_else(|| {
-                            // TODO: disable hazard tracking?
-                            self.shared.device
-                                .lock()
-                                .new_texture(&image.texture_desc)
-                        })
-                )
-            },
-            n::MemoryHeap::Public(_memory_type, ref cpu_buffer) => {
-                assert_eq!(image.mip_sizes.len(), 1);
-                n::ImageLike::Buffer(n::Buffer {
-                    raw: cpu_buffer.clone(),
-                    range: offset .. offset + image.mip_sizes[0] as u64,
-                    options: MTLResourceOptions::StorageModeShared,
-                })
-            }
-            n::MemoryHeap::Private => {
-                image.texture_desc.set_storage_mode(MTLStorageMode::Private);
-                n::ImageLike::Texture(
-                    self.shared.device
-                        .lock()
-                        .new_texture(&image.texture_desc)
-                )
+            match memory.heap {
+                n::MemoryHeap::Native(ref heap) => {
+                    let resource_options = conv::resource_options_from_storage_and_cache(
+                        heap.storage_mode(),
+                        heap.cpu_cache_mode());
+                    descriptor.set_resource_options(resource_options);
+                    n::ImageLike::Texture(
+                        heap.new_texture(descriptor)
+                            .unwrap_or_else(|| {
+                                // TODO: disable hazard tracking?
+                                self.shared.device
+                                    .lock()
+                                    .new_texture(&descriptor)
+                            })
+                    )
+                },
+                n::MemoryHeap::Public(_memory_type, ref cpu_buffer) => {
+                    assert_eq!(mip_sizes.len(), 1);
+                    n::ImageLike::Buffer(
+                        n::Buffer::Bound {
+                            raw: cpu_buffer.clone(),
+                            range: offset .. offset + mip_sizes[0] as u64,
+                            options: MTLResourceOptions::StorageModeShared,
+                        }
+                    )
+                }
+                n::MemoryHeap::Private => {
+                    descriptor.set_storage_mode(MTLStorageMode::Private);
+                    n::ImageLike::Texture(
+                        self.shared.device
+                            .lock()
+                            .new_texture(descriptor)
+                    )
+                }
             }
         };
 
-        Ok(n::Image {
-            like,
-            kind: image.kind,
-            format_desc,
-            shader_channel: base.1.into(),
-            mtl_format: match self.private_caps.map_format(image.format) {
-                Some(format) => format,
-                None => {
-                    error!("failed to find corresponding Metal format for {:?}", image.format);
-                    return Err(BindError::OutOfBounds);
-                },
-            },
-            mtl_type: image.texture_desc.texture_type(),
-        })
+        Ok(image.like = like)
     }
 
     fn destroy_image(&self, _image: n::Image) {
+        //nothing to do
     }
 
     fn create_image_view(

@@ -2,7 +2,7 @@ use winapi::shared::dxgiformat::DXGI_FORMAT;
 use winapi::shared::minwindef::UINT;
 use winapi::um::d3d12;
 
-use hal::{format, image, pass, pso, DescriptorPool as HalDescriptorPool};
+use hal::{buffer, format, image, memory, pass, pso, DescriptorPool as HalDescriptorPool};
 use native::{self, query};
 use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
@@ -151,16 +151,46 @@ pub struct Framebuffer {
     pub(crate) layers: image::Layer,
 }
 
+#[derive(Copy, Clone, Debug)]
+pub struct BufferUnbound {
+    pub(crate) requirements: memory::Requirements,
+    pub(crate) usage: buffer::Usage,
+}
+
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct Buffer {
+pub struct BufferBound {
     pub(crate) resource: native::Resource,
-    pub(crate) size_in_bytes: u32,
+    pub(crate) requirements: memory::Requirements,
     #[derivative(Debug = "ignore")]
     pub(crate) clear_uav: Option<native::CpuDescriptor>,
 }
-unsafe impl Send for Buffer {}
-unsafe impl Sync for Buffer {}
+
+unsafe impl Send for BufferBound {}
+unsafe impl Sync for BufferBound {}
+
+#[derive(Derivative)]
+#[derivative(Debug)]
+pub enum Buffer {
+    Unbound(BufferUnbound),
+    Bound(BufferBound),
+}
+
+impl Buffer {
+    pub(crate) fn expect_unbound(&self) -> &BufferUnbound {
+        match *self {
+            Buffer::Unbound(ref unbound) => unbound,
+            Buffer::Bound(_) => panic!("Expected unbound buffer"),
+        }
+    }
+
+    pub(crate) fn expect_bound(&self) -> &BufferBound {
+        match *self {
+            Buffer::Unbound(_) => panic!("Expected bound buffer"),
+            Buffer::Bound(ref bound) => bound,
+        }
+    }
+}
 
 #[derive(Copy, Clone, Derivative)]
 #[derivative(Debug)]
@@ -183,7 +213,7 @@ pub enum Place {
 
 #[derive(Clone, Derivative)]
 #[derivative(Debug)]
-pub struct Image {
+pub struct ImageBound {
     pub(crate) resource: native::Resource,
     #[derivative(Debug = "ignore")]
     pub(crate) place: Place,
@@ -202,11 +232,13 @@ pub struct Image {
     pub(crate) clear_dv: Vec<native::CpuDescriptor>,
     #[derivative(Debug = "ignore")]
     pub(crate) clear_sv: Vec<native::CpuDescriptor>,
+    pub(crate) requirements: memory::Requirements,
 }
-unsafe impl Send for Image {}
-unsafe impl Sync for Image {}
 
-impl Image {
+unsafe impl Send for ImageBound {}
+unsafe impl Sync for ImageBound {}
+
+impl ImageBound {
     /// Get `SubresourceRange` of the whole image.
     pub fn to_subresource_range(&self, aspects: format::Aspects) -> image::SubresourceRange {
         image::SubresourceRange {
@@ -220,6 +252,70 @@ impl Image {
         mip_level
             + (layer * self.descriptor.MipLevels as UINT)
             + (plane * self.descriptor.MipLevels as UINT * self.kind.num_layers() as UINT)
+    }
+}
+
+#[derive(Copy, Clone, Derivative)]
+#[derivative(Debug)]
+pub struct ImageUnbound {
+    #[derivative(Debug = "ignore")]
+    pub(crate) desc: d3d12::D3D12_RESOURCE_DESC,
+    pub(crate) dsv_format: DXGI_FORMAT,
+    pub(crate) requirements: memory::Requirements,
+    pub(crate) format: format::Format,
+    pub(crate) kind: image::Kind,
+    pub(crate) usage: image::Usage,
+    pub(crate) tiling: image::Tiling,
+    pub(crate) view_caps: image::ViewCapabilities,
+    //TODO: use hal::format::FormatDesc
+    pub(crate) bytes_per_block: u8,
+    // Dimension of a texel block (compressed formats).
+    pub(crate) block_dim: (u8, u8),
+    pub(crate) num_levels: image::Level,
+}
+
+impl ImageUnbound {
+    pub fn calc_subresource(&self, mip_level: UINT, layer: UINT, plane: UINT) -> UINT {
+        mip_level
+            + (layer * self.desc.MipLevels as UINT)
+            + (plane * self.desc.MipLevels as UINT * self.kind.num_layers() as UINT)
+    }
+}
+
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
+pub enum Image {
+    Unbound(ImageUnbound),
+    Bound(ImageBound) ,
+}
+
+impl Image {
+    pub(crate) fn expect_unbound(&self) -> &ImageUnbound {
+        match *self {
+            Image::Unbound(ref unbound) => unbound,
+            Image::Bound(_) => panic!("Expected unbound image"),
+        }
+    }
+
+    pub(crate) fn expect_bound(&self) -> &ImageBound {
+        match *self {
+            Image::Unbound(_) => panic!("Expected bound image"),
+            Image::Bound(ref bound) => bound,
+        }
+    }
+
+    pub fn get_desc(&self) -> &d3d12::D3D12_RESOURCE_DESC {
+        match self {
+            Image::Bound(i) => &i.descriptor,
+            Image::Unbound(i) => &i.desc,
+        }
+    }
+
+    pub fn calc_subresource(&self, mip_level: UINT, layer: UINT, plane: UINT) -> UINT {
+        match self {
+            Image::Bound(i) => i.calc_subresource(mip_level, layer, plane),
+            Image::Unbound(i) => i.calc_subresource(mip_level, layer, plane),
+        }
     }
 }
 
