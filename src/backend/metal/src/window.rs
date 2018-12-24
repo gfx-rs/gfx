@@ -426,7 +426,7 @@ impl Device {
 }
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_image(
+    unsafe fn acquire_image(
         &mut self, _timeout_ns: u64, sync: hal::FrameSync<Backend>
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         self.last_frame += 1;

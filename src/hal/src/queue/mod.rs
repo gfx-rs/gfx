@@ -76,7 +76,7 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
     /// list more than once.
     ///
     /// Unsafe for the same reasons as `submit()`.
-    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
     where
         Self: Sized,
         W: 'a + Borrow<B::Swapchain>,
@@ -108,7 +108,7 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
     }
 
     /// Get a mutable reference to the raw command queue
-    pub fn as_raw_mut(&mut self) -> &mut B::CommandQueue {
+    pub unsafe fn as_raw_mut(&mut self) -> &mut B::CommandQueue {
         &mut self.0
     }
 
@@ -119,7 +119,7 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
 
     /// Submits the submission command buffers to the queue for execution.
     /// `fence` will be signalled after submission and _must_ be unsignalled.
-    pub fn submit<'a, T, Ic, S, Iw, Is>(&mut self,
+    pub unsafe fn submit<'a, T, Ic, S, Iw, Is>(&mut self,
         submission: Submission<Ic, Iw, Is>,
         fence: Option<&B::Fence>,
     ) where
@@ -129,13 +129,11 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
         Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
         Is: IntoIterator<Item = &'a S>,
     {
-        unsafe {
-            self.0.submit(submission, fence)
-        }
+        self.0.submit(submission, fence)
     }
 
     /// Submit command buffers without any semaphore waits or singals.
-    pub fn submit_nosemaphores<'a, T, I>(
+    pub unsafe fn submit_nosemaphores<'a, T, I>(
         &mut self, command_buffers: I, fence: Option<&B::Fence>
     ) where
         T: 'a + Submittable<B, C, Primary>,
@@ -152,7 +150,7 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
     /// Presents the result of the queue to the given swapchains, after waiting on all the
     /// semaphores given in `wait_semaphores`. A given swapchain must not appear in this
     /// list more than once.
-    pub fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
+    pub unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
     where
         W: 'a + Borrow<B::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
@@ -168,12 +166,10 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
     }
 
     /// Downgrade a command queue to a lesser capability type.
-    pub fn downgrade<D>(&mut self) -> &mut CommandQueue<B, D>
+    pub unsafe fn downgrade<D>(&mut self) -> &mut CommandQueue<B, D>
     where
         C: Supports<D>,
     {
-        unsafe {
-            ::std::mem::transmute(self)
-        }
+        ::std::mem::transmute(self)
     }
 }

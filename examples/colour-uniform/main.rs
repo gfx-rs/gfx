@@ -137,7 +137,7 @@ enum Color {
 }
 
 impl<B: Backend> RendererState<B> {
-    fn new(mut backend: BackendState<B>, window: WindowState) -> Self {
+    unsafe fn new(mut backend: BackendState<B>, window: WindowState) -> Self {
         let device = Rc::new(RefCell::new(DeviceState::new(
             backend.adapter.adapter.take().unwrap(),
             &backend.surface,
@@ -292,25 +292,32 @@ impl<B: Backend> RendererState<B> {
 
         self.swapchain.take().unwrap();
 
-        self.swapchain = Some(SwapchainState::new(
-            &mut self.backend,
-            Rc::clone(&self.device),
-        ));
+        self.swapchain = Some(unsafe {
+            SwapchainState::new(
+                &mut self.backend,
+                Rc::clone(&self.device),
+            )
+        });
 
-        self.render_pass =
-            RenderPassState::new(self.swapchain.as_ref().unwrap(), Rc::clone(&self.device));
+        self.render_pass = unsafe {
+            RenderPassState::new(self.swapchain.as_ref().unwrap(), Rc::clone(&self.device))
+        };
 
-        self.framebuffer = FramebufferState::new(
-            Rc::clone(&self.device),
-            &self.render_pass,
-            self.swapchain.as_mut().unwrap(),
-        );
+        self.framebuffer = unsafe {
+            FramebufferState::new(
+                Rc::clone(&self.device),
+                &self.render_pass,
+                self.swapchain.as_mut().unwrap(),
+            )
+        };
 
-        self.pipeline = PipelineState::new(
-            vec![self.image.get_layout(), self.uniform.get_layout()],
-            self.render_pass.render_pass.as_ref().unwrap(),
-            Rc::clone(&self.device),
-        );
+        self.pipeline = unsafe {
+            PipelineState::new(
+                vec![self.image.get_layout(), self.uniform.get_layout()],
+                self.render_pass.render_pass.as_ref().unwrap(),
+                Rc::clone(&self.device),
+            )
+        };
 
         self.viewport = RendererState::create_viewport(self.swapchain.as_ref().unwrap());
     }
@@ -491,7 +498,7 @@ impl<B: Backend> RendererState<B> {
 
             let sem_index = self.framebuffer.next_acq_pre_pair_index();
 
-            let frame: hal::SwapImageIndex = {
+            let frame: hal::SwapImageIndex = unsafe {
                 let (acquire_semaphore, _) = self
                     .framebuffer
                     .get_frame_data(None, Some(sem_index))
@@ -521,74 +528,77 @@ impl<B: Backend> RendererState<B> {
             let (framebuffer_fence, framebuffer, command_pool) = fid.unwrap();
             let (image_acquired, image_present) = sid.unwrap();
 
-            self.device
-                .borrow()
-                .device
-                .wait_for_fence(framebuffer_fence, !0)
-                .unwrap();
-            self.device
-                .borrow()
-                .device
-                .reset_fence(framebuffer_fence)
-                .unwrap();
-            command_pool.reset();
+            unsafe {
+                self.device
+                    .borrow()
+                    .device
+                    .wait_for_fence(framebuffer_fence, !0)
+                    .unwrap();
+                self.device
+                    .borrow()
+                    .device
+                    .reset_fence(framebuffer_fence)
+                    .unwrap();
+                command_pool.reset();
 
-            // Rendering
-            let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
-            cmd_buffer.begin();
+                // Rendering
+                let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
+                cmd_buffer.begin();
 
-            cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
-            cmd_buffer.set_scissors(0, &[self.viewport.rect]);
-            cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
-            cmd_buffer.bind_vertex_buffers(
-                0,
-                Some((self.vertex_buffer.get_buffer(), 0)),
-            );
-            cmd_buffer.bind_graphics_descriptor_sets(
-                self.pipeline.pipeline_layout.as_ref().unwrap(),
-                0,
-                vec![
-                	self.image.desc.set.as_ref().unwrap(),
-                	self.uniform.desc.as_ref().unwrap().set.as_ref().unwrap(),
-                ],
-                &[],
-            ); //TODO
-
-            {
-                let mut encoder = cmd_buffer.begin_render_pass_inline(
-                    self.render_pass.render_pass.as_ref().unwrap(),
-                    framebuffer,
-                    self.viewport.rect,
-                    &[command::ClearValue::Color(command::ClearColor::Float([
-                        cr, cg, cb, 1.0,
-                    ]))],
+                cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
+                cmd_buffer.set_scissors(0, &[self.viewport.rect]);
+                cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
+                cmd_buffer.bind_vertex_buffers(
+                    0,
+                    Some((self.vertex_buffer.get_buffer(), 0)),
                 );
-                encoder.draw(0..6, 0..1);
-            }
-            cmd_buffer.finish();
+                cmd_buffer.bind_graphics_descriptor_sets(
+                    self.pipeline.pipeline_layout.as_ref().unwrap(),
+                    0,
+                    vec![
+                        self.image.desc.set.as_ref().unwrap(),
+                        self.uniform.desc.as_ref().unwrap().set.as_ref().unwrap(),
+                    ],
+                    &[],
+                ); //TODO
 
-            let submission = Submission {
-                command_buffers: iter::once(&cmd_buffer),
-                wait_semaphores: iter::once((&*image_acquired, PipelineStage::BOTTOM_OF_PIPE)),
-                signal_semaphores: iter::once(&*image_present),
-            };
-            self.device.borrow_mut().queues.queues[0].submit(submission, Some(framebuffer_fence));
+                {
+                    let mut encoder = cmd_buffer.begin_render_pass_inline(
+                        self.render_pass.render_pass.as_ref().unwrap(),
+                        framebuffer,
+                        self.viewport.rect,
+                        &[command::ClearValue::Color(command::ClearColor::Float([
+                            cr, cg, cb, 1.0,
+                        ]))],
+                    );
+                    encoder.draw(0..6, 0..1);
+                }
+                cmd_buffer.finish();
 
-            // present frame
-            if let Err(_) = self
-                .swapchain
-                .as_ref()
-                .unwrap()
-                .swapchain
-                .as_ref()
-                .unwrap()
-                .present(
-                    &mut self.device.borrow_mut().queues.queues[0],
-                    frame,
-                    Some(&*image_present),
-                ) {
-                recreate_swapchain = true;
-                continue;
+                let submission = Submission {
+                    command_buffers: iter::once(&cmd_buffer),
+                    wait_semaphores: iter::once((&*image_acquired, PipelineStage::BOTTOM_OF_PIPE)),
+                    signal_semaphores: iter::once(&*image_present),
+                };
+
+                self.device.borrow_mut().queues.queues[0].submit(submission, Some(framebuffer_fence));
+
+                // present frame
+                if let Err(_) = self
+                    .swapchain
+                    .as_ref()
+                    .unwrap()
+                    .swapchain
+                    .as_ref()
+                    .unwrap()
+                    .present(
+                        &mut self.device.borrow_mut().queues.queues[0],
+                        frame,
+                        Some(&*image_present),
+                    ) {
+                    recreate_swapchain = true;
+                    continue;
+                }
             }
         }
     }
@@ -597,15 +607,17 @@ impl<B: Backend> RendererState<B> {
 impl<B: Backend> Drop for RendererState<B> {
     fn drop(&mut self) {
         self.device.borrow().device.wait_idle().unwrap();
-        self.device
-            .borrow()
-            .device
-            .destroy_descriptor_pool(self.img_desc_pool.take().unwrap());
-        self.device
-            .borrow()
-            .device
-            .destroy_descriptor_pool(self.uniform_desc_pool.take().unwrap());
-        self.swapchain.take();
+        unsafe {
+            self.device
+                .borrow()
+                .device
+                .destroy_descriptor_pool(self.img_desc_pool.take().unwrap());
+            self.device
+                .borrow()
+                .device
+                .destroy_descriptor_pool(self.uniform_desc_pool.take().unwrap());
+            self.swapchain.take();
+        }
     }
 }
 
@@ -740,7 +752,7 @@ struct RenderPassState<B: Backend> {
 }
 
 impl<B: Backend> RenderPassState<B> {
-    fn new(swapchain: &SwapchainState<B>, device: Rc<RefCell<DeviceState<B>>>) -> Self {
+    unsafe fn new(swapchain: &SwapchainState<B>, device: Rc<RefCell<DeviceState<B>>>) -> Self {
         let render_pass = {
             let attachment = pass::Attachment {
                 format: Some(swapchain.format.clone()),
@@ -786,7 +798,9 @@ impl<B: Backend> RenderPassState<B> {
 impl<B: Backend> Drop for RenderPassState<B> {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
-        device.destroy_render_pass(self.render_pass.take().unwrap());
+        unsafe {
+            device.destroy_render_pass(self.render_pass.take().unwrap());
+        }
     }
 }
 
@@ -802,7 +816,7 @@ impl<B: Backend> BufferState<B> {
         self.buffer.as_ref().unwrap()
     }
 
-    fn new<T>(
+    unsafe fn new<T>(
         device_ptr: Rc<RefCell<DeviceState<B>>>,
         data_source: &[T],
         usage: buffer::Usage,
@@ -871,16 +885,18 @@ impl<B: Backend> BufferState<B> {
 
         assert!(offset + upload_size <= self.size);
 
-        let mut data_target = device
-            .acquire_mapping_writer::<T>(self.memory.as_ref().unwrap(), offset..self.size)
-            .unwrap();
-        data_target[0..data_source.len()].copy_from_slice(data_source);
-        device.release_mapping_writer(data_target).unwrap();
+        unsafe {
+            let mut data_target = device
+                .acquire_mapping_writer::<T>(self.memory.as_ref().unwrap(), offset..self.size)
+                .unwrap();
+            data_target[0..data_source.len()].copy_from_slice(data_source);
+            device.release_mapping_writer(data_target).unwrap();
+        }
     }
 
-    fn new_texture(
+    unsafe fn new_texture(
         device_ptr: Rc<RefCell<DeviceState<B>>>,
-        device: &mut B::Device,
+        device: &B::Device,
         img: &::image::ImageBuffer<::image::Rgba<u8>, Vec<u8>>,
         adapter: &AdapterState<B>,
         usage: buffer::Usage,
@@ -951,8 +967,10 @@ impl<B: Backend> BufferState<B> {
 impl<B: Backend> Drop for BufferState<B> {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
-        device.destroy_buffer(self.buffer.take().unwrap());
-        device.free_memory(self.memory.take().unwrap());
+        unsafe {
+            device.destroy_buffer(self.buffer.take().unwrap());
+            device.free_memory(self.memory.take().unwrap());
+        }
     }
 }
 
@@ -962,7 +980,7 @@ struct Uniform<B: Backend> {
 }
 
 impl<B: Backend> Uniform<B> {
-    fn new<T>(
+    unsafe fn new<T>(
         device: Rc<RefCell<DeviceState<B>>>,
         memory_types: &[MemoryType],
         data: &[T],
@@ -1009,7 +1027,7 @@ struct DescSetLayout<B: Backend> {
 }
 
 impl<B: Backend> DescSetLayout<B> {
-    fn new(
+    unsafe fn new(
         device: Rc<RefCell<DeviceState<B>>>,
         bindings: Vec<pso::DescriptorSetLayoutBinding>,
     ) -> Self {
@@ -1025,7 +1043,7 @@ impl<B: Backend> DescSetLayout<B> {
         }
     }
 
-    fn create_desc_set(self, desc_pool: &mut B::DescriptorPool) -> DescSet<B> {
+    unsafe fn create_desc_set(self, desc_pool: &mut B::DescriptorPool) -> DescSet<B> {
         let desc_set = desc_pool
             .allocate_set(self.layout.as_ref().unwrap())
             .unwrap();
@@ -1039,7 +1057,9 @@ impl<B: Backend> DescSetLayout<B> {
 impl<B: Backend> Drop for DescSetLayout<B> {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
-        device.destroy_descriptor_set_layout(self.layout.take().unwrap());
+        unsafe {
+            device.destroy_descriptor_set_layout(self.layout.take().unwrap());
+        }
     }
 }
 
@@ -1055,7 +1075,7 @@ struct DescSetWrite<W> {
 }
 
 impl<B: Backend> DescSet<B> {
-    fn write_to_state<'a, 'b: 'a, W>(
+    unsafe fn write_to_state<'a, 'b: 'a, W>(
         &'b mut self,
         write: Vec<DescSetWrite<W>>,
         device: &mut B::Device,
@@ -1091,7 +1111,7 @@ struct ImageState<B: Backend> {
 }
 
 impl<B: Backend> ImageState<B> {
-    fn new<T: ::hal::Supports<::hal::Transfer>>(
+    unsafe fn new<T: ::hal::Supports<::hal::Transfer>>(
         mut desc: DescSet<B>,
         img: &::image::ImageBuffer<::image::Rgba<u8>, Vec<u8>>,
         adapter: &AdapterState<B>,
@@ -1241,9 +1261,11 @@ impl<B: Backend> ImageState<B> {
 
     fn wait_for_transfer_completion(&self) {
         let device = &self.desc.layout.device.borrow().device;
-        device
-            .wait_for_fence(self.transfered_image_fence.as_ref().unwrap(), !0)
-            .unwrap();
+        unsafe {
+            device
+                .wait_for_fence(self.transfered_image_fence.as_ref().unwrap(), !0)
+                .unwrap();
+        }
     }
 
     fn get_layout(&self) -> &B::DescriptorSetLayout {
@@ -1253,7 +1275,7 @@ impl<B: Backend> ImageState<B> {
 
 impl<B: Backend> Drop for ImageState<B> {
     fn drop(&mut self) {
-        {
+        unsafe {
             let device = &self.desc.layout.device.borrow().device;
 
             let fence = self.transfered_image_fence.take().unwrap();
@@ -1277,7 +1299,7 @@ struct PipelineState<B: Backend> {
 }
 
 impl<B: Backend> PipelineState<B> {
-    fn new<IS>(
+    unsafe fn new<IS>(
         desc_layouts: IS,
         render_pass: &B::RenderPass,
         device_ptr: Rc<RefCell<DeviceState<B>>>,
@@ -1320,7 +1342,7 @@ impl<B: Backend> PipelineState<B> {
                         module: &vs_module,
                         specialization: pso::Specialization {
                             constants: &[pso::SpecializationConstant { id: 0, range: 0..4 }],
-                            data: unsafe { std::mem::transmute::<&f32, &[u8; 4]>(&0.8f32) },
+                            data: std::mem::transmute::<&f32, &[u8; 4]>(&0.8f32),
                         },
                     },
                     pso::EntryPoint::<B> {
@@ -1397,8 +1419,10 @@ impl<B: Backend> PipelineState<B> {
 impl<B: Backend> Drop for PipelineState<B> {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
-        device.destroy_graphics_pipeline(self.pipeline.take().unwrap());
-        device.destroy_pipeline_layout(self.pipeline_layout.take().unwrap());
+        unsafe {
+            device.destroy_graphics_pipeline(self.pipeline.take().unwrap());
+            device.destroy_pipeline_layout(self.pipeline_layout.take().unwrap());
+        }
     }
 }
 
@@ -1411,7 +1435,7 @@ struct SwapchainState<B: Backend> {
 }
 
 impl<B: Backend> SwapchainState<B> {
-    fn new(backend: &mut BackendState<B>, device: Rc<RefCell<DeviceState<B>>>) -> Self {
+    unsafe fn new(backend: &mut BackendState<B>, device: Rc<RefCell<DeviceState<B>>>) -> Self {
         let (caps, formats, _present_modes, _composite_alphas) = backend
             .surface
             .compatibility(&device.borrow().physical_device);
@@ -1446,10 +1470,12 @@ impl<B: Backend> SwapchainState<B> {
 
 impl<B: Backend> Drop for SwapchainState<B> {
     fn drop(&mut self) {
-        self.device
-            .borrow()
-            .device
-            .destroy_swapchain(self.swapchain.take().unwrap());
+        unsafe {
+            self.device
+                .borrow()
+                .device
+                .destroy_swapchain(self.swapchain.take().unwrap());
+        }
     }
 }
 
@@ -1465,7 +1491,7 @@ struct FramebufferState<B: Backend> {
 }
 
 impl<B: Backend> FramebufferState<B> {
-    fn new(
+    unsafe fn new(
         device: Rc<RefCell<DeviceState<B>>>,
         render_pass: &RenderPassState<B>,
         swapchain: &mut SwapchainState<B>,
@@ -1597,29 +1623,31 @@ impl<B: Backend> Drop for FramebufferState<B> {
     fn drop(&mut self) {
         let device = &self.device.borrow().device;
 
-        for fence in self.framebuffer_fences.take().unwrap() {
-            device.wait_for_fence(&fence, !0).unwrap();
-            device.destroy_fence(fence);
-        }
+        unsafe {
+            for fence in self.framebuffer_fences.take().unwrap() {
+                device.wait_for_fence(&fence, !0).unwrap();
+                device.destroy_fence(fence);
+            }
 
-        for command_pool in self.command_pools.take().unwrap() {
-            device.destroy_command_pool(command_pool.into_raw());
-        }
+            for command_pool in self.command_pools.take().unwrap() {
+                device.destroy_command_pool(command_pool.into_raw());
+            }
 
-        for acquire_semaphore in self.acquire_semaphores.take().unwrap() {
-            device.destroy_semaphore(acquire_semaphore);
-        }
+            for acquire_semaphore in self.acquire_semaphores.take().unwrap() {
+                device.destroy_semaphore(acquire_semaphore);
+            }
 
-        for present_semaphore in self.present_semaphores.take().unwrap() {
-            device.destroy_semaphore(present_semaphore);
-        }
+            for present_semaphore in self.present_semaphores.take().unwrap() {
+                device.destroy_semaphore(present_semaphore);
+            }
 
-        for framebuffer in self.framebuffers.take().unwrap() {
-            device.destroy_framebuffer(framebuffer);
-        }
+            for framebuffer in self.framebuffers.take().unwrap() {
+                device.destroy_framebuffer(framebuffer);
+            }
 
-        for (_, rtv) in self.frame_images.take().unwrap() {
-            device.destroy_image_view(rtv);
+            for (_, rtv) in self.frame_images.take().unwrap() {
+                device.destroy_image_view(rtv);
+            }
         }
     }
 }
@@ -1636,7 +1664,9 @@ fn main() {
     let mut window = WindowState::new();
     let (backend, _instance) = create_backend(&mut window);
 
-    let mut renderer_state = RendererState::new(backend, window);
+    let mut renderer_state = unsafe {
+        RendererState::new(backend, window)
+    };
     renderer_state.mainloop();
 }
 

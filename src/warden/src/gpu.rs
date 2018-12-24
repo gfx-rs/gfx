@@ -42,9 +42,11 @@ impl<'a, B: hal::Backend> Drop for FetchGuard<'a, B> {
     fn drop(&mut self) {
         let buffer = self.buffer.take().unwrap();
         let memory = self.memory.take().unwrap();
-        self.device.unmap_memory(&memory);
-        self.device.destroy_buffer(buffer);
-        self.device.free_memory(memory);
+        unsafe {
+            self.device.unmap_memory(&memory);
+            self.device.destroy_buffer(buffer);
+            self.device.free_memory(memory);
+        }
     }
 }
 
@@ -172,10 +174,12 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         info!("upload memory: {:?}", upload_type);
         info!("download memory: {:?}", &download_type);
 
-        let mut command_pool = device.create_command_pool_typed(
-            &queue_group,
-            hal::pool::CommandPoolCreateFlags::empty(),
-        )?;
+        let mut command_pool = unsafe {
+            device.create_command_pool_typed(
+                &queue_group,
+                hal::pool::CommandPoolCreateFlags::empty(),
+            )
+        }?;
 
         // create resources
         let mut resources = Resources::<B> {
@@ -194,15 +198,20 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         };
         let mut upload_buffers = HashMap::new();
         let mut init_cmd = command_pool.acquire_command_buffer::<c::MultiShot>();
-        init_cmd.begin(false);
+        unsafe {
+            init_cmd.begin(false);
+        }
         // Pass[1]: images, buffers, passes, descriptor set layouts/pools
         for (name, resource) in &raw.resources {
             match *resource {
                 raw::Resource::Buffer { size, usage, ref data } => {
                     // allocate memory
-                    let mut buffer = device.create_buffer(size as _, usage)
-                        .unwrap();
-                    let requirements = device.get_buffer_requirements(&buffer);
+                    let mut buffer = unsafe {
+                        device.create_buffer(size as _, usage)
+                    }.unwrap();
+                    let requirements = unsafe {
+                        device.get_buffer_requirements(&buffer)
+                    };
                     let memory_type = memory_types
                         .iter()
                         .enumerate()
@@ -212,37 +221,49 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         })
                         .unwrap()
                         .into();
-                    let memory = device.allocate_memory(memory_type, requirements.size)
+                    let memory = unsafe {
+                        device.allocate_memory(memory_type, requirements.size)
+                    }.unwrap();
+
+                    unsafe {
+                        device.bind_buffer_memory(&memory, 0, &mut buffer)
                         .unwrap();
-                    device.bind_buffer_memory(&memory, 0, &mut buffer)
-                        .unwrap();
+                    }
 
                     // process initial data for the buffer
                     let stable_state = if data.is_empty() {
                         let access = b::Access::SHADER_READ; //TODO
                         if false { //TODO
                             let buffer_barrier = memory::Barrier::whole_buffer(&buffer, b::Access::empty() .. access);
-                            init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                                memory::Dependencies::empty(),
-                                &[buffer_barrier],
-                            );
+                            unsafe {
+                                init_cmd.pipeline_barrier(
+                                    pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                                    memory::Dependencies::empty(),
+                                    &[buffer_barrier],
+                                );
+                            }
                         }
                         access
                     } else {
                         // calculate required sizes
                         let upload_size = align(size as _, limits.min_buffer_copy_pitch_alignment);
                         // create upload buffer
-                        let mut upload_buffer = device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
-                            .unwrap();
-                        let upload_req = device.get_buffer_requirements(&upload_buffer);
+                        let mut upload_buffer = unsafe {
+                            device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
+                        }.unwrap();
+                        let upload_req = unsafe {
+                            device.get_buffer_requirements(&upload_buffer)
+                        };
                         assert_ne!(upload_req.type_mask & (1 << upload_type.0), 0);
-                        let upload_memory = device.allocate_memory(upload_type, upload_req.size)
-                            .unwrap();
+                        let upload_memory = unsafe {
+                            device.allocate_memory(upload_type, upload_req.size)
+                        }.unwrap();
+
+                        unsafe {
                         device.bind_buffer_memory(&memory, 0, &mut upload_buffer)
-                            .unwrap();
+                        }.unwrap();
                         // write the data
-                        {
+                        unsafe {
                             let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0 .. size as _)
                                 .unwrap();
                             File::open(data_path.join(data))
@@ -255,28 +276,34 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         let final_state = b::Access::SHADER_READ;
                         let pre_barrier = memory::Barrier::whole_buffer(&buffer,
                             b::Access::empty() .. b::Access::TRANSFER_WRITE);
-                        init_cmd.pipeline_barrier(
-                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
-                            memory::Dependencies::empty(),
-                            &[pre_barrier],
-                        );
+                        unsafe {
+                            init_cmd.pipeline_barrier(
+                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                                memory::Dependencies::empty(),
+                                &[pre_barrier],
+                            );
+                        }
                         let copy = c::BufferCopy {
                             src: 0,
                             dst: 0,
                             size: size as _,
                         };
-                        init_cmd.copy_buffer(
-                            &upload_buffer,
-                            &buffer,
-                            &[copy],
-                        );
+                        unsafe {
+                            init_cmd.copy_buffer(
+                                &upload_buffer,
+                                &buffer,
+                                &[copy],
+                            );
+                        }
                         let post_barrier = memory::Barrier::whole_buffer(&buffer,
                             b::Access::TRANSFER_WRITE .. final_state);
-                        init_cmd.pipeline_barrier(
-                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                            memory::Dependencies::empty(),
-                            &[post_barrier],
-                        );
+                        unsafe {
+                            init_cmd.pipeline_barrier(
+                                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                                memory::Dependencies::empty(),
+                                &[post_barrier],
+                            );
+                        }
                         // done
                         upload_buffers.insert(name.clone(), (upload_buffer, upload_memory));
                         final_state
@@ -291,10 +318,14 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 }
                 raw::Resource::Image { kind, num_levels, format, usage, ref data } => {
                     // allocate memory
-                    let mut image = device.create_image(
-                        kind, num_levels, format, i::Tiling::Optimal, usage, i::ViewCapabilities::empty()
-                        ).unwrap();
-                    let requirements = device.get_image_requirements(&image);
+                    let mut image = unsafe {
+                        device.create_image(
+                            kind, num_levels, format, i::Tiling::Optimal, usage, i::ViewCapabilities::empty()
+                        )
+                    }.unwrap();
+                    let requirements = unsafe {
+                        device.get_image_requirements(&image)
+                    };
                     let memory_type = memory_types
                         .iter()
                         .enumerate()
@@ -304,10 +335,12 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         })
                         .unwrap()
                         .into();
-                    let memory = device.allocate_memory(memory_type, requirements.size)
-                        .unwrap();
-                    device.bind_image_memory(&memory, 0, &mut image)
-                        .unwrap();
+                    let memory = unsafe {
+                        device.allocate_memory(memory_type, requirements.size)
+                    }.unwrap();
+                    unsafe {
+                        device.bind_image_memory(&memory, 0, &mut image)
+                    }.unwrap();
 
                     // process initial data for the image
                     let stable_state = if data.is_empty() {
@@ -326,11 +359,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     .. COLOR_RANGE.clone()
                                 },
                             };
-                            init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                                memory::Dependencies::empty(),
-                                &[image_barrier],
-                            );
+                            unsafe {
+                                init_cmd.pipeline_barrier(
+                                    pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                                    memory::Dependencies::empty(),
+                                    &[image_barrier],
+                                );
+                            }
                         }
                         (access, layout)
                     } else {
@@ -351,26 +386,34 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
                         let upload_size = (row_pitch as u64 * h as u64 * d as u64) / block_height as u64;
                         // create upload buffer
-                        let mut upload_buffer = device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
-                            .unwrap();
-                        let upload_req = device.get_buffer_requirements(&upload_buffer);
+                        let mut upload_buffer = unsafe {
+                            device.create_buffer(upload_size, b::Usage::TRANSFER_SRC)
+                        }.unwrap();
+                        let upload_req = unsafe {
+                            device.get_buffer_requirements(&upload_buffer)
+                        };
                         assert_ne!(upload_req.type_mask & (1 << upload_type.0), 0);
-                        let upload_memory = device.allocate_memory(upload_type, upload_req.size)
-                            .unwrap();
-						device.bind_buffer_memory(&upload_memory, 0, &mut upload_buffer)
-                            .unwrap();
+                        let upload_memory = unsafe {
+                            device.allocate_memory(upload_type, upload_req.size)
+                        }.unwrap();
+                        unsafe {
+                            device.bind_buffer_memory(&upload_memory, 0, &mut upload_buffer)
+                        }.unwrap();
                         // write the data
                         {
                             let mut file = File::open(data_path.join(data))
                                 .unwrap();
-                            let mut mapping = device.acquire_mapping_writer::<u8>(&upload_memory, 0..upload_size)
-                                .unwrap();
+                            let mut mapping = unsafe {
+                                device.acquire_mapping_writer::<u8>(&upload_memory, 0..upload_size)
+                            }.unwrap();
                             for y in 0 .. (h as usize * d as usize) {
                                 let dest_range = y * row_pitch as usize .. y * row_pitch as usize + width_bytes as usize;
                                 file.read_exact(&mut mapping[dest_range])
                                     .unwrap();
                             }
-                            device.release_mapping_writer(mapping).unwrap();
+                            unsafe {
+                                device.release_mapping_writer(mapping).unwrap();
+                            }
                         }
                         // add init commands
                         let final_state = (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal);
@@ -381,11 +424,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             target: &image,
                             range: COLOR_RANGE.clone(), //TODO
                         };
-                        init_cmd.pipeline_barrier(
-                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
-                            memory::Dependencies::empty(),
-                            &[pre_barrier],
-                        );
+                        unsafe {
+                            init_cmd.pipeline_barrier(
+                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                                memory::Dependencies::empty(),
+                                &[pre_barrier],
+                            );
+                        }
 
                         let buffer_width = (row_pitch as u32 * 8) / format_desc.bits as u32;
                         let copy = c::BufferImageCopy {
@@ -400,23 +445,27 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             image_offset: i::Offset::ZERO,
                             image_extent: extent,
                         };
-                        init_cmd.copy_buffer_to_image(
-                            &upload_buffer,
-                            &image,
-                            i::Layout::TransferDstOptimal,
-                            &[copy],
-                        );
+                        unsafe {
+                            init_cmd.copy_buffer_to_image(
+                                &upload_buffer,
+                                &image,
+                                i::Layout::TransferDstOptimal,
+                                &[copy],
+                            );
+                        }
                         let post_barrier = memory::Barrier::Image {
                             states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal) .. final_state,
                             families: None,
                             target: &image,
                             range: COLOR_RANGE.clone(), //TODO
                         };
-                        init_cmd.pipeline_barrier(
-                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
-                            memory::Dependencies::empty(),
-                            &[post_barrier],
-                        );
+                        unsafe {
+                            init_cmd.pipeline_barrier(
+                                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                                memory::Dependencies::empty(),
+                                &[post_barrier],
+                            );
+                        }
                         // done
                         upload_buffers.insert(name.clone(), (upload_buffer, upload_memory));
                         final_state
@@ -492,9 +541,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         });
 
                     let rp = RenderPass {
-                        handle: device
-                            .create_render_pass(raw_atts, raw_subs, raw_deps)
-                            .expect("Render pass creation failure"),
+                        handle: unsafe {
+                            device.create_render_pass(raw_atts, raw_subs, raw_deps)
+                        }.expect("Render pass creation failure"),
                         attachments: attachments.keys().cloned().collect(),
                         subpasses: subpasses.keys().cloned().collect(),
                     };
@@ -526,23 +575,27 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     };
                     let mut spirv = Vec::new();
                     file.read_to_end(&mut spirv).unwrap();
-                    let module = device.create_shader_module(&spirv)
-                        .unwrap();
+                    let module = unsafe {
+                        device.create_shader_module(&spirv)
+                    }.unwrap();
                     resources.shaders.insert(name.clone(), module);
                 }
                 raw::Resource::DescriptorSetLayout { ref bindings, ref immutable_samplers } => {
                     assert!(immutable_samplers.is_empty()); //TODO! requires changing the order,
+                    assert!(!bindings.is_empty());
                     // since samples are expect to be all read by this point
-                    let layout = device
-                        .create_descriptor_set_layout(bindings, &[])
-                        .expect("Descriptor set layout creation failure!");
+                    let layout = unsafe {
+                        device.create_descriptor_set_layout(bindings, &[])
+                    }.expect("Descriptor set layout creation failure!");
                     let binding_indices = bindings.iter().map(|dsb| dsb.binding).collect();
                     resources.desc_set_layouts.insert(name.clone(), (binding_indices, layout));
                 }
                 raw::Resource::DescriptorPool { capacity, ref ranges } => {
-                    let pool = device
-                        .create_descriptor_pool(capacity, ranges)
-                        .expect("Descriptor pool creation failure!");
+                    assert!(!ranges.is_empty());
+                    assert!(capacity > 0);
+                    let pool = unsafe {
+                        device.create_descriptor_pool(capacity, ranges)
+                    }.expect("Descriptor pool creation failure!");
                     resources.desc_pools.insert(name.clone(), pool);
                 }
                 _ => {}
@@ -554,18 +607,20 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             match *resource {
                 raw::Resource::ImageView { ref image, kind, format, swizzle, ref range } => {
                     let image = &resources.images[image].handle;
-                    let view = device.create_image_view(image, kind, format, swizzle, range.clone())
-                        .unwrap();
+                    let view = unsafe {
+                        device.create_image_view(image, kind, format, swizzle, range.clone())
+                    }.unwrap();
                     resources.image_views.insert(name.clone(), view);
                 }
                 raw::Resource::DescriptorSet { ref pool, ref layout, ref data } => {
                     // create a descriptor set
                     let (ref binding_indices, ref set_layout) = resources.desc_set_layouts[layout];
-                    let desc_set = resources.desc_pools
-                        .get_mut(pool)
-                        .expect(&format!("Missing descriptor pool: {}", pool))
-                        .allocate_set(set_layout)
-                        .expect(&format!("Failed to allocate set with layout: {:?}", set_layout));
+                    let desc_set = unsafe {
+                        resources.desc_pools
+                            .get_mut(pool)
+                            .expect(&format!("Missing descriptor pool: {}", pool))
+                            .allocate_set(set_layout)
+                    }.expect(&format!("Failed to allocate set with layout: {:?}", set_layout));
                     resources.desc_sets.insert(name.clone(), desc_set);
                     // fill it up
                     let set = &resources.desc_sets[name];
@@ -592,16 +647,18 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 }
                             },
                         });
-                    device.write_descriptor_sets(writes);
+                    unsafe {
+                        device.write_descriptor_sets(writes);
+                    }
                 }
                 raw::Resource::PipelineLayout { ref set_layouts, ref push_constant_ranges } => {
                     let layout = {
                         let layouts = set_layouts
                             .iter()
                             .map(|sl| &resources.desc_set_layouts[sl].1);
-                        device
-                        	.create_pipeline_layout(layouts, push_constant_ranges)
-                        	.unwrap()
+                        unsafe {
+                            device.create_pipeline_layout(layouts, push_constant_ranges)
+                        }.unwrap()
                     };
                     resources.pipeline_layouts.insert(name.clone(), layout);
                 }
@@ -624,8 +681,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     .unwrap();
                                 &resources.image_views[entry.1]
                             });
-                        device.create_framebuffer(&rp.handle, image_views, extent)
-                            .unwrap()
+                        unsafe {
+                            device.create_framebuffer(&rp.handle, image_views, extent)
+                        }.unwrap()
                     };
                     resources.framebuffers.insert(name.clone(), (framebuffer, extent));
                 }
@@ -677,9 +735,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         flags: pso::PipelineCreationFlags::empty(),
                         parent: pso::BasePipeline::None,
                     };
-                    let pso = device.create_graphics_pipelines(&[desc], None)
-                        .swap_remove(0)
-                        .unwrap();
+                    let pso = unsafe {
+                        device.create_graphics_pipelines(&[desc], None)
+                    }.remove(0).unwrap();
                     resources.graphics_pipelines.insert(name.clone(), pso);
                 }
                 raw::Resource::ComputePipeline { ref shader, ref layout } => {
@@ -697,26 +755,30 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         flags: pso::PipelineCreationFlags::empty(),
                         parent: pso::BasePipeline::None,
                     };
-                    let pso = device.create_compute_pipelines(&[desc], None)
-                        .swap_remove(0)
-                        .unwrap();
+                    let pso = unsafe {
+                        device.create_compute_pipelines(&[desc], None)
+                    }.remove(0).unwrap();
                     resources.compute_pipelines.insert(name.clone(), (layout.clone(), pso));
                 }
                 _ => {}
             }
         }
 
-        init_cmd.finish();
+        unsafe {
+            init_cmd.finish();
+        }
 
         // fill up command buffers
         let mut jobs = HashMap::new();
         for (name, job) in &raw.jobs {
             use raw::TransferCommand as Tc;
             let mut command_buf = command_pool.acquire_command_buffer::<c::MultiShot>();
-            command_buf.begin(false);
+            unsafe {
+                command_buf.begin(false);
+            }
             match *job {
                 raw::Job::Transfer(ref command) => match *command {
-                    Tc::CopyBuffer { ref src, ref dst, ref regions } => {
+                    Tc::CopyBuffer { ref src, ref dst, ref regions } => unsafe {
                         let sb = resources.buffers
                             .get(src)
                             .expect(&format!("Missing source buffer: {}", src));
@@ -741,7 +803,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             ],
                         );
                     }
-                    Tc::CopyImage { ref src, ref dst, ref regions } => {
+                    Tc::CopyImage { ref src, ref dst, ref regions } => unsafe {
                         let st = resources.images
                             .get(src)
                             .expect(&format!("Missing source image: {}", src));
@@ -770,7 +832,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             ],
                         );
                     }
-                    Tc::CopyBufferToImage { ref src, ref dst, ref regions } => {
+                    Tc::CopyBufferToImage { ref src, ref dst, ref regions } => unsafe {
                         let sb = resources.buffers
                             .get(src)
                             .expect(&format!("Missing source buffer: {}", src));
@@ -799,7 +861,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             ],
                         );
                     }
-                    Tc::CopyImageToBuffer { ref src, ref dst, ref regions } => {
+                    Tc::CopyImageToBuffer { ref src, ref dst, ref regions } => unsafe {
                         let st = resources.images
                             .get(src)
                             .expect(&format!("Missing source image: {}", src));
@@ -828,7 +890,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             ],
                         );
                     }
-                    Tc::ClearImage { ref image, color, depth_stencil, ref ranges } => {
+                    Tc::ClearImage { ref image, color, depth_stencil, ref ranges } => unsafe {
                         let img = resources.images
                             .get(image)
                             .expect(&format!("Missing clear image: {}", image));
@@ -853,7 +915,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             ],
                         );
                     }
-                    Tc::BlitImage { ref src, ref dst, filter, ref regions } => {
+                    Tc::BlitImage { ref src, ref dst, filter, ref regions } => unsafe {
                         let st = resources.images
                             .get(src)
                             .expect(&format!("Missing source image: {}", src));
@@ -883,7 +945,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             ],
                         );
                     }
-                    Tc::FillBuffer { ref buffer, start, end, data } => {
+                    Tc::FillBuffer { ref buffer, start, end, data } => unsafe {
                         let buf = resources.buffers
                             .get(buffer)
                             .expect(&format!("Missing buffer: {}", buffer));
@@ -900,7 +962,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         );
                     }
                 }
-                raw::Job::Graphics { ref framebuffer, ref pass, ref clear_values } => {
+                raw::Job::Graphics { ref framebuffer, ref pass, ref clear_values } => unsafe {
                     let (ref fb, extent) = resources.framebuffers[framebuffer];
                     let rp = &resources.render_passes[&pass.0];
                     let rect = pso::Rect {
@@ -982,7 +1044,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         }
                     }
                 }
-                raw::Job::Compute { ref pipeline, ref descriptor_sets, dispatch } => {
+                raw::Job::Compute { ref pipeline, ref descriptor_sets, dispatch } => unsafe {
                     let (ref layout, ref pso) = resources.compute_pipelines[pipeline];
                     command_buf.bind_compute_pipeline(pso);
                     command_buf.bind_compute_descriptor_sets(
@@ -1001,7 +1063,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 }
             }
 
-            command_buf.finish();
+            unsafe {
+                command_buf.finish();
+            }
             jobs.insert(name.clone(), Job {
                 submission: command_buf,
             });
@@ -1038,7 +1102,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             });
 
         let command_buffers = iter::once(&self.init_submit).chain(submits);
-        self.queue_group.queues[0].submit_nosemaphores(command_buffers, None);
+        unsafe {
+            self.queue_group.queues[0].submit_nosemaphores(command_buffers, None);
+        }
     }
 
     pub fn fetch_buffer(&mut self, name: &str) -> FetchGuard<B> {
@@ -1049,23 +1115,29 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 
         let down_size = align(buffer.size as u64, limits.min_buffer_copy_pitch_alignment);
 
-        let mut down_buffer = self.device.create_buffer(down_size, b::Usage::TRANSFER_DST)
-            .unwrap();
-        let down_req = self.device.get_buffer_requirements(&down_buffer);
+        let mut down_buffer = unsafe {
+            self.device.create_buffer(down_size, b::Usage::TRANSFER_DST)
+        }.unwrap();
+        let down_req = unsafe {
+            self.device.get_buffer_requirements(&down_buffer)
+        };
         assert_ne!(down_req.type_mask & (1<<self.download_type.0), 0);
-        let down_memory = self.device.allocate_memory(self.download_type, down_req.size)
-            .unwrap();
-        self.device.bind_buffer_memory(&down_memory, 0, &mut down_buffer)
-            .unwrap();
+        let down_memory = unsafe {
+            self.device.allocate_memory(self.download_type, down_req.size)
+        }.unwrap();
 
-        let mut command_pool = self.device
-	        .create_command_pool_typed(
+        unsafe {
+            self.device.bind_buffer_memory(&down_memory, 0, &mut down_buffer)
+        }.unwrap();
+
+        let mut command_pool = unsafe {
+            self.device.create_command_pool_typed(
 	            &self.queue_group,
 	            hal::pool::CommandPoolCreateFlags::empty(),
 	        )
-	        .expect("Can't create command pool");
+        }.expect("Can't create command pool");
         let mut cmd_buffer = command_pool.acquire_command_buffer::<c::OneShot>();
-        {
+        unsafe {
             cmd_buffer.begin();
             let pre_barrier = memory::Barrier::whole_buffer(&buffer.handle,
                 buffer.stable_state .. b::Access::TRANSFER_READ);
@@ -1099,15 +1171,16 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let copy_fence = self.device
         	.create_fence(false)
         	.expect("Can't create copy-fence");
-        self.queue_group.queues[0].submit_nosemaphores(iter::once(&cmd_buffer), Some(&copy_fence));
-        self.device.wait_for_fence(&copy_fence, !0).unwrap();
-        self.device.destroy_fence(copy_fence);
-        self.device.destroy_command_pool(command_pool.into_raw());
+        unsafe {
+            self.queue_group.queues[0].submit_nosemaphores(iter::once(&cmd_buffer), Some(&copy_fence));
+            self.device.wait_for_fence(&copy_fence, !0).unwrap();
+            self.device.destroy_fence(copy_fence);
+            self.device.destroy_command_pool(command_pool.into_raw());
+        }
 
-        let mapping = self
-            .device
-            .map_memory(&down_memory, 0 .. down_size)
-            .unwrap();
+        let mapping = unsafe {
+            self.device.map_memory(&down_memory, 0 .. down_size)
+        }.unwrap();
 
         FetchGuard {
             device: &mut self.device,
@@ -1141,23 +1214,28 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
         let down_size = (row_pitch * height * depth as u64) / block_height as u64;
 
-        let mut down_buffer = self.device.create_buffer(down_size, b::Usage::TRANSFER_DST)
-            .unwrap();
-        let down_req = self.device.get_buffer_requirements(&down_buffer);
+        let mut down_buffer = unsafe {
+            self.device.create_buffer(down_size, b::Usage::TRANSFER_DST)
+        }.unwrap();
+        let down_req = unsafe {
+            self.device.get_buffer_requirements(&down_buffer)
+        };
         assert_ne!(down_req.type_mask & (1<<self.download_type.0), 0);
-        let down_memory = self.device.allocate_memory(self.download_type, down_req.size)
-            .unwrap();
-        self.device.bind_buffer_memory(&down_memory, 0, &mut down_buffer)
-            .unwrap();
+        let down_memory = unsafe {
+            self.device.allocate_memory(self.download_type, down_req.size)
+        }.unwrap();
+        unsafe {
+            self.device.bind_buffer_memory(&down_memory, 0, &mut down_buffer)
+        }.unwrap();
 
-        let mut command_pool = self.device
-        	.create_command_pool_typed(
+        let mut command_pool = unsafe {
+            self.device.create_command_pool_typed(
 	            &self.queue_group,
 	            hal::pool::CommandPoolCreateFlags::empty(),
 	        )
-	        .expect("Can't create command pool");
+        }.expect("Can't create command pool");
         let mut cmd_buffer = command_pool.acquire_command_buffer::<c::OneShot>();
-        {
+        unsafe {
             cmd_buffer.begin();
             let pre_barrier = memory::Barrier::Image {
                 states: image.stable_state .. (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
@@ -1211,15 +1289,16 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let copy_fence = self.device
         	.create_fence(false)
         	.expect("Can't create copy-fence");
-        self.queue_group.queues[0].submit_nosemaphores(iter::once(&cmd_buffer), Some(&copy_fence));
-        self.device.wait_for_fence(&copy_fence, !0).unwrap();
-        self.device.destroy_fence(copy_fence);
-        self.device.destroy_command_pool(command_pool.into_raw());
+        unsafe {
+            self.queue_group.queues[0].submit_nosemaphores(iter::once(&cmd_buffer), Some(&copy_fence));
+            self.device.wait_for_fence(&copy_fence, !0).unwrap();
+            self.device.destroy_fence(copy_fence);
+            self.device.destroy_command_pool(command_pool.into_raw());
+        }
 
-        let mapping = self
-            .device
-            .map_memory(&down_memory, 0 .. down_size)
-            .unwrap();
+        let mapping = unsafe {
+            self.device.map_memory(&down_memory, 0 .. down_size)
+        }.unwrap();
 
         FetchGuard {
             device: &mut self.device,
@@ -1234,12 +1313,14 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 
 impl<B: hal::Backend, C> Drop for Scene<B, C> {
     fn drop(&mut self) {
-        for (_, (buffer, memory)) in self.upload_buffers.drain() {
-            self.device.destroy_buffer(buffer);
-            self.device.free_memory(memory);
+        unsafe {
+            for (_, (buffer, memory)) in self.upload_buffers.drain() {
+                self.device.destroy_buffer(buffer);
+                self.device.free_memory(memory);
+            }
+            //TODO: free those properly
+            let _ = &self.queue_group;
+            self.device.destroy_command_pool(self.command_pool.take().unwrap().into_raw());
         }
-        //TODO: free those properly
-        let _ = &self.queue_group;
-        self.device.destroy_command_pool(self.command_pool.take().unwrap().into_raw());
     }
 }

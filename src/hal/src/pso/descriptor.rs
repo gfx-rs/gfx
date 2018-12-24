@@ -142,7 +142,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// 
     /// [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
     /// [`DescriptorSetCopy`]: struct.DescriptorSetCopy.html
-    fn allocate_set(&mut self, layout: &B::DescriptorSetLayout) -> Result<B::DescriptorSet, AllocationError> {
+    unsafe fn allocate_set(&mut self, layout: &B::DescriptorSetLayout) -> Result<B::DescriptorSet, AllocationError> {
         let mut sets = Vec::with_capacity(1);
         self.allocate_sets(Some(layout), &mut sets)
             .map(|_| sets.remove(0))
@@ -160,7 +160,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// 
     /// [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
     /// [`DescriptorSetCopy`]: struct.DescriptorSetCopy.html
-    fn allocate_sets<I>(&mut self, layouts: I, sets: &mut Vec<B::DescriptorSet>) -> Result<(), AllocationError>
+    unsafe fn allocate_sets<I>(&mut self, layouts: I, sets: &mut Vec<B::DescriptorSet>) -> Result<(), AllocationError>
     where
         I: IntoIterator,
         I::Item: Borrow<B::DescriptorSetLayout>,
@@ -179,7 +179,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     }
 
     /// Free the given descriptor sets provided as an iterator.
-    fn free_sets<I>(&mut self, descriptor_sets: I)
+    unsafe fn free_sets<I>(&mut self, descriptor_sets: I)
     where
         I: IntoIterator<Item = B::DescriptorSet>;
 
@@ -187,7 +187,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     /// allocated from it and freeing the descriptor sets. Invalidates all descriptor
     /// sets allocated from the pool; trying to use one after the pool has been reset
     /// is undefined behavior.
-    fn reset(&mut self);
+    unsafe fn reset(&mut self);
 }
 
 /// Writes the actual descriptors to be bound into a descriptor set. Should be provided

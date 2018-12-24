@@ -740,7 +740,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 
     #[cfg(feature = "glutin")]
-    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
     where
         W: 'a + Borrow<window::glutin::Swapchain>,
         Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,

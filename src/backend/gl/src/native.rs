@@ -176,21 +176,21 @@ pub struct DescriptorSet {
 pub struct DescriptorPool {}
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
+    unsafe fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
         Ok(DescriptorSet {
             layout: layout.clone(),
             bindings: Arc::new(Mutex::new(Vec::new())),
         })
     }
 
-    fn free_sets<I>(&mut self, _descriptor_sets: I)
+    unsafe fn free_sets<I>(&mut self, _descriptor_sets: I)
     where
         I: IntoIterator<Item = DescriptorSet>
     {
         // Poof!  Does nothing, because OpenGL doesn't have a meaningful concept of a `DescriptorSet`.
     }
 
-    fn reset(&mut self) {
+    unsafe fn reset(&mut self) {
         // Poof!  Does nothing, because OpenGL doesn't have a meaningful concept of a `DescriptorSet`.
     }
 }

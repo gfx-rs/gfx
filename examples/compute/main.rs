@@ -46,7 +46,7 @@ fn main() {
         .expect("Failed to find a GPU with compute support!");
 
     let memory_properties = adapter.physical_device.memory_properties();
-    let (mut device, mut queue_group) = adapter
+    let (device, mut queue_group) = adapter
         .open_with::<_, Compute>(1, |_family| true)
         .unwrap();
 
@@ -56,88 +56,100 @@ fn main() {
         .bytes()
         .map(|b| b.unwrap())
         .collect();
-    let shader = device.create_shader_module(&spirv).unwrap();
+    let shader = unsafe { device.create_shader_module(&spirv) }.unwrap();
 
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {
-        let set_layout = device.create_descriptor_set_layout(
-            &[
-                pso::DescriptorSetLayoutBinding {
-                    binding: 0,
-                    ty: pso::DescriptorType::StorageBuffer,
-                    count: 1,
-                    stage_flags: pso::ShaderStageFlags::COMPUTE,
-                    immutable_samplers: false,
-                }
-            ],
-            &[],
-        ).expect("Can't create descriptor set layout");
+        let set_layout = unsafe {
+            device.create_descriptor_set_layout(
+                &[
+                    pso::DescriptorSetLayoutBinding {
+                        binding: 0,
+                        ty: pso::DescriptorType::StorageBuffer,
+                        count: 1,
+                        stage_flags: pso::ShaderStageFlags::COMPUTE,
+                        immutable_samplers: false,
+                    }
+                ],
+                &[],
+            )
+        }.expect("Can't create descriptor set layout");
 
-        let pipeline_layout = device
-            .create_pipeline_layout(Some(&set_layout), &[])
-            .expect("Can't create pipeline layout");
+        let pipeline_layout = unsafe {
+            device.create_pipeline_layout(Some(&set_layout), &[])
+        }.expect("Can't create pipeline layout");
         let entry_point = pso::EntryPoint {
             entry: "main",
             module: &shader,
             specialization: pso::Specialization::default(),
         };
-        let pipeline = device
-            .create_compute_pipeline(&pso::ComputePipelineDesc::new(entry_point, &pipeline_layout), None)
-            .expect("Error creating compute pipeline!");
+        let pipeline = unsafe {
+            device.create_compute_pipeline(&pso::ComputePipelineDesc::new(entry_point, &pipeline_layout), None)
+        }.expect("Error creating compute pipeline!");
 
-        let desc_pool = device.create_descriptor_pool(
-            1,
-            &[
-                pso::DescriptorRangeDesc {
-                    ty: pso::DescriptorType::StorageBuffer,
-                    count: 1,
-                },
-            ],
-        ).expect("Can't create descriptor pool");
+        let desc_pool = unsafe {
+            device.create_descriptor_pool(
+                1,
+                &[
+                    pso::DescriptorRangeDesc {
+                        ty: pso::DescriptorType::StorageBuffer,
+                        count: 1,
+                    },
+                ],
+            )
+        }.expect("Can't create descriptor pool");
         (pipeline_layout, pipeline, set_layout, desc_pool)
     };
 
-    let (staging_memory, staging_buffer, staging_size) = create_buffer::<back::Backend>(
-        &mut device,
-        &memory_properties.memory_types,
-        memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
-        buffer::Usage::TRANSFER_SRC | buffer::Usage::TRANSFER_DST,
-        stride,
-        numbers.len() as u64,
-    );
+    let (staging_memory, staging_buffer, staging_size) = unsafe {
+        create_buffer::<back::Backend>(
+            &device,
+            &memory_properties.memory_types,
+            memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
+            buffer::Usage::TRANSFER_SRC | buffer::Usage::TRANSFER_DST,
+            stride,
+            numbers.len() as u64,
+        )
+    };
 
-    {
+    unsafe {
         let mut writer = device.acquire_mapping_writer::<u32>(&staging_memory, 0..staging_size).unwrap();
         writer[0..numbers.len()].copy_from_slice(&numbers);
         device.release_mapping_writer(writer).expect("Can't relase mapping writer");
     }
 
-    let (device_memory, device_buffer, _device_buffer_size) = create_buffer::<back::Backend>(
-        &mut device,
-        &memory_properties.memory_types,
-        memory::Properties::DEVICE_LOCAL,
-        buffer::Usage::TRANSFER_SRC | buffer::Usage::TRANSFER_DST | buffer::Usage::STORAGE,
-        stride,
-        numbers.len() as u64,
-    );
+    let (device_memory, device_buffer, _device_buffer_size) = unsafe {
+        create_buffer::<back::Backend>(
+            &device,
+            &memory_properties.memory_types,
+            memory::Properties::DEVICE_LOCAL,
+            buffer::Usage::TRANSFER_SRC | buffer::Usage::TRANSFER_DST | buffer::Usage::STORAGE,
+            stride,
+            numbers.len() as u64,
+        )
+    };
 
-    let desc_set = desc_pool.allocate_set(&set_layout).unwrap();
-    device.write_descriptor_sets(Some(
-        pso::DescriptorSetWrite {
-            set: &desc_set,
-            binding: 0,
-            array_offset: 0,
-            descriptors: Some(
-                pso::Descriptor::Buffer(&device_buffer, None .. None)
-            ),
-        }
-    ));
+    let desc_set;
 
-    let mut command_pool = device
-    	.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
-    	.expect("Can't create command pool");
+    unsafe {
+        desc_set = desc_pool.allocate_set(&set_layout).unwrap();
+        device.write_descriptor_sets(Some(
+            pso::DescriptorSetWrite {
+                set: &desc_set,
+                binding: 0,
+                array_offset: 0,
+                descriptors: Some(
+                    pso::Descriptor::Buffer(&device_buffer, None .. None)
+                ),
+            }
+        ));
+    };
+
+    let mut command_pool = unsafe {
+        device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
+    }.expect("Can't create command pool");
     let fence = device.create_fence(false).unwrap();
     let mut command_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
-    {
+    unsafe {
         command_buffer.begin();
         command_buffer.copy_buffer(&staging_buffer, &device_buffer, &[command::BufferCopy { src: 0, dst: 0, size: stride * numbers.len() as u64}]);
         command_buffer.pipeline_barrier(
@@ -167,31 +179,34 @@ fn main() {
         command_buffer.finish();
 
         queue_group.queues[0].submit_nosemaphores(Some(&command_buffer), Some(&fence));
-    }
-    device.wait_for_fence(&fence, !0).unwrap();
-    command_pool.free(Some(command_buffer));
 
-    {
+        device.wait_for_fence(&fence, !0).unwrap();
+        command_pool.free(Some(command_buffer));
+    }
+
+    unsafe {
         let reader = device.acquire_mapping_reader::<u32>(&staging_memory, 0..staging_size).unwrap();
         println!("Times: {:?}", reader[0..numbers.len()].into_iter().map(|n| *n).collect::<Vec<u32>>());
         device.release_mapping_reader(reader);
     }
 
-    device.destroy_command_pool(command_pool.into_raw());
-    device.destroy_descriptor_pool(desc_pool);
-    device.destroy_descriptor_set_layout(set_layout);
-    device.destroy_shader_module(shader);
-    device.destroy_buffer(device_buffer);
-    device.destroy_buffer(staging_buffer);
-    device.destroy_fence(fence);
-    device.destroy_pipeline_layout(pipeline_layout);
-    device.free_memory(device_memory);
-    device.free_memory(staging_memory);
-    device.destroy_compute_pipeline(pipeline);
+    unsafe {
+        device.destroy_command_pool(command_pool.into_raw());
+        device.destroy_descriptor_pool(desc_pool);
+        device.destroy_descriptor_set_layout(set_layout);
+        device.destroy_shader_module(shader);
+        device.destroy_buffer(device_buffer);
+        device.destroy_buffer(staging_buffer);
+        device.destroy_fence(fence);
+        device.destroy_pipeline_layout(pipeline_layout);
+        device.free_memory(device_memory);
+        device.free_memory(staging_memory);
+        device.destroy_compute_pipeline(pipeline);
+    }
 }
 
-fn create_buffer<B: Backend>(
-    device: &mut B::Device,
+unsafe fn create_buffer<B: Backend>(
+    device: &B::Device,
     memory_types: &[hal::MemoryType],
     properties: memory::Properties,
     usage: buffer::Usage,

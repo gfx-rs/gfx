@@ -487,7 +487,7 @@ impl DescriptorPool {
 }
 
 impl HalDescriptorPool<Backend> for DescriptorPool {
-    fn allocate_set(&mut self, set_layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
+    unsafe fn allocate_set(&mut self, set_layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
         self.report_available();
         match *self {
             DescriptorPool::Emulated { ref inner, ref mut allocators } => {
@@ -605,7 +605,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         }
     }
 
-    fn free_sets<I>(&mut self, descriptor_sets: I)
+    unsafe fn free_sets<I>(&mut self, descriptor_sets: I)
     where
         I: IntoIterator<Item = DescriptorSet>
     {
@@ -659,7 +659,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         self.report_available();
     }
 
-    fn reset(&mut self) {
+    unsafe fn reset(&mut self) {
         match *self {
             DescriptorPool::Emulated { ref inner, ref mut allocators } => {
                 debug!("pool: reset");

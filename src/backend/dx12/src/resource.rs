@@ -532,7 +532,7 @@ unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
 impl HalDescriptorPool<Backend> for DescriptorPool {
-    fn allocate_set(
+    unsafe fn allocate_set(
         &mut self,
         layout: &DescriptorSetLayout,
     ) -> Result<DescriptorSet, pso::AllocationError> {
@@ -598,7 +598,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         })
     }
 
-    fn free_sets<I>(&mut self, descriptor_sets: I)
+    unsafe fn free_sets<I>(&mut self, descriptor_sets: I)
     where
         I: IntoIterator<Item = DescriptorSet>,
     {
@@ -618,7 +618,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         }
     }
 
-    fn reset(&mut self) {
+    unsafe fn reset(&mut self) {
         self.heap_srv_cbv_uav.clear();
         self.heap_sampler.clear();
     }
