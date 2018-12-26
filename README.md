@@ -5,9 +5,6 @@
   <a href="https://travis-ci.org/gfx-rs/gfx">
       <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?style=flat-square" alt="Travis Build Status">
   </a>
-  <a href="https://ci.appveyor.com/project/kvark/gfx">
-      <img src="https://ci.appveyor.com/api/projects/status/ryn5ee3aumpmbw5l?svg=true" alt="AppVeyor Build Status">
-  </a>
   <a href="https://crates.io/crates/gfx-hal">
       <img src="http://img.shields.io/crates/v/gfx-hal.svg?label=gfx-hal" alt = "gfx-hal on crates.io">
   </a>
