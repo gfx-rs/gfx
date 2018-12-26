@@ -164,7 +164,7 @@ pub struct ImageBlit {
 
 impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn clear_image<T>(
+    pub unsafe fn clear_image<T>(
         &mut self,
         image: &B::Image,
         layout: image::Layout,
@@ -179,12 +179,12 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<B>) {
+    pub unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<B>) {
         self.raw.bind_index_buffer(ibv)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    pub unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<B::Buffer>,
@@ -193,12 +193,12 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
+    pub unsafe fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.raw.bind_graphics_pipeline(pipeline)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_graphics_descriptor_sets<I, J>(
+    pub unsafe fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
@@ -214,7 +214,7 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
+    pub unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
@@ -223,7 +223,7 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
+    pub unsafe fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
@@ -232,47 +232,47 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    pub unsafe fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
         self.raw.set_stencil_reference(faces, value);
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    pub unsafe fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
         self.raw.set_stencil_read_mask(faces, value);
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    pub unsafe fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
         self.raw.set_stencil_write_mask(faces, value);
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_blend_constants(&mut self, cv: pso::ColorValue) {
+    pub unsafe fn set_blend_constants(&mut self, cv: pso::ColorValue) {
         self.raw.set_blend_constants(cv)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_depth_bounds(&mut self, bounds: Range<f32>) {
+    pub unsafe fn set_depth_bounds(&mut self, bounds: Range<f32>) {
         self.raw.set_depth_bounds(bounds)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_line_width(&mut self, width: f32) {
+    pub unsafe fn set_line_width(&mut self, width: f32) {
         self.raw.set_line_width(width);
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {
+    pub unsafe fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {
         self.raw.set_depth_bias(depth_bias);
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
+    pub unsafe fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
         self.raw.push_graphics_constants(layout, stages, offset, constants)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn resolve_image<T>(
+    pub unsafe fn resolve_image<T>(
         &mut self,
         src: &B::Image,
         src_layout: image::Layout,
@@ -287,7 +287,7 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn blit_image<T>(
+    pub unsafe fn blit_image<T>(
         &mut self,
         src: &B::Image,
         src_layout: image::Layout,
@@ -305,7 +305,7 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
 
 impl<B: Backend, C: Supports<Graphics>, S: Shot> CommandBuffer<B, C, S, Primary> {
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn begin_render_pass_inline<T>(
+    pub unsafe fn begin_render_pass_inline<T>(
         &mut self,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
@@ -320,7 +320,7 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot> CommandBuffer<B, C, S, Primary>
     }
 
     /// Creates a new secondary render pass.
-    pub fn begin_render_pass_secondary<T>(
+    pub unsafe fn begin_render_pass_secondary<T>(
         &mut self,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
@@ -337,22 +337,22 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot> CommandBuffer<B, C, S, Primary>
 
 impl<B: Backend, C: Supports<GraphicsOrCompute>, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn begin_query(&mut self, query: query::Query<B>, flags: query::ControlFlags) {
+    pub unsafe fn begin_query(&mut self, query: query::Query<B>, flags: query::ControlFlags) {
         self.raw.begin_query(query, flags)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn end_query(&mut self, query: query::Query<B>) {
+    pub unsafe fn end_query(&mut self, query: query::Query<B>) {
         self.raw.end_query(query)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<query::Id>) {
+    pub unsafe fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<query::Id>) {
         self.raw.reset_query_pool(pool, queries)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn copy_query_pool_results(
+    pub unsafe fn copy_query_pool_results(
         &mut self,
         pool: &B::QueryPool,
         queries: Range<query::Id>,
@@ -365,7 +365,7 @@ impl<B: Backend, C: Supports<GraphicsOrCompute>, S: Shot, L: Level> CommandBuffe
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>) {
+    pub unsafe fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>) {
         self.raw.write_timestamp(stage, query)
     }
 }

@@ -33,7 +33,7 @@ pub struct RenderSubpassCommon<B, C> {
 }
 
 impl<B: Backend, C: BorrowMut<B::CommandBuffer>> RenderSubpassCommon<B, C> {
-    fn new(cmb: C) -> Self {
+    unsafe fn new(cmb: C) -> Self {
         RenderSubpassCommon {
             cmb,
             _marker: PhantomData,
@@ -41,7 +41,7 @@ impl<B: Backend, C: BorrowMut<B::CommandBuffer>> RenderSubpassCommon<B, C> {
     }
 
     ///
-    pub fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
+    pub unsafe fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
         T: IntoIterator,
         T::Item: Borrow<AttachmentClear>,
@@ -52,31 +52,31 @@ impl<B: Backend, C: BorrowMut<B::CommandBuffer>> RenderSubpassCommon<B, C> {
     }
 
     ///
-    pub fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
+    pub unsafe fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
         self.cmb.borrow_mut().draw(vertices, instances)
     }
 
     ///
-    pub fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
+    pub unsafe fn draw_indexed(&mut self, indices: Range<IndexCount>, base_vertex: VertexOffset, instances: Range<InstanceCount>) {
         self.cmb.borrow_mut().draw_indexed(indices, base_vertex, instances)
     }
 
     ///
-    pub fn draw_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
+    pub unsafe fn draw_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
         self.cmb.borrow_mut().draw_indirect(buffer, offset, draw_count, stride)
     }
     ///
-    pub fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
+    pub unsafe fn draw_indexed_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset, draw_count: DrawCount, stride: u32) {
         self.cmb.borrow_mut().draw_indexed_indirect(buffer, offset, draw_count, stride)
     }
 
     ///
-    pub fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<B>) {
+    pub unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<B>) {
         self.cmb.borrow_mut().bind_index_buffer(ibv)
     }
 
     ///
-    pub fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    pub unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<B::Buffer>,
@@ -85,12 +85,12 @@ impl<B: Backend, C: BorrowMut<B::CommandBuffer>> RenderSubpassCommon<B, C> {
     }
 
     ///
-    pub fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
+    pub unsafe fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline) {
         self.cmb.borrow_mut().bind_graphics_pipeline(pipeline)
     }
 
     ///
-    pub fn bind_graphics_descriptor_sets<I, J>(
+    pub unsafe fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
@@ -106,7 +106,7 @@ impl<B: Backend, C: BorrowMut<B::CommandBuffer>> RenderSubpassCommon<B, C> {
     }
 
     ///
-    pub fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
+    pub unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
@@ -115,7 +115,7 @@ impl<B: Backend, C: BorrowMut<B::CommandBuffer>> RenderSubpassCommon<B, C> {
     }
 
     ///
-    pub fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
+    pub unsafe fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
@@ -124,59 +124,59 @@ impl<B: Backend, C: BorrowMut<B::CommandBuffer>> RenderSubpassCommon<B, C> {
     }
 
     ///
-    pub fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    pub unsafe fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
         self.cmb.borrow_mut().set_stencil_reference(faces, value);
     }
 
     ///
-    pub fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    pub unsafe fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
         self.cmb.borrow_mut().set_stencil_read_mask(faces, value);
     }
 
     ///
-    pub fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    pub unsafe fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
         self.cmb.borrow_mut().set_stencil_write_mask(faces, value);
     }
 
     ///
-    pub fn set_blend_constants(&mut self, cv: pso::ColorValue) {
+    pub unsafe fn set_blend_constants(&mut self, cv: pso::ColorValue) {
         self.cmb.borrow_mut().set_blend_constants(cv)
     }
 
     ///
-    pub fn set_depth_bounds(&mut self, bounds: Range<f32>) {
+    pub unsafe fn set_depth_bounds(&mut self, bounds: Range<f32>) {
         self.cmb.borrow_mut().set_depth_bounds(bounds)
     }
 
     ///
-    pub fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
+    pub unsafe fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
         self.cmb.borrow_mut().push_graphics_constants(layout, stages, offset, constants);
     }
 
     ///
-    pub fn set_line_width(&mut self, width: f32) {
+    pub unsafe fn set_line_width(&mut self, width: f32) {
         self.cmb.borrow_mut().set_line_width(width);
     }
 
     ///
-    pub fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {
+    pub unsafe fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {
         self.cmb.borrow_mut().set_depth_bias(depth_bias);
     }
 
     // TODO: pipeline barrier (postponed)
 
     ///
-    pub fn begin_query(&mut self, query: query::Query<B>, flags: query::ControlFlags) {
+    pub unsafe fn begin_query(&mut self, query: query::Query<B>, flags: query::ControlFlags) {
         self.cmb.borrow_mut().begin_query(query, flags)
     }
 
     ///
-    pub fn end_query(&mut self, query: query::Query<B>) {
+    pub unsafe fn end_query(&mut self, query: query::Query<B>) {
         self.cmb.borrow_mut().end_query(query)
     }
 
     ///
-    pub fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>) {
+    pub unsafe fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>) {
         self.cmb.borrow_mut().write_timestamp(stage, query)
     }
 }
@@ -189,7 +189,7 @@ where B::CommandBuffer: 'a;
 impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     /// Creates a new `RenderPassInlineEncoder`, starting a new render
     /// pass in the given `CommandBuffer`.
-    pub fn new<C, T, S: Shot>(
+    pub unsafe fn new<C, T, S: Shot>(
         cmd_buffer: &'a mut CommandBuffer<B, C, S, Primary>,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
@@ -218,13 +218,17 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
 
     /// Start the next subpass.
     pub fn next_subpass_inline(self) -> Self {
-        self.0.cmb.next_subpass(SubpassContents::Inline);
+        unsafe {
+            self.0.cmb.next_subpass(SubpassContents::Inline);
+        }
         self
     }
 
    /// Begins recording a new subpass with secondary buffers.
     pub fn next_subpass_secondary(self) -> RenderPassSecondaryEncoder<'a, B> {
-        self.0.cmb.next_subpass(SubpassContents::SecondaryBuffers);
+        unsafe {
+            self.0.cmb.next_subpass(SubpassContents::SecondaryBuffers);
+        }
         RenderPassSecondaryEncoder(self.0.cmb)
     }
 }
@@ -244,7 +248,9 @@ impl<'a, B: Backend> DerefMut for RenderPassInlineEncoder<'a, B> {
 
 impl<'a, B: Backend> Drop for RenderPassInlineEncoder<'a, B> {
     fn drop(&mut self) {
-        self.0.cmb.end_render_pass();
+        unsafe {
+            self.0.cmb.end_render_pass();
+        }
     }
 }
 
@@ -257,7 +263,7 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
     /// Wraps the given `CommandBuffer` in a `RenderPassSecondaryEncoder`,
     /// starting a new render pass where the actual commands are contained in
     /// secondary command buffers.
-    pub fn new<C, T, S: Shot>(
+    pub unsafe fn new<C, T, S: Shot>(
         cmd_buffer: &'a mut CommandBuffer<B, C, S, Primary>,
         render_pass: &B::RenderPass,
         frame_buffer: &B::Framebuffer,
@@ -287,7 +293,7 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
     }
 
     /// Executes the given commands as a secondary command buffer.
-    pub fn execute_commands<'b, T, I>(&mut self, cmd_buffers: I)
+    pub unsafe fn execute_commands<'b, T, I>(&mut self, cmd_buffers: I)
     where
         T: 'b + Submittable<B, Graphics, Secondary>,
         I: IntoIterator<Item = &'b T>,
@@ -297,25 +303,28 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
 
     /// Starts a new subpass with inline commands.
     pub fn next_subpass_inline(self) -> RenderPassInlineEncoder<'a, B> {
-        self.0.next_subpass(SubpassContents::Inline);
-        RenderPassInlineEncoder(RenderSubpassCommon::new(self.0))
+        unsafe {
+            self.0.next_subpass(SubpassContents::Inline);
+            RenderPassInlineEncoder(RenderSubpassCommon::new(self.0))
+        }
     }
 
     /// Starts a new subpass with secondary command buffers.
     pub fn next_subpass_secondary(self) -> Self {
-        self.0.next_subpass(SubpassContents::SecondaryBuffers);
+        unsafe {
+            self.0.next_subpass(SubpassContents::SecondaryBuffers);
+        }
         self
     }
 }
 
 impl<'a, B: Backend> Drop for RenderPassSecondaryEncoder<'a, B> {
     fn drop(&mut self) {
-        self.0.end_render_pass();
+        unsafe {
+            self.0.end_render_pass();
+        }
     }
 }
-
-/// Capability used only for subpass command buffers.
-pub enum Subpass { }
 
 /// A secondary command buffer recorded entirely within a subpass.
 pub struct SubpassCommandBuffer<B: Backend, S: Shot>(RenderSubpassCommon<B, B::CommandBuffer>, PhantomData<S>);
@@ -330,14 +339,14 @@ impl<B: Backend, S: Shot> SubpassCommandBuffer<B, S> {
     /// Finish recording commands to the command buffer.
     ///
     /// The command pool must be reset to able to re-record commands.
-    pub fn finish(&mut self) {
+    pub unsafe fn finish(&mut self) {
         self.0.cmb.finish();
     }
 }
 
 impl<B: Backend> SubpassCommandBuffer<B, OneShot> {
     /// Begin recording a one-shot sub-pass command buffer.
-    pub fn begin<'a>(
+    pub unsafe fn begin<'a>(
         &mut self,
         subpass: pass::Subpass<'a, B>,
         framebuffer: Option<&'a B::Framebuffer>,
@@ -355,7 +364,7 @@ impl<B: Backend> SubpassCommandBuffer<B, OneShot> {
 
 impl<B: Backend> SubpassCommandBuffer<B, MultiShot> {
     /// Begin recording a one-shot sub-pass command buffer.
-    pub fn begin<'a>(
+    pub unsafe fn begin<'a>(
         &mut self,
         allow_pending_resubmit: bool,
         subpass: pass::Subpass<'a, B>,

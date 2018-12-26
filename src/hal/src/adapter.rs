@@ -67,10 +67,11 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     ///
     /// # let physical_device: empty::PhysicalDevice = return;
     /// # let family: empty::QueueFamily = return;
+    /// # unsafe {
     /// let gpu = physical_device.open(&[(&family, &[1.0; 1])]);
-    /// # }
+    /// # }}
     /// ```
-    fn open(
+    unsafe fn open(
         &self,
         families: &[(&B::QueueFamily, &[QueuePriority])],
     ) -> Result<Gpu<B>, DeviceCreationError>;
@@ -192,7 +193,9 @@ impl<B: Backend> Adapter<B> {
             _ => return Err(DeviceCreationError::InitializationFailed),
         };
 
-        let Gpu { device, mut queues } = self.physical_device.open(&families)?;
+        let Gpu { device, mut queues } = unsafe {
+            self.physical_device.open(&families)
+        }?;
         Ok((device, queues.take(id).unwrap()))
     }
 }

@@ -348,7 +348,7 @@ pub struct PhysicalDevice {
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(
+    unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[hal::QueuePriority])],
     ) -> Result<hal::Gpu<Backend>, DeviceCreationError> {
@@ -765,7 +765,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         assert_eq!(Ok(()), result);
     }
 
-    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
     where
         W: 'a + Borrow<window::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,

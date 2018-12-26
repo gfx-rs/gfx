@@ -62,7 +62,7 @@ pub struct BufferImageCopy {
 
 impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn pipeline_barrier<'i, T>(
+    pub unsafe fn pipeline_barrier<'i, T>(
         &mut self,
         stages: Range<PipelineStage>,
         dependencies: Dependencies,
@@ -76,7 +76,7 @@ impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S
 
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn fill_buffer<R>(
+    pub unsafe fn fill_buffer<R>(
         &mut self,
         buffer: &B::Buffer,
         range: R,
@@ -88,7 +88,7 @@ impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn copy_buffer<T>(
+    pub unsafe fn copy_buffer<T>(
         &mut self,
         src: &B::Buffer,
         dst: &B::Buffer,
@@ -101,7 +101,7 @@ impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn update_buffer(
+    pub unsafe fn update_buffer(
         &mut self,
         buffer: &B::Buffer,
         offset: buffer::Offset,
@@ -111,7 +111,7 @@ impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn copy_image<T>(
+    pub unsafe fn copy_image<T>(
         &mut self,
         src: &B::Image,
         src_layout: image::Layout,
@@ -126,7 +126,7 @@ impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn copy_buffer_to_image<T>(
+    pub unsafe fn copy_buffer_to_image<T>(
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
@@ -140,7 +140,7 @@ impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn copy_image_to_buffer<T>(
+    pub unsafe fn copy_image_to_buffer<T>(
         &mut self,
         src: &B::Image,
         src_layout: image::Layout,

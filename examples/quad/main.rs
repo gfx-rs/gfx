@@ -117,13 +117,13 @@ fn main() {
         .open_with::<_, hal::Graphics>(1, |family| surface.supports_queue_family(family))
         .unwrap();
 
-    let mut command_pool = device
-        .create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
-        .expect("Can't create command pool");
+    let mut command_pool = unsafe {
+        device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
+    }.expect("Can't create command pool");
 
     // Setup renderpass and pipeline
-    let set_layout = device
-        .create_descriptor_set_layout(
+    let set_layout = unsafe {
+        device.create_descriptor_set_layout(
             &[
                 pso::DescriptorSetLayoutBinding {
                     binding: 0,
@@ -141,11 +141,12 @@ fn main() {
                 },
             ],
             &[],
-        ).expect("Can't create descriptor set layout");
+        )
+    }.expect("Can't create descriptor set layout");
 
     // Descriptors
-    let mut desc_pool = device
-        .create_descriptor_pool(
+    let mut desc_pool = unsafe {
+        device.create_descriptor_pool(
             1, // sets
             &[
                 pso::DescriptorRangeDesc {
@@ -157,8 +158,11 @@ fn main() {
                     count: 1,
                 },
             ],
-        ).expect("Can't create descriptor pool");
-    let desc_set = desc_pool.allocate_set(&set_layout).unwrap();
+        )
+    }.expect("Can't create descriptor pool");
+    let desc_set = unsafe {
+        desc_pool.allocate_set(&set_layout)
+    }.unwrap();
 
     // Buffer allocations
     println!("Memory types: {:?}", memory_types);
@@ -166,10 +170,14 @@ fn main() {
     let buffer_stride = std::mem::size_of::<Vertex>() as u64;
     let buffer_len = QUAD.len() as u64 * buffer_stride;
 
-    let mut vertex_buffer = device
-        .create_buffer(buffer_len, buffer::Usage::VERTEX)
-        .unwrap();
-    let buffer_req = device.get_buffer_requirements(&vertex_buffer);
+    assert_ne!(buffer_len, 0);
+    let mut vertex_buffer = unsafe {
+        device.create_buffer(buffer_len, buffer::Usage::VERTEX)
+    }.unwrap();
+
+    let buffer_req = unsafe {
+        device.get_buffer_requirements(&vertex_buffer)
+    };
 
     let upload_type = memory_types
         .iter()
@@ -183,15 +191,16 @@ fn main() {
         }).unwrap()
         .into();
 
-    let buffer_memory = device
-        .allocate_memory(upload_type, buffer_req.size)
-        .unwrap();
-    device
-        .bind_buffer_memory(&buffer_memory, 0, &mut vertex_buffer)
-        .unwrap();
+    let buffer_memory = unsafe {
+        device.allocate_memory(upload_type, buffer_req.size)
+    }.unwrap();
+
+    unsafe {
+        device.bind_buffer_memory(&buffer_memory, 0, &mut vertex_buffer)
+    }.unwrap();
 
     // TODO: check transitions: read/write mapping and vertex buffer read
-    {
+    unsafe {
         let mut vertices = device
             .acquire_mapping_writer::<Vertex>(&buffer_memory, 0..buffer_req.size)
             .unwrap();
@@ -212,19 +221,22 @@ fn main() {
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;
 
-    let mut image_upload_buffer = device
-        .create_buffer(upload_size, buffer::Usage::TRANSFER_SRC)
-        .unwrap();
-    let image_mem_reqs = device.get_buffer_requirements(&image_upload_buffer);
-    let image_upload_memory = device
-        .allocate_memory(upload_type, image_mem_reqs.size)
-        .unwrap();
-    device
-        .bind_buffer_memory(&image_upload_memory, 0, &mut image_upload_buffer)
-        .unwrap();
+    let mut image_upload_buffer = unsafe {
+        device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC)
+    }.unwrap();
+    let image_mem_reqs = unsafe {
+        device.get_buffer_requirements(&image_upload_buffer)
+    };
+    let image_upload_memory = unsafe {
+        device.allocate_memory(upload_type, image_mem_reqs.size)
+    }.unwrap();
+    
+    unsafe {
+        device.bind_buffer_memory(&image_upload_memory, 0, &mut image_upload_buffer)
+    }.unwrap();
 
     // copy image data into staging buffer
-    {
+    unsafe {
         let mut data = device
             .acquire_mapping_writer::<u8>(&image_upload_memory, 0..image_mem_reqs.size)
             .unwrap();
@@ -237,16 +249,20 @@ fn main() {
         device.release_mapping_writer(data).unwrap();
     }
 
-    let mut image_logo = device
-        .create_image(
-            kind,
-            1,
-            ColorFormat::SELF,
-            i::Tiling::Optimal,
-            i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
-            i::ViewCapabilities::empty(),
-        ).unwrap(); // TODO: usage
-    let image_req = device.get_image_requirements(&image_logo);
+    let mut image_logo = unsafe {
+        device
+            .create_image(
+                kind,
+                1,
+                ColorFormat::SELF,
+                i::Tiling::Optimal,
+                i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
+                i::ViewCapabilities::empty(),
+            )
+    }.unwrap(); // TODO: usage
+    let image_req = unsafe {
+        device.get_image_requirements(&image_logo)
+    };
 
     let device_type = memory_types
         .iter()
@@ -256,44 +272,50 @@ fn main() {
                 && memory_type.properties.contains(m::Properties::DEVICE_LOCAL)
         }).unwrap()
         .into();
-    let image_memory = device.allocate_memory(device_type, image_req.size).unwrap();
+    let image_memory = unsafe {
+        device.allocate_memory(device_type, image_req.size)
+    }.unwrap();
 
-    device
-        .bind_image_memory(&image_memory, 0, &mut image_logo)
-        .unwrap();
-    let image_srv = device
-        .create_image_view(
-            &image_logo,
-            i::ViewKind::D2,
-            ColorFormat::SELF,
-            Swizzle::NO,
-            COLOR_RANGE.clone(),
-        ).unwrap();
+    unsafe {
+        device.bind_image_memory(&image_memory, 0, &mut image_logo)
+    }.unwrap();
+    let image_srv = unsafe {
+        device
+            .create_image_view(
+                &image_logo,
+                i::ViewKind::D2,
+                ColorFormat::SELF,
+                Swizzle::NO,
+                COLOR_RANGE.clone(),
+            )
+    }.unwrap();
 
-    let sampler = device
-        .create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
-        .expect("Can't create sampler");
+    let sampler = unsafe {
+        device.create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
+    }.expect("Can't create sampler");
 
-    device.write_descriptor_sets(vec![
-        pso::DescriptorSetWrite {
-            set: &desc_set,
-            binding: 0,
-            array_offset: 0,
-            descriptors: Some(pso::Descriptor::Image(&image_srv, i::Layout::Undefined)),
-        },
-        pso::DescriptorSetWrite {
-            set: &desc_set,
-            binding: 1,
-            array_offset: 0,
-            descriptors: Some(pso::Descriptor::Sampler(&sampler)),
-        },
-    ]);
+    unsafe {
+        device.write_descriptor_sets(vec![
+            pso::DescriptorSetWrite {
+                set: &desc_set,
+                binding: 0,
+                array_offset: 0,
+                descriptors: Some(pso::Descriptor::Image(&image_srv, i::Layout::Undefined)),
+            },
+            pso::DescriptorSetWrite {
+                set: &desc_set,
+                binding: 1,
+                array_offset: 0,
+                descriptors: Some(pso::Descriptor::Sampler(&sampler)),
+            },
+        ]);
+    }
 
     let mut frame_semaphore = device.create_semaphore().expect("Can't create semaphore");
     let mut frame_fence = device.create_fence(false).expect("Can't create fence"); // TODO: remove
 
     // copy buffer to texture
-    {
+    unsafe {
         let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
         cmd_buffer.begin();
 
@@ -370,9 +392,9 @@ fn main() {
     println!("{:?}", swap_config);
     let extent = swap_config.extent.to_extent();
 
-    let (mut swap_chain, mut backbuffer) = device
-        .create_swapchain(&mut surface, swap_config, None)
-        .expect("Can't create swapchain");
+    let (mut swap_chain, mut backbuffer) = unsafe {
+        device.create_swapchain(&mut surface, swap_config, None)
+    }.expect("Can't create swapchain");
 
     let render_pass = {
         let attachment = pass::Attachment {
@@ -401,15 +423,15 @@ fn main() {
                 ..(i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
         };
 
-        device
-            .create_render_pass(&[attachment], &[subpass], &[dependency])
-            .expect("Can't create render pass")
+        unsafe {
+            device.create_render_pass(&[attachment], &[subpass], &[dependency])
+        }.expect("Can't create render pass")
     };
     let (mut frame_images, mut framebuffers) = match backbuffer {
         Backbuffer::Images(images) => {
             let pairs = images
                 .into_iter()
-                .map(|image| {
+                .map(|image| unsafe {
                     let rtv = device
                         .create_image_view(
                             &image,
@@ -422,7 +444,7 @@ fn main() {
                 }).collect::<Vec<_>>();
             let fbos = pairs
                 .iter()
-                .map(|&(_, ref rtv)| {
+                .map(|&(_, ref rtv)| unsafe {
                     device
                         .create_framebuffer(&render_pass, Some(rtv), extent)
                         .unwrap()
@@ -432,11 +454,12 @@ fn main() {
         Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
     };
 
-    let pipeline_layout = device
-        .create_pipeline_layout(
+    let pipeline_layout = unsafe {
+        device.create_pipeline_layout(
             std::iter::once(&set_layout),
             &[(pso::ShaderStageFlags::VERTEX, 0..8)],
-        ).expect("Can't create pipeline layout");
+        )
+    }.expect("Can't create pipeline layout");
     let pipeline = {
         let vs_module = {
             let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
@@ -445,7 +468,9 @@ fn main() {
                 .bytes()
                 .map(|b| b.unwrap())
                 .collect();
-            device.create_shader_module(&spirv).unwrap()
+            unsafe {
+                device.create_shader_module(&spirv)
+            }.unwrap()
         };
         let fs_module = {
             let glsl = fs::read_to_string("quad/data/quad.frag").unwrap();
@@ -454,7 +479,9 @@ fn main() {
                 .bytes()
                 .map(|b| b.unwrap())
                 .collect();
-            device.create_shader_module(&spirv).unwrap()
+            unsafe {
+                device.create_shader_module(&spirv)
+            }.unwrap()
         };
 
         let pipeline = {
@@ -521,11 +548,17 @@ fn main() {
                 },
             });
 
-            device.create_graphics_pipeline(&pipeline_desc, None)
+            unsafe {
+                device.create_graphics_pipeline(&pipeline_desc, None)
+            }
         };
 
-        device.destroy_shader_module(vs_module);
-        device.destroy_shader_module(fs_module);
+        unsafe {
+            device.destroy_shader_module(vs_module);
+        }
+        unsafe {
+            device.destroy_shader_module(fs_module);
+        }
 
         pipeline.unwrap()
     };
@@ -590,16 +623,18 @@ fn main() {
             println!("{:?}", swap_config);
             let extent = swap_config.extent.to_extent();
 
-            let (new_swap_chain, new_backbuffer) = device
-                .create_swapchain(&mut surface, swap_config, Some(swap_chain))
-                .expect("Can't create swapchain");
+            let (new_swap_chain, new_backbuffer) = unsafe {
+                device.create_swapchain(&mut surface, swap_config, Some(swap_chain))
+            }.expect("Can't create swapchain");
 
-            // Clean up the old framebuffers, images and swapchain
-            for framebuffer in framebuffers {
-                device.destroy_framebuffer(framebuffer);
-            }
-            for (_, rtv) in frame_images {
-                device.destroy_image_view(rtv);
+            unsafe {
+                // Clean up the old framebuffers, images and swapchain
+                for framebuffer in framebuffers {
+                    device.destroy_framebuffer(framebuffer);
+                }
+                for (_, rtv) in frame_images {
+                    device.destroy_image_view(rtv);
+                }
             }
 
             backbuffer = new_backbuffer;
@@ -609,9 +644,8 @@ fn main() {
                 Backbuffer::Images(images) => {
                     let pairs = images
                         .into_iter()
-                        .map(|image| {
-                            let rtv = device
-                                .create_image_view(
+                        .map(|image| unsafe {
+                            let rtv = device.create_image_view(
                                     &image,
                                     i::ViewKind::D2,
                                     format,
@@ -622,7 +656,7 @@ fn main() {
                         }).collect::<Vec<_>>();
                     let fbos = pairs
                         .iter()
-                        .map(|&(_, ref rtv)| {
+                        .map(|&(_, ref rtv)| unsafe {
                             device
                                 .create_framebuffer(&render_pass, Some(rtv), extent)
                                 .unwrap()
@@ -639,9 +673,9 @@ fn main() {
             recreate_swapchain = false;
         }
 
-        device.reset_fence(&frame_fence).unwrap();
-        command_pool.reset();
-        let frame: hal::SwapImageIndex = {
+        let frame: hal::SwapImageIndex = unsafe {
+            device.reset_fence(&frame_fence).unwrap();
+            command_pool.reset();
             match swap_chain.acquire_image(!0, FrameSync::Semaphore(&mut frame_semaphore)) {
                 Ok(i) => i,
                 Err(_) => {
@@ -653,7 +687,7 @@ fn main() {
 
         // Rendering
         let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
-        {
+        unsafe {
             cmd_buffer.begin();
 
             cmd_buffer.set_viewports(0, &[viewport.clone()]);
@@ -682,46 +716,47 @@ fn main() {
                 signal_semaphores: &[],
             };
             queue_group.queues[0].submit(submission, Some(&mut frame_fence));
-        }
 
-        // TODO: replace with semaphore
-        device.wait_for_fence(&frame_fence, !0).unwrap();
-        command_pool.free(Some(cmd_buffer));
+            // TODO: replace with semaphore
+            device.wait_for_fence(&frame_fence, !0).unwrap();
+            command_pool.free(Some(cmd_buffer));
 
-        // present frame
-        if let Err(_) = swap_chain.present_nosemaphores(&mut queue_group.queues[0], frame) {
-            recreate_swapchain = true;
+            // present frame
+            if let Err(_) = swap_chain.present_nosemaphores(&mut queue_group.queues[0], frame) {
+                recreate_swapchain = true;
+            }
         }
     }
 
     // cleanup!
     device.wait_idle().unwrap();
+    unsafe {
+        device.destroy_command_pool(command_pool.into_raw());
+        device.destroy_descriptor_pool(desc_pool);
+        device.destroy_descriptor_set_layout(set_layout);
 
-    device.destroy_command_pool(command_pool.into_raw());
-    device.destroy_descriptor_pool(desc_pool);
-    device.destroy_descriptor_set_layout(set_layout);
+        device.destroy_buffer(vertex_buffer);
+        device.destroy_buffer(image_upload_buffer);
+        device.destroy_image(image_logo);
+        device.destroy_image_view(image_srv);
+        device.destroy_sampler(sampler);
+        device.destroy_fence(frame_fence);
+        device.destroy_semaphore(frame_semaphore);
+        device.destroy_render_pass(render_pass);
+        device.free_memory(buffer_memory);
+        device.free_memory(image_memory);
+        device.free_memory(image_upload_memory);
+        device.destroy_graphics_pipeline(pipeline);
+        device.destroy_pipeline_layout(pipeline_layout);
+        for framebuffer in framebuffers {
+            device.destroy_framebuffer(framebuffer);
+        }
+        for (_, rtv) in frame_images {
+            device.destroy_image_view(rtv);
+        }
 
-    device.destroy_buffer(vertex_buffer);
-    device.destroy_buffer(image_upload_buffer);
-    device.destroy_image(image_logo);
-    device.destroy_image_view(image_srv);
-    device.destroy_sampler(sampler);
-    device.destroy_fence(frame_fence);
-    device.destroy_semaphore(frame_semaphore);
-    device.destroy_render_pass(render_pass);
-    device.free_memory(buffer_memory);
-    device.free_memory(image_memory);
-    device.free_memory(image_upload_memory);
-    device.destroy_graphics_pipeline(pipeline);
-    device.destroy_pipeline_layout(pipeline_layout);
-    for framebuffer in framebuffers {
-        device.destroy_framebuffer(framebuffer);
+        device.destroy_swapchain(swap_chain);
     }
-    for (_, rtv) in frame_images {
-        device.destroy_image_view(rtv);
-    }
-
-    device.destroy_swapchain(swap_chain);
 }
 
 #[cfg(not(any(

@@ -100,7 +100,7 @@ pub struct DescriptorPool {
 }
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_sets<I>(
+    unsafe fn allocate_sets<I>(
         &mut self, layout_iter: I, output: &mut Vec<DescriptorSet>
     ) -> Result<(), pso::AllocationError>
     where
@@ -141,7 +141,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
             })
     }
 
-    fn free_sets<I>(&mut self, descriptor_sets: I)
+    unsafe fn free_sets<I>(&mut self, descriptor_sets: I)
     where
         I: IntoIterator<Item = DescriptorSet>
     {
@@ -152,7 +152,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         }
     }
 
-    fn reset(&mut self) {
+    unsafe fn reset(&mut self) {
         assert_eq!(Ok(()), unsafe {
             self.device.0.reset_descriptor_pool(
                 self.raw,

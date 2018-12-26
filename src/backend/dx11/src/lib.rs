@@ -461,7 +461,7 @@ fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL
 
 // TODO: PhysicalDevice
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(
+    unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[hal::QueuePriority])],
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
@@ -721,7 +721,7 @@ unsafe impl Send for Swapchain {}
 unsafe impl Sync for Swapchain {}
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_image(
+    unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
         _sync: hal::FrameSync<Backend>,
@@ -803,7 +803,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
     where
         W: 'a + Borrow<Swapchain>,
         Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
@@ -1363,7 +1363,7 @@ impl CommandBuffer {
 }
 
 impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(
+    unsafe fn begin(
         &mut self,
         _flags: command::CommandBufferFlags,
         _info: command::CommandBufferInheritanceInfo<Backend>
@@ -1371,7 +1371,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         self.reset();
     }
 
-    fn finish(&mut self) {
+    unsafe fn finish(&mut self) {
         // TODO:
 
         let mut list = ptr::null_mut();
@@ -1384,11 +1384,11 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         self.list = Some(unsafe { ComPtr::from_raw(list) });
     }
 
-    fn reset(&mut self, _release_resources: bool) {
+    unsafe fn reset(&mut self, _release_resources: bool) {
         self.reset();
     }
 
-    fn begin_render_pass<T>(
+    unsafe fn begin_render_pass<T>(
         &mut self,
         render_pass: &RenderPass,
         framebuffer: &Framebuffer,
@@ -1507,7 +1507,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn next_subpass(&mut self, _contents: command::SubpassContents) {
+    unsafe fn next_subpass(&mut self, _contents: command::SubpassContents) {
         if let Some(ref mut current_render_pass) = self.render_pass_cache {
             // TODO: resolve msaa
             current_render_pass.next_subpass();
@@ -1515,7 +1515,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn end_render_pass(&mut self) {
+    unsafe fn end_render_pass(&mut self) {
         unsafe {
             self.context.OMSetRenderTargets(8, [ptr::null_mut(); 8].as_ptr(), ptr::null_mut());
         }
@@ -1523,7 +1523,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         self.render_pass_cache = None;
     }
 
-    fn pipeline_barrier<'a, T>(
+    unsafe fn pipeline_barrier<'a, T>(
         &mut self,
         _stages: Range<pso::PipelineStage>,
         _dependencies: memory::Dependencies,
@@ -1536,7 +1536,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         // unimplemented!()
     }
 
-    fn clear_image<T>(
+    unsafe fn clear_image<T>(
         &mut self,
         image: &Image,
         _: image::Layout,
@@ -1590,7 +1590,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
+    unsafe fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
         T: IntoIterator,
         T::Item: Borrow<command::AttachmentClear>,
@@ -1606,7 +1606,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn resolve_image<T>(
+    unsafe fn resolve_image<T>(
         &mut self,
         _src: &Image,
         _src_layout: image::Layout,
@@ -1620,7 +1620,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn blit_image<T>(
+    unsafe fn blit_image<T>(
         &mut self,
         src: &Image,
         _src_layout: image::Layout,
@@ -1640,7 +1640,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         self.cache.bind(&self.context);
     }
 
-    fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
         unsafe {
             self.context.IASetIndexBuffer(
                 ibv.buffer.internal.raw,
@@ -1650,7 +1650,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<Buffer>,
@@ -1670,7 +1670,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         self.cache.bind_vertex_buffers(&self.context);
     }
 
-    fn set_viewports<T>(&mut self, _first_viewport: u32, viewports: T)
+    unsafe fn set_viewports<T>(&mut self, _first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
@@ -1688,7 +1688,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         self.cache.bind_viewports(&self.context);
     }
 
-    fn set_scissors<T>(&mut self, _first_scissor: u32, scissors: T)
+    unsafe fn set_scissors<T>(&mut self, _first_scissor: u32, scissors: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
@@ -1708,42 +1708,42 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_blend_constants(&mut self, color: pso::ColorValue) {
+    unsafe fn set_blend_constants(&mut self, color: pso::ColorValue) {
         self.cache.set_blend_factor(color);
         self.cache.bind_blend_state(&self.context);
     }
 
-    fn set_stencil_reference(&mut self, _faces: pso::Face, value: pso::StencilValue) {
+    unsafe fn set_stencil_reference(&mut self, _faces: pso::Face, value: pso::StencilValue) {
         self.cache.stencil_ref = Some(value);
     }
 
-    fn set_stencil_read_mask(&mut self, _faces: pso::Face, value: pso::StencilValue) {
+    unsafe fn set_stencil_read_mask(&mut self, _faces: pso::Face, value: pso::StencilValue) {
         self.cache.stencil_read_mask = Some(value);
     }
 
-    fn set_stencil_write_mask(&mut self, _faces: pso::Face, value: pso::StencilValue) {
+    unsafe fn set_stencil_write_mask(&mut self, _faces: pso::Face, value: pso::StencilValue) {
         self.cache.stencil_write_mask = Some(value);
     }
 
-    fn set_depth_bounds(&mut self, _bounds: Range<f32>) {
+    unsafe fn set_depth_bounds(&mut self, _bounds: Range<f32>) {
         unimplemented!()
     }
 
-    fn set_line_width(&mut self, width: f32) {
+    unsafe fn set_line_width(&mut self, width: f32) {
         validate_line_width(width);
     }
 
-    fn set_depth_bias(&mut self, _depth_bias: pso::DepthBias) {
+    unsafe fn set_depth_bias(&mut self, _depth_bias: pso::DepthBias) {
         // TODO:
         // unimplemented!()
     }
 
-    fn bind_graphics_pipeline(&mut self, pipeline: &GraphicsPipeline) {
+    unsafe fn bind_graphics_pipeline(&mut self, pipeline: &GraphicsPipeline) {
         self.cache.set_graphics_pipeline(pipeline.clone());
         self.cache.bind_graphics_pipeline(&self.context);
     }
 
-    fn bind_graphics_descriptor_sets<'a, I, J>(
+    unsafe fn bind_graphics_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &PipelineLayout,
         first_set: usize,
@@ -1817,14 +1817,14 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_compute_pipeline(&mut self, pipeline: &ComputePipeline) {
+    unsafe fn bind_compute_pipeline(&mut self, pipeline: &ComputePipeline) {
         unsafe {
             self.context
                 .CSSetShader(pipeline.cs.as_raw(), ptr::null_mut(), 0);
         }
     }
 
-    fn bind_compute_descriptor_sets<I, J>(
+    unsafe fn bind_compute_descriptor_sets<I, J>(
         &mut self,
         layout: &PipelineLayout,
         first_set: usize,
@@ -1893,28 +1893,28 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn dispatch(&mut self, count: WorkGroupCount) {
+    unsafe fn dispatch(&mut self, count: WorkGroupCount) {
         unsafe {
             self.context.Dispatch(count[0], count[1], count[2]);
         }
     }
 
-    fn dispatch_indirect(&mut self, _buffer: &Buffer, _offset: buffer::Offset) {
+    unsafe fn dispatch_indirect(&mut self, _buffer: &Buffer, _offset: buffer::Offset) {
         unimplemented!()
     }
 
-    fn fill_buffer<R>(&mut self, _buffer: &Buffer, _range: R, _data: u32)
+    unsafe fn fill_buffer<R>(&mut self, _buffer: &Buffer, _range: R, _data: u32)
     where
         R: RangeArg<buffer::Offset>,
     {
         unimplemented!()
     }
 
-    fn update_buffer(&mut self, _buffer: &Buffer, _offset: buffer::Offset, _data: &[u8]) {
+    unsafe fn update_buffer(&mut self, _buffer: &Buffer, _offset: buffer::Offset, _data: &[u8]) {
         unimplemented!()
     }
 
-    fn copy_buffer<T>(&mut self, src: &Buffer, dst: &Buffer, regions: T)
+    unsafe fn copy_buffer<T>(&mut self, src: &Buffer, dst: &Buffer, regions: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
@@ -1948,7 +1948,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_image<T>(
+    unsafe fn copy_image<T>(
         &mut self,
         src: &Image,
         _: image::Layout,
@@ -1963,7 +1963,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             .copy_image_2d(&self.context, src, dst, regions);
     }
 
-    fn copy_buffer_to_image<T>(
+    unsafe fn copy_buffer_to_image<T>(
         &mut self,
         buffer: &Buffer,
         image: &Image,
@@ -1981,7 +1981,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             .copy_buffer_to_image_2d(&self.context, buffer, image, regions);
     }
 
-    fn copy_image_to_buffer<T>(
+    unsafe fn copy_image_to_buffer<T>(
         &mut self,
         image: &Image,
         _: image::Layout,
@@ -1999,7 +1999,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             .copy_image_2d_to_buffer(&self.context, image, buffer, regions);
     }
 
-    fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
+    unsafe fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
         unsafe {
             self.context.DrawInstanced(
                 vertices.end - vertices.start,
@@ -2010,7 +2010,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn draw_indexed(
+    unsafe fn draw_indexed(
         &mut self,
         indices: Range<IndexCount>,
         base_vertex: VertexOffset,
@@ -2027,7 +2027,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn draw_indirect(
+    unsafe fn draw_indirect(
         &mut self,
         _buffer: &Buffer,
         _offset: buffer::Offset,
@@ -2037,7 +2037,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn draw_indexed_indirect(
+    unsafe fn draw_indexed_indirect(
         &mut self,
         _buffer: &Buffer,
         _offset: buffer::Offset,
@@ -2047,19 +2047,19 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn begin_query(&mut self, _query: query::Query<Backend>, _flags: query::ControlFlags) {
+    unsafe fn begin_query(&mut self, _query: query::Query<Backend>, _flags: query::ControlFlags) {
         unimplemented!()
     }
 
-    fn end_query(&mut self, _query: query::Query<Backend>) {
+    unsafe fn end_query(&mut self, _query: query::Query<Backend>) {
         unimplemented!()
     }
 
-    fn reset_query_pool(&mut self, _pool: &QueryPool, _queries: Range<query::Id>) {
+    unsafe fn reset_query_pool(&mut self, _pool: &QueryPool, _queries: Range<query::Id>) {
         unimplemented!()
     }
 
-    fn copy_query_pool_results(
+    unsafe fn copy_query_pool_results(
         &mut self,
         _pool: &QueryPool,
         _queries: Range<query::Id>,
@@ -2071,11 +2071,11 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn write_timestamp(&mut self, _: pso::PipelineStage, _query: query::Query<Backend>) {
+    unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, _query: query::Query<Backend>) {
         unimplemented!()
     }
 
-    fn push_graphics_constants(
+    unsafe fn push_graphics_constants(
         &mut self,
         _layout: &PipelineLayout,
         _stages: pso::ShaderStageFlags,
@@ -2085,7 +2085,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         // unimplemented!()
     }
 
-    fn push_compute_constants(
+    unsafe fn push_compute_constants(
         &mut self,
         _layout: &PipelineLayout,
         _offset: u32,
@@ -2094,7 +2094,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn execute_commands<'a, T, I>(&mut self, _buffers: I)
+    unsafe fn execute_commands<'a, T, I>(&mut self, _buffers: I)
     where
         T: 'a + Borrow<CommandBuffer>,
         I: IntoIterator<Item = &'a T>,
@@ -2390,7 +2390,7 @@ unsafe impl Send for CommandPool {}
 unsafe impl Sync for CommandPool {}
 
 impl hal::pool::RawCommandPool<Backend> for CommandPool {
-    fn reset(&mut self) {
+    unsafe fn reset(&mut self) {
         //unimplemented!()
     }
 
@@ -2871,7 +2871,7 @@ impl DescriptorPool {
 }
 
 impl hal::DescriptorPool<Backend> for DescriptorPool {
-    fn allocate_set(
+    unsafe fn allocate_set(
         &mut self,
         layout: &DescriptorSetLayout,
     ) -> Result<DescriptorSet, pso::AllocationError> {
@@ -2900,7 +2900,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
             .map_err(|_| pso::AllocationError::OutOfPoolMemory)
     }
 
-    fn free_sets<I>(&mut self, descriptor_sets: I)
+    unsafe fn free_sets<I>(&mut self, descriptor_sets: I)
     where
         I: IntoIterator<Item = DescriptorSet>,
     {
@@ -2910,7 +2910,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
         }
     }
 
-    fn reset(&mut self) {
+    unsafe fn reset(&mut self) {
         self.allocator.reset();
     }
 }

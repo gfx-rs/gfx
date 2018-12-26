@@ -606,7 +606,7 @@ impl Device {
 }
 
 impl hal::Device<Backend> for Device {
-    fn allocate_memory(
+    unsafe fn allocate_memory(
         &self,
         mem_type: hal::MemoryTypeId,
         size: u64,
@@ -623,7 +623,7 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn create_command_pool(
+    unsafe fn create_command_pool(
         &self, _family: QueueFamilyId, _create_flags: pool::CommandPoolCreateFlags
     ) -> Result<CommandPool, device::OutOfMemory> {
         // TODO:
@@ -633,11 +633,11 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn destroy_command_pool(&self, _pool: CommandPool) {
+    unsafe fn destroy_command_pool(&self, _pool: CommandPool) {
         // automatic
     }
 
-    fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, IA, IS, ID>(
         &self,
         attachments: IA,
         subpasses: IS,
@@ -665,7 +665,7 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn create_pipeline_layout<IS, IR>(
+    unsafe fn create_pipeline_layout<IS, IR>(
         &self,
         set_layouts: IS,
         _push_constant_ranges: IR,
@@ -833,11 +833,11 @@ impl hal::Device<Backend> for Device {
         Ok(())
     }
 
-    fn destroy_pipeline_cache(&self, _: ()) {
+    unsafe fn destroy_pipeline_cache(&self, _: ()) {
         //empty
     }
 
-    fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), device::OutOfMemory>
+    unsafe fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<()>,
@@ -846,7 +846,7 @@ impl hal::Device<Backend> for Device {
         Ok(())
     }
 
-    fn create_graphics_pipeline<'a>(
+    unsafe fn create_graphics_pipeline<'a>(
         &self,
         desc: &pso::GraphicsPipelineDesc<'a, Backend>, _cache: Option<&()>
     ) -> Result<GraphicsPipeline, pso::CreationError> {
@@ -912,7 +912,7 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn create_compute_pipeline<'a>(
+    unsafe fn create_compute_pipeline<'a>(
         &self, desc: &pso::ComputePipelineDesc<'a, Backend>,  _cache: Option<&()>
     ) -> Result<ComputePipeline, pso::CreationError> {
         let build_shader =
@@ -934,7 +934,7 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn create_framebuffer<I>(
+    unsafe fn create_framebuffer<I>(
         &self,
         _renderpass: &RenderPass,
         attachments: I,
@@ -950,11 +950,11 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn create_shader_module(&self, raw_data: &[u8]) -> Result<ShaderModule, device::ShaderError> {
+    unsafe fn create_shader_module(&self, raw_data: &[u8]) -> Result<ShaderModule, device::ShaderError> {
         Ok(ShaderModule::Spirv(raw_data.into()))
     }
 
-    fn create_buffer(
+    unsafe fn create_buffer(
         &self,
         size: u64,
         usage: buffer::Usage,
@@ -1020,11 +1020,11 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn get_buffer_requirements(&self, buffer: &Buffer) -> memory::Requirements {
+    unsafe fn get_buffer_requirements(&self, buffer: &Buffer) -> memory::Requirements {
         buffer.requirements
     }
 
-    fn bind_buffer_memory(
+    unsafe fn bind_buffer_memory(
         &self,
         memory: &Memory,
         offset: u64,
@@ -1232,7 +1232,7 @@ impl hal::Device<Backend> for Device {
         Ok(())
     }
 
-    fn create_buffer_view<R: RangeArg<u64>>(
+    unsafe fn create_buffer_view<R: RangeArg<u64>>(
         &self,
         _buffer: &Buffer,
         _format: Option<format::Format>,
@@ -1241,7 +1241,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn create_image(
+    unsafe fn create_image(
         &self,
         kind: image::Kind,
         mip_levels: image::Level,
@@ -1309,17 +1309,17 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn get_image_requirements(&self, image: &Image) -> memory::Requirements {
+    unsafe fn get_image_requirements(&self, image: &Image) -> memory::Requirements {
         image.requirements
     }
 
-    fn get_image_subresource_footprint(
+    unsafe fn get_image_subresource_footprint(
         &self, _image: &Image, _sub: image::Subresource
     ) -> image::SubresourceFootprint {
         unimplemented!()
     }
 
-    fn bind_image_memory(
+    unsafe fn bind_image_memory(
         &self,
         memory: &Memory,
         offset: u64,
@@ -1613,7 +1613,7 @@ impl hal::Device<Backend> for Device {
         Ok(())
     }
 
-    fn create_image_view(
+    unsafe fn create_image_view(
         &self,
         image: &Image,
         view_kind: image::ViewKind,
@@ -1665,7 +1665,7 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn create_sampler(&self, info: image::SamplerInfo) -> Result<Sampler, device::AllocationError> {
+    unsafe fn create_sampler(&self, info: image::SamplerInfo) -> Result<Sampler, device::AllocationError> {
         let op = match info.comparison {
             Some(_) => d3d11::D3D11_FILTER_REDUCTION_TYPE_COMPARISON,
             None => d3d11::D3D11_FILTER_REDUCTION_TYPE_STANDARD,
@@ -1703,7 +1703,7 @@ impl hal::Device<Backend> for Device {
     }
 
     // TODO: make use of `max_sets`
-    fn create_descriptor_pool<I>(
+    unsafe fn create_descriptor_pool<I>(
         &self,
         _max_sets: usize,
         ranges: I,
@@ -1724,7 +1724,7 @@ impl hal::Device<Backend> for Device {
         Ok(DescriptorPool::with_capacity(count))
     }
 
-    fn create_descriptor_set_layout<I, J>(
+    unsafe fn create_descriptor_set_layout<I, J>(
         &self, layout_bindings: I, _immutable_samplers: J
     ) -> Result<DescriptorSetLayout, device::OutOfMemory>
     where
@@ -1886,7 +1886,7 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
+    unsafe fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
         J: IntoIterator,
@@ -1964,7 +1964,7 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
+    unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
@@ -1996,7 +1996,7 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn map_memory<R>(&self, memory: &Memory, range: R) -> Result<*mut u8, mapping::Error>
+    unsafe fn map_memory<R>(&self, memory: &Memory, range: R) -> Result<*mut u8, mapping::Error>
     where
         R: RangeArg<u64>,
     {
@@ -2005,11 +2005,11 @@ impl hal::Device<Backend> for Device {
         Ok(unsafe { memory.mapped_ptr.offset(*range.start().unwrap_or(&0) as isize) })
     }
 
-    fn unmap_memory(&self, memory: &Memory) {
+    unsafe fn unmap_memory(&self, memory: &Memory) {
         assert_eq!(memory.host_visible.is_some(), true);
     }
 
-    fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), device::OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a Memory, R)>,
@@ -2030,7 +2030,7 @@ impl hal::Device<Backend> for Device {
         Ok(())
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), device::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a Memory, R)>,
@@ -2067,12 +2067,12 @@ impl hal::Device<Backend> for Device {
         }))
     }
 
-    fn reset_fence(&self, fence: &Fence) -> Result<(), device::OutOfMemory> {
+    unsafe fn reset_fence(&self, fence: &Fence) -> Result<(), device::OutOfMemory> {
         *fence.mutex.lock() = false;
         Ok(())
     }
 
-    fn wait_for_fence(&self, fence: &Fence, timeout_ns: u64) -> Result<bool, device::OomOrDeviceLost> {
+    unsafe fn wait_for_fence(&self, fence: &Fence, timeout_ns: u64) -> Result<bool, device::OomOrDeviceLost> {
         use std::time::{Duration, Instant};
 
         debug!("wait_for_fence {:?} for {} ns", fence, timeout_ns);
@@ -2103,11 +2103,11 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn get_fence_status(&self, fence: &Fence) -> Result<bool, device::DeviceLost> {
+    unsafe fn get_fence_status(&self, fence: &Fence) -> Result<bool, device::DeviceLost> {
         Ok(*fence.mutex.lock())
     }
 
-    fn free_memory(&self, memory: Memory) {
+    unsafe fn free_memory(&self, memory: Memory) {
         for (_range, internal) in memory.local_buffers.borrow_mut().iter() {
             unsafe {
                 (*internal.raw).Release();
@@ -2118,15 +2118,15 @@ impl hal::Device<Backend> for Device {
         }
     }
 
-    fn create_query_pool(&self, _query_ty: query::Type, _count: query::Id) -> Result<QueryPool, query::CreationError> {
+    unsafe fn create_query_pool(&self, _query_ty: query::Type, _count: query::Id) -> Result<QueryPool, query::CreationError> {
         unimplemented!()
     }
 
-    fn destroy_query_pool(&self, _pool: QueryPool) {
+    unsafe fn destroy_query_pool(&self, _pool: QueryPool) {
         unimplemented!()
     }
 
-    fn get_query_pool_results(
+    unsafe fn get_query_pool_results(
         &self, _pool: &QueryPool, _queries: Range<query::Id>,
         _data: &mut [u8], _stride: buffer::Offset,
         _flags: query::ResultFlags,
@@ -2134,62 +2134,62 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn destroy_shader_module(&self, _shader_lib: ShaderModule) {
+    unsafe fn destroy_shader_module(&self, _shader_lib: ShaderModule) {
     }
 
-    fn destroy_render_pass(&self, _rp: RenderPass) {
+    unsafe fn destroy_render_pass(&self, _rp: RenderPass) {
         //unimplemented!()
     }
 
-    fn destroy_pipeline_layout(&self, _layout: PipelineLayout) {
+    unsafe fn destroy_pipeline_layout(&self, _layout: PipelineLayout) {
         //unimplemented!()
     }
 
-    fn destroy_graphics_pipeline(&self, _pipeline: GraphicsPipeline) {
+    unsafe fn destroy_graphics_pipeline(&self, _pipeline: GraphicsPipeline) {
     }
 
-    fn destroy_compute_pipeline(&self, _pipeline: ComputePipeline) {
+    unsafe fn destroy_compute_pipeline(&self, _pipeline: ComputePipeline) {
     }
 
-    fn destroy_framebuffer(&self, _fb: Framebuffer) {
+    unsafe fn destroy_framebuffer(&self, _fb: Framebuffer) {
     }
 
-    fn destroy_buffer(&self, _buffer: Buffer) {
+    unsafe fn destroy_buffer(&self, _buffer: Buffer) {
     }
 
-    fn destroy_buffer_view(&self, _view: BufferView) {
+    unsafe fn destroy_buffer_view(&self, _view: BufferView) {
         unimplemented!()
     }
 
-    fn destroy_image(&self, _image: Image) {
+    unsafe fn destroy_image(&self, _image: Image) {
         // TODO:
         // unimplemented!()
     }
 
-    fn destroy_image_view(&self, _view: ImageView) {
+    unsafe fn destroy_image_view(&self, _view: ImageView) {
         //unimplemented!()
     }
 
-    fn destroy_sampler(&self, _sampler: Sampler) {
+    unsafe fn destroy_sampler(&self, _sampler: Sampler) {
     }
 
-    fn destroy_descriptor_pool(&self, _pool: DescriptorPool) {
+    unsafe fn destroy_descriptor_pool(&self, _pool: DescriptorPool) {
         //unimplemented!()
     }
 
-    fn destroy_descriptor_set_layout(&self, _layout: DescriptorSetLayout) {
+    unsafe fn destroy_descriptor_set_layout(&self, _layout: DescriptorSetLayout) {
         //unimplemented!()
     }
 
-    fn destroy_fence(&self, _fence: Fence) {
+    unsafe fn destroy_fence(&self, _fence: Fence) {
         // unimplemented!()
     }
 
-    fn destroy_semaphore(&self, _semaphore: Semaphore) {
+    unsafe fn destroy_semaphore(&self, _semaphore: Semaphore) {
         //unimplemented!()
     }
 
-    fn create_swapchain(
+    unsafe fn create_swapchain(
         &self,
         surface: &mut Surface,
         config: hal::SwapchainConfig,
@@ -2328,7 +2328,7 @@ impl hal::Device<Backend> for Device {
         Ok((Swapchain { dxgi_swapchain: swapchain }, hal::Backbuffer::Images(images)))
     }
 
-    fn destroy_swapchain(&self, _swapchain: Swapchain) {
+    unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {
         // automatic
     }
 

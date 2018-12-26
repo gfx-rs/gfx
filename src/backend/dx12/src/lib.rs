@@ -196,7 +196,7 @@ unsafe impl Send for PhysicalDevice {}
 unsafe impl Sync for PhysicalDevice {}
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
-    fn open(
+    unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[hal::QueuePriority])],
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
@@ -446,7 +446,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
     where
         W: 'a + Borrow<window::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,

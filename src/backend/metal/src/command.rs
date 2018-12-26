@@ -1768,7 +1768,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-     fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
     where
         W: 'a + Borrow<window::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
@@ -1830,7 +1830,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
 }
 
 impl pool::RawCommandPool<Backend> for CommandPool {
-    fn reset(&mut self) {
+    unsafe fn reset(&mut self) {
         for cmd_buffer in &self.allocated {
             cmd_buffer
                 .borrow_mut()
@@ -1930,7 +1930,7 @@ impl CommandBuffer {
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
-    fn begin(&mut self, flags: com::CommandBufferFlags, _info: com::CommandBufferInheritanceInfo<Backend>) {
+    unsafe fn begin(&mut self, flags: com::CommandBufferFlags, _info: com::CommandBufferInheritanceInfo<Backend>) {
         self.reset(false);
         let mut inner = self.inner.borrow_mut();
         //TODO: Implement secondary command buffers
@@ -1971,21 +1971,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.state.reset_resources();
     }
 
-    fn finish(&mut self) {
+    unsafe fn finish(&mut self) {
         self.inner
             .borrow_mut()
             .sink()
             .stop_encoding();
     }
 
-    fn reset(&mut self, release_resources: bool) {
+    unsafe fn reset(&mut self, release_resources: bool) {
         self.state.reset_resources();
         self.inner
             .borrow_mut()
             .reset(&self.shared, release_resources);
     }
 
-    fn pipeline_barrier<'a, T>(
+    unsafe fn pipeline_barrier<'a, T>(
         &mut self,
         _stages: Range<pso::PipelineStage>,
         _dependencies: memory::Dependencies,
@@ -1996,7 +1996,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
     }
 
-    fn fill_buffer<R>(
+    unsafe fn fill_buffer<R>(
         &mut self,
         buffer: &native::Buffer,
         range: R,
@@ -2066,7 +2066,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn update_buffer(
+    unsafe fn update_buffer(
         &mut self,
         dst: &native::Buffer,
         offset: buffer::Offset,
@@ -2104,7 +2104,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         inner.retained_buffers.push(src);
     }
 
-    fn clear_image<T>(
+    unsafe fn clear_image<T>(
         &mut self,
         image: &native::Image,
         _layout: Layout,
@@ -2235,7 +2235,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         });
     }
 
-    fn clear_attachments<T, U>(
+    unsafe fn clear_attachments<T, U>(
         &mut self,
         clears: T,
         rects: U,
@@ -2438,7 +2438,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         vertices.clear();
     }
 
-    fn resolve_image<T>(
+    unsafe fn resolve_image<T>(
         &mut self,
         _src: &native::Image,
         _src_layout: Layout,
@@ -2452,7 +2452,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    fn blit_image<T>(
+    unsafe fn blit_image<T>(
         &mut self,
         src: &native::Image,
         _src_layout: Layout,
@@ -2677,7 +2677,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         retained_textures.extend(dst_cubish);
     }
 
-    fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
         let (raw, range) = view.buffer.as_bound();
         assert!(range.start + view.offset < range.end); // conservative
         self.state.index_buffer = Some(IndexBuffer {
@@ -2691,7 +2691,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
 
-    fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<native::Buffer>,
@@ -2722,7 +2722,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn set_viewports<T>(&mut self, first_viewport: u32, vps: T)
+    unsafe fn set_viewports<T>(&mut self, first_viewport: u32, vps: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
@@ -2747,7 +2747,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue(com);
     }
 
-    fn set_scissors<T>(&mut self, first_scissor: u32, rects: T)
+    unsafe fn set_scissors<T>(&mut self, first_scissor: u32, rects: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
@@ -2771,7 +2771,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue(com);
     }
 
-    fn set_blend_constants(&mut self, color: pso::ColorValue) {
+    unsafe fn set_blend_constants(&mut self, color: pso::ColorValue) {
         let com = self.state.set_blend_color(&color);
         self.inner
             .borrow_mut()
@@ -2780,15 +2780,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue(com);
     }
 
-    fn set_depth_bounds(&mut self, _: Range<f32>) {
+    unsafe fn set_depth_bounds(&mut self, _: Range<f32>) {
         warn!("Depth bounds test is not supported");
     }
 
-    fn set_line_width(&mut self, width: f32) {
+    unsafe fn set_line_width(&mut self, width: f32) {
         validate_line_width(width);
     }
 
-    fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {
+    unsafe fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {
         let com = self.state.set_depth_bias(&depth_bias);
         self.inner
             .borrow_mut()
@@ -2797,7 +2797,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue(com);
     }
 
-    fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    unsafe fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
         if faces.contains(pso::Face::FRONT) {
             self.state.stencil.front_reference = value;
         }
@@ -2816,7 +2816,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue(com);
     }
 
-    fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    unsafe fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
         if faces.contains(pso::Face::FRONT) {
             self.state.stencil.front_read_mask = value;
         }
@@ -2826,7 +2826,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.update_depth_stencil();
     }
 
-    fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    unsafe fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue) {
         if faces.contains(pso::Face::FRONT) {
             self.state.stencil.front_write_mask = value;
         }
@@ -2836,7 +2836,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.update_depth_stencil();
     }
 
-    fn begin_render_pass<T>(
+    unsafe fn begin_render_pass<T>(
         &mut self,
         render_pass: &native::RenderPass,
         framebuffer: &native::Framebuffer,
@@ -2947,7 +2947,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.next_subpass(first_subpass_contents);
     }
 
-    fn next_subpass(&mut self, _contents: com::SubpassContents) {
+    unsafe fn next_subpass(&mut self, _contents: com::SubpassContents) {
         let sin = self.state.pending_subpasses.pop().unwrap();
 
         self.state.render_pso_is_compatible = match self.state.render_pso {
@@ -2982,14 +2982,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue_many(init_commands);
     }
 
-    fn end_render_pass(&mut self) {
+    unsafe fn end_render_pass(&mut self) {
         self.inner
             .borrow_mut()
             .sink()
             .stop_encoding();
     }
 
-    fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
+    unsafe fn bind_graphics_pipeline(&mut self, pipeline: &native::GraphicsPipeline) {
         let mut set_stencil_references = false;
         if let pso::StencilTest::On { ref front, ref back } = pipeline.depth_stencil_desc.stencil {
             if let pso::State::Static(value) = front.mask_read {
@@ -3121,7 +3121,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_graphics_descriptor_sets<'a, I, J>(
+    unsafe fn bind_graphics_descriptor_sets<'a, I, J>(
         &mut self,
         pipe_layout: &native::PipelineLayout,
         first_set: usize,
@@ -3225,7 +3225,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
+    unsafe fn bind_compute_pipeline(&mut self, pipeline: &native::ComputePipeline) {
         self.state.compute_pso = Some(pipeline.raw.clone());
         self.state.work_group_size = pipeline.work_group_size;
 
@@ -3243,7 +3243,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn bind_compute_descriptor_sets<'a, I, J>(
+    unsafe fn bind_compute_descriptor_sets<'a, I, J>(
         &mut self,
         pipe_layout: &native::PipelineLayout,
         first_set: usize,
@@ -3317,7 +3317,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn dispatch(&mut self, count: WorkGroupCount) {
+    unsafe fn dispatch(&mut self, count: WorkGroupCount) {
         let mut inner = self.inner.borrow_mut();
         let (mut pre, init) = inner.sink().switch_compute();
         if init {
@@ -3334,7 +3334,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         });
     }
 
-    fn dispatch_indirect(&mut self, buffer: &native::Buffer, offset: buffer::Offset) {
+    unsafe fn dispatch_indirect(&mut self, buffer: &native::Buffer, offset: buffer::Offset) {
         let mut inner = self.inner.borrow_mut();
         let (mut pre, init) = inner.sink().switch_compute();
         if init {
@@ -3351,7 +3351,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         });
     }
 
-    fn copy_buffer<T>(
+    unsafe fn copy_buffer<T>(
         &mut self,
         src: &native::Buffer,
         dst: &native::Buffer,
@@ -3441,7 +3441,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_image<T>(
+    unsafe fn copy_image<T>(
         &mut self,
         src: &native::Image,
         src_layout: Layout,
@@ -3532,7 +3532,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_buffer_to_image<T>(
+    unsafe fn copy_buffer_to_image<T>(
         &mut self,
         src: &native::Buffer,
         dst: &native::Image,
@@ -3582,7 +3582,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_image_to_buffer<T>(
+    unsafe fn copy_image_to_buffer<T>(
         &mut self,
         src: &native::Image,
         _src_layout: Layout,
@@ -3632,7 +3632,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn draw(
+    unsafe fn draw(
         &mut self,
         vertices: Range<VertexCount>,
         instances: Range<InstanceCount>,
@@ -3653,7 +3653,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue(command);
     }
 
-    fn draw_indexed(
+    unsafe fn draw_indexed(
         &mut self,
         indices: Range<IndexCount>,
         base_vertex: VertexOffset,
@@ -3677,7 +3677,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue(command);
     }
 
-    fn draw_indirect(
+    unsafe fn draw_indirect(
         &mut self,
         buffer: &native::Buffer,
         offset: buffer::Offset,
@@ -3702,7 +3702,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue_many(commands);
     }
 
-    fn draw_indexed_indirect(
+    unsafe fn draw_indexed_indirect(
         &mut self,
         buffer: &native::Buffer,
         offset: buffer::Offset,
@@ -3728,7 +3728,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue_many(commands);
     }
 
-    fn begin_query(
+    unsafe fn begin_query(
         &mut self,
         query: query::Query<Backend>,
         flags: query::ControlFlags,
@@ -3753,7 +3753,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn end_query(
+    unsafe fn end_query(
         &mut self,
         query: query::Query<Backend>,
     ) {
@@ -3772,7 +3772,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn reset_query_pool(
+    unsafe fn reset_query_pool(
         &mut self,
         pool: &native::QueryPool,
         queries: Range<query::Id>,
@@ -3813,7 +3813,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn copy_query_pool_results(
+    unsafe fn copy_query_pool_results(
         &mut self,
         pool: &native::QueryPool,
         queries: Range<query::Id>,
@@ -3913,7 +3913,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn write_timestamp(
+    unsafe fn write_timestamp(
         &mut self,
         _: pso::PipelineStage,
         _: query::Query<Backend>,
@@ -3921,7 +3921,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // nothing to do, timestamps are unsupported on Metal
     }
 
-    fn push_graphics_constants(
+    unsafe fn push_graphics_constants(
         &mut self,
         layout: &native::PipelineLayout,
         stages: pso::ShaderStageFlags,
@@ -3944,7 +3944,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    fn push_compute_constants(
+    unsafe fn push_compute_constants(
         &mut self,
         layout: &native::PipelineLayout,
         offset: u32,
@@ -3961,7 +3961,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue(self.state.push_cs_constants(pc));
     }
 
-    fn execute_commands<'a, T, I>(&mut self, _cmd_buffers: I,)
+    unsafe fn execute_commands<'a, T, I>(&mut self, _cmd_buffers: I,)
     where
         T: 'a + Borrow<CommandBuffer>,
         I: IntoIterator<Item = &'a T>,

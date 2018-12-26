@@ -119,7 +119,7 @@ pub struct Swapchain {
 }
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_image(
+    unsafe fn acquire_image(
         &mut self,
         _timout_ns: u64,
         _sync: hal::FrameSync<Backend>,

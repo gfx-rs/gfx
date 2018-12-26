@@ -65,7 +65,7 @@ pub struct Swapchain {
 }
 
 impl hal::Swapchain<B> for Swapchain {
-    fn acquire_image(
+    unsafe fn acquire_image(
         &mut self, _timeout_ns: u64, _sync: hal::FrameSync<B>
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         // TODO: sync

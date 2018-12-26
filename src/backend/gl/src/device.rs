@@ -449,7 +449,7 @@ where
 }
 
 impl d::Device<B> for Device {
-    fn allocate_memory(
+    unsafe fn allocate_memory(
         &self, _mem_type: c::MemoryTypeId, size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
         // TODO
@@ -460,7 +460,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_command_pool(
+    unsafe fn create_command_pool(
         &self,
         _family: QueueFamilyId,
         flags: CommandPoolCreateFlags,
@@ -485,7 +485,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn destroy_command_pool(&self, pool: RawCommandPool) {
+    unsafe fn destroy_command_pool(&self, pool: RawCommandPool) {
         unsafe {
             if let Some(fbo) = pool.fbo {
                 let gl = &self.share.context;
@@ -494,7 +494,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_render_pass<'a, IA, IS, ID>(
+    unsafe fn create_render_pass<'a, IA, IS, ID>(
         &self, attachments: IA, subpasses: IS, _dependencies: ID
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
@@ -529,7 +529,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_pipeline_layout<IS, IR>(&self, layouts: IS, _: IR) -> Result<n::PipelineLayout, d::OutOfMemory>
+    unsafe fn create_pipeline_layout<IS, IR>(&self, layouts: IS, _: IR) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
         IS: IntoIterator,
         IS::Item: Borrow<n::DescriptorSetLayout>,
@@ -586,11 +586,11 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    fn destroy_pipeline_cache(&self, _: ()) {
+    unsafe fn destroy_pipeline_cache(&self, _: ()) {
         //empty
     }
 
-    fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), d::OutOfMemory>
+    unsafe fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<()>,
@@ -599,7 +599,7 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    fn create_graphics_pipeline<'a>(
+    unsafe fn create_graphics_pipeline<'a>(
         &self, desc: &pso::GraphicsPipelineDesc<'a, B>, _cache: Option<&()>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         let gl = &self.share.context;
@@ -724,7 +724,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_compute_pipeline<'a>(
+    unsafe fn create_compute_pipeline<'a>(
         &self, desc: &pso::ComputePipelineDesc<'a, B>, _cache: Option<&()>
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         let gl = &self.share.context;
@@ -782,7 +782,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_framebuffer<I>(
+    unsafe fn create_framebuffer<I>(
         &self,
         pass: &n::RenderPass,
         attachments: I,
@@ -839,14 +839,14 @@ impl d::Device<B> for Device {
         Ok(name)
     }
 
-    fn create_shader_module(
+    unsafe fn create_shader_module(
         &self,
         raw_data: &[u8],
     ) -> Result<n::ShaderModule, d::ShaderError> {
         Ok(n::ShaderModule::Spirv(raw_data.into()))
     }
 
-    fn create_sampler(&self, info: i::SamplerInfo) -> Result<n::FatSampler, d::AllocationError> {
+    unsafe fn create_sampler(&self, info: i::SamplerInfo) -> Result<n::FatSampler, d::AllocationError> {
         if !self.share.legacy_features.contains(LegacyFeatures::SAMPLER_OBJECTS) {
             return Ok(n::FatSampler::Info(info));
         }
@@ -873,7 +873,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_buffer(
+    unsafe fn create_buffer(
         &self, size: u64, usage: buffer::Usage,
     ) -> Result<n::Buffer, buffer::CreationError> {
         if !self.share.legacy_features.contains(LegacyFeatures::CONSTANT_BUFFER) &&
@@ -907,11 +907,11 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn get_buffer_requirements(&self, buffer: &n::Buffer) -> memory::Requirements {
+    unsafe fn get_buffer_requirements(&self, buffer: &n::Buffer) -> memory::Requirements {
         buffer.requirements
     }
 
-    fn bind_buffer_memory(
+    unsafe fn bind_buffer_memory(
         &self, memory: &n::Memory, offset: u64, buffer: &mut n::Buffer,
     ) -> Result<(), d::BindError> {
         let gl = &self.share.context;
@@ -969,7 +969,7 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    fn map_memory<R: RangeArg<u64>>(
+    unsafe fn map_memory<R: RangeArg<u64>>(
         &self, memory: &n::Memory, range: R
     ) -> Result<*mut u8, mapping::Error> {
         let gl = &self.share.context;
@@ -999,7 +999,7 @@ impl d::Device<B> for Device {
         Ok(ptr)
     }
 
-    fn unmap_memory(&self, memory: &n::Memory) {
+    unsafe fn unmap_memory(&self, memory: &n::Memory) {
         let gl = &self.share.context;
         let buffer = match memory.first_bound_buffer.get() {
             0 => panic!("No buffer has been bound yet, can't map memory!"),
@@ -1019,7 +1019,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn flush_mapped_memory_ranges<'a, I, R>(&self, _: I) -> Result<(), d::OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, _: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
@@ -1029,7 +1029,7 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _ranges: I) -> Result<(), d::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
@@ -1038,13 +1038,13 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn create_buffer_view<R: RangeArg<u64>>(
+    unsafe fn create_buffer_view<R: RangeArg<u64>>(
         &self, _: &n::Buffer, _: Option<Format>, _: R
     ) -> Result<n::BufferView, buffer::ViewCreationError> {
         unimplemented!()
     }
 
-    fn create_image(
+    unsafe fn create_image(
         &self,
         kind: i::Kind,
         num_levels: i::Level,
@@ -1132,23 +1132,23 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn get_image_requirements(&self, unbound: &n::Image) -> memory::Requirements {
+    unsafe fn get_image_requirements(&self, unbound: &n::Image) -> memory::Requirements {
         unbound.requirements
     }
 
-    fn get_image_subresource_footprint(
+    unsafe fn get_image_subresource_footprint(
         &self, _image: &n::Image, _sub: i::Subresource
     ) -> i::SubresourceFootprint {
         unimplemented!()
     }
 
-    fn bind_image_memory(
+    unsafe fn bind_image_memory(
         &self, _memory: &n::Memory, _offset: u64, _image: &mut n::Image
     ) -> Result<(), d::BindError> {
         Ok(())
     }
 
-    fn create_image_view(
+    unsafe fn create_image_view(
         &self,
         image: &n::Image,
         _kind: i::ViewKind,
@@ -1185,7 +1185,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_descriptor_pool<I>(&self, _: usize, _: I) -> Result<n::DescriptorPool, d::OutOfMemory>
+    unsafe fn create_descriptor_pool<I>(&self, _: usize, _: I) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
@@ -1193,7 +1193,7 @@ impl d::Device<B> for Device {
         Ok(n::DescriptorPool { })
     }
 
-    fn create_descriptor_set_layout<I, J>(&self, layout: I, _: J) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
+    unsafe fn create_descriptor_set_layout<I, J>(&self, layout: I, _: J) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
@@ -1204,7 +1204,7 @@ impl d::Device<B> for Device {
         Ok(layout.into_iter().map(|l| l.borrow().clone()).collect())
     }
 
-    fn write_descriptor_sets<'a, I, J>(&self, writes: I)
+    unsafe fn write_descriptor_sets<'a, I, J>(&self, writes: I)
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
         J: IntoIterator,
@@ -1277,7 +1277,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn copy_descriptor_sets<'a, I>(&self, copies: I)
+    unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
@@ -1301,7 +1301,7 @@ impl d::Device<B> for Device {
         Ok(n::Fence::new(sync))
     }
 
-    fn reset_fences<I>(&self, fences: I) -> Result<(), d::OutOfMemory>
+    unsafe fn reset_fences<I>(&self, fences: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
@@ -1322,7 +1322,7 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    fn wait_for_fence(&self, fence: &n::Fence, timeout_ns: u64) -> Result<bool, d::OomOrDeviceLost> {
+    unsafe fn wait_for_fence(&self, fence: &n::Fence, timeout_ns: u64) -> Result<bool, d::OomOrDeviceLost> {
         if !self.share.private_caps.sync {
             return Ok(true);
         }
@@ -1338,23 +1338,23 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn get_fence_status(&self, _: &n::Fence) -> Result<bool, d::DeviceLost> {
+    unsafe fn get_fence_status(&self, _: &n::Fence) -> Result<bool, d::DeviceLost> {
         unimplemented!()
     }
 
-    fn free_memory(&self, _memory: n::Memory) {
+    unsafe fn free_memory(&self, _memory: n::Memory) {
         // Nothing to do
     }
 
-    fn create_query_pool(&self, _ty: query::Type, _count: query::Id) -> Result<(), query::CreationError> {
+    unsafe fn create_query_pool(&self, _ty: query::Type, _count: query::Id) -> Result<(), query::CreationError> {
         unimplemented!()
     }
 
-    fn destroy_query_pool(&self, _: ()) {
+    unsafe fn destroy_query_pool(&self, _: ()) {
         unimplemented!()
     }
 
-    fn get_query_pool_results(
+    unsafe fn get_query_pool_results(
         &self, _pool: &(), _queries: Range<query::Id>,
         _data: &mut [u8], _stride: buffer::Offset,
         _flags: query::ResultFlags,
@@ -1362,45 +1362,45 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    fn destroy_shader_module(&self, _: n::ShaderModule) {
+    unsafe fn destroy_shader_module(&self, _: n::ShaderModule) {
         // Assumes compiled shaders are managed internally
     }
 
-    fn destroy_render_pass(&self, _: n::RenderPass) {
+    unsafe fn destroy_render_pass(&self, _: n::RenderPass) {
         // Nothing to do
     }
 
-    fn destroy_pipeline_layout(&self, _: n::PipelineLayout) {
+    unsafe fn destroy_pipeline_layout(&self, _: n::PipelineLayout) {
         // Nothing to do
     }
 
-    fn destroy_graphics_pipeline(&self, pipeline: n::GraphicsPipeline) {
+    unsafe fn destroy_graphics_pipeline(&self, pipeline: n::GraphicsPipeline) {
         unsafe {
             self.share.context.DeleteProgram(pipeline.program);
         }
     }
 
-    fn destroy_compute_pipeline(&self, pipeline: n::ComputePipeline) {
+    unsafe fn destroy_compute_pipeline(&self, pipeline: n::ComputePipeline) {
         unsafe {
             self.share.context.DeleteProgram(pipeline.program);
         }
     }
 
-    fn destroy_framebuffer(&self, frame_buffer: n::FrameBuffer) {
+    unsafe fn destroy_framebuffer(&self, frame_buffer: n::FrameBuffer) {
         let gl = &self.share.context;
         unsafe { gl.DeleteFramebuffers(1, &frame_buffer); }
     }
 
-    fn destroy_buffer(&self, buffer: n::Buffer) {
+    unsafe fn destroy_buffer(&self, buffer: n::Buffer) {
         unsafe {
             self.share.context.DeleteBuffers(1, &buffer.raw);
         }
     }
-    fn destroy_buffer_view(&self, _: n::BufferView) {
+    unsafe fn destroy_buffer_view(&self, _: n::BufferView) {
         // Nothing to do
     }
 
-    fn destroy_image(&self, image: n::Image) {
+    unsafe fn destroy_image(&self, image: n::Image) {
         let gl = &self.share.context;
         match image.kind {
             n::ImageKind::Surface(rb) => unsafe { gl.DeleteRenderbuffers(1, &rb) },
@@ -1408,11 +1408,11 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_image_view(&self, _image_view: n::ImageView) {
+    unsafe fn destroy_image_view(&self, _image_view: n::ImageView) {
         // Nothing to do
     }
 
-    fn destroy_sampler(&self, sampler: n::FatSampler) {
+    unsafe fn destroy_sampler(&self, sampler: n::FatSampler) {
         let gl = &self.share.context;
         match sampler {
             n::FatSampler::Sampler(s) => unsafe { gl.DeleteSamplers(1, &s) },
@@ -1420,15 +1420,15 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_descriptor_pool(&self, _: n::DescriptorPool) {
+    unsafe fn destroy_descriptor_pool(&self, _: n::DescriptorPool) {
         // Nothing to do
     }
 
-    fn destroy_descriptor_set_layout(&self, _: n::DescriptorSetLayout) {
+    unsafe fn destroy_descriptor_set_layout(&self, _: n::DescriptorSetLayout) {
         // Nothing to do
     }
 
-    fn destroy_fence(&self, fence: n::Fence) {
+    unsafe fn destroy_fence(&self, fence: n::Fence) {
         unsafe {
             let gl = &self.share.context;
             let sync = fence.0.get();
@@ -1438,11 +1438,11 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn destroy_semaphore(&self, _: n::Semaphore) {
+    unsafe fn destroy_semaphore(&self, _: n::Semaphore) {
         // Nothing to do
     }
 
-    fn create_swapchain(
+    unsafe fn create_swapchain(
         &self,
         surface: &mut Surface,
         config: c::SwapchainConfig,
@@ -1451,7 +1451,7 @@ impl d::Device<B> for Device {
         Ok(self.create_swapchain_impl(surface, config))
     }
 
-    fn destroy_swapchain(&self, _swapchain: Swapchain) {
+    unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {
         // Nothing to do
     }
 

@@ -9,12 +9,12 @@ use super::{CommandBuffer, DescriptorSetOffset, RawCommandBuffer, Shot, Level};
 
 impl<B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_compute_pipeline(&mut self, pipeline: &B::ComputePipeline) {
+    pub unsafe fn bind_compute_pipeline(&mut self, pipeline: &B::ComputePipeline) {
         self.raw.bind_compute_pipeline(pipeline)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn bind_compute_descriptor_sets<I, J>(
+    pub unsafe fn bind_compute_descriptor_sets<I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
@@ -30,17 +30,17 @@ impl<B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<B, C, S,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn dispatch(&mut self, count: WorkGroupCount) {
+    pub unsafe fn dispatch(&mut self, count: WorkGroupCount) {
         self.raw.dispatch(count)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: Offset) {
+    pub unsafe fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: Offset) {
         self.raw.dispatch_indirect(buffer, offset)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn push_compute_constants(&mut self, layout: &B::PipelineLayout, offset: u32, constants: &[u32]) {
+    pub unsafe fn push_compute_constants(&mut self, layout: &B::PipelineLayout, offset: u32, constants: &[u32]) {
         self.raw.push_compute_constants(layout, offset, constants);
     }
 }

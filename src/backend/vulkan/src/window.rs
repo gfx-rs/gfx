@@ -399,7 +399,7 @@ pub struct Swapchain {
 
 
 impl hal::Swapchain<Backend> for Swapchain {
-    fn acquire_image(
+    unsafe fn acquire_image(
         &mut self, timeout_ns: u64, sync: hal::FrameSync<Backend>
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         let (semaphore, fence) = match sync {

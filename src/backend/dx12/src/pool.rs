@@ -73,7 +73,7 @@ unsafe impl Send for RawCommandPool {}
 unsafe impl Sync for RawCommandPool {}
 
 impl pool::RawCommandPool<Backend> for RawCommandPool {
-    fn reset(&mut self) {
+    unsafe fn reset(&mut self) {
         match self.allocator {
             CommandPoolAllocator::Shared(ref allocator) => unsafe { allocator.Reset(); },
             CommandPoolAllocator::Individual(ref mut allocators) => {

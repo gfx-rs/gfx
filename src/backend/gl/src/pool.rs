@@ -60,7 +60,7 @@ pub struct RawCommandPool {
 }
 
 impl pool::RawCommandPool<Backend> for RawCommandPool {
-    fn reset(&mut self) {
+    unsafe fn reset(&mut self) {
         let mut memory = self
             .memory
             .try_lock()

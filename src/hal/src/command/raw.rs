@@ -119,20 +119,20 @@ impl<'a, B: Backend> Default for CommandBufferInheritanceInfo<'a, B> {
 /// provided by a `Backend`'s command buffer.
 pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// Begins recording commands to a command buffer.
-    fn begin(&mut self, flags: CommandBufferFlags, inheritance_info: CommandBufferInheritanceInfo<B>);
+    unsafe fn begin(&mut self, flags: CommandBufferFlags, inheritance_info: CommandBufferInheritanceInfo<B>);
 
     /// Finish recording commands to a command buffer.
-    fn finish(&mut self);
+    unsafe fn finish(&mut self);
 
     /// Empties the command buffer, optionally releasing all
     /// resources from the commands that have been submitted.
-    fn reset(&mut self, release_resources: bool);
+    unsafe fn reset(&mut self, release_resources: bool);
 
     // TODO: This REALLY needs to be deeper, but it's complicated.
     // Should probably be a whole book chapter on synchronization and stuff really.
     /// Inserts a synchronization dependency between pipeline stages
     /// in the command buffer.
-    fn pipeline_barrier<'a, T>(
+    unsafe fn pipeline_barrier<'a, T>(
         &mut self,
         stages: Range<pso::PipelineStage>,
         dependencies: Dependencies,
@@ -142,7 +142,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
         T::Item: Borrow<Barrier<'a, B>>;
 
     /// Fill a buffer with the given `u32` value.
-    fn fill_buffer<R>(
+    unsafe fn fill_buffer<R>(
         &mut self,
         buffer: &B::Buffer,
         range: R,
@@ -151,7 +151,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
         R: RangeArg<buffer::Offset>;
 
     /// Copy data from the given slice into a buffer.
-    fn update_buffer(
+    unsafe fn update_buffer(
         &mut self,
         buffer: &B::Buffer,
         offset: buffer::Offset,
@@ -159,7 +159,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     );
 
     /// Clears an image to the given color/depth/stencil.
-    fn clear_image<T>(
+    unsafe fn clear_image<T>(
         &mut self,
         image: &B::Image,
         layout: Layout,
@@ -172,7 +172,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
 
     /// Takes an iterator of attachments and an iterator of rect's,
     /// and clears the given rect's for *each* attachment.
-    fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
+    unsafe fn clear_attachments<T, U>(&mut self, clears: T, rects: U)
     where
         T: IntoIterator,
         T::Item: Borrow<AttachmentClear>,
@@ -181,7 +181,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
 
     /// "Resolves" a multisampled image, converting it into a non-multisampled
     /// image. Takes an iterator of regions to apply the resolution to.
-    fn resolve_image<T>(
+    unsafe fn resolve_image<T>(
         &mut self,
         src: &B::Image,
         src_layout: Layout,
@@ -194,7 +194,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
 
     /// Copies regions from the source to destination image,
     /// applying scaling, filtering and potentially format conversion.
-    fn blit_image<T>(
+    unsafe fn blit_image<T>(
         &mut self,
         src: &B::Image,
         src_layout: Layout,
@@ -208,14 +208,14 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
 
     /// Bind the index buffer view, making it the "current" one that draw commands
     /// will operate on.
-    fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<B>);
+    unsafe fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<B>);
 
     /// Bind the vertex buffer set, making it the "current" one that draw commands
     /// will operate on.
     ///
     /// Each buffer passed corresponds to the vertex input binding with the same index,
     /// starting from an offset index `first_binding`.
-    fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<B::Buffer>;
@@ -237,7 +237,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// - The bound pipeline must not have baked viewport state.
     /// - All viewports used by the pipeline must be specified before the first
     ///   draw call.
-    fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
+    unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>;
@@ -259,7 +259,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// - The bound pipeline must not have baked scissor state.
     /// - All scissors used by the pipeline must be specified before the first draw
     ///   call.
-    fn set_scissors<T>(&mut self, first_scissor: u32, rects: T)
+    unsafe fn set_scissors<T>(&mut self, first_scissor: u32, rects: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>;
@@ -267,25 +267,25 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// Sets the stencil reference value for comparison operations and store operations.
     /// Will be used on the LHS of stencil compare ops and as store value when the
     /// store op is Reference.
-    fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue);
+    unsafe fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue);
 
     /// Sets the stencil read mask.
-    fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue);
+    unsafe fn set_stencil_read_mask(&mut self, faces: pso::Face, value: pso::StencilValue);
 
     /// Sets the stencil write mask.
-    fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue);
+    unsafe fn set_stencil_write_mask(&mut self, faces: pso::Face, value: pso::StencilValue);
 
     /// Set the blend constant values dynamically.
-    fn set_blend_constants(&mut self, color: pso::ColorValue);
+    unsafe fn set_blend_constants(&mut self, color: pso::ColorValue);
 
     /// Set the depth bounds test values dynamically.
-    fn set_depth_bounds(&mut self, bounds: Range<f32>);
+    unsafe fn set_depth_bounds(&mut self, bounds: Range<f32>);
 
     /// Set the line width dynamically.
-    fn set_line_width(&mut self, width: f32);
+    unsafe fn set_line_width(&mut self, width: f32);
 
     /// Set the depth bias dynamically.
-    fn set_depth_bias(&mut self, depth_bias: pso::DepthBias);
+    unsafe fn set_depth_bias(&mut self, depth_bias: pso::DepthBias);
 
     /// Begins recording commands for a render pass on the given framebuffer.
     /// `render_area` is the section of the framebuffer to render,
@@ -294,7 +294,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// `first_subpass` specifies, for the first subpass, whether the
     /// rendering commands are provided inline or whether the render
     /// pass is composed of subpasses.
-    fn begin_render_pass<T>(
+    unsafe fn begin_render_pass<T>(
         &mut self,
         render_pass: &B::RenderPass,
         framebuffer: &B::Framebuffer,
@@ -306,10 +306,10 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
         T::Item: Borrow<ClearValueRaw>;
 
     /// Steps to the next subpass in the current render pass.
-    fn next_subpass(&mut self, contents: SubpassContents);
+    unsafe fn next_subpass(&mut self, contents: SubpassContents);
 
     /// Finishes recording commands for the current a render pass.
-    fn end_render_pass(&mut self);
+    unsafe fn end_render_pass(&mut self);
 
     /// Bind a graphics pipeline.
     ///
@@ -320,11 +320,11 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     ///
     /// - Command buffer must be in recording state.
     /// - Only queues with graphics capability support this function.
-    fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline);
+    unsafe fn bind_graphics_pipeline(&mut self, pipeline: &B::GraphicsPipeline);
 
     /// Takes an iterator of graphics `DescriptorSet`'s, and binds them to the command buffer.
     /// `first_set` is the index that the first descriptor is mapped to in the command buffer.
-    fn bind_graphics_descriptor_sets<I, J>(
+    unsafe fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
@@ -345,11 +345,11 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     ///
     /// - Command buffer must be in recording state.
     /// - Only queues with compute capability support this function.
-    fn bind_compute_pipeline(&mut self, pipeline: &B::ComputePipeline);
+    unsafe fn bind_compute_pipeline(&mut self, pipeline: &B::ComputePipeline);
 
     /// Takes an iterator of compute `DescriptorSet`'s, and binds them to the command buffer,
     /// `first_set` is the index that the first descriptor is mapped to in the command buffer.
-    fn bind_compute_descriptor_sets<I, J>(
+    unsafe fn bind_compute_descriptor_sets<I, J>(
         &mut self,
         layout: &B::PipelineLayout,
         first_set: usize,
@@ -377,14 +377,14 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// - `count` must be less than or equal to `Limits::max_compute_group_count`
     ///
     /// TODO:
-    fn dispatch(&mut self, count: WorkGroupCount);
+    unsafe fn dispatch(&mut self, count: WorkGroupCount);
 
     /// Works similarly to `dispatch()` but reads parameters from the given
     /// buffer during execution.
-    fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset);
+    unsafe fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset);
 
     /// Adds a command to copy regions from the source to destination buffer.
-    fn copy_buffer<T>(
+    unsafe fn copy_buffer<T>(
         &mut self,
         src: &B::Buffer,
         dst: &B::Buffer,
@@ -397,7 +397,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// have the given layouts.  No format conversion is done; the source and destination
     /// `Layout`'s **must** have the same sized image formats (such as `Rgba8Unorm` and
     /// `R32`, both of which are 32 bits).
-    fn copy_image<T>(
+    unsafe fn copy_image<T>(
         &mut self,
         src: &B::Image,
         src_layout: Layout,
@@ -409,7 +409,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
         T::Item: Borrow<ImageCopy>;
 
     /// Copies regions from the source buffer to the destination image.
-    fn copy_buffer_to_image<T>(
+    unsafe fn copy_buffer_to_image<T>(
         &mut self,
         src: &B::Buffer,
         dst: &B::Image,
@@ -420,7 +420,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
         T::Item: Borrow<BufferImageCopy>;
 
     /// Copies regions from the source image to the destination buffer.
-    fn copy_image_to_buffer<T>(
+    unsafe fn copy_image_to_buffer<T>(
         &mut self,
         src: &B::Image,
         src_layout: Layout,
@@ -435,7 +435,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// from the currently bound vertex buffers.  It performs instanced
     /// drawing, drawing `instances.len()`
     /// times with an `instanceIndex` starting with the start of the range.
-    fn draw(
+    unsafe fn draw(
         &mut self,
         vertices: Range<VertexCount>,
         instances: Range<InstanceCount>,
@@ -447,7 +447,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// That is, the offset into the vertex buffer is `(current_index + base_vertex)`
     ///
     /// It also performs instanced drawing, identical to `draw()`.
-    fn draw_indexed(
+    unsafe fn draw_indexed(
         &mut self,
         indices: Range<IndexCount>,
         base_vertex: VertexOffset,
@@ -463,7 +463,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// in order, the number of vertices to draw, the number of instances to draw,
     /// the index of the first vertex to draw, and the instance ID of the first
     /// instance to draw.
-    fn draw_indirect(
+    unsafe fn draw_indirect(
         &mut self,
         buffer: &B::Buffer,
         offset: buffer::Offset,
@@ -478,7 +478,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// in order, the number of indices, the number of instances, the first index,
     /// the vertex offset, and the first instance.  All are `u32`'s except
     /// the vertex offset, which is an `i32`.
-    fn draw_indexed_indirect(
+    unsafe fn draw_indexed_indirect(
         &mut self,
         buffer: &B::Buffer,
         offset: buffer::Offset,
@@ -489,16 +489,16 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// Begins a query operation.  Queries count operations or record timestamps
     /// resulting from commands that occur between the beginning and end of the query,
     /// and save the results to the query pool.
-    fn begin_query(&mut self, query: query::Query<B>, flags: query::ControlFlags);
+    unsafe fn begin_query(&mut self, query: query::Query<B>, flags: query::ControlFlags);
 
     /// End a query.
-    fn end_query(&mut self, query: query::Query<B>);
+    unsafe fn end_query(&mut self, query: query::Query<B>);
 
     /// Reset/clear the values in the given range of the query pool.
-    fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<query::Id>);
+    unsafe fn reset_query_pool(&mut self, pool: &B::QueryPool, queries: Range<query::Id>);
 
     /// Copy query results into a buffer.
-    fn copy_query_pool_results(
+    unsafe fn copy_query_pool_results(
         &mut self,
         pool: &B::QueryPool,
         queries: Range<query::Id>,
@@ -509,12 +509,12 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     );
 
     /// Requests a timestamp to be written.
-    fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>);
+    unsafe fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>);
 
     /// Modify constant data in a graphics pipeline.
     /// Push constants are intended to modify data in a pipeline more
     /// quickly than a updating the values inside a descriptor set.
-    fn push_graphics_constants(
+    unsafe fn push_graphics_constants(
         &mut self,
         layout: &B::PipelineLayout,
         stages: pso::ShaderStageFlags,
@@ -525,7 +525,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// Modify constant data in a compute pipeline.
     /// Push constants are intended to modify data in a pipeline more
     /// quickly than a updating the values inside a descriptor set.
-    fn push_compute_constants(
+    unsafe fn push_compute_constants(
         &mut self,
         layout: &B::PipelineLayout,
         offset: u32,
@@ -533,7 +533,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     );
 
     /// Execute the given secondary command buffers.
-    fn execute_commands<'a, T, I>(
+    unsafe fn execute_commands<'a, T, I>(
         &mut self,
         cmd_buffers: I,
     ) where

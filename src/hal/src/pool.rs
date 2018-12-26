@@ -26,7 +26,7 @@ pub trait RawCommandPool<B: Backend>: Any + Send + Sync {
     /// Reset the command pool and the corresponding command buffers.
     ///
     /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
-    fn reset(&mut self);
+    unsafe fn reset(&mut self);
 
     /// Allocate a single command buffers from the pool.
     fn allocate_one(&mut self, level: RawLevel) -> B::CommandBuffer {
@@ -72,7 +72,7 @@ impl<B: Backend, C> CommandPool<B, C> {
     /// Reset the command pool and the corresponding command buffers.
     ///
     /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
-    pub fn reset(&mut self) {
+    pub unsafe fn reset(&mut self) {
         self.raw.reset();
     }
 
@@ -101,12 +101,10 @@ impl<B: Backend, C> CommandPool<B, C> {
     }
 
     /// Free the given iterator of command buffers from the pool.
-    pub fn free<S: Shot, I>(&mut self, cmd_buffers: I)
-    where I: IntoIterator<Item = CommandBuffer<B, C, S>>
+    pub unsafe fn free<S: Shot, I>(&mut self, cmd_buffers: I)
+        where I: IntoIterator<Item = CommandBuffer<B, C, S>>
     {
-        unsafe {
-            self.raw.free(cmd_buffers.into_iter().map(|cmb| cmb.raw))
-        }
+        self.raw.free(cmd_buffers.into_iter().map(|cmb| cmb.raw))
     }
 
     /// Downgrade a typed command pool to untyped one, free up the allocated command buffers.

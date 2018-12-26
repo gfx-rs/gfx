@@ -479,7 +479,7 @@ impl RawCommandBuffer {
 }
 
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
-    fn begin(
+    unsafe fn begin(
         &mut self,
         _flags: hal::command::CommandBufferFlags,
         _inheritance_info: hal::command::CommandBufferInheritanceInfo<Backend>
@@ -492,11 +492,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn finish(&mut self) {
+    unsafe fn finish(&mut self) {
         // no-op
     }
 
-    fn reset(&mut self, _release_resources: bool) {
+    unsafe fn reset(&mut self, _release_resources: bool) {
         if !self.individual_reset {
             error!("Associated pool must allow individual resets.");
             return
@@ -524,7 +524,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     }
 
-    fn pipeline_barrier<'a, T>(
+    unsafe fn pipeline_barrier<'a, T>(
         &mut self,
         _stages: Range<hal::pso::PipelineStage>,
         _dependencies: memory::Dependencies,
@@ -536,18 +536,18 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // TODO
     }
 
-    fn fill_buffer<R>(&mut self, _buffer: &n::Buffer, _range: R, _data: u32)
+    unsafe fn fill_buffer<R>(&mut self, _buffer: &n::Buffer, _range: R, _data: u32)
     where
         R: RangeArg<buffer::Offset>,
     {
         unimplemented!()
     }
 
-    fn update_buffer(&mut self, _buffer: &n::Buffer, _offset: buffer::Offset, _data: &[u8]) {
+    unsafe fn update_buffer(&mut self, _buffer: &n::Buffer, _offset: buffer::Offset, _data: &[u8]) {
         unimplemented!()
     }
 
-    fn begin_render_pass<T>(
+    unsafe fn begin_render_pass<T>(
         &mut self,
         render_pass: &n::RenderPass,
         framebuffer: &n::FrameBuffer,
@@ -606,15 +606,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.begin_subpass();
     }
 
-    fn next_subpass(&mut self, _contents: command::SubpassContents) {
+    unsafe fn next_subpass(&mut self, _contents: command::SubpassContents) {
         unimplemented!()
     }
 
-    fn end_render_pass(&mut self) {
+    unsafe fn end_render_pass(&mut self) {
         // TODO
     }
 
-    fn clear_image<T>(
+    unsafe fn clear_image<T>(
         &mut self,
         image: &n::Image,
         _: image::Layout,
@@ -663,7 +663,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn clear_attachments<T, U>(&mut self, _: T, _: U)
+    unsafe fn clear_attachments<T, U>(&mut self, _: T, _: U)
     where
         T: IntoIterator,
         T::Item: Borrow<command::AttachmentClear>,
@@ -673,7 +673,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn resolve_image<T>(
+    unsafe fn resolve_image<T>(
         &mut self,
         _src: &n::Image,
         _src_layout: image::Layout,
@@ -687,7 +687,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn blit_image<T>(
+    unsafe fn blit_image<T>(
         &mut self,
         _src: &n::Image,
         _src_layout: image::Layout,
@@ -702,7 +702,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
         // TODO: how can we incorporate the buffer offset?
         if ibv.offset > 0 {
             warn!("Non-zero index buffer offset currently not handled.");
@@ -712,7 +712,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::BindIndexBuffer(ibv.buffer.raw));
     }
 
-    fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<n::Buffer>,
@@ -729,7 +729,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
+    unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
@@ -767,7 +767,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
+    unsafe fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
     where
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
@@ -796,7 +796,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
+    unsafe fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
         assert!(!faces.is_empty());
 
         let mut front = 0;
@@ -821,34 +821,34 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.cache.stencil_ref = Some((front, back));
     }
 
-    fn set_stencil_read_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
+    unsafe fn set_stencil_read_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
         unimplemented!();
     }
 
-    fn set_stencil_write_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
+    unsafe fn set_stencil_write_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
         unimplemented!();
     }
 
-    fn set_blend_constants(&mut self, cv: pso::ColorValue) {
+    unsafe fn set_blend_constants(&mut self, cv: pso::ColorValue) {
         if self.cache.blend_color != Some(cv) {
             self.cache.blend_color = Some(cv);
             self.push_cmd(Command::SetBlendColor(cv));
         }
     }
 
-    fn set_depth_bounds(&mut self, _: Range<f32>) {
+    unsafe fn set_depth_bounds(&mut self, _: Range<f32>) {
         warn!("Depth bounds test is not supported");
     }
 
-    fn set_line_width(&mut self, _width: f32) {
+    unsafe fn set_line_width(&mut self, _width: f32) {
         unimplemented!()
     }
 
-    fn set_depth_bias(&mut self, _depth_bias: pso::DepthBias) {
+    unsafe fn set_depth_bias(&mut self, _depth_bias: pso::DepthBias) {
         unimplemented!()
     }
 
-    fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
+    unsafe fn bind_graphics_pipeline(&mut self, pipeline: &n::GraphicsPipeline) {
         let n::GraphicsPipeline {
             primitive,
             patch_size,
@@ -881,7 +881,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.update_blend_targets(blend_targets);
     }
 
-    fn bind_graphics_descriptor_sets<I, J>(
+    unsafe fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
         layout: &n::PipelineLayout,
         first_set: usize,
@@ -976,7 +976,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
+    unsafe fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
         let n::ComputePipeline {
             program,
         } = *pipeline;
@@ -987,7 +987,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn bind_compute_descriptor_sets<I, J>(
+    unsafe fn bind_compute_descriptor_sets<I, J>(
         &mut self,
         _layout: &n::PipelineLayout,
         _first_set: usize,
@@ -1002,15 +1002,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // TODO
     }
 
-    fn dispatch(&mut self, count: hal::WorkGroupCount) {
+    unsafe fn dispatch(&mut self, count: hal::WorkGroupCount) {
         self.push_cmd(Command::Dispatch(count));
     }
 
-    fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
+    unsafe fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
         self.push_cmd(Command::DispatchIndirect(buffer.raw, offset));
     }
 
-    fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
+    unsafe fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
@@ -1028,7 +1028,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn copy_image<T>(
+    unsafe fn copy_image<T>(
         &mut self,
         src: &n::Image,
         _src_layout: image::Layout,
@@ -1055,7 +1055,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-     fn copy_buffer_to_image<T>(
+     unsafe fn copy_buffer_to_image<T>(
          &mut self,
         src: &n::Buffer,
         dst: &n::Image,
@@ -1081,7 +1081,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn copy_image_to_buffer<T>(
+    unsafe fn copy_image_to_buffer<T>(
         &mut self,
         src: &n::Image,
         _: image::Layout,
@@ -1107,7 +1107,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn draw(
+    unsafe fn draw(
         &mut self,
         vertices: Range<hal::VertexCount>,
         instances: Range<hal::InstanceCount>,
@@ -1131,7 +1131,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn draw_indexed(
+    unsafe fn draw_indexed(
         &mut self,
         indices: Range<hal::IndexCount>,
         base_vertex: hal::VertexOffset,
@@ -1168,7 +1168,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    fn draw_indirect(
+    unsafe fn draw_indirect(
         &mut self,
         _buffer: &n::Buffer,
         _offset: buffer::Offset,
@@ -1178,7 +1178,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn draw_indexed_indirect(
+    unsafe fn draw_indexed_indirect(
         &mut self,
         _buffer: &n::Buffer,
         _offset: buffer::Offset,
@@ -1188,7 +1188,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn begin_query(
+    unsafe fn begin_query(
         &mut self,
         _query: query::Query<Backend>,
         _flags: query::ControlFlags,
@@ -1196,7 +1196,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn copy_query_pool_results(
+    unsafe fn copy_query_pool_results(
         &mut self,
         _pool: &(),
         _queries: Range<query::Id>,
@@ -1208,14 +1208,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn end_query(
+    unsafe fn end_query(
         &mut self,
         _query: query::Query<Backend>,
     ) {
         unimplemented!()
     }
 
-    fn reset_query_pool(
+    unsafe fn reset_query_pool(
         &mut self,
         _pool: &(),
         _queries: Range<query::Id>,
@@ -1223,7 +1223,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn write_timestamp(
+    unsafe fn write_timestamp(
         &mut self,
         _: pso::PipelineStage,
         _: query::Query<Backend>,
@@ -1231,7 +1231,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn push_graphics_constants(
+    unsafe fn push_graphics_constants(
         &mut self,
         _layout: &n::PipelineLayout,
         _stages: pso::ShaderStageFlags,
@@ -1241,7 +1241,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn push_compute_constants(
+    unsafe fn push_compute_constants(
         &mut self,
         _layout: &n::PipelineLayout,
         _offset: u32,
@@ -1250,7 +1250,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    fn execute_commands<'a, T, I>(
+    unsafe fn execute_commands<'a, T, I>(
         &mut self,
         _buffers: I,
     ) where

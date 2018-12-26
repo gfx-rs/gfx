@@ -31,6 +31,7 @@
 //! # let mut swapchain: empty::Swapchain = return;
 //! # let device: empty::Device = return;
 //! # let mut present_queue: CommandQueue<empty::Backend, Graphics> = return;
+//! # unsafe {
 //! let acquisition_semaphore = device.create_semaphore().unwrap();
 //! let render_semaphore = device.create_semaphore().unwrap();
 //!
@@ -38,7 +39,7 @@
 //! // render the scene..
 //! // `render_semaphore` will be signalled once rendering has been finished
 //! swapchain.present(&mut present_queue, 0, &[render_semaphore]);
-//! # }
+//! # }}
 //! ```
 //!
 //! Queues need to synchronize with the presentation engine, usually done via signalling a semaphore
@@ -397,7 +398,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// ```no_run
     ///
     /// ```
-    fn acquire_image(
+    unsafe fn acquire_image(
         &mut self,
         timeout_ns: u64,
         sync: FrameSync<B>,
@@ -415,7 +416,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// ```no_run
     ///
     /// ```
-    fn present<'a, C, S, Iw>(
+    unsafe fn present<'a, C, S, Iw>(
         &'a self,
         present_queue: &mut CommandQueue<B, C>,
         image_index: SwapImageIndex,
@@ -431,7 +432,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     }
 
     /// Present one acquired image without any semaphore synchronization.
-    fn present_nosemaphores<'a, C>(
+    unsafe fn present_nosemaphores<'a, C>(
         &'a self,
         present_queue: &mut CommandQueue<B, C>,
         image_index: SwapImageIndex,

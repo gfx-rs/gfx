@@ -3,6 +3,7 @@ name = "hal-examples"
 version = "0.1.0"
 publish = false
 workspace = ".."
+edition = "2018"
 
 [features]
 default = []

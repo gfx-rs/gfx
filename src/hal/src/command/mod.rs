@@ -91,7 +91,7 @@ impl<B: Backend, C, K: Capability + Supports<C>, S, L: Level> Submittable<B, K, 
 
 impl<B: Backend, C> CommandBuffer<B, C, OneShot, Primary> {
     /// Begin recording a one-shot primary command buffer.
-    pub fn begin(&mut self) {
+    pub unsafe fn begin(&mut self) {
         let flags = CommandBufferFlags::ONE_TIME_SUBMIT;
         self.raw.begin(flags, CommandBufferInheritanceInfo::default());
     }
@@ -99,7 +99,7 @@ impl<B: Backend, C> CommandBuffer<B, C, OneShot, Primary> {
 
 impl<B: Backend, C> CommandBuffer<B, C, MultiShot, Primary> {
     /// Begin recording a multi-shot primary command buffer.
-    pub fn begin(
+    pub unsafe fn begin(
         &mut self,
         allow_pending_resubmit: bool,
     ) {
@@ -114,7 +114,7 @@ impl<B: Backend, C> CommandBuffer<B, C, MultiShot, Primary> {
 
 impl<B: Backend, C> CommandBuffer<B, C, OneShot, Secondary> {
     /// Begin recording a one-shot secondary command buffer.
-    pub fn begin(
+    pub unsafe fn begin(
         &mut self,
         inheritance: CommandBufferInheritanceInfo<B>,
     ) {
@@ -125,7 +125,7 @@ impl<B: Backend, C> CommandBuffer<B, C, OneShot, Secondary> {
 
 impl<B: Backend, C> CommandBuffer<B, C, MultiShot, Secondary> {
     /// Begin recording a multi-shot secondary command buffer.
-    pub fn begin(
+    pub unsafe fn begin(
         &mut self,
         allow_pending_resubmit: bool,
         inheritance: CommandBufferInheritanceInfo<B>,
@@ -151,7 +151,7 @@ impl<B: Backend, C, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Finish recording commands to the command buffers.
     ///
     /// The command pool must be reset to able to re-record commands.
-    pub fn finish(&mut self) {
+    pub unsafe fn finish(&mut self) {
         self.raw.finish();
     }
 
@@ -167,20 +167,17 @@ impl<B: Backend, C, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     }*/
 
     /// Downgrade a command buffer to a lesser capability type.
-    ///
-    /// This is safe as a downgraded version can't be `submit`'ed
-    /// since `submit` requires `self` by move.
-    pub fn downgrade<D>(&mut self) -> &mut CommandBuffer<B, D, S>
+    pub unsafe fn downgrade<D>(&mut self) -> &mut CommandBuffer<B, D, S>
     where
         C: Supports<D>
     {
-        unsafe { ::std::mem::transmute(self) }
+        ::std::mem::transmute(self)
     }
 }
 
 impl<B: Backend, C, S: Shot> CommandBuffer<B, C, S, Primary> {
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub fn execute_commands<'a, I, T, K>(&mut self, cmd_buffers: I)
+    pub unsafe fn execute_commands<'a, I, T, K>(&mut self, cmd_buffers: I)
     where
         K: Capability,
         T: 'a + Submittable<B, K, Secondary>,
