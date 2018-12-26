@@ -834,6 +834,14 @@ impl hal::Swapchain<Backend> for Swapchain {
 }
 
 pub struct Instance;
+
+impl Instance {
+    /// Create instance.
+    pub fn create(_name: &str, _version: u32) -> Self {
+        Instance
+    }
+}
+
 impl hal::Instance for Instance {
     type Backend = Backend;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
