@@ -8,7 +8,7 @@ keywords = ["graphics", "gamedev"]
 license = "MIT OR Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 readme = "README.md"
-documentation = "https://docs.rs/gfx-device-vulkan"
+documentation = "https://docs.rs/gfx-backend-vulkan"
 workspace = "../../.."
 
 [features]

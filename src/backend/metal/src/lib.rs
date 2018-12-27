@@ -1,4 +1,5 @@
 extern crate gfx_hal as hal;
+extern crate range_alloc;
 extern crate metal;
 #[macro_use]
 extern crate bitflags;
@@ -25,8 +26,6 @@ mod conversions;
 mod device;
 mod internal;
 mod native;
-#[path = "../../auxil/range_alloc.rs"]
-mod range_alloc;
 mod soft;
 mod window;
 
