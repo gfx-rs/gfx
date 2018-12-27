@@ -2,7 +2,9 @@
 name = "gfx-backend-empty"
 version = "0.1.0"
 description = "Empty backend for gfx-rs"
-publish = false
+license = "MIT OR Apache-2.0"
+authors = ["The Gfx-rs Developers"]
+documentation = "https://docs.rs/gfx-backend-empty"
 workspace = "../../.."
 
 [lib]

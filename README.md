@@ -8,14 +8,14 @@
   <a href="https://ci.appveyor.com/project/kvark/gfx">
       <img src="https://ci.appveyor.com/api/projects/status/ryn5ee3aumpmbw5l?svg=true" alt="AppVeyor Build Status">
   </a>
-  <!--a href="https://crates.io/crates/gfx-hal">
+  <a href="https://crates.io/crates/gfx-hal">
       <img src="http://img.shields.io/crates/v/gfx-hal.svg?label=gfx-hal" alt = "gfx-hal on crates.io">
-  </a-->
+  </a>
   <a href="https://gitter.im/gfx-rs/gfx">
     <img src="https://img.shields.io/badge/gitter-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
   </a>
   <br>
-  <strong><a href="info/getting_started.md">Getting Started</a> | <s><!--<a href="http://docs.rs/gfx-hal">-->Documentation<!--</a>--></s> (work in progress) | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
+  <strong><a href="info/getting_started.md">Getting Started</a> | <a href="http://docs.rs/gfx-hal">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
 </p>
 
 # gfx-rs
