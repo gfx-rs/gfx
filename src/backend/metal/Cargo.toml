@@ -20,6 +20,7 @@ name = "gfx_backend_metal"
 
 [dependencies]
 gfx-hal = { path = "../../hal", version = "0.1" }
+range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1.0"
 log = { version = "0.4" }
 winit = { version = "0.18", optional = true }
