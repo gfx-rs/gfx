@@ -1,9 +1,10 @@
+extern crate gfx_hal as hal;
+extern crate range_alloc;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate derivative;
 extern crate d3d12 as native;
-extern crate gfx_hal as hal;
 #[macro_use]
 extern crate log;
 extern crate smallvec;
@@ -18,8 +19,6 @@ mod descriptors_cpu;
 mod device;
 mod internal;
 mod pool;
-#[path = "../../auxil/range_alloc.rs"]
-mod range_alloc;
 mod resource;
 mod root_constants;
 mod window;

@@ -1,10 +1,11 @@
 //#[deny(missing_docs)]
 
+extern crate gfx_hal as hal;
+extern crate range_alloc;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate derivative;
-extern crate gfx_hal as hal;
 #[macro_use]
 extern crate log;
 extern crate parking_lot;
@@ -85,8 +86,6 @@ mod debug;
 mod device;
 mod dxgi;
 mod internal;
-#[path = "../../auxil/range_alloc.rs"]
-mod range_alloc;
 mod shader;
 
 #[derive(Derivative)]
