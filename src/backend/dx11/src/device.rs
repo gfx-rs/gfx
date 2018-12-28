@@ -1052,7 +1052,7 @@ impl hal::Device<Backend> for Device {
                 let desc = d3d11::D3D11_BUFFER_DESC {
                     ByteWidth: buffer.requirements.size as _,
                     Usage: d3d11::D3D11_USAGE_DEFAULT,
-                    BindFlags: buffer.requirements.size as _,
+                    BindFlags: buffer.bind,
                     CPUAccessFlags: 0,
                     MiscFlags,
                     StructureByteStride: if buffer.internal.usage.contains(buffer::Usage::TRANSFER_SRC) { 4 } else { 0 },
