@@ -1077,9 +1077,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .iter()
             .enumerate()
             .map(|(i, attachment)| {
-                let cv = if attachment.ops.load == pass::AttachmentLoadOp::Clear
-                    || attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear
-                {
+                let cv = if attachment.has_clears() {
                     Some(*clear_iter.next().unwrap().borrow())
                 } else {
                     None
@@ -1094,7 +1092,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         None
                     },
                     stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                        Some(unsafe { cv.unwrap().depth_stencil.stencil })
+                        Some(cv.unwrap().depth_stencil.stencil)
                     } else {
                         None
                     },

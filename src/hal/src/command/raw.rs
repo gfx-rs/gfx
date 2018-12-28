@@ -290,7 +290,8 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// Begins recording commands for a render pass on the given framebuffer.
     /// `render_area` is the section of the framebuffer to render,
     /// `clear_values` is an iterator of `ClearValueRaw`'s to use to use for
-    /// `clear_*` commands, one for each attachment of the render pass.
+    /// `clear_*` commands, one for each attachment of the render pass
+    /// that has a clear operation.
     /// `first_subpass` specifies, for the first subpass, whether the
     /// rendering commands are provided inline or whether the render
     /// pass is composed of subpasses.

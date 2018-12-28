@@ -57,6 +57,7 @@ pub struct Sampler(pub vk::Sampler);
 #[derive(Debug, Hash)]
 pub struct RenderPass {
     pub raw: vk::RenderPass,
+    pub clear_attachments_mask: u64,
 }
 
 #[derive(Debug, Hash)]

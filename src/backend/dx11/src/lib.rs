@@ -1398,12 +1398,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ClearValueRaw>,
     {
+        use pass::AttachmentLoadOp as Alo;
+
         let mut clear_iter = clear_values.into_iter();
         let mut attachment_clears = Vec::new();
 
         for (idx, attachment) in render_pass.attachments.iter().enumerate() {
-            use pass::AttachmentLoadOp::*;
-
             //let attachment = render_pass.attachments[attachment_ref];
             let format = attachment.format.unwrap();
             let channel_type = format.base_format().1;
@@ -1423,13 +1423,11 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
             let subpass_id = render_pass.subpasses.iter().position(|sp| sp.is_using(idx));
 
-            if attachment.ops.load == Clear ||
-               attachment.stencil_ops.load == Clear
-            {
+            if attachment.has_clears() {
                 let raw_clear_value = *clear_iter.next().unwrap().borrow();
 
                 match (attachment.ops.load, attachment.stencil_ops.load) {
-                    (Clear, Clear) if format.is_depth() => {
+                    (Alo::Clear, Alo::Clear) if format.is_depth() => {
                         attachment_clears.push(AttachmentClear {
                             subpass_id,
                             attachment_id: idx,
@@ -1439,7 +1437,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             }
                         });
                     }
-                    (Clear, Clear) => {
+                    (Alo::Clear, Alo::Clear) => {
                         attachment_clears.push(AttachmentClear {
                             subpass_id,
                             attachment_id: idx,
@@ -1458,7 +1456,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             }
                         });
                     },
-                    (Clear, _) if format.is_depth() => {
+                    (Alo::Clear, _) if format.is_depth() => {
                         attachment_clears.push(AttachmentClear {
                             subpass_id,
                             attachment_id: idx,
@@ -1468,7 +1466,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             }
                         });
                     }
-                    (Clear, _) => {
+                    (Alo::Clear, _) => {
                         attachment_clears.push(AttachmentClear {
                             subpass_id,
                             attachment_id: idx,
@@ -1478,7 +1476,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             }
                         });
                     },
-                    (_, Clear) => {
+                    (_, Alo::Clear) => {
                         attachment_clears.push(AttachmentClear {
                             subpass_id,
                             attachment_id: idx,

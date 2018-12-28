@@ -2849,16 +2849,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         // fill out temporary clear values per attachment
         self.temp.clear_values.clear();
-        self.temp.clear_values.extend(
-            render_pass.attachments.iter().zip(clear_values).map(|(rat, in_value)| {
-                if rat.ops.load == AttachmentLoadOp::Clear || rat.stencil_ops.load == AttachmentLoadOp::Clear {
-                    Some(in_value.borrow().clone())
-                } else {
-                    None
-                }
-            })
-        );
         self.temp.clear_values.resize(render_pass.attachments.len(), None);
+        for ((out_val, _), in_val) in self.temp.clear_values
+            .iter_mut()
+            .zip(&render_pass.attachments)
+            .filter(|(_, rat)| rat.has_clears())
+            .zip(clear_values)
+        {
+            *out_val = Some(in_val.borrow().clone());
+        }
 
         self.state.pending_subpasses.clear();
         self.state.target_extent = framebuffer.extent;

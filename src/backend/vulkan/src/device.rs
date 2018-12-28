@@ -125,6 +125,16 @@ impl d::Device<B> for Device {
             })
             .collect::<Vec<_>>();
 
+        let clear_attachments_mask = attachments
+            .iter()
+            .enumerate()
+            .filter_map(|(i, at)| if at.load_op == vk::AttachmentLoadOp::CLEAR || at.stencil_load_op == vk::AttachmentLoadOp::CLEAR {
+                Some(1 << i as u64)
+            } else {
+                None
+            })
+            .sum();
+
         let mut attachment_refs = Vec::new();
 
         let subpasses = subpasses
@@ -207,7 +217,10 @@ impl d::Device<B> for Device {
         let result = unsafe { self.raw.0.create_render_pass(&info, None) };
 
         match result {
-            Ok(renderpass) => Ok(n::RenderPass { raw: renderpass }),
+            Ok(renderpass) => Ok(n::RenderPass {
+                raw: renderpass,
+                clear_attachments_mask,
+            }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::OutOfDeviceMemory),
             _ => unreachable!(),
