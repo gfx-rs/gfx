@@ -19,9 +19,6 @@ extern crate x11;
 #[cfg(all(unix, not(target_os = "android")))]
 extern crate xcb;
 
-#[cfg(feature = "glsl-to-spirv")]
-extern crate glsl_to_spirv;
-
 use ash::extensions as ext;
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0, V1_0};
 use ash::vk;
