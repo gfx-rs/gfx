@@ -353,6 +353,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[hal::QueuePriority])],
+        requested_features: Features,
     ) -> Result<hal::Gpu<Backend>, DeviceCreationError> {
         let family_infos = families
             .iter()
@@ -366,8 +367,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             })
             .collect::<Vec<_>>();
 
-        // enabled features mask
-        let features = Features::empty();
+        if !self.features().contains(requested_features) {
+            return Err(DeviceCreationError::MissingFeature);
+        }
+
+        let enabled_features = conv::map_device_features(requested_features);
 
         // Create device
         let device_raw = {
@@ -378,8 +382,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
             let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
 
-            // TODO: derive from `features`
-            let enabled_features = unsafe { mem::zeroed() };
             let info = vk::DeviceCreateInfo {
                 s_type: vk::StructureType::DEVICE_CREATE_INFO,
                 p_next: ptr::null(),
@@ -411,7 +413,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         });
 
         let device = Device {
-            raw: Arc::new(RawDevice(device_raw, features)),
+            raw: Arc::new(RawDevice(device_raw, requested_features)),
         };
 
         let device_arc = device.raw.clone();

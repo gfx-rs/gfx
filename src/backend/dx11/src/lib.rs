@@ -463,8 +463,13 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[hal::QueuePriority])],
+        requested_features: hal::Features,
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         let (device, cxt) = {
+            if !self.features().contains(requested_features) {
+                return Err(error::DeviceCreationError::MissingFeature);
+            }
+
             let feature_level = get_feature_level(self.adapter.as_raw());
             let mut returned_level = d3dcommon::D3D_FEATURE_LEVEL_9_1;
 

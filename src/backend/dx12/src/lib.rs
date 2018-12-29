@@ -198,12 +198,17 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[hal::QueuePriority])],
+        requested_features: hal::Features,
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         let lock = self.is_open.try_lock();
         let mut open_guard = match lock {
             Ok(inner) => inner,
             Err(_) => return Err(error::DeviceCreationError::TooManyObjects),
         };
+
+        if !self.features().contains(requested_features) {
+            return Err(error::DeviceCreationError::MissingFeature);
+        }
 
         let (device_raw, hr_device) =
             native::Device::create(self.adapter, native::FeatureLevel::L11_0);
