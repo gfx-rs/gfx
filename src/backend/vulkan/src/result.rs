@@ -1,4 +1,3 @@
-
 use ash::vk;
 
 use hal::error::{DeviceCreationError, HostExecutionError};
@@ -17,7 +16,7 @@ pub(crate) enum Error {
     IncompatibleDriver,
     TooManyObjects,
     FormatNotSupported,
-    FragmentedPool ,
+    FragmentedPool,
     SurfaceLostKhr,
     NativeWindowInUseKhr,
     OutOfDateKhr,
@@ -30,25 +29,24 @@ pub(crate) enum Error {
 
 impl From<vk::Result> for Error {
     fn from(result: vk::Result) -> Self {
-        use ash::vk::Result::*;
         match result {
-            ErrorOutOfHostMemory => Error::OutOfHostMemory,
-            ErrorOutOfDeviceMemory => Error::OutOfDeviceMemory,
-            ErrorInitializationFailed => Error::InitializationFailed,
-            ErrorDeviceLost => Error::DeviceLost,
-            ErrorMemoryMapFailed => Error::MemoryMapFailed,
-            ErrorLayerNotPresent => Error::LayerNotPresent,
-            ErrorExtensionNotPresent => Error::ExtensionNotPresent,
-            ErrorFeatureNotPresent => Error::FeatureNotPresent,
-            ErrorIncompatibleDriver => Error::IncompatibleDriver,
-            ErrorTooManyObjects => Error::TooManyObjects,
-            ErrorFormatNotSupported => Error::FormatNotSupported,
-            ErrorFragmentedPool => Error::FragmentedPool,
-            ErrorSurfaceLostKhr => Error::SurfaceLostKhr,
-            ErrorNativeWindowInUseKhr => Error::NativeWindowInUseKhr,
-            ErrorOutOfDateKhr => Error::OutOfDateKhr,
-            ErrorIncompatibleDisplayKhr => Error::IncompatibleDisplayKhr,
-            ErrorValidationFailedExt => Error::ValidationFailedExt,
+            ERROR_OUT_OF_HOST_MEMORY => Error::OutOfHostMemory,
+            ERROR_OUT_OF_DEVICE_MEMORY => Error::OutOfDeviceMemory,
+            ERROR_INITIALIZATION_FAILED => Error::InitializationFailed,
+            ERROR_DEVICE_LOST => Error::DeviceLost,
+            ERROR_MEMORY_MAP_FAILED => Error::MemoryMapFailed,
+            ERROR_LAYER_NOT_PRESENT => Error::LayerNotPresent,
+            ERROR_EXTENSION_NOT_PRESENT => Error::ExtensionNotPresent,
+            ERROR_FEATURE_NOT_PRESENT => Error::FeatureNotPresent,
+            ERROR_INCOMPATIBLE_DRIVER => Error::IncompatibleDriver,
+            ERROR_TOO_MANY_OBJECTS => Error::TooManyObjects,
+            ERROR_FORMAT_NOT_SUPPORTED => Error::FormatNotSupported,
+            ERROR_FRAGMENTED_POOL => Error::FragmentedPool,
+            ERROR_SURFACE_LOST_KHR => Error::SurfaceLostKhr,
+            ERROR_NATIVE_WINDOW_IN_USE_KHR => Error::NativeWindowInUseKhr,
+            ERROR_OUT_OF_DATE_KHR => Error::OutOfDateKhr,
+            ERROR_INCOMPATIBLE_DISPLAY_KHR => Error::IncompatibleDisplayKhr,
+            ERROR_VALIDATION_FAILED_EXT => Error::ValidationFailedExt,
             _ => Error::Unknown,
         }
     }
