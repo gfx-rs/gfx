@@ -43,7 +43,6 @@ optional = true
 [dependencies.gfx-backend-vulkan]
 path = "../src/backend/vulkan"
 version = "0.1"
-#features = ["glsl-to-spirv"]
 optional = true
 
 [target.'cfg(any(target_os = "macos", all(target_os = "ios", target_arch = "aarch64")))'.dependencies.gfx-backend-metal]

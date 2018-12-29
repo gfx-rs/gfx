@@ -21,38 +21,6 @@ use {Backend as B, Device};
 use {conv, native as n, result, window as w};
 use pool::RawCommandPool;
 
-
-impl Device {
-    #[cfg(feature = "glsl-to-spirv")]
-    pub fn create_shader_module_from_glsl(
-        &self,
-        code: &str,
-        stage: pso::Stage,
-    ) -> Result<n::ShaderModule, d::ShaderError> {
-        use self::d::Device;
-        use std::io::Read;
-        use glsl_to_spirv::{compile, ShaderType};
-
-        let ty = match stage {
-            pso::Stage::Vertex => ShaderType::Vertex,
-            pso::Stage::Fragment => ShaderType::Fragment,
-            pso::Stage::Geometry => ShaderType::Geometry,
-            pso::Stage::Hull => ShaderType::TessellationControl,
-            pso::Stage::Domain => ShaderType::TessellationEvaluation,
-            pso::Stage::Compute => ShaderType::Compute,
-        };
-
-        match compile(code, ty) {
-            Ok(mut file) => {
-                let mut data = Vec::new();
-                file.read_to_end(&mut data).unwrap();
-                self.create_shader_module(&data)
-            },
-            Err(string) => Err(d::ShaderError::CompilationFailed(string)),
-        }
-    }
-}
-
 impl d::Device<B> for Device {
     unsafe fn allocate_memory(&self, mem_type: MemoryTypeId, size: u64) -> Result<n::Memory, d::AllocationError> {
         let info = vk::MemoryAllocateInfo {
