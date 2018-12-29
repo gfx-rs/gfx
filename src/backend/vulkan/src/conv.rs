@@ -5,27 +5,24 @@ use hal::{buffer, command, format, image, pass, pso, query};
 use hal::{IndexType, PresentMode, Primitive};
 
 use native as n;
-
 use std::borrow::Borrow;
 use std::mem;
 use std::ptr;
 
 pub fn map_format(format: format::Format) -> vk::Format {
-    // Safe due to equivalence of HAL format values and Vulkan format values
-    unsafe { mem::transmute(format) }
+    vk::Format::from_raw(format as i32)
 }
 
-pub fn map_vk_format(format: vk::Format) -> Option<format::Format> {
-    if (format.as_raw() as usize) < format::NUM_FORMATS && format != vk::Format::UNDEFINED {
-        // Safe due to equivalence of HAL format values and Vulkan format values
-        Some(unsafe { mem::transmute(format) })
+pub fn map_vk_format(vk_format: vk::Format) -> Option<format::Format> {
+    if (vk_format.as_raw() as usize) < format::NUM_FORMATS && vk_format != vk::Format::UNDEFINED {
+        Some(unsafe { mem::transmute(vk_format) })
     } else {
         None
     }
 }
 
 pub fn map_tiling(tiling: image::Tiling) -> vk::ImageTiling {
-    unsafe { mem::transmute(tiling) }
+    vk::ImageTiling::from_raw(tiling as i32)
 }
 
 pub fn map_component(component: format::Component) -> vk::ComponentSwizzle {
@@ -73,8 +70,7 @@ pub fn map_image_layout(layout: image::Layout) -> vk::ImageLayout {
 }
 
 pub fn map_image_aspects(aspects: format::Aspects) -> vk::ImageAspectFlags {
-    // Safe due to equivalence of HAL format values and Vulkan format values
-    unsafe { mem::transmute(aspects.bits() as u32) }
+    vk::ImageAspectFlags::from_raw(aspects.bits() as u32)
 }
 
 pub fn map_clear_color(value: command::ClearColor) -> vk::ClearColorValue {
@@ -146,53 +142,43 @@ pub fn map_attachment_store_op(op: pass::AttachmentStoreOp) -> vk::AttachmentSto
 }
 
 pub fn map_buffer_access(access: buffer::Access) -> vk::AccessFlags {
-    // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(access) }
+    vk::AccessFlags::from_raw(access.bits())
 }
 
 pub fn map_image_access(access: image::Access) -> vk::AccessFlags {
-    // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(access) }
+    vk::AccessFlags::from_raw(access.bits())
 }
 
 pub fn map_pipeline_stage(stage: pso::PipelineStage) -> vk::PipelineStageFlags {
-    // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(stage) }
+    vk::PipelineStageFlags::from_raw(stage.bits())
 }
 
 pub fn map_buffer_usage(usage: buffer::Usage) -> vk::BufferUsageFlags {
-    // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(usage) }
+    vk::BufferUsageFlags::from_raw(usage.bits())
 }
 
 pub fn map_image_usage(usage: image::Usage) -> vk::ImageUsageFlags {
-    // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(usage) }
+    vk::ImageUsageFlags::from_raw(usage.bits())
 }
 
 pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> image::Usage {
-    // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(usage) }
+    image::Usage::from_bits_truncate(usage.as_raw())
 }
 
 pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
-    // enums have to match exactly
-    unsafe { mem::transmute(ty) }
+    vk::DescriptorType::from_raw(ty as i32)
 }
 
 pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
-    // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(stages) }
+    vk::ShaderStageFlags::from_raw(stages.bits())
 }
 
 pub fn map_filter(filter: image::Filter) -> vk::Filter {
-    // enums have to match exactly
-    unsafe { mem::transmute(filter as u32) }
+    vk::Filter::from_raw(filter as i32)
 }
 
 pub fn map_mip_filter(filter: image::Filter) -> vk::SamplerMipmapMode {
-    // enums have to match exactly
-    unsafe { mem::transmute(filter as u32) }
+    vk::SamplerMipmapMode::from_raw(filter as i32)
 }
 
 pub fn map_wrap(wrap: image::WrapMode) -> vk::SamplerAddressMode {
@@ -361,8 +347,7 @@ pub fn map_blend_op(operation: pso::BlendOp) -> (vk::BlendOp, vk::BlendFactor, v
 pub fn map_pipeline_statistics(
     statistics: query::PipelineStatistic,
 ) -> vk::QueryPipelineStatisticFlags {
-    // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(statistics) }
+    vk::QueryPipelineStatisticFlags::from_raw(statistics.bits())
 }
 
 pub fn map_query_control_flags(flags: query::ControlFlags) -> vk::QueryControlFlags {
@@ -375,13 +360,11 @@ pub fn map_query_result_flags(flags: query::ResultFlags) -> vk::QueryResultFlags
 }
 
 pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeature {
-    // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(features) }
+    format::ImageFeature::from_bits_truncate(features.as_raw())
 }
 
 pub fn map_buffer_features(features: vk::FormatFeatureFlags) -> format::BufferFeature {
-    // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(features) }
+    format::BufferFeature::from_bits_truncate(features.as_raw())
 }
 
 pub fn map_memory_ranges<'a, I, R>(ranges: I) -> Vec<vk::MappedMemoryRange>
@@ -425,7 +408,7 @@ where
 
 pub fn map_command_buffer_flags(flags: command::CommandBufferFlags) -> vk::CommandBufferUsageFlags {
     // Safe due to equivalence of HAL values and Vulkan values
-    unsafe { mem::transmute(flags) }
+    vk::CommandBufferUsageFlags::from_raw(flags.bits())
 }
 
 pub fn map_command_buffer_level(level: command::RawLevel) -> vk::CommandBufferLevel {
@@ -490,11 +473,9 @@ pub fn map_viewport(vp: &pso::Viewport) -> vk::Viewport {
 }
 
 pub fn map_view_capabilities(caps: image::ViewCapabilities) -> vk::ImageCreateFlags {
-    // the flag values have to match Vulkan
-    unsafe { mem::transmute(caps) }
+    vk::ImageCreateFlags::from_raw(caps.bits())
 }
 
 pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> PresentMode {
-    // the enum variants have to match Vulkan
     unsafe { mem::transmute(mode) }
 }
