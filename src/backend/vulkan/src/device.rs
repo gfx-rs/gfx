@@ -1,88 +1,96 @@
-use ash::vk;
 use ash::extensions as ext;
 use ash::version::DeviceV1_0;
+use ash::vk;
 use smallvec::SmallVec;
 
 use hal;
-use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
-use hal::{Backbuffer, Features, MemoryTypeId, SwapchainConfig};
 use hal::error::HostExecutionError;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use hal::range::RangeArg;
+use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
+use hal::{Backbuffer, Features, MemoryTypeId, SwapchainConfig};
 
-use std::{mem, ptr};
 use std::borrow::Borrow;
 use std::ffi::CString;
 use std::ops::Range;
 use std::sync::Arc;
+use std::{mem, ptr};
 
 use {Backend as B, Device};
 use {conv, native as n, result, window as w};
 use pool::RawCommandPool;
 
 impl d::Device<B> for Device {
-    unsafe fn allocate_memory(&self, mem_type: MemoryTypeId, size: u64) -> Result<n::Memory, d::AllocationError> {
+    unsafe fn allocate_memory(
+        &self,
+        mem_type: MemoryTypeId,
+        size: u64,
+    ) -> Result<n::Memory, d::AllocationError> {
         let info = vk::MemoryAllocateInfo {
-            s_type: vk::StructureType::MemoryAllocateInfo,
+            s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
             p_next: ptr::null(),
             allocation_size: size,
             memory_type_index: mem_type.0 as _,
         };
 
-        let result = unsafe {
-            self.raw.0.allocate_memory(&info, None)
-        };
+        let result = unsafe { self.raw.0.allocate_memory(&info, None) };
 
         match result {
             Ok(memory) => Ok(n::Memory { raw: memory }),
-            Err(vk::Result::ErrorTooManyObjects) => Err(d::AllocationError::TooManyObjects),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => Err(d::AllocationError::TooManyObjects),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
 
     unsafe fn create_command_pool(
-        &self, family: queue::QueueFamilyId, create_flags: CommandPoolCreateFlags
+        &self,
+        family: queue::QueueFamilyId,
+        create_flags: CommandPoolCreateFlags,
     ) -> Result<RawCommandPool, d::OutOfMemory> {
         let mut flags = vk::CommandPoolCreateFlags::empty();
         if create_flags.contains(CommandPoolCreateFlags::TRANSIENT) {
-            flags |= vk::COMMAND_POOL_CREATE_TRANSIENT_BIT;
+            flags |= vk::CommandPoolCreateFlags::TRANSIENT;
         }
         if create_flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
-            flags |= vk::COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+            flags |= vk::CommandPoolCreateFlags::RESET_COMMAND_BUFFER;
         }
 
         let info = vk::CommandPoolCreateInfo {
-            s_type: vk::StructureType::CommandPoolCreateInfo,
+            s_type: vk::StructureType::COMMAND_POOL_CREATE_INFO,
             p_next: ptr::null(),
             flags,
             queue_family_index: family.0 as _,
         };
 
-        let result = unsafe {
-            self.raw.0
-                .create_command_pool(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_command_pool(&info, None) };
 
         match result {
-            Ok(pool) => Ok(RawCommandPool { raw: pool, device: self.raw.clone() }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory),
+            Ok(pool) => Ok(RawCommandPool {
+                raw: pool,
+                device: self.raw.clone(),
+            }),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::OutOfDeviceMemory),
             _ => unreachable!(),
         }
     }
 
     unsafe fn destroy_command_pool(&self, pool: RawCommandPool) {
-        unsafe {
-            self.raw.0
-                .destroy_command_pool(pool.raw, None)
-        };
+        unsafe { self.raw.0.destroy_command_pool(pool.raw, None) };
     }
 
     unsafe fn create_render_pass<'a, IA, IS, ID>(
-        &self, attachments: IA, subpasses: IS, dependencies: ID
+        &self,
+        attachments: IA,
+        subpasses: IS,
+        dependencies: ID,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
         IA: IntoIterator,
@@ -92,90 +100,100 @@ impl d::Device<B> for Device {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
     {
-        let map_subpass_ref = |pass: pass::SubpassRef| {
-            match pass {
-                pass::SubpassRef::External => vk::VK_SUBPASS_EXTERNAL,
-                pass::SubpassRef::Pass(id) => id as u32,
-            }
+        let map_subpass_ref = |pass: pass::SubpassRef| match pass {
+            pass::SubpassRef::External => vk::SUBPASS_EXTERNAL,
+            pass::SubpassRef::Pass(id) => id as u32,
         };
 
-        let attachments = attachments.into_iter().map(|attachment| {
-            let attachment = attachment.borrow();
-            vk::AttachmentDescription {
-                flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
-                format: attachment.format.map_or(vk::Format::Undefined, conv::map_format),
-                samples: vk::SAMPLE_COUNT_1_BIT, // TODO: multisampling
-                load_op: conv::map_attachment_load_op(attachment.ops.load),
-                store_op: conv::map_attachment_store_op(attachment.ops.store),
-                stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
-                stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
-                initial_layout: conv::map_image_layout(attachment.layouts.start),
-                final_layout: conv::map_image_layout(attachment.layouts.end),
-            }
-        }).collect::<Vec<_>>();
+        let attachments = attachments
+            .into_iter()
+            .map(|attachment| {
+                let attachment = attachment.borrow();
+                vk::AttachmentDescription {
+                    flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
+                    format: attachment
+                        .format
+                        .map_or(vk::Format::UNDEFINED, conv::map_format),
+                    samples: vk::SampleCountFlags::TYPE_1, // TODO: multisampling
+                    load_op: conv::map_attachment_load_op(attachment.ops.load),
+                    store_op: conv::map_attachment_store_op(attachment.ops.store),
+                    stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
+                    stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
+                    initial_layout: conv::map_image_layout(attachment.layouts.start),
+                    final_layout: conv::map_image_layout(attachment.layouts.end),
+                }
+            })
+            .collect::<Vec<_>>();
 
         let mut attachment_refs = Vec::new();
 
-        let subpasses = subpasses.into_iter().map(|subpass| {
-            let subpass = subpass.borrow();
-            {
-                fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
-                    vk::AttachmentReference {
-                        attachment: id as _,
-                        layout: conv::map_image_layout(layout),
+        let subpasses = subpasses
+            .into_iter()
+            .map(|subpass| {
+                let subpass = subpass.borrow();
+                {
+                    fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
+                        vk::AttachmentReference {
+                            attachment: id as _,
+                            layout: conv::map_image_layout(layout),
+                        }
                     }
+                    let colors = subpass.colors.iter().map(make_ref).collect::<Vec<_>>();
+                    let depth_stencil = subpass.depth_stencil.map(make_ref);
+                    let inputs = subpass.inputs.iter().map(make_ref).collect::<Vec<_>>();
+                    let preserves = subpass
+                        .preserves
+                        .iter()
+                        .map(|&id| id as u32)
+                        .collect::<Vec<_>>();
+
+                    attachment_refs.push((colors, depth_stencil, inputs, preserves));
                 }
-                let colors = subpass.colors.iter()
-                    .map(make_ref)
-                    .collect::<Vec<_>>();
-                let depth_stencil = subpass.depth_stencil
-                    .map(make_ref);
-                let inputs = subpass.inputs.iter()
-                    .map(make_ref)
-                    .collect::<Vec<_>>();
-                let preserves = subpass.preserves.iter()
-                    .map(|&id| id as u32)
-                    .collect::<Vec<_>>();
 
-                attachment_refs.push((colors, depth_stencil, inputs, preserves));
-            }
+                let &(
+                    ref color_attachments,
+                    ref depth_stencil,
+                    ref input_attachments,
+                    ref preserve_attachments,
+                ) = attachment_refs.last().unwrap();
 
-            let &(ref color_attachments, ref depth_stencil, ref input_attachments, ref preserve_attachments) =
-                attachment_refs.last().unwrap();
+                vk::SubpassDescription {
+                    flags: vk::SubpassDescriptionFlags::empty(),
+                    pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
+                    input_attachment_count: input_attachments.len() as u32,
+                    p_input_attachments: input_attachments.as_ptr(),
+                    color_attachment_count: color_attachments.len() as u32,
+                    p_color_attachments: color_attachments.as_ptr(),
+                    p_resolve_attachments: ptr::null(), // TODO
+                    p_depth_stencil_attachment: match *depth_stencil {
+                        Some(ref aref) => aref as *const _,
+                        None => ptr::null(),
+                    },
+                    preserve_attachment_count: preserve_attachments.len() as u32,
+                    p_preserve_attachments: preserve_attachments.as_ptr(),
+                }
+            })
+            .collect::<Vec<_>>();
 
-            vk::SubpassDescription {
-                flags: vk::SubpassDescriptionFlags::empty(),
-                pipeline_bind_point: vk::PipelineBindPoint::Graphics,
-                input_attachment_count: input_attachments.len() as u32,
-                p_input_attachments: input_attachments.as_ptr(),
-                color_attachment_count: color_attachments.len() as u32,
-                p_color_attachments: color_attachments.as_ptr(),
-                p_resolve_attachments: ptr::null(), // TODO
-                p_depth_stencil_attachment: match *depth_stencil {
-                    Some(ref aref) => aref as *const _,
-                    None => ptr::null(),
-                },
-                preserve_attachment_count: preserve_attachments.len() as u32,
-                p_preserve_attachments: preserve_attachments.as_ptr(),
-            }
-        }).collect::<Vec<_>>();
-
-        let dependencies = dependencies.into_iter().map(|dependency| {
-            let dependency = dependency.borrow();
-            // TODO: checks
-            vk::SubpassDependency {
-                src_subpass: map_subpass_ref(dependency.passes.start),
-                dst_subpass: map_subpass_ref(dependency.passes.end),
-                src_stage_mask: conv::map_pipeline_stage(dependency.stages.start),
-                dst_stage_mask: conv::map_pipeline_stage(dependency.stages.end),
-                src_access_mask: conv::map_image_access(dependency.accesses.start),
-                dst_access_mask: conv::map_image_access(dependency.accesses.end),
-                dependency_flags: vk::DependencyFlags::empty(), // TODO
-            }
-        }).collect::<Vec<_>>();
+        let dependencies = dependencies
+            .into_iter()
+            .map(|dependency| {
+                let dependency = dependency.borrow();
+                // TODO: checks
+                vk::SubpassDependency {
+                    src_subpass: map_subpass_ref(dependency.passes.start),
+                    dst_subpass: map_subpass_ref(dependency.passes.end),
+                    src_stage_mask: conv::map_pipeline_stage(dependency.stages.start),
+                    dst_stage_mask: conv::map_pipeline_stage(dependency.stages.end),
+                    src_access_mask: conv::map_image_access(dependency.accesses.start),
+                    dst_access_mask: conv::map_image_access(dependency.accesses.end),
+                    dependency_flags: vk::DependencyFlags::empty(), // TODO
+                }
+            })
+            .collect::<Vec<_>>();
 
         let info = vk::RenderPassCreateInfo {
-            s_type: vk::StructureType::RenderPassCreateInfo,
+            s_type: vk::StructureType::RENDER_PASS_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::RenderPassCreateFlags::empty(),
             attachment_count: attachments.len() as u32,
@@ -186,19 +204,21 @@ impl d::Device<B> for Device {
             p_dependencies: dependencies.as_ptr(),
         };
 
-        let result = unsafe {
-            self.raw.0.create_render_pass(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_render_pass(&info, None) };
 
         match result {
             Ok(renderpass) => Ok(n::RenderPass { raw: renderpass }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::OutOfDeviceMemory),
             _ => unreachable!(),
         }
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(&self, sets: IS, push_constant_ranges: IR) -> Result<n::PipelineLayout, d::OutOfMemory>
+    unsafe fn create_pipeline_layout<IS, IR>(
+        &self,
+        sets: IS,
+        push_constant_ranges: IR,
+    ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
         IS: IntoIterator,
         IS::Item: Borrow<n::DescriptorSetLayout>,
@@ -207,9 +227,8 @@ impl d::Device<B> for Device {
     {
         let set_layouts = sets
             .into_iter()
-            .map(|set| {
-                set.borrow().raw
-            }).collect::<Vec<_>>();
+            .map(|set| set.borrow().raw)
+            .collect::<Vec<_>>();
 
         debug!("create_pipeline_layout {:?}", set_layouts);
 
@@ -222,10 +241,11 @@ impl d::Device<B> for Device {
                     offset: r.start * 4,
                     size: (r.end - r.start) * 4,
                 }
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
         let info = vk::PipelineLayoutCreateInfo {
-            s_type: vk::StructureType::PipelineLayoutCreateInfo,
+            s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::PipelineLayoutCreateFlags::empty(),
             set_layout_count: set_layouts.len() as u32,
@@ -234,98 +254,105 @@ impl d::Device<B> for Device {
             p_push_constant_ranges: push_constant_ranges.as_ptr(),
         };
 
-        let result = unsafe {
-            self.raw.0
-                .create_pipeline_layout(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_pipeline_layout(&info, None) };
 
         match result {
             Ok(raw) => Ok(n::PipelineLayout { raw }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::OutOfDeviceMemory),
             _ => unreachable!(),
         }
     }
 
     fn create_pipeline_cache(&self) -> Result<n::PipelineCache, d::OutOfMemory> {
         let info = vk::PipelineCacheCreateInfo {
-            s_type: vk::StructureType::PipelineCacheCreateInfo,
+            s_type: vk::StructureType::PIPELINE_CACHE_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::PipelineCacheCreateFlags::empty(),
             initial_data_size: 0, //TODO.
             p_initial_data: ptr::null(),
         };
 
-        let result = unsafe {
-            self.raw.0
-                .create_pipeline_cache(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_pipeline_cache(&info, None) };
 
         match result {
             Ok(raw) => Ok(n::PipelineCache { raw }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::OutOfDeviceMemory),
             _ => unreachable!(),
         }
     }
 
     unsafe fn destroy_pipeline_cache(&self, cache: n::PipelineCache) {
-        unsafe {
-            self.raw.0.destroy_pipeline_cache(cache.raw, None)
-        };
+        unsafe { self.raw.0.destroy_pipeline_cache(cache.raw, None) };
     }
 
-    unsafe fn merge_pipeline_caches<I>(&self, target: &n::PipelineCache, sources: I) -> Result<(), d::OutOfMemory>
+    unsafe fn merge_pipeline_caches<I>(
+        &self,
+        target: &n::PipelineCache,
+        sources: I,
+    ) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<n::PipelineCache>,
     {
-        let caches = sources.into_iter().map(|s| s.borrow().raw).collect::<Vec<_>>();
-        let result = unsafe  {
-            self.raw.0
-                .fp_v1_0()
-                .merge_pipeline_caches(self.raw.0.handle(), target.raw, caches.len() as u32, caches.as_ptr())
+        let caches = sources
+            .into_iter()
+            .map(|s| s.borrow().raw)
+            .collect::<Vec<_>>();
+        let result = unsafe {
+            self.raw.0.fp_v1_0().merge_pipeline_caches(
+                self.raw.0.handle(),
+                target.raw,
+                caches.len() as u32,
+                caches.as_ptr(),
+            )
         };
 
         match result {
-            vk::Result::Success => Ok(()),
-            vk::Result::ErrorOutOfHostMemory => Err(d::OutOfMemory::OutOfHostMemory),
-            vk::Result::ErrorOutOfDeviceMemory => Err(d::OutOfMemory::OutOfDeviceMemory),
+            vk::Result::SUCCESS => Ok(()),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::OutOfHostMemory),
+            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::OutOfDeviceMemory),
             _ => unreachable!(),
         }
     }
 
     unsafe fn create_graphics_pipelines<'a, T>(
-        &self, descs: T, cache: Option<&n::PipelineCache>
+        &self,
+        descs: T,
+        cache: Option<&n::PipelineCache>,
     ) -> Vec<Result<n::GraphicsPipeline, pso::CreationError>>
     where
         T: IntoIterator,
         T::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
     {
         let descs = descs.into_iter().collect::<Vec<_>>();
-        debug!("create_graphics_pipelines {:?}", descs.iter().map(Borrow::borrow).collect::<Vec<_>>());
+        debug!(
+            "create_graphics_pipelines {:?}",
+            descs.iter().map(Borrow::borrow).collect::<Vec<_>>()
+        );
         const NUM_STAGES: usize = 5;
         const MAX_DYNAMIC_STATES: usize = 10;
 
         // Store pipeline parameters to avoid stack usage
-        let mut info_stages                = Vec::with_capacity(descs.len());
-        let mut info_vertex_descs          = Vec::with_capacity(descs.len());
-        let mut info_vertex_input_states   = Vec::with_capacity(descs.len());
+        let mut info_stages = Vec::with_capacity(descs.len());
+        let mut info_vertex_descs = Vec::with_capacity(descs.len());
+        let mut info_vertex_input_states = Vec::with_capacity(descs.len());
         let mut info_input_assembly_states = Vec::with_capacity(descs.len());
-        let mut info_tessellation_states   = Vec::with_capacity(descs.len());
-        let mut info_viewport_states       = Vec::with_capacity(descs.len());
-        let mut info_rasterization_states  = Vec::with_capacity(descs.len());
-        let mut info_multisample_states    = Vec::with_capacity(descs.len());
-        let mut info_depth_stencil_states  = Vec::with_capacity(descs.len());
-        let mut info_color_blend_states    = Vec::with_capacity(descs.len());
-        let mut info_dynamic_states        = Vec::with_capacity(descs.len());
-        let mut color_attachments          = Vec::with_capacity(descs.len());
-        let mut info_specializations       = Vec::with_capacity(descs.len() * NUM_STAGES);
-        let mut specialization_entries     = Vec::with_capacity(descs.len() * NUM_STAGES);
-        let mut dynamic_states             = Vec::with_capacity(descs.len() * MAX_DYNAMIC_STATES);
-        let mut viewports                  = Vec::with_capacity(descs.len());
-        let mut scissors                   = Vec::with_capacity(descs.len());
-        let mut sample_masks               = Vec::with_capacity(descs.len());
+        let mut info_tessellation_states = Vec::with_capacity(descs.len());
+        let mut info_viewport_states = Vec::with_capacity(descs.len());
+        let mut info_rasterization_states = Vec::with_capacity(descs.len());
+        let mut info_multisample_states = Vec::with_capacity(descs.len());
+        let mut info_depth_stencil_states = Vec::with_capacity(descs.len());
+        let mut info_color_blend_states = Vec::with_capacity(descs.len());
+        let mut info_dynamic_states = Vec::with_capacity(descs.len());
+        let mut color_attachments = Vec::with_capacity(descs.len());
+        let mut info_specializations = Vec::with_capacity(descs.len() * NUM_STAGES);
+        let mut specialization_entries = Vec::with_capacity(descs.len() * NUM_STAGES);
+        let mut dynamic_states = Vec::with_capacity(descs.len() * MAX_DYNAMIC_STATES);
+        let mut viewports = Vec::with_capacity(descs.len());
+        let mut scissors = Vec::with_capacity(descs.len());
+        let mut sample_masks = Vec::with_capacity(descs.len());
 
         let mut c_strings = Vec::new(); // hold the C strings temporarily
         let mut make_stage = |stage, source: &pso::EntryPoint<'a, B>| {
@@ -333,7 +360,9 @@ impl d::Device<B> for Device {
             let p_name = string.as_ptr();
             c_strings.push(string);
 
-            let map_entries = source.specialization.constants
+            let map_entries = source
+                .specialization
+                .constants
                 .iter()
                 .map(|c| vk::SpecializationMapEntry {
                     constant_id: c.id,
@@ -354,7 +383,7 @@ impl d::Device<B> for Device {
             let info = info_specializations.last().unwrap();
 
             vk::PipelineShaderStageCreateInfo {
-                s_type: vk::StructureType::PipelineShaderStageCreateInfo,
+                s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
                 p_next: ptr::null(),
                 flags: vk::PipelineShaderStageCreateFlags::empty(),
                 stage,
@@ -364,320 +393,377 @@ impl d::Device<B> for Device {
             }
         };
 
-        let infos = descs.iter().map(|desc| {
-            let desc = desc.borrow();
-            let mut stages = Vec::new();
-            // Vertex stage
-            if true { //vertex shader is required
-                stages.push(make_stage(vk::SHADER_STAGE_VERTEX_BIT, &desc.shaders.vertex));
-            }
-            // Pixel stage
-            if let Some(ref entry) = desc.shaders.fragment {
-                stages.push(make_stage(vk::SHADER_STAGE_FRAGMENT_BIT, entry));
-            }
-            // Geometry stage
-            if let Some(ref entry) = desc.shaders.geometry {
-                stages.push(make_stage(vk::SHADER_STAGE_GEOMETRY_BIT, entry));
-            }
-            // Domain stage
-            if let Some(ref entry) = desc.shaders.domain {
-                stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_EVALUATION_BIT, entry));
-            }
-            // Hull stage
-            if let Some(ref entry) = desc.shaders.hull {
-                stages.push(make_stage(vk::SHADER_STAGE_TESSELLATION_CONTROL_BIT, entry));
-            }
-
-            let (polygon_mode, line_width) = conv::map_polygon_mode(desc.rasterizer.polygon_mode);
-            info_stages.push(stages);
-
-            {
-                let mut vertex_bindings = Vec::new();
-                for vbuf in &desc.vertex_buffers {
-                    vertex_bindings.push(vk::VertexInputBindingDescription {
-                        binding: vbuf.binding,
-                        stride: vbuf.stride as u32,
-                        input_rate: if vbuf.rate == 0 {
-                            vk::VertexInputRate::Vertex
-                        } else {
-                            vk::VertexInputRate::Instance
-                        },
-                    });
+        let infos = descs
+            .iter()
+            .map(|desc| {
+                let desc = desc.borrow();
+                let mut stages = Vec::new();
+                // Vertex stage
+                if true {
+                    //vertex shader is required
+                    stages.push(make_stage(
+                        vk::ShaderStageFlags::VERTEX,
+                        &desc.shaders.vertex,
+                    ));
                 }
-                let mut vertex_attributes = Vec::new();
-                for attr in desc.attributes.iter() {
-                    vertex_attributes.push(vk::VertexInputAttributeDescription {
-                        location: attr.location as u32,
-                        binding: attr.binding as u32,
-                        format: conv::map_format(attr.element.format),
-                        offset: attr.element.offset as u32,
-                    });
+                // Pixel stage
+                if let Some(ref entry) = desc.shaders.fragment {
+                    stages.push(make_stage(vk::ShaderStageFlags::FRAGMENT, entry));
+                }
+                // Geometry stage
+                if let Some(ref entry) = desc.shaders.geometry {
+                    stages.push(make_stage(vk::ShaderStageFlags::GEOMETRY, entry));
+                }
+                // Domain stage
+                if let Some(ref entry) = desc.shaders.domain {
+                    stages.push(make_stage(
+                        vk::ShaderStageFlags::TESSELLATION_EVALUATION,
+                        entry,
+                    ));
+                }
+                // Hull stage
+                if let Some(ref entry) = desc.shaders.hull {
+                    stages.push(make_stage(
+                        vk::ShaderStageFlags::TESSELLATION_CONTROL,
+                        entry,
+                    ));
                 }
 
-                info_vertex_descs.push((vertex_bindings, vertex_attributes));
-            }
+                let (polygon_mode, line_width) =
+                    conv::map_polygon_mode(desc.rasterizer.polygon_mode);
+                info_stages.push(stages);
 
-            let &(ref vertex_bindings, ref vertex_attributes) = info_vertex_descs.last().unwrap();
-
-            info_vertex_input_states.push(vk::PipelineVertexInputStateCreateInfo {
-                s_type: vk::StructureType::PipelineVertexInputStateCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::PipelineVertexInputStateCreateFlags::empty(),
-                vertex_binding_description_count: vertex_bindings.len() as u32,
-                p_vertex_binding_descriptions: vertex_bindings.as_ptr(),
-                vertex_attribute_description_count: vertex_attributes.len() as u32,
-                p_vertex_attribute_descriptions: vertex_attributes.as_ptr(),
-            });
-
-            info_input_assembly_states.push(vk::PipelineInputAssemblyStateCreateInfo {
-                s_type: vk::StructureType::PipelineInputAssemblyStateCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
-                topology: conv::map_topology(desc.input_assembler.primitive),
-                primitive_restart_enable: vk::VK_FALSE,
-            });
-            let depth_bias = match desc.rasterizer.depth_bias {
-                Some(pso::State::Static(db)) => db,
-                Some(pso::State::Dynamic) => {
-                    dynamic_states.push(vk::DynamicState::DepthBias);
-                    pso::DepthBias::default()
-                },
-                None => pso::DepthBias::default(),
-            };
-
-            info_rasterization_states.push(vk::PipelineRasterizationStateCreateInfo {
-                s_type: vk::StructureType::PipelineRasterizationStateCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::PipelineRasterizationStateCreateFlags::empty(),
-                depth_clamp_enable: if desc.rasterizer.depth_clamping {
-                    if self.raw.1.contains(Features::DEPTH_CLAMP) {
-                        vk::VK_TRUE
-                    } else {
-                        warn!("Depth clamping was requested on a device with disabled feature");
-                        vk::VK_FALSE
+                {
+                    let mut vertex_bindings = Vec::new();
+                    for vbuf in &desc.vertex_buffers {
+                        vertex_bindings.push(vk::VertexInputBindingDescription {
+                            binding: vbuf.binding,
+                            stride: vbuf.stride as u32,
+                            input_rate: if vbuf.rate == 0 {
+                                vk::VertexInputRate::VERTEX
+                            } else {
+                                vk::VertexInputRate::INSTANCE
+                            },
+                        });
                     }
-                } else {
-                    vk::VK_FALSE
-                },
-                rasterizer_discard_enable: if desc.shaders.fragment.is_none() { vk::VK_TRUE } else { vk::VK_FALSE },
-                polygon_mode,
-                cull_mode: conv::map_cull_face(desc.rasterizer.cull_face),
-                front_face: conv::map_front_face(desc.rasterizer.front_face),
-                depth_bias_enable: if desc.rasterizer.depth_bias.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
-                depth_bias_constant_factor: depth_bias.const_factor,
-                depth_bias_clamp: depth_bias.clamp,
-                depth_bias_slope_factor: depth_bias.slope_factor,
-                line_width,
-            });
+                    let mut vertex_attributes = Vec::new();
+                    for attr in desc.attributes.iter() {
+                        vertex_attributes.push(vk::VertexInputAttributeDescription {
+                            location: attr.location as u32,
+                            binding: attr.binding as u32,
+                            format: conv::map_format(attr.element.format),
+                            offset: attr.element.offset as u32,
+                        });
+                    }
 
-            let is_tessellated = desc.shaders.hull.is_some() && desc.shaders.domain.is_some();
-            if is_tessellated {
-                info_tessellation_states.push(vk::PipelineTessellationStateCreateInfo {
-                    s_type: vk::StructureType::PipelineTessellationStateCreateInfo,
+                    info_vertex_descs.push((vertex_bindings, vertex_attributes));
+                }
+
+                let &(ref vertex_bindings, ref vertex_attributes) =
+                    info_vertex_descs.last().unwrap();
+
+                info_vertex_input_states.push(vk::PipelineVertexInputStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
                     p_next: ptr::null(),
-                    flags: vk::PipelineTessellationStateCreateFlags::empty(),
-                    patch_control_points: 1 // TODO: 0 < control_points <= VkPhysicalDeviceLimits::maxTessellationPatchSize
+                    flags: vk::PipelineVertexInputStateCreateFlags::empty(),
+                    vertex_binding_description_count: vertex_bindings.len() as u32,
+                    p_vertex_binding_descriptions: vertex_bindings.as_ptr(),
+                    vertex_attribute_description_count: vertex_attributes.len() as u32,
+                    p_vertex_attribute_descriptions: vertex_attributes.as_ptr(),
                 });
-            }
 
-            let dynamic_state_base = dynamic_states.len();
+                info_input_assembly_states.push(vk::PipelineInputAssemblyStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
+                    topology: conv::map_topology(desc.input_assembler.primitive),
+                    primitive_restart_enable: vk::FALSE,
+                });
+                let depth_bias = match desc.rasterizer.depth_bias {
+                    Some(pso::State::Static(db)) => db,
+                    Some(pso::State::Dynamic) => {
+                        dynamic_states.push(vk::DynamicState::DEPTH_BIAS);
+                        pso::DepthBias::default()
+                    }
+                    None => pso::DepthBias::default(),
+                };
 
-            info_viewport_states.push(vk::PipelineViewportStateCreateInfo {
-                s_type: vk::StructureType::PipelineViewportStateCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::PipelineViewportStateCreateFlags::empty(),
-                scissor_count: 1, // TODO
-                p_scissors: match desc.baked_states.scissor {
-                    Some(ref rect) => {
-                        scissors.push(conv::map_rect(rect));
-                        scissors.last().unwrap()
+                info_rasterization_states.push(vk::PipelineRasterizationStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineRasterizationStateCreateFlags::empty(),
+                    depth_clamp_enable: if desc.rasterizer.depth_clamping {
+                        if self.raw.1.contains(Features::DEPTH_CLAMP) {
+                            vk::TRUE
+                        } else {
+                            warn!("Depth clamping was requested on a device with disabled feature");
+                            vk::FALSE
+                        }
+                    } else {
+                        vk::FALSE
                     },
-                    None => {
-                        dynamic_states.push(vk::DynamicState::Scissor);
-                        ptr::null()
+                    rasterizer_discard_enable: if desc.shaders.fragment.is_none() {
+                        vk::TRUE
+                    } else {
+                        vk::FALSE
                     },
-                },
-                viewport_count: 1, // TODO
-                p_viewports:  match desc.baked_states.viewport {
-                    Some(ref vp) => {
-                        viewports.push(conv::map_viewport(vp));
-                        viewports.last().unwrap()
+                    polygon_mode,
+                    cull_mode: conv::map_cull_face(desc.rasterizer.cull_face),
+                    front_face: conv::map_front_face(desc.rasterizer.front_face),
+                    depth_bias_enable: if desc.rasterizer.depth_bias.is_some() {
+                        vk::TRUE
+                    } else {
+                        vk::FALSE
                     },
-                    None => {
-                        dynamic_states.push(vk::DynamicState::Viewport);
-                        ptr::null()
-                    },
-                },
-            });
+                    depth_bias_constant_factor: depth_bias.const_factor,
+                    depth_bias_clamp: depth_bias.clamp,
+                    depth_bias_slope_factor: depth_bias.slope_factor,
+                    line_width,
+                });
 
-            let multisampling_state = match desc.multisampling {
-                Some(ref ms) => {
-                    let sample_mask = [
-                        (ms.sample_mask & 0xFFFFFFFF) as u32,
-                        ((ms.sample_mask >> 32) & 0xFFFFFFFF) as u32,
-                    ];
-                    sample_masks.push(sample_mask);
+                let is_tessellated = desc.shaders.hull.is_some() && desc.shaders.domain.is_some();
+                if is_tessellated {
+                    info_tessellation_states.push(vk::PipelineTessellationStateCreateInfo {
+                        s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
+                        p_next: ptr::null(),
+                        flags: vk::PipelineTessellationStateCreateFlags::empty(),
+                        patch_control_points: 1, // TODO: 0 < control_points <= VkPhysicalDeviceLimits::maxTessellationPatchSize
+                    });
+                }
 
-                    vk::PipelineMultisampleStateCreateInfo {
-                        s_type: vk::StructureType::PipelineMultisampleStateCreateInfo,
+                let dynamic_state_base = dynamic_states.len();
+
+                info_viewport_states.push(vk::PipelineViewportStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineViewportStateCreateFlags::empty(),
+                    scissor_count: 1, // TODO
+                    p_scissors: match desc.baked_states.scissor {
+                        Some(ref rect) => {
+                            scissors.push(conv::map_rect(rect));
+                            scissors.last().unwrap()
+                        }
+                        None => {
+                            dynamic_states.push(vk::DynamicState::SCISSOR);
+                            ptr::null()
+                        }
+                    },
+                    viewport_count: 1, // TODO
+                    p_viewports: match desc.baked_states.viewport {
+                        Some(ref vp) => {
+                            viewports.push(conv::map_viewport(vp));
+                            viewports.last().unwrap()
+                        }
+                        None => {
+                            dynamic_states.push(vk::DynamicState::VIEWPORT);
+                            ptr::null()
+                        }
+                    },
+                });
+
+                let multisampling_state = match desc.multisampling {
+                    Some(ref ms) => {
+                        let sample_mask = [
+                            (ms.sample_mask & 0xFFFFFFFF) as u32,
+                            ((ms.sample_mask >> 32) & 0xFFFFFFFF) as u32,
+                        ];
+                        sample_masks.push(sample_mask);
+
+                        vk::PipelineMultisampleStateCreateInfo {
+                            s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                            p_next: ptr::null(),
+                            flags: vk::PipelineMultisampleStateCreateFlags::empty(),
+                            rasterization_samples: vk::SampleCountFlags::from_raw(
+                                (ms.rasterization_samples as u32)
+                                    & vk::SampleCountFlags::all().as_raw(),
+                            ),
+                            sample_shading_enable: ms.sample_shading.is_some() as _,
+                            min_sample_shading: ms.sample_shading.unwrap_or(0.0),
+                            p_sample_mask: sample_masks.last().unwrap().as_ptr(),
+                            alpha_to_coverage_enable: ms.alpha_coverage as _,
+                            alpha_to_one_enable: ms.alpha_to_one as _,
+                        }
+                    }
+                    None => vk::PipelineMultisampleStateCreateInfo {
+                        s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
                         p_next: ptr::null(),
                         flags: vk::PipelineMultisampleStateCreateFlags::empty(),
-                        rasterization_samples: vk::SampleCountFlags::from_flags_truncate(ms.rasterization_samples as _),
-                        sample_shading_enable: ms.sample_shading.is_some() as _,
-                        min_sample_shading: ms.sample_shading.unwrap_or(0.0),
-                        p_sample_mask: sample_masks.last().unwrap().as_ptr(),
-                        alpha_to_coverage_enable: ms.alpha_coverage as _,
-                        alpha_to_one_enable: ms.alpha_to_one as _,
-                    }
-                },
-                None => vk::PipelineMultisampleStateCreateInfo {
-                    s_type: vk::StructureType::PipelineMultisampleStateCreateInfo,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineMultisampleStateCreateFlags::empty(),
-                    rasterization_samples: vk::SAMPLE_COUNT_1_BIT,
-                    sample_shading_enable: vk::VK_FALSE,
-                    min_sample_shading: 0.0,
-                    p_sample_mask: ptr::null(),
-                    alpha_to_coverage_enable: vk::VK_FALSE,
-                    alpha_to_one_enable: vk::VK_FALSE,
-                },
-            };
-            info_multisample_states.push(multisampling_state);
-
-            let depth_stencil = desc.depth_stencil;
-            let (depth_test_enable, depth_write_enable, depth_compare_op) = match depth_stencil.depth {
-                pso::DepthTest::On { fun, write } => (vk::VK_TRUE, write as _, conv::map_comparison(fun)),
-                pso::DepthTest::Off => (vk::VK_FALSE, vk::VK_FALSE, vk::CompareOp::Never),
-            };
-            let (stencil_test_enable, front, back) = match depth_stencil.stencil {
-                pso::StencilTest::On { ref front, ref back } => (
-                    vk::VK_TRUE,
-                    conv::map_stencil_side(front),
-                    conv::map_stencil_side(back),
-                ),
-                pso::StencilTest::Off => unsafe { mem::zeroed() },
-            };
-            let (min_depth_bounds, max_depth_bounds) = match desc.baked_states.depth_bounds {
-                Some(ref range) => (range.start, range.end),
-                None => {
-                    dynamic_states.push(vk::DynamicState::DepthBounds);
-                    (0.0, 1.0)
-                }
-            };
-
-            info_depth_stencil_states.push(vk::PipelineDepthStencilStateCreateInfo {
-                s_type: vk::StructureType::PipelineDepthStencilStateCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
-                depth_test_enable,
-                depth_write_enable,
-                depth_compare_op,
-                depth_bounds_test_enable: depth_stencil.depth_bounds as _,
-                stencil_test_enable,
-                front,
-                back,
-                min_depth_bounds,
-                max_depth_bounds,
-            });
-
-            // Build blend states for color attachments
-            let blend_states = desc.blender.targets
-                .iter()
-                .map(|&pso::ColorBlendDesc(mask, ref blend)| {
-                    let color_write_mask = vk::ColorComponentFlags::from_flags(mask.bits() as _).unwrap();
-                    match *blend {
-                        pso::BlendState::On { color, alpha } => {
-                            let (color_blend_op, src_color_blend_factor, dst_color_blend_factor) = conv::map_blend_op(color);
-                            let (alpha_blend_op, src_alpha_blend_factor, dst_alpha_blend_factor) = conv::map_blend_op(alpha);
-                            vk::PipelineColorBlendAttachmentState {
-                                color_write_mask,
-                                blend_enable: vk::VK_TRUE,
-                                src_color_blend_factor,
-                                dst_color_blend_factor,
-                                color_blend_op,
-                                src_alpha_blend_factor,
-                                dst_alpha_blend_factor,
-                                alpha_blend_op,
-                            }
-                        },
-                        pso::BlendState::Off => vk::PipelineColorBlendAttachmentState {
-                            color_write_mask,
-                            .. unsafe { mem::zeroed() }
-                        },
-                    }
-                })
-                .collect::<Vec<_>>();
-            color_attachments.push(blend_states);
-
-            info_color_blend_states.push(vk::PipelineColorBlendStateCreateInfo {
-                s_type: vk::StructureType::PipelineColorBlendStateCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::PipelineColorBlendStateCreateFlags::empty(),
-                logic_op_enable: vk::VK_FALSE, // TODO
-                logic_op: vk::LogicOp::Clear,
-                attachment_count: color_attachments.last().unwrap().len() as _,
-                p_attachments: color_attachments.last().unwrap().as_ptr(), // TODO:
-                blend_constants: match desc.baked_states.blend_color {
-                    Some(value) => value,
-                    None => {
-                        dynamic_states.push(vk::DynamicState::BlendConstants);
-                        [0.0; 4]
+                        rasterization_samples: vk::SampleCountFlags::TYPE_1,
+                        sample_shading_enable: vk::FALSE,
+                        min_sample_shading: 0.0,
+                        p_sample_mask: ptr::null(),
+                        alpha_to_coverage_enable: vk::FALSE,
+                        alpha_to_one_enable: vk::FALSE,
                     },
-                },
-            });
+                };
+                info_multisample_states.push(multisampling_state);
 
-            info_dynamic_states.push(vk::PipelineDynamicStateCreateInfo {
-                s_type: vk::StructureType::PipelineDynamicStateCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::PipelineDynamicStateCreateFlags::empty(),
-                dynamic_state_count: (dynamic_states.len() - dynamic_state_base) as _,
-                p_dynamic_states: unsafe {
-                    dynamic_states.as_ptr().offset(dynamic_state_base as _)
-                },
-            });
+                let depth_stencil = desc.depth_stencil;
+                let (depth_test_enable, depth_write_enable, depth_compare_op) =
+                    match depth_stencil.depth {
+                        pso::DepthTest::On { fun, write } => {
+                            (vk::TRUE, write as _, conv::map_comparison(fun))
+                        }
+                        pso::DepthTest::Off => (vk::FALSE, vk::FALSE, vk::CompareOp::NEVER),
+                    };
+                let (stencil_test_enable, front, back) = match depth_stencil.stencil {
+                    pso::StencilTest::On {
+                        ref front,
+                        ref back,
+                    } => (
+                        vk::TRUE,
+                        conv::map_stencil_side(front),
+                        conv::map_stencil_side(back),
+                    ),
+                    pso::StencilTest::Off => unsafe { mem::zeroed() },
+                };
+                let (min_depth_bounds, max_depth_bounds) = match desc.baked_states.depth_bounds {
+                    Some(ref range) => (range.start, range.end),
+                    None => {
+                        dynamic_states.push(vk::DynamicState::DEPTH_BOUNDS);
+                        (0.0, 1.0)
+                    }
+                };
 
-            let (base_handle, base_index) = match desc.parent {
-                pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
-                pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
-                pso::BasePipeline::None => (vk::Pipeline::null(), -1),
-            };
+                info_depth_stencil_states.push(vk::PipelineDepthStencilStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
+                    depth_test_enable,
+                    depth_write_enable,
+                    depth_compare_op,
+                    depth_bounds_test_enable: depth_stencil.depth_bounds as _,
+                    stencil_test_enable,
+                    front,
+                    back,
+                    min_depth_bounds,
+                    max_depth_bounds,
+                });
 
-            let mut flags = vk::PipelineCreateFlags::empty();
-            match desc.parent {
-                pso::BasePipeline::None => (),
-                _ => { flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT; }
-            }
-            if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
-                flags |= vk::PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
-            }
-            if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
-                flags |= vk::PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
-            }
+                // Build blend states for color attachments
+                let blend_states = desc
+                    .blender
+                    .targets
+                    .iter()
+                    .map(|&pso::ColorBlendDesc(mask, ref blend)| {
+                        let color_write_mask = vk::ColorComponentFlags::from_raw(mask.bits() as _);
+                        match *blend {
+                            pso::BlendState::On { color, alpha } => {
+                                let (
+                                    color_blend_op,
+                                    src_color_blend_factor,
+                                    dst_color_blend_factor,
+                                ) = conv::map_blend_op(color);
+                                let (
+                                    alpha_blend_op,
+                                    src_alpha_blend_factor,
+                                    dst_alpha_blend_factor,
+                                ) = conv::map_blend_op(alpha);
+                                vk::PipelineColorBlendAttachmentState {
+                                    color_write_mask,
+                                    blend_enable: vk::TRUE,
+                                    src_color_blend_factor,
+                                    dst_color_blend_factor,
+                                    color_blend_op,
+                                    src_alpha_blend_factor,
+                                    dst_alpha_blend_factor,
+                                    alpha_blend_op,
+                                }
+                            }
+                            pso::BlendState::Off => vk::PipelineColorBlendAttachmentState {
+                                color_write_mask,
+                                ..unsafe { mem::zeroed() }
+                            },
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                color_attachments.push(blend_states);
 
-            Ok(vk::GraphicsPipelineCreateInfo {
-                s_type: vk::StructureType::GraphicsPipelineCreateInfo,
-                p_next: ptr::null(),
-                flags,
-                stage_count: info_stages.last().unwrap().len() as _,
-                p_stages: info_stages.last().unwrap().as_ptr(),
-                p_vertex_input_state: info_vertex_input_states.last().unwrap(),
-                p_input_assembly_state: info_input_assembly_states.last().unwrap(),
-                p_rasterization_state: info_rasterization_states.last().unwrap(),
-                p_tessellation_state: if is_tessellated { info_tessellation_states.last().unwrap() } else { ptr::null() },
-                p_viewport_state: info_viewport_states.last().unwrap(),
-                p_multisample_state: info_multisample_states.last().unwrap(),
-                p_depth_stencil_state: info_depth_stencil_states.last().unwrap(),
-                p_color_blend_state: info_color_blend_states.last().unwrap(),
-                p_dynamic_state: info_dynamic_states.last().unwrap(),
-                layout: desc.layout.raw,
-                render_pass: desc.subpass.main_pass.raw,
-                subpass: desc.subpass.index as _,
-                base_pipeline_handle: base_handle,
-                base_pipeline_index: base_index,
+                info_color_blend_states.push(vk::PipelineColorBlendStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineColorBlendStateCreateFlags::empty(),
+                    logic_op_enable: vk::FALSE, // TODO
+                    logic_op: vk::LogicOp::CLEAR,
+                    attachment_count: color_attachments.last().unwrap().len() as _,
+                    p_attachments: color_attachments.last().unwrap().as_ptr(), // TODO:
+                    blend_constants: match desc.baked_states.blend_color {
+                        Some(value) => value,
+                        None => {
+                            dynamic_states.push(vk::DynamicState::BLEND_CONSTANTS);
+                            [0.0; 4]
+                        }
+                    },
+                });
+
+                info_dynamic_states.push(vk::PipelineDynamicStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineDynamicStateCreateFlags::empty(),
+                    dynamic_state_count: (dynamic_states.len() - dynamic_state_base) as _,
+                    p_dynamic_states: unsafe {
+                        dynamic_states.as_ptr().offset(dynamic_state_base as _)
+                    },
+                });
+
+                let (base_handle, base_index) = match desc.parent {
+                    pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
+                    pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
+                    pso::BasePipeline::None => (vk::Pipeline::null(), -1),
+                };
+
+                let mut flags = vk::PipelineCreateFlags::empty();
+                match desc.parent {
+                    pso::BasePipeline::None => (),
+                    _ => {
+                        flags |= vk::PipelineCreateFlags::DERIVATIVE;
+                    }
+                }
+                if desc
+                    .flags
+                    .contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION)
+                {
+                    flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
+                }
+                if desc
+                    .flags
+                    .contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES)
+                {
+                    flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
+                }
+
+                Ok(vk::GraphicsPipelineCreateInfo {
+                    s_type: vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags,
+                    stage_count: info_stages.last().unwrap().len() as _,
+                    p_stages: info_stages.last().unwrap().as_ptr(),
+                    p_vertex_input_state: info_vertex_input_states.last().unwrap(),
+                    p_input_assembly_state: info_input_assembly_states.last().unwrap(),
+                    p_rasterization_state: info_rasterization_states.last().unwrap(),
+                    p_tessellation_state: if is_tessellated {
+                        info_tessellation_states.last().unwrap()
+                    } else {
+                        ptr::null()
+                    },
+                    p_viewport_state: info_viewport_states.last().unwrap(),
+                    p_multisample_state: info_multisample_states.last().unwrap(),
+                    p_depth_stencil_state: info_depth_stencil_states.last().unwrap(),
+                    p_color_blend_state: info_color_blend_states.last().unwrap(),
+                    p_dynamic_state: info_dynamic_states.last().unwrap(),
+                    layout: desc.layout.raw,
+                    render_pass: desc.subpass.main_pass.raw,
+                    subpass: desc.subpass.index as _,
+                    base_pipeline_handle: base_handle,
+                    base_pipeline_index: base_index,
+                })
             })
-        }).collect::<Vec<_>>();
+            .collect::<Vec<_>>();
 
-        let valid_infos = infos.iter().filter_map(|info| info.clone().ok()).collect::<Vec<_>>();
+        let valid_infos = infos
+            .iter()
+            .filter_map(|info| info.clone().ok())
+            .collect::<Vec<_>>();
         let result = if valid_infos.is_empty() {
             Ok(Vec::new())
         } else {
@@ -701,23 +787,31 @@ impl d::Device<B> for Device {
         let mut psos = pipelines.into_iter();
         infos
             .into_iter()
-            .map(|result| result.and_then(|_| {
-                let pso = psos.next().unwrap();
-                if pso == vk::Pipeline::null() {
-                    match error {
-                        Some(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-                        Some(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
-                        _ => unreachable!(),
+            .map(|result| {
+                result.and_then(|_| {
+                    let pso = psos.next().unwrap();
+                    if pso == vk::Pipeline::null() {
+                        match error {
+                            Some(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                                Err(d::OutOfMemory::OutOfHostMemory.into())
+                            }
+                            Some(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+                            }
+                            _ => unreachable!(),
+                        }
+                    } else {
+                        Ok(n::GraphicsPipeline(pso))
                     }
-                } else {
-                    Ok(n::GraphicsPipeline(pso))
-               }
-            }))
+                })
+            })
             .collect()
     }
 
     unsafe fn create_compute_pipelines<'a, T>(
-        &self, descs: T, cache: Option<&n::PipelineCache>
+        &self,
+        descs: T,
+        cache: Option<&n::PipelineCache>,
     ) -> Vec<Result<n::ComputePipeline, pso::CreationError>>
     where
         T: IntoIterator,
@@ -728,72 +822,89 @@ impl d::Device<B> for Device {
         let mut info_specializations = Vec::with_capacity(descs.len());
         let mut specialization_entries = Vec::with_capacity(descs.len());
 
-        let infos = descs.iter().map(|desc| {
-            let desc = desc.borrow();
-            let string = CString::new(desc.shader.entry).unwrap();
-            let p_name = string.as_ptr();
-            c_strings.push(string);
+        let infos = descs
+            .iter()
+            .map(|desc| {
+                let desc = desc.borrow();
+                let string = CString::new(desc.shader.entry).unwrap();
+                let p_name = string.as_ptr();
+                c_strings.push(string);
 
-            let map_entries = desc.shader.specialization.constants
-                .iter()
-                .map(|c| vk::SpecializationMapEntry {
-                    constant_id: c.id,
-                    offset: c.range.start as _,
-                    size: (c.range.end - c.range.start) as _,
+                let map_entries = desc
+                    .shader
+                    .specialization
+                    .constants
+                    .iter()
+                    .map(|c| vk::SpecializationMapEntry {
+                        constant_id: c.id,
+                        offset: c.range.start as _,
+                        size: (c.range.end - c.range.start) as _,
+                    })
+                    .collect::<SmallVec<[_; 4]>>();
+
+                specialization_entries.push(map_entries);
+                let map_entries = specialization_entries.last().unwrap();
+
+                info_specializations.push(vk::SpecializationInfo {
+                    map_entry_count: map_entries.len() as _,
+                    p_map_entries: map_entries.as_ptr(),
+                    data_size: desc.shader.specialization.data.len() as _,
+                    p_data: desc.shader.specialization.data.as_ptr() as _,
+                });
+                let info = info_specializations.last().unwrap();
+
+                let stage = vk::PipelineShaderStageCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineShaderStageCreateFlags::empty(),
+                    stage: vk::ShaderStageFlags::COMPUTE,
+                    module: desc.shader.module.raw,
+                    p_name,
+                    p_specialization_info: info,
+                };
+
+                let (base_handle, base_index) = match desc.parent {
+                    pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
+                    pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
+                    pso::BasePipeline::None => (vk::Pipeline::null(), -1),
+                };
+
+                let mut flags = vk::PipelineCreateFlags::empty();
+                match desc.parent {
+                    pso::BasePipeline::None => (),
+                    _ => {
+                        flags |= vk::PipelineCreateFlags::DERIVATIVE;
+                    }
+                }
+                if desc
+                    .flags
+                    .contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION)
+                {
+                    flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
+                }
+                if desc
+                    .flags
+                    .contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES)
+                {
+                    flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
+                }
+
+                Ok(vk::ComputePipelineCreateInfo {
+                    s_type: vk::StructureType::COMPUTE_PIPELINE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags,
+                    stage,
+                    layout: desc.layout.raw,
+                    base_pipeline_handle: base_handle,
+                    base_pipeline_index: base_index,
                 })
-                .collect::<SmallVec<[_; 4]>>();
-
-            specialization_entries.push(map_entries);
-            let map_entries = specialization_entries.last().unwrap();
-
-            info_specializations.push(vk::SpecializationInfo {
-                map_entry_count: map_entries.len() as _,
-                p_map_entries: map_entries.as_ptr(),
-                data_size: desc.shader.specialization.data.len() as _,
-                p_data: desc.shader.specialization.data.as_ptr() as _,
-            });
-            let info = info_specializations.last().unwrap();
-
-            let stage = vk::PipelineShaderStageCreateInfo {
-                s_type: vk::StructureType::PipelineShaderStageCreateInfo,
-                p_next: ptr::null(),
-                flags: vk::PipelineShaderStageCreateFlags::empty(),
-                stage: vk::SHADER_STAGE_COMPUTE_BIT,
-                module: desc.shader.module.raw,
-                p_name,
-                p_specialization_info: info,
-            };
-
-            let (base_handle, base_index) = match desc.parent {
-                pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
-                pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
-                pso::BasePipeline::None => (vk::Pipeline::null(), -1),
-            };
-
-            let mut flags = vk::PipelineCreateFlags::empty();
-            match desc.parent {
-                pso::BasePipeline::None => (),
-                _ => { flags |= vk::PIPELINE_CREATE_DERIVATIVE_BIT; }
-            }
-            if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
-                flags |= vk::PIPELINE_CREATE_DISABLE_OPTIMIZATION_BIT;
-            }
-            if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
-                flags |= vk::PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT;
-            }
-
-            Ok(vk::ComputePipelineCreateInfo {
-                s_type: vk::StructureType::ComputePipelineCreateInfo,
-                p_next: ptr::null(),
-                flags,
-                stage,
-                layout: desc.layout.raw,
-                base_pipeline_handle: base_handle,
-                base_pipeline_index: base_index,
             })
-        }).collect::<Vec<_>>();
+            .collect::<Vec<_>>();
 
-        let valid_infos = infos.iter().filter_map(|info| info.clone().ok()).collect::<Vec<_>>();
+        let valid_infos = infos
+            .iter()
+            .filter_map(|info| info.clone().ok())
+            .collect::<Vec<_>>();
         let result = if valid_infos.is_empty() {
             Ok(Vec::new())
         } else {
@@ -817,18 +928,24 @@ impl d::Device<B> for Device {
         let mut psos = pipelines.into_iter();
         infos
             .into_iter()
-            .map(|result| result.and_then(|_| {
-                let pso = psos.next().unwrap();
-                if pso == vk::Pipeline::null() {
-                     match error {
-                         Some(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-                         Some(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
-                         _ => unreachable!(),
-                     }
-                } else {
-                    Ok(n::ComputePipeline(pso))
-                }
-            }))
+            .map(|result| {
+                result.and_then(|_| {
+                    let pso = psos.next().unwrap();
+                    if pso == vk::Pipeline::null() {
+                        match error {
+                            Some(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                                Err(d::OutOfMemory::OutOfHostMemory.into())
+                            }
+                            Some(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+                            }
+                            _ => unreachable!(),
+                        }
+                    } else {
+                        Ok(n::ComputePipeline(pso))
+                    }
+                })
+            })
             .collect()
     }
 
@@ -848,7 +965,7 @@ impl d::Device<B> for Device {
             .collect::<SmallVec<[_; 4]>>();
 
         let info = vk::FramebufferCreateInfo {
-            s_type: vk::StructureType::FramebufferCreateInfo,
+            s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::FramebufferCreateFlags::empty(),
             render_pass: renderpass.raw,
@@ -859,60 +976,69 @@ impl d::Device<B> for Device {
             layers: extent.depth,
         };
 
-        let result = unsafe {
-            self.raw.0.create_framebuffer(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_framebuffer(&info, None) };
 
         match result {
             Ok(raw) => Ok(n::Framebuffer { raw }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::OutOfDeviceMemory),
             _ => unreachable!(),
         }
     }
 
-    unsafe fn create_shader_module(&self, spirv_data: &[u8]) -> Result<n::ShaderModule, d::ShaderError> {
+    unsafe fn create_shader_module(
+        &self,
+        spirv_data: &[u8],
+    ) -> Result<n::ShaderModule, d::ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(spirv_data.len() & 3, 0);
 
         let info = vk::ShaderModuleCreateInfo {
-            s_type: vk::StructureType::ShaderModuleCreateInfo,
+            s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::ShaderModuleCreateFlags::empty(),
             code_size: spirv_data.len(),
             p_code: spirv_data as *const _ as *const u32,
         };
 
-        let module = unsafe {
-            self.raw.0.create_shader_module(&info, None)
-        };
+        let module = unsafe { self.raw.0.create_shader_module(&info, None) };
 
         match module {
             Ok(raw) => Ok(n::ShaderModule { raw }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             Err(_) => {
                 Err(d::ShaderError::CompilationFailed(String::new())) // TODO
             }
         }
     }
 
-    unsafe fn create_sampler(&self, sampler_info: image::SamplerInfo) -> Result<n::Sampler, d::AllocationError> {
+    unsafe fn create_sampler(
+        &self,
+        sampler_info: image::SamplerInfo,
+    ) -> Result<n::Sampler, d::AllocationError> {
         use hal::pso::Comparison;
 
         let (anisotropy_enable, max_anisotropy) = match sampler_info.anisotropic {
-            image::Anisotropic::Off => (vk::VK_FALSE, 1.0),
+            image::Anisotropic::Off => (vk::FALSE, 1.0),
             image::Anisotropic::On(aniso) => {
                 if self.raw.1.contains(Features::SAMPLER_ANISOTROPY) {
-                    (vk::VK_TRUE, aniso as f32)
+                    (vk::TRUE, aniso as f32)
                 } else {
-                    warn!("Anisotropy({}) was requested on a device with disabled feature", aniso);
-                    (vk::VK_FALSE, 1.0)
+                    warn!(
+                        "Anisotropy({}) was requested on a device with disabled feature",
+                        aniso
+                    );
+                    (vk::FALSE, 1.0)
                 }
-            },
+            }
         };
         let info = vk::SamplerCreateInfo {
-            s_type: vk::StructureType::SamplerCreateInfo,
+            s_type: vk::StructureType::SAMPLER_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::SamplerCreateFlags::empty(),
             mag_filter: conv::map_filter(sampler_info.mag_filter),
@@ -924,7 +1050,11 @@ impl d::Device<B> for Device {
             mip_lod_bias: sampler_info.lod_bias.into(),
             anisotropy_enable,
             max_anisotropy,
-            compare_enable: if sampler_info.comparison.is_some() { vk::VK_TRUE } else { vk::VK_FALSE },
+            compare_enable: if sampler_info.comparison.is_some() {
+                vk::TRUE
+            } else {
+                vk::FALSE
+            },
             compare_op: conv::map_comparison(sampler_info.comparison.unwrap_or(Comparison::Never)),
             min_lod: sampler_info.lod_range.start.into(),
             max_lod: sampler_info.lod_range.end.into(),
@@ -932,46 +1062,54 @@ impl d::Device<B> for Device {
                 Some(bc) => bc,
                 None => {
                     error!("Unsupported border color {:x}", sampler_info.border.0);
-                    vk::BorderColor::FloatTransparentBlack
+                    vk::BorderColor::FLOAT_TRANSPARENT_BLACK
                 }
             },
-            unnormalized_coordinates: vk::VK_FALSE,
+            unnormalized_coordinates: vk::FALSE,
         };
 
-        let result = unsafe {
-            self.raw.0.create_sampler(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_sampler(&info, None) };
 
         match result {
             Ok(sampler) => Ok(n::Sampler(sampler)),
-            Err(vk::Result::ErrorTooManyObjects) => Err(d::AllocationError::TooManyObjects),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => Err(d::AllocationError::TooManyObjects),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
 
     ///
-    unsafe fn create_buffer(&self, size: u64, usage: buffer::Usage) -> Result<n::Buffer, buffer::CreationError> {
+    unsafe fn create_buffer(
+        &self,
+        size: u64,
+        usage: buffer::Usage,
+    ) -> Result<n::Buffer, buffer::CreationError> {
         let info = vk::BufferCreateInfo {
-            s_type: vk::StructureType::BufferCreateInfo,
+            s_type: vk::StructureType::BUFFER_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::BufferCreateFlags::empty(), // TODO:
             size,
             usage: conv::map_buffer_usage(usage),
-            sharing_mode: vk::SharingMode::Exclusive, // TODO:
+            sharing_mode: vk::SharingMode::EXCLUSIVE, // TODO:
             queue_family_index_count: 0,
             p_queue_family_indices: ptr::null(),
         };
 
-        let result = unsafe {
-            self.raw.0.create_buffer(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_buffer(&info, None) };
 
         match result {
             Ok(raw) => Ok(n::Buffer { raw }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
@@ -986,41 +1124,57 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn bind_buffer_memory(&self, memory: &n::Memory, offset: u64, buffer: &mut n::Buffer) -> Result<(), d::BindError> {
+    unsafe fn bind_buffer_memory(
+        &self,
+        memory: &n::Memory,
+        offset: u64,
+        buffer: &mut n::Buffer,
+    ) -> Result<(), d::BindError> {
         let result = unsafe {
-            self.raw.0.bind_buffer_memory(buffer.raw, memory.raw, offset)
+            self.raw
+                .0
+                .bind_buffer_memory(buffer.raw, memory.raw, offset)
         };
 
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
 
     unsafe fn create_buffer_view<R: RangeArg<u64>>(
-        &self, buffer: &n::Buffer, format: Option<format::Format>, range: R
+        &self,
+        buffer: &n::Buffer,
+        format: Option<format::Format>,
+        range: R,
     ) -> Result<n::BufferView, buffer::ViewCreationError> {
         let (offset, size) = conv::map_range_arg(&range);
         let info = vk::BufferViewCreateInfo {
-            s_type: vk::StructureType::BufferViewCreateInfo,
+            s_type: vk::StructureType::BUFFER_VIEW_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::BufferViewCreateFlags::empty(),
             buffer: buffer.raw,
-            format: format.map_or(vk::Format::Undefined, conv::map_format),
+            format: format.map_or(vk::Format::UNDEFINED, conv::map_format),
             offset,
             range: size,
         };
 
-        let result = unsafe {
-            self.raw.0.create_buffer_view(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_buffer_view(&info, None) };
 
         match result {
             Ok(raw) => Ok(n::BufferView { raw }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
@@ -1039,13 +1193,13 @@ impl d::Device<B> for Device {
         let array_layers = kind.num_layers();
         let samples = kind.num_samples() as u32;
         let image_type = match kind {
-            image::Kind::D1(..) => vk::ImageType::Type1d,
-            image::Kind::D2(..) => vk::ImageType::Type2d,
-            image::Kind::D3(..) => vk::ImageType::Type3d,
+            image::Kind::D1(..) => vk::ImageType::TYPE_1D,
+            image::Kind::D2(..) => vk::ImageType::TYPE_2D,
+            image::Kind::D3(..) => vk::ImageType::TYPE_3D,
         };
 
         let info = vk::ImageCreateInfo {
-            s_type: vk::StructureType::ImageCreateInfo,
+            s_type: vk::StructureType::IMAGE_CREATE_INFO,
             p_next: ptr::null(),
             flags,
             image_type,
@@ -1053,23 +1207,30 @@ impl d::Device<B> for Device {
             extent: extent.clone(),
             mip_levels: mip_levels as u32,
             array_layers: array_layers as u32,
-            samples: vk::SampleCountFlags::from_flags_truncate(samples),
+            samples: vk::SampleCountFlags::from_raw(samples & vk::SampleCountFlags::all().as_raw()),
             tiling: conv::map_tiling(tiling),
             usage: conv::map_image_usage(usage),
-            sharing_mode: vk::SharingMode::Exclusive, // TODO:
+            sharing_mode: vk::SharingMode::EXCLUSIVE, // TODO:
             queue_family_index_count: 0,
             p_queue_family_indices: ptr::null(),
-            initial_layout: vk::ImageLayout::Undefined,
+            initial_layout: vk::ImageLayout::UNDEFINED,
         };
 
-        let result = unsafe {
-            self.raw.0.create_image(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_image(&info, None) };
 
         match result {
-            Ok(raw) => Ok(n::Image { raw, ty: image_type, flags, extent }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Ok(raw) => Ok(n::Image {
+                raw,
+                ty: image_type,
+                flags,
+                extent,
+            }),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
@@ -1085,30 +1246,39 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn get_image_subresource_footprint(
-        &self, image: &n::Image, subresource: image::Subresource
+        &self,
+        image: &n::Image,
+        subresource: image::Subresource,
     ) -> image::SubresourceFootprint {
         let sub = conv::map_subresource(&subresource);
         let layout = self.raw.0.get_image_subresource_layout(image.raw, sub);
 
         image::SubresourceFootprint {
-            slice: layout.offset .. layout.offset + layout.size,
+            slice: layout.offset..layout.offset + layout.size,
             row_pitch: layout.row_pitch,
             array_pitch: layout.array_pitch,
             depth_pitch: layout.depth_pitch,
         }
     }
 
-    unsafe fn bind_image_memory(&self, memory: &n::Memory, offset: u64, image: &mut n::Image) -> Result<(), d::BindError> {
+    unsafe fn bind_image_memory(
+        &self,
+        memory: &n::Memory,
+        offset: u64,
+        image: &mut n::Image,
+    ) -> Result<(), d::BindError> {
         // TODO: error handling
         // TODO: check required type
-        let result = unsafe {
-            self.raw.0.bind_image_memory(image.raw, memory.raw, offset)
-        };
+        let result = unsafe { self.raw.0.bind_image_memory(image.raw, memory.raw, offset) };
 
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
@@ -1121,9 +1291,11 @@ impl d::Device<B> for Device {
         swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
-        let is_cube = image.flags.intersects(vk::IMAGE_CREATE_CUBE_COMPATIBLE_BIT);
+        let is_cube = image
+            .flags
+            .intersects(vk::ImageCreateFlags::CUBE_COMPATIBLE);
         let info = vk::ImageViewCreateInfo {
-            s_type: vk::StructureType::ImageViewCreateInfo,
+            s_type: vk::StructureType::IMAGE_VIEW_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::ImageViewCreateFlags::empty(),
             image: image.raw,
@@ -1136,9 +1308,7 @@ impl d::Device<B> for Device {
             subresource_range: conv::map_subresource_range(&range),
         };
 
-        let result = unsafe {
-            self.raw.0.create_image_view(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_image_view(&info, None) };
 
         match result {
             Ok(view) => Ok(n::ImageView {
@@ -1146,27 +1316,38 @@ impl d::Device<B> for Device {
                 view,
                 range,
             }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
 
-    unsafe fn create_descriptor_pool<T>(&self, max_sets: usize, descriptor_pools: T) -> Result<n::DescriptorPool, d::OutOfMemory>
+    unsafe fn create_descriptor_pool<T>(
+        &self,
+        max_sets: usize,
+        descriptor_pools: T,
+    ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
         T: IntoIterator,
         T::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        let pools = descriptor_pools.into_iter().map(|pool| {
-            let pool = pool.borrow();
-            vk::DescriptorPoolSize {
-                typ: conv::map_descriptor_type(pool.ty),
-                descriptor_count: pool.count as u32,
-            }
-        }).collect::<Vec<_>>();
+        let pools = descriptor_pools
+            .into_iter()
+            .map(|pool| {
+                let pool = pool.borrow();
+                vk::DescriptorPoolSize {
+                    ty: conv::map_descriptor_type(pool.ty),
+                    descriptor_count: pool.count as u32,
+                }
+            })
+            .collect::<Vec<_>>();
 
         let info = vk::DescriptorPoolCreateInfo {
-            s_type: vk::StructureType::DescriptorPoolCreateInfo,
+            s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::DescriptorPoolCreateFlags::empty(), // disallow individual freeing
             max_sets: max_sets as u32,
@@ -1174,9 +1355,7 @@ impl d::Device<B> for Device {
             p_pool_sizes: pools.as_ptr(),
         };
 
-        let result = unsafe {
-            self.raw.0.create_descriptor_pool(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_descriptor_pool(&info, None) };
 
         match result {
             Ok(pool) => Ok(n::DescriptorPool {
@@ -1184,14 +1363,20 @@ impl d::Device<B> for Device {
                 device: self.raw.clone(),
                 set_free_vec: Vec::new(),
             }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
 
     unsafe fn create_descriptor_set_layout<I, J>(
-        &self, binding_iter: I, immutable_sampler_iter: J
+        &self,
+        binding_iter: I,
+        immutable_sampler_iter: J,
     ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
         I: IntoIterator,
@@ -1205,14 +1390,16 @@ impl d::Device<B> for Device {
             .collect::<Vec<_>>();
         let mut sampler_offset = 0;
 
-        let bindings = Arc::new(binding_iter
-            .into_iter()
-            .map(|b| b.borrow().clone())
-            .collect::<Vec<_>>()
+        let bindings = Arc::new(
+            binding_iter
+                .into_iter()
+                .map(|b| b.borrow().clone())
+                .collect::<Vec<_>>(),
         );
 
-        let raw_bindings = bindings.iter().map(|b| {
-            vk::DescriptorSetLayoutBinding {
+        let raw_bindings = bindings
+            .iter()
+            .map(|b| vk::DescriptorSetLayoutBinding {
                 binding: b.binding,
                 descriptor_type: conv::map_descriptor_type(b.ty),
                 descriptor_count: b.count as _,
@@ -1224,30 +1411,32 @@ impl d::Device<B> for Device {
                 } else {
                     ptr::null()
                 },
-            }
-        }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
         debug!("create_descriptor_set_layout {:?}", raw_bindings);
 
         let info = vk::DescriptorSetLayoutCreateInfo {
-            s_type: vk::StructureType::DescriptorSetLayoutCreateInfo,
+            s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::DescriptorSetLayoutCreateFlags::empty(),
             binding_count: raw_bindings.len() as _,
             p_bindings: raw_bindings.as_ptr(),
         };
 
-        let result = unsafe {
-            self.raw.0.create_descriptor_set_layout(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_descriptor_set_layout(&info, None) };
 
         match result {
             Ok(layout) => Ok(n::DescriptorSetLayout {
                 raw: layout,
                 bindings,
             }),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
@@ -1264,12 +1453,14 @@ impl d::Device<B> for Device {
         let mut texel_buffer_views = Vec::new();
 
         for sw in write_iter {
-            let layout = sw.set.bindings
+            let layout = sw
+                .set
+                .bindings
                 .iter()
                 .find(|lb| lb.binding == sw.binding)
                 .expect("Descriptor set writes don't match the set layout!");
             let mut raw = vk::WriteDescriptorSet {
-                s_type: vk::StructureType::WriteDescriptorSet,
+                s_type: vk::StructureType::WRITE_DESCRIPTOR_SET,
                 p_next: ptr::null(),
                 dst_set: sw.set.raw,
                 dst_binding: sw.binding,
@@ -1288,7 +1479,7 @@ impl d::Device<B> for Device {
                         image_infos.push(vk::DescriptorImageInfo {
                             sampler: sampler.0,
                             image_view: vk::ImageView::null(),
-                            image_layout: vk::ImageLayout::General,
+                            image_layout: vk::ImageLayout::GENERAL,
                         });
                     }
                     pso::Descriptor::Image(view, layout) => {
@@ -1312,12 +1503,12 @@ impl d::Device<B> for Device {
                             offset,
                             range: match range.end {
                                 Some(end) => end - offset,
-                                None => vk::VK_WHOLE_SIZE,
+                                None => vk::WHOLE_SIZE,
                             },
                         });
                     }
-                    pso::Descriptor::UniformTexelBuffer(view) |
-                    pso::Descriptor::StorageTexelBuffer(view) => {
+                    pso::Descriptor::UniformTexelBuffer(view)
+                    | pso::Descriptor::StorageTexelBuffer(view) => {
                         texel_buffer_views.push(view.raw);
                     }
                 }
@@ -1333,38 +1524,36 @@ impl d::Device<B> for Device {
         for raw in &mut raw_writes {
             use vk::DescriptorType as Dt;
             match raw.descriptor_type {
-                Dt::Sampler |
-                Dt::SampledImage |
-                Dt::StorageImage |
-                Dt::CombinedImageSampler |
-                Dt::InputAttachment => {
+                Dt::SAMPLER
+                | Dt::SAMPLED_IMAGE
+                | Dt::STORAGE_IMAGE
+                | Dt::COMBINED_IMAGE_SAMPLER
+                | Dt::INPUT_ATTACHMENT => {
                     raw.p_buffer_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
                     let base = raw.p_image_info as usize - raw.descriptor_count as usize;
                     raw.p_image_info = image_infos[base..].as_ptr();
                 }
-                Dt::UniformTexelBuffer |
-                Dt::StorageTexelBuffer => {
+                Dt::UNIFORM_TEXEL_BUFFER | Dt::STORAGE_TEXEL_BUFFER => {
                     raw.p_buffer_info = ptr::null();
                     raw.p_image_info = ptr::null();
                     let base = raw.p_texel_buffer_view as usize - raw.descriptor_count as usize;
                     raw.p_texel_buffer_view = texel_buffer_views[base..].as_ptr();
                 }
-                Dt::UniformBuffer |
-                Dt::StorageBuffer |
-                Dt::StorageBufferDynamic |
-                Dt::UniformBufferDynamic => {
+                Dt::UNIFORM_BUFFER
+                | Dt::STORAGE_BUFFER
+                | Dt::STORAGE_BUFFER_DYNAMIC
+                | Dt::UNIFORM_BUFFER_DYNAMIC => {
                     raw.p_image_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
                     let base = raw.p_buffer_info as usize - raw.descriptor_count as usize;
                     raw.p_buffer_info = buffer_infos[base..].as_ptr();
                 }
+                _ => panic!("unknown descriptor type"),
             }
         }
 
-        unsafe {
-            self.raw.0.update_descriptor_sets(&raw_writes, &[]);
-        }
+        self.raw.0.update_descriptor_sets(&raw_writes, &[]);
     }
 
     unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
@@ -1372,20 +1561,23 @@ impl d::Device<B> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
     {
-        let copies = copies.into_iter().map(|copy| {
-            let c = copy.borrow();
-            vk::CopyDescriptorSet {
-                s_type: vk::StructureType::CopyDescriptorSet,
-                p_next: ptr::null(),
-                src_set: c.src_set.raw,
-                src_binding: c.src_binding as u32,
-                src_array_element: c.src_array_offset as u32,
-                dst_set: c.dst_set.raw,
-                dst_binding: c.dst_binding as u32,
-                dst_array_element: c.dst_array_offset as u32,
-                descriptor_count: c.count as u32,
-            }
-        }).collect::<Vec<_>>();
+        let copies = copies
+            .into_iter()
+            .map(|copy| {
+                let c = copy.borrow();
+                vk::CopyDescriptorSet {
+                    s_type: vk::StructureType::COPY_DESCRIPTOR_SET,
+                    p_next: ptr::null(),
+                    src_set: c.src_set.raw,
+                    src_binding: c.src_binding as u32,
+                    src_array_element: c.src_array_offset as u32,
+                    dst_set: c.dst_set.raw,
+                    dst_binding: c.dst_binding as u32,
+                    dst_array_element: c.dst_array_offset as u32,
+                    descriptor_count: c.count as u32,
+                }
+            })
+            .collect::<Vec<_>>();
 
         unsafe {
             self.raw.0.update_descriptor_sets(&[], &copies);
@@ -1398,19 +1590,20 @@ impl d::Device<B> for Device {
     {
         let (offset, size) = conv::map_range_arg(&range);
         let result = unsafe {
-            self.raw.0.map_memory(
-                memory.raw,
-                offset,
-                size,
-                vk::MemoryMapFlags::empty(),
-            )
+            self.raw
+                .0
+                .map_memory(memory.raw, offset, size, vk::MemoryMapFlags::empty())
         };
 
         match result {
             Ok(ptr) => Ok(ptr as *mut _),
-            Err(vk::Result::ErrorMemoryMapFailed) => Err(mapping::Error::MappingFailed),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_MEMORY_MAP_FAILED) => Err(mapping::Error::MappingFailed),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
@@ -1426,77 +1619,86 @@ impl d::Device<B> for Device {
         R: RangeArg<u64>,
     {
         let ranges = conv::map_memory_ranges(ranges);
-        let result = unsafe {
-            self.raw.0
-                .flush_mapped_memory_ranges(&ranges)
-        };
+        let result = unsafe { self.raw.0.flush_mapped_memory_ranges(&ranges) };
 
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), d::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
+        &self,
+        ranges: I,
+    ) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
         let ranges = conv::map_memory_ranges(ranges);
-        let result = unsafe {
-            self.raw.0
-                .invalidate_mapped_memory_ranges(&ranges)
-        };
+        let result = unsafe { self.raw.0.invalidate_mapped_memory_ranges(&ranges) };
 
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
 
     fn create_semaphore(&self) -> Result<n::Semaphore, d::OutOfMemory> {
         let info = vk::SemaphoreCreateInfo {
-            s_type: vk::StructureType::SemaphoreCreateInfo,
+            s_type: vk::StructureType::SEMAPHORE_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::SemaphoreCreateFlags::empty(),
         };
 
-        let result = unsafe {
-            self.raw.0.create_semaphore(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_semaphore(&info, None) };
 
         match result {
             Ok(semaphore) => Ok(n::Semaphore(semaphore)),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
 
     fn create_fence(&self, signaled: bool) -> Result<n::Fence, d::OutOfMemory> {
         let info = vk::FenceCreateInfo {
-            s_type: vk::StructureType::FenceCreateInfo,
+            s_type: vk::StructureType::FENCE_CREATE_INFO,
             p_next: ptr::null(),
             flags: if signaled {
-                vk::FENCE_CREATE_SIGNALED_BIT
+                vk::FenceCreateFlags::SIGNALED
             } else {
                 vk::FenceCreateFlags::empty()
             },
         };
 
-        let result = unsafe {
-            self.raw.0.create_fence(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_fence(&info, None) };
 
         match result {
             Ok(fence) => Ok(n::Fence(fence)),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
@@ -1506,112 +1708,143 @@ impl d::Device<B> for Device {
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
     {
-        let fences = fences.into_iter().map(|fence| fence.borrow().0).collect::<Vec<_>>();
-        let result = unsafe {
-            self.raw.0.reset_fences(&fences)
-        };
+        let fences = fences
+            .into_iter()
+            .map(|fence| fence.borrow().0)
+            .collect::<Vec<_>>();
+        let result = unsafe { self.raw.0.reset_fences(&fences) };
 
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
 
-    unsafe fn wait_for_fences<I>(&self, fences: I, wait: d::WaitFor, timeout_ns: u64) -> Result<bool, d::OomOrDeviceLost>
+    unsafe fn wait_for_fences<I>(
+        &self,
+        fences: I,
+        wait: d::WaitFor,
+        timeout_ns: u64,
+    ) -> Result<bool, d::OomOrDeviceLost>
     where
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
     {
-        let fences = fences.into_iter().map(|fence| fence.borrow().0).collect::<Vec<_>>();
+        let fences = fences
+            .into_iter()
+            .map(|fence| fence.borrow().0)
+            .collect::<Vec<_>>();
         let all = match wait {
             d::WaitFor::Any => false,
             d::WaitFor::All => true,
         };
-        let result = unsafe {
-            self.raw.0.wait_for_fences(&fences, all, timeout_ns)
-        };
+        let result = unsafe { self.raw.0.wait_for_fences(&fences, all, timeout_ns) };
         match result {
             Ok(()) => Ok(true),
-            Err(vk::Result::Timeout) => Ok(false),
-            Err(vk::Result::ErrorDeviceLost) => Err(d::DeviceLost.into()),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::TIMEOUT) => Ok(false),
+            Err(vk::Result::ERROR_DEVICE_LOST) => Err(d::DeviceLost.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
-
         }
     }
 
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, d::DeviceLost> {
-        let result = unsafe {
-            self.raw.0.get_fence_status(fence.0)
-        };
+        let result = unsafe { self.raw.0.get_fence_status(fence.0) };
         match result {
             Ok(()) => Ok(true),
-            Err(vk::Result::NotReady) => Ok(false),
-            Err(vk::Result::ErrorDeviceLost) => Err(d::DeviceLost),
+            Err(vk::Result::NOT_READY) => Ok(false),
+            Err(vk::Result::ERROR_DEVICE_LOST) => Err(d::DeviceLost),
             _ => unreachable!(),
         }
     }
 
     unsafe fn free_memory(&self, memory: n::Memory) {
-        unsafe { self.raw.0.free_memory(memory.raw, None); }
+        unsafe {
+            self.raw.0.free_memory(memory.raw, None);
+        }
     }
 
-    unsafe fn create_query_pool(&self, ty: query::Type, query_count: query::Id) -> Result<n::QueryPool, query::CreationError> {
+    unsafe fn create_query_pool(
+        &self,
+        ty: query::Type,
+        query_count: query::Id,
+    ) -> Result<n::QueryPool, query::CreationError> {
         let (query_type, pipeline_statistics) = match ty {
-            query::Type::Occlusion =>
-                (vk::QueryType::Occlusion, vk::QueryPipelineStatisticFlags::empty()),
-            query::Type::PipelineStatistics(statistics) =>
-                (vk::QueryType::PipelineStatistics, conv::map_pipeline_statistics(statistics)),
-            query::Type::Timestamp =>
-                (vk::QueryType::Timestamp, vk::QueryPipelineStatisticFlags::empty()),
+            query::Type::Occlusion => (
+                vk::QueryType::OCCLUSION,
+                vk::QueryPipelineStatisticFlags::empty(),
+            ),
+            query::Type::PipelineStatistics(statistics) => (
+                vk::QueryType::PIPELINE_STATISTICS,
+                conv::map_pipeline_statistics(statistics),
+            ),
+            query::Type::Timestamp => (
+                vk::QueryType::TIMESTAMP,
+                vk::QueryPipelineStatisticFlags::empty(),
+            ),
         };
 
         let info = vk::QueryPoolCreateInfo {
-            s_type: vk::StructureType::QueryPoolCreateInfo,
+            s_type: vk::StructureType::QUERY_POOL_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::QueryPoolCreateFlags::empty(),
             query_type,
             query_count,
-            pipeline_statistics
+            pipeline_statistics,
         };
 
-        let result = unsafe {
-            self.raw.0.create_query_pool(&info, None)
-        };
+        let result = unsafe { self.raw.0.create_query_pool(&info, None) };
 
         match result {
             Ok(pool) => Ok(n::QueryPool(pool)),
-            Err(vk::Result::ErrorOutOfHostMemory) => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         }
     }
 
     unsafe fn get_query_pool_results(
-        &self, pool: &n::QueryPool, queries: Range<query::Id>,
-        data: &mut [u8], stride: buffer::Offset,
+        &self,
+        pool: &n::QueryPool,
+        queries: Range<query::Id>,
+        data: &mut [u8],
+        stride: buffer::Offset,
         flags: query::ResultFlags,
     ) -> Result<bool, d::OomOrDeviceLost> {
         let result = unsafe {
-            self.raw.0
-                .fp_v1_0()
-                .get_query_pool_results(
-                    self.raw.0.handle(),
-                    pool.0, queries.start, queries.end - queries.start,
-                    data.len(), data.as_mut_ptr() as *mut _, stride,
-                    conv::map_query_result_flags(flags),
-                )
+            self.raw.0.fp_v1_0().get_query_pool_results(
+                self.raw.0.handle(),
+                pool.0,
+                queries.start,
+                queries.end - queries.start,
+                data.len(),
+                data.as_mut_ptr() as *mut _,
+                stride,
+                conv::map_query_result_flags(flags),
+            )
         };
 
         match result {
-            vk::Result::Success => Ok(true),
-            vk::Result::NotReady => Ok(false),
-            vk::Result::ErrorDeviceLost => Err(d::DeviceLost.into()),
-            vk::Result::ErrorOutOfHostMemory => Err(d::OutOfMemory::OutOfHostMemory.into()),
-            vk::Result::ErrorOutOfDeviceMemory => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            vk::Result::SUCCESS => Ok(true),
+            vk::Result::NOT_READY => Ok(false),
+            vk::Result::ERROR_DEVICE_LOST => Err(d::DeviceLost.into()),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::OutOfHostMemory.into()),
+            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::OutOfDeviceMemory.into()),
             _ => unreachable!(),
         }
     }
@@ -1622,8 +1855,7 @@ impl d::Device<B> for Device {
         config: SwapchainConfig,
         provided_old_swapchain: Option<w::Swapchain>,
     ) -> Result<(w::Swapchain, Backbuffer<B>), hal::window::CreationError> {
-        let functor = ext::Swapchain::new(&surface.raw.instance.0, &self.raw.0)
-            .expect("Unable to query swapchain function");
+        let functor = ext::Swapchain::new(&surface.raw.instance.0, &self.raw.0);
 
         let old_swapchain = match provided_old_swapchain {
             Some(osc) => osc.raw,
@@ -1634,24 +1866,26 @@ impl d::Device<B> for Device {
         surface.height = config.extent.height;
 
         let info = vk::SwapchainCreateInfoKHR {
-            s_type: vk::StructureType::SwapchainCreateInfoKhr,
+            s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
             p_next: ptr::null(),
             flags: vk::SwapchainCreateFlagsKHR::empty(),
             surface: surface.raw.handle,
             min_image_count: config.image_count,
             image_format: conv::map_format(config.format),
-            image_color_space: vk::ColorSpaceKHR::SrgbNonlinear,
+            image_color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
             image_extent: vk::Extent2D {
                 width: surface.width,
                 height: surface.height,
             },
             image_array_layers: 1,
             image_usage: conv::map_image_usage(config.image_usage),
-            image_sharing_mode: vk::SharingMode::Exclusive,
+            image_sharing_mode: vk::SharingMode::EXCLUSIVE,
             queue_family_index_count: 0,
             p_queue_family_indices: ptr::null(),
-            pre_transform: vk::SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
-            composite_alpha: vk::CompositeAlphaFlagsKHR::from_flags(1 << config.composite_alpha as u32).unwrap(),
+            pre_transform: vk::SurfaceTransformFlagsKHR::IDENTITY,
+            composite_alpha: vk::CompositeAlphaFlagsKHR::from_raw(
+                1 << config.composite_alpha as u32,
+            ),
             present_mode: unsafe { mem::transmute(config.present_mode) },
             clipped: 1,
             old_swapchain,
@@ -1665,11 +1899,15 @@ impl d::Device<B> for Device {
 
         let swapchain_raw = match result {
             Ok(swapchain_raw) => swapchain_raw,
-            Err(vk::Result::ErrorOutOfHostMemory) => return Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => return Err(d::OutOfMemory::OutOfDeviceMemory.into()),
-            Err(vk::Result::ErrorDeviceLost) => return Err(d::DeviceLost.into()),
-            Err(vk::Result::ErrorSurfaceLostKhr) => return Err(d::SurfaceLost.into()),
-            Err(vk::Result::ErrorNativeWindowInUseKhr) => return Err(d::WindowInUse.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                return Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                return Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
+            Err(vk::Result::ERROR_DEVICE_LOST) => return Err(d::DeviceLost.into()),
+            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => return Err(d::SurfaceLost.into()),
+            Err(vk::Result::ERROR_NATIVE_WINDOW_IN_USE_KHR) => return Err(d::WindowInUse.into()),
             _ => unreachable!("Unexpected result - driver bug? {:?}", result),
         };
 
@@ -1677,8 +1915,12 @@ impl d::Device<B> for Device {
 
         let backbuffer_images = match result {
             Ok(backbuffer_images) => backbuffer_images,
-            Err(vk::Result::ErrorOutOfHostMemory) => return Err(d::OutOfMemory::OutOfHostMemory.into()),
-            Err(vk::Result::ErrorOutOfDeviceMemory) => return Err(d::OutOfMemory::OutOfDeviceMemory.into()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                return Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                return Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
             _ => unreachable!(),
         };
 
@@ -1689,17 +1931,15 @@ impl d::Device<B> for Device {
 
         let images = backbuffer_images
             .into_iter()
-            .map(|image| {
-                n::Image {
-                    raw: image,
-                    ty: vk::ImageType::Type2d,
-                    flags: vk::ImageCreateFlags::empty(),
-                    extent: vk::Extent3D {
-                        width: surface.width,
-                        height: surface.height,
-                        depth: 1,
-                    },
-                }
+            .map(|image| n::Image {
+                raw: image,
+                ty: vk::ImageType::TYPE_2D,
+                flags: vk::ImageCreateFlags::empty(),
+                extent: vk::Extent3D {
+                    width: surface.width,
+                    height: surface.height,
+                    depth: 1,
+                },
             })
             .collect();
 
@@ -1707,84 +1947,120 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_swapchain(&self, swapchain: w::Swapchain) {
-        unsafe { swapchain.functor.destroy_swapchain_khr(swapchain.raw, None); }
+        unsafe {
+            swapchain.functor.destroy_swapchain_khr(swapchain.raw, None);
+        }
     }
 
     unsafe fn destroy_query_pool(&self, pool: n::QueryPool) {
-        unsafe { self.raw.0.destroy_query_pool(pool.0, None); }
+        unsafe {
+            self.raw.0.destroy_query_pool(pool.0, None);
+        }
     }
 
     unsafe fn destroy_shader_module(&self, module: n::ShaderModule) {
-        unsafe { self.raw.0.destroy_shader_module(module.raw, None); }
+        unsafe {
+            self.raw.0.destroy_shader_module(module.raw, None);
+        }
     }
 
     unsafe fn destroy_render_pass(&self, rp: n::RenderPass) {
-        unsafe { self.raw.0.destroy_render_pass(rp.raw, None); }
+        unsafe {
+            self.raw.0.destroy_render_pass(rp.raw, None);
+        }
     }
 
     unsafe fn destroy_pipeline_layout(&self, pl: n::PipelineLayout) {
-        unsafe { self.raw.0.destroy_pipeline_layout(pl.raw, None); }
+        unsafe {
+            self.raw.0.destroy_pipeline_layout(pl.raw, None);
+        }
     }
 
     unsafe fn destroy_graphics_pipeline(&self, pipeline: n::GraphicsPipeline) {
-        unsafe { self.raw.0.destroy_pipeline(pipeline.0, None); }
+        unsafe {
+            self.raw.0.destroy_pipeline(pipeline.0, None);
+        }
     }
 
     unsafe fn destroy_compute_pipeline(&self, pipeline: n::ComputePipeline) {
-        unsafe { self.raw.0.destroy_pipeline(pipeline.0, None); }
+        unsafe {
+            self.raw.0.destroy_pipeline(pipeline.0, None);
+        }
     }
 
     unsafe fn destroy_framebuffer(&self, fb: n::Framebuffer) {
-        unsafe { self.raw.0.destroy_framebuffer(fb.raw, None); }
+        unsafe {
+            self.raw.0.destroy_framebuffer(fb.raw, None);
+        }
     }
 
     unsafe fn destroy_buffer(&self, buffer: n::Buffer) {
-        unsafe { self.raw.0.destroy_buffer(buffer.raw, None); }
+        unsafe {
+            self.raw.0.destroy_buffer(buffer.raw, None);
+        }
     }
 
     unsafe fn destroy_buffer_view(&self, view: n::BufferView) {
-        unsafe { self.raw.0.destroy_buffer_view(view.raw, None); }
+        unsafe {
+            self.raw.0.destroy_buffer_view(view.raw, None);
+        }
     }
 
     unsafe fn destroy_image(&self, image: n::Image) {
-        unsafe { self.raw.0.destroy_image(image.raw, None); }
+        unsafe {
+            self.raw.0.destroy_image(image.raw, None);
+        }
     }
 
     unsafe fn destroy_image_view(&self, view: n::ImageView) {
-        unsafe { self.raw.0.destroy_image_view(view.view, None); }
+        unsafe {
+            self.raw.0.destroy_image_view(view.view, None);
+        }
     }
 
     unsafe fn destroy_sampler(&self, sampler: n::Sampler) {
-        unsafe { self.raw.0.destroy_sampler(sampler.0, None); }
+        unsafe {
+            self.raw.0.destroy_sampler(sampler.0, None);
+        }
     }
 
     unsafe fn destroy_descriptor_pool(&self, pool: n::DescriptorPool) {
-        unsafe { self.raw.0.destroy_descriptor_pool(pool.raw, None); }
+        unsafe {
+            self.raw.0.destroy_descriptor_pool(pool.raw, None);
+        }
     }
 
     unsafe fn destroy_descriptor_set_layout(&self, layout: n::DescriptorSetLayout) {
-        unsafe { self.raw.0.destroy_descriptor_set_layout(layout.raw, None); }
+        unsafe {
+            self.raw.0.destroy_descriptor_set_layout(layout.raw, None);
+        }
     }
 
     unsafe fn destroy_fence(&self, fence: n::Fence) {
-        unsafe { self.raw.0.destroy_fence(fence.0, None); }
+        unsafe {
+            self.raw.0.destroy_fence(fence.0, None);
+        }
     }
 
     unsafe fn destroy_semaphore(&self, semaphore: n::Semaphore) {
-        unsafe { self.raw.0.destroy_semaphore(semaphore.0, None); }
+        unsafe {
+            self.raw.0.destroy_semaphore(semaphore.0, None);
+        }
     }
 
     fn wait_idle(&self) -> Result<(), HostExecutionError> {
-        self.raw
-            .0
-            .device_wait_idle()
-            .map_err(From::from)
-            .map_err(From::<result::Error>::from)
+        unsafe {
+            self.raw
+                .0
+                .device_wait_idle()
+                .map_err(From::from)
+                .map_err(From::<result::Error>::from)
+        }
     }
 }
 
 #[test]
 fn test_send_sync() {
-    fn foo<T: Send+Sync>() {}
+    fn foo<T: Send + Sync>() {}
     foo::<Device>()
 }

@@ -1,15 +1,14 @@
 use ash::vk;
 
-use hal::{buffer, command, format, image, pass, pso, query};
-use hal::{IndexType, Primitive, PresentMode};
 use hal::range::RangeArg;
+use hal::{buffer, command, format, image, pass, pso, query};
+use hal::{IndexType, PresentMode, Primitive};
 
 use native as n;
 
-use std::mem;
 use std::borrow::Borrow;
+use std::mem;
 use std::ptr;
-
 
 pub fn map_format(format: format::Format) -> vk::Format {
     // Safe due to equivalence of HAL format values and Vulkan format values
@@ -17,9 +16,7 @@ pub fn map_format(format: format::Format) -> vk::Format {
 }
 
 pub fn map_vk_format(format: vk::Format) -> Option<format::Format> {
-    if (format as usize) < format::NUM_FORMATS &&
-        format != vk::Format::Undefined
-    {
+    if (format.as_raw() as usize) < format::NUM_FORMATS && format != vk::Format::UNDEFINED {
         // Safe due to equivalence of HAL format values and Vulkan format values
         Some(unsafe { mem::transmute(format) })
     } else {
@@ -34,12 +31,12 @@ pub fn map_tiling(tiling: image::Tiling) -> vk::ImageTiling {
 pub fn map_component(component: format::Component) -> vk::ComponentSwizzle {
     use hal::format::Component::*;
     match component {
-        Zero => vk::ComponentSwizzle::Zero,
-        One  => vk::ComponentSwizzle::One,
-        R    => vk::ComponentSwizzle::R,
-        G    => vk::ComponentSwizzle::G,
-        B    => vk::ComponentSwizzle::B,
-        A    => vk::ComponentSwizzle::A,
+        Zero => vk::ComponentSwizzle::ZERO,
+        One => vk::ComponentSwizzle::ONE,
+        R => vk::ComponentSwizzle::R,
+        G => vk::ComponentSwizzle::G,
+        B => vk::ComponentSwizzle::B,
+        A => vk::ComponentSwizzle::A,
     }
 }
 
@@ -54,24 +51,24 @@ pub fn map_swizzle(swizzle: format::Swizzle) -> vk::ComponentMapping {
 
 pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
     match index_type {
-        IndexType::U16 => vk::IndexType::Uint16,
-        IndexType::U32 => vk::IndexType::Uint32,
+        IndexType::U16 => vk::IndexType::UINT16,
+        IndexType::U32 => vk::IndexType::UINT32,
     }
 }
 
 pub fn map_image_layout(layout: image::Layout) -> vk::ImageLayout {
     use hal::image::Layout as Il;
     match layout {
-        Il::General => vk::ImageLayout::General,
-        Il::ColorAttachmentOptimal => vk::ImageLayout::ColorAttachmentOptimal,
-        Il::DepthStencilAttachmentOptimal => vk::ImageLayout::DepthStencilAttachmentOptimal,
-        Il::DepthStencilReadOnlyOptimal => vk::ImageLayout::DepthStencilReadOnlyOptimal,
-        Il::ShaderReadOnlyOptimal => vk::ImageLayout::ShaderReadOnlyOptimal,
-        Il::TransferSrcOptimal => vk::ImageLayout::TransferSrcOptimal,
-        Il::TransferDstOptimal => vk::ImageLayout::TransferDstOptimal,
-        Il::Undefined => vk::ImageLayout::Undefined,
-        Il::Preinitialized => vk::ImageLayout::Preinitialized,
-        Il::Present => vk::ImageLayout::PresentSrcKhr,
+        Il::General => vk::ImageLayout::GENERAL,
+        Il::ColorAttachmentOptimal => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
+        Il::DepthStencilAttachmentOptimal => vk::ImageLayout::DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+        Il::DepthStencilReadOnlyOptimal => vk::ImageLayout::DEPTH_STENCIL_READ_ONLY_OPTIMAL,
+        Il::ShaderReadOnlyOptimal => vk::ImageLayout::SHADER_READ_ONLY_OPTIMAL,
+        Il::TransferSrcOptimal => vk::ImageLayout::TRANSFER_SRC_OPTIMAL,
+        Il::TransferDstOptimal => vk::ImageLayout::TRANSFER_DST_OPTIMAL,
+        Il::Undefined => vk::ImageLayout::UNDEFINED,
+        Il::Preinitialized => vk::ImageLayout::PREINITIALIZED,
+        Il::Present => vk::ImageLayout::PRESENT_SRC_KHR,
     }
 }
 
@@ -83,8 +80,8 @@ pub fn map_image_aspects(aspects: format::Aspects) -> vk::ImageAspectFlags {
 pub fn map_clear_color(value: command::ClearColor) -> vk::ClearColorValue {
     match value {
         command::ClearColor::Float(v) => vk::ClearColorValue { float32: v },
-        command::ClearColor::Int(v)   => vk::ClearColorValue { int32: v },
-        command::ClearColor::Uint(v)  => vk::ClearColorValue { uint32: v },
+        command::ClearColor::Int(v) => vk::ClearColorValue { int32: v },
+        command::ClearColor::Uint(v) => vk::ClearColorValue { uint32: v },
     }
 }
 
@@ -104,9 +101,7 @@ pub fn map_extent(offset: image::Extent) -> vk::Extent3D {
     }
 }
 
-pub fn map_subresource(
-    sub: &image::Subresource,
-) -> vk::ImageSubresource {
+pub fn map_subresource(sub: &image::Subresource) -> vk::ImageSubresource {
     vk::ImageSubresource {
         aspect_mask: map_image_aspects(sub.aspects),
         mip_level: sub.level as _,
@@ -114,9 +109,7 @@ pub fn map_subresource(
     }
 }
 
-pub fn map_subresource_layers(
-    sub: &image::SubresourceLayers,
-) -> vk::ImageSubresourceLayers {
+pub fn map_subresource_layers(sub: &image::SubresourceLayers) -> vk::ImageSubresourceLayers {
     vk::ImageSubresourceLayers {
         aspect_mask: map_image_aspects(sub.aspects),
         mip_level: sub.level as _,
@@ -125,9 +118,7 @@ pub fn map_subresource_layers(
     }
 }
 
-pub fn map_subresource_range(
-    range: &image::SubresourceRange,
-) -> vk::ImageSubresourceRange {
+pub fn map_subresource_range(range: &image::SubresourceRange) -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange {
         aspect_mask: map_image_aspects(range.aspects),
         base_mip_level: range.levels.start as _,
@@ -140,17 +131,17 @@ pub fn map_subresource_range(
 pub fn map_attachment_load_op(op: pass::AttachmentLoadOp) -> vk::AttachmentLoadOp {
     use hal::pass::AttachmentLoadOp as Alo;
     match op {
-        Alo::Load => vk::AttachmentLoadOp::Load,
-        Alo::Clear => vk::AttachmentLoadOp::Clear,
-        Alo::DontCare => vk::AttachmentLoadOp::DontCare,
+        Alo::Load => vk::AttachmentLoadOp::LOAD,
+        Alo::Clear => vk::AttachmentLoadOp::CLEAR,
+        Alo::DontCare => vk::AttachmentLoadOp::DONT_CARE,
     }
 }
 
 pub fn map_attachment_store_op(op: pass::AttachmentStoreOp) -> vk::AttachmentStoreOp {
     use hal::pass::AttachmentStoreOp as Aso;
     match op {
-        Aso::Store => vk::AttachmentStoreOp::Store,
-        Aso::DontCare => vk::AttachmentStoreOp::DontCare,
+        Aso::Store => vk::AttachmentStoreOp::STORE,
+        Aso::DontCare => vk::AttachmentStoreOp::DONT_CARE,
     }
 }
 
@@ -194,7 +185,6 @@ pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {
     unsafe { mem::transmute(stages) }
 }
 
-
 pub fn map_filter(filter: image::Filter) -> vk::Filter {
     // enums have to match exactly
     unsafe { mem::transmute(filter as u32) }
@@ -208,86 +198,86 @@ pub fn map_mip_filter(filter: image::Filter) -> vk::SamplerMipmapMode {
 pub fn map_wrap(wrap: image::WrapMode) -> vk::SamplerAddressMode {
     use hal::image::WrapMode as Wm;
     match wrap {
-        Wm::Tile   => vk::SamplerAddressMode::Repeat,
-        Wm::Mirror => vk::SamplerAddressMode::MirroredRepeat,
-        Wm::Clamp  => vk::SamplerAddressMode::ClampToEdge,
-        Wm::Border => vk::SamplerAddressMode::ClampToBorder,
+        Wm::Tile => vk::SamplerAddressMode::REPEAT,
+        Wm::Mirror => vk::SamplerAddressMode::MIRRORED_REPEAT,
+        Wm::Clamp => vk::SamplerAddressMode::CLAMP_TO_EDGE,
+        Wm::Border => vk::SamplerAddressMode::CLAMP_TO_BORDER,
     }
 }
 
 pub fn map_border_color(col: image::PackedColor) -> Option<vk::BorderColor> {
     match col.0 {
-        0x00000000 => Some(vk::BorderColor::FloatTransparentBlack),
-        0xFF000000 => Some(vk::BorderColor::FloatOpaqueBlack),
-        0xFFFFFFFF => Some(vk::BorderColor::FloatOpaqueWhite),
-        _ => None
+        0x00000000 => Some(vk::BorderColor::FLOAT_TRANSPARENT_BLACK),
+        0xFF000000 => Some(vk::BorderColor::FLOAT_OPAQUE_BLACK),
+        0xFFFFFFFF => Some(vk::BorderColor::FLOAT_OPAQUE_WHITE),
+        _ => None,
     }
 }
 
 pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
     match prim {
-        Primitive::PointList              => vk::PrimitiveTopology::PointList,
-        Primitive::LineList               => vk::PrimitiveTopology::LineList,
-        Primitive::LineListAdjacency      => vk::PrimitiveTopology::LineListWithAdjacency,
-        Primitive::LineStrip              => vk::PrimitiveTopology::LineStrip,
-        Primitive::LineStripAdjacency     => vk::PrimitiveTopology::LineStripWithAdjacency,
-        Primitive::TriangleList           => vk::PrimitiveTopology::TriangleList,
-        Primitive::TriangleListAdjacency  => vk::PrimitiveTopology::TriangleListWithAdjacency,
-        Primitive::TriangleStrip          => vk::PrimitiveTopology::TriangleStrip,
-        Primitive::TriangleStripAdjacency => vk::PrimitiveTopology::TriangleStripWithAdjacency,
-        Primitive::PatchList(_)           => vk::PrimitiveTopology::PatchList,
+        Primitive::PointList => vk::PrimitiveTopology::POINT_LIST,
+        Primitive::LineList => vk::PrimitiveTopology::LINE_LIST,
+        Primitive::LineListAdjacency => vk::PrimitiveTopology::LINE_LIST_WITH_ADJACENCY,
+        Primitive::LineStrip => vk::PrimitiveTopology::LINE_STRIP,
+        Primitive::LineStripAdjacency => vk::PrimitiveTopology::LINE_STRIP_WITH_ADJACENCY,
+        Primitive::TriangleList => vk::PrimitiveTopology::TRIANGLE_LIST,
+        Primitive::TriangleListAdjacency => vk::PrimitiveTopology::TRIANGLE_LIST_WITH_ADJACENCY,
+        Primitive::TriangleStrip => vk::PrimitiveTopology::TRIANGLE_STRIP,
+        Primitive::TriangleStripAdjacency => vk::PrimitiveTopology::TRIANGLE_STRIP_WITH_ADJACENCY,
+        Primitive::PatchList(_) => vk::PrimitiveTopology::PATCH_LIST,
     }
 }
 
 pub fn map_polygon_mode(rm: pso::PolygonMode) -> (vk::PolygonMode, f32) {
     match rm {
-        pso::PolygonMode::Point   => (vk::PolygonMode::Point, 1.0),
-        pso::PolygonMode::Line(w) => (vk::PolygonMode::Line, w),
-        pso::PolygonMode::Fill    => (vk::PolygonMode::Fill, 1.0),
+        pso::PolygonMode::Point => (vk::PolygonMode::POINT, 1.0),
+        pso::PolygonMode::Line(w) => (vk::PolygonMode::LINE, w),
+        pso::PolygonMode::Fill => (vk::PolygonMode::FILL, 1.0),
     }
 }
 
 pub fn map_cull_face(cf: pso::Face) -> vk::CullModeFlags {
     match cf {
-        pso::Face::NONE => vk::CULL_MODE_NONE,
-        pso::Face::FRONT => vk::CULL_MODE_FRONT_BIT,
-        pso::Face::BACK => vk::CULL_MODE_BACK_BIT,
-        _ => vk::CULL_MODE_FRONT_AND_BACK,
+        pso::Face::NONE => vk::CullModeFlags::NONE,
+        pso::Face::FRONT => vk::CullModeFlags::FRONT,
+        pso::Face::BACK => vk::CullModeFlags::BACK,
+        _ => vk::CullModeFlags::FRONT_AND_BACK,
     }
 }
 
 pub fn map_front_face(ff: pso::FrontFace) -> vk::FrontFace {
     match ff {
-        pso::FrontFace::Clockwise        => vk::FrontFace::Clockwise,
-        pso::FrontFace::CounterClockwise => vk::FrontFace::CounterClockwise,
+        pso::FrontFace::Clockwise => vk::FrontFace::CLOCKWISE,
+        pso::FrontFace::CounterClockwise => vk::FrontFace::COUNTER_CLOCKWISE,
     }
 }
 
 pub fn map_comparison(fun: pso::Comparison) -> vk::CompareOp {
     use hal::pso::Comparison::*;
     match fun {
-        Never        => vk::CompareOp::Never,
-        Less         => vk::CompareOp::Less,
-        LessEqual    => vk::CompareOp::LessOrEqual,
-        Equal        => vk::CompareOp::Equal,
-        GreaterEqual => vk::CompareOp::GreaterOrEqual,
-        Greater      => vk::CompareOp::Greater,
-        NotEqual     => vk::CompareOp::NotEqual,
-        Always       => vk::CompareOp::Always,
+        Never => vk::CompareOp::NEVER,
+        Less => vk::CompareOp::LESS,
+        LessEqual => vk::CompareOp::LESS_OR_EQUAL,
+        Equal => vk::CompareOp::EQUAL,
+        GreaterEqual => vk::CompareOp::GREATER_OR_EQUAL,
+        Greater => vk::CompareOp::GREATER,
+        NotEqual => vk::CompareOp::NOT_EQUAL,
+        Always => vk::CompareOp::ALWAYS,
     }
 }
 
 pub fn map_stencil_op(op: pso::StencilOp) -> vk::StencilOp {
     use hal::pso::StencilOp::*;
     match op {
-        Keep           => vk::StencilOp::Keep,
-        Zero           => vk::StencilOp::Zero,
-        Replace        => vk::StencilOp::Replace,
-        IncrementClamp => vk::StencilOp::IncrementAndClamp,
-        IncrementWrap  => vk::StencilOp::IncrementAndWrap,
-        DecrementClamp => vk::StencilOp::DecrementAndClamp,
-        DecrementWrap  => vk::StencilOp::DecrementAndWrap,
-        Invert         => vk::StencilOp::Invert,
+        Keep => vk::StencilOp::KEEP,
+        Zero => vk::StencilOp::ZERO,
+        Replace => vk::StencilOp::REPLACE,
+        IncrementClamp => vk::StencilOp::INCREMENT_AND_CLAMP,
+        IncrementWrap => vk::StencilOp::INCREMENT_AND_WRAP,
+        DecrementClamp => vk::StencilOp::DECREMENT_AND_CLAMP,
+        DecrementWrap => vk::StencilOp::DECREMENT_AND_WRAP,
+        Invert => vk::StencilOp::INVERT,
     }
 }
 
@@ -315,50 +305,56 @@ pub fn map_stencil_side(side: &pso::StencilFace) -> vk::StencilOpState {
 pub fn map_blend_factor(factor: pso::Factor) -> vk::BlendFactor {
     use hal::pso::Factor::*;
     match factor {
-        Zero => vk::BlendFactor::Zero,
-        One => vk::BlendFactor::One,
-        SrcColor => vk::BlendFactor::SrcColor,
-        OneMinusSrcColor => vk::BlendFactor::OneMinusSrcColor,
-        DstColor => vk::BlendFactor::DstColor,
-        OneMinusDstColor => vk::BlendFactor::OneMinusDstColor,
-        SrcAlpha => vk::BlendFactor::SrcAlpha,
-        OneMinusSrcAlpha => vk::BlendFactor::OneMinusSrcAlpha,
-        DstAlpha => vk::BlendFactor::DstAlpha,
-        OneMinusDstAlpha => vk::BlendFactor::OneMinusDstAlpha,
-        ConstColor => vk::BlendFactor::ConstantColor,
-        OneMinusConstColor => vk::BlendFactor::OneMinusConstantColor,
-        ConstAlpha => vk::BlendFactor::ConstantAlpha,
-        OneMinusConstAlpha => vk::BlendFactor::OneMinusConstantAlpha,
-        SrcAlphaSaturate => vk::BlendFactor::SrcAlphaSaturate,
-        Src1Color => vk::BlendFactor::Src1Color,
-        OneMinusSrc1Color => vk::BlendFactor::OneMinusSrc1Color,
-        Src1Alpha => vk::BlendFactor::Src1Alpha,
-        OneMinusSrc1Alpha => vk::BlendFactor::OneMinusSrc1Alpha,
+        Zero => vk::BlendFactor::ZERO,
+        One => vk::BlendFactor::ONE,
+        SrcColor => vk::BlendFactor::SRC_COLOR,
+        OneMinusSrcColor => vk::BlendFactor::ONE_MINUS_SRC_COLOR,
+        DstColor => vk::BlendFactor::DST_COLOR,
+        OneMinusDstColor => vk::BlendFactor::ONE_MINUS_DST_COLOR,
+        SrcAlpha => vk::BlendFactor::SRC_ALPHA,
+        OneMinusSrcAlpha => vk::BlendFactor::ONE_MINUS_SRC_ALPHA,
+        DstAlpha => vk::BlendFactor::DST_ALPHA,
+        OneMinusDstAlpha => vk::BlendFactor::ONE_MINUS_DST_ALPHA,
+        ConstColor => vk::BlendFactor::CONSTANT_COLOR,
+        OneMinusConstColor => vk::BlendFactor::ONE_MINUS_CONSTANT_COLOR,
+        ConstAlpha => vk::BlendFactor::CONSTANT_ALPHA,
+        OneMinusConstAlpha => vk::BlendFactor::ONE_MINUS_CONSTANT_ALPHA,
+        SrcAlphaSaturate => vk::BlendFactor::SRC_ALPHA_SATURATE,
+        Src1Color => vk::BlendFactor::SRC1_COLOR,
+        OneMinusSrc1Color => vk::BlendFactor::ONE_MINUS_SRC1_COLOR,
+        Src1Alpha => vk::BlendFactor::SRC1_ALPHA,
+        OneMinusSrc1Alpha => vk::BlendFactor::ONE_MINUS_SRC1_ALPHA,
     }
 }
 
-pub fn map_blend_op(
-    operation: pso::BlendOp
-) -> (vk::BlendOp, vk::BlendFactor, vk::BlendFactor) {
+pub fn map_blend_op(operation: pso::BlendOp) -> (vk::BlendOp, vk::BlendFactor, vk::BlendFactor) {
     use hal::pso::BlendOp::*;
     match operation {
         Add { src, dst } => (
-            vk::BlendOp::Add,
+            vk::BlendOp::ADD,
             map_blend_factor(src),
             map_blend_factor(dst),
         ),
         Sub { src, dst } => (
-            vk::BlendOp::Subtract,
+            vk::BlendOp::SUBTRACT,
             map_blend_factor(src),
             map_blend_factor(dst),
         ),
         RevSub { src, dst } => (
-            vk::BlendOp::ReverseSubtract,
+            vk::BlendOp::REVERSE_SUBTRACT,
             map_blend_factor(src),
             map_blend_factor(dst),
         ),
-        Min => (vk::BlendOp::Min, vk::BlendFactor::Zero, vk::BlendFactor::Zero),
-        Max => (vk::BlendOp::Max, vk::BlendFactor::Zero, vk::BlendFactor::Zero),
+        Min => (
+            vk::BlendOp::MIN,
+            vk::BlendFactor::ZERO,
+            vk::BlendFactor::ZERO,
+        ),
+        Max => (
+            vk::BlendOp::MAX,
+            vk::BlendFactor::ZERO,
+            vk::BlendFactor::ZERO,
+        ),
     }
 }
 
@@ -371,11 +367,11 @@ pub fn map_pipeline_statistics(
 
 pub fn map_query_control_flags(flags: query::ControlFlags) -> vk::QueryControlFlags {
     // Safe due to equivalence of HAL values and Vulkan values
-    vk::QueryControlFlags::from_flags_truncate(flags.bits())
+    vk::QueryControlFlags::from_raw(flags.bits() & vk::QueryControlFlags::all().as_raw())
 }
 
 pub fn map_query_result_flags(flags: query::ResultFlags) -> vk::QueryResultFlags {
-    vk::QueryResultFlags::from_flags_truncate(flags.bits())
+    vk::QueryResultFlags::from_raw(flags.bits() & vk::QueryResultFlags::all().as_raw())
 }
 
 pub fn map_image_features(features: vk::FormatFeatureFlags) -> format::ImageFeature {
@@ -394,13 +390,13 @@ where
     I::Item: Borrow<(&'a n::Memory, R)>,
     R: RangeArg<u64>,
 {
-     ranges
+    ranges
         .into_iter()
         .map(|range| {
             let &(ref memory, ref range) = range.borrow();
             let (offset, size) = map_range_arg(range);
             vk::MappedMemoryRange {
-                s_type: vk::StructureType::MappedMemoryRange,
+                s_type: vk::StructureType::MAPPED_MEMORY_RANGE,
                 p_next: ptr::null(),
                 memory: memory.raw,
                 offset,
@@ -421,7 +417,7 @@ where
     let offset = *range.start().unwrap_or(&0);
     let size = match range.end() {
         Some(end) => end - offset,
-        None => vk::VK_WHOLE_SIZE,
+        None => vk::WHOLE_SIZE,
     };
 
     (offset, size)
@@ -434,28 +430,30 @@ pub fn map_command_buffer_flags(flags: command::CommandBufferFlags) -> vk::Comma
 
 pub fn map_command_buffer_level(level: command::RawLevel) -> vk::CommandBufferLevel {
     match level {
-        command::RawLevel::Primary => vk::CommandBufferLevel::Primary,
-        command::RawLevel::Secondary => vk::CommandBufferLevel::Secondary,
+        command::RawLevel::Primary => vk::CommandBufferLevel::PRIMARY,
+        command::RawLevel::Secondary => vk::CommandBufferLevel::SECONDARY,
     }
 }
 
 pub fn map_view_kind(
-    kind: image::ViewKind, ty: vk::ImageType, is_cube: bool
+    kind: image::ViewKind,
+    ty: vk::ImageType,
+    is_cube: bool,
 ) -> Option<vk::ImageViewType> {
-    use vk::ImageType::*;
-    use hal::image::ViewKind::*;
+    use image::ViewKind::*;
+    use vk::ImageType;
 
     Some(match (ty, kind) {
-        (Type1d, D1) => vk::ImageViewType::Type1d,
-        (Type1d, D1Array) => vk::ImageViewType::Type1dArray,
-        (Type2d, D2) => vk::ImageViewType::Type2d,
-        (Type2d, D2Array) => vk::ImageViewType::Type2dArray,
-        (Type3d, D3) => vk::ImageViewType::Type3d,
-        (Type2d, Cube) if is_cube => vk::ImageViewType::Cube,
-        (Type2d, CubeArray) if is_cube => vk::ImageViewType::CubeArray,
-        (Type3d, Cube) if is_cube => vk::ImageViewType::Cube,
-        (Type3d, CubeArray) if is_cube => vk::ImageViewType::CubeArray,
-        _ => return None
+        (ImageType::TYPE_1D, D1) => vk::ImageViewType::TYPE_1D,
+        (ImageType::TYPE_1D, D1Array) => vk::ImageViewType::TYPE_1D_ARRAY,
+        (ImageType::TYPE_2D, D2) => vk::ImageViewType::TYPE_2D,
+        (ImageType::TYPE_2D, D2Array) => vk::ImageViewType::TYPE_2D_ARRAY,
+        (ImageType::TYPE_3D, D3) => vk::ImageViewType::TYPE_3D,
+        (ImageType::TYPE_2D, Cube) if is_cube => vk::ImageViewType::CUBE,
+        (ImageType::TYPE_2D, CubeArray) if is_cube => vk::ImageViewType::CUBE_ARRAY,
+        (ImageType::TYPE_3D, Cube) if is_cube => vk::ImageViewType::CUBE,
+        (ImageType::TYPE_3D, CubeArray) if is_cube => vk::ImageViewType::CUBE_ARRAY,
+        _ => return None,
     })
 }
 
