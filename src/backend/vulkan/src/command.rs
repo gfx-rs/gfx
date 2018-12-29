@@ -147,13 +147,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         let render_area = conv::map_rect(&render_area);
 
-        let clear_values: SmallVec<[vk::ClearValue; 16]> = clear_values
-            .into_iter()
-            .map(|clear| unsafe {
-                // Vulkan and HAL share same memory layout
-                mem::transmute(*clear.borrow())
+        // Vulkan wants one clear value per attachment (even those that don't need clears),
+        // but can receive less clear values than total attachments.
+        let clear_value_count = 64 - render_pass.clear_attachments_mask.leading_zeros() as u32;
+        let mut clear_value_iter = clear_values.into_iter();
+        let raw_clear_values = (0 .. clear_value_count)
+            .map(|i| unsafe {
+                if render_pass.clear_attachments_mask & (1 << i) != 0 {
+                    // Vulkan and HAL share same memory layout
+                    let next = clear_value_iter.next().unwrap();
+                    mem::transmute(*next.borrow())
+                } else {
+                    mem::zeroed()
+                }
             })
-            .collect();
+            .collect::<SmallVec<[vk::ClearValue; 8]>>();
 
         let info = vk::RenderPassBeginInfo {
             s_type: vk::StructureType::RENDER_PASS_BEGIN_INFO,
@@ -161,8 +169,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             render_pass: render_pass.raw,
             framebuffer: frame_buffer.raw,
             render_area,
-            clear_value_count: clear_values.len() as u32,
-            p_clear_values: clear_values.as_ptr(),
+            clear_value_count,
+            p_clear_values: raw_clear_values.as_ptr(),
         };
 
         let contents = map_subpass_contents(first_subpass);

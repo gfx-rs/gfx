@@ -94,6 +94,14 @@ pub struct Attachment {
     pub layouts: Range<AttachmentLayout>,
 }
 
+impl Attachment {
+    /// Returns true if this attachment has some clear operations. This is useful
+    /// when starting a render pass, since there has to be a clear value provided.
+    pub fn has_clears(&self) -> bool {
+        self.ops.load == AttachmentLoadOp::Clear || self.stencil_ops.load == AttachmentLoadOp::Clear
+    }
+}
+
 /// Index of an attachment within a framebuffer/renderpass,
 pub type AttachmentId = usize;
 /// Reference to an attachment by index and expected image layout.

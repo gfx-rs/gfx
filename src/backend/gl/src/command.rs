@@ -129,7 +129,7 @@ struct AttachmentClear {
 }
 
 #[derive(Clone)]
-pub struct RenderPassCache {
+struct RenderPassCache {
     render_pass: n::RenderPass,
     framebuffer: n::FrameBuffer,
     attachment_clears: Vec<AttachmentClear>,
@@ -575,20 +575,25 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         // 2./3.
         self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, *framebuffer));
 
+        let mut clear_values_iter = clear_values.into_iter();
         let attachment_clears = render_pass.attachments
             .iter()
-            .zip(clear_values.into_iter())
             .enumerate()
-            .map(|(i, (attachment, clear_value))| {
+            .map(|(i, attachment)| {
+                let cv = if attachment.has_clears() {
+                    Some(clear_values_iter.next().unwrap())
+                } else {
+                    None
+                };
                 AttachmentClear {
                     subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
                     value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                        Some(*clear_value.borrow())
+                        Some(*cv.as_ref().unwrap().borrow())
                     } else {
                         None
                     },
                     stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                        Some(unsafe { clear_value.borrow().depth_stencil.stencil })
+                        Some(cv.unwrap().borrow().depth_stencil.stencil)
                     } else {
                         None
                     },
