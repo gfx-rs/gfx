@@ -43,7 +43,6 @@ use std::sync::Arc;
 use hal::queue::QueueFamilyId;
 
 use core_graphics::base::CGFloat;
-#[cfg(target_os = "macos")]
 use core_graphics::geometry::CGRect;
 use foreign_types::ForeignTypeRef;
 use objc::runtime::{BOOL, YES};
@@ -260,12 +259,24 @@ impl Instance {
             panic!("window does not have a valid contentView");
         }
 
-        let render_layer: CAMetalLayer = msg_send![view, layer];
+        let main_layer: CAMetalLayer = msg_send![view, layer];
         let class = class!(CAMetalLayer);
-        let is_valid_layer: BOOL = msg_send![render_layer, isKindOfClass: class];
-        if is_valid_layer != YES {
-            panic!("expected [UIView layer] to be a CAMetalLayer");
-        }
+        let is_valid_layer: BOOL = msg_send![main_layer, isKindOfClass: class];
+        let render_layer = if is_valid_layer == YES {
+            main_layer
+        } else {
+            // If the main layer is not a CAMetalLayer, we create a CAMetalLayer sublayer and use it instead.
+            // Unlike on macOS, we cannot replace the main view as UIView does not allow it (when NSView does).
+            let new_layer: CAMetalLayer = msg_send![class, new];
+            let bounds: CGRect = msg_send![view, bounds];
+            msg_send![new_layer, setBounds: bounds];
+
+            let frame: CGRect = msg_send![view, frame];
+            msg_send![new_layer, setFrame: frame];
+
+            msg_send![main_layer, addSublayer: new_layer];
+            new_layer
+        };
 
         let window: cocoa::base::id = msg_send![view, window];
         if window.is_null() {
