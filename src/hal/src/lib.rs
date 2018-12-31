@@ -197,9 +197,9 @@ bitflags! {
         ///
         const SPARSE_RESIDENCY_BUFFER = 0x000_2000_0000_0000;
         ///
-        const SHADER_RESIDENCY_IMAGE_2D = 0x000_4000_0000_0000;
+        const SPARSE_RESIDENCY_IMAGE_2D = 0x000_4000_0000_0000;
         ///
-        const SHADER_RESIDENSY_IMAGE_3D = 0x000_8000_0000_0000;
+        const SPARSE_RESIDENCY_IMAGE_3D = 0x000_8000_0000_0000;
         ///
         const SPARSE_RESIDENCY_2_SAMPLES = 0x001_0000_0000_0000;
         ///
