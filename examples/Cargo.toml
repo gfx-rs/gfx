@@ -30,16 +30,31 @@ path = "compute/main.rs"
 env_logger = "0.6"
 image = "0.21"
 log = "0.4"
-winit = "0.19"
-glsl-to-spirv = "0.1.4"
 gfx-hal = { path = "../src/hal", version = "0.2" }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.2" }
 
-[dependencies.gfx-backend-gl]
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+winit = "0.19"
+glsl-to-spirv = "0.1.4"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies.gfx-backend-gl]
 path = "../src/backend/gl"
 version = "0.2"
 features = ["glutin"]
 optional = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.gfx-backend-gl]
+path = "../src/backend/gl"
+version = "0.2"
+default-features = false
+optional = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2.29"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+version = "0.3.6"
+features = [ "console", "Document", "Element", "HtmlElement", "Node", "Window" ]
 
 [dependencies.gfx-backend-vulkan]
 path = "../src/backend/vulkan"

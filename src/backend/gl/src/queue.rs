@@ -983,7 +983,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         fence.map(|fence| self.signal_fence(fence));
     }
 
-    #[cfg(feature = "glutin")]
+    #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
     unsafe fn present<'a, W, Is, S, Iw>(
         &mut self,
         swapchains: Is,
@@ -1020,6 +1020,18 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
 
         Ok(None)
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
+    where
+        W: 'a + Borrow<window::web::Swapchain>,
+        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
+        S: 'a + Borrow<native::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
+    {
+        // Presenting and swapping window buffers is automatic
+        Ok(())
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {

@@ -24,5 +24,15 @@ log = { version = "0.4" }
 gfx_gl = "0.5"
 gfx-hal = { path = "../../hal", version = "0.2" }
 smallvec = "0.6"
-glutin = { version = "0.20", optional = true }
 spirv_cross = "0.12.1"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+glutin = { version = "0.20", optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3.6"
+wasm-bindgen = "0.2.29"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
+version = "0.3.6"
+features = [ "console", "Document", "Element", "HtmlCanvasElement", "WebGlBuffer", "WebGlRenderingContext", "WebGl2RenderingContext", "WebGlProgram", "WebGlSampler", "WebGlShader", "WebGlTexture", "Window" ]
