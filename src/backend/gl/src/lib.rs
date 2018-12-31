@@ -9,9 +9,10 @@ extern crate bitflags;
 extern crate log;
 extern crate gfx_gl as gl;
 extern crate gfx_hal as hal;
-#[cfg(feature = "glutin")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub extern crate glutin;
 extern crate smallvec;
+#[cfg(not(target_arch = "wasm32"))]
 extern crate spirv_cross;
 
 use std::cell::Cell;
@@ -36,8 +37,10 @@ mod queue;
 mod state;
 mod window;
 
-#[cfg(feature = "glutin")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
+#[cfg(target_arch = "wasm32")]
+ pub use crate::window::web::{Surface, Swapchain, Window};
 
 pub(crate) struct GlContainer {
     context: gl::Gl,
@@ -52,7 +55,7 @@ impl GlContainer {
 impl Deref for GlContainer {
     type Target = gl::Gl;
     fn deref(&self) -> &gl::Gl {
-        #[cfg(feature = "glutin")]
+        #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
         self.make_current();
         &self.context
     }
