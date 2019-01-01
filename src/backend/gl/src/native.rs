@@ -7,25 +7,24 @@ use crate::hal::{format, image as i, pass, pso};
 
 use crate::gl;
 use crate::Backend;
+use GlContext;
 
 pub type TextureType = gl::types::GLenum;
 
-pub type RawBuffer = gl::types::GLuint;
-pub type Shader = gl::types::GLuint;
-pub type Program = gl::types::GLuint;
-pub type FrameBuffer = gl::types::GLuint;
-pub type Surface = gl::types::GLuint;
-pub type Texture = gl::types::GLuint;
-pub type Sampler = gl::types::GLuint;
-
+pub type VertexArray = <GlContext as glow::Context>::VertexArray;
+pub type RawBuffer = <GlContext as glow::Context>::Buffer;
+pub type Shader = <GlContext as glow::Context>::Shader;
+pub type Program = <GlContext as glow::Context>::Program;
+pub type FrameBuffer = <GlContext as glow::Context>::Framebuffer;
+pub type Surface = <GlContext as glow::Context>::Renderbuffer;
+pub type Texture = <GlContext as glow::Context>::Texture;
+pub type Sampler = <GlContext as glow::Context>::Sampler;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
-
-pub const DEFAULT_FRAMEBUFFER: FrameBuffer = 0;
 
 #[derive(Debug)]
 pub struct Buffer {
     pub(crate) raw: RawBuffer,
-    pub(crate) target: gl::types::GLenum,
+    pub(crate) target: u32,
     pub(crate) requirements: Requirements,
 }
 
@@ -33,12 +32,12 @@ pub struct Buffer {
 pub struct BufferView;
 
 #[derive(Debug)]
-pub struct Fence(pub(crate) Cell<gl::types::GLsync>);
+pub struct Fence(pub(crate) Cell<Option<<GlContext as glow::Context>::Fence>>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 impl Fence {
-    pub(crate) fn new(sync: gl::types::GLsync) -> Self {
+    pub(crate) fn new(sync: Option<<GlContext as glow::Context>::Fence>) -> Self {
         Fence(Cell::new(sync))
     }
 }
@@ -132,7 +131,7 @@ impl DescRemapData {
 #[derive(Clone, Debug)]
 pub struct GraphicsPipeline {
     pub(crate) program: Program,
-    pub(crate) primitive: gl::types::GLenum,
+    pub(crate) primitive: u32,
     pub(crate) patch_size: Option<gl::types::GLint>,
     pub(crate) blend_targets: Vec<pso::ColorBlendDesc>,
     pub(crate) attributes: Vec<AttributeDesc>,
@@ -231,7 +230,7 @@ pub enum ShaderModule {
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) properties: Properties,
-    pub(crate) first_bound_buffer: Cell<RawBuffer>,
+    pub(crate) first_bound_buffer: Cell<Option<RawBuffer>>,
     /// Allocation size
     pub(crate) size: u64,
 }
@@ -300,7 +299,7 @@ pub struct AttributeDesc {
     pub(crate) offset: u32,
     pub(crate) binding: gl::types::GLuint,
     pub(crate) size: gl::types::GLint,
-    pub(crate) format: gl::types::GLenum,
+    pub(crate) format: u32,
     pub(crate) vertex_attrib_fn: VertexAttribFunction,
 }
 

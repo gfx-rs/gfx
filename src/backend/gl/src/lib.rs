@@ -14,6 +14,9 @@ pub extern crate glutin;
 extern crate smallvec;
 #[cfg(not(target_arch = "wasm32"))]
 extern crate spirv_cross;
+#[cfg(target_arch = "wasm32")]
+extern crate wasm_bindgen;
+extern crate glow;
 
 use std::cell::Cell;
 use std::fmt;
@@ -40,10 +43,16 @@ mod window;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
 #[cfg(target_arch = "wasm32")]
- pub use crate::window::web::{Surface, Swapchain, Window};
+pub use crate::window::web::{Surface, Swapchain, Window};
+
+use glow::Context;
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+pub use glow::native::Context as GlContext;
+#[cfg(target_arch = "wasm32")]
+pub use glow::web::Context as GlContext;
 
 pub(crate) struct GlContainer {
-    context: gl::Gl,
+    context: GlContext,
 }
 
 impl GlContainer {
@@ -53,8 +62,8 @@ impl GlContainer {
 }
 
 impl Deref for GlContainer {
-    type Target = gl::Gl;
-    fn deref(&self) -> &gl::Gl {
+    type Target = GlContext;
+    fn deref(&self) -> &GlContext {
         #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
         self.make_current();
         &self.context
@@ -79,7 +88,7 @@ impl hal::Backend for Backend {
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
-    type Framebuffer = native::FrameBuffer;
+    type Framebuffer = Option<native::FrameBuffer>;
 
     type Buffer = native::Buffer;
     type BufferView = native::BufferView;
@@ -143,7 +152,7 @@ impl Share {
     fn check(&self) -> Result<(), Error> {
         if cfg!(debug_assertions) {
             let gl = &self.context;
-            let err = Error::from_error_code(unsafe { gl.GetError() });
+            let err = Error::from_error_code(unsafe { gl.get_error() });
             if err != Error::NoError {
                 return Err(err);
             }
@@ -239,12 +248,36 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 pub struct PhysicalDevice(Starc<Share>);
 
 impl PhysicalDevice {
-    fn new_adapter<F>(fn_proc: F) -> hal::Adapter<Backend>
+    #[allow(unused)]
+    fn new_adapter<F>(fn_proc: F, webgl_context_id: Option<&str>) -> hal::Adapter<Backend>
     where
         F: FnMut(&str) -> *const std::os::raw::c_void,
     {
+        #[cfg(target_arch = "wasm32")]
+        let context = {
+            use wasm_bindgen::JsCast;
+            let canvas = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id(webgl_context_id.unwrap())
+                .unwrap()
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .unwrap();
+            let webgl2_context = canvas
+                .get_context("webgl2")
+                .unwrap()
+                .unwrap()
+                .dyn_into::<web_sys::WebGl2RenderingContext>()
+                .unwrap();
+            glow::web::Context::from_webgl2_context(webgl2_context)
+        };
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let context = glow::native::Context::from_loader_function(fn_proc);
+
         let gl = GlContainer {
-            context: gl::Gl::load_with(fn_proc),
+            context,
         };
 
         // query information
@@ -384,17 +417,17 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .contains(info::LegacyFeatures::SRGB_COLOR)
         {
             // TODO: Find way to emulate this on older Opengl versions.
-
-            gl.Enable(gl::FRAMEBUFFER_SRGB);
+            gl.enable(glow::FRAMEBUFFER_SRGB);
+        }
+        unsafe {
+            gl.pixel_store_i32(glow::PixelStoreI32Parameter::UnpackAlignment, 1);
         }
 
-        gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
-
         // create main VAO and bind it
-        let mut vao = 0;
+        let mut vao = None;
         if self.0.private_caps.vertex_array {
-            gl.GenVertexArrays(1, &mut vao);
-            gl.BindVertexArray(vao);
+            vao = Some(gl.create_vertex_array().unwrap());
+            gl.bind_vertex_array(vao);
         }
 
         if let Err(err) = self.0.check() {
