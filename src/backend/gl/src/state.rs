@@ -9,7 +9,7 @@ use smallvec::SmallVec;
 pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
     let attachments: SmallVec<[gl::types::GLenum; 16]> =
         (0..num).map(|x| gl::COLOR_ATTACHMENT0 + x as u32).collect();
-    unsafe { gl.draw_buffers(num as gl::types::GLint, attachments.as_ptr()) };
+    unsafe { gl.draw_buffers(&attachments) };
 }
 
 pub fn map_comparison(cmp: pso::Comparison) -> glow::Func {

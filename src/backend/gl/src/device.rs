@@ -49,50 +49,10 @@ fn get_program_iv(gl: &GlContainer, name: n::Program, query: GLenum) -> gl::type
     iv
 }
 
-fn get_shader_log(gl: &GlContainer, name: n::Shader) -> String {
-    let mut length = get_shader_iv(gl, name, gl::INFO_LOG_LENGTH);
-    if length > 0 {
-        let mut log = String::with_capacity(length as usize);
-        log.extend(repeat('\0').take(length as usize));
-        unsafe {
-            gl.GetShaderInfoLog(
-                name,
-                length,
-                &mut length,
-                (&log[..]).as_ptr() as *mut gl::types::GLchar,
-            );
-        }
-        log.truncate(length as usize);
-        log
-    } else {
-        String::new()
-    }
-}
-
-pub(crate) fn get_program_log(gl: &GlContainer, name: n::Program) -> String {
-    let mut length = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
-    if length > 0 {
-        let mut log = String::with_capacity(length as usize);
-        log.extend(repeat('\0').take(length as usize));
-        unsafe {
-            gl.GetProgramInfoLog(
-                name,
-                length,
-                &mut length,
-                (&log[..]).as_ptr() as *mut gl::types::GLchar,
-            );
-        }
-        log.truncate(length as usize);
-        log
-    } else {
-        String::new()
-    }
-}
-
-fn create_fbo_internal(share: &Starc<Share>) -> Option<gl::types::GLuint> {
+fn create_fbo_internal(share: &Starc<Share>) -> Option<<GlContext as glow::Context>::Framebuffer> {
     if share.private_caps.framebuffer {
         let gl = &share.context;
-        let name = gl.create_framebuffer();
+        let name = gl.create_framebuffer().unwrap();
         info!("\tCreated frame buffer {}", name);
         Some(name)
     } else {
@@ -128,18 +88,18 @@ impl Device {
         let can_compute = self.share.limits.max_compute_work_group_count[0] != 0;
         let can_tessellate = self.share.limits.max_patch_size != 0;
         let target = match stage {
-            pso::Stage::Vertex => gl::VERTEX_SHADER,
-            pso::Stage::Hull if can_tessellate => gl::TESS_CONTROL_SHADER,
-            pso::Stage::Domain if can_tessellate => gl::TESS_EVALUATION_SHADER,
-            pso::Stage::Geometry => gl::GEOMETRY_SHADER,
-            pso::Stage::Fragment => gl::FRAGMENT_SHADER,
-            pso::Stage::Compute if can_compute => gl::COMPUTE_SHADER,
+            pso::Stage::Vertex => glow::ShaderType::Vertex,
+            pso::Stage::Hull if can_tessellate  => glow::ShaderType::TessControl,
+            pso::Stage::Domain if can_tessellate => glow::ShaderType::TessEvaluation,
+            pso::Stage::Geometry => glow::ShaderType::Geometry,
+            pso::Stage::Fragment => glow::ShaderType::Fragment,
+            pso::Stage::Compute if can_compute => glow::ShaderType::Compute,
             _ => return Err(d::ShaderError::UnsupportedStage(stage)),
         };
 
         let name = unsafe { gl.create_shader(target) }.unwrap();
         unsafe {
-            gl.shader_source(name, str::from_utf8(data).expect("Invalid shader source"));
+            gl.shader_source(name, std::str::from_utf8(data).expect("Invalid shader source"));
             gl.compile_shader(name);
         }
         info!("\tCompiled shader {}", name);
@@ -148,7 +108,7 @@ impl Device {
         }
 
         let status = get_shader_iv(gl, name, gl::COMPILE_STATUS);
-        let log = get_shader_log(gl, name);
+        let log = gl.get_shader_info_log(name);
         if status != 0 {
             if !log.is_empty() {
                 warn!("\tLog: {}", log);
@@ -170,11 +130,11 @@ impl Device {
                 gl.framebuffer_renderbuffer(point, attachment, gl::RENDERBUFFER, surface);
             },
             n::ImageView::Texture(texture, level) => unsafe {
-                gl.bind_texture(glow::TextureBindingTarget::D2, texture);
+                gl.bind_texture(glow::TextureBindingTarget::D2, Some(texture));
                 gl.framebuffer_texture_2D(point, attachment, gl::TEXTURE_2D, texture, level as _);
             },
             n::ImageView::TextureLayer(texture, level, layer) => unsafe {
-                gl.bind_texture(glow::TextureBindingTarget::D2, texture);
+                gl.bind_texture(glow::TextureBindingTarget::D2, Some(texture));
                 gl.framebuffer_texture_3D(point, attachment, gl::TEXTURE_2D, texture, level as _, layer as _);
             },
         }
@@ -809,16 +769,16 @@ impl d::Device<B> for Device {
             {
                 let gl = &self.share.context;
                 unsafe {
-                    gl.use_program(name);
+                    gl.use_program(Some(name));
                     for (bname, binding) in name_binding_map.iter() {
-                        let loc = gl.GetUniformLocation(name, bname.as_ptr() as _);
+                        let loc = gl.get_uniform_location(name, bname.as_ptr() as _);
                         gl.uniform1i(loc, *binding as _);
                     }
                 }
             }
 
             let status = get_program_iv(gl, name, gl::LINK_STATUS);
-            let log = get_program_log(gl, name);
+            let log = gl.get_program_info_log(name);
             if status != 0 {
                 if !log.is_empty() {
                     warn!("\tLog: {}", log);
@@ -960,7 +920,7 @@ impl d::Device<B> for Device {
             {
                 let gl = &self.share.context;
                 unsafe {
-                    gl.use_program(name);
+                    gl.use_program(Some(name));
                     for (bname, binding) in name_binding_map.iter() {
                         let loc = gl.get_uniform_location(name, bname.as_ptr() as _);
                         gl.uniform1i(loc, *binding as _);
@@ -969,7 +929,7 @@ impl d::Device<B> for Device {
             }
 
             let status = get_program_iv(gl, name, gl::LINK_STATUS);
-            let log = get_program_log(gl, name);
+            let log = gl.get_program_info_log(name);
             if status != 0 {
                 if !log.is_empty() {
                     warn!("\tLog: {}", log);
@@ -1120,7 +1080,7 @@ impl d::Device<B> for Device {
         }
 
         let target = if self.share.private_caps.buffer_role_change {
-            gl::ARRAY_BUFFER
+            glow::BufferBindingTarget::Array
         } else {
             match conv::buffer_usage_to_gl_target(usage) {
                 Some(target) => target,
@@ -1129,7 +1089,7 @@ impl d::Device<B> for Device {
         };
 
         let gl = &self.share.context;
-        let raw = gl.create_buffer();
+        let raw = unsafe { gl.create_buffer() }.unwrap();
 
         Ok(n::Buffer {
             raw,
@@ -1588,14 +1548,14 @@ impl d::Device<B> for Device {
         for fence in fences {
             let fence = fence.borrow();
             let sync = fence.0.get();
-            if !sync.is_null() {
+            if let Some(s) = sync {
                 unsafe {
-                    if self.share.private_caps.sync && gl.is_sync(sync) == gl::TRUE {
-                        gl.delete_sync(sync);
+                    if self.share.private_caps.sync && gl.is_sync(s) == gl::TRUE {
+                        gl.delete_sync(s);
                     }
                 }
             }
-            fence.0.set(ptr::null())
+            fence.0.set(None);
         }
         Ok(())
     }
@@ -1694,7 +1654,7 @@ impl d::Device<B> for Device {
     unsafe fn destroy_image(&self, image: n::Image) {
         let gl = &self.share.context;
         match image.kind {
-            n::ImageKind::Surface(rb) => unsafe { gl.delete_renderbuffers(rb) },
+            n::ImageKind::Surface(rb) => unsafe { gl.delete_renderbuffer(rb) },
             n::ImageKind::Texture(t) => unsafe { gl.delete_texture(t) },
         }
     }
@@ -1724,7 +1684,9 @@ impl d::Device<B> for Device {
             let gl = &self.share.context;
             let sync = fence.0.get();
             if self.share.private_caps.sync && gl.is_sync(sync) == gl::TRUE {
-                gl.delete_sync(sync);
+                if let Some(s) = sync {
+                    gl.delete_sync(s);
+                }
             }
         }
     }

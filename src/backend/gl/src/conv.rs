@@ -45,12 +45,13 @@ pub fn wrap_to_gl(w: i::WrapMode) -> t::GLenum {
     }
 }
 
-pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<t::GLenum> {
+pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<glow::BufferBindingTarget> {
     use self::buffer::Usage;
+    use glow::BufferBindingTarget as B;
     match usage & (Usage::UNIFORM | Usage::INDEX | Usage::VERTEX | Usage::INDIRECT) {
-        Usage::UNIFORM => Some(gl::UNIFORM_BUFFER),
-        Usage::INDEX => Some(gl::ELEMENT_ARRAY_BUFFER),
-        Usage::VERTEX => Some(gl::ARRAY_BUFFER),
+        Usage::UNIFORM => Some(B::Uniform),
+        Usage::INDEX => Some(B::ElementArray),
+        Usage::VERTEX => Some(B::Array),
         Usage::INDIRECT => unimplemented!(),
         _ => None,
     }

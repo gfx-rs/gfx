@@ -440,10 +440,10 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     }
 
     let private = PrivateCaps {
-        vertex_array: info.is_supported(&[Core(3, 0), Es(3, 0), Ext("GL_ARB_vertex_array_object")])
-            && gl.GenVertexArrays.is_loaded(),
-        framebuffer: info.is_supported(&[Core(3, 0), Es(2, 0), Ext("GL_ARB_framebuffer_object")])
-            && gl.GenFramebuffers.is_loaded(),
+        vertex_array: info.is_supported(&[Core(3,0), Es(3,0), Ext("GL_ARB_vertex_array_object")]),
+            // TODO && gl.GenVertexArrays.is_loaded(),
+        framebuffer: info.is_supported(&[Core(3,0), Es(2,0), Ext ("GL_ARB_framebuffer_object")]),
+            // TODO && gl.GenFramebuffers.is_loaded(),
         framebuffer_texture: info.is_supported(&[Core(3, 0)]), //TODO: double check
         buffer_role_change: !info.version.is_embedded,
         image_storage: info.is_supported(&[Core(4, 2), Ext("GL_ARB_texture_storage")]),

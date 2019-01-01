@@ -10,13 +10,13 @@ use crate::Backend;
 use GlContext;
 
 
-pub type RawBuffer = Context::Buffer;
-pub type Shader = Context::Shader;
-pub type Program = Context::Program;
-pub type FrameBuffer = gl::types::GLuint;
+pub type RawBuffer = <GlContext as glow::Context>::Buffer;
+pub type Shader = <GlContext as glow::Context>::Shader;
+pub type Program = <GlContext as glow::Context>::Program;
+pub type FrameBuffer = <GlContext as glow::Context>::Framebuffer;
 pub type Surface = gl::types::GLuint;
-pub type Texture = Context::Texture;
-pub type Sampler = Context::Sampler;
+pub type Texture = <GlContext as glow::Context>::Texture;
+pub type Sampler = <GlContext as glow::Context>::Sampler;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
 
 pub const DEFAULT_FRAMEBUFFER: FrameBuffer = 0;
@@ -32,12 +32,12 @@ pub struct Buffer {
 pub struct BufferView;
 
 #[derive(Debug)]
-pub struct Fence(pub(crate) Cell<Option<Context::Fence>>);
+pub struct Fence(pub(crate) Cell<Option<<GlContext as glow::Context>::Fence>>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 impl Fence {
-    pub(crate) fn new(sync: Option<Context::Fence>) -> Self {
+    pub(crate) fn new(sync: Option<<GlContext as glow::Context>::Fence>) -> Self {
         Fence(Cell::new(sync))
     }
 }

@@ -159,8 +159,8 @@ impl CommandQueue {
 
     fn bind_target(
         &mut self,
-        point: gl::types::GLenum,
-        attachment: gl::types::GLenum,
+        point: glow::FramebufferBindingTarget,
+        attachment: u32,
         view: &native::ImageView,
     ) {
         let gl = &self.share.context;
@@ -237,7 +237,7 @@ impl CommandQueue {
         if self.state.num_viewports == 1 {
             unsafe {
                 gl.viewport(0, 0, 0, 0);
-                gl.depth_range(0.0, 1.0);
+                gl.depth_range_f32(0.0, 1.0);
             };
         } else if self.state.num_viewports > 1 {
             // 16 viewports is a common limit set in drivers.
@@ -263,7 +263,7 @@ impl CommandQueue {
             // 16 viewports is a common limit set in drivers.
             let scissors: SmallVec<[[i32; 4]; 16]> =
                 (0..self.state.num_scissors).map(|_| [0, 0, 0, 0]).collect();
-            unsafe { gl.scissor_arrayv(0, scissors.len() as i32, scissors.as_ptr() as *const _)};
+            unsafe { gl.scissor_slice(0, scissors.len() as i32, scissors.as_slice()) };
         }
     }
 
@@ -329,12 +329,16 @@ impl CommandQueue {
             } => {
                 let gl = &self.share.context;
                 let legacy = &self.share.legacy_features;
-                let offset = index_buffer_offset as *const gl::types::GLvoid;
 
                 if instances == &(0u32..1) {
                     if base_vertex == 0 {
                         unsafe {
-                            gl.draw_elements(primitive, index_count as _, index_type, offset);
+                            gl.draw_elements(
+                                primitive,
+                                index_count as _,
+                                index_type,
+                                index_buffer_offset as i32,
+                            );
                         }
                     } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_BASE) {
                         unsafe {
@@ -342,7 +346,7 @@ impl CommandQueue {
                                 primitive,
                                 index_count as _,
                                 index_type,
-                                offset,
+                                index_buffer_offset as i32,
                                 base_vertex as _,
                             );
                         }
@@ -356,7 +360,7 @@ impl CommandQueue {
                                 primitive,
                                 index_count as _,
                                 index_type,
-                                offset,
+                                index_buffer_offset as i32,
                                 instances.end as _,
                             );
                         }
@@ -368,7 +372,7 @@ impl CommandQueue {
                                 primitive,
                                 index_count as _,
                                 index_type,
-                                offset,
+                                index_buffer_offset as i32,
                                 instances.end as _,
                                 base_vertex as _,
                             );
@@ -381,7 +385,7 @@ impl CommandQueue {
                                 primitive,
                                 index_count as _,
                                 index_type,
-                                offset,
+                                index_buffer_offset as i32,
                                 (instances.end - instances.start) as _,
                                 base_vertex as _,
                                 instances.start as _,
@@ -433,10 +437,10 @@ impl CommandQueue {
                             view[0] as i32,
                             view[1] as i32,
                             view[2] as i32,
-                            view[3] as i32,
+                            view[3] as i32
                         );
-                        gl.depth_range(depth_range[0], depth_range[1]);
-                    }
+                        gl.depth_range_f64(depth_range[0], depth_range[1]);
+                    };
                 } else if num_viewports > 1 {
                     // Support for these functions is coupled with the support
                     // of multiple viewports.
@@ -518,17 +522,15 @@ impl CommandQueue {
             com::Command::ClearTexture(_color) => unimplemented!(),
             com::Command::DrawBuffers(draw_buffers) => unsafe {
                 let draw_buffers = Self::get::<gl::types::GLenum>(data_buf, draw_buffers);
-                self.share
-                    .context
-                    .draw_buffers(draw_buffers.len() as _, draw_buffers.as_ptr());
+                self.share.context.draw_buffers(draw_buffers);
             }
             com::Command::BindFrameBuffer(point, frame_buffer) => {
                 if self.share.private_caps.framebuffer {
                     let gl = &self.share.context;
                     unsafe { gl.bind_framebuffer(point, frame_buffer) };
                     self.state.fbo = frame_buffer;
-                } else if frame_buffer != 0 {
-                    error!("Tried to bind FBO {} without FBO support!", frame_buffer);
+                } else if frame_buffer.is_some() {
+                    error!("Tried to bind FBO without FBO support!");
                 }
             }
             com::Command::BindTargetView(point, attachment, view) => {
@@ -538,7 +540,7 @@ impl CommandQueue {
                 state::bind_draw_color_buffers(&self.share.context, num);
             }
             com::Command::SetPatchSize(num) => unsafe {
-                self.share.context.patch_parameteri(gl::PATCH_VERTICES, num);
+                self.share.context.patch_parameter_i32(PatchParameter::Vertices, num);
             }
             com::Command::BindProgram(program) => unsafe {
                 self.share.context.use_program(Some(program));
@@ -604,7 +606,7 @@ impl CommandQueue {
                 let gl = &self.share.context;
                 gl.active_texture(gl::TEXTURE0);
                 gl.bind_buffer(glow::BufferBindingTarget::PixelUnpack, Some(buffer));
-                gl.bind_texture(glow::TextureBindingTarget::D2, texture);
+                gl.bind_texture(glow::TextureBindingTarget::D2, Some(texture));
                 gl.tex_sub_image_2D(
                     gl::TEXTURE_2D,
                     r.image_layers.level as _,
@@ -628,7 +630,7 @@ impl CommandQueue {
                 let gl = &self.share.context;
                 gl.active_texture(gl::TEXTURE0);
                 gl.bind_buffer(glow::BufferBindingTarget::PixelPack, Some(buffer));
-                gl.bind_texture(glow::TextureBindingTarget::D2, texture);
+                gl.bind_texture(glow::TextureBindingTarget::D2, Some(texture));
                 gl.get_tex_image(
                     gl::TEXTURE_2D,
                     r.image_layers.level as _,
@@ -653,28 +655,28 @@ impl CommandQueue {
             }
             com::Command::BindBufferRange(target, index, buffer, offset, size) => unsafe {
                 let gl = &self.share.context;
-                gl.bind_buffer_range(target, index, buffer, offset, size);
+                gl.bind_buffer_range(target, index, Some(buffer), offset, size);
             }
             com::Command::BindTexture(index, texture) => unsafe {
                 let gl = &self.share.context;
                 gl.active_texture(gl::TEXTURE0 + index);
-                gl.bind_texture(glow::TextureBindingTarget::D2, texture);
+                gl.bind_texture(glow::TextureBindingTarget::D2, Some(texture));
             }
             com::Command::BindSampler(index, sampler) => unsafe {
                 let gl = &self.share.context;
-                gl.bind_sampler(index, sampler);
+                gl.bind_sampler(index, Some(sampler));
             }
             com::Command::SetTextureSamplerSettings(index, texture, ref sinfo) => unsafe {
                 let gl = &self.share.context;
                 gl.active_texture(gl::TEXTURE0 + index);
-                gl.bind_texture(glow::TextureBindingTarget::D2, texture);
+                gl.bind_texture(glow::TextureBindingTarget::D2, Some(texture));
 
                 // TODO: Optimization: only change texture properties that have changed.
                 device::set_sampler_info(
                     &self.share,
                     &sinfo,
-                    |a, b| gl.tex_parameter_f(glow::TextureBindingTarget::D2, a, b),
-                    |a, b| gl.tex_parameter_fv(glow::TextureBindingTarget::D2, a, &b[0]),
+                    |a, b| gl.tex_parameter_f32(glow::TextureBindingTarget::D2, a, b),
+                    |a, b| gl.tex_parameter_f32_slice(glow::TextureBindingTarget::D2, a, &b),
                     |a, b| gl.tex_parameter_i32(glow::TextureBindingTarget::D2, a, b),
                 );
             }, /*

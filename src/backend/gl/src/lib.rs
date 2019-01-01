@@ -43,6 +43,7 @@ pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
 #[cfg(target_arch = "wasm32")]
 pub use crate::window::web::{Surface, Swapchain, Window};
 
+use glow::Context;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub use glow::native::Context as GlContext;
 #[cfg(target_arch = "wasm32")]
@@ -60,7 +61,7 @@ impl GlContainer {
 
 impl Deref for GlContainer {
     type Target = GlContext;
-    fn deref(&self) -> &Context {
+    fn deref(&self) -> &GlContext {
         #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
         self.make_current();
         &self.context
@@ -381,17 +382,21 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .contains(info::LegacyFeatures::SRGB_COLOR)
         {
             // TODO: Find way to emulate this on older Opengl versions.
-
-            gl.Enable(gl::FRAMEBUFFER_SRGB);
+            unsafe {
+                gl.enable(glow::Parameter::FramebufferSrgb);
+            }
+        }
+        unsafe {
+            gl.pixel_store_i32(glow::PixelStoreI32Parameter::UnpackAlignment, 1);
         }
 
-        gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
-
         // create main VAO and bind it
-        let mut vao = 0;
+        let mut vao = None;
         if self.0.private_caps.vertex_array {
-            gl.GenVertexArrays(1, &mut vao);
-            gl.BindVertexArray(vao);
+            unsafe {
+                vao = gl.create_vertex_array();
+                gl.bind_vertex_array(Some(vao));
+            }
         }
 
         if let Err(err) = self.0.check() {
