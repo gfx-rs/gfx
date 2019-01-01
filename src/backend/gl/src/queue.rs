@@ -5,6 +5,7 @@ use crate::Starc;
 use crate::hal;
 use crate::hal::error;
 
+use glow::Context;
 use crate::gl;
 use smallvec::SmallVec;
 
@@ -78,7 +79,7 @@ impl CommandQueue {
     ///
     /// > Note: Calling this function can have a noticeable impact on the performance
     ///         because the internal state cache will flushed.
-    pub unsafe fn with_gl<F: FnMut(&gl::Gl)>(&mut self, mut fun: F) {
+    pub unsafe fn with_gl<F: FnMut(&GlContext)>(&mut self, mut fun: F) {
         self.reset_state();
         fun(&self.share.context);
         // Flush the state to enforce a reset once a new command buffer
@@ -160,13 +161,13 @@ impl CommandQueue {
         let gl = &self.share.context;
         match view {
             &native::ImageView::Surface(surface) => unsafe {
-                gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
+                gl.framebuffer_renderbuffer(point, attachment, gl::RENDERBUFFER, surface);
             },
             &native::ImageView::Texture(texture, level) => unsafe {
-                gl.FramebufferTexture(point, attachment, texture, level as gl::types::GLint);
+                gl.framebuffer_texture(point, attachment, texture, level as gl::types::GLint);
             },
             &native::ImageView::TextureLayer(texture, level, layer) => unsafe {
-                gl.FramebufferTextureLayer(
+                gl.framebuffer_texture_layer(
                     point,
                     attachment,
                     texture,
@@ -179,7 +180,7 @@ impl CommandQueue {
 
     fn _unbind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum) {
         let gl = &self.share.context;
-        unsafe { gl.FramebufferTexture(point, attachment, 0, 0) };
+        unsafe { gl.framebuffer_texture(point, attachment, 0, 0) };
     }
 
     /// Return a reference to a stored data object.
@@ -204,7 +205,7 @@ impl CommandQueue {
         // Bind default VAO
         if !self.state.vao {
             if self.share.private_caps.vertex_array {
-                unsafe { gl.BindVertexArray(self.vao) };
+                unsafe { gl.bind_vertex_array(Some(self.vao)) };
             }
             self.state.vao = true
         }
@@ -215,22 +216,24 @@ impl CommandQueue {
             .legacy_features
             .contains(LegacyFeatures::INDIRECT_EXECUTION)
         {
-            unsafe { gl.BindBuffer(gl::DRAW_INDIRECT_BUFFER, 0) };
+            unsafe { gl.bind_buffer(glow::BufferBindingTarget::DrawIndirect, None) };
         }
 
         // Unbind index buffers
         match self.state.index_buffer {
             Some(0) => (), // Nothing to do
             Some(_) | None => {
-                unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, 0) };
+                unsafe { gl.bind_buffer(glow::BufferBindingTarget::ElementArray, None) };
                 self.state.index_buffer = Some(0);
             }
         }
 
         // Reset viewports
         if self.state.num_viewports == 1 {
-            unsafe { gl.Viewport(0, 0, 0, 0) };
-            unsafe { gl.DepthRange(0.0, 1.0) };
+            unsafe {
+                gl.viewport(0, 0, 0, 0);
+                gl.depth_range(0.0, 1.0);
+            };
         } else if self.state.num_viewports > 1 {
             // 16 viewports is a common limit set in drivers.
             let viewports: SmallVec<[[f32; 4]; 16]> = (0..self.state.num_viewports)
@@ -238,24 +241,24 @@ impl CommandQueue {
                 .collect();
             let depth_ranges: SmallVec<[[f64; 2]; 16]> =
                 (0..self.state.num_viewports).map(|_| [0.0, 0.0]).collect();
-            unsafe { gl.ViewportArrayv(0, viewports.len() as i32, viewports.as_ptr() as *const _) };
             unsafe {
-                gl.DepthRangeArrayv(
+                gl.viewport_arrayv(0, viewports.len() as i32, viewports.as_ptr() as *const _);
+                gl.depth_range_arrayv(
                     0,
                     depth_ranges.len() as i32,
                     depth_ranges.as_ptr() as *const _,
-                )
-            };
+                );
+            }
         }
 
         // Reset scissors
         if self.state.num_scissors == 1 {
-            unsafe { gl.Scissor(0, 0, 0, 0) };
+            unsafe { gl.scissor(0, 0, 0, 0) };
         } else if self.state.num_scissors > 1 {
             // 16 viewports is a common limit set in drivers.
             let scissors: SmallVec<[[i32; 4]; 16]> =
                 (0..self.state.num_scissors).map(|_| [0, 0, 0, 0]).collect();
-            unsafe { gl.ScissorArrayv(0, scissors.len() as i32, scissors.as_ptr() as *const _) };
+            unsafe { gl.scissor_arrayv(0, scissors.len() as i32, scissors.as_ptr() as *const _)};
         }
     }
 
@@ -264,7 +267,7 @@ impl CommandQueue {
             com::Command::BindIndexBuffer(buffer) => {
                 let gl = &self.share.context;
                 self.state.index_buffer = Some(buffer);
-                unsafe { gl.BindBuffer(gl::ELEMENT_ARRAY_BUFFER, buffer) };
+                unsafe { gl.bind_buffer(glow::BufferBindingTarget::ElementArray, Some(buffer)) };
             }
             //          com::Command::BindVertexBuffers(_data_ptr) =>
             com::Command::Draw {
@@ -276,7 +279,7 @@ impl CommandQueue {
                 let legacy = &self.share.legacy_features;
                 if instances == &(0u32..1) {
                     unsafe {
-                        gl.DrawArrays(
+                        gl.draw_arrays(
                             primitive,
                             vertices.start as _,
                             (vertices.end - vertices.start) as _,
@@ -285,7 +288,7 @@ impl CommandQueue {
                 } else if legacy.contains(LegacyFeatures::DRAW_INSTANCED) {
                     if instances.start == 0 {
                         unsafe {
-                            gl.DrawArraysInstanced(
+                            gl.draw_arrays_instanced(
                                 primitive,
                                 vertices.start as _,
                                 (vertices.end - vertices.start) as _,
@@ -294,7 +297,7 @@ impl CommandQueue {
                         }
                     } else if legacy.contains(LegacyFeatures::DRAW_INSTANCED_BASE) {
                         unsafe {
-                            gl.DrawArraysInstancedBaseInstance(
+                            gl.draw_arrays_instanced_base_instance(
                                 primitive,
                                 vertices.start as _,
                                 (vertices.end - vertices.start) as _,
@@ -326,11 +329,11 @@ impl CommandQueue {
                 if instances == &(0u32..1) {
                     if base_vertex == 0 {
                         unsafe {
-                            gl.DrawElements(primitive, index_count as _, index_type, offset);
+                            gl.draw_elements(primitive, index_count as _, index_type, offset);
                         }
                     } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_BASE) {
                         unsafe {
-                            gl.DrawElementsBaseVertex(
+                            gl.draw_elements_base_vertex(
                                 primitive,
                                 index_count as _,
                                 index_type,
@@ -344,7 +347,7 @@ impl CommandQueue {
                 } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_INSTANCED) {
                     if base_vertex == 0 && instances.start == 0 {
                         unsafe {
-                            gl.DrawElementsInstanced(
+                            gl.draw_elements_instanced(
                                 primitive,
                                 index_count as _,
                                 index_type,
@@ -356,7 +359,7 @@ impl CommandQueue {
                         && legacy.contains(LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE_VERTEX)
                     {
                         unsafe {
-                            gl.DrawElementsInstancedBaseVertex(
+                            gl.draw_elements_instanced_base_vertex(
                                 primitive,
                                 index_count as _,
                                 index_type,
@@ -369,7 +372,7 @@ impl CommandQueue {
                         error!("Base vertex with instanced indexed drawing is not supported");
                     } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE) {
                         unsafe {
-                            gl.DrawElementsInstancedBaseVertexBaseInstance(
+                            gl.draw_elements_instanced_base_vertex_base_instance(
                                 primitive,
                                 index_count as _,
                                 index_type,
@@ -391,7 +394,7 @@ impl CommandQueue {
                 // If there is no compute support, this pattern should never be reached
                 // because no queue with compute capability can be created.
                 let gl = &self.share.context;
-                unsafe { gl.DispatchCompute(count[0], count[1], count[2]) };
+                unsafe { gl.dispatch_compute(count[0], count[1], count[2]) };
             }
             com::Command::DispatchIndirect(buffer, offset) => {
                 // Capability support is given by which queue types will be exposed.
@@ -399,9 +402,9 @@ impl CommandQueue {
                 // because no queue with compute capability can be created.
                 let gl = &self.share.context;
                 unsafe {
-                    gl.BindBuffer(gl::DRAW_INDIRECT_BUFFER, buffer);
+                    gl.bind_buffer(glow::BufferBindingTarget::DrawIndirect, Some(buffer));
                     // TODO: possible integer conversion issue
-                    gl.DispatchComputeIndirect(offset as _);
+                    gl.dispatch_compute_indirect(offset as _);
                 }
             }
             com::Command::SetViewports {
@@ -419,33 +422,31 @@ impl CommandQueue {
 
                 if num_viewports == 1 {
                     let view = viewports[0];
-                    let depth_range = depth_ranges[0];
+                    let depth_range  = depth_ranges[0];
                     unsafe {
-                        gl.Viewport(
+                        gl.viewport(
                             view[0] as i32,
                             view[1] as i32,
                             view[2] as i32,
                             view[3] as i32,
-                        )
-                    };
-                    unsafe { gl.DepthRange(depth_range[0], depth_range[1]) };
+                        );
+                        gl.depth_range(depth_range[0], depth_range[1]);
+                    }
                 } else if num_viewports > 1 {
                     // Support for these functions is coupled with the support
                     // of multiple viewports.
                     unsafe {
-                        gl.ViewportArrayv(
+                        gl.viewport_arrayv(
                             first_viewport,
                             num_viewports as i32,
                             viewports.as_ptr() as *const _,
-                        )
-                    };
-                    unsafe {
-                        gl.DepthRangeArrayv(
+                        );
+                        gl.depth_range_arrayv(
                             first_viewport,
                             num_viewports as i32,
                             depth_ranges.as_ptr() as *const _,
-                        )
-                    };
+                        );
+                    }
                 }
             }
             com::Command::SetScissors(first_scissor, data_ptr) => {
@@ -456,17 +457,17 @@ impl CommandQueue {
 
                 if num_scissors == 1 {
                     let scissor = scissors[0];
-                    unsafe { gl.Scissor(scissor[0], scissor[1], scissor[2], scissor[3]) };
+                    unsafe { gl.scissor(scissor[0], scissor[1], scissor[2], scissor[3]) };
                 } else {
                     // Support for this function is coupled with the support
                     // of multiple viewports.
                     unsafe {
-                        gl.ScissorArrayv(
+                        gl.scissor_arrayv(
                             first_scissor,
                             num_scissors as i32,
                             scissors.as_ptr() as *const _,
-                        )
-                    };
+                        );
+                    }
                 }
             }
             com::Command::SetBlendColor(color) => {
@@ -475,18 +476,18 @@ impl CommandQueue {
             com::Command::ClearBufferColorF(draw_buffer, cv) => unsafe {
                 self.share
                     .context
-                    .ClearBufferfv(gl::COLOR, draw_buffer, cv.as_ptr());
-            },
+                    .clear_bufferfv(gl::COLOR, draw_buffer, cv.as_ptr());
+            }
             com::Command::ClearBufferColorU(draw_buffer, cv) => unsafe {
                 self.share
                     .context
-                    .ClearBufferuiv(gl::COLOR, draw_buffer, cv.as_ptr());
-            },
+                    .clear_bufferuiv(gl::COLOR, draw_buffer, cv.as_ptr());
+            }
             com::Command::ClearBufferColorI(draw_buffer, cv) => unsafe {
                 self.share
                     .context
-                    .ClearBufferiv(gl::COLOR, draw_buffer, cv.as_ptr());
-            },
+                    .clear_bufferiv(gl::COLOR, draw_buffer, cv.as_ptr());
+            }
             com::Command::ClearBufferDepthStencil(depth, stencil) => unsafe {
                 let (target, depth, stencil) = match (depth, stencil) {
                     (Some(depth), Some(stencil)) => (gl::DEPTH_STENCIL, depth, stencil),
@@ -494,22 +495,21 @@ impl CommandQueue {
                     (None, Some(stencil)) => (gl::STENCIL, 0.0, stencil),
                     _ => unreachable!(),
                 };
-
                 self.share
                     .context
-                    .ClearBufferfi(target, 0, depth, stencil as _);
-            },
+                    .clear_bufferfi(target, 0, depth, stencil as _);
+            }
             com::Command::ClearTexture(_color) => unimplemented!(),
             com::Command::DrawBuffers(draw_buffers) => unsafe {
                 let draw_buffers = Self::get::<gl::types::GLenum>(data_buf, draw_buffers);
                 self.share
                     .context
-                    .DrawBuffers(draw_buffers.len() as _, draw_buffers.as_ptr());
-            },
+                    .draw_buffers(draw_buffers.len() as _, draw_buffers.as_ptr());
+            }
             com::Command::BindFrameBuffer(point, frame_buffer) => {
                 if self.share.private_caps.framebuffer {
                     let gl = &self.share.context;
-                    unsafe { gl.BindFramebuffer(point, frame_buffer) };
+                    unsafe { gl.bind_framebuffer(point, frame_buffer) };
                 } else if frame_buffer != 0 {
                     error!("Tried to bind FBO {} without FBO support!", frame_buffer);
                 }
@@ -521,11 +521,11 @@ impl CommandQueue {
                 state::bind_draw_color_buffers(&self.share.context, num);
             }
             com::Command::SetPatchSize(num) => unsafe {
-                self.share.context.PatchParameteri(gl::PATCH_VERTICES, num);
-            },
+                self.share.context.patch_parameteri(gl::PATCH_VERTICES, num);
+            }
             com::Command::BindProgram(program) => unsafe {
-                self.share.context.UseProgram(program);
-            },
+                self.share.context.use_program(Some(program));
+            }
             com::Command::BindBlendSlot(slot, ref blend) => {
                 state::bind_blend_slot(&self.share.context, slot, blend);
             }
@@ -540,60 +540,55 @@ impl CommandQueue {
                     vertex_attrib_fn,
                     ..
                 } = attribute;
-                let offset = offset as *const gl::types::GLvoid;
                 let gl = &self.share.context;
 
-                gl.BindBuffer(gl::ARRAY_BUFFER, handle);
+                gl.bind_buffer(glow::BufferBindingTarget::Array, Some(handle));
 
                 match vertex_attrib_fn {
                     Float => {
-                        gl.VertexAttribPointer(location, size, format, gl::FALSE, stride, offset)
+                        gl.vertex_attrib_pointer_f32(location, size, format, false, stride, offset as i32)
                     }
-                    Integer => gl.VertexAttribIPointer(location, size, format, stride, offset),
-                    Double => gl.VertexAttribLPointer(location, size, format, stride, offset),
+                    Integer => gl.vertex_attrib_pointer_i32(location, size, format, stride, offset as i32),
+                    Double => gl.vertex_attrib_pointer_f64(location, size, format, stride, offset as i32),
                 }
 
                 if rate != 0 {
-                    if self
-                        .share
-                        .legacy_features
-                        .contains(LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING)
-                    {
-                        gl.VertexAttribDivisor(location, rate);
+                    if self.share.legacy_features.contains(LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING) {
+                        gl.vertex_attrib_divisor(location, rate);
                     } else {
                         error!("Binding attribute with instanced input rate is not supported");
                     }
                 }
 
-                gl.EnableVertexAttribArray(location);
-                gl.BindBuffer(gl::ARRAY_BUFFER, 0);
-            },
+                gl.enable_vertex_attrib_array(location);
+                gl.bind_buffer(glow::BufferBindingTarget::Array, None);
+            }
             /*
             com::Command::UnbindAttribute(ref attribute) => unsafe {
                 self.share.context.DisableVertexAttribArray(attribute.location);
             }*/
             com::Command::CopyBufferToBuffer(src, dst, ref r) => unsafe {
                 let gl = &self.share.context;
-                gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, src);
-                gl.BindBuffer(gl::PIXEL_PACK_BUFFER, dst);
-                gl.CopyBufferSubData(
+                gl.bind_buffer(glow::BufferBindingTarget::PixelUnpack, Some(src));
+                gl.bind_buffer(glow::BufferBindingTarget::PixelPack, Some(dst));
+                gl.copy_buffer_sub_data(
                     gl::PIXEL_UNPACK_BUFFER,
                     gl::PIXEL_PACK_BUFFER,
                     r.src as _,
                     r.dst as _,
                     r.size as _,
                 );
-                gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0);
-                gl.BindBuffer(gl::PIXEL_PACK_BUFFER, 0);
-            },
+                gl.bind_buffer(glow::BufferBindingTarget::PixelUnpack, None);
+                gl.bind_buffer(glow::BufferBindingTarget::PixelPack, None);
+            }
             com::Command::CopyBufferToTexture(buffer, texture, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 assert_eq!(r.image_offset.z, 0);
                 let gl = &self.share.context;
-                gl.ActiveTexture(gl::TEXTURE0);
-                gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, buffer);
-                gl.BindTexture(gl::TEXTURE_2D, texture);
-                gl.TexSubImage2D(
+                gl.active_texture(gl::TEXTURE0);
+                gl.bind_buffer(glow::BufferBindingTarget::PixelUnpack, Some(buffer));
+                gl.bind_texture(glow::TextureBindingTarget::D2, texture);
+                gl.tex_sub_image_2D(
                     gl::TEXTURE_2D,
                     r.image_layers.level as _,
                     r.image_offset.x,
@@ -604,8 +599,8 @@ impl CommandQueue {
                     gl::UNSIGNED_BYTE,
                     ptr::null(),
                 );
-                gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0);
-            },
+                gl.bind_buffer(glow::BufferBindingTarget::PixelUnpack, None);
+            }
             com::Command::CopyBufferToSurface(..) => {
                 unimplemented!() //TODO: use FBO
             }
@@ -614,20 +609,22 @@ impl CommandQueue {
                 // TODO: handle partial copies gracefully
                 assert_eq!(r.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
                 let gl = &self.share.context;
-                gl.ActiveTexture(gl::TEXTURE0);
-                gl.BindBuffer(gl::PIXEL_PACK_BUFFER, buffer);
-                gl.BindTexture(gl::TEXTURE_2D, texture);
-                gl.GetTexImage(
+                gl.active_texture(gl::TEXTURE0);
+                gl.bind_buffer(glow::BufferBindingTarget::PixelPack, Some(buffer));
+                gl.bind_texture(glow::TextureBindingTarget::D2, texture);
+                gl.get_tex_image(
                     gl::TEXTURE_2D,
                     r.image_layers.level as _,
-                    //r.image_offset.x, r.image_offset.y,
-                    //r.image_extent.width as _, r.image_extent.height as _,
+                    //r.image_offset.x,
+                    //r.image_offset.y,
+                    //r.image_extent.width as _,
+                    //r.image_extent.height as _,
                     gl::RGBA,
                     gl::UNSIGNED_BYTE,
                     ptr::null_mut(),
                 );
-                gl.BindBuffer(gl::PIXEL_PACK_BUFFER, 0);
-            },
+                gl.bind_buffer(glow::BufferBindingTarget::PixelPack, None);
+            }
             com::Command::CopySurfaceToBuffer(..) => {
                 unimplemented!() //TODO: use FBO
             }
@@ -639,29 +636,29 @@ impl CommandQueue {
             }
             com::Command::BindBufferRange(target, index, buffer, offset, size) => unsafe {
                 let gl = &self.share.context;
-                gl.BindBufferRange(target, index, buffer, offset, size);
-            },
+                gl.bind_buffer_range(target, index, buffer, offset, size);
+            }
             com::Command::BindTexture(index, texture) => unsafe {
                 let gl = &self.share.context;
-                gl.ActiveTexture(gl::TEXTURE0 + index);
-                gl.BindTexture(gl::TEXTURE_2D, texture);
-            },
+                gl.active_texture(gl::TEXTURE0 + index);
+                gl.bind_texture(glow::TextureBindingTarget::D2, texture);
+            }
             com::Command::BindSampler(index, sampler) => unsafe {
                 let gl = &self.share.context;
-                gl.BindSampler(index, sampler);
-            },
+                gl.bind_sampler(index, sampler);
+            }
             com::Command::SetTextureSamplerSettings(index, texture, ref sinfo) => unsafe {
                 let gl = &self.share.context;
-                gl.ActiveTexture(gl::TEXTURE0 + index);
-                gl.BindTexture(gl::TEXTURE_2D, texture);
+                gl.active_texture(gl::TEXTURE0 + index);
+                gl.bind_texture(glow::TextureBindingTarget::D2, texture);
 
                 // TODO: Optimization: only change texture properties that have changed.
                 device::set_sampler_info(
                     &self.share,
                     &sinfo,
-                    |a, b| gl.TexParameterf(gl::TEXTURE_2D, a, b),
-                    |a, b| gl.TexParameterfv(gl::TEXTURE_2D, a, &b[0]),
-                    |a, b| gl.TexParameteri(gl::TEXTURE_2D, a, b),
+                    |a, b| gl.tex_parameter_f(glow::TextureBindingTarget::D2, a, b),
+                    |a, b| gl.tex_parameter_fv(glow::TextureBindingTarget::D2, a, &b[0]),
+                    |a, b| gl.tex_parameter_i32(glow::TextureBindingTarget::D2, a, b),
                 );
             }, /*
                com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
@@ -773,11 +770,11 @@ impl CommandQueue {
 
     fn signal_fence(&mut self, fence: &native::Fence) {
         if self.share.private_caps.sync {
+            let gl = &self.share.context;
             let sync = if self.share.private_caps.sync {
-                let gl = &self.share.context;
-                unsafe { gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0) }
+                Some(unsafe { gl.fence_sync(glow::FenceSyncCondition::GpuCommandsComplete, glow::FenceSyncFlags::empty()).unwrap() })
             } else {
-                ptr::null()
+                None
             };
 
             fence.0.set(sync);
@@ -856,7 +853,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         unsafe {
-            self.share.context.Finish();
+            self.share.context.finish();
         }
         Ok(())
     }
