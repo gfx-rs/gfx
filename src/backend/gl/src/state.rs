@@ -22,7 +22,7 @@ pub(crate) fn bind_polygon_mode(
         Fill => (glow::PolygonMode::Fill, glow::Parameter::PolygonOffsetFill),
     };
 
-    unsafe { gl.polygon_mode(gl::PolygonFace::FrontAndBack, gl_draw) };
+    unsafe { gl.polygon_mode(gl::Face::FrontAndBack, gl_draw) };
 
     match bias {
         Some(pso::State::Static(bias)) => unsafe {
@@ -47,9 +47,9 @@ pub(crate) fn bind_rasterizer(gl: &GlContainer, r: &pso::Rasterizer, is_embedded
         unsafe {
             gl.enable(glow::Parameter::CullFace);
             gl.cull_face(match r.cull_face {
-                pso::Face::FRONT => glow::CullFace::Front,
-                pso::Face::BACK => glow::CullFace::Back,
-                _ => glow::CullFace::FrontAndBack,
+                pso::Face::FRONT => glow::Face::Front,
+                pso::Face::BACK => glow::Face::Back,
+                _ => glow::Face::FrontAndBack,
             });
         }
     } else {
@@ -71,7 +71,7 @@ pub(crate) fn bind_rasterizer(gl: &GlContainer, r: &pso::Rasterizer, is_embedded
 pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
     let attachments: SmallVec<[gl::types::GLenum; 16]> =
         (0..num).map(|x| gl::COLOR_ATTACHMENT0 + x as u32).collect();
-    unsafe { gl.draw_buffers(num as gl::types::GLint, attachments.as_ptr()) };
+    unsafe { gl.draw_buffers(&attachments) };
 }
 
 pub fn map_comparison(cmp: pso::Comparison) -> glow::Func {
