@@ -17,6 +17,7 @@ use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
 use info::PrivateCaps;
 use core::memory::Bind;
+use core::factory::ResourceViewError;
 use core::format::{Format as NewFormat, ChannelType};
 use core::texture as t;
 
@@ -971,7 +972,7 @@ pub fn compressed_update(gl: &gl::Gl, kind: Kind, target: GLenum, img: &ImageInf
 */
 
 /// Common texture creation routine, just creates and binds.
-fn make_texture(gl: &gl::Gl, kind: t::Kind) -> (Texture, GLuint) {
+pub fn make_texture(gl: &gl::Gl, kind: t::Kind) -> (Texture, GLuint) {
     let mut name = 0 as GLuint;
     unsafe {
         gl.GenTextures(1, &mut name);
@@ -980,6 +981,34 @@ fn make_texture(gl: &gl::Gl, kind: t::Kind) -> (Texture, GLuint) {
     let target = kind_to_gl(kind);
     unsafe { gl.BindTexture(target, name) };
     (name, target)
+}
+
+/// Create a texture view from the source.
+pub fn make_view(gl: &gl::Gl, source: Texture, info: &t::Info, desc: &t::ResourceDesc) ->
+                 Result<Texture, ResourceViewError> {
+    assert!(desc.min <= desc.max && desc.max < info.levels);
+
+    let mut name = 0 as GLuint;
+    unsafe {
+        gl.GenTextures(1, &mut name);
+    }
+
+    let format = NewFormat(info.format, desc.channel);
+    let gl_format = format_to_glfull(format).unwrap();
+    let target = kind_to_gl(info.kind);
+
+    let (base_layer, num_layers) = match desc.layer {
+        Some(layer) if info.kind.is_cube() => (layer * 6, 6),
+        Some(layer) => (layer, 1),
+        None => (0, info.kind.get_num_slices().unwrap_or(1)),
+    };
+
+    unsafe {
+        gl.TextureView(name, target, source, gl_format,
+            desc.min as u32, desc.max as u32 + 1 - desc.min as u32,
+            base_layer as u32, num_layers as u32);
+    }
+    Ok(name)
 }
 
 fn wrap_to_gl(w: t::WrapMode) -> GLenum {
