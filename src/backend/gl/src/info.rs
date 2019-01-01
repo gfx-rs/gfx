@@ -183,6 +183,7 @@ pub struct PrivateCaps {
     pub frag_data_location_supported: bool,
     pub sampler_lod_bias_supported: bool,
     pub texture_border_clamp_supported: bool,
+    pub texture_view_supported: bool,
 }
 
 /// OpenGL implementation information
@@ -333,6 +334,8 @@ pub fn get_all(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         texture_border_clamp_supported:    info.is_supported(&[Core(2,0), //TODO?
                                                                Es  (3,2),
                                                                Ext ("GL_EXT_texture_border_clamp")]),
+        texture_view_supported:            info.is_supported(&[Core(4,3),
+                                                               Ext ("GL_EXT_texture_view")]),
     };
     (info, caps, private)
 }
