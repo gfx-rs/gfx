@@ -55,19 +55,19 @@ pub enum Command {
     Dispatch(hal::WorkGroupCount),
     DispatchIndirect(gl::types::GLuint, buffer::Offset),
     Draw {
-        primitive: gl::types::GLenum,
+        primitive: glow::PrimitiveMode,
         vertices: Range<hal::VertexCount>,
         instances: Range<hal::InstanceCount>,
     },
     DrawIndexed {
-        primitive: gl::types::GLenum,
+        primitive: glow::PrimitiveMode,
         index_type: gl::types::GLenum,
         index_count: hal::IndexCount,
         index_buffer_offset: buffer::Offset,
         base_vertex: hal::VertexOffset,
         instances: Range<hal::InstanceCount>,
     },
-    BindIndexBuffer(gl::types::GLuint),
+    BindIndexBuffer(GlContext::Buffer),
     //BindVertexBuffers(BufferSlice),
     BindUniform {
         uniform: n::UniformDesc,

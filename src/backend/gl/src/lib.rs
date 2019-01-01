@@ -14,6 +14,7 @@ pub extern crate glutin;
 extern crate smallvec;
 #[cfg(not(target_arch = "wasm32"))]
 extern crate spirv_cross;
+extern crate glow;
 
 use std::cell::Cell;
 use std::fmt;
@@ -40,10 +41,15 @@ mod window;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
 #[cfg(target_arch = "wasm32")]
- pub use crate::window::web::{Surface, Swapchain, Window};
+pub use crate::window::web::{Surface, Swapchain, Window};
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+pub use glow::native::Context as GlContext;
+#[cfg(target_arch = "wasm32")]
+pub use glow::web::Context as GlContext;
 
 pub(crate) struct GlContainer {
-    context: gl::Gl,
+    context: GlContext,
 }
 
 impl GlContainer {
@@ -53,8 +59,8 @@ impl GlContainer {
 }
 
 impl Deref for GlContainer {
-    type Target = gl::Gl;
-    fn deref(&self) -> &gl::Gl {
+    type Target = GlContext;
+    fn deref(&self) -> &Context {
         #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
         self.make_current();
         &self.context

@@ -7,15 +7,16 @@ use crate::hal::{format, image as i, pass, pso};
 
 use crate::gl;
 use crate::Backend;
+use GlContext;
 
-pub type RawBuffer = gl::types::GLuint;
-pub type Shader = gl::types::GLuint;
-pub type Program = gl::types::GLuint;
+
+pub type RawBuffer = Context::Buffer;
+pub type Shader = Context::Shader;
+pub type Program = Context::Program;
 pub type FrameBuffer = gl::types::GLuint;
 pub type Surface = gl::types::GLuint;
-pub type Texture = gl::types::GLuint;
-pub type Sampler = gl::types::GLuint;
-
+pub type Texture = Context::Texture;
+pub type Sampler = Context::Sampler;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
 
 pub const DEFAULT_FRAMEBUFFER: FrameBuffer = 0;
@@ -23,7 +24,7 @@ pub const DEFAULT_FRAMEBUFFER: FrameBuffer = 0;
 #[derive(Debug)]
 pub struct Buffer {
     pub(crate) raw: RawBuffer,
-    pub(crate) target: gl::types::GLenum,
+    pub(crate) target: glow::BufferBindingTarget,
     pub(crate) requirements: Requirements,
 }
 
@@ -31,12 +32,12 @@ pub struct Buffer {
 pub struct BufferView;
 
 #[derive(Debug)]
-pub struct Fence(pub(crate) Cell<gl::types::GLsync>);
+pub struct Fence(pub(crate) Cell<Option<Context::Fence>>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 impl Fence {
-    pub(crate) fn new(sync: gl::types::GLsync) -> Self {
+    pub(crate) fn new(sync: Option<Context::Fence>) -> Self {
         Fence(Cell::new(sync))
     }
 }
@@ -298,7 +299,7 @@ pub struct AttributeDesc {
     pub(crate) offset: u32,
     pub(crate) binding: gl::types::GLuint,
     pub(crate) size: gl::types::GLint,
-    pub(crate) format: gl::types::GLenum,
+    pub(crate) format: glow::VertexDataType,
     pub(crate) vertex_attrib_fn: VertexAttribFunction,
 }
 
