@@ -120,6 +120,13 @@ impl ResourceView {
             owned: false,
         }
     }
+    pub fn new_texture_owned(t: Texture, kind: texture::Kind) -> ResourceView {
+        ResourceView {
+            object: t,
+            bind: tex::kind_to_gl(kind),
+            owned: true,
+        }
+    }
     pub fn new_buffer(b: Texture) -> ResourceView {
         ResourceView {
             object: b,
