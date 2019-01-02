@@ -175,6 +175,23 @@ const DUAL_SOURCE_BLEND_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v2,
 ];
 
+const LAYERED_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily5_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+];
+
+const FUNCTION_SPECIALIZATION_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily1_v3,
+    MTLFeatureSet::tvOS_GPUFamily1_v2,
+    MTLFeatureSet::macOS_GPUFamily1_v2,
+];
+
+const DEPTH_CLIP_MODE: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily1_v4,
+    MTLFeatureSet::tvOS_GPUFamily1_v3,
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+];
+
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
 
@@ -196,7 +213,7 @@ enum FunctionError {
 }
 
 fn get_final_function(
-    library: &metal::LibraryRef, entry: &str, specialization: pso::Specialization
+    library: &metal::LibraryRef, entry: &str, specialization: pso::Specialization, function_specialization: bool,
 ) -> Result<metal::Function, FunctionError> {
     type MTLFunctionConstant = Object;
 
@@ -207,12 +224,20 @@ fn get_final_function(
             FunctionError::InvalidEntryPoint
         })?;
 
+    if !function_specialization {
+        assert!(
+            specialization.data.is_empty() && specialization.constants.is_empty(),
+            "platform does not support specialization",
+        );
+        return Ok(mtl_function);
+    }
+
     let dictionary = mtl_function.function_constants_dictionary();
     let count: NSUInteger = unsafe {
         msg_send![dictionary, count]
     };
     if count == 0 {
-        return Ok(mtl_function)
+        return Ok(mtl_function);
     }
 
     let all_values: *mut Object = unsafe {
@@ -349,7 +374,9 @@ impl PhysicalDevice {
                 os_is_mac,
                 os_version: (major as u32, minor as u32),
                 msl_version: if os_is_mac {
-                    if PrivateCapabilities::version_at_least(major, minor, 10, 13) {
+                    if PrivateCapabilities::version_at_least(major, minor, 10, 14) {
+                        MTLLanguageVersion::V2_1
+                    } else if PrivateCapabilities::version_at_least(major, minor, 10, 13) {
                         MTLLanguageVersion::V2_0
                     } else if PrivateCapabilities::version_at_least(major, minor, 10, 12) {
                         MTLLanguageVersion::V1_2
@@ -358,6 +385,8 @@ impl PhysicalDevice {
                     } else {
                         MTLLanguageVersion::V1_0
                     }
+                } else if PrivateCapabilities::version_at_least(major, minor, 12, 0) {
+                    MTLLanguageVersion::V2_1
                 } else if PrivateCapabilities::version_at_least(major, minor, 11, 0) {
                     MTLLanguageVersion::V2_0
                 } else if PrivateCapabilities::version_at_least(major, minor, 10, 0) {
@@ -375,6 +404,9 @@ impl PhysicalDevice {
                 dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
                 low_power: !os_is_mac || device.is_low_power(),
                 headless: os_is_mac && device.is_headless(),
+                layered_rendering: Self::supports_any(&device, LAYERED_RENDERING_SUPPORT),
+                function_specialization: Self::supports_any(&device, FUNCTION_SPECIALIZATION_SUPPORT),
+                depth_clip_mode: Self::supports_any(&device, DEPTH_CLIP_MODE),
                 format_depth24_stencil8: os_is_mac && device.d24_s8_supported(),
                 format_depth32_stencil8_filter: os_is_mac,
                 format_depth32_stencil8_none: !os_is_mac,
@@ -667,6 +699,7 @@ impl Device {
             LanguageVersion { major: 1, minor: 1 } => MTLLanguageVersion::V1_1,
             LanguageVersion { major: 1, minor: 2 } => MTLLanguageVersion::V1_2,
             LanguageVersion { major: 2, minor: 0 } => MTLLanguageVersion::V2_0,
+            LanguageVersion { major: 2, minor: 1 } => MTLLanguageVersion::V2_1,
             _ => return Err(ShaderError::CompilationFailed("shader model not supported".into()))
         };
         if msl_version > self.private_caps.msl_version {
@@ -818,7 +851,7 @@ impl Device {
             // this can only happen if the shader came directly from the user
             None => (ep.entry, metal::MTLSize { width: 0, height: 0, depth: 0 }),
         };
-        let mtl_function = get_final_function(&lib, name, ep.specialization)
+        let mtl_function = get_final_function(&lib, name, ep.specialization, self.private_caps.function_specialization)
             .map_err(|e| {
                 error!("Invalid shader entry point '{}': {:?}", name, e);
                 pso::CreationError::Other
@@ -865,7 +898,11 @@ impl hal::Device<Backend> for Device {
     unsafe fn create_command_pool(
         &self, _family: QueueFamilyId, _flags: CommandPoolCreateFlags
     ) -> Result<command::CommandPool, OutOfMemory> {
-        Ok(command::CommandPool::new(&self.shared, self.online_recording.clone()))
+        Ok(command::CommandPool::new(
+            &self.shared,
+            self.online_recording.clone(),
+            self.private_caps.layered_rendering,
+        ))
     }
 
     unsafe fn destroy_command_pool(&self, mut pool: command::CommandPool) {
@@ -1110,6 +1147,7 @@ impl hal::Device<Backend> for Device {
             MTLLanguageVersion::V1_1 => msl::Version::V1_1,
             MTLLanguageVersion::V1_2 => msl::Version::V1_2,
             MTLLanguageVersion::V2_0 => msl::Version::V2_0,
+            MTLLanguageVersion::V2_1 => msl::Version::V2_1,
         };
         shader_compiler_options.enable_point_size_builtin = false;
         shader_compiler_options.vertex.invert_y = true;
@@ -1219,7 +1257,9 @@ impl hal::Device<Backend> for Device {
             hal::Primitive::TriangleStrip => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::TriangleStrip),
             _ => (MTLPrimitiveTopologyClass::Unspecified, MTLPrimitiveType::Point) //TODO: double-check
         };
-        pipeline.set_input_primitive_topology(primitive_class);
+        if self.private_caps.layered_rendering {
+            pipeline.set_input_primitive_topology(primitive_class);
+        }
 
         // Vertex shader
         let (vs_lib, vs_function, _, enable_rasterization) = self.load_shader(
@@ -1397,10 +1437,14 @@ impl hal::Device<Backend> for Device {
                     metal::MTLCullMode::None
                 }
             },
-            depth_clip: if pipeline_desc.rasterizer.depth_clamping {
-                metal::MTLDepthClipMode::Clamp
+            depth_clip: if self.private_caps.depth_clip_mode {
+                Some(if pipeline_desc.rasterizer.depth_clamping {
+                    metal::MTLDepthClipMode::Clamp
+                } else {
+                    metal::MTLDepthClipMode::Clip
+                })
             } else {
-                metal::MTLDepthClipMode::Clip
+                None
             },
         });
         let depth_bias = pipeline_desc.rasterizer.depth_bias

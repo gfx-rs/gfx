@@ -129,6 +129,7 @@ pub struct CommandPool {
     shared: Arc<Shared>,
     allocated: Vec<CommandBufferInnerPtr>,
     pool_shared: PoolSharedPtr,
+    layered_rendering: bool,
 }
 
 unsafe impl Send for CommandPool {}
@@ -138,6 +139,7 @@ impl CommandPool {
     pub(crate) fn new(
         shared: &Arc<Shared>,
         online_recording: OnlineRecording,
+        layered_rendering: bool,
     ) -> Self {
         let pool_shared = PoolShared {
             #[cfg(feature = "dispatch")]
@@ -152,6 +154,7 @@ impl CommandPool {
             shared: Arc::clone(shared),
             allocated: Vec::new(),
             pool_shared: Arc::new(RefCell::new(pool_shared)),
+            layered_rendering,
         }
     }
 }
@@ -162,6 +165,7 @@ pub struct CommandBuffer {
     inner: CommandBufferInnerPtr,
     state: State,
     temp: Temp,
+    layered_rendering: bool,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -1208,7 +1212,9 @@ where
         Cmd::SetRasterizerState(ref rs) => {
             encoder.set_front_facing_winding(rs.front_winding);
             encoder.set_cull_mode(rs.cull_mode);
-            encoder.set_depth_clip_mode(rs.depth_clip);
+            if let Some(depth_clip) = rs.depth_clip {
+                encoder.set_depth_clip_mode(depth_clip);
+            }
         }
         Cmd::SetVisibilityResult(mode, offset) => {
             encoder.set_visibility_result_mode(offset, mode);
@@ -1893,6 +1899,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 blit_vertices: FastHashMap::default(),
                 clear_values: Vec::new(),
             },
+            layered_rendering: self.layered_rendering,
         }
     }
 
@@ -2354,6 +2361,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 key,
                 &self.shared.service_pipes.library,
                 &self.shared.device,
+                self.layered_rendering,
             );
 
             let com_pso = iter::once(soft::RenderCommand::BindPipeline(&**pso));
@@ -2488,6 +2496,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             key,
             &self.shared.service_pipes.library,
             &self.shared.device,
+            self.layered_rendering,
         );
 
         for region in regions {
@@ -2593,6 +2602,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             None
         };
 
+        let layered_rendering = self.layered_rendering;
         autoreleasepool(|| {
             let dst_new = match dst_cubish {
                 Some(ref tex) => tex.as_ref(),
@@ -2601,7 +2611,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             for ((aspects, level), list) in vertices.drain() {
                 let descriptor = metal::RenderPassDescriptor::new().to_owned();
-                descriptor.set_render_target_array_length(dst_layers as _);
+                if layered_rendering {
+                    descriptor.set_render_target_array_length(dst_layers as _);
+                }
 
                 if aspects.contains(Aspects::COLOR) {
                     let att = descriptor
@@ -2868,7 +2880,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let mut combined_aspects = Aspects::empty();
             let descriptor = metal::RenderPassDescriptor::new().to_owned();
             descriptor.set_visibility_result_buffer(Some(&self.shared.visibility.buffer));
-            descriptor.set_render_target_array_length(framebuffer.extent.depth as _);
+            if self.layered_rendering {
+                descriptor.set_render_target_array_length(framebuffer.extent.depth as _);
+            }
 
             for (i, &(at_id, op_flags)) in subpass.colors.iter().enumerate() {
                 let rat = &render_pass.attachments[at_id];
