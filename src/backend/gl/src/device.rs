@@ -40,7 +40,7 @@ fn create_fbo_internal(share: &Starc<Share>) -> Option<<GlContext as glow::Conte
     if share.private_caps.framebuffer {
         let gl = &share.context;
         let name = unsafe { gl.create_framebuffer() }.unwrap();
-        info!("\tCreated frame buffer {}", name);
+        info!("\tCreated frame buffer {:?}", name);
         Some(name)
     } else {
         None
@@ -89,7 +89,7 @@ impl Device {
             gl.shader_source(name, std::str::from_utf8(data).expect("Invalid shader source"));
             gl.compile_shader(name);
         }
-        info!("\tCompiled shader {}", name);
+        info!("\tCompiled shader {:?}", name);
         if let Err(err) = self.share.check() {
             panic!("Error compiling shader: {:?}", err);
         }
@@ -520,7 +520,7 @@ impl d::Device<B> for Device {
         // TODO
         Ok(n::Memory {
             properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
-            first_bound_buffer: Cell::new(0),
+            first_bound_buffer: Cell::new(None),
             size,
         })
     }
@@ -727,7 +727,7 @@ impl d::Device<B> for Device {
             }
 
             gl.link_program(name);
-            info!("\tLinked program {}", name);
+            info!("\tLinked program {:?}", name);
             if let Err(err) = share.check() {
                 panic!("Error linking program: {:?}", err);
             }
@@ -876,7 +876,7 @@ impl d::Device<B> for Device {
 
             gl.attach_shader(name, shader);
             gl.link_program(name);
-            info!("\tLinked program {}", name);
+            info!("\tLinked program {:?}", name);
             if let Err(err) = share.check() {
                 panic!("Error linking program: {:?}", err);
             }
@@ -918,7 +918,7 @@ impl d::Device<B> for Device {
         pass: &n::RenderPass,
         attachments: I,
         _extent: i::Extent,
-    ) -> Result<n::FrameBuffer, d::OutOfMemory>
+    ) -> Result<Option<n::FrameBuffer>, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<n::ImageView>,
@@ -986,7 +986,7 @@ impl d::Device<B> for Device {
             );
         }
 
-        Ok(name)
+        Ok(Some(name))
     }
 
     unsafe fn create_shader_module(
@@ -1079,9 +1079,9 @@ impl d::Device<B> for Device {
         let target = buffer.target;
 
         if offset == 0 {
-            memory.first_bound_buffer.set(buffer.raw);
+            memory.first_bound_buffer.set(Some(buffer.raw));
         } else {
-            assert_ne!(0, memory.first_bound_buffer.get());
+            assert!(memory.first_bound_buffer.get().is_some());
         }
 
         let cpu_can_read = memory.can_download();
@@ -1136,8 +1136,8 @@ impl d::Device<B> for Device {
     ) -> Result<*mut u8, mapping::Error> {
         let gl = &self.share.context;
         let buffer = match memory.first_bound_buffer.get() {
-            0 => panic!("No buffer has been bound yet, can't map memory!"),
-            other => other,
+            None => panic!("No buffer has been bound yet, can't map memory!"),
+            Some(other) => other,
         };
 
         assert!(self.share.private_caps.buffer_role_change);
@@ -1161,8 +1161,8 @@ impl d::Device<B> for Device {
     unsafe fn unmap_memory(&self, memory: &n::Memory) {
         let gl = &self.share.context;
         let buffer = match memory.first_bound_buffer.get() {
-            0 => panic!("No buffer has been bound yet, can't map memory!"),
-            other => other,
+            None => panic!("No buffer has been bound yet, can't map memory!"),
+            Some(other) => other,
         };
         let target = glow::PIXEL_PACK_BUFFER;
 
@@ -1585,9 +1585,11 @@ impl d::Device<B> for Device {
         self.share.context.delete_program(pipeline.program);
     }
 
-    unsafe fn destroy_framebuffer(&self, frame_buffer: n::FrameBuffer) {
+    unsafe fn destroy_framebuffer(&self, frame_buffer: Option<n::FrameBuffer>) {
         let gl = &self.share.context;
-        gl.delete_framebuffer(frame_buffer);
+        if let Some(f) = frame_buffer {
+            gl.delete_framebuffer(f);
+        }
     }
 
     unsafe fn destroy_buffer(&self, buffer: n::Buffer) {

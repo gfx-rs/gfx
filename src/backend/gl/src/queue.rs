@@ -13,8 +13,6 @@ use crate::info::LegacyFeatures;
 use crate::{command as com, device, native, state, window};
 use crate::{Backend, GlContext, Share};
 
-pub type ArrayBuffer = gl::types::GLuint;
-
 // State caching system for command queue.
 //
 // We track the current global state, which is based on
@@ -29,7 +27,7 @@ struct State {
     vao: bool,
     // Currently bound index/element buffer.
     // None denotes that we don't know what is currently bound.
-    index_buffer: Option<gl::types::GLuint>,
+    index_buffer: Option<native::RawBuffer>,
     // Currently set viewports.
     num_viewports: usize,
     // Currently set scissor rects.
@@ -65,13 +63,13 @@ impl State {
 #[derive(Debug)]
 pub struct CommandQueue {
     pub(crate) share: Starc<Share>,
-    vao: Option<ArrayBuffer>,
+    vao: Option<native::VertexArray>,
     state: State,
 }
 
 impl CommandQueue {
     /// Create a new command queue.
-    pub(crate) fn new(share: &Starc<Share>, vao: Option<ArrayBuffer>) -> Self {
+    pub(crate) fn new(share: &Starc<Share>, vao: Option<native::VertexArray>) -> Self {
         CommandQueue {
             share: share.clone(),
             vao,
@@ -221,13 +219,9 @@ impl CommandQueue {
         }
 
         // Unbind index buffers
-        match self.state.index_buffer {
-            Some(0) => (), // Nothing to do
-            Some(_) | None => {
-                unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None) };
-                self.state.index_buffer = Some(0);
-            }
-        }
+        // TODO: Handle already unbound case
+        unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None) };
+        self.state.index_buffer = None;
 
         // Reset viewports
         if self.state.num_viewports == 1 {

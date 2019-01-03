@@ -14,6 +14,8 @@ pub extern crate glutin;
 extern crate smallvec;
 #[cfg(not(target_arch = "wasm32"))]
 extern crate spirv_cross;
+#[cfg(target_arch = "wasm32")]
+extern crate wasm_bindgen;
 extern crate glow;
 
 use std::cell::Cell;
@@ -86,7 +88,7 @@ impl hal::Backend for Backend {
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
-    type Framebuffer = native::FrameBuffer;
+    type Framebuffer = Option<native::FrameBuffer>;
 
     type Buffer = native::Buffer;
     type BufferView = native::BufferView;

@@ -10,16 +10,15 @@ use crate::Backend;
 use GlContext;
 
 
+pub type VertexArray = <GlContext as glow::Context>::VertexArray;
 pub type RawBuffer = <GlContext as glow::Context>::Buffer;
 pub type Shader = <GlContext as glow::Context>::Shader;
 pub type Program = <GlContext as glow::Context>::Program;
 pub type FrameBuffer = <GlContext as glow::Context>::Framebuffer;
-pub type Surface = gl::types::GLuint;
+pub type Surface = <GlContext as glow::Context>::Renderbuffer;
 pub type Texture = <GlContext as glow::Context>::Texture;
 pub type Sampler = <GlContext as glow::Context>::Sampler;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
-
-pub const DEFAULT_FRAMEBUFFER: FrameBuffer = 0;
 
 #[derive(Debug)]
 pub struct Buffer {
@@ -230,7 +229,7 @@ pub enum ShaderModule {
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) properties: Properties,
-    pub(crate) first_bound_buffer: Cell<RawBuffer>,
+    pub(crate) first_bound_buffer: Cell<Option<RawBuffer>>,
     /// Allocation size
     pub(crate) size: u64,
 }
