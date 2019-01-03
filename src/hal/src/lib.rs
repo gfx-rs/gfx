@@ -405,7 +405,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type QueryPool:           fmt::Debug + Any + Send + Sync;
 }
 
-/// Marks that an error occured submitting a command to a command buffer.
+/// Marks that an error occurred submitting a command to a command buffer.
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SubmissionError {}
