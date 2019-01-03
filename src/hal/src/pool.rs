@@ -44,11 +44,6 @@ pub trait RawCommandPool<B: Backend>: Any + Send + Sync {
 }
 
 /// Strong-typed command pool.
-///
-/// This a safer wrapper around `RawCommandPool` which ensures that only **one**
-/// command buffer is recorded at the same time from the current queue.
-/// Command buffers are stored internally and can only be obtained via a strong-typed
-/// `CommandBuffer` wrapper for encoding.
 pub struct CommandPool<B: Backend, C> {
     raw: B::CommandPool,
     _capability: PhantomData<C>,
@@ -76,11 +71,7 @@ impl<B: Backend, C> CommandPool<B, C> {
         self.raw.reset();
     }
 
-    /// Get a primary command buffer for recording.
-    ///
-    /// You can only record to one command buffer per pool at the same time.
-    /// If more command buffers are requested than allocated, new buffers will be reserved.
-    /// The command buffer will be returned in 'recording' state.
+    /// Allocates a new primary command buffer from the pool.
     pub fn acquire_command_buffer<S: Shot>(&mut self) -> CommandBuffer<B, C, S> {
         let buffer = self.raw.allocate_one(RawLevel::Primary);
         unsafe {
@@ -88,11 +79,7 @@ impl<B: Backend, C> CommandPool<B, C> {
         }
     }
 
-    /// Get a secondary command buffer for recording.
-    ///
-    /// You can only record to one command buffer per pool at the same time.
-    /// If more command buffers are requested than allocated, new buffers will be reserved.
-    /// The command buffer will be returned in 'recording' state.
+    /// Allocates a new secondary command buffer from the pool.
     pub fn acquire_secondary_command_buffer<S: Shot>(&mut self) -> SecondaryCommandBuffer<B, C, S> {
         let buffer = self.raw.allocate_one(RawLevel::Secondary);
         unsafe {
@@ -107,18 +94,14 @@ impl<B: Backend, C> CommandPool<B, C> {
         self.raw.free(cmd_buffers.into_iter().map(|cmb| cmb.raw))
     }
 
-    /// Downgrade a typed command pool to untyped one, free up the allocated command buffers.
+    /// Downgrade a typed command pool to untyped one.
     pub fn into_raw(self) -> B::CommandPool {
         self.raw
     }
 }
 
 impl<B: Backend, C: Supports<Graphics>> CommandPool<B, C> {
-    /// Get a subpass command buffer for recording.
-    ///
-    /// You can only record to one command buffer per pool at the same time.
-    /// If more command buffers are requested than allocated, new buffers will be reserved.
-    /// The command buffer will be returned in 'recording' state.
+    /// Allocates a new subpass command buffer from the pool.
     pub fn acquire_subpass_command_buffer<'a, S: Shot>(&mut self) -> SubpassCommandBuffer<B, S> {
         let buffer = self.raw.allocate_one(RawLevel::Secondary);
         unsafe {
