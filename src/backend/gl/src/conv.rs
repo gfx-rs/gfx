@@ -45,30 +45,29 @@ pub fn wrap_to_gl(w: i::WrapMode) -> t::GLenum {
     }
 }
 
-pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<glow::BufferBindingTarget> {
+pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<u32> {
     use self::buffer::Usage;
-    use glow::BufferBindingTarget as B;
     match usage & (Usage::UNIFORM | Usage::INDEX | Usage::VERTEX | Usage::INDIRECT) {
-        Usage::UNIFORM => Some(B::Uniform),
-        Usage::INDEX => Some(B::ElementArray),
-        Usage::VERTEX => Some(B::Array),
+        Usage::UNIFORM => Some(glow::UNIFORM_BUFFER),
+        Usage::INDEX => Some(glow::ELEMENT_ARRAY_BUFFER),
+        Usage::VERTEX => Some(glow::ARRAY_BUFFER),
         Usage::INDIRECT => unimplemented!(),
         _ => None,
     }
 }
 
-pub fn primitive_to_gl_primitive(primitive: Primitive) -> t::GLenum {
+pub fn primitive_to_gl_primitive(primitive: Primitive) -> u32 {
     match primitive {
-        Primitive::PointList => gl::POINTS,
-        Primitive::LineList => gl::LINES,
-        Primitive::LineStrip => gl::LINE_STRIP,
-        Primitive::TriangleList => gl::TRIANGLES,
-        Primitive::TriangleStrip => gl::TRIANGLE_STRIP,
-        Primitive::LineListAdjacency => gl::LINES_ADJACENCY,
-        Primitive::LineStripAdjacency => gl::LINE_STRIP_ADJACENCY,
-        Primitive::TriangleListAdjacency => gl::TRIANGLES_ADJACENCY,
-        Primitive::TriangleStripAdjacency => gl::TRIANGLE_STRIP_ADJACENCY,
-        Primitive::PatchList(_) => gl::PATCHES,
+        Primitive::PointList => glow::POINTS,
+        Primitive::LineList => glow::LINES,
+        Primitive::LineStrip => glow::LINE_STRIP,
+        Primitive::TriangleList => glow::TRIANGLES,
+        Primitive::TriangleStrip => glow::TRIANGLE_STRIP,
+        Primitive::LineListAdjacency => glow::LINES_ADJACENCY,
+        Primitive::LineStripAdjacency => glow::LINE_STRIP_ADJACENCY,
+        Primitive::TriangleListAdjacency => glow::TRIANGLES_ADJACENCY,
+        Primitive::TriangleStripAdjacency => glow::TRIANGLE_STRIP_ADJACENCY,
+        Primitive::PatchList(_) => glow::PATCHES,
     }
 }
 

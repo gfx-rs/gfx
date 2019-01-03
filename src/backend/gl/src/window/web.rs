@@ -149,7 +149,7 @@ impl Device {
 impl hal::Instance for Surface {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
-        let adapter = PhysicalDevice::new_adapter(|s| 0 as *const _);
+        let adapter = PhysicalDevice::new_adapter(|s| 0 as *const _, Some("canvas")); // TODO: Move to `self` like native/window
         vec![adapter]
     }
 }
