@@ -3,19 +3,21 @@ use crate::{gl, Error, GlContainer};
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
 
+use glow::Context;
+
 /// A version number for a specific component of an OpenGL implementation
-#[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
 pub struct Version {
     pub is_embedded: bool,
     pub major: u32,
     pub minor: u32,
     pub revision: Option<u32>,
-    pub vendor_info: &'static str,
+    pub vendor_info: String,
 }
 
 impl Version {
     /// Create a new OpenGL version number
-    pub fn new(major: u32, minor: u32, revision: Option<u32>, vendor_info: &'static str) -> Self {
+    pub fn new(major: u32, minor: u32, revision: Option<u32>, vendor_info: String) -> Self {
         Version {
             is_embedded: false,
             major: major,
@@ -25,13 +27,13 @@ impl Version {
         }
     }
     /// Create a new OpenGL ES version number
-    pub fn new_embedded(major: u32, minor: u32, vendor_info: &'static str) -> Self {
+    pub fn new_embedded(major: u32, minor: u32, vendor_info: String) -> Self {
         Version {
             is_embedded: true,
-            major: major,
-            minor: minor,
+            major,
+            minor,
             revision: None,
-            vendor_info: vendor_info,
+            vendor_info,
         }
     }
 
@@ -55,18 +57,18 @@ impl Version {
     /// Note that this function is intentionally lenient in regards to parsing,
     /// and will try to recover at least the first two version numbers without
     /// resulting in an `Err`.
-    pub fn parse(mut src: &'static str) -> Result<Version, &'static str> {
+    pub fn parse(mut src: String) -> Result<Version, String> {
         let es_sig = " ES ";
         let is_es = match src.rfind(es_sig) {
             Some(pos) => {
-                src = &src[pos + es_sig.len()..];
+                src = src[pos + es_sig.len() ..].to_string();
                 true
             }
             None => false,
         };
         let (version, vendor_info) = match src.find(' ') {
-            Some(i) => (&src[..i], &src[i + 1..]),
-            None => (src, ""),
+            Some(i) => (src[..i].to_string(), src[i+1..].to_string()),
+            None => (src.to_string(), String::from("")),
         };
 
         // TODO: make this even more lenient so that we can also accept
@@ -79,10 +81,10 @@ impl Version {
         match (major, minor, revision) {
             (Some(major), Some(minor), revision) => Ok(Version {
                 is_embedded: is_es,
-                major: major,
-                minor: minor,
-                revision: revision,
-                vendor_info: vendor_info,
+                major,
+                minor,
+                revision,
+                vendor_info,
             }),
             (_, _, _) => Err(src),
         }
@@ -91,7 +93,7 @@ impl Version {
 
 impl fmt::Debug for Version {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match (self.major, self.minor, self.revision, self.vendor_info) {
+        match (self.major, self.minor, self.revision, self.vendor_info.as_str()) {
             (major, minor, Some(revision), "") => write!(f, "{}.{}.{}", major, minor, revision),
             (major, minor, None, "") => write!(f, "{}.{}", major, minor),
             (major, minor, Some(revision), vendor_info) => {
@@ -102,28 +104,18 @@ impl fmt::Debug for Version {
     }
 }
 
-const EMPTY_STRING: &'static str = "";
-
-/// Get a statically allocated string from the implementation using
-/// `glGetString`. Fails if it `GLenum` cannot be handled by the
-/// implementation's `gl.GetString` function.
-fn get_string(gl: &GlContainer, name: gl::types::GLenum) -> &'static str {
-    let ptr = unsafe { gl.GetString(name) } as *const i8;
-    if !ptr.is_null() {
-        // This should be safe to mark as statically allocated because
-        // GlGetString only returns static strings.
-        unsafe { c_str_as_static_str(ptr) }
+fn get_string(gl: &GlContainer, name: u32) -> Result<String, Error> {
+    let value = unsafe { gl.get_parameter_string(name) };
+    let err = Error::from_error_code(unsafe { gl.get_error() });
+    if err != Error::NoError {
+        Err(err)
     } else {
-        error!("Invalid GLenum passed to `get_string`: {:x}", name);
-        EMPTY_STRING
+        Ok(value)
     }
 }
-
-fn get_usize(gl: &GlContainer, name: gl::types::GLenum) -> Result<usize, Error> {
-    let mut value = 0 as gl::types::GLint;
-    unsafe { gl.GetIntegerv(name, &mut value) };
-
-    let err = Error::from_error_code(unsafe { gl.GetError() });
+fn get_usize(gl: &GlContainer, name: u32) -> Result<usize, Error> {
+    let value = unsafe { gl.get_parameter_i32(name) };
+    let err = Error::from_error_code(unsafe { gl.get_error() });
     if err != Error::NoError {
         Err(err)
     } else {
@@ -131,25 +123,20 @@ fn get_usize(gl: &GlContainer, name: gl::types::GLenum) -> Result<usize, Error> 
     }
 }
 
-unsafe fn c_str_as_static_str(c_str: *const i8) -> &'static str {
-    //TODO: avoid transmuting
-    mem::transmute(str::from_utf8(ffi::CStr::from_ptr(c_str as *const _).to_bytes()).unwrap())
-}
-
 /// A unique platform identifier that does not change between releases
-#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug)]
 pub struct PlatformName {
     /// The company responsible for the OpenGL implementation
-    pub vendor: &'static str,
+    pub vendor: String,
     /// The name of the renderer
-    pub renderer: &'static str,
+    pub renderer: String,
 }
 
 impl PlatformName {
     fn get(gl: &GlContainer) -> Self {
         PlatformName {
-            vendor: get_string(gl, gl::VENDOR),
-            renderer: get_string(gl, gl::RENDERER),
+            vendor: get_string(gl, glow::VENDOR).unwrap(),
+            renderer: get_string(gl, glow::RENDERER).unwrap()
         }
     }
 }
@@ -190,7 +177,7 @@ pub struct Info {
     /// The GLSL version number
     pub shading_language: Version,
     /// The extensions supported by the implementation
-    pub extensions: HashSet<&'static str>,
+    pub extensions: HashSet<String>,
 }
 
 bitflags! {
@@ -233,60 +220,53 @@ bitflags! {
 }
 
 #[derive(Copy, Clone)]
-pub enum Requirement {
+pub enum Requirement<'a> {
     Core(u32, u32),
     Es(u32, u32),
-    Ext(&'static str),
+    Ext(&'a str),
 }
 
 impl Info {
     fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
-        let version = Version::parse(get_string(gl, gl::VERSION)).unwrap();
+        let version = Version::parse(get_string(gl, glow::VERSION).unwrap()).unwrap();
         let shading_language =
-            Version::parse(get_string(gl, gl::SHADING_LANGUAGE_VERSION)).unwrap();
-        let extensions = if version >= Version::new(3, 0, None, "") {
-            let num_exts = get_usize(gl, gl::NUM_EXTENSIONS).unwrap() as gl::types::GLuint;
+            Version::parse(get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap()).unwrap();
+        let extensions = if version >= Version::new(3, 0, None, String::from("")) {
+            let num_exts = get_usize(gl, glow::NUM_EXTENSIONS).unwrap();
             (0..num_exts)
-                .map(|i| unsafe {
-                    c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8)
-                })
+                .map(|i| unsafe { gl.get_parameter_indexed_string(glow::EXTENSIONS, i as u32) })
                 .collect()
         } else {
             // Fallback
-            get_string(gl, gl::EXTENSIONS).split(' ').collect()
+            get_string(gl, glow::EXTENSIONS).unwrap().split(' ').map(|s| s.to_string()).collect()
         };
         Info {
-            platform_name: platform_name,
-            version: version,
-            shading_language: shading_language,
-            extensions: extensions,
+            platform_name,
+            version,
+            shading_language,
+            extensions,
         }
     }
 
     pub fn is_version_supported(&self, major: u32, minor: u32) -> bool {
-        !self.version.is_embedded && self.version >= Version::new(major, minor, None, "")
+        !self.version.is_embedded && self.version >= Version::new(major, minor, None, String::from(""))
     }
 
     pub fn is_embedded_version_supported(&self, major: u32, minor: u32) -> bool {
-        self.version.is_embedded && self.version >= Version::new(major, minor, None, "")
+        self.version.is_embedded && self.version >= Version::new(major, minor, None, String::from(""))
     }
 
     /// Returns `true` if the implementation supports the extension
-    pub fn is_extension_supported(&self, s: &'static str) -> bool {
-        self.extensions.contains(&s)
+    pub fn is_extension_supported(&self, s: &str) -> bool {
+        self.extensions.contains(s)
     }
 
-    pub fn is_version_or_extension_supported(
-        &self,
-        major: u32,
-        minor: u32,
-        ext: &'static str,
-    ) -> bool {
+    pub fn is_version_or_extension_supported(&self, major: u32, minor: u32, ext: &str) -> bool {
         self.is_version_supported(major, minor) || self.is_extension_supported(ext)
     }
 
-    pub fn is_any_extension_supported(&self, exts: &[&'static str]) -> bool {
+    pub fn is_any_extension_supported(&self, exts: &[String]) -> bool {
         exts.iter().any(|e| self.extensions.contains(e))
     }
 
@@ -340,7 +320,6 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
             Ext("GL_ARB_compute_shader"),
         ])
     {
-        let mut values = [0 as gl::types::GLint; 2];
         for (i, (count, size)) in limits
             .max_compute_work_group_count
             .iter_mut()
@@ -348,11 +327,9 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
             .enumerate()
         {
             unsafe {
-                gl.GetIntegeri_v(gl::MAX_COMPUTE_WORK_GROUP_COUNT, i as _, &mut values[0]);
-                gl.GetIntegeri_v(gl::MAX_COMPUTE_WORK_GROUP_SIZE, i as _, &mut values[1]);
+                *count = gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, i as _) as u32;
+                *size = gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, i as _) as u32;
             }
-            *count = values[0] as _;
-            *size = values[1] as _;
         }
     }
 

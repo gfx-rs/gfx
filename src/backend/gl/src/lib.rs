@@ -149,7 +149,7 @@ impl Share {
     fn check(&self) -> Result<(), Error> {
         if cfg!(debug_assertions) {
             let gl = &self.context;
-            let err = Error::from_error_code(unsafe { gl.GetError() });
+            let err = Error::from_error_code(unsafe { gl.get_error() });
             if err != Error::NoError {
                 return Err(err);
             }
@@ -245,12 +245,36 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 pub struct PhysicalDevice(Starc<Share>);
 
 impl PhysicalDevice {
-    fn new_adapter<F>(fn_proc: F) -> hal::Adapter<Backend>
+    #[allow(unused)]
+    fn new_adapter<F>(fn_proc: F, webgl_context_id: Option<&str>) -> hal::Adapter<Backend>
     where
         F: FnMut(&str) -> *const std::os::raw::c_void,
     {
+        #[cfg(target_arch = "wasm32")]
+        let context = {
+            use wasm_bindgen::JsCast;
+            let canvas = web_sys::window()
+                .unwrap()
+                .document()
+                .unwrap()
+                .get_element_by_id(webgl_context_id.unwrap())
+                .unwrap()
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .unwrap();
+            let webgl2_context = canvas
+                .get_context("webgl2")
+                .unwrap()
+                .unwrap()
+                .dyn_into::<web_sys::WebGl2RenderingContext>()
+                .unwrap();
+            glow::web::Context::from_webgl2_context(webgl2_context)
+        };
+
+        #[cfg(not(target_arch = "wasm32"))]
+        let context = glow::native::Context::from_loader_function(fn_proc);
+
         let gl = GlContainer {
-            context: gl::Gl::load_with(fn_proc),
+            context,
         };
 
         // query information
@@ -382,9 +406,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .contains(info::LegacyFeatures::SRGB_COLOR)
         {
             // TODO: Find way to emulate this on older Opengl versions.
-            unsafe {
-                gl.enable(glow::Parameter::FramebufferSrgb);
-            }
+            gl.enable(glow::FRAMEBUFFER_SRGB);
         }
         unsafe {
             gl.pixel_store_i32(glow::PixelStoreI32Parameter::UnpackAlignment, 1);
@@ -393,10 +415,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         // create main VAO and bind it
         let mut vao = None;
         if self.0.private_caps.vertex_array {
-            unsafe {
-                vao = gl.create_vertex_array();
-                gl.bind_vertex_array(Some(vao));
-            }
+            vao = Some(gl.create_vertex_array().unwrap());
+            gl.bind_vertex_array(vao);
         }
 
         if let Err(err) = self.0.check() {

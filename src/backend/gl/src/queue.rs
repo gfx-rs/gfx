@@ -11,7 +11,7 @@ use smallvec::SmallVec;
 
 use crate::info::LegacyFeatures;
 use crate::{command as com, device, native, state, window};
-use crate::{Backend, Share};
+use crate::{Backend, GlContext, Share};
 
 pub type ArrayBuffer = gl::types::GLuint;
 
@@ -65,13 +65,13 @@ impl State {
 #[derive(Debug)]
 pub struct CommandQueue {
     pub(crate) share: Starc<Share>,
-    vao: ArrayBuffer,
+    vao: Option<ArrayBuffer>,
     state: State,
 }
 
 impl CommandQueue {
     /// Create a new command queue.
-    pub(crate) fn new(share: &Starc<Share>, vao: ArrayBuffer) -> Self {
+    pub(crate) fn new(share: &Starc<Share>, vao: Option<ArrayBuffer>) -> Self {
         CommandQueue {
             share: share.clone(),
             vao,
@@ -157,35 +157,31 @@ impl CommandQueue {
     }
     */
 
-    fn bind_target(
-        &mut self,
-        point: glow::FramebufferBindingTarget,
-        attachment: u32,
-        view: &native::ImageView,
-    ) {
+    fn bind_target(&mut self, point: u32, attachment: u32, view: &native::ImageView) {
         let gl = &self.share.context;
         match view {
             &native::ImageView::Surface(surface) => unsafe {
-                gl.framebuffer_renderbuffer(point, attachment, gl::RENDERBUFFER, surface);
+                gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(surface));
             },
             &native::ImageView::Texture(texture, level) => unsafe {
-                gl.framebuffer_texture(point, attachment, texture, level as gl::types::GLint);
+                gl.framebuffer_texture(point, attachment, Some(texture), level as i32);
             },
             &native::ImageView::TextureLayer(texture, level, layer) => unsafe {
                 gl.framebuffer_texture_layer(
                     point,
                     attachment,
-                    texture,
-                    level as gl::types::GLint,
-                    layer as gl::types::GLint,
+                    Some(texture),
+                    level as i32,
+                    layer as i32,
                 );
             },
         }
     }
 
-    fn _unbind_target(&mut self, point: gl::types::GLenum, attachment: gl::types::GLenum) {
+    fn _unbind_target(&mut self, point: u32, attachment: gl::types::GLenum) {
         let gl = &self.share.context;
-        unsafe { gl.framebuffer_texture(point, attachment, 0, 0) };
+        // TODO: Find workaround or use explicit `textarget` with the other `framebuffer_texture`
+        unsafe { gl.framebuffer_texture(point, attachment, None, 0) };
     }
 
     /// Return a reference to a stored data object.
@@ -210,7 +206,7 @@ impl CommandQueue {
         // Bind default VAO
         if !self.state.vao {
             if self.share.private_caps.vertex_array {
-                unsafe { gl.bind_vertex_array(Some(self.vao)) };
+                unsafe { gl.bind_vertex_array(self.vao) };
             }
             self.state.vao = true
         }
@@ -221,14 +217,14 @@ impl CommandQueue {
             .legacy_features
             .contains(LegacyFeatures::INDIRECT_EXECUTION)
         {
-            unsafe { gl.bind_buffer(glow::BufferBindingTarget::DrawIndirect, None) };
+            unsafe { gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, None) };
         }
 
         // Unbind index buffers
         match self.state.index_buffer {
             Some(0) => (), // Nothing to do
             Some(_) | None => {
-                unsafe { gl.bind_buffer(glow::BufferBindingTarget::ElementArray, None) };
+                unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, None) };
                 self.state.index_buffer = Some(0);
             }
         }
@@ -247,12 +243,8 @@ impl CommandQueue {
             let depth_ranges: SmallVec<[[f64; 2]; 16]> =
                 (0..self.state.num_viewports).map(|_| [0.0, 0.0]).collect();
             unsafe {
-                gl.viewport_arrayv(0, viewports.len() as i32, viewports.as_ptr() as *const _);
-                gl.depth_range_arrayv(
-                    0,
-                    depth_ranges.len() as i32,
-                    depth_ranges.as_ptr() as *const _,
-                );
+                gl.viewport_f32_slice(0, viewports.len() as i32, &viewports);
+                gl.depth_range_f64_slice(0, depth_ranges.len() as i32, &depth_ranges);
             }
         }
 
@@ -272,7 +264,7 @@ impl CommandQueue {
             com::Command::BindIndexBuffer(buffer) => {
                 let gl = &self.share.context;
                 self.state.index_buffer = Some(buffer);
-                unsafe { gl.bind_buffer(glow::BufferBindingTarget::ElementArray, Some(buffer)) };
+                unsafe { gl.bind_buffer(glow::ELEMENT_ARRAY_BUFFER, Some(buffer)) };
             }
             //          com::Command::BindVertexBuffers(_data_ptr) =>
             com::Command::Draw {
@@ -411,7 +403,7 @@ impl CommandQueue {
                 // because no queue with compute capability can be created.
                 let gl = &self.share.context;
                 unsafe {
-                    gl.bind_buffer(glow::BufferBindingTarget::DrawIndirect, Some(buffer));
+                    gl.bind_buffer(glow::DRAW_INDIRECT_BUFFER, Some(buffer));
                     // TODO: possible integer conversion issue
                     gl.dispatch_compute_indirect(offset as _);
                 }
@@ -445,17 +437,9 @@ impl CommandQueue {
                     // Support for these functions is coupled with the support
                     // of multiple viewports.
                     unsafe {
-                        gl.viewport_arrayv(
-                            first_viewport,
-                            num_viewports as i32,
-                            viewports.as_ptr() as *const _,
-                        );
-                        gl.depth_range_arrayv(
-                            first_viewport,
-                            num_viewports as i32,
-                            depth_ranges.as_ptr() as *const _,
-                        );
-                    }
+                        gl.viewport_f32_slice(first_viewport, num_viewports as i32, &viewports);
+                        gl.depth_range_f64_slice(first_viewport, num_viewports as i32, &depth_ranges);
+                    };
                 }
             }
             com::Command::SetScissors(first_scissor, data_ptr) => {
@@ -470,51 +454,45 @@ impl CommandQueue {
                 } else {
                     // Support for this function is coupled with the support
                     // of multiple viewports.
-                    unsafe {
-                        gl.scissor_arrayv(
-                            first_scissor,
-                            num_scissors as i32,
-                            scissors.as_ptr() as *const _,
-                        );
-                    }
+                    unsafe { gl.scissor_slice(first_scissor, num_scissors as i32, scissors) };
                 }
             }
             com::Command::SetBlendColor(color) => {
                 state::set_blend_color(&self.share.context, color);
             }
-            com::Command::ClearBufferColorF(draw_buffer, cv) => unsafe {
+            com::Command::ClearBufferColorF(draw_buffer, mut cv) => unsafe {
                 self.share
                     .context
-                    .clear_buffer_f32_slice(gl::COLOR, draw_buffer, cv.as_ptr());
+                    .clear_buffer_f32_slice(glow::COLOR, draw_buffer, cv.as_ptr());
             }
-            com::Command::ClearBufferColorU(draw_buffer, cv) => unsafe {
+            com::Command::ClearBufferColorU(draw_buffer, mut cv) => unsafe {
                 self.share
                     .context
-                    .clear_buffer_u32_slice(gl::COLOR, draw_buffer, cv.as_ptr());
+                    .clear_buffer_u32_slice(glow::COLOR, draw_buffer, cv.as_ptr());
             }
-            com::Command::ClearBufferColorI(draw_buffer, cv) => unsafe {
+            com::Command::ClearBufferColorI(draw_buffer, mut cv) => unsafe {
                 self.share
                     .context
-                    .clear_buffer_i32_slice(gl::COLOR, draw_buffer, cv.as_ptr());
+                    .clear_buffer_i32_slice(glow::COLOR, draw_buffer, cv.as_ptr());
             }
             com::Command::ClearBufferDepthStencil(depth, stencil) => unsafe {
                 match (depth, stencil) {
                     (Some(depth), Some(stencil)) => {
                         self.share
                             .context
-                            .clear_buffer_depth_stencil(gl::DEPTH_STENCIL, 0, depth, stencil as _);
+                            .clear_buffer_depth_stencil(glow::DEPTH_STENCIL, 0, depth, stencil as _);
                     },
                     (Some(depth), None) => {
                         let mut depths = [depth];
                         self.share
                             .context
-                            .clear_buffer_f32_slice(gl::DEPTH, 0, &mut depths);
+                            .clear_buffer_f32_slice(glow::DEPTH, 0, &mut depths);
                     },
                     (None, Some(stencil)) => {
                         let mut stencils = [stencil];
                         self.share
                             .context
-                            .clear_buffer_i32_slice(gl::STENCIL, 0, &mut stencils));
+                            .clear_buffer_i32_slice(glow::STENCIL, 0, &mut stencils));
                     }
                     _ => unreachable!(),
                 };
@@ -540,7 +518,7 @@ impl CommandQueue {
                 state::bind_draw_color_buffers(&self.share.context, num);
             }
             com::Command::SetPatchSize(num) => unsafe {
-                self.share.context.patch_parameter_i32(PatchParameter::Vertices, num);
+                self.share.context.patch_parameter_i32(glow::PATCH_VERTICES, num);
             }
             com::Command::BindProgram(program) => unsafe {
                 self.share.context.use_program(Some(program));
@@ -561,7 +539,7 @@ impl CommandQueue {
                 } = attribute;
                 let gl = &self.share.context;
 
-                gl.bind_buffer(glow::BufferBindingTarget::Array, Some(handle));
+                gl.bind_buffer(glow::ARRAY_BUFFER, Some(handle));
 
                 match vertex_attrib_fn {
                     Float => {
@@ -580,7 +558,7 @@ impl CommandQueue {
                 }
 
                 gl.enable_vertex_attrib_array(location);
-                gl.bind_buffer(glow::BufferBindingTarget::Array, None);
+                gl.bind_buffer(glow::ARRAY_BUFFER, None);
             }
             /*
             com::Command::UnbindAttribute(ref attribute) => unsafe {
@@ -588,37 +566,37 @@ impl CommandQueue {
             }*/
             com::Command::CopyBufferToBuffer(src, dst, ref r) => unsafe {
                 let gl = &self.share.context;
-                gl.bind_buffer(glow::BufferBindingTarget::PixelUnpack, Some(src));
-                gl.bind_buffer(glow::BufferBindingTarget::PixelPack, Some(dst));
+                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(src));
+                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(dst));
                 gl.copy_buffer_sub_data(
-                    gl::PIXEL_UNPACK_BUFFER,
-                    gl::PIXEL_PACK_BUFFER,
+                    glow::PIXEL_UNPACK_BUFFER,
+                    glow::PIXEL_PACK_BUFFER,
                     r.src as _,
                     r.dst as _,
                     r.size as _,
                 );
-                gl.bind_buffer(glow::BufferBindingTarget::PixelUnpack, None);
-                gl.bind_buffer(glow::BufferBindingTarget::PixelPack, None);
+                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
+                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
             }
             com::Command::CopyBufferToTexture(buffer, texture, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 assert_eq!(r.image_offset.z, 0);
                 let gl = &self.share.context;
-                gl.active_texture(gl::TEXTURE0);
-                gl.bind_buffer(glow::BufferBindingTarget::PixelUnpack, Some(buffer));
-                gl.bind_texture(glow::TextureBindingTarget::D2, Some(texture));
-                gl.tex_sub_image_2D(
-                    gl::TEXTURE_2D,
+                gl.active_texture(glow::TEXTURE0);
+                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer));
+                gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                gl.tex_sub_image_2d_pixel_buffer_offset(
+                    glow::TEXTURE_2D,
                     r.image_layers.level as _,
                     r.image_offset.x,
                     r.image_offset.y,
                     r.image_extent.width as _,
                     r.image_extent.height as _,
-                    gl::RGBA,
-                    gl::UNSIGNED_BYTE,
-                    ptr::null(),
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    0,
                 );
-                gl.bind_buffer(glow::BufferBindingTarget::PixelUnpack, None);
+                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
             }
             com::Command::CopyBufferToSurface(..) => {
                 unimplemented!() //TODO: use FBO
@@ -629,20 +607,19 @@ impl CommandQueue {
                 assert_eq!(r.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
                 let gl = &self.share.context;
                 gl.active_texture(gl::TEXTURE0);
-                gl.bind_buffer(glow::BufferBindingTarget::PixelPack, Some(buffer));
-                gl.bind_texture(glow::TextureBindingTarget::D2, Some(texture));
+                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer));
+                gl.bind_texture(glow::TEXTURE_2D, Some(texture));
                 gl.get_tex_image(
-                    gl::TEXTURE_2D,
-                    r.image_layers.level as _,
+                    glow::TEXTURE_2D, r.image_layers.level as _,
                     //r.image_offset.x,
                     //r.image_offset.y,
                     //r.image_extent.width as _,
                     //r.image_extent.height as _,
-                    gl::RGBA,
-                    gl::UNSIGNED_BYTE,
-                    ptr::null_mut(),
+                    glow::RGBA,
+                    glow::UNSIGNED_BYTE,
+                    None,
                 );
-                gl.bind_buffer(glow::BufferBindingTarget::PixelPack, None);
+                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
             }
             com::Command::CopySurfaceToBuffer(..) => {
                 unimplemented!() //TODO: use FBO
@@ -659,8 +636,8 @@ impl CommandQueue {
             }
             com::Command::BindTexture(index, texture) => unsafe {
                 let gl = &self.share.context;
-                gl.active_texture(gl::TEXTURE0 + index);
-                gl.bind_texture(glow::TextureBindingTarget::D2, Some(texture));
+                gl.active_texture(glow::TEXTURE0 + index);
+                gl.bind_texture(glow::TEXTURE_2D, Some(texture));
             }
             com::Command::BindSampler(index, sampler) => unsafe {
                 let gl = &self.share.context;
@@ -668,16 +645,16 @@ impl CommandQueue {
             }
             com::Command::SetTextureSamplerSettings(index, texture, ref sinfo) => unsafe {
                 let gl = &self.share.context;
-                gl.active_texture(gl::TEXTURE0 + index);
-                gl.bind_texture(glow::TextureBindingTarget::D2, Some(texture));
+                gl.active_texture(glow::TEXTURE0 + index);
+                gl.bind_texture(glow::TEXTURE_2D, Some(texture));
 
                 // TODO: Optimization: only change texture properties that have changed.
                 device::set_sampler_info(
                     &self.share,
                     &sinfo,
-                    |a, b| gl.tex_parameter_f32(glow::TextureBindingTarget::D2, a, b),
-                    |a, b| gl.tex_parameter_f32_slice(glow::TextureBindingTarget::D2, a, &b),
-                    |a, b| gl.tex_parameter_i32(glow::TextureBindingTarget::D2, a, b),
+                    |a, b| gl.tex_parameter_f32(glow::TEXTURE_2D, a, b),
+                    |a, b| gl.tex_parameter_f32_slice(glow::TEXTURE_2D, a, &b),
+                    |a, b| gl.tex_parameter_i32(glow::TEXTURE_2D, a, b),
                 );
             }, /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
@@ -937,7 +914,7 @@ impl CommandQueue {
         if self.share.private_caps.sync {
             let gl = &self.share.context;
             let sync = if self.share.private_caps.sync {
-                Some(unsafe { gl.fence_sync(glow::FenceSyncCondition::GpuCommandsComplete, glow::FenceSyncFlags::empty()).unwrap() })
+                Some(unsafe { gl.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0).unwrap() })
             } else {
                 None
             };

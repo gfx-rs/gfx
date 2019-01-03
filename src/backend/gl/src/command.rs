@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::gl;
+use crate::{gl, GlContext};
 
 use crate::hal::format::ChannelType;
 use crate::hal::range::RangeArg;
@@ -55,19 +55,19 @@ pub enum Command {
     Dispatch(hal::WorkGroupCount),
     DispatchIndirect(gl::types::GLuint, buffer::Offset),
     Draw {
-        primitive: glow::PrimitiveMode,
+        primitive: u32,
         vertices: Range<hal::VertexCount>,
         instances: Range<hal::InstanceCount>,
     },
     DrawIndexed {
-        primitive: glow::PrimitiveMode,
-        index_type: glow::ElementType,
+        primitive: u32,
+        index_type: u32,
         index_count: hal::IndexCount,
         index_buffer_offset: buffer::Offset,
         base_vertex: hal::VertexOffset,
         instances: Range<hal::InstanceCount>,
     },
-    BindIndexBuffer(GlContext::Buffer),
+    BindIndexBuffer(<GlContext as glow::Context>::Buffer),
     //BindVertexBuffers(BufferSlice),
     BindUniform {
         uniform: n::UniformDesc,
@@ -105,8 +105,8 @@ pub enum Command {
     BindFrameBuffer(FrameBufferTarget, Option<n::FrameBuffer>),
     BindTargetView(FrameBufferTarget, AttachmentPoint, n::ImageView),
     SetDrawColorBuffers(usize),
-    SetPatchSize(gl::types::GLint),
-    BindProgram(Context::Program),
+    SetPatchSize(i32),
+    BindProgram(<GlContext as glow::Context>::Program),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
     BindAttribute(
         n::AttributeDesc,
@@ -123,15 +123,15 @@ pub enum Command {
     CopyImageToTexture(n::ImageKind, n::Texture, command::ImageCopy),
     CopyImageToSurface(n::ImageKind, n::Surface, command::ImageCopy),
 
-    BindBufferRange(glow::BufferBindingTarget, u32, n::RawBuffer, i32, i32),
+    BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
     BindTexture(u32, n::Texture),
     BindSampler(u32, n::Texture),
     SetTextureSamplerSettings(gl::types::GLuint, n::Texture, image::SamplerInfo),
 }
 
-pub type FrameBufferTarget = glow::FramebufferBindingTarget;
+pub type FrameBufferTarget = u32;
 pub type AttachmentPoint = gl::types::GLenum;
-pub type DrawBuffer = gl::types::GLint;
+pub type DrawBuffer = u32;
 
 #[derive(Clone, Debug)]
 struct AttachmentClear {
@@ -151,7 +151,7 @@ pub struct RenderPassCache {
 #[derive(Debug)]
 struct Cache {
     // Active primitive topology, set by the current pipeline.
-    primitive: Option<glow::PrimitiveMode>,
+    primitive: Option<u32>,
     // Active index type, set by the current index buffer.
     index_type: Option<hal::IndexType>,
     // Stencil reference values (front, back).
@@ -604,7 +604,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         //  >= GL 4.5: Invalidate framebuffer attachment when store op is `DONT_CARE`.
 
         // 2./3.
-        self.push_cmd(Command::BindFrameBuffer(glow::FramebufferBindingTarget::DrawFramebuffer, Some(*framebuffer)));
+        self.push_cmd(Command::BindFrameBuffer(glow::DRAW_FRAMEBUFFER, Some(*framebuffer)));
 
         let mut clear_values_iter = clear_values.into_iter();
         let attachment_clears = render_pass
@@ -677,12 +677,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                     n::ImageKind::Texture(id) => n::ImageView::Texture(id, 0), //TODO
                 };
                 self.push_cmd(Command::BindFrameBuffer(
-                    glow::FramebufferBindingTarget::DrawFramebuffer,
-                    Some(fbo)
+                    glow::DRAW_FRAMEBUFFER,
+                    Some(fbo),
                 ));
                 self.push_cmd(Command::BindTargetView(
-                    glow::FramebufferBindingTarget::DrawFramebuffer,
-                    gl::COLOR_ATTACHMENT0,
+                    glow::DRAW_FRAMEBUFFER,
+                    glow::COLOR_ATTACHMENT0,
                     view,
                 ));
                 self.push_cmd(Command::SetDrawColorBuffers(1));
@@ -926,7 +926,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             depth,
         } = *pipeline;
 
-        if self.cache.primitive.map(|p| p as u32) != Some(primitive) {
+        if self.cache.primitive != Some(primitive) {
             self.cache.primitive = Some(primitive);
         }
 
@@ -988,7 +988,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         size,
                     } => {
                         let btype = match btype {
-                            n::BindingTypes::UniformBuffers => glow::BufferBindingTarget::Uniform,
+                            n::BindingTypes::UniformBuffers => glow::UNIFORM_BUFFER,
                             n::BindingTypes::Images => panic!("Wrong desc set binding"),
                         };
                         for binding in drd
@@ -1224,8 +1224,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.bind_attributes();
 
         let (start, index_type) = match self.cache.index_type {
-            Some(hal::IndexType::U16) => (indices.start * 2, glow::ElementType::UnsignedShort),
-            Some(hal::IndexType::U32) => (indices.start * 4, glow::ElementType::UnsignedInt),
+            Some(hal::IndexType::U16) => (indices.start * 2, glow::UNSIGNED_SHORT),
+            Some(hal::IndexType::U32) => (indices.start * 4, glow::UNSIGNED_INT),
             None => {
                 warn!("No index type bound. An index buffer needs to be bound before calling `draw_indexed`.");
                 self.cache.error_state = true;

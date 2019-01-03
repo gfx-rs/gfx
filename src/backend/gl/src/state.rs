@@ -12,33 +12,31 @@ pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
     unsafe { gl.draw_buffers(&attachments) };
 }
 
-pub fn map_comparison(cmp: pso::Comparison) -> glow::Func {
+pub fn map_comparison(cmp: pso::Comparison) -> u32 {
     use crate::hal::pso::Comparison::*;
-    use glow::Func as G;
     match cmp {
-        Never => G::Never,
-        Less => G::Less,
-        LessEqual => G::LessEqual,
-        Equal => G::Equal,
-        GreaterEqual => G::GreaterEqual,
-        Greater => G::Greater,
-        NotEqual => G::NotEqual,
-        Always => G::Always,
+        Never => glow::NEVER,
+        Less => glow::LESS,
+        LessEqual => glow::LEQUAL,
+        Equal => glow::EQUAL,
+        GreaterEqual => glow::GEQUAL,
+        Greater => glow::GREATER,
+        NotEqual => glow::NOTEQUAL,
+        Always => glow::ALWAYS,
     }
 }
 
 fn map_operation(op: pso::StencilOp) -> glow::StencilOp {
     use crate::hal::pso::StencilOp::*;
-    use glow::StencilOp as SO;
     match op {
-        Keep => SO::Keep,
-        Zero => SO::Zero,
-        Replace => SO::Replace,
-        IncrementClamp => SO::Increment,
-        IncrementWrap => SO::IncrementWrap,
-        DecrementClamp => SO::Decrement,
-        DecrementWrap => SO::DecrementWrap,
-        Invert => SO::Invert,
+        Keep => glow::KEEP,
+        Zero => glow::ZERO,
+        Replace => glow::REPLACE,
+        IncrementClamp => glow::INCR,
+        IncrementWrap => glow::INCR_WRAP,
+        DecrementClamp => glow::DECR,
+        DecrementWrap => glow::DECR_WRAP,
+        Invert => glow::INVERT,
     }
 }
 
@@ -50,7 +48,7 @@ pub(crate) fn bind_stencil(
 ) {
     fn bind_side(
         gl: &GlContainer,
-        face: glow::Face,
+        face: u32,
         side: &pso::StencilFace,
         ref_value: pso::StencilValue,
     ) {
@@ -75,59 +73,56 @@ pub(crate) fn bind_stencil(
     }
     match *stencil {
         pso::StencilTest::On { ref front, ref back } => {
-            unsafe { gl.enable(glow::Parameter::StencilTest) };
+            unsafe { gl.enable(glow::STENCIL_TEST) };
             if let Some(cf) = cull {
                 if !cf.contains(pso::Face::FRONT) {
-                    bind_side(gl, glow::Face::Front, front, ref_front);
+                    bind_side(gl, glow::FRONT, front, ref_front);
                 }
                 if !cf.contains(pso::Face::BACK) {
-                    bind_side(gl, glow::Face::Back, back, ref_back);
+                    bind_side(gl, glow::BACK, back, ref_back);
                 }
             }
         }
         pso::StencilTest::Off => unsafe {
-            gl.disable(glow::Parameter::StencilTest);
+            gl.disable(glow::STENCIL_TEST);
         },
     }
 }
 
-fn map_factor(factor: pso::Factor) -> glow::BlendFactor {
+fn map_factor(factor: pso::Factor) -> u32 {
     use crate::hal::pso::Factor::*;
-    use glow::BlendFactor as BF;
     match factor {
-        Zero => BF::Zero,
-        One => BF::One,
-        SrcColor => BF::SrcColor,
-        OneMinusSrcColor => BF::OneMinusSrcColor,
-        DstColor => BF::DstColor,
-        OneMinusDstColor => BF::OneMinusDstColor,
-        SrcAlpha => BF::SrcAlpha,
-        OneMinusSrcAlpha => BF::OneMinusSrcAlpha,
-        DstAlpha => BF::DstAlpha,
-        OneMinusDstAlpha => BF::OneMinusDstAlpha,
-        ConstColor => BF::ConstantColor,
-        OneMinusConstColor => BF::OneMinusConstantColor,
-        ConstAlpha => BF::ConstantAlpha,
-        OneMinusConstAlpha => BF::OneMinusConstantAlpha,
-        SrcAlphaSaturate => BF::SrcAlphaSaturate,
-        Src1Color => BF::Src1Color,
-        OneMinusSrc1Color => BF::OneMinusSrc1Color,
-        Src1Alpha => BF::Src1Alpha,
-        OneMinusSrc1Alpha => BF::OneMinusSrc1Alpha,
+        Zero => glow::ZERO,
+        One => glow::ONE,
+        SrcColor => glow::SRC_COLOR,
+        OneMinusSrcColor => glow::ONE_MINUS_SRC_COLOR,
+        DstColor => glow::DST_COLOR,
+        OneMinusDstColor => glow::ONE_MINUS_DST_COLOR,
+        SrcAlpha => glow::SRC_ALPHA,
+        OneMinusSrcAlpha => glow::ONE_MINUS_SRC_ALPHA,
+        DstAlpha => glow::DST_ALPHA,
+        OneMinusDstAlpha => glow::ONE_MINUS_DST_ALPHA,
+        ConstColor => glow::CONSTANT_COLOR,
+        OneMinusConstColor => glow::ONE_MINUS_CONSTANT_COLOR,
+        ConstAlpha => glow::CONSTANT_ALPHA,
+        OneMinusConstAlpha => glow::ONE_MINUS_CONSTANT_ALPHA,
+        SrcAlphaSaturate => glow::SRC_ALPHA_SATURATE,
+        Src1Color => glow::SRC1_COLOR,
+        OneMinusSrc1Color => glow::ONE_MINUS_SRC1_COLOR,
+        Src1Alpha => glow::SRC1_ALPHA,
+        OneMinusSrc1Alpha => glow::ONE_MINUS_SRC1_ALPHA,
     }
 }
 
-fn map_blend_op(operation: pso::BlendOp) -> (glow::BlendMode, glow::BlendFactor, glow::BlendFactor) {
-    use glow::BlendMode as BM;
-    use glow::BlendFactor as BF;
+fn map_blend_op(operation: pso::BlendOp) -> (u32, u32, u32) {
     match operation {
-        pso::BlendOp::Add { src, dst } => (BM::FuncAdd, map_factor(src), map_factor(dst)),
-        pso::BlendOp::Sub { src, dst } => (BM::FuncSubtract, map_factor(src), map_factor(dst)),
+        pso::BlendOp::Add { src, dst } => (glow::FUNC_ADD, map_factor(src), map_factor(dst)),
+        pso::BlendOp::Sub { src, dst } => (glow::FUNC_SUBTRACT, map_factor(src), map_factor(dst)),
         pso::BlendOp::RevSub { src, dst } => {
-            (BM::FuncReverseSubtract, map_factor(src), map_factor(dst))
+            (glow::FUNC_REVERSE_SUBTRACT, map_factor(src), map_factor(dst))
         }
-        pso::BlendOp::Min => (BM::Min, BF::Zero, BF::Zero),
-        pso::BlendOp::Max => (BM::Max, BF::Zero, BF::Zero),
+        pso::BlendOp::Min => (glow::MIN, glow::ZERO, glow::ZERO),
+        pso::BlendOp::Max => (glow::MAX, glow::ZERO, glow::ZERO),
     }
 }
 
@@ -138,12 +133,12 @@ pub(crate) fn bind_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
         pso::BlendState::On { color, alpha } => unsafe {
             let (color_eq, color_src, color_dst) = map_blend_op(color);
             let (alpha_eq, alpha_src, alpha_dst) = map_blend_op(alpha);
-            gl.enable(glow::Parameter::Blend);
+            gl.enable(glow::BLEND);
             gl.blend_equation_separate(color_eq, alpha_eq);
             gl.blend_func_separate(color_src, color_dst, alpha_src, alpha_dst);
         },
         pso::BlendState::Off => unsafe {
-            gl.disable(glow::Parameter::Blend);
+            gl.disable(glow::BLEND);
         },
     };
 
@@ -164,18 +159,17 @@ pub(crate) fn bind_blend_slot(gl: &GlContainer, slot: ColorSlot, desc: &pso::Col
         pso::BlendState::On { color, alpha } => unsafe {
             let (color_eq, color_src, color_dst) = map_blend_op(color);
             let (alpha_eq, alpha_src, alpha_dst) = map_blend_op(alpha);
-            //Note: using ARB functions as they are more compatible
-            gl.enable_i(glow::Parameter::Blend, slot as _);
-            gl.blend_equation_separate_i(slot as _, color_eq, alpha_eq);
-            gl.blend_func_separate_i(slot as _, color_src, color_dst, alpha_src, alpha_dst);
+            gl.enable_draw_buffer(glow::BLEND, slot as _);
+            gl.blend_equation_separate_draw_buffer(slot as _, color_eq, alpha_eq);
+            gl.blend_func_separate_draw_buffer(slot as _, color_src, color_dst, alpha_src, alpha_dst);
         },
         pso::BlendState::Off => unsafe {
-            gl.disable_i(glow::Parameter::Blend, slot as _);
+            gl.disable_draw_buffer(glow::BLEND, slot as _);
         },
     };
 
     unsafe {
-        gl.color_mask_i(slot as _,
+        gl.color_mask_draw_buffer(slot as _,
             desc.0.contains(Cm::RED) as _,
             desc.0.contains(Cm::GREEN) as _,
             desc.0.contains(Cm::BLUE) as _,
