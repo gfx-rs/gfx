@@ -269,9 +269,21 @@ impl hal::Surface<Backend> for Surface {
             None
         };
 
+        let device_caps = &device.shared.private_caps;
+
+        let can_set_maximum_drawables_count = device_caps.os_is_mac || device_caps.has_version_at_least(11, 2);
+
+        let image_count = if can_set_maximum_drawables_count {
+            2..4
+        } else {
+            // 3 is the default in `CAMetalLayer` documentation
+            // iOS 10.3 was tested to use 3 on iphone5s
+            3..4
+        };
+
         let caps = hal::SurfaceCapabilities {
             //Note: this is hardcoded in `CAMetalLayer` documentation
-            image_count: 2 .. 4,
+            image_count,
             current_extent,
             extents: Extent2D { width: 4, height: 4} .. Extent2D { width: 4096, height: 4096 },
             max_image_layers: 1,
@@ -285,7 +297,6 @@ impl hal::Surface<Backend> for Surface {
             format::Format::Rgba16Float,
         ];
 
-        let device_caps = &device.private_caps;
         let can_set_display_sync = device_caps.os_is_mac && device_caps.has_version_at_least(10, 13);
 
         let present_modes = if can_set_display_sync {
@@ -318,7 +329,7 @@ impl Device {
             sc.clear_drawables();
         }
 
-        let caps = &self.private_caps;
+        let caps = &self.shared.private_caps;
         let mtl_format = caps
             .map_format(config.format)
             .expect("unsupported backbuffer format");
@@ -343,7 +354,10 @@ impl Device {
             msg_send![render_layer, setDevice: device_raw];
             msg_send![render_layer, setPixelFormat: mtl_format];
             msg_send![render_layer, setFramebufferOnly: framebuffer_only];
+
+            // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
             msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
+
             msg_send![render_layer, setDrawableSize: CGSize::new(config.extent.width as f64, config.extent.height as f64)];
             if can_set_next_drawable_timeout {
                 msg_send![render_layer, setAllowsNextDrawableTimeout:false];
@@ -373,7 +387,7 @@ impl Device {
                                 cmd_buffer,
                                 &old.frames[0].texture,
                                 texture,
-                                self.private_caps.layered_rendering,
+                                &self.shared.private_caps,
                             );
                             cmd_buffer.present_drawable(drawable);
                             cmd_buffer.set_label("build_swapchain");
