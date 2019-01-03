@@ -229,7 +229,7 @@ pub struct RasterizerState {
     //TODO: more states
     pub front_winding: metal::MTLWinding,
     pub cull_mode: metal::MTLCullMode,
-    pub depth_clip: metal::MTLDepthClipMode,
+    pub depth_clip: Option<metal::MTLDepthClipMode>,
 }
 
 impl Default for RasterizerState {
@@ -237,7 +237,7 @@ impl Default for RasterizerState {
         RasterizerState {
             front_winding: metal::MTLWinding::Clockwise,
             cull_mode: metal::MTLCullMode::None,
-            depth_clip: metal::MTLDepthClipMode::Clip,
+            depth_clip: None,
         }
     }
 }

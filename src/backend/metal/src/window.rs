@@ -373,6 +373,7 @@ impl Device {
                                 cmd_buffer,
                                 &old.frames[0].texture,
                                 texture,
+                                self.private_caps.layered_rendering,
                             );
                             cmd_buffer.present_drawable(drawable);
                             cmd_buffer.set_label("build_swapchain");
