@@ -1,3 +1,4 @@
+use PrivateCapabilities;
 use conversions as conv;
 
 use metal;
@@ -272,24 +273,24 @@ pub struct ImageClearPipes {
 }
 
 impl ImageClearPipes {
-    pub fn get(
+    pub(crate) fn get(
         &self,
         key: ClearKey,
         library: &Mutex<metal::Library>,
         device: &Mutex<metal::Device>,
-        layered_rendering: bool,
+        private_caps: &PrivateCapabilities,
     ) -> FastStorageGuard<metal::RenderPipelineState> {
         self.map
             .get_or_create_with(&key, || {
-                Self::create(key, &*library.lock(), &*device.lock(), layered_rendering)
+                Self::create(key, &*library.lock(), &*device.lock(), private_caps)
             })
     }
 
     fn create(
-        key: ClearKey, library: &metal::LibraryRef, device: &metal::DeviceRef, layered_rendering: bool,
+        key: ClearKey, library: &metal::LibraryRef, device: &metal::DeviceRef, private_caps: &PrivateCapabilities,
     ) -> metal::RenderPipelineState {
         let pipeline = metal::RenderPipelineDescriptor::new();
-        if layered_rendering {
+        if private_caps.layered_rendering {
             pipeline.set_input_primitive_topology(metal::MTLPrimitiveTopologyClass::Triangle);
         }
 
@@ -354,16 +355,16 @@ pub struct ImageBlitPipes {
 }
 
 impl ImageBlitPipes {
-    pub fn get(
+    pub(crate) fn get(
         &self,
         key: BlitKey,
         library: &Mutex<metal::Library>,
         device: &Mutex<metal::Device>,
-        layered_rendering: bool,
+        private_caps: &PrivateCapabilities,
     ) -> FastStorageGuard<metal::RenderPipelineState> {
         self.map
             .get_or_create_with(&key, || {
-                Self::create(key, &*library.lock(), &*device.lock(), layered_rendering)
+                Self::create(key, &*library.lock(), &*device.lock(), private_caps)
             })
     }
 
@@ -371,12 +372,12 @@ impl ImageBlitPipes {
         key: BlitKey,
         library: &metal::LibraryRef,
         device: &metal::DeviceRef,
-        layered_rendering: bool,
+        private_caps: &PrivateCapabilities,
     ) -> metal::RenderPipelineState {
         use metal::MTLTextureType as Tt;
 
         let pipeline = metal::RenderPipelineDescriptor::new();
-        if layered_rendering {
+        if private_caps.layered_rendering {
         	pipeline.set_input_primitive_topology(metal::MTLPrimitiveTopologyClass::Triangle);
         }
 
@@ -513,12 +514,12 @@ impl ServicePipes {
         unsafe { device.new_compute_pipeline_state(&pipeline) }.unwrap()
     }
 
-    pub fn simple_blit(
+    pub(crate) fn simple_blit(
         &self, device: &Mutex<metal::Device>, cmd_buffer: &metal::CommandBufferRef,
-        src: &metal::TextureRef, dst: &metal::TextureRef, layered_rendering: bool,
+        src: &metal::TextureRef, dst: &metal::TextureRef, private_caps: &PrivateCapabilities,
     ) {
         let key = (metal::MTLTextureType::D2, dst.pixel_format(), Aspects::COLOR, Channel::Float);
-        let pso = self.blits.get(key, &self.library, device, layered_rendering);
+        let pso = self.blits.get(key, &self.library, device, private_caps);
         let vertices = [
             BlitVertex {
                 uv: [0.0, 1.0, 0.0, 0.0],
@@ -539,7 +540,7 @@ impl ServicePipes {
         ];
 
         let descriptor = metal::RenderPassDescriptor::new();
-        if layered_rendering {
+        if private_caps.layered_rendering {
             descriptor.set_render_target_array_length(1);
         }
         let attachment = descriptor
