@@ -177,7 +177,7 @@ impl hal::Instance for Surface {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
         unsafe { self.window.make_current().unwrap() };
-        let adapter = PhysicalDevice::new_adapter(|s| self.window.get_proc_address(s) as *const _);
+        let adapter = PhysicalDevice::new_adapter(|s| self.window.get_proc_address(s) as *const _, None);
         vec![adapter]
     }
 }
@@ -209,7 +209,7 @@ impl hal::Instance for Headless {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
         unsafe { self.0.make_current().unwrap() };
-        let adapter = PhysicalDevice::new_adapter(|s| self.0.get_proc_address(s) as *const _);
+        let adapter = PhysicalDevice::new_adapter(|s| self.0.get_proc_address(s) as *const _, None);
         vec![adapter]
     }
 }
