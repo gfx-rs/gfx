@@ -229,9 +229,15 @@ pub enum Requirement<'a> {
 impl Info {
     fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
-        let version = Version::parse(get_string(gl, glow::VERSION).unwrap()).unwrap();
+        let version =
+            Version::parse(get_string(gl, glow::VERSION).unwrap_or_else(|_| String::from(""))).unwrap();
         let shading_language =
-            Version::parse(get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap()).unwrap();
+            Version::parse(get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_else(|_| String::from(""))).unwrap();
+        // TODO: Use separate path for WebGL extensions in `glow` somehow
+        // Perhaps automatic fallback for NUM_EXTENSIONS to EXTENSIONS on native
+        #[cfg(target_arch = "wasm32")]
+        let extensions = HashSet::new();
+        #[cfg(not(target_arch = "wasm32"))]
         let extensions = if version >= Version::new(3, 0, None, String::from("")) {
             let num_exts = get_usize(gl, glow::NUM_EXTENSIONS).unwrap();
             (0..num_exts)
@@ -239,7 +245,7 @@ impl Info {
                 .collect()
         } else {
             // Fallback
-            get_string(gl, glow::EXTENSIONS).unwrap().split(' ').map(|s| s.to_string()).collect()
+            get_string(gl, glow::EXTENSIONS).unwrap_or_else(|_| String::from("")).split(' ').map(|s| s.to_string()).collect()
         };
         Info {
             platform_name,

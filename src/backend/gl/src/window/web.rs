@@ -141,7 +141,7 @@ impl Device {
         let swapchain = Swapchain {
             window: surface.window.clone(),
         };
-        let backbuffer = hal::Backbuffer::Framebuffer(0);
+        let backbuffer = hal::Backbuffer::Framebuffer(None);
         (swapchain, backbuffer)
     }
 }
