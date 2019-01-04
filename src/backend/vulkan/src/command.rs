@@ -937,7 +937,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 self.raw,
                 layout.raw,
                 vk::ShaderStageFlags::COMPUTE,
-                offset * 4,
+                offset,
                 memory::cast_slice(constants),
             );
         }
@@ -955,7 +955,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 self.raw,
                 layout.raw,
                 conv::map_stage_flags(stages),
-                offset * 4,
+                offset,
                 memory::cast_slice(constants),
             );
         }
