@@ -423,8 +423,9 @@ impl CommandQueue {
                             view[0] as i32,
                             view[1] as i32,
                             view[2] as i32,
-                            view[3] as i32
+                            view[3] as i32,
                         );
+                        #[cfg(not(target_arch = "wasm32"))] // TODO
                         gl.depth_range_f64(depth_range[0], depth_range[1]);
                     };
                 } else if num_viewports > 1 {
@@ -493,8 +494,11 @@ impl CommandQueue {
             },
             com::Command::ClearTexture(_color) => unimplemented!(),
             com::Command::DrawBuffers(draw_buffers) => unsafe {
-                let draw_buffers = Self::get::<gl::types::GLenum>(data_buf, draw_buffers);
-                self.share.context.draw_buffers(draw_buffers);
+                #[cfg(not(target_arch = "wasm32"))] // TODO
+                {
+                    let draw_buffers = Self::get::<gl::types::GLenum>(data_buf, draw_buffers);
+                    self.share.context.draw_buffers(draw_buffers);
+                }
             }
             com::Command::BindFrameBuffer(point, frame_buffer) => {
                 if self.share.private_caps.framebuffer {

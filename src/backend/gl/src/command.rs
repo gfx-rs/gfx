@@ -962,9 +962,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     {
         assert!(offsets.into_iter().next().is_none()); // TODO: offsets unsupported
 
+        #[cfg(not(target_arch = "wasm32"))]
         let mut set = first_set as _;
         let drd = &*layout.desc_remap_data.read().unwrap();
-
         for desc_set in sets {
             let desc_set = desc_set.borrow();
             let bindings = desc_set.bindings.lock().unwrap();
@@ -981,6 +981,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                             n::BindingTypes::UniformBuffers => glow::UNIFORM_BUFFER,
                             n::BindingTypes::Images => panic!("Wrong desc set binding"),
                         };
+                        #[cfg(not(target_arch = "wasm32"))]
                         for binding in drd
                             .get_binding(n::BindingTypes::UniformBuffers, set, *binding)
                             .unwrap()
@@ -995,6 +996,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         }
                     }
                     n::DescSetBindings::Texture(binding, texture, textype) => {
+                        #[cfg(not(target_arch = "wasm32"))]
                         for binding in drd
                             .get_binding(n::BindingTypes::Images, set, *binding)
                             .unwrap()
@@ -1003,14 +1005,19 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         }
                     }
                     n::DescSetBindings::Sampler(binding, sampler) => {
+                        #[cfg(not(target_arch = "wasm32"))]
                         for binding in drd
                             .get_binding(n::BindingTypes::Images, set, *binding)
                             .unwrap()
                         {
-                            self.push_cmd(Command::BindSampler(*binding, *sampler))
+                            self.push_cmd(Command::BindSampler(
+                                *binding,
+                                *sampler,
+                            ))
                         }
                     }
                     n::DescSetBindings::SamplerInfo(binding, sinfo) => {
+                        #[cfg(not(target_arch = "wasm32"))]
                         let mut all_txts = drd
                             .get_binding(n::BindingTypes::Images, set, *binding)
                             .unwrap()
@@ -1037,9 +1044,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         // texture are gonna be unbound or the two samplers have
                         // identical properties.
 
+                        #[cfg(not(target_arch = "wasm32"))]
                         all_txts.sort_unstable_by(|a, b| a.1.cmp(&b.1));
+                        #[cfg(not(target_arch = "wasm32"))]
                         all_txts.dedup_by(|a, b| a.1 == b.1);
 
+                        #[cfg(not(target_arch = "wasm32"))]
                         for (binding, txt, txttype) in all_txts {
                             self.push_cmd(Command::SetTextureSamplerSettings(
                                 binding,
@@ -1051,7 +1061,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                     }
                 }
             }
-            set += 1;
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                set += 1;
+            }
         }
     }
 
