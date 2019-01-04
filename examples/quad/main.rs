@@ -533,6 +533,7 @@ fn main() {
     .expect("Can't create pipeline layout");
     let pipeline = {
         let vs_module = {
+            #[cfg(not(target_arch = "wasm32"))]
             let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
             #[cfg(not(target_arch = "wasm32"))]
             let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
@@ -546,6 +547,7 @@ fn main() {
             unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
         let fs_module = {
+            #[cfg(not(target_arch = "wasm32"))]
             let glsl = fs::read_to_string("quad/data/quad.frag").unwrap();
             #[cfg(not(target_arch = "wasm32"))]
             let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
@@ -652,6 +654,10 @@ fn main() {
     };
     let mut frame: u64 = 0;
     while running {
+        #[cfg(target_arch = "wasm32")] // TODO
+        {
+            running = false;
+        }
         #[cfg(not(target_arch = "wasm32"))]
         events_loop.poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
@@ -829,6 +835,9 @@ fn main() {
         }
         // Increment our frame
         frame += 1;
+
+        #[cfg(target_arch = "wasm32")] // TODO
+        return;
     }
 
     // cleanup!

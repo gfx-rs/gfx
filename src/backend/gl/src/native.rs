@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::hal::backend::FastHashMap;
@@ -232,6 +232,7 @@ pub struct Memory {
     pub(crate) first_bound_buffer: Cell<Option<RawBuffer>>,
     /// Allocation size
     pub(crate) size: u64,
+    pub(crate) emulate_map_allocation: RefCell<*mut u8>,
 }
 
 unsafe impl Send for Memory {}

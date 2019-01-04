@@ -163,6 +163,8 @@ pub struct PrivateCaps {
     pub sync: bool,
     /// Can map memory
     pub map: bool,
+    /// Whether to emulate map memory
+    pub emulate_map: bool,
     /// Indicates if we only have support via the EXT.
     pub sampler_anisotropy_ext: bool,
 }
@@ -360,8 +362,8 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         features |= Features::SAMPLER_MIP_LOD_BIAS;
     }
 
-    if info.is_supported(&[Core(4, 3), Es(3, 1)]) {
-        // TODO: extension
+    // TODO
+    if false && info.is_supported(&[Core(4, 3), Es(3, 1)]) { // TODO: extension
         legacy |= LegacyFeatures::INDIRECT_EXECUTION;
     }
     if info.is_supported(&[Core(3, 1), Es(3, 0), Ext("GL_ARB_draw_instanced")]) {
@@ -422,23 +424,26 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         legacy |= LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING;
     }
 
+    let emulate_map = true;//info.version.is_embedded;
+
     let private = PrivateCaps {
         vertex_array: info.is_supported(&[Core(3,0), Es(3,0), Ext("GL_ARB_vertex_array_object")]),
             // TODO && gl.GenVertexArrays.is_loaded(),
         framebuffer: info.is_supported(&[Core(3,0), Es(2,0), Ext ("GL_ARB_framebuffer_object")]),
             // TODO && gl.GenFramebuffers.is_loaded(),
         framebuffer_texture: info.is_supported(&[Core(3, 0)]), //TODO: double check
-        buffer_role_change: !info.version.is_embedded,
+        buffer_role_change: true || !info.version.is_embedded, // TODO
         image_storage: info.is_supported(&[Core(4, 2), Ext("GL_ARB_texture_storage")]),
         buffer_storage: info.is_supported(&[Core(4, 4), Ext("GL_ARB_buffer_storage")]),
         clear_buffer: info.is_supported(&[Core(3, 0), Es(3, 0)]),
         program_interface: info.is_supported(&[Core(4, 3), Ext("GL_ARB_program_interface_query")]),
         frag_data_location: !info.version.is_embedded,
-        sync: info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]),
+        sync: false && info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]), // TODO
         map: !info.version.is_embedded, //TODO: OES extension
         sampler_anisotropy_ext: !info
             .is_supported(&[Core(4, 6), Ext("GL_ARB_texture_filter_anisotropic")])
             && info.is_supported(&[Ext("GL_EXT_texture_filter_anisotropic")]),
+        emulate_map, // TODO
     };
 
     (info, features, legacy, limits, private)

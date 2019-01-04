@@ -159,17 +159,22 @@ pub(crate) fn bind_blend_slot(gl: &GlContainer, slot: ColorSlot, desc: &pso::Col
         pso::BlendState::On { color, alpha } => unsafe {
             let (color_eq, color_src, color_dst) = map_blend_op(color);
             let (alpha_eq, alpha_src, alpha_dst) = map_blend_op(alpha);
-            gl.enable_draw_buffer(glow::BLEND, slot as _);
-            gl.blend_equation_separate_draw_buffer(slot as _, color_eq, alpha_eq);
-            gl.blend_func_separate_draw_buffer(slot as _, color_src, color_dst, alpha_src, alpha_dst);
+            #[cfg(not(target_arch = "wasm32"))] // TODO
+            {
+                gl.enable_draw_buffer(glow::BLEND, slot as _);
+                gl.blend_equation_separate_draw_buffer(slot as _, color_eq, alpha_eq);
+                gl.blend_func_separate_draw_buffer(slot as _, color_src, color_dst, alpha_src, alpha_dst);
+            }
         },
         pso::BlendState::Off => unsafe {
             gl.disable_draw_buffer(glow::BLEND, slot as _);
         },
     };
 
+    #[cfg(not(target_arch = "wasm32"))] // TODO
     unsafe {
-        gl.color_mask_draw_buffer(slot as _,
+        gl.color_mask_draw_buffer(
+            slot as _,
             desc.0.contains(Cm::RED) as _,
             desc.0.contains(Cm::GREEN) as _,
             desc.0.contains(Cm::BLUE) as _,

@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::ops::Range;
 use std::{mem, ptr, slice};
 use std::sync::{Arc, Mutex, RwLock};
@@ -522,6 +522,7 @@ impl d::Device<B> for Device {
             properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
             first_bound_buffer: Cell::new(None),
             size,
+            emulate_map_allocation: RefCell::new(std::ptr::null_mut()),
         })
     }
 
@@ -1140,16 +1141,25 @@ impl d::Device<B> for Device {
             Some(other) => other,
         };
 
-        assert!(self.share.private_caps.buffer_role_change);
+        let caps = &self.share.private_caps;
+
+        assert!(caps.buffer_role_change);
         let target = glow::PIXEL_PACK_BUFFER;
         let access = memory.map_flags();
 
         let offset = *range.start().unwrap_or(&0);
         let size = *range.end().unwrap_or(&memory.size) - offset;
 
-        gl.bind_buffer(target, Some(buffer));
-        let ptr = gl.map_buffer_range(target, offset as _, size as _, access);
-        gl.bind_buffer(target, None);
+        let ptr = if caps.emulate_map {
+            let raw = Box::into_raw(vec![0; size as usize].into_boxed_slice()) as *mut u8;
+            *memory.emulate_map_allocation.borrow_mut() = raw;
+            raw
+        } else {
+            gl.bind_buffer(target, Some(buffer));
+            let raw = gl.map_buffer_range(target, offset as _, size as _, access);
+            gl.bind_buffer(target, None);
+            raw
+        };
 
         if let Err(err) = self.share.check() {
             panic!("Error mapping memory: {:?} for memory {:?}", err, memory);
@@ -1167,7 +1177,17 @@ impl d::Device<B> for Device {
         let target = glow::PIXEL_PACK_BUFFER;
 
         gl.bind_buffer(target, Some(buffer));
-        gl.unmap_buffer(target);
+
+        if self.share.private_caps.emulate_map {
+            let raw = memory.emulate_map_allocation.replace(std::ptr::null_mut());
+            let mut mapped = slice::from_raw_parts_mut(raw, memory.size as usize);
+            // TODO: Access
+            gl.buffer_data_u8_slice(target, mapped, gl::DYNAMIC_DRAW);
+            let _ = *Box::from_raw(raw);
+        } else {
+            gl.unmap_buffer(target);
+        }
+
         gl.bind_buffer(target, None);
 
         if let Err(err) = self.share.check() {
