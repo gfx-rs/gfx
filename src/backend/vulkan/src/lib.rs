@@ -36,7 +36,7 @@ use hal::{Features, Limits, PatchSize, QueueType, SwapImageIndex};
 use std::borrow::Borrow;
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
-use std::{fmt, mem, ptr};
+use std::{fmt, mem, ptr, slice};
 
 #[cfg(feature = "use-rtld-next")]
 use ash::{EntryCustom, LoadingError};
@@ -55,7 +55,7 @@ mod window;
 // CStr's cannot be constant yet, until const fn lands we need to use a lazy_static
 lazy_static! {
     static ref LAYERS: Vec<&'static CStr> = vec![#[cfg(debug_assertions)] CStr::from_bytes_with_nul(b"VK_LAYER_LUNARG_standard_validation\0").expect("Wrong extension string")];
-    static ref EXTENSIONS: Vec<&'static CStr> = vec![#[cfg(debug_assertions)] CStr::from_bytes_with_nul(b"VK_EXT_debug_report\0").expect("Wrong extension string")];
+    static ref EXTENSIONS: Vec<&'static CStr> = vec![#[cfg(debug_assertions)] CStr::from_bytes_with_nul(b"VK_EXT_debug_utils\0").expect("Wrong extension string")];
     static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![ext::Swapchain::name()];
     static ref SURFACE_EXTENSIONS: Vec<&'static CStr> = vec![
         ext::Surface::name(),
@@ -89,17 +89,17 @@ lazy_static! {
 
 pub struct RawInstance(
     pub ash::Instance,
-    Option<(ext::DebugReport, vk::DebugReportCallbackEXT)>,
+    Option<(ext::DebugUtils, vk::DebugUtilsMessengerEXT)>,
 );
 impl Drop for RawInstance {
     fn drop(&mut self) {
         unsafe {
             #[cfg(debug_assertions)]
-            {
-                if let Some((ref ext, callback)) = self.1 {
-                    ext.destroy_debug_report_callback_ext(callback, None);
+                {
+                    if let Some((ref ext, callback)) = self.1 {
+                        ext.destroy_debug_utils_messenger_ext(callback, None);
+                    }
                 }
-            }
 
             self.0.destroy_instance(None);
         }
@@ -131,27 +131,132 @@ fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
     }
 }
 
-extern "system" fn callback(
-    type_: vk::DebugReportFlagsEXT,
-    _: vk::DebugReportObjectTypeEXT,
-    _object: u64,
-    _location: usize,
-    _msg_code: i32,
-    layer_prefix: *const std::os::raw::c_char,
-    description: *const std::os::raw::c_char,
+unsafe fn display_debug_utils_label_ext(
+    label_structs: *mut vk::DebugUtilsLabelEXT,
+    count: usize,
+) -> Option<String> {
+    if count == 0 {
+        return None;
+    }
+
+    Some(
+        slice::from_raw_parts::<vk::DebugUtilsLabelEXT>(label_structs, count)
+            .iter()
+            .flat_map(|dul_obj| {
+                dul_obj
+                    .p_label_name
+                    .as_ref()
+                    .map(|lbl| CStr::from_ptr(lbl).to_string_lossy().into_owned())
+            })
+            .collect::<Vec<String>>()
+            .join(", "),
+    )
+}
+
+unsafe fn display_debug_utils_object_name_info_ext(
+    info_structs: *mut vk::DebugUtilsObjectNameInfoEXT,
+    count: usize,
+) -> Option<String> {
+    if count == 0 {
+        return None;
+    }
+
+    //TODO: use color field of vk::DebugUtilsLabelsExt in a meaningful way?
+    Some(
+        slice::from_raw_parts::<vk::DebugUtilsObjectNameInfoEXT>(info_structs, count)
+            .iter()
+            .map(|obj_info| {
+                let object_name = obj_info
+                    .p_object_name
+                    .as_ref()
+                    .map(|name| CStr::from_ptr(name).to_string_lossy().into_owned());
+
+                match object_name {
+                    Some(name) => format!(
+                        "(type: {}, hndl: {}, name: {})",
+                        obj_info.object_type,
+                        &obj_info.object_handle.to_string(),
+                        name
+                    ),
+                    None => format!(
+                        "(type: {}, hndl: {})",
+                        obj_info.object_type,
+                        &obj_info.object_handle.to_string()
+                    ),
+                }
+            })
+            .collect::<Vec<String>>()
+            .join(", "),
+    )
+}
+
+unsafe extern "system" fn debug_utils_messenger_callback(
+    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT,
+    message_type: vk::DebugUtilsMessageTypeFlagsEXT,
+    p_callback_data: *const vk::DebugUtilsMessengerCallbackDataEXT,
     _user_data: *mut std::os::raw::c_void,
 ) -> vk::Bool32 {
-    unsafe {
-        let level = match type_ {
-            vk::DebugReportFlagsEXT::ERROR => log::Level::Error,
-            vk::DebugReportFlagsEXT::DEBUG => log::Level::Debug,
-            _ => log::Level::Warn,
-        };
-        let layer_prefix = CStr::from_ptr(layer_prefix).to_str().unwrap();
-        let description = CStr::from_ptr(description).to_str().unwrap();
-        log!(level, "[{}] {}", layer_prefix, description);
-        vk::FALSE
-    }
+    let callback_data = *p_callback_data;
+
+    let message_severity = match message_severity {
+        vk::DebugUtilsMessageSeverityFlagsEXT::ERROR => log::Level::Error,
+        vk::DebugUtilsMessageSeverityFlagsEXT::WARNING => log::Level::Warn,
+        vk::DebugUtilsMessageSeverityFlagsEXT::INFO => log::Level::Info,
+        vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Trace,
+        _ => log::Level::Warn,
+    };
+    let message_type = &format!("{}", message_type);
+
+    let message_id_name = CStr::from_ptr(callback_data.p_message_id_name).to_string_lossy();
+    let message_id_number: i32 = callback_data.message_id_number as i32;
+    let message = CStr::from_ptr(callback_data.p_message).to_string_lossy();
+
+    let additional_info: [(&str, Option<String>); 3] = [
+        (
+            "queue info",
+            display_debug_utils_label_ext(
+                callback_data.p_queue_labels,
+                callback_data.queue_label_count as usize,
+            ),
+        ),
+        (
+            "cmd buf info",
+            display_debug_utils_label_ext(
+                callback_data.p_cmd_buf_labels,
+                callback_data.cmd_buf_label_count as usize,
+            ),
+        ),
+        (
+            "object info",
+            display_debug_utils_object_name_info_ext(
+                callback_data.p_objects,
+                callback_data.object_count as usize,
+            ),
+        ),
+    ];
+
+    log!(message_severity, "{}\n", {
+        let mut msg = format!(
+            "\n{} [{} ({})] : {}",
+            message_type,
+            message_id_name,
+            &message_id_number.to_string(),
+            message
+        );
+
+        for (info_label, info) in additional_info.into_iter() {
+            match info {
+                Some(data) => {
+                    msg = format!("{}\n{}: {}", msg, info_label, data);
+                }
+                None => {}
+            }
+        }
+
+        msg
+    });
+
+    vk::FALSE
 }
 
 impl Instance {
@@ -242,25 +347,25 @@ impl Instance {
         };
 
         #[cfg(debug_assertions)]
-        let debug_report = {
-            let ext = ext::DebugReport::new(entry, &instance);
-            let info = vk::DebugReportCallbackCreateInfoEXT {
-                s_type: vk::StructureType::DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+            let debug_messenger = {
+            let ext = ext::DebugUtils::new(entry, &instance);
+            let info = vk::DebugUtilsMessengerCreateInfoEXT {
+                s_type: vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
                 p_next: ptr::null(),
-                flags: vk::DebugReportFlagsEXT::WARNING
-                    | vk::DebugReportFlagsEXT::PERFORMANCE_WARNING
-                    | vk::DebugReportFlagsEXT::ERROR,
-                pfn_callback: Some(callback),
+                flags: vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
+                message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::all(),
+                message_type: vk::DebugUtilsMessageTypeFlagsEXT::all(),
+                pfn_user_callback: Some(debug_utils_messenger_callback),
                 p_user_data: ptr::null_mut(),
             };
-            let handle = unsafe { ext.create_debug_report_callback_ext(&info, None) }.unwrap();
+            let handle = unsafe { ext.create_debug_utils_messenger_ext(&info, None) }.unwrap();
             Some((ext, handle))
         };
         #[cfg(not(debug_assertions))]
-        let debug_report = None;
+            let debug_messenger = None;
 
         Instance {
-            raw: Arc::new(RawInstance(instance, debug_report)),
+            raw: Arc::new(RawInstance(instance, debug_messenger)),
             extensions,
         }
     }
@@ -353,6 +458,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[hal::QueuePriority])],
+        requested_features: Features,
     ) -> Result<hal::Gpu<Backend>, DeviceCreationError> {
         let family_infos = families
             .iter()
@@ -366,8 +472,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             })
             .collect::<Vec<_>>();
 
-        // enabled features mask
-        let features = Features::empty();
+        if !self.features().contains(requested_features) {
+            return Err(DeviceCreationError::MissingFeature);
+        }
+
+        let enabled_features = conv::map_device_features(requested_features);
 
         // Create device
         let device_raw = {
@@ -378,8 +487,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
             let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
 
-            // TODO: derive from `features`
-            let enabled_features = unsafe { mem::zeroed() };
             let info = vk::DeviceCreateInfo {
                 s_type: vk::StructureType::DEVICE_CREATE_INFO,
                 p_next: ptr::null(),
@@ -411,7 +518,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         });
 
         let device = Device {
-            raw: Arc::new(RawDevice(device_raw, features)),
+            raw: Arc::new(RawDevice(device_raw, requested_features)),
         };
 
         let device_arc = device.raw.clone();
@@ -562,9 +669,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let is_windows_intel_dual_src_bug = cfg!(windows)
             && self.properties.vendor_id == info::intel::VENDOR
             && (self.properties.device_id & info::intel::DEVICE_KABY_LAKE_MASK
-                == info::intel::DEVICE_KABY_LAKE_MASK
-                || self.properties.device_id & info::intel::DEVICE_SKY_LAKE_MASK
-                    == info::intel::DEVICE_SKY_LAKE_MASK);
+            == info::intel::DEVICE_KABY_LAKE_MASK
+            || self.properties.device_id & info::intel::DEVICE_SKY_LAKE_MASK
+            == info::intel::DEVICE_SKY_LAKE_MASK);
 
         let features = unsafe { self.instance.0.get_physical_device_features(self.handle) };
         let mut bits = Features::empty();
@@ -776,11 +883,11 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         swapchains: Is,
         wait_semaphores: Iw,
     ) -> Result<(), ()>
-    where
-        W: 'a + Borrow<window::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
-        S: 'a + Borrow<native::Semaphore>,
-        Iw: IntoIterator<Item = &'a S>,
+        where
+            W: 'a + Borrow<window::Swapchain>,
+            Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
+            S: 'a + Borrow<native::Semaphore>,
+            Iw: IntoIterator<Item = &'a S>,
     {
         let semaphores = wait_semaphores
             .into_iter()

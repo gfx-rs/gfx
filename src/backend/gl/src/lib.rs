@@ -298,6 +298,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[hal::QueuePriority])],
+        requested_features: hal::Features,
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         // Can't have multiple logical devices at the same time
         // as they would share the same context.
@@ -306,6 +307,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
         self.0.open.set(true);
 
+        // TODO: Check for support in the LeagcyFeatures struct too
+        if !self.features().contains(requested_features) {
+            return Err(error::DeviceCreationError::MissingFeature);
+        }
+        
         // initialize permanent states
         let gl = &self.0.context;
         if self

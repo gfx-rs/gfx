@@ -51,11 +51,13 @@ pub struct MemoryProperties {
 
 /// Represents a physical device (such as a GPU) capable of supporting the given backend.
 pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
-    /// Create a new logical device.
+    /// Create a new logical device with the requested features. If `requested_features` is
+    /// empty (e.g. through `Features::empty()`) then only the core features are supported.
     ///
     /// # Errors
     ///
     /// - Returns `TooManyObjects` if the implementation can't create a new logical device.
+    /// - Returns `MissingFeature` if the implementation does not support a requested feature.
     ///
     /// # Examples
     ///
@@ -63,17 +65,18 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
     /// # extern crate gfx_backend_empty as empty;
     /// # extern crate gfx_hal;
     /// # fn main() {
-    /// use gfx_hal::PhysicalDevice;
+    /// use gfx_hal::{PhysicalDevice, Features};
     ///
     /// # let physical_device: empty::PhysicalDevice = return;
     /// # let family: empty::QueueFamily = return;
     /// # unsafe {
-    /// let gpu = physical_device.open(&[(&family, &[1.0; 1])]);
+    /// let gpu = physical_device.open(&[(&family, &[1.0; 1])], Features::empty());
     /// # }}
     /// ```
     unsafe fn open(
         &self,
         families: &[(&B::QueueFamily, &[QueuePriority])],
+        requested_features: Features,
     ) -> Result<Gpu<B>, DeviceCreationError>;
 
     /// Fetch details for a particular format.
@@ -133,8 +136,9 @@ pub struct AdapterInfo {
 /// The list of `Adapter` instances is obtained by calling `Instance::enumerate_adapters()`.
 ///
 /// Given an `Adapter` a `Gpu` can be constructed by calling `PhysicalDevice::open()` on its
-/// `physical_device` field. However, if only a single queue family is needed, then the
-/// `Adapter::open_with` convenience method can be used instead.
+/// `physical_device` field. However, if only a single queue family is needed or if no
+/// additional device features are required, than then the `Adapter::open_with` convenience method
+/// can be used instead.
 pub struct Adapter<B: Backend> {
     /// General information about this adapter.
     pub info: AdapterInfo,
@@ -194,7 +198,7 @@ impl<B: Backend> Adapter<B> {
         };
 
         let Gpu { device, mut queues } = unsafe {
-            self.physical_device.open(&families)
+            self.physical_device.open(&families, Features::empty())
         }?;
         Ok((device, queues.take(id).unwrap()))
     }

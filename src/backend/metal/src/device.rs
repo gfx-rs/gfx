@@ -228,8 +228,14 @@ impl PhysicalDevice {
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
-        &self, families: &[(&QueueFamily, &[hal::QueuePriority])],
+        &self, families: &[(&QueueFamily, &[hal::QueuePriority])], requested_features: hal::Features,
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
+        // TODO: Query supported features by feature set rather than hard coding in the supported
+        // features. https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
+        if !self.features().contains(requested_features) {
+            return Err(error::DeviceCreationError::MissingFeature);
+        }
+        
         // TODO: Handle opening a physical device multiple times
         assert_eq!(families.len(), 1);
         assert_eq!(families[0].1.len(), 1);
