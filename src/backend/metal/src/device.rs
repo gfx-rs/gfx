@@ -1566,7 +1566,7 @@ impl hal::Device<Backend> for Device {
         unsafe { descriptor.set_lod_bias(info.lod_bias.into()) };
         descriptor.set_lod_min_clamp(info.lod_range.start.into());
         descriptor.set_lod_max_clamp(info.lod_range.end.into());
-        
+
         let caps = &self.private_caps;
         // TODO: Clarify minimum macOS version with Apple (43707452)
         if (caps.os_is_mac && caps.has_version_at_least(10, 13)) ||
@@ -1575,7 +1575,10 @@ impl hal::Device<Backend> for Device {
         }
 
         if let Some(fun) = info.comparison {
-            descriptor.set_compare_function(conv::map_compare_function(fun));
+            if (caps.os_is_mac && caps.has_version_at_least(10, 11)) ||
+                (!caps.os_is_mac && caps.has_version_at_least(9, 0)) {
+                descriptor.set_compare_function(conv::map_compare_function(fun));
+            }
         }
         if [r, s, t].iter().any(|&am| am == image::WrapMode::Border) {
             descriptor.set_border_color(match info.border.0 {
@@ -1588,6 +1591,8 @@ impl hal::Device<Backend> for Device {
                 }
             });
         }
+
+        // TODO: support supportArgumentBuffers
 
         Ok(n::Sampler(
             self.shared.device
