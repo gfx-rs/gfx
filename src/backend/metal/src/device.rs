@@ -1,5 +1,5 @@
 use {
-    AsNative, Backend, PrivateCapabilities, QueueFamily, ResourceIndex, OnlineRecording,
+    AsNative, Backend, QueueFamily, ResourceIndex, OnlineRecording,
     Shared, Surface, Swapchain, VisibilityShared,
     validate_line_width,
 };
@@ -24,10 +24,10 @@ use hal::pool::CommandPoolCreateFlags;
 use hal::queue::{QueueFamilyId, Queues};
 use hal::range::RangeArg;
 
-use cocoa::foundation::{NSRange, NSUInteger, NSInteger};
+use cocoa::foundation::{NSRange, NSUInteger};
 use foreign_types::ForeignType;
 use metal::{self,
-    MTLFeatureSet, MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass,
+    MTLLanguageVersion, MTLArgumentAccess, MTLDataType, MTLPrimitiveType, MTLPrimitiveTopologyClass,
     MTLCPUCacheMode, MTLStorageMode, MTLResourceOptions,
     MTLVertexStepFunction, MTLSamplerBorderColor, MTLSamplerMipFilter, MTLTextureType,
     CaptureManager
@@ -37,164 +37,8 @@ use objc::runtime::{BOOL, NO, Object};
 use parking_lot::Mutex;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
-
-const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v3,
-    MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::tvOS_GPUFamily1_v2,
-];
-
-const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
-    MTLFeatureSet::macOS_GPUFamily1_v3,
-];
-
-const ASTC_PIXEL_FORMAT_FEATURES: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily2_v1,
-    MTLFeatureSet::iOS_GPUFamily2_v2,
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily2_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::tvOS_GPUFamily1_v1,
-    MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
-];
-
-const R8UNORM_SRGB_ALL: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily2_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
-];
-
-const R8SNORM_NO_RESOLVE: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v1,
-    MTLFeatureSet::iOS_GPUFamily1_v2,
-    MTLFeatureSet::iOS_GPUFamily1_v3,
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-];
-
-const RG8UNORM_SRGB_NO_WRITE: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v1,
-    MTLFeatureSet::iOS_GPUFamily2_v1,
-    MTLFeatureSet::iOS_GPUFamily1_v2,
-    MTLFeatureSet::iOS_GPUFamily2_v2,
-    MTLFeatureSet::iOS_GPUFamily1_v3,
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::tvOS_GPUFamily1_v1,
-];
-
-const RG8SNORM_NO_RESOLVE: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v1,
-    MTLFeatureSet::iOS_GPUFamily1_v2,
-    MTLFeatureSet::iOS_GPUFamily1_v3,
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-];
-
-const RGBA8_SRGB: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily2_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
-];
-
-const RGB10A2UNORM_ALL: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily1_v3,
-];
-
-const RGB10A2UINT_COLOR_WRITE: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily1_v3,
-];
-
-const RG11B10FLOAT_ALL: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily1_v3,
-];
-
-const RGB9E5FLOAT_ALL: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
-];
-
-const BGR10A2_ALL: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::iOS_GPUFamily2_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
-    MTLFeatureSet::iOS_GPUFamily4_v1,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
-    MTLFeatureSet::tvOS_GPUFamily2_v1,
-];
-
-const BASE_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v1,
-];
-
-const DUAL_SOURCE_BLEND_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
-    MTLFeatureSet::macOS_GPUFamily1_v2,
-];
-
-const LAYERED_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily5_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v1,
-];
-
-const FUNCTION_SPECIALIZATION_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v3,
-    MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily1_v2,
-];
-
-const DEPTH_CLIP_MODE: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
-    MTLFeatureSet::macOS_GPUFamily1_v1,
-];
-
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
-
 
 /// Emit error during shader module parsing.
 fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
@@ -294,7 +138,6 @@ impl VisibilityShared {
 //#[derive(Clone)]
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
-    pub(crate) private_caps: PrivateCapabilities,
     memory_types: Vec<hal::MemoryType>,
     pub online_recording: OnlineRecording,
 }
@@ -336,137 +179,16 @@ impl MemoryTypes {
     }
 }
 
-#[repr(C)]
-#[derive(Clone, Copy, Debug)]
-struct NSOperatingSystemVersion {
-    major: NSInteger,
-    minor: NSInteger,
-    patch: NSInteger,
-}
-
 pub struct PhysicalDevice {
-    shared: Arc<Shared>,
+    pub(crate) shared: Arc<Shared>,
     memory_types: Vec<hal::MemoryType>,
-    pub(crate) private_caps: PrivateCapabilities,
 }
 unsafe impl Send for PhysicalDevice {}
 unsafe impl Sync for PhysicalDevice {}
 
 impl PhysicalDevice {
-    fn supports_any(raw: &metal::DeviceRef, features_sets: &[MTLFeatureSet]) -> bool {
-        features_sets.iter().cloned().any(|x| raw.supports_feature_set(x))
-    }
-
     pub(crate) fn new(shared: Arc<Shared>) -> Self {
-        let device = shared.device.lock();
-
-        let version: NSOperatingSystemVersion = unsafe {
-            let process_info: *mut Object = msg_send![class!(NSProcessInfo), processInfo];
-            msg_send![process_info, operatingSystemVersion]
-        };
-
-        let major = version.major as u32;
-        let minor = version.minor as u32;
-        let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
-
-        let private_caps = {
-            PrivateCapabilities {
-                os_is_mac,
-                os_version: (major as u32, minor as u32),
-                msl_version: if os_is_mac {
-                    if PrivateCapabilities::version_at_least(major, minor, 10, 14) {
-                        MTLLanguageVersion::V2_1
-                    } else if PrivateCapabilities::version_at_least(major, minor, 10, 13) {
-                        MTLLanguageVersion::V2_0
-                    } else if PrivateCapabilities::version_at_least(major, minor, 10, 12) {
-                        MTLLanguageVersion::V1_2
-                    } else if PrivateCapabilities::version_at_least(major, minor, 10, 11) {
-                        MTLLanguageVersion::V1_1
-                    } else {
-                        MTLLanguageVersion::V1_0
-                    }
-                } else if PrivateCapabilities::version_at_least(major, minor, 12, 0) {
-                    MTLLanguageVersion::V2_1
-                } else if PrivateCapabilities::version_at_least(major, minor, 11, 0) {
-                    MTLLanguageVersion::V2_0
-                } else if PrivateCapabilities::version_at_least(major, minor, 10, 0) {
-                    MTLLanguageVersion::V1_2
-                } else if PrivateCapabilities::version_at_least(major, minor, 9, 0) {
-                    MTLLanguageVersion::V1_1
-                } else {
-                    MTLLanguageVersion::V1_0
-                },
-                exposed_queues: 1,
-                resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
-                argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
-                shared_textures: !os_is_mac,
-                base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
-                dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
-                low_power: !os_is_mac || device.is_low_power(),
-                headless: os_is_mac && device.is_headless(),
-                layered_rendering: Self::supports_any(&device, LAYERED_RENDERING_SUPPORT),
-                function_specialization: Self::supports_any(&device, FUNCTION_SPECIALIZATION_SUPPORT),
-                depth_clip_mode: Self::supports_any(&device, DEPTH_CLIP_MODE),
-                format_depth24_stencil8: os_is_mac && device.d24_s8_supported(),
-                format_depth32_stencil8_filter: os_is_mac,
-                format_depth32_stencil8_none: !os_is_mac,
-                format_min_srgb_channels: if os_is_mac {4} else {1},
-                format_b5: !os_is_mac,
-                format_bc: os_is_mac,
-                format_eac_etc: !os_is_mac,
-                format_astc: Self::supports_any(&device, ASTC_PIXEL_FORMAT_FEATURES),
-                format_r8unorm_srgb_all: Self::supports_any(&device, R8UNORM_SRGB_ALL),
-                format_r8unorm_srgb_no_write: !Self::supports_any(&device, R8UNORM_SRGB_ALL) && !os_is_mac,
-                format_r8snorm_all: !Self::supports_any(&device, R8SNORM_NO_RESOLVE),
-                format_r16_norm_all: os_is_mac,
-                format_rg8unorm_srgb_all: Self::supports_any(&device, RG8UNORM_SRGB_NO_WRITE),
-                format_rg8unorm_srgb_no_write: !Self::supports_any(&device, RG8UNORM_SRGB_NO_WRITE) && !os_is_mac,
-                format_rg8snorm_all: !Self::supports_any(&device, RG8SNORM_NO_RESOLVE),
-                format_r32_all: !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
-                format_r32_no_write: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
-                format_r32float_no_write_no_filter: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]) && !os_is_mac,
-                format_r32float_no_filter: !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]) && !os_is_mac,
-                format_r32float_all: os_is_mac,
-                format_rgba8_srgb_all: Self::supports_any(&device, RGBA8_SRGB),
-                format_rgba8_srgb_no_write: !Self::supports_any(&device, RGBA8_SRGB),
-                format_rgb10a2_unorm_all: Self::supports_any(&device, RGB10A2UNORM_ALL),
-                format_rgb10a2_unorm_no_write: !Self::supports_any(&device, RGB10A2UNORM_ALL),
-                format_rgb10a2_uint_color: !Self::supports_any(&device, RGB10A2UINT_COLOR_WRITE),
-                format_rgb10a2_uint_color_write: Self::supports_any(&device, RGB10A2UINT_COLOR_WRITE),
-                format_rg11b10_all: Self::supports_any(&device, RG11B10FLOAT_ALL),
-                format_rg11b10_no_write: !Self::supports_any(&device, RG11B10FLOAT_ALL),
-                format_rgb9e5_all: Self::supports_any(&device, RGB9E5FLOAT_ALL),
-                format_rgb9e5_no_write: !Self::supports_any(&device, RGB9E5FLOAT_ALL) && !os_is_mac,
-                format_rgb9e5_filter_only: os_is_mac,
-                format_rg32_color: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
-                format_rg32_color_write: !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
-                format_rg32float_all: os_is_mac,
-                format_rg32float_color_blend: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
-                format_rg32float_no_filter: !os_is_mac && !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
-                format_rgba32int_color: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
-                format_rgba32int_color_write: !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
-                format_rgba32float_color: Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]),
-                format_rgba32float_color_write: !Self::supports_any(&device, &[MTLFeatureSet::iOS_GPUFamily1_v1, MTLFeatureSet::iOS_GPUFamily2_v1]) && !os_is_mac,
-                format_rgba32float_all: os_is_mac,
-                format_depth16unorm: Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]),
-                format_depth32float_filter: Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v1, MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]),
-                format_depth32float_none: !Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v1, MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]),
-                format_bgr10a2_all: Self::supports_any(&device, BGR10A2_ALL),
-                format_bgr10a2_no_write: !Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v3]),
-                max_buffers_per_stage: 31,
-                max_textures_per_stage: if os_is_mac {128} else {31},
-                max_samplers_per_stage: 16,
-                buffer_alignment: if os_is_mac {256} else {64},
-                max_buffer_size: if Self::supports_any(&device, &[MTLFeatureSet::macOS_GPUFamily1_v2, MTLFeatureSet::macOS_GPUFamily1_v3]) {
-                    1 << 30 // 1GB on macOS 1.2 and up
-                } else {
-                    1 << 28 // 256MB otherwise
-                },
-                max_texture_size: 4096, //TODO
-            }
-        };
-
-        let memory_types = if os_is_mac {
+        let memory_types = if shared.private_caps.os_is_mac {
             vec![
                 hal::MemoryType { // PRIVATE
                     properties: Properties::DEVICE_LOCAL,
@@ -500,7 +222,6 @@ impl PhysicalDevice {
         PhysicalDevice {
             shared:  shared.clone(),
             memory_types,
-            private_caps,
         }
     }
 }
@@ -525,13 +246,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         let mut queue_group = hal::backend::RawQueueGroup::new(family);
-        for _ in 0 .. self.private_caps.exposed_queues {
+        for _ in 0 .. self.shared.private_caps.exposed_queues {
             queue_group.add_queue(command::CommandQueue::new(self.shared.clone()));
         }
 
         let device = Device {
             shared: self.shared.clone(),
-            private_caps: self.private_caps.clone(),
             memory_types: self.memory_types.clone(),
             online_recording: OnlineRecording::default(),
         };
@@ -543,9 +263,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
-        match format.and_then(|f| self.private_caps.map_format(f)) {
+        match format.and_then(|f| self.shared.private_caps.map_format(f)) {
             Some(format) =>  {
-                self.private_caps.map_format_properties(format)
+                self.shared.private_caps.map_format_properties(format)
             },
             None => format::Properties {
                 linear_tiling: format::ImageFeature::empty(),
@@ -587,7 +307,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             depth: if dimensions >= 3 { max_dimension } else { 1 },
         };
 
-        self.private_caps.map_format(format).map(|_| image::FormatProperties {
+        self.shared.private_caps.map_format(format).map(|_| image::FormatProperties {
             max_extent,
             max_levels: if dimensions == 1 { 1 } else { 12 },
             // 3D images enforce a single layer
@@ -596,7 +316,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             //TODO: buffers and textures have separate limits
             // Max buffer size is determined by feature set
             // Max texture size does not appear to be documented publicly
-            max_resource_size: self.private_caps.max_buffer_size as _,
+            max_resource_size: self.shared.private_caps.max_buffer_size as _,
         })
     }
 
@@ -604,7 +324,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         hal::MemoryProperties {
             memory_heaps: vec![
                 !0, //TODO: private memory limits
-                self.private_caps.max_buffer_size,
+                self.shared.private_caps.max_buffer_size,
             ],
             memory_types: self.memory_types.to_vec(),
         }
@@ -620,24 +340,24 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING |
         hal::Features::VERTEX_STORES_AND_ATOMICS |
         hal::Features::FRAGMENT_STORES_AND_ATOMICS |
-        if self.private_caps.dual_source_blending { hal::Features::DUAL_SRC_BLENDING } else { hal::Features::empty() }
+        if self.shared.private_caps.dual_source_blending { hal::Features::DUAL_SRC_BLENDING } else { hal::Features::empty() }
     }
 
     fn limits(&self) -> hal::Limits {
         hal::Limits {
-            max_texture_size: self.private_caps.max_texture_size as usize,
-            max_texel_elements: (self.private_caps.max_texture_size * self.private_caps.max_texture_size) as usize,
+            max_texture_size: self.shared.private_caps.max_texture_size as usize,
+            max_texel_elements: (self.shared.private_caps.max_texture_size * self.shared.private_caps.max_texture_size) as usize,
             max_patch_size: 0, // No tessellation
 
             // Note: The maximum number of supported viewports and scissor rectangles varies by device.
             // TODO: read from Metal Feature Sets.
             max_viewports: 1,
 
-            min_buffer_copy_offset_alignment: self.private_caps.buffer_alignment,
+            min_buffer_copy_offset_alignment: self.shared.private_caps.buffer_alignment,
             min_buffer_copy_pitch_alignment: 4,
-            min_texel_buffer_offset_alignment: self.private_caps.buffer_alignment,
-            min_uniform_buffer_offset_alignment: self.private_caps.buffer_alignment,
-            min_storage_buffer_offset_alignment: self.private_caps.buffer_alignment,
+            min_texel_buffer_offset_alignment: self.shared.private_caps.buffer_alignment,
+            min_uniform_buffer_offset_alignment: self.shared.private_caps.buffer_alignment,
+            min_storage_buffer_offset_alignment: self.shared.private_caps.buffer_alignment,
 
             max_compute_group_count: [16; 3], // TODO
             max_compute_group_size: [64; 3], // TODO
@@ -702,7 +422,7 @@ impl Device {
             LanguageVersion { major: 2, minor: 1 } => MTLLanguageVersion::V2_1,
             _ => return Err(ShaderError::CompilationFailed("shader model not supported".into()))
         };
-        if msl_version > self.private_caps.msl_version {
+        if msl_version > self.shared.private_caps.msl_version {
             return Err(ShaderError::CompilationFailed("shader model too high".into()))
         }
         options.set_language_version(msl_version);
@@ -807,7 +527,7 @@ impl Device {
         pipeline_cache: Option<&n::PipelineCache>,
     ) -> Result<(metal::Library, metal::Function, metal::MTLSize, bool), pso::CreationError> {
         let device = &self.shared.device;
-        let msl_version = self.private_caps.msl_version;
+        let msl_version = self.shared.private_caps.msl_version;
         let module_map;
         let (info_owned, info_guard);
 
@@ -851,7 +571,7 @@ impl Device {
             // this can only happen if the shader came directly from the user
             None => (ep.entry, metal::MTLSize { width: 0, height: 0, depth: 0 }),
         };
-        let mtl_function = get_final_function(&lib, name, ep.specialization, self.private_caps.function_specialization)
+        let mtl_function = get_final_function(&lib, name, ep.specialization, self.shared.private_caps.function_specialization)
             .map_err(|e| {
                 error!("Invalid shader entry point '{}': {:?}", name, e);
                 pso::CreationError::Other
@@ -901,7 +621,6 @@ impl hal::Device<Backend> for Device {
         Ok(command::CommandPool::new(
             &self.shared,
             self.online_recording.clone(),
-            self.private_caps.layered_rendering,
         ))
     }
 
@@ -949,13 +668,13 @@ impl hal::Device<Backend> for Device {
                             .iter()
                             .map(|&(id, _)| {
                                 let format = attachments[id].format.expect("No color format provided");
-                                let mtl_format = self.private_caps.map_format(format).expect("Unable to map color format!");
+                                let mtl_format = self.shared.private_caps.map_format(format).expect("Unable to map color format!");
                                 (mtl_format, Channel::from(format.base_format().1))
                             })
                             .collect(),
                         depth_stencil: sub.depth_stencil
                             .map(|&(id, _)| {
-                                self.private_caps.map_format(
+                                self.shared.private_caps.map_format(
                                     attachments[id].format.expect("No depth-stencil format provided")
                                 ).expect("Unable to map depth-stencil format!")
                             }),
@@ -1136,13 +855,13 @@ impl hal::Device<Backend> for Device {
                 );
             }
             // make sure we fit the limits
-            assert!(counters.buffers <= self.private_caps.max_buffers_per_stage);
-            assert!(counters.textures <= self.private_caps.max_textures_per_stage);
-            assert!(counters.samplers <= self.private_caps.max_samplers_per_stage);
+            assert!(counters.buffers <= self.shared.private_caps.max_buffers_per_stage);
+            assert!(counters.textures <= self.shared.private_caps.max_textures_per_stage);
+            assert!(counters.samplers <= self.shared.private_caps.max_samplers_per_stage);
         }
 
         let mut shader_compiler_options = msl::CompilerOptions::default();
-        shader_compiler_options.version = match self.private_caps.msl_version {
+        shader_compiler_options.version = match self.shared.private_caps.msl_version {
             MTLLanguageVersion::V1_0 => msl::Version::V1_0,
             MTLLanguageVersion::V1_1 => msl::Version::V1_1,
             MTLLanguageVersion::V1_2 => msl::Version::V1_2,
@@ -1257,7 +976,7 @@ impl hal::Device<Backend> for Device {
             hal::Primitive::TriangleStrip => (MTLPrimitiveTopologyClass::Triangle, MTLPrimitiveType::TriangleStrip),
             _ => (MTLPrimitiveTopologyClass::Unspecified, MTLPrimitiveType::Point) //TODO: double-check
         };
-        if self.private_caps.layered_rendering {
+        if self.shared.private_caps.layered_rendering {
             pipeline.set_input_primitive_topology(primitive_class);
         }
 
@@ -1374,7 +1093,7 @@ impl hal::Device<Backend> for Device {
                     vertex_buffers.len() - 1
                 });
             let mtl_buffer_index = attribute_buffer_index as usize + relative_index;
-            if mtl_buffer_index >= self.private_caps.max_buffers_per_stage as usize {
+            if mtl_buffer_index >= self.shared.private_caps.max_buffers_per_stage as usize {
                 error!("Attribute offset {} exceeds the stride {}, and there is no room for replacement.",
                     element.offset, original.stride);
                 return Err(pso::CreationError::Other);
@@ -1437,7 +1156,7 @@ impl hal::Device<Backend> for Device {
                     metal::MTLCullMode::None
                 }
             },
-            depth_clip: if self.private_caps.depth_clip_mode {
+            depth_clip: if self.shared.private_caps.depth_clip_mode {
                 Some(if pipeline_desc.rasterizer.depth_clamping {
                     metal::MTLDepthClipMode::Clamp
                 } else {
@@ -1536,7 +1255,7 @@ impl hal::Device<Backend> for Device {
             let mut options = msl::CompilerOptions::default();
             options.enable_point_size_builtin = false;
             options.vertex.invert_y = true;
-            let info = Self::compile_shader_library(&self.shared.device, raw_data, &options, self.private_caps.msl_version)?;
+            let info = Self::compile_shader_library(&self.shared.device, raw_data, &options, self.shared.private_caps.msl_version)?;
             n::ShaderModule::Compiled(info)
         })
     }
@@ -1567,7 +1286,7 @@ impl hal::Device<Backend> for Device {
         descriptor.set_lod_min_clamp(info.lod_range.start.into());
         descriptor.set_lod_max_clamp(info.lod_range.end.into());
         
-        let caps = &self.private_caps;
+        let caps = &self.shared.private_caps;
         // TODO: Clarify minimum macOS version with Apple (43707452)
         if (caps.os_is_mac && caps.has_version_at_least(10, 13)) ||
             (!caps.os_is_mac && caps.has_version_at_least(9, 0)) {
@@ -1693,7 +1412,7 @@ impl hal::Device<Backend> for Device {
         Ok(n::Semaphore {
             // Semaphore synchronization between command buffers of the same queue
             // is useless, don't bother even creating one.
-            system: if self.private_caps.exposed_queues > 1 {
+            system: if self.shared.private_caps.exposed_queues > 1 {
                 Some(n::SystemSemaphore::new())
             } else {
                 None
@@ -1709,7 +1428,7 @@ impl hal::Device<Backend> for Device {
     {
         let mut counters = n::ResourceData::<n::PoolResourceIndex>::new();
 
-        if self.private_caps.argument_buffers {
+        if self.shared.private_caps.argument_buffers {
             let mut arguments = Vec::new();
             for desc_range in descriptor_ranges {
                 let desc = desc_range.borrow();
@@ -1757,7 +1476,7 @@ impl hal::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<n::Sampler>,
     {
-        if self.private_caps.argument_buffers {
+        if self.shared.private_caps.argument_buffers {
             let mut stage_flags = pso::ShaderStageFlags::empty();
             let arguments = binding_iter
                 .into_iter()
@@ -1886,7 +1605,7 @@ impl hal::Device<Backend> for Device {
                     }
                 }
                 n::DescriptorSet::ArgumentBuffer { ref raw, offset, ref encoder, .. } => {
-                    debug_assert!(self.private_caps.argument_buffers);
+                    debug_assert!(self.shared.private_caps.argument_buffers);
 
                     encoder.set_argument_buffer(raw, offset);
                     //TODO: range checks, need to keep some layout metadata around
@@ -1958,7 +1677,7 @@ impl hal::Device<Backend> for Device {
 
         // Heaps cannot be used for CPU coherent resources
         //TEMP: MacOS supports Private only, iOS and tvOS can do private/shared
-        let heap = if self.private_caps.resource_heaps && storage != MTLStorageMode::Shared && false {
+        let heap = if self.shared.private_caps.resource_heaps && storage != MTLStorageMode::Shared && false {
             let descriptor = metal::HeapDescriptor::new();
             descriptor.set_storage_mode(storage);
             descriptor.set_cpu_cache_mode(cache);
@@ -2000,9 +1719,9 @@ impl hal::Device<Backend> for Device {
             n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
         };
         let mut max_size = size;
-        let mut max_alignment = self.private_caps.buffer_alignment;
+        let mut max_alignment = self.shared.private_caps.buffer_alignment;
 
-        if self.private_caps.resource_heaps {
+        if self.shared.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the buffer with, so we test them
             // all get the most stringent ones.
             for (i, _mt) in self.memory_types.iter().enumerate() {
@@ -2027,7 +1746,7 @@ impl hal::Device<Backend> for Device {
         memory::Requirements {
             size: (max_size + SIZE_MASK) & !SIZE_MASK,
             alignment: max_alignment,
-            type_mask: if !supports_texel_view || self.private_caps.shared_textures {
+            type_mask: if !supports_texel_view || self.shared.private_caps.shared_textures {
                 MemoryTypes::all().bits()
             } else {
                 (MemoryTypes::all() ^ MemoryTypes::SHARED).bits()
@@ -2120,9 +1839,9 @@ impl hal::Device<Backend> for Device {
 
         //Note: we rely on SPIRV-Cross to use the proper 2D texel indexing here
         let texel_count = (end_rough - start) * 8 / format_desc.bits as u64;
-        let col_count = cmp::min(texel_count, self.private_caps.max_texture_size);
-        let row_count = (texel_count + self.private_caps.max_texture_size - 1) / self.private_caps.max_texture_size;
-        let mtl_format = self.private_caps
+        let col_count = cmp::min(texel_count, self.shared.private_caps.max_texture_size);
+        let row_count = (texel_count + self.shared.private_caps.max_texture_size - 1) / self.shared.private_caps.max_texture_size;
+        let mtl_format = self.shared.private_caps
             .map_format(format)
             .ok_or(buffer::ViewCreationError::UnsupportedFormat { format: format_maybe })?;
 
@@ -2136,7 +1855,7 @@ impl hal::Device<Backend> for Device {
         descriptor.set_storage_mode(raw.storage_mode());
         descriptor.set_usage(metal::MTLTextureUsage::ShaderRead);
 
-        let align_mask = self.private_caps.buffer_alignment - 1;
+        let align_mask = self.shared.private_caps.buffer_alignment - 1;
         let stride = (col_count * (format_desc.bits as u64 / 8) + align_mask) & !align_mask;
 
         Ok(n::BufferView {
@@ -2161,7 +1880,7 @@ impl hal::Device<Backend> for Device {
             kind, mip_levels, format, tiling, usage);
 
         let is_cube = view_caps.contains(image::ViewCapabilities::KIND_CUBE);
-        let mtl_format = self.private_caps
+        let mtl_format = self.shared.private_caps
             .map_format(format)
             .ok_or(image::CreationError::Format(format))?;
 
@@ -2253,7 +1972,7 @@ impl hal::Device<Backend> for Device {
             n::ImageLike::Buffer(..) => panic!("Expected Image::Unbound"),
         };
 
-        if self.private_caps.resource_heaps {
+        if self.shared.private_caps.resource_heaps {
             // We don't know what memory type the user will try to allocate the image with, so we test them
             // all get the most stringent ones. Note we don't check Shared because heaps can't use it
             let mut max_size = 0;
@@ -2284,10 +2003,10 @@ impl hal::Device<Backend> for Device {
             }
         } else if host_visible {
             assert_eq!(mip_sizes.len(), 1);
-            let mask = self.private_caps.buffer_alignment - 1;
+            let mask = self.shared.private_caps.buffer_alignment - 1;
             memory::Requirements {
                 size: (mip_sizes[0] + mask) & !mask,
-                alignment: self.private_caps.buffer_alignment,
+                alignment: self.shared.private_caps.buffer_alignment,
                 type_mask: MemoryTypes::all().bits(),
             }
         } else {
@@ -2380,7 +2099,7 @@ impl hal::Device<Backend> for Device {
         swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<n::ImageView, image::ViewError> {
-        let mtl_format = match self.private_caps.map_format_with_swizzle(format, swizzle) {
+        let mtl_format = match self.shared.private_caps.map_format_with_swizzle(format, swizzle) {
             Some(f) => f,
             None => {
                 error!("failed to swizzle format {:?} with {:?}", format, swizzle);
