@@ -49,7 +49,7 @@ pub struct Submission<Ic, Iw, Is> {
     pub command_buffers: Ic,
     /// Semaphores to wait being signalled before submission.
     pub wait_semaphores: Iw,
-    /// Semaphores which get signalled after submission.
+    /// Semaphores to signal after all command buffers in the submission have finished execution.
     pub signal_semaphores: Is,
 }
 
@@ -57,7 +57,8 @@ pub struct Submission<Ic, Iw, Is> {
 /// Commands are executed on the the device by submitting command buffers to queues.
 pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
     /// Submit command buffers to queue for execution.
-    /// `fence` will be signalled after submission and _must_ be unsignalled.
+    /// `fence` must be in unsignalled state, and will be signalled after all command buffers in the submission have
+    /// finished execution.
     ///
     /// Unsafe because it's not checked that the queue can process the submitted command buffers.
     /// Trying to submit compute commands to a graphics queue will result in undefined behavior.
@@ -117,8 +118,9 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
         self.0
     }
 
-    /// Submits the submission command buffers to the queue for execution.
-    /// `fence` will be signalled after submission and _must_ be unsignalled.
+    /// Submit command buffers to queue for execution.
+    /// `fence` must be in unsignalled state, and will be signalled after all command buffers in the submission have
+    /// finished execution.
     pub unsafe fn submit<'a, T, Ic, S, Iw, Is>(&mut self,
         submission: Submission<Ic, Iw, Is>,
         fence: Option<&B::Fence>,
@@ -132,7 +134,7 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
         self.0.submit(submission, fence)
     }
 
-    /// Submit command buffers without any semaphore waits or singals.
+    /// Submit command buffers without any semaphore waits or signals.
     pub unsafe fn submit_nosemaphores<'a, T, I>(
         &mut self, command_buffers: I, fence: Option<&B::Fence>
     ) where
