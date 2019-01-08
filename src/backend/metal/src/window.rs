@@ -1,23 +1,22 @@
-use {Backend, QueueFamily};
 use device::{Device, PhysicalDevice};
 use internal::Channel;
 use native;
+use {Backend, QueueFamily};
 
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::thread;
 
+use hal::window::Extent2D;
 use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig};
-use hal::window::Extent2D;
 
 use core_graphics::geometry::{CGRect, CGSize};
 use foreign_types::{ForeignType, ForeignTypeRef};
-use parking_lot::{Mutex, MutexGuard};
 use metal;
 use objc::rc::autoreleasepool;
 use objc::runtime::Object;
-
+use parking_lot::{Mutex, MutexGuard};
 
 //TODO: make it a weak pointer, so that we know which
 // frames can be replaced if we receive an unknown
@@ -56,7 +55,6 @@ struct FrameNotFound {
     texture: metal::Texture,
 }
 
-
 impl SurfaceInner {
     pub fn new(view: Option<NonNull<Object>>, layer: CAMetalLayer) -> Self {
         SurfaceInner {
@@ -72,16 +70,23 @@ impl SurfaceInner {
         }
     }
 
-    fn next_frame<'a>(&self, frames: &'a [Frame]) -> Result<(usize, MutexGuard<'a, FrameInner>), FrameNotFound> {
+    fn next_frame<'a>(
+        &self,
+        frames: &'a [Frame],
+    ) -> Result<(usize, MutexGuard<'a, FrameInner>), FrameNotFound> {
         let layer_ref = self.render_layer.lock();
-        autoreleasepool(|| { // for the drawable
+        autoreleasepool(|| {
+            // for the drawable
             let (drawable, texture_temp): (&metal::DrawableRef, &metal::TextureRef) = unsafe {
                 let drawable = msg_send![*layer_ref, nextDrawable];
                 (drawable, msg_send![drawable, texture])
             };
 
             trace!("looking for {:?}", texture_temp);
-            match frames.iter().position(|f| f.texture.as_ptr() == texture_temp.as_ptr()) {
+            match frames
+                .iter()
+                .position(|f| f.texture.as_ptr() == texture_temp.as_ptr())
+            {
                 Some(index) => {
                     let mut frame = frames[index].inner.lock();
                     assert!(frame.drawable.is_none());
@@ -104,9 +109,7 @@ impl SurfaceInner {
                 let bounds: CGRect = msg_send![view.as_ptr(), bounds];
                 bounds.size
             },
-            None => unsafe {
-                msg_send![*self.render_layer.lock(), drawableSize]
-            },
+            None => unsafe { msg_send![*self.render_layer.lock(), drawableSize] },
         };
         Extent2D {
             width: size.width as _,
@@ -114,7 +117,6 @@ impl SurfaceInner {
         }
     }
 }
-
 
 #[derive(Debug)]
 struct FrameInner {
@@ -180,10 +182,7 @@ impl Swapchain {
     /// Returns the drawable for the specified swapchain image index,
     /// marks the index as free for future use.
     pub(crate) fn take_drawable(&self, index: hal::SwapImageIndex) -> Result<metal::Drawable, ()> {
-        let mut frame = self
-            .frames[index as usize]
-            .inner
-            .lock();
+        let mut frame = self.frames[index as usize].inner.lock();
         assert!(!frame.available && frame.linked);
 
         match frame.drawable.take() {
@@ -237,21 +236,20 @@ impl SwapchainImage {
             match self.surface.next_frame(&self.frames) {
                 Ok((index, _)) if index == self.index as usize => {
                     debug!("Swapchain image is ready after {} frames", count);
-                    break
+                    break;
                 }
                 Ok(_) => {
                     count += 1;
                 }
                 Err(_e) => {
                     debug!("Swapchain drawables are changed");
-                    break
+                    break;
                 }
             }
         }
         count
     }
 }
-
 
 impl hal::Surface<Backend> for Surface {
     fn kind(&self) -> image::Kind {
@@ -260,8 +258,14 @@ impl hal::Surface<Backend> for Surface {
     }
 
     fn compatibility(
-        &self, device: &PhysicalDevice,
-    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>, Vec<hal::CompositeAlpha>) {
+        &self,
+        device: &PhysicalDevice,
+    ) -> (
+        hal::SurfaceCapabilities,
+        Option<Vec<format::Format>>,
+        Vec<hal::PresentMode>,
+        Vec<hal::CompositeAlpha>,
+    ) {
         let current_extent = if self.main_thread_id == thread::current().id() {
             Some(self.inner.dimensions())
         } else {
@@ -271,7 +275,8 @@ impl hal::Surface<Backend> for Surface {
 
         let device_caps = &device.shared.private_caps;
 
-        let can_set_maximum_drawables_count = device_caps.os_is_mac || device_caps.has_version_at_least(11, 2);
+        let can_set_maximum_drawables_count =
+            device_caps.os_is_mac || device_caps.has_version_at_least(11, 2);
 
         let image_count = if can_set_maximum_drawables_count {
             2..4
@@ -285,10 +290,18 @@ impl hal::Surface<Backend> for Surface {
             //Note: this is hardcoded in `CAMetalLayer` documentation
             image_count,
             current_extent,
-            extents: Extent2D { width: 4, height: 4} .. Extent2D { width: 4096, height: 4096 },
+            extents: Extent2D {
+                width: 4,
+                height: 4,
+            }..Extent2D {
+                width: 4096,
+                height: 4096,
+            },
             max_image_layers: 1,
-            usage: image::Usage::COLOR_ATTACHMENT | image::Usage::SAMPLED |
-                image::Usage::TRANSFER_SRC | image::Usage::TRANSFER_DST,
+            usage: image::Usage::COLOR_ATTACHMENT
+                | image::Usage::SAMPLED
+                | image::Usage::TRANSFER_SRC
+                | image::Usage::TRANSFER_DST,
         };
 
         let formats = vec![
@@ -297,7 +310,8 @@ impl hal::Surface<Backend> for Surface {
             format::Format::Rgba16Float,
         ];
 
-        let can_set_display_sync = device_caps.os_is_mac && device_caps.has_version_at_least(10, 13);
+        let can_set_display_sync =
+            device_caps.os_is_mac && device_caps.has_version_at_least(10, 13);
 
         let present_modes = if can_set_display_sync {
             vec![hal::PresentMode::Fifo, hal::PresentMode::Immediate]
@@ -367,52 +381,55 @@ impl Device {
             }
         };
 
-        let frames = (0 .. config.image_count)
-            .map(|index| autoreleasepool(|| { // for the drawable & texture
-                let (drawable, texture) = unsafe {
-                    let drawable: &metal::DrawableRef = msg_send![render_layer, nextDrawable];
-                    assert!(!drawable.as_ptr().is_null());
-                    let texture: &metal::TextureRef = msg_send![drawable, texture];
-                    (drawable, texture)
-                };
-                trace!("\tframe[{}] = {:?}", index, texture);
+        let frames = (0..config.image_count)
+            .map(|index| {
+                autoreleasepool(|| {
+                    // for the drawable & texture
+                    let (drawable, texture) = unsafe {
+                        let drawable: &metal::DrawableRef = msg_send![render_layer, nextDrawable];
+                        assert!(!drawable.as_ptr().is_null());
+                        let texture: &metal::TextureRef = msg_send![drawable, texture];
+                        (drawable, texture)
+                    };
+                    trace!("\tframe[{}] = {:?}", index, texture);
 
-                let drawable = if index == 0 {
-                    // when resizing, this trick frees up the currently shown frame
-                    match old_swapchain {
-                        Some(ref old) => {
-                            let cmd_buffer = cmd_queue.spawn_temp();
-                            self.shared.service_pipes.simple_blit(
-                                &self.shared.device,
-                                cmd_buffer,
-                                &old.frames[0].texture,
-                                texture,
-                                &self.shared.private_caps,
-                            );
-                            cmd_buffer.present_drawable(drawable);
-                            cmd_buffer.set_label("build_swapchain");
-                            cmd_buffer.commit();
-                            cmd_buffer.wait_until_completed();
+                    let drawable = if index == 0 {
+                        // when resizing, this trick frees up the currently shown frame
+                        match old_swapchain {
+                            Some(ref old) => {
+                                let cmd_buffer = cmd_queue.spawn_temp();
+                                self.shared.service_pipes.simple_blit(
+                                    &self.shared.device,
+                                    cmd_buffer,
+                                    &old.frames[0].texture,
+                                    texture,
+                                    &self.shared.private_caps,
+                                );
+                                cmd_buffer.present_drawable(drawable);
+                                cmd_buffer.set_label("build_swapchain");
+                                cmd_buffer.commit();
+                                cmd_buffer.wait_until_completed();
+                            }
+                            None => {
+                                // this will look as a black frame
+                                drawable.present();
+                            }
                         }
-                        None => {
-                            // this will look as a black frame
-                            drawable.present();
-                        }
+                        None
+                    } else {
+                        Some(drawable.to_owned())
+                    };
+                    Frame {
+                        inner: Mutex::new(FrameInner {
+                            drawable,
+                            available: true,
+                            linked: true,
+                            last_frame: 0,
+                        }),
+                        texture: texture.to_owned(),
                     }
-                    None
-                } else {
-                    Some(drawable.to_owned())
-                };
-                Frame {
-                    inner: Mutex::new(FrameInner {
-                        drawable,
-                        available: true,
-                        linked: true,
-                        last_frame: 0,
-                    }),
-                    texture: texture.to_owned(),
-                }
-            }))
+                })
+            })
             .collect::<Vec<_>>();
 
         let images = frames
@@ -442,7 +459,9 @@ impl Device {
 
 impl hal::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
-        &mut self, _timeout_ns: u64, sync: hal::FrameSync<Backend>
+        &mut self,
+        _timeout_ns: u64,
+        sync: hal::FrameSync<Backend>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         self.last_frame += 1;
 
@@ -457,7 +476,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         for (index, frame_arc) in self.frames.iter().enumerate() {
             let mut frame = frame_arc.inner.lock();
             if !frame.available {
-                continue
+                continue;
             }
             if frame.drawable.is_some() {
                 frame.available = false;
@@ -472,15 +491,16 @@ impl hal::Swapchain<Backend> for Swapchain {
         }
 
         let (index, mut frame) = match self.acquire_mode {
-            AcquireMode::Wait => {
-                self.surface.next_frame(&self.frames)
-                    .map_err(|_| hal::AcquireError::OutOfDate)?
-            }
+            AcquireMode::Wait => self
+                .surface
+                .next_frame(&self.frames)
+                .map_err(|_| hal::AcquireError::OutOfDate)?,
             AcquireMode::Oldest => {
                 self.image_ready_callbacks.retain(|ir| ir.lock().is_some());
                 match sync {
                     hal::FrameSync::Semaphore(semaphore) => {
-                        self.image_ready_callbacks.push(Arc::clone(&semaphore.image_ready));
+                        self.image_ready_callbacks
+                            .push(Arc::clone(&semaphore.image_ready));
                         let mut sw_image = semaphore.image_ready.lock();
                         if let Some(ref swi) = *sw_image {
                             warn!("frame {} hasn't been waited upon", swi.index);

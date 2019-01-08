@@ -3,8 +3,8 @@
 //! or other introspection, providing a mechanism for the command buffer to record data about its
 //! operation as it is running.
 
-use Backend;
 use device::OutOfMemory;
+use Backend;
 
 /// A query identifier.
 pub type Id = u32;
@@ -31,9 +31,9 @@ impl From<OutOfMemory> for CreationError {
 /// It is passed as a parameter to the command buffer's query methods.
 #[derive(Debug)]
 pub struct Query<'a, B: Backend> {
-    /// 
+    ///
     pub pool: &'a B::QueryPool,
-    /// 
+    ///
     pub id: Id,
 }
 

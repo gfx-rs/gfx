@@ -197,9 +197,8 @@ impl<B: Backend> Adapter<B> {
             _ => return Err(DeviceCreationError::InitializationFailed),
         };
 
-        let Gpu { device, mut queues } = unsafe {
-            self.physical_device.open(&families, Features::empty())
-        }?;
+        let Gpu { device, mut queues } =
+            unsafe { self.physical_device.open(&families, Features::empty()) }?;
         Ok((device, queues.take(id).unwrap()))
     }
 }

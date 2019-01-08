@@ -1,12 +1,11 @@
-use {ResourceIndex, BufferPtr, SamplerPtr, TexturePtr};
 use command::IndexBuffer;
 use native::RasterizerState;
+use {BufferPtr, ResourceIndex, SamplerPtr, TexturePtr};
 
 use hal;
 use metal;
 
 use std::ops::Range;
-
 
 pub type CacheResourceIndex = u32;
 
@@ -92,7 +91,7 @@ pub enum RenderCommand<R: Resources> {
     Draw {
         primitive_type: metal::MTLPrimitiveType,
         vertices: Range<hal::VertexCount>,
-        instances: Range<hal::InstanceCount>
+        instances: Range<hal::InstanceCount>,
     },
     DrawIndexed {
         primitive_type: metal::MTLPrimitiveType,
@@ -180,7 +179,6 @@ pub enum ComputeCommand<R: Resources> {
     },
 }
 
-
 #[derive(Debug)]
 pub enum Pass {
     Render(metal::RenderPassDescriptor),
@@ -207,64 +205,104 @@ impl Own {
             SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
             SetRasterizerState(ref state) => SetRasterizerState(state.clone()),
             SetVisibilityResult(mode, offset) => SetVisibilityResult(mode, offset),
-            BindBuffer { stage, index, buffer, offset } => BindBuffer {
+            BindBuffer {
+                stage,
+                index,
+                buffer,
+                offset,
+            } => BindBuffer {
                 stage,
                 index,
                 buffer,
                 offset,
             },
-            BindBuffers { stage, index, buffers: (buffers, offsets) } => BindBuffers {
+            BindBuffers {
+                stage,
+                index,
+                buffers: (buffers, offsets),
+            } => BindBuffers {
                 stage,
                 index,
                 buffers: {
                     let start = self.buffers.len() as CacheResourceIndex;
                     self.buffers.extend_from_slice(buffers);
                     self.buffer_offsets.extend_from_slice(offsets);
-                    start .. self.buffers.len() as CacheResourceIndex
+                    start..self.buffers.len() as CacheResourceIndex
                 },
             },
-            BindBufferData { stage, index, words } => BindBufferData {
+            BindBufferData {
+                stage,
+                index,
+                words,
+            } => BindBufferData {
                 stage,
                 index,
                 words: words.to_vec(),
             },
-            BindTextures { stage, index, textures } => BindTextures {
+            BindTextures {
+                stage,
+                index,
+                textures,
+            } => BindTextures {
                 stage,
                 index,
                 textures: {
                     let start = self.textures.len() as CacheResourceIndex;
                     self.textures.extend_from_slice(textures);
-                    start .. self.textures.len() as CacheResourceIndex
+                    start..self.textures.len() as CacheResourceIndex
                 },
             },
-            BindSamplers { stage, index, samplers } => BindSamplers {
+            BindSamplers {
+                stage,
+                index,
+                samplers,
+            } => BindSamplers {
                 stage,
                 index,
                 samplers: {
                     let start = self.samplers.len() as CacheResourceIndex;
                     self.samplers.extend_from_slice(samplers);
-                    start .. self.samplers.len() as CacheResourceIndex
+                    start..self.samplers.len() as CacheResourceIndex
                 },
             },
             BindPipeline(pso) => BindPipeline(pso.to_owned()),
-            Draw { primitive_type, vertices, instances } => Draw {
+            Draw {
+                primitive_type,
+                vertices,
+                instances,
+            } => Draw {
                 primitive_type,
                 vertices,
                 instances,
             },
-            DrawIndexed { primitive_type, index, indices, base_vertex, instances } => DrawIndexed {
+            DrawIndexed {
+                primitive_type,
+                index,
+                indices,
+                base_vertex,
+                instances,
+            } => DrawIndexed {
                 primitive_type,
                 index,
                 indices,
                 base_vertex,
                 instances,
             },
-            DrawIndirect { primitive_type, buffer, offset } => DrawIndirect {
+            DrawIndirect {
+                primitive_type,
+                buffer,
+                offset,
+            } => DrawIndirect {
                 primitive_type,
                 buffer,
                 offset,
             },
-            DrawIndexedIndirect { primitive_type, index, buffer, offset } => DrawIndexedIndirect {
+            DrawIndexedIndirect {
+                primitive_type,
+                index,
+                buffer,
+                offset,
+            } => DrawIndexedIndirect {
                 primitive_type,
                 index,
                 buffer,
@@ -276,18 +314,25 @@ impl Own {
     pub fn own_compute(&mut self, com: ComputeCommand<&Ref>) -> ComputeCommand<Self> {
         use self::ComputeCommand::*;
         match com {
-            BindBuffer { index, buffer, offset } => BindBuffer {
+            BindBuffer {
+                index,
+                buffer,
+                offset,
+            } => BindBuffer {
                 index,
                 buffer,
                 offset,
             },
-            BindBuffers { index, buffers: (buffers, offsets) } => BindBuffers {
+            BindBuffers {
+                index,
+                buffers: (buffers, offsets),
+            } => BindBuffers {
                 index,
                 buffers: {
                     let start = self.buffers.len() as CacheResourceIndex;
                     self.buffers.extend_from_slice(buffers);
                     self.buffer_offsets.extend_from_slice(offsets);
-                    start .. self.buffers.len() as CacheResourceIndex
+                    start..self.buffers.len() as CacheResourceIndex
                 },
             },
             BindBufferData { index, words } => BindBufferData {
@@ -299,7 +344,7 @@ impl Own {
                 textures: {
                     let start = self.textures.len() as CacheResourceIndex;
                     self.textures.extend_from_slice(textures);
-                    start .. self.textures.len() as CacheResourceIndex
+                    start..self.textures.len() as CacheResourceIndex
                 },
             },
             BindSamplers { index, samplers } => BindSamplers {
@@ -307,15 +352,16 @@ impl Own {
                 samplers: {
                     let start = self.samplers.len() as CacheResourceIndex;
                     self.samplers.extend_from_slice(samplers);
-                    start .. self.samplers.len() as CacheResourceIndex
+                    start..self.samplers.len() as CacheResourceIndex
                 },
             },
             BindPipeline(pso) => BindPipeline(pso.to_owned()),
-            Dispatch { wg_size, wg_count } => Dispatch {
+            Dispatch { wg_size, wg_count } => Dispatch { wg_size, wg_count },
+            DispatchIndirect {
                 wg_size,
-                wg_count,
-            },
-            DispatchIndirect { wg_size, buffer, offset } => DispatchIndirect {
+                buffer,
+                offset,
+            } => DispatchIndirect {
                 wg_size,
                 buffer,
                 offset,
@@ -335,13 +381,17 @@ impl<'b, T> AsSlice<Option<T>, &'b Ref> for &'b [Option<T>] {
         self
     }
 }
-impl<'b> AsSlice<Option<BufferPtr>, &'b Ref> for (&'b [Option<BufferPtr>], &'b [hal::buffer::Offset]) {
+impl<'b> AsSlice<Option<BufferPtr>, &'b Ref>
+    for (&'b [Option<BufferPtr>], &'b [hal::buffer::Offset])
+{
     #[inline(always)]
     fn as_slice<'a>(&'a self, _: &'a &'b Ref) -> &'a [Option<BufferPtr>] {
         self.0
     }
 }
-impl<'b> AsSlice<hal::buffer::Offset, &'b Ref> for (&'b [Option<BufferPtr>], &'b [hal::buffer::Offset]) {
+impl<'b> AsSlice<hal::buffer::Offset, &'b Ref>
+    for (&'b [Option<BufferPtr>], &'b [hal::buffer::Offset])
+{
     #[inline(always)]
     fn as_slice<'a>(&'a self, _: &'a &'b Ref) -> &'a [hal::buffer::Offset] {
         self.1
@@ -350,28 +400,27 @@ impl<'b> AsSlice<hal::buffer::Offset, &'b Ref> for (&'b [Option<BufferPtr>], &'b
 impl AsSlice<Option<BufferPtr>, Own> for Range<CacheResourceIndex> {
     #[inline(always)]
     fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [Option<BufferPtr>] {
-        &resources.buffers[self.start as usize .. self.end as usize]
+        &resources.buffers[self.start as usize..self.end as usize]
     }
 }
 impl AsSlice<hal::buffer::Offset, Own> for Range<CacheResourceIndex> {
     #[inline(always)]
     fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [hal::buffer::Offset] {
-        &resources.buffer_offsets[self.start as usize .. self.end as usize]
+        &resources.buffer_offsets[self.start as usize..self.end as usize]
     }
 }
 impl AsSlice<Option<TexturePtr>, Own> for Range<CacheResourceIndex> {
     #[inline(always)]
     fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [Option<TexturePtr>] {
-        &resources.textures[self.start as usize .. self.end as usize]
+        &resources.textures[self.start as usize..self.end as usize]
     }
 }
 impl AsSlice<Option<SamplerPtr>, Own> for Range<CacheResourceIndex> {
     #[inline(always)]
     fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [Option<SamplerPtr>] {
-        &resources.samplers[self.start as usize .. self.end as usize]
+        &resources.samplers[self.start as usize..self.end as usize]
     }
 }
-
 
 fn _test_render_command_size(com: RenderCommand<Own>) -> [usize; 6] {
     use std::mem;

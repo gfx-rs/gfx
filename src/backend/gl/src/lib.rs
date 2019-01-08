@@ -184,12 +184,10 @@ impl<T> Starc<T> {
     pub fn try_unwrap(self) -> Result<T, Self> {
         let a = Arc::try_unwrap(self.arc);
         let thread = self.thread;
-        a.map_err(|a|
-            Starc {
-                arc: a,
-                thread: thread,
-            }
-        )
+        a.map_err(|a| Starc {
+            arc: a,
+            thread: thread,
+        })
     }
 
     #[inline]
@@ -227,10 +225,7 @@ pub struct Wstarc<T: ?Sized> {
 impl<T> Wstarc<T> {
     pub fn upgrade(&self) -> Option<Starc<T>> {
         let thread = self.thread;
-        self.weak.upgrade().map(|arc| Starc {
-            arc,
-            thread,
-        })
+        self.weak.upgrade().map(|arc| Starc { arc, thread })
     }
 }
 unsafe impl<T: ?Sized> Send for Wstarc<T> {}
@@ -311,7 +306,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         if !self.features().contains(requested_features) {
             return Err(error::DeviceCreationError::MissingFeature);
         }
-        
+
         // initialize permanent states
         let gl = &self.0.context;
         if self

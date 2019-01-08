@@ -2,7 +2,6 @@ use std::fmt::Debug;
 use std::iter::Sum;
 use std::ops::{Add, AddAssign, Range, Sub};
 
-
 #[derive(Debug)]
 pub struct RangeAllocator<T> {
     /// The range this allocator covers.
@@ -52,9 +51,7 @@ where
                         (best_index, best_range.clone())
                     }
                 }
-                None => {
-                    (index, range)
-                }
+                None => (index, range),
             });
         }
         match best_fit {
@@ -68,7 +65,7 @@ where
             }
             None => Err(RangeAllocationError {
                 fragmented_free_length,
-            })
+            }),
         }
     }
 
@@ -77,7 +74,9 @@ where
         assert!(range.start < range.end);
 
         // Get insertion position.
-        let i = self.free_ranges.iter()
+        let i = self
+            .free_ranges
+            .iter()
             .position(|r| r.start > range.start)
             .unwrap_or(self.free_ranges.len());
 
@@ -97,22 +96,21 @@ where
             return;
         } else if i < self.free_ranges.len() && range.end == self.free_ranges[i].start {
             // Merge with |right|.
-            self.free_ranges[i].start =
-                if i > 0 && range.start == self.free_ranges[i - 1].end {
-                    // Check for possible merge with |left| and |right|.
-                    let left = self.free_ranges.remove(i - 1);
-                    left.start
-                } else {
-                    range.start
-                };
+            self.free_ranges[i].start = if i > 0 && range.start == self.free_ranges[i - 1].end {
+                // Check for possible merge with |left| and |right|.
+                let left = self.free_ranges.remove(i - 1);
+                left.start
+            } else {
+                range.start
+            };
 
             return;
         }
 
         // Debug checks
         assert!(
-            (i == 0 || self.free_ranges[i - 1].end < range.start) &&
-            (i >= self.free_ranges.len() || range.end < self.free_ranges[i].start)
+            (i == 0 || self.free_ranges[i - 1].end < range.start)
+                && (i >= self.free_ranges.len() || range.end < self.free_ranges[i].start)
         );
 
         self.free_ranges.insert(i, range);
@@ -121,24 +119,26 @@ where
     /// Returns an iterator over allocated non-empty ranges
     pub fn allocated_ranges<'a>(&'a self) -> impl 'a + Iterator<Item = Range<T>> {
         let first = match self.free_ranges.first() {
-            Some(Range { ref start, .. }) if *start > self.initial_range.start => Some(self.initial_range.start .. *start),
+            Some(Range { ref start, .. }) if *start > self.initial_range.start => {
+                Some(self.initial_range.start..*start)
+            }
             _ => None,
         };
 
         let last = match self.free_ranges.last() {
-            Some(Range { end, .. }) if *end < self.initial_range.end => Some(*end .. self.initial_range.end),
+            Some(Range { end, .. }) if *end < self.initial_range.end => {
+                Some(*end..self.initial_range.end)
+            }
             _ => None,
         };
 
-        let mid = self.free_ranges
+        let mid = self
+            .free_ranges
             .iter()
             .zip(self.free_ranges.iter().skip(1))
-            .map(|(ra, rb)| ra.end .. rb.start);
+            .map(|(ra, rb)| ra.end..rb.start);
 
-        first
-            .into_iter()
-            .chain(mid)
-            .chain(last)
+        first.into_iter().chain(mid).chain(last)
     }
 
     pub fn reset(&mut self) {
@@ -159,7 +159,6 @@ impl<T: Copy + Sub<Output = T> + Sum> RangeAllocator<T> {
             .sum()
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -219,7 +218,10 @@ mod tests {
         alloc.free_range(70..80);
         alloc.free_range(90..100);
         // Check that the right blocks were freed.
-        assert_eq!(alloc.free_ranges, vec![10..20, 30..40, 50..60, 70..80, 90..100]);
+        assert_eq!(
+            alloc.free_ranges,
+            vec![10..20, 30..40, 50..60, 70..80, 90..100]
+        );
         // Fragment the memory on purpose a bit.
         assert_eq!(alloc.allocate_range(6), Ok(10..16));
         assert_eq!(alloc.allocate_range(6), Ok(30..36));
@@ -227,7 +229,10 @@ mod tests {
         assert_eq!(alloc.allocate_range(6), Ok(70..76));
         assert_eq!(alloc.allocate_range(6), Ok(90..96));
         // Check for fragmentation.
-        assert_eq!(alloc.free_ranges, vec![16..20, 36..40, 56..60, 76..80, 96..100]);
+        assert_eq!(
+            alloc.free_ranges,
+            vec![16..20, 36..40, 56..60, 76..80, 96..100]
+        );
         // Fill up the fragmentation
         assert_eq!(alloc.allocate_range(4), Ok(16..20));
         assert_eq!(alloc.allocate_range(4), Ok(36..40));

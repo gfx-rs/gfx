@@ -17,9 +17,9 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::{mem, ptr};
 
-use {Backend as B, Device};
-use {conv, native as n, result, window as w};
 use pool::RawCommandPool;
+use {conv, native as n, result, window as w};
+use {Backend as B, Device};
 
 impl d::Device<B> for Device {
     unsafe fn allocate_memory(
@@ -128,10 +128,14 @@ impl d::Device<B> for Device {
         let clear_attachments_mask = attachments
             .iter()
             .enumerate()
-            .filter_map(|(i, at)| if at.load_op == vk::AttachmentLoadOp::CLEAR || at.stencil_load_op == vk::AttachmentLoadOp::CLEAR {
-                Some(1 << i as u64)
-            } else {
-                None
+            .filter_map(|(i, at)| {
+                if at.load_op == vk::AttachmentLoadOp::CLEAR
+                    || at.stencil_load_op == vk::AttachmentLoadOp::CLEAR
+                {
+                    Some(1 << i as u64)
+                } else {
+                    None
+                }
             })
             .sum();
 

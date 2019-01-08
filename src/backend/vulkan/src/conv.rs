@@ -2,7 +2,7 @@ use ash::vk;
 
 use hal::range::RangeArg;
 use hal::{buffer, command, format, image, pass, pso, query};
-use hal::{IndexType, PresentMode, Primitive, Features};
+use hal::{Features, IndexType, PresentMode, Primitive};
 
 use native as n;
 use std::borrow::Borrow;
@@ -398,16 +398,34 @@ pub fn map_device_features(features: Features) -> vk::PhysicalDeviceFeatures {
         .pipeline_statistics_query(features.contains(Features::PIPELINE_STATISTICS_QUERY))
         .vertex_pipeline_stores_and_atomics(features.contains(Features::VERTEX_STORES_AND_ATOMICS))
         .fragment_stores_and_atomics(features.contains(Features::FRAGMENT_STORES_AND_ATOMICS))
-        .shader_tessellation_and_geometry_point_size(features.contains(Features::SHADER_TESSELLATION_AND_GEOMETRY_POINT_SIZE))
+        .shader_tessellation_and_geometry_point_size(
+            features.contains(Features::SHADER_TESSELLATION_AND_GEOMETRY_POINT_SIZE),
+        )
         .shader_image_gather_extended(features.contains(Features::SHADER_IMAGE_GATHER_EXTENDED))
-        .shader_storage_image_extended_formats(features.contains(Features::SHADER_STORAGE_IMAGE_EXTENDED_FORMATS))
-        .shader_storage_image_multisample(features.contains(Features::SHADER_STORAGE_IMAGE_MULTISAMPLE))
-        .shader_storage_image_read_without_format(features.contains(Features::SHADER_STORAGE_IMAGE_READ_WITHOUT_FORMAT))
-        .shader_storage_image_write_without_format(features.contains(Features::SHADER_STORAGE_IMAGE_WRITE_WITHOUT_FORMAT))
-        .shader_uniform_buffer_array_dynamic_indexing(features.contains(Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING))
-        .shader_sampled_image_array_dynamic_indexing(features.contains(Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING))
-        .shader_storage_buffer_array_dynamic_indexing(features.contains(Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING))
-        .shader_storage_image_array_dynamic_indexing(features.contains(Features::SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING))
+        .shader_storage_image_extended_formats(
+            features.contains(Features::SHADER_STORAGE_IMAGE_EXTENDED_FORMATS),
+        )
+        .shader_storage_image_multisample(
+            features.contains(Features::SHADER_STORAGE_IMAGE_MULTISAMPLE),
+        )
+        .shader_storage_image_read_without_format(
+            features.contains(Features::SHADER_STORAGE_IMAGE_READ_WITHOUT_FORMAT),
+        )
+        .shader_storage_image_write_without_format(
+            features.contains(Features::SHADER_STORAGE_IMAGE_WRITE_WITHOUT_FORMAT),
+        )
+        .shader_uniform_buffer_array_dynamic_indexing(
+            features.contains(Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING),
+        )
+        .shader_sampled_image_array_dynamic_indexing(
+            features.contains(Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING),
+        )
+        .shader_storage_buffer_array_dynamic_indexing(
+            features.contains(Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING),
+        )
+        .shader_storage_image_array_dynamic_indexing(
+            features.contains(Features::SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING),
+        )
         .shader_clip_distance(features.contains(Features::SHADER_CLIP_DISTANCE))
         .shader_cull_distance(features.contains(Features::SHADER_CULL_DISTANCE))
         .shader_float64(features.contains(Features::SHADER_FLOAT64))

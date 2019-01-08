@@ -1,6 +1,6 @@
 use gl::{self, types as t};
-use hal::{buffer, image as i, Primitive};
 use hal::format::Format;
+use hal::{buffer, image as i, Primitive};
 use native::VertexAttribFunction;
 
 /*
@@ -38,9 +38,9 @@ pub fn filter_to_gl(mag: i::Filter, min: i::Filter, mip: i::Filter) -> (t::GLenu
 
 pub fn wrap_to_gl(w: i::WrapMode) -> t::GLenum {
     match w {
-        i::WrapMode::Tile   => gl::REPEAT,
+        i::WrapMode::Tile => gl::REPEAT,
         i::WrapMode::Mirror => gl::MIRRORED_REPEAT,
-        i::WrapMode::Clamp  => gl::CLAMP_TO_EDGE,
+        i::WrapMode::Clamp => gl::CLAMP_TO_EDGE,
         i::WrapMode::Border => gl::CLAMP_TO_BORDER,
     }
 }
@@ -52,7 +52,7 @@ pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<t::GLenum> {
         Usage::INDEX => Some(gl::ELEMENT_ARRAY_BUFFER),
         Usage::VERTEX => Some(gl::ARRAY_BUFFER),
         Usage::INDIRECT => unimplemented!(),
-        _ => None
+        _ => None,
     }
 }
 
@@ -71,12 +71,14 @@ pub fn primitive_to_gl_primitive(primitive: Primitive) -> t::GLenum {
     }
 }
 
-pub fn format_to_gl_format(format: Format) -> Option<(gl::types::GLint, gl::types::GLenum, VertexAttribFunction)> {
-    use hal::format::Format::*;
+pub fn format_to_gl_format(
+    format: Format,
+) -> Option<(gl::types::GLint, gl::types::GLenum, VertexAttribFunction)> {
     use gl::*;
+    use hal::format::Format::*;
     use native::VertexAttribFunction::*;
     let _ = Double; //mark as used
-    // TODO: Add more formats and error handling for `None`
+                    // TODO: Add more formats and error handling for `None`
     let format = match format {
         R8Uint => (1, UNSIGNED_BYTE, Integer),
         R8Int => (1, BYTE, Integer),

@@ -2,13 +2,13 @@
 use std::borrow::Borrow;
 use std::ops::Range;
 
-use Backend;
-use {buffer, image};
+use super::{CommandBuffer, Level, RawCommandBuffer, Shot};
 use memory::{Barrier, Dependencies};
 use pso::PipelineStage;
 use queue::capability::{Supports, Transfer};
-use super::{CommandBuffer, RawCommandBuffer, Shot, Level};
 use range::RangeArg;
+use Backend;
+use {buffer, image};
 /// Specifies a source region and a destination
 /// region in a buffer for copying.  All values
 /// are in units of bytes.
@@ -59,7 +59,6 @@ pub struct BufferImageCopy {
     pub image_extent: image::Extent,
 }
 
-
 impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
     pub unsafe fn pipeline_barrier<'i, T>(
@@ -74,26 +73,17 @@ impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S
         self.raw.pipeline_barrier(stages, dependencies, barriers)
     }
 
-
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub unsafe fn fill_buffer<R>(
-        &mut self,
-        buffer: &B::Buffer,
-        range: R,
-        data: u32,
-    ) where
+    pub unsafe fn fill_buffer<R>(&mut self, buffer: &B::Buffer, range: R, data: u32)
+    where
         R: RangeArg<buffer::Offset>,
     {
         self.raw.fill_buffer(buffer, range, data)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub unsafe fn copy_buffer<T>(
-        &mut self,
-        src: &B::Buffer,
-        dst: &B::Buffer,
-        regions: T,
-    ) where
+    pub unsafe fn copy_buffer<T>(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: T)
+    where
         T: IntoIterator,
         T::Item: Borrow<BufferCopy>,
     {
@@ -122,7 +112,8 @@ impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S
         T: IntoIterator,
         T::Item: Borrow<ImageCopy>,
     {
-        self.raw.copy_image(src, src_layout, dst, dst_layout, regions)
+        self.raw
+            .copy_image(src, src_layout, dst, dst_layout, regions)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

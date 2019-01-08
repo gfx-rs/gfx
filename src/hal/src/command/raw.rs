@@ -1,17 +1,17 @@
 use std::any::Any;
 use std::borrow::Borrow;
-use std::ops::Range;
 use std::fmt;
+use std::ops::Range;
 
-use {buffer, pass, pso, query};
-use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use super::{
+    AttachmentClear, BufferCopy, BufferImageCopy, ImageBlit, ImageCopy, ImageResolve,
+    SubpassContents,
+};
 use image::{Filter, Layout, SubresourceRange};
 use memory::{Barrier, Dependencies};
 use range::RangeArg;
-use super::{
-    AttachmentClear, BufferCopy, BufferImageCopy,
-    ImageBlit, ImageCopy, ImageResolve, SubpassContents,
-};
+use {buffer, pass, pso, query};
+use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 
 /// Unsafe variant of `ClearColor`.
 #[repr(C)]
@@ -119,7 +119,11 @@ impl<'a, B: Backend> Default for CommandBufferInheritanceInfo<'a, B> {
 /// provided by a `Backend`'s command buffer.
 pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// Begins recording commands to a command buffer.
-    unsafe fn begin(&mut self, flags: CommandBufferFlags, inheritance_info: CommandBufferInheritanceInfo<B>);
+    unsafe fn begin(
+        &mut self,
+        flags: CommandBufferFlags,
+        inheritance_info: CommandBufferInheritanceInfo<B>,
+    );
 
     /// Finish recording commands to a command buffer.
     unsafe fn finish(&mut self);
@@ -142,21 +146,12 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
         T::Item: Borrow<Barrier<'a, B>>;
 
     /// Fill a buffer with the given `u32` value.
-    unsafe fn fill_buffer<R>(
-        &mut self,
-        buffer: &B::Buffer,
-        range: R,
-        data: u32,
-    ) where
+    unsafe fn fill_buffer<R>(&mut self, buffer: &B::Buffer, range: R, data: u32)
+    where
         R: RangeArg<buffer::Offset>;
 
     /// Copy data from the given slice into a buffer.
-    unsafe fn update_buffer(
-        &mut self,
-        buffer: &B::Buffer,
-        offset: buffer::Offset,
-        data: &[u8],
-    );
+    unsafe fn update_buffer(&mut self, buffer: &B::Buffer, offset: buffer::Offset, data: &[u8]);
 
     /// Clears an image to the given color/depth/stencil.
     unsafe fn clear_image<T>(
@@ -385,12 +380,8 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     unsafe fn dispatch_indirect(&mut self, buffer: &B::Buffer, offset: buffer::Offset);
 
     /// Adds a command to copy regions from the source to destination buffer.
-    unsafe fn copy_buffer<T>(
-        &mut self,
-        src: &B::Buffer,
-        dst: &B::Buffer,
-        regions: T,
-    ) where
+    unsafe fn copy_buffer<T>(&mut self, src: &B::Buffer, dst: &B::Buffer, regions: T)
+    where
         T: IntoIterator,
         T::Item: Borrow<BufferCopy>;
 
@@ -436,11 +427,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// from the currently bound vertex buffers.  It performs instanced
     /// drawing, drawing `instances.len()`
     /// times with an `instanceIndex` starting with the start of the range.
-    unsafe fn draw(
-        &mut self,
-        vertices: Range<VertexCount>,
-        instances: Range<InstanceCount>,
-    );
+    unsafe fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>);
 
     /// Performs indexed drawing, drawing the range of indices
     /// given by the current index buffer and any bound vertex buffers.
@@ -534,10 +521,8 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     );
 
     /// Execute the given secondary command buffers.
-    unsafe fn execute_commands<'a, T, I>(
-        &mut self,
-        cmd_buffers: I,
-    ) where
+    unsafe fn execute_commands<'a, T, I>(&mut self, cmd_buffers: I)
+    where
         T: 'a + Borrow<B::CommandBuffer>,
         I: IntoIterator<Item = &'a T>;
 }

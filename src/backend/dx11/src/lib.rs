@@ -18,16 +18,14 @@ extern crate winit;
 extern crate wio;
 
 use hal::backend::RawQueueGroup;
+use hal::command::{ClearColor, ClearColorRaw};
+use hal::format::ChannelType;
 use hal::queue::{QueueFamilyId, Queues};
 use hal::range::RangeArg;
 use hal::{
     buffer, command, error, format, image, memory, pass, pso, query, Features, Limits, QueueType,
 };
-use hal::{
-    DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount,
-};
-use hal::format::ChannelType;
-use hal::command::{ClearColor, ClearColorRaw};
+use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 
 use range_alloc::RangeAllocator;
 
@@ -91,7 +89,7 @@ mod shader;
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub(crate) struct ViewInfo {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     resource: *mut d3d11::ID3D11Resource,
     kind: image::Kind,
     caps: image::ViewCapabilities,
@@ -192,11 +190,12 @@ fn get_format_properties(
 
         if hr == winerror::S_OK {
             let can_buffer = 0 != support.OutFormatSupport & d3d11::D3D11_FORMAT_SUPPORT_BUFFER;
-            let can_image = 0 != support.OutFormatSupport
-                & (d3d11::D3D11_FORMAT_SUPPORT_TEXTURE1D
-                    | d3d11::D3D11_FORMAT_SUPPORT_TEXTURE2D
-                    | d3d11::D3D11_FORMAT_SUPPORT_TEXTURE3D
-                    | d3d11::D3D11_FORMAT_SUPPORT_TEXTURECUBE);
+            let can_image = 0
+                != support.OutFormatSupport
+                    & (d3d11::D3D11_FORMAT_SUPPORT_TEXTURE1D
+                        | d3d11::D3D11_FORMAT_SUPPORT_TEXTURE2D
+                        | d3d11::D3D11_FORMAT_SUPPORT_TEXTURE3D
+                        | d3d11::D3D11_FORMAT_SUPPORT_TEXTURECUBE);
             let can_linear = can_image && !format.surface_desc().is_compressed();
             if can_image {
                 props.optimal_tiling |=
@@ -318,7 +317,9 @@ impl hal::Instance for Instance {
                         heap_index: 0,
                     },
                     hal::MemoryType {
-                        properties: Properties::CPU_VISIBLE | Properties::COHERENT | Properties::CPU_CACHED,
+                        properties: Properties::CPU_VISIBLE
+                            | Properties::COHERENT
+                            | Properties::CPU_CACHED,
                         heap_index: 1,
                     },
                     hal::MemoryType {
@@ -807,7 +808,11 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(
+        &mut self,
+        swapchains: Is,
+        _wait_semaphores: Iw,
+    ) -> Result<(), ()>
     where
         W: 'a + Borrow<Swapchain>,
         Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
@@ -847,22 +852,34 @@ pub struct RenderPassCache {
 }
 
 impl RenderPassCache {
-    pub fn start_subpass(&mut self, internal: &mut internal::Internal, context: &ComPtr<d3d11::ID3D11DeviceContext>, cache: &mut CommandBufferState) {
-        let attachments = self.attachment_clear_values.iter().filter(|clear| clear.subpass_id == Some(self.current_subpass)).map(|clear| clear.raw);
+    pub fn start_subpass(
+        &mut self,
+        internal: &mut internal::Internal,
+        context: &ComPtr<d3d11::ID3D11DeviceContext>,
+        cache: &mut CommandBufferState,
+    ) {
+        let attachments = self
+            .attachment_clear_values
+            .iter()
+            .filter(|clear| clear.subpass_id == Some(self.current_subpass))
+            .map(|clear| clear.raw);
 
-        cache.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::VIEWPORTS);
+        cache
+            .dirty_flag
+            .insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::VIEWPORTS);
         internal.clear_attachments(
             context,
             attachments,
             &[pso::ClearRect {
                 rect: self.target_rect,
-                layers: 0..1
+                layers: 0..1,
             }],
-            &self
+            &self,
         );
 
         let subpass = &self.render_pass.subpasses[self.current_subpass];
-        let color_views = subpass.color_attachments
+        let color_views = subpass
+            .color_attachments
             .iter()
             .map(|&(id, _)| {
                 self.framebuffer.attachments[id]
@@ -873,7 +890,13 @@ impl RenderPassCache {
             })
             .collect::<Vec<_>>();
         let ds_view = match subpass.depth_stencil_attachment {
-            Some((id, _)) => Some(self.framebuffer.attachments[id].dsv_handle.clone().unwrap().as_raw()),
+            Some((id, _)) => Some(
+                self.framebuffer.attachments[id]
+                    .dsv_handle
+                    .clone()
+                    .unwrap()
+                    .as_raw(),
+            ),
             None => None,
         };
 
@@ -914,7 +937,7 @@ pub struct CommandBufferState {
     required_bindings: Option<u32>,
     // the highest binding number in currently bound pipeline
     max_bindings: Option<u32>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     viewports: Vec<d3d11::D3D11_VIEWPORT>,
     vertex_buffers: Vec<*mut d3d11::ID3D11Buffer>,
     vertex_offsets: Vec<u32>,
@@ -968,7 +991,12 @@ impl CommandBufferState {
         self.current_blend = None;
     }
 
-    pub fn set_vertex_buffer(&mut self, index: usize, offset: u32, buffer: *mut d3d11::ID3D11Buffer) {
+    pub fn set_vertex_buffer(
+        &mut self,
+        index: usize,
+        offset: u32,
+        buffer: *mut d3d11::ID3D11Buffer,
+    ) {
         self.bound_bindings |= 1 << index as u32;
 
         if index >= self.vertex_buffers.len() {
@@ -984,8 +1012,8 @@ impl CommandBufferState {
 
     pub fn bind_vertex_buffers(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
         if let Some(binding_count) = self.max_bindings {
-            if self.vertex_buffers.len() >= binding_count as usize &&
-               self.vertex_strides.len() >= binding_count as usize
+            if self.vertex_buffers.len() >= binding_count as usize
+                && self.vertex_strides.len() >= binding_count as usize
             {
                 unsafe {
                     context.IASetVertexBuffers(
@@ -1029,7 +1057,11 @@ impl CommandBufferState {
         self.dirty_flag.remove(DirtyStateFlag::VIEWPORTS);
     }
 
-    pub fn set_render_targets(&mut self, render_targets: &[*mut d3d11::ID3D11RenderTargetView], depth_target: Option<*mut d3d11::ID3D11DepthStencilView>) {
+    pub fn set_render_targets(
+        &mut self,
+        render_targets: &[*mut d3d11::ID3D11RenderTargetView],
+        depth_target: Option<*mut d3d11::ID3D11DepthStencilView>,
+    ) {
         for (idx, &rt) in render_targets.iter().enumerate() {
             self.render_targets[idx] = rt;
         }
@@ -1049,7 +1081,7 @@ impl CommandBufferState {
                     dsv
                 } else {
                     ptr::null_mut()
-                }
+                },
             );
         }
 
@@ -1065,7 +1097,11 @@ impl CommandBufferState {
     pub fn bind_blend_state(&mut self, context: &ComPtr<d3d11::ID3D11DeviceContext>) {
         if let Some(blend) = self.current_blend {
             let blend_color = if let Some(ref pipeline) = self.graphics_pipeline {
-                pipeline.baked_states.blend_color.or(self.blend_factor).unwrap_or([0f32; 4])
+                pipeline
+                    .baked_states
+                    .blend_color
+                    .or(self.blend_factor)
+                    .unwrap_or([0f32; 4])
             } else {
                 self.blend_factor.unwrap_or([0f32; 4])
             };
@@ -1078,7 +1114,6 @@ impl CommandBufferState {
             self.dirty_flag.remove(DirtyStateFlag::BLEND_STATE);
         }
     }
-
 
     pub fn set_graphics_pipeline(&mut self, pipeline: GraphicsPipeline) {
         self.graphics_pipeline = Some(pipeline);
@@ -1123,8 +1158,6 @@ impl CommandBufferState {
                 if let Some(ref scissor) = pipeline.baked_states.scissor {
                     context.RSSetScissorRects(1, [conv::map_rect(&scissor)].as_ptr());
                 }
-
-
 
                 if let Some((ref state, reference)) = pipeline.depth_stencil_state {
                     let stencil_ref = if let pso::State::Static(reference) = reference {
@@ -1337,23 +1370,31 @@ impl CommandBuffer {
     }
 
     fn defer_coherent_flush(&mut self, buffer: &Buffer) {
-        if !self.flush_coherent_memory.iter().any(|m| m.buffer == buffer.internal.raw) {
+        if !self
+            .flush_coherent_memory
+            .iter()
+            .any(|m| m.buffer == buffer.internal.raw)
+        {
             self.flush_coherent_memory.push(MemoryFlush {
                 host_memory: buffer.host_ptr,
                 sync_range: SyncRange::Whole,
-                buffer: buffer.internal.raw
+                buffer: buffer.internal.raw,
             });
         }
     }
 
     fn defer_coherent_invalidate(&mut self, buffer: &Buffer) {
-        if !self.invalidate_coherent_memory.iter().any(|m| m.buffer == buffer.internal.raw) {
+        if !self
+            .invalidate_coherent_memory
+            .iter()
+            .any(|m| m.buffer == buffer.internal.raw)
+        {
             self.invalidate_coherent_memory.push(MemoryInvalidate {
                 working_buffer: Some(self.internal.working_buffer.clone()),
                 working_buffer_size: self.internal.working_buffer_size,
                 host_memory: buffer.host_ptr,
                 sync_range: buffer.bound_range.clone(),
-                buffer: buffer.internal.raw
+                buffer: buffer.internal.raw,
             });
         }
     }
@@ -1370,7 +1411,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         _flags: command::CommandBufferFlags,
-        _info: command::CommandBufferInheritanceInfo<Backend>
+        _info: command::CommandBufferInheritanceInfo<Backend>,
     ) {
         self.reset();
     }
@@ -1414,11 +1455,14 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             let channel_type = format.base_format().1;
 
             fn typed_clear_color(ty: ChannelType, raw_clear: ClearColorRaw) -> ClearColor {
-
                 match ty {
-                    ChannelType::Unorm | ChannelType::Inorm | ChannelType::Ufloat |
-                    ChannelType::Float | ChannelType::Uscaled | ChannelType::Iscaled |
-                    ChannelType::Srgb => ClearColor::Float(unsafe { raw_clear.float32 }),
+                    ChannelType::Unorm
+                    | ChannelType::Inorm
+                    | ChannelType::Ufloat
+                    | ChannelType::Float
+                    | ChannelType::Uscaled
+                    | ChannelType::Iscaled
+                    | ChannelType::Srgb => ClearColor::Float(unsafe { raw_clear.float32 }),
 
                     ChannelType::Uint => ClearColor::Uint(unsafe { raw_clear.uint32 }),
 
@@ -1439,7 +1483,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             raw: command::AttachmentClear::DepthStencil {
                                 depth: Some(unsafe { raw_clear_value.depth_stencil.depth }),
                                 stencil: Some(unsafe { raw_clear_value.depth_stencil.stencil }),
-                            }
+                            },
                         });
                     }
                     (Alo::Clear, Alo::Clear) => {
@@ -1448,8 +1492,10 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             attachment_id: idx,
                             raw: command::AttachmentClear::Color {
                                 index: idx,
-                                value: typed_clear_color(channel_type, unsafe { raw_clear_value.color }),
-                            }
+                                value: typed_clear_color(channel_type, unsafe {
+                                    raw_clear_value.color
+                                }),
+                            },
                         });
 
                         attachment_clears.push(AttachmentClear {
@@ -1458,9 +1504,9 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             raw: command::AttachmentClear::DepthStencil {
                                 depth: None,
                                 stencil: Some(unsafe { raw_clear_value.depth_stencil.stencil }),
-                            }
+                            },
                         });
-                    },
+                    }
                     (Alo::Clear, _) if format.is_depth() => {
                         attachment_clears.push(AttachmentClear {
                             subpass_id,
@@ -1468,7 +1514,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             raw: command::AttachmentClear::DepthStencil {
                                 depth: Some(unsafe { raw_clear_value.depth_stencil.depth }),
                                 stencil: None,
-                            }
+                            },
                         });
                     }
                     (Alo::Clear, _) => {
@@ -1477,10 +1523,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             attachment_id: idx,
                             raw: command::AttachmentClear::Color {
                                 index: idx,
-                                value: typed_clear_color(channel_type, unsafe { raw_clear_value.color }),
-                            }
+                                value: typed_clear_color(channel_type, unsafe {
+                                    raw_clear_value.color
+                                }),
+                            },
                         });
-                    },
+                    }
                     (_, Alo::Clear) => {
                         attachment_clears.push(AttachmentClear {
                             subpass_id,
@@ -1488,10 +1536,10 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             raw: command::AttachmentClear::DepthStencil {
                                 depth: None,
                                 stencil: Some(unsafe { raw_clear_value.depth_stencil.stencil }),
-                            }
+                            },
                         });
-                    },
-                    _ => {},
+                    }
+                    _ => {}
                 }
             }
         }
@@ -1519,7 +1567,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn end_render_pass(&mut self) {
         unsafe {
-            self.context.OMSetRenderTargets(8, [ptr::null_mut(); 8].as_ptr(), ptr::null_mut());
+            self.context
+                .OMSetRenderTargets(8, [ptr::null_mut(); 8].as_ptr(), ptr::null_mut());
         }
 
         self.render_pass_cache = None;
@@ -1600,8 +1649,13 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         U::Item: Borrow<pso::ClearRect>,
     {
         if let Some(ref pass) = self.render_pass_cache {
-            self.cache.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE | DirtyStateFlag::VIEWPORTS | DirtyStateFlag::RENDER_TARGETS);
-            self.internal.clear_attachments(&self.context, clears, rects, pass);
+            self.cache.dirty_flag.insert(
+                DirtyStateFlag::GRAPHICS_PIPELINE
+                    | DirtyStateFlag::VIEWPORTS
+                    | DirtyStateFlag::RENDER_TARGETS,
+            );
+            self.internal
+                .clear_attachments(&self.context, clears, rects, pass);
             self.cache.bind(&self.context);
         } else {
             panic!("`clear_attachments` can only be called inside a renderpass")
@@ -1634,7 +1688,9 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ImageBlit>,
     {
-        self.cache.dirty_flag.insert(DirtyStateFlag::GRAPHICS_PIPELINE);
+        self.cache
+            .dirty_flag
+            .insert(DirtyStateFlag::GRAPHICS_PIPELINE);
 
         self.internal
             .blit_2d_image(&self.context, src, dst, filter, regions);
@@ -1661,12 +1717,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             let idx = i + first_binding as usize;
             let buf = buf.borrow();
 
-
             if buf.ty == MemoryHeapFlags::HOST_COHERENT {
                 self.defer_coherent_flush(buf);
             }
 
-            self.cache.set_vertex_buffer(idx, offset as u32, buf.internal.raw);
+            self.cache
+                .set_vertex_buffer(idx, offset as u32, buf.internal.raw);
         }
 
         self.cache.bind_vertex_buffers(&self.context);
@@ -2144,11 +2200,7 @@ fn intersection(a: &Range<u64>, b: &Range<u64>) -> Option<Range<u64>> {
     if min.end < max.start {
         None
     } else {
-        let end = if min.end < max.end {
-            min.end
-        } else {
-            max.end
-        };
+        let end = if min.end < max.end { min.end } else { max.end };
         Some(max.start..end)
     }
 }
@@ -2333,21 +2385,24 @@ impl Memory {
                         host_memory: unsafe { ptr.offset(buffer_range.start as _) },
                         sync_range: SyncRange::Whole,
                         buffer: buffer.raw,
-                    }.do_flush(&context);
+                    }
+                    .do_flush(&context);
 
                     if let Some(disjoint) = buffer.disjoint_cb {
                         MemoryFlush {
                             host_memory: unsafe { ptr.offset(buffer_range.start as _) },
                             sync_range: SyncRange::Whole,
                             buffer: disjoint,
-                        }.do_flush(&context);
+                        }
+                        .do_flush(&context);
                     }
                 } else if buffer.usage == Usage::UNIFORM {
                     MemoryFlush {
                         host_memory: unsafe { ptr.offset(buffer_range.start as _) },
                         sync_range: SyncRange::Whole,
                         buffer: buffer.raw,
-                    }.do_flush(&context);
+                    }
+                    .do_flush(&context);
                 } else {
                     let local_start = range.start - buffer_range.start;
                     let local_len = range.end - range.start;
@@ -2356,7 +2411,8 @@ impl Memory {
                         host_memory: unsafe { ptr.offset(range.start as _) },
                         sync_range: SyncRange::Partial(local_start..(local_start + local_len)),
                         buffer: buffer.raw,
-                    }.do_flush(&context);
+                    }
+                    .do_flush(&context);
                 }
             }
         }
@@ -2377,7 +2433,8 @@ impl Memory {
                     host_memory: self.mapped_ptr,
                     sync_range: range.clone(),
                     buffer: buffer.raw,
-                }.do_invalidate(&context);
+                }
+                .do_invalidate(&context);
             }
         }
     }
@@ -2401,7 +2458,9 @@ impl hal::pool::RawCommandPool<Backend> for CommandPool {
     }
 
     unsafe fn free<I>(&mut self, _cbufs: I)
-    where I: IntoIterator<Item = CommandBuffer> {
+    where
+        I: IntoIterator<Item = CommandBuffer>,
+    {
         // TODO:
         // unimplemented!()
     }
@@ -2457,7 +2516,6 @@ pub struct Framebuffer {
     layers: image::Layer,
 }
 
-
 #[derive(Clone, Debug)]
 pub struct InternalBuffer {
     raw: *mut d3d11::ID3D11Buffer,
@@ -2473,8 +2531,8 @@ pub struct InternalBuffer {
 #[derivative(Debug)]
 pub struct Buffer {
     internal: InternalBuffer,
-    ty: MemoryHeapFlags, // empty if unbound
-    host_ptr: *mut u8, // null if unbound
+    ty: MemoryHeapFlags,     // empty if unbound
+    host_ptr: *mut u8,       // null if unbound
     bound_range: Range<u64>, // 0 if unbound
     requirements: memory::Requirements,
     bind: d3d11::D3D11_BIND_FLAG,
@@ -2504,9 +2562,9 @@ pub struct Image {
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct InternalImage {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     raw: *mut d3d11::ID3D11Resource,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     copy_srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
     #[derivative(Debug = "ignore")]
     srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
@@ -2567,7 +2625,7 @@ impl Image {
 #[derivative(Clone, Debug)]
 pub struct ImageView {
     format: format::Format,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     rtv_handle: Option<ComPtr<d3d11::ID3D11RenderTargetView>>,
     #[derivative(Debug = "ignore")]
     srv_handle: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
@@ -2608,15 +2666,15 @@ unsafe impl Sync for ComputePipeline {}
 #[derive(Derivative)]
 #[derivative(Clone, Debug)]
 pub struct GraphicsPipeline {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     vs: ComPtr<d3d11::ID3D11VertexShader>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     gs: Option<ComPtr<d3d11::ID3D11GeometryShader>>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     hs: Option<ComPtr<d3d11::ID3D11HullShader>>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     ds: Option<ComPtr<d3d11::ID3D11DomainShader>>,
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     ps: Option<ComPtr<d3d11::ID3D11PixelShader>>,
     #[derivative(Debug = "ignore")]
     topology: d3d11::D3D11_PRIMITIVE_TOPOLOGY,

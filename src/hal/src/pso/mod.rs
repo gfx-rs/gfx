@@ -2,9 +2,9 @@
 //!
 //! This module contains items used to create and manage Pipelines.
 
-use {device, pass};
 use std::fmt;
 use std::ops::Range;
+use {device, pass};
 
 mod compute;
 mod descriptor;
@@ -121,7 +121,7 @@ pub enum Stage {
     Domain,
     Geometry,
     Fragment,
-    Compute
+    Compute,
 }
 
 impl From<Stage> for ShaderStageFlags {
@@ -145,11 +145,10 @@ impl fmt::Display for Stage {
             Stage::Domain => "domain",
             Stage::Geometry => "geometry",
             Stage::Fragment => "fragment",
-            Stage::Compute => "compute"
+            Stage::Compute => "compute",
         })
     }
 }
-
 
 /// Shader entry point.
 #[derive(Debug, Copy)]

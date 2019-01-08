@@ -2,25 +2,25 @@ use std::borrow::Borrow;
 use std::cell::Cell;
 use std::iter::repeat;
 use std::ops::Range;
-use std::{ptr, mem, slice};
 use std::sync::{Arc, Mutex, RwLock};
+use std::{mem, ptr, slice};
 
+use gl::types::{GLenum, GLfloat, GLint};
 use {gl, GlContainer};
-use gl::types::{GLint, GLenum, GLfloat};
 
-use hal::{self as c, device as d, error, image as i, memory, pass, pso, buffer, mapping, query};
 use hal::backend::FastHashMap;
 use hal::format::{Format, Swizzle};
 use hal::pool::CommandPoolCreateFlags;
 use hal::queue::QueueFamilyId;
 use hal::range::RangeArg;
+use hal::{self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query};
 
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
-use {Backend as B, Share, Surface, Swapchain, Starc};
-use {conv, native as n, state};
 use info::LegacyFeatures;
 use pool::{BufferMemory, OwnedBuffer, RawCommandPool};
+use {conv, native as n, state};
+use {Backend as B, Share, Starc, Surface, Swapchain};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -50,8 +50,12 @@ fn get_shader_log(gl: &GlContainer, name: n::Shader) -> String {
         let mut log = String::with_capacity(length as usize);
         log.extend(repeat('\0').take(length as usize));
         unsafe {
-            gl.GetShaderInfoLog(name, length, &mut length,
-                (&log[..]).as_ptr() as *mut gl::types::GLchar);
+            gl.GetShaderInfoLog(
+                name,
+                length,
+                &mut length,
+                (&log[..]).as_ptr() as *mut gl::types::GLchar,
+            );
         }
         log.truncate(length as usize);
         log
@@ -61,13 +65,17 @@ fn get_shader_log(gl: &GlContainer, name: n::Shader) -> String {
 }
 
 pub(crate) fn get_program_log(gl: &GlContainer, name: n::Program) -> String {
-    let mut length  = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
+    let mut length = get_program_iv(gl, name, gl::INFO_LOG_LENGTH);
     if length > 0 {
         let mut log = String::with_capacity(length as usize);
         log.extend(repeat('\0').take(length as usize));
         unsafe {
-            gl.GetProgramInfoLog(name, length, &mut length,
-                (&log[..]).as_ptr() as *mut gl::types::GLchar);
+            gl.GetProgramInfoLog(
+                name,
+                length,
+                &mut length,
+                (&log[..]).as_ptr() as *mut gl::types::GLchar,
+            );
         }
         log.truncate(length as usize);
         log
@@ -105,9 +113,7 @@ impl Drop for Device {
 impl Device {
     /// Create a new `Device`.
     pub(crate) fn new(share: Starc<Share>) -> Self {
-        Device {
-            share: share,
-        }
+        Device { share: share }
     }
 
     pub fn create_shader_module_from_source(
@@ -120,8 +126,8 @@ impl Device {
         let can_compute = self.share.limits.max_compute_group_count[0] != 0;
         let can_tessellate = self.share.limits.max_patch_size != 0;
         let target = match stage {
-            pso::Stage::Vertex   => gl::VERTEX_SHADER,
-            pso::Stage::Hull  if can_tessellate  => gl::TESS_CONTROL_SHADER,
+            pso::Stage::Vertex => gl::VERTEX_SHADER,
+            pso::Stage::Hull if can_tessellate => gl::TESS_CONTROL_SHADER,
             pso::Stage::Domain if can_tessellate => gl::TESS_EVALUATION_SHADER,
             pso::Stage::Geometry => gl::GEOMETRY_SHADER,
             pso::Stage::Fragment => gl::FRAGMENT_SHADER,
@@ -131,9 +137,12 @@ impl Device {
 
         let name = unsafe { gl.CreateShader(target) };
         unsafe {
-            gl.ShaderSource(name, 1,
+            gl.ShaderSource(
+                name,
+                1,
                 &(data.as_ptr() as *const gl::types::GLchar),
-                &(data.len() as gl::types::GLint));
+                &(data.len() as gl::types::GLint),
+            );
             gl.CompileShader(name);
         }
         info!("\tCompiled shader {}", name);
@@ -153,7 +162,12 @@ impl Device {
         }
     }
 
-    fn bind_target_compat(gl: &GlContainer, point: GLenum, attachment: GLenum, view: &n::ImageView) {
+    fn bind_target_compat(
+        gl: &GlContainer,
+        point: GLenum,
+        attachment: GLenum,
+        view: &n::ImageView,
+    ) {
         match *view {
             n::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
@@ -164,7 +178,14 @@ impl Device {
             },
             n::ImageView::TextureLayer(texture, level, layer) => unsafe {
                 gl.BindTexture(gl::TEXTURE_2D, texture);
-                gl.FramebufferTexture3D(point, attachment, gl::TEXTURE_2D, texture, level as _, layer as _);
+                gl.FramebufferTexture3D(
+                    point,
+                    attachment,
+                    gl::TEXTURE_2D,
+                    texture,
+                    level as _,
+                    layer as _,
+                );
             },
         }
     }
@@ -194,14 +215,13 @@ impl Device {
             )
         });
 
-        spirv::Ast::parse(&module)
-            .map_err(|err| {
-                let msg =  match err {
-                    SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
-                };
-                d::ShaderError::CompilationFailed(msg)
-            })
+        spirv::Ast::parse(&module).map_err(|err| {
+            let msg = match err {
+                SpirvErrorCode::CompilationError(msg) => msg,
+                SpirvErrorCode::Unhandled => "Unknown parsing error".into(),
+            };
+            d::ShaderError::CompilationFailed(msg)
+        })
     }
 
     fn specialize_ast(
@@ -214,16 +234,17 @@ impl Device {
             .map_err(gen_unexpected_error)?;
 
         for spec_constant in spec_constants {
-            if let Some(constant) = specialization.constants
+            if let Some(constant) = specialization
+                .constants
                 .iter()
                 .find(|c| c.id == spec_constant.constant_id)
             {
                 // Override specialization constant values
-                let value = specialization
-                    .data[constant.range.start as usize .. constant.range.end as usize]
+                let value = specialization.data
+                    [constant.range.start as usize..constant.range.end as usize]
                     .iter()
                     .rev()
-                    .fold(0u64, |u, &b| (u<<8) + b as u64);
+                    .fold(0u64, |u, &b| (u << 8) + b as u64);
 
                 ast.set_scalar_constant(spec_constant.id, value)
                     .map_err(gen_unexpected_error)?;
@@ -261,14 +282,13 @@ impl Device {
 
         ast.set_compiler_options(&compile_options)
             .map_err(gen_unexpected_error)?;
-        ast.compile()
-            .map_err(|err| {
-                let msg =  match err {
-                    SpirvErrorCode::CompilationError(msg) => msg,
-                    SpirvErrorCode::Unhandled => "Unknown compile error".into(),
-                };
-                d::ShaderError::CompilationFailed(msg)
-            })
+        ast.compile().map_err(|err| {
+            let msg = match err {
+                SpirvErrorCode::CompilationError(msg) => msg,
+                SpirvErrorCode::Unhandled => "Unknown compile error".into(),
+            };
+            d::ShaderError::CompilationFailed(msg)
+        })
     }
 
     fn remap_bindings(
@@ -278,8 +298,20 @@ impl Device {
         nb_map: &mut FastHashMap<String, pso::DescriptorBinding>,
     ) {
         let res = ast.get_shader_resources().unwrap();
-        self.remap_binding(ast, desc_remap_data, nb_map, &res.sampled_images, n::BindingTypes::Images);
-        self.remap_binding(ast, desc_remap_data, nb_map, &res.uniform_buffers, n::BindingTypes::UniformBuffers);
+        self.remap_binding(
+            ast,
+            desc_remap_data,
+            nb_map,
+            &res.sampled_images,
+            n::BindingTypes::Images,
+        );
+        self.remap_binding(
+            ast,
+            desc_remap_data,
+            nb_map,
+            &res.uniform_buffers,
+            n::BindingTypes::UniformBuffers,
+        );
     }
 
     fn remap_binding(
@@ -291,18 +323,31 @@ impl Device {
         btype: n::BindingTypes,
     ) {
         for res in all_res {
-            let set = ast.get_decoration(res.id, spirv::Decoration::DescriptorSet).unwrap();
-            let binding = ast.get_decoration(res.id, spirv::Decoration::Binding).unwrap();
-            let nbs = desc_remap_data.get_binding(btype, set as _, binding).unwrap();
+            let set = ast
+                .get_decoration(res.id, spirv::Decoration::DescriptorSet)
+                .unwrap();
+            let binding = ast
+                .get_decoration(res.id, spirv::Decoration::Binding)
+                .unwrap();
+            let nbs = desc_remap_data
+                .get_binding(btype, set as _, binding)
+                .unwrap();
 
             for nb in nbs {
-                if self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
-                    ast.set_decoration(res.id, spirv::Decoration::Binding, *nb).unwrap()
+                if self
+                    .share
+                    .legacy_features
+                    .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
+                {
+                    ast.set_decoration(res.id, spirv::Decoration::Binding, *nb)
+                        .unwrap()
                 } else {
-                    ast.unset_decoration(res.id, spirv::Decoration::Binding).unwrap();
+                    ast.unset_decoration(res.id, spirv::Decoration::Binding)
+                        .unwrap();
                     assert!(nb_map.insert(res.name.clone(), *nb).is_none());
                 }
-                ast.unset_decoration(res.id, spirv::Decoration::DescriptorSet).unwrap();
+                ast.unset_decoration(res.id, spirv::Decoration::DescriptorSet)
+                    .unwrap();
             }
         }
     }
@@ -313,7 +358,8 @@ impl Device {
         desc_remap_data: &mut n::DescRemapData,
         nb_map: &mut FastHashMap<String, pso::DescriptorBinding>,
     ) {
-        let mut id_map = FastHashMap::<u32, (pso::DescriptorSetIndex, pso::DescriptorBinding)>::default();
+        let mut id_map =
+            FastHashMap::<u32, (pso::DescriptorSetIndex, pso::DescriptorBinding)>::default();
         let res = ast.get_shader_resources().unwrap();
         self.populate_id_map(ast, &mut id_map, &res.separate_images);
         self.populate_id_map(ast, &mut id_map, &res.separate_samplers);
@@ -321,32 +367,32 @@ impl Device {
         for cis in ast.get_combined_image_samplers().unwrap() {
             let (set, binding) = id_map.get(&cis.image_id).unwrap();
             let nb = desc_remap_data.reserve_binding(n::BindingTypes::Images);
-            desc_remap_data.insert_missing_binding(
-                nb,
-                n::BindingTypes::Images,
-                *set,
-                *binding,
-            );
+            desc_remap_data.insert_missing_binding(nb, n::BindingTypes::Images, *set, *binding);
             let (set, binding) = id_map.get(&cis.sampler_id).unwrap();
-            desc_remap_data.insert_missing_binding(
-                nb,
-                n::BindingTypes::Images,
-                *set,
-                *binding,
-            );
+            desc_remap_data.insert_missing_binding(nb, n::BindingTypes::Images, *set, *binding);
 
             let new_name = "GFX_HAL_COMBINED_SAMPLER".to_owned()
-                + "_" + &cis.sampler_id.to_string()
-                + "_" + &cis.image_id.to_string()
-                + "_" + &cis.combined_id.to_string() ;
+                + "_"
+                + &cis.sampler_id.to_string()
+                + "_"
+                + &cis.image_id.to_string()
+                + "_"
+                + &cis.combined_id.to_string();
             ast.set_name(cis.combined_id, &new_name).unwrap();
-            if self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
-                ast.set_decoration(cis.combined_id, spirv::Decoration::Binding, nb).unwrap()
+            if self
+                .share
+                .legacy_features
+                .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
+            {
+                ast.set_decoration(cis.combined_id, spirv::Decoration::Binding, nb)
+                    .unwrap()
             } else {
-                ast.unset_decoration(cis.combined_id, spirv::Decoration::Binding).unwrap();
+                ast.unset_decoration(cis.combined_id, spirv::Decoration::Binding)
+                    .unwrap();
                 assert!(nb_map.insert(new_name, nb).is_none())
             }
-            ast.unset_decoration(cis.combined_id, spirv::Decoration::DescriptorSet).unwrap();
+            ast.unset_decoration(cis.combined_id, spirv::Decoration::DescriptorSet)
+                .unwrap();
         }
     }
 
@@ -357,8 +403,12 @@ impl Device {
         all_res: &[spirv::Resource],
     ) {
         for res in all_res {
-            let set = ast.get_decoration(res.id, spirv::Decoration::DescriptorSet).unwrap();
-            let binding = ast.get_decoration(res.id, spirv::Decoration::Binding).unwrap();
+            let set = ast
+                .get_decoration(res.id, spirv::Decoration::DescriptorSet)
+                .unwrap();
+            let binding = ast
+                .get_decoration(res.id, spirv::Decoration::Binding)
+                .unwrap();
             assert!(id_map.insert(res.id, (set as _, binding)).is_none())
         }
     }
@@ -381,13 +431,20 @@ impl Device {
 
                 self.specialize_ast(&mut ast, point.specialization).unwrap();
                 self.remap_bindings(&mut ast, desc_remap_data, name_binding_map);
-                self.combine_separate_images_and_samplers(&mut ast, desc_remap_data, name_binding_map);
+                self.combine_separate_images_and_samplers(
+                    &mut ast,
+                    desc_remap_data,
+                    name_binding_map,
+                );
 
                 let glsl = self.translate_spirv(&mut ast).unwrap();
                 info!("Generated:\n{:?}", glsl);
-                let shader = match self.create_shader_module_from_source(glsl.as_bytes(), stage).unwrap() {
+                let shader = match self
+                    .create_shader_module_from_source(glsl.as_bytes(), stage)
+                    .unwrap()
+                {
                     n::ShaderModule::Raw(raw) => raw,
-                    _ => panic!("Unhandled")
+                    _ => panic!("Unhandled"),
                 };
 
                 shader
@@ -402,8 +459,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     mut set_param_float: SetParamFloat,
     mut set_param_float_vec: SetParamFloatVec,
     mut set_param_int: SetParamInt,
-)
-where
+) where
     SetParamFloat: FnMut(GLenum, GLfloat),
     SetParamFloatVec: FnMut(GLenum, &[GLfloat]),
     SetParamInt: FnMut(GLenum, GLint),
@@ -417,7 +473,7 @@ where
                 set_param_float(gl::TEXTURE_MAX_ANISOTROPY_EXT, fac as GLfloat);
             }
         }
-        _ => ()
+        _ => (),
     }
 
     set_param_int(gl::TEXTURE_MIN_FILTER, min as GLint);
@@ -428,10 +484,16 @@ where
     set_param_int(gl::TEXTURE_WRAP_T, conv::wrap_to_gl(t) as GLint);
     set_param_int(gl::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as GLint);
 
-    if share.legacy_features.contains(LegacyFeatures::SAMPLER_LOD_BIAS) {
+    if share
+        .legacy_features
+        .contains(LegacyFeatures::SAMPLER_LOD_BIAS)
+    {
         set_param_float(gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
     }
-    if share.legacy_features.contains(LegacyFeatures::SAMPLER_BORDER_COLOR) {
+    if share
+        .legacy_features
+        .contains(LegacyFeatures::SAMPLER_BORDER_COLOR)
+    {
         let border: [f32; 4] = info.border.into();
         set_param_float_vec(gl::TEXTURE_BORDER_COLOR, &border);
     }
@@ -442,15 +504,23 @@ where
     match info.comparison {
         None => set_param_int(gl::TEXTURE_COMPARE_MODE, gl::NONE as GLint),
         Some(cmp) => {
-            set_param_int(gl::TEXTURE_COMPARE_MODE, gl::COMPARE_REF_TO_TEXTURE as GLint);
-            set_param_int(gl::TEXTURE_COMPARE_FUNC, state::map_comparison(cmp) as GLint);
+            set_param_int(
+                gl::TEXTURE_COMPARE_MODE,
+                gl::COMPARE_REF_TO_TEXTURE as GLint,
+            );
+            set_param_int(
+                gl::TEXTURE_COMPARE_FUNC,
+                state::map_comparison(cmp) as GLint,
+            );
         }
     }
 }
 
 impl d::Device<B> for Device {
     unsafe fn allocate_memory(
-        &self, _mem_type: c::MemoryTypeId, size: u64,
+        &self,
+        _mem_type: c::MemoryTypeId,
+        size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
         // TODO
         Ok(n::Memory {
@@ -495,7 +565,10 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn create_render_pass<'a, IA, IS, ID>(
-        &self, attachments: IA, subpasses: IS, _dependencies: ID
+        &self,
+        attachments: IA,
+        subpasses: IS,
+        _dependencies: ID,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
         IA: IntoIterator,
@@ -505,31 +578,34 @@ impl d::Device<B> for Device {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
     {
-        let subpasses =
-            subpasses
-                .into_iter()
-                .map(|subpass| {
-                    let color_attachments =
-                        subpass
-                            .borrow()
-                            .colors
-                            .iter()
-                            .map(|&(index, _)| index)
-                            .collect();
+        let subpasses = subpasses
+            .into_iter()
+            .map(|subpass| {
+                let color_attachments = subpass
+                    .borrow()
+                    .colors
+                    .iter()
+                    .map(|&(index, _)| index)
+                    .collect();
 
-                    n::SubpassDesc {
-                        color_attachments,
-                    }
-                })
-                .collect();
+                n::SubpassDesc { color_attachments }
+            })
+            .collect();
 
         Ok(n::RenderPass {
-            attachments: attachments.into_iter().map(|attachment| attachment.borrow().clone()).collect::<Vec<_>>(),
+            attachments: attachments
+                .into_iter()
+                .map(|attachment| attachment.borrow().clone())
+                .collect::<Vec<_>>(),
             subpasses,
         })
     }
 
-    unsafe fn create_pipeline_layout<IS, IR>(&self, layouts: IS, _: IR) -> Result<n::PipelineLayout, d::OutOfMemory>
+    unsafe fn create_pipeline_layout<IS, IR>(
+        &self,
+        layouts: IS,
+        _: IR,
+    ) -> Result<n::PipelineLayout, d::OutOfMemory>
     where
         IS: IntoIterator,
         IS::Item: Borrow<n::DescriptorSetLayout>,
@@ -538,44 +614,44 @@ impl d::Device<B> for Device {
     {
         let mut drd = n::DescRemapData::new();
 
-        layouts
-            .into_iter()
-            .enumerate()
-            .for_each(|(set, layout)| {
-                layout.borrow().iter().for_each(|binding| {
-                    // DescriptorType -> Descriptor
-                    //
-                    // Sampler -> Sampler
-                    // Image -> SampledImage, StorageImage, InputAttachment
-                    // CombinedImageSampler -> CombinedImageSampler
-                    // Buffer -> UniformBuffer, StorageBuffer
-                    // UniformTexel -> UniformTexel
-                    // StorageTexel -> StorageTexel
+        layouts.into_iter().enumerate().for_each(|(set, layout)| {
+            layout.borrow().iter().for_each(|binding| {
+                // DescriptorType -> Descriptor
+                //
+                // Sampler -> Sampler
+                // Image -> SampledImage, StorageImage, InputAttachment
+                // CombinedImageSampler -> CombinedImageSampler
+                // Buffer -> UniformBuffer, StorageBuffer
+                // UniformTexel -> UniformTexel
+                // StorageTexel -> StorageTexel
 
-                    assert!(!binding.immutable_samplers); //TODO: Implement immutable_samplers
-                    use pso::DescriptorType::*;
-                    match binding.ty {
-                        CombinedImageSampler => {
-                            drd.insert_missing_binding_into_spare(n::BindingTypes::Images, set as _, binding.binding);
-                        }
-                        Sampler | SampledImage => {
-                            // We need to figure out combos once we get the shaders, until then we
-                            // do nothing
-                        }
-                        UniformBuffer => {
-                            drd.insert_missing_binding_into_spare(n::BindingTypes::UniformBuffers, set as _, binding.binding);
-                        }
-                        StorageImage
-                        | UniformTexelBuffer
-                        | UniformBufferDynamic
-                        | StorageTexelBuffer
-                        | StorageBufferDynamic
-                        | StorageBuffer
-
-                        | InputAttachment => unimplemented!(), // 6
+                assert!(!binding.immutable_samplers); //TODO: Implement immutable_samplers
+                use pso::DescriptorType::*;
+                match binding.ty {
+                    CombinedImageSampler => {
+                        drd.insert_missing_binding_into_spare(
+                            n::BindingTypes::Images,
+                            set as _,
+                            binding.binding,
+                        );
                     }
-                })
-            });
+                    Sampler | SampledImage => {
+                        // We need to figure out combos once we get the shaders, until then we
+                        // do nothing
+                    }
+                    UniformBuffer => {
+                        drd.insert_missing_binding_into_spare(
+                            n::BindingTypes::UniformBuffers,
+                            set as _,
+                            binding.binding,
+                        );
+                    }
+                    StorageImage | UniformTexelBuffer | UniformBufferDynamic
+                    | StorageTexelBuffer | StorageBufferDynamic | StorageBuffer
+                    | InputAttachment => unimplemented!(), // 6
+                }
+            })
+        });
 
         Ok(n::PipelineLayout {
             desc_remap_data: Arc::new(RwLock::new(drd)),
@@ -600,7 +676,9 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn create_graphics_pipeline<'a>(
-        &self, desc: &pso::GraphicsPipelineDesc<'a, B>, _cache: Option<&()>,
+        &self,
+        desc: &pso::GraphicsPipelineDesc<'a, B>,
+        _cache: Option<&()>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         let gl = &self.share.context;
         let share = &self.share;
@@ -636,7 +714,9 @@ impl d::Device<B> for Device {
                             &mut desc.layout.desc_remap_data.write().unwrap(),
                             &mut name_binding_map,
                         );
-                        unsafe { gl.AttachShader(name, shader_name); }
+                        unsafe {
+                            gl.AttachShader(name, shader_name);
+                        }
                         shader_name
                     })
                 })
@@ -646,7 +726,11 @@ impl d::Device<B> for Device {
                 for i in 0..subpass.color_attachments.len() {
                     let color_name = format!("Target{}\0", i);
                     unsafe {
-                        gl.BindFragDataLocation(name, i as u32, (&color_name[..]).as_ptr() as *mut gl::types::GLchar);
+                        gl.BindFragDataLocation(
+                            name,
+                            i as u32,
+                            (&color_name[..]).as_ptr() as *mut gl::types::GLchar,
+                        );
                     }
                 }
             }
@@ -664,7 +748,11 @@ impl d::Device<B> for Device {
                 }
             }
 
-            if !self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
+            if !self
+                .share
+                .legacy_features
+                .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
+            {
                 let gl = &self.share.context;
                 unsafe {
                     gl.UseProgram(name);
@@ -682,7 +770,9 @@ impl d::Device<B> for Device {
                     warn!("\tLog: {}", log);
                 }
             } else {
-                return Err(pso::CreationError::Shader(d::ShaderError::CompilationFailed(log)));
+                return Err(pso::CreationError::Shader(
+                    d::ShaderError::CompilationFailed(log),
+                ));
             }
 
             name
@@ -690,7 +780,7 @@ impl d::Device<B> for Device {
 
         let patch_size = match desc.input_assembler.primitive {
             c::Primitive::PatchList(size) => Some(size as _),
-            _ => None
+            _ => None,
         };
 
         let mut vertex_buffers = Vec::new();
@@ -707,10 +797,12 @@ impl d::Device<B> for Device {
             patch_size,
             blend_targets: desc.blender.targets.clone(),
             vertex_buffers,
-            attributes: desc.attributes
+            attributes: desc
+                .attributes
                 .iter()
                 .map(|&a| {
-                    let (size, format, vertex_attrib_fn) = conv::format_to_gl_format(a.element.format).unwrap();
+                    let (size, format, vertex_attrib_fn) =
+                        conv::format_to_gl_format(a.element.format).unwrap();
                     n::AttributeDesc {
                         location: a.location,
                         offset: a.element.offset,
@@ -725,7 +817,9 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn create_compute_pipeline<'a>(
-        &self, desc: &pso::ComputePipelineDesc<'a, B>, _cache: Option<&()>
+        &self,
+        desc: &pso::ComputePipelineDesc<'a, B>,
+        _cache: Option<&()>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         let gl = &self.share.context;
         let share = &self.share;
@@ -753,7 +847,11 @@ impl d::Device<B> for Device {
                 gl.DeleteShader(shader);
             }
 
-            if !self.share.legacy_features.contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER) {
+            if !self
+                .share
+                .legacy_features
+                .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
+            {
                 let gl = &self.share.context;
                 unsafe {
                     gl.UseProgram(name);
@@ -777,9 +875,7 @@ impl d::Device<B> for Device {
             name
         };
 
-        Ok(n::ComputePipeline {
-            program,
-        })
+        Ok(n::ComputePipeline { program })
     }
 
     unsafe fn create_framebuffer<I>(
@@ -832,8 +928,10 @@ impl d::Device<B> for Device {
         }
         if let Err(err) = self.share.check() {
             //TODO: attachments have been consumed
-            panic!("Error creating FBO: {:?} for {:?}"/* with attachments {:?}"*/,
-               err, pass/*, attachments*/);
+            panic!(
+                "Error creating FBO: {:?} for {:?}", /* with attachments {:?}"*/
+                err, pass /*, attachments*/
+            );
         }
 
         Ok(name)
@@ -846,14 +944,20 @@ impl d::Device<B> for Device {
         Ok(n::ShaderModule::Spirv(raw_data.into()))
     }
 
-    unsafe fn create_sampler(&self, info: i::SamplerInfo) -> Result<n::FatSampler, d::AllocationError> {
-        if !self.share.legacy_features.contains(LegacyFeatures::SAMPLER_OBJECTS) {
+    unsafe fn create_sampler(
+        &self,
+        info: i::SamplerInfo,
+    ) -> Result<n::FatSampler, d::AllocationError> {
+        if !self
+            .share
+            .legacy_features
+            .contains(LegacyFeatures::SAMPLER_OBJECTS)
+        {
             return Ok(n::FatSampler::Info(info));
         }
 
         let gl = &self.share.context;
         let mut name = 0 as n::Sampler;
-
 
         unsafe {
             gl.GenSamplers(1, &mut name);
@@ -867,17 +971,25 @@ impl d::Device<B> for Device {
         }
 
         if let Err(_) = self.share.check() {
-            Err(d::AllocationError::OutOfMemory(d::OutOfMemory::OutOfHostMemory))
+            Err(d::AllocationError::OutOfMemory(
+                d::OutOfMemory::OutOfHostMemory,
+            ))
         } else {
             Ok(n::FatSampler::Sampler(name))
         }
     }
 
     unsafe fn create_buffer(
-        &self, size: u64, usage: buffer::Usage,
+        &self,
+        size: u64,
+        usage: buffer::Usage,
     ) -> Result<n::Buffer, buffer::CreationError> {
-        if !self.share.legacy_features.contains(LegacyFeatures::CONSTANT_BUFFER) &&
-            usage.contains(buffer::Usage::UNIFORM) {
+        if !self
+            .share
+            .legacy_features
+            .contains(LegacyFeatures::CONSTANT_BUFFER)
+            && usage.contains(buffer::Usage::UNIFORM)
+        {
             return Err(buffer::CreationError::UnsupportedUsage { usage });
         }
 
@@ -912,7 +1024,10 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn bind_buffer_memory(
-        &self, memory: &n::Memory, offset: u64, buffer: &mut n::Buffer,
+        &self,
+        memory: &n::Memory,
+        offset: u64,
+        buffer: &mut n::Buffer,
     ) -> Result<(), d::BindError> {
         let gl = &self.share.context;
         let target = buffer.target;
@@ -932,15 +1047,10 @@ impl d::Device<B> for Device {
             //TODO: use *Named calls to avoid binding
             unsafe {
                 gl.BindBuffer(target, buffer.raw);
-                gl.BufferStorage(target,
-                    buffer.requirements.size as _,
-                    ptr::null(),
-                    flags,
-                );
+                gl.BufferStorage(target, buffer.requirements.size as _, ptr::null(), flags);
                 gl.BindBuffer(target, 0);
             }
-        }
-        else {
+        } else {
             let flags = if cpu_can_read && cpu_can_write {
                 gl::DYNAMIC_DRAW
             } else if cpu_can_write {
@@ -952,25 +1062,25 @@ impl d::Device<B> for Device {
             };
             unsafe {
                 gl.BindBuffer(target, buffer.raw);
-                gl.BufferData(target,
-                    buffer.requirements.size as _,
-                    ptr::null(),
-                    flags,
-                );
+                gl.BufferData(target, buffer.requirements.size as _, ptr::null(), flags);
                 gl.BindBuffer(target, 0);
             }
         }
 
         if let Err(err) = self.share.check() {
-            panic!("Error {:?} initializing buffer {:?}, memory {:?}",
-                err, buffer, memory.properties);
+            panic!(
+                "Error {:?} initializing buffer {:?}, memory {:?}",
+                err, buffer, memory.properties
+            );
         }
 
         Ok(())
     }
 
     unsafe fn map_memory<R: RangeArg<u64>>(
-        &self, memory: &n::Memory, range: R
+        &self,
+        memory: &n::Memory,
+        range: R,
     ) -> Result<*mut u8, mapping::Error> {
         let gl = &self.share.context;
         let buffer = match memory.first_bound_buffer.get() {
@@ -1014,8 +1124,7 @@ impl d::Device<B> for Device {
         }
 
         if let Err(err) = self.share.check() {
-            panic!("Error unmapping memory: {:?} for memory {:?}",
-                err, memory);
+            panic!("Error unmapping memory: {:?} for memory {:?}", err, memory);
         }
     }
 
@@ -1029,7 +1138,10 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _ranges: I) -> Result<(), d::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
+        &self,
+        _ranges: I,
+    ) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
@@ -1039,7 +1151,10 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn create_buffer_view<R: RangeArg<u64>>(
-        &self, _: &n::Buffer, _: Option<Format>, _: R
+        &self,
+        _: &n::Buffer,
+        _: Option<Format>,
+        _: R,
     ) -> Result<n::BufferView, buffer::ViewCreationError> {
         unimplemented!()
     }
@@ -1058,14 +1173,14 @@ impl d::Device<B> for Device {
         let (int_format, iformat, itype) = match format {
             Format::Rgba8Unorm => (gl::RGBA8, gl::RGBA, gl::UNSIGNED_BYTE),
             Format::Rgba8Srgb => (gl::SRGB8_ALPHA8, gl::RGBA, gl::UNSIGNED_BYTE),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         };
 
         let channel = format.base_format().1;
 
-        let image = if num_levels > 1 ||
-            usage.contains(i::Usage::STORAGE) ||
-            usage.contains(i::Usage::SAMPLED)
+        let image = if num_levels > 1
+            || usage.contains(i::Usage::STORAGE)
+            || usage.contains(i::Usage::SAMPLED)
         {
             let mut name = 0;
             unsafe { gl.GenTextures(1, &mut name) };
@@ -1073,9 +1188,19 @@ impl d::Device<B> for Device {
                 i::Kind::D2(w, h, 1, 1) => unsafe {
                     gl.BindTexture(gl::TEXTURE_2D, name);
                     if self.share.private_caps.image_storage {
-                        gl.TexStorage2D(gl::TEXTURE_2D, num_levels as _, int_format, w as _, h as _);
+                        gl.TexStorage2D(
+                            gl::TEXTURE_2D,
+                            num_levels as _,
+                            int_format,
+                            w as _,
+                            h as _,
+                        );
                     } else {
-                        gl.TexParameteri(gl::TEXTURE_2D, gl::TEXTURE_MAX_LEVEL, (num_levels - 1) as _);
+                        gl.TexParameteri(
+                            gl::TEXTURE_2D,
+                            gl::TEXTURE_MAX_LEVEL,
+                            (num_levels - 1) as _,
+                        );
                         let mut w = w;
                         let mut h = h;
                         for i in 0..num_levels {
@@ -1094,7 +1219,7 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
-                }
+                },
                 _ => unimplemented!(),
             };
             n::ImageKind::Texture(name)
@@ -1105,20 +1230,22 @@ impl d::Device<B> for Device {
                 i::Kind::D2(w, h, 1, 1) => unsafe {
                     gl.BindRenderbuffer(gl::RENDERBUFFER, name);
                     gl.RenderbufferStorage(gl::RENDERBUFFER, int_format, w as _, h as _);
-                }
+                },
                 _ => unimplemented!(),
             };
             n::ImageKind::Surface(name)
         };
 
         let surface_desc = format.base_format().0.desc();
-        let bytes_per_texel  = surface_desc.bits / 8;
+        let bytes_per_texel = surface_desc.bits / 8;
         let ext = kind.extent();
         let size = (ext.width * ext.height * ext.depth) as u64 * bytes_per_texel as u64;
 
         if let Err(err) = self.share.check() {
-            panic!("Error creating image: {:?} for kind {:?} of {:?}",
-                err, kind, format);
+            panic!(
+                "Error creating image: {:?} for kind {:?} of {:?}",
+                err, kind, format
+            );
         }
 
         Ok(n::Image {
@@ -1128,7 +1255,7 @@ impl d::Device<B> for Device {
                 size,
                 alignment: 1,
                 type_mask: 0x7,
-            }
+            },
         })
     }
 
@@ -1137,13 +1264,18 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn get_image_subresource_footprint(
-        &self, _image: &n::Image, _sub: i::Subresource
+        &self,
+        _image: &n::Image,
+        _sub: i::Subresource,
     ) -> i::SubresourceFootprint {
         unimplemented!()
     }
 
     unsafe fn bind_image_memory(
-        &self, _memory: &n::Memory, _offset: u64, _image: &mut n::Image
+        &self,
+        _memory: &n::Memory,
+        _offset: u64,
+        _image: &mut n::Image,
     ) -> Result<(), d::BindError> {
         Ok(())
     }
@@ -1169,7 +1301,9 @@ impl d::Device<B> for Device {
                 } else if level != 0 {
                     Err(i::ViewError::Level(level)) //TODO
                 } else {
-                    Err(i::ViewError::Layer(i::LayerError::OutOfBounds(range.layers)))
+                    Err(i::ViewError::Layer(i::LayerError::OutOfBounds(
+                        range.layers,
+                    )))
                 }
             }
             n::ImageKind::Texture(texture) => {
@@ -1177,23 +1311,37 @@ impl d::Device<B> for Device {
                 if range.layers.start == 0 {
                     Ok(n::ImageView::Texture(texture, level))
                 } else if range.layers.start + 1 == range.layers.end {
-                    Ok(n::ImageView::TextureLayer(texture, level, range.layers.start))
+                    Ok(n::ImageView::TextureLayer(
+                        texture,
+                        level,
+                        range.layers.start,
+                    ))
                 } else {
-                    Err(i::ViewError::Layer(i::LayerError::OutOfBounds(range.layers)))
+                    Err(i::ViewError::Layer(i::LayerError::OutOfBounds(
+                        range.layers,
+                    )))
                 }
             }
         }
     }
 
-    unsafe fn create_descriptor_pool<I>(&self, _: usize, _: I) -> Result<n::DescriptorPool, d::OutOfMemory>
+    unsafe fn create_descriptor_pool<I>(
+        &self,
+        _: usize,
+        _: I,
+    ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        Ok(n::DescriptorPool { })
+        Ok(n::DescriptorPool {})
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(&self, layout: I, _: J) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
+    unsafe fn create_descriptor_set_layout<I, J>(
+        &self,
+        layout: I,
+        _: J,
+    ) -> Result<n::DescriptorSetLayout, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
@@ -1223,53 +1371,46 @@ impl d::Device<B> for Device {
                         let end = range.end.unwrap_or(buffer.requirements.size);
                         let size = (end - start) as _;
 
-                        bindings
-                            .push(n::DescSetBindings::Buffer {
-                                ty: n::BindingTypes::UniformBuffers,
-                                binding,
-                                buffer: buffer.raw,
-                                offset,
-                                size,
-                            });
+                        bindings.push(n::DescSetBindings::Buffer {
+                            ty: n::BindingTypes::UniformBuffers,
+                            binding,
+                            buffer: buffer.raw,
+                            offset,
+                            size,
+                        });
 
                         offset += size;
-                    },
+                    }
                     pso::Descriptor::CombinedImageSampler(view, _layout, sampler) => {
                         match view {
                             n::ImageView::Texture(tex, _)
-                            | n::ImageView::TextureLayer(tex, _, _) =>
-                                bindings
-                                .push(n::DescSetBindings::Texture(binding, *tex)),
+                            | n::ImageView::TextureLayer(tex, _, _) => {
+                                bindings.push(n::DescSetBindings::Texture(binding, *tex))
+                            }
                             n::ImageView::Surface(_) => unimplemented!(),
                         }
                         match sampler {
-                            n::FatSampler::Sampler(sampler) =>
-                                bindings
-                                .push(n::DescSetBindings::Sampler(binding, *sampler)),
-                            n::FatSampler::Info(info) =>
-                                bindings
+                            n::FatSampler::Sampler(sampler) => {
+                                bindings.push(n::DescSetBindings::Sampler(binding, *sampler))
+                            }
+                            n::FatSampler::Info(info) => bindings
                                 .push(n::DescSetBindings::SamplerInfo(binding, info.clone())),
                         }
                     }
-                    pso::Descriptor::Image(view, _layout) => {
-                        match view {
-                            n::ImageView::Texture(tex, _)
-                            | n::ImageView::TextureLayer(tex, _, _) =>
-                                bindings
-                                .push(n::DescSetBindings::Texture(binding, *tex)),
-                            n::ImageView::Surface(_) => unimplemented!(),
+                    pso::Descriptor::Image(view, _layout) => match view {
+                        n::ImageView::Texture(tex, _) | n::ImageView::TextureLayer(tex, _, _) => {
+                            bindings.push(n::DescSetBindings::Texture(binding, *tex))
                         }
-                    }
-                    pso::Descriptor::Sampler(sampler) => {
-                        match sampler {
-                            n::FatSampler::Sampler(sampler) =>
-                                bindings
-                                .push(n::DescSetBindings::Sampler(binding, *sampler)),
-                            n::FatSampler::Info(info) =>
-                                bindings
-                                .push(n::DescSetBindings::SamplerInfo(binding, info.clone())),
+                        n::ImageView::Surface(_) => unimplemented!(),
+                    },
+                    pso::Descriptor::Sampler(sampler) => match sampler {
+                        n::FatSampler::Sampler(sampler) => {
+                            bindings.push(n::DescSetBindings::Sampler(binding, *sampler))
                         }
-                    }
+                        n::FatSampler::Info(info) => {
+                            bindings.push(n::DescSetBindings::SamplerInfo(binding, info.clone()))
+                        }
+                    },
                     pso::Descriptor::UniformTexelBuffer(_view) => unimplemented!(),
                     pso::Descriptor::StorageTexelBuffer(_view) => unimplemented!(),
                 }
@@ -1322,7 +1463,11 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn wait_for_fence(&self, fence: &n::Fence, timeout_ns: u64) -> Result<bool, d::OomOrDeviceLost> {
+    unsafe fn wait_for_fence(
+        &self,
+        fence: &n::Fence,
+        timeout_ns: u64,
+    ) -> Result<bool, d::OomOrDeviceLost> {
         if !self.share.private_caps.sync {
             return Ok(true);
         }
@@ -1346,7 +1491,11 @@ impl d::Device<B> for Device {
         // Nothing to do
     }
 
-    unsafe fn create_query_pool(&self, _ty: query::Type, _count: query::Id) -> Result<(), query::CreationError> {
+    unsafe fn create_query_pool(
+        &self,
+        _ty: query::Type,
+        _count: query::Id,
+    ) -> Result<(), query::CreationError> {
         unimplemented!()
     }
 
@@ -1355,8 +1504,11 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn get_query_pool_results(
-        &self, _pool: &(), _queries: Range<query::Id>,
-        _data: &mut [u8], _stride: buffer::Offset,
+        &self,
+        _pool: &(),
+        _queries: Range<query::Id>,
+        _data: &mut [u8],
+        _stride: buffer::Offset,
         _flags: query::ResultFlags,
     ) -> Result<bool, d::OomOrDeviceLost> {
         unimplemented!()
@@ -1388,7 +1540,9 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_framebuffer(&self, frame_buffer: n::FrameBuffer) {
         let gl = &self.share.context;
-        unsafe { gl.DeleteFramebuffers(1, &frame_buffer); }
+        unsafe {
+            gl.DeleteFramebuffers(1, &frame_buffer);
+        }
     }
 
     unsafe fn destroy_buffer(&self, buffer: n::Buffer) {
@@ -1456,7 +1610,9 @@ impl d::Device<B> for Device {
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        unsafe { self.share.context.Finish(); }
+        unsafe {
+            self.share.context.Finish();
+        }
         Ok(())
     }
 }

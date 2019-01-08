@@ -1,9 +1,9 @@
 #![deny(missing_docs, missing_copy_implementations)]
 
 //! Memory mapping
+use device;
 use std::ops::{self, Range};
 use Backend;
-use device;
 
 // TODO
 /// Error accessing a mapping.
@@ -44,7 +44,9 @@ impl<'a, B: Backend, T: 'a> Drop for Reader<'a, B, T> {
 
 impl<'a, B: Backend, T: 'a> ops::Deref for Reader<'a, B, T> {
     type Target = [T];
-    fn deref(&self) -> &[T] { self.slice }
+    fn deref(&self) -> &[T] {
+        self.slice
+    }
 }
 
 /// Mapping writer.
@@ -65,9 +67,13 @@ impl<'a, B: Backend, T: 'a> Drop for Writer<'a, B, T> {
 
 impl<'a, B: Backend, T: 'a> ops::Deref for Writer<'a, B, T> {
     type Target = [T];
-    fn deref(&self) -> &[T] { self.slice }
+    fn deref(&self) -> &[T] {
+        self.slice
+    }
 }
 
 impl<'a, B: Backend, T: 'a> ops::DerefMut for Writer<'a, B, T> {
-    fn deref_mut(&mut self) -> &mut [T] { self.slice }
+    fn deref_mut(&mut self) -> &mut [T] {
+        self.slice
+    }
 }

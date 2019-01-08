@@ -293,7 +293,8 @@ impl Device {
                 image.id,
                 spirv::Decoration::DescriptorSet,
                 space_offset + set,
-            ).map_err(gen_unexpected_error)?;
+            )
+            .map_err(gen_unexpected_error)?;
         }
 
         for uniform_buffer in &shader_resources.uniform_buffers {
@@ -304,7 +305,8 @@ impl Device {
                 uniform_buffer.id,
                 spirv::Decoration::DescriptorSet,
                 space_offset + set,
-            ).map_err(gen_unexpected_error)?;
+            )
+            .map_err(gen_unexpected_error)?;
         }
 
         for storage_buffer in &shader_resources.storage_buffers {
@@ -315,7 +317,8 @@ impl Device {
                 storage_buffer.id,
                 spirv::Decoration::DescriptorSet,
                 space_offset + set,
-            ).map_err(gen_unexpected_error)?;
+            )
+            .map_err(gen_unexpected_error)?;
         }
 
         for image in &shader_resources.storage_images {
@@ -326,7 +329,8 @@ impl Device {
                 image.id,
                 spirv::Decoration::DescriptorSet,
                 space_offset + set,
-            ).map_err(gen_unexpected_error)?;
+            )
+            .map_err(gen_unexpected_error)?;
         }
 
         for sampler in &shader_resources.separate_samplers {
@@ -337,7 +341,8 @@ impl Device {
                 sampler.id,
                 spirv::Decoration::DescriptorSet,
                 space_offset + set,
-            ).map_err(gen_unexpected_error)?;
+            )
+            .map_err(gen_unexpected_error)?;
         }
 
         for image in &shader_resources.sampled_images {
@@ -348,7 +353,8 @@ impl Device {
                 image.id,
                 spirv::Decoration::DescriptorSet,
                 space_offset + set,
-            ).map_err(gen_unexpected_error)?;
+            )
+            .map_err(gen_unexpected_error)?;
         }
 
         for input in &shader_resources.subpass_inputs {
@@ -359,7 +365,8 @@ impl Device {
                 input.id,
                 spirv::Decoration::DescriptorSet,
                 space_offset + set,
-            ).map_err(gen_unexpected_error)?;
+            )
+            .map_err(gen_unexpected_error)?;
         }
 
         // TODO: other resources
@@ -392,7 +399,8 @@ impl Device {
                 } else {
                     None
                 }
-            }).collect();
+            })
+            .collect();
         ast.set_compiler_options(&compile_options)
             .map_err(gen_unexpected_error)?;
         ast.set_root_constant_layout(root_constant_layout)
@@ -1131,7 +1139,8 @@ impl d::Device<B> for Device {
                     att.layouts.start,
                 ),
                 barrier_start_index: 0,
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
         // Fill out subpass known layouts
         for (sid, sub) in subpasses.iter().enumerate() {
@@ -1312,7 +1321,8 @@ impl d::Device<B> for Device {
                     stages: constant.stages,
                     range: constant.range.start..constant.range.end,
                 }
-            }).collect::<Vec<_>>();
+            })
+            .collect::<Vec<_>>();
 
         // guarantees that no re-allocation is done, and our pointers are valid
         let mut parameters = Vec::with_capacity(root_constants.len() + sets.len() * 2);
@@ -1350,7 +1360,8 @@ impl d::Device<B> for Device {
                 }
 
                 sum
-            }).sum();
+            })
+            .sum();
         let mut ranges = Vec::with_capacity(total);
         let mut set_tables = Vec::with_capacity(sets.len());
 
@@ -1383,7 +1394,8 @@ impl d::Device<B> for Device {
                     .filter(|bind| {
                         bind.ty == pso::DescriptorType::Sampler
                             || bind.ty == pso::DescriptorType::CombinedImageSampler
-                    }).map(|bind| {
+                    })
+                    .map(|bind| {
                         conv::map_descriptor_range(bind, (table_space_offset + i) as u32, true)
                     }),
             );
@@ -1572,7 +1584,8 @@ impl d::Device<B> for Device {
                     InputSlotClass: slot_class,
                     InstanceDataStepRate: buffer_desc.rate as _,
                 }))
-            }).collect::<Result<Vec<_>, _>>()?;
+            })
+            .collect::<Result<Vec<_>, _>>()?;
 
         // TODO: check maximum number of rtvs
         // Get associated subpass information
@@ -1653,7 +1666,8 @@ impl d::Device<B> for Device {
                     desc.subpass.main_pass.attachments[att_ref.0]
                         .format
                         .and_then(|f| conv::map_format_dsv(f.base_format().0))
-                }).unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN),
+                })
+                .unwrap_or(dxgiformat::DXGI_FORMAT_UNKNOWN),
             SampleDesc: sample_desc,
             NodeMask: 0,
             CachedPSO: d3d12::D3D12_CACHED_PIPELINE_STATE {
@@ -1782,7 +1796,10 @@ impl d::Device<B> for Device {
         })
     }
 
-    unsafe fn create_shader_module(&self, raw_data: &[u8]) -> Result<r::ShaderModule, d::ShaderError> {
+    unsafe fn create_shader_module(
+        &self,
+        raw_data: &[u8],
+    ) -> Result<r::ShaderModule, d::ShaderError> {
         Ok(r::ShaderModule::Spirv(raw_data.into()))
     }
 
@@ -2228,8 +2245,10 @@ impl d::Device<B> for Device {
                                 layers: layer..layer + 1,
                             },
                             ..info.clone()
-                        }).unwrap()
-                    }).collect()
+                        })
+                        .unwrap()
+                    })
+                    .collect()
             } else {
                 Vec::new()
             },
@@ -2244,8 +2263,10 @@ impl d::Device<B> for Device {
                                 layers: layer..layer + 1,
                             },
                             ..info.clone()
-                        }).unwrap()
-                    }).collect()
+                        })
+                        .unwrap()
+                    })
+                    .collect()
             } else {
                 Vec::new()
             },
@@ -2260,8 +2281,10 @@ impl d::Device<B> for Device {
                                 layers: layer..layer + 1,
                             },
                             ..info.clone()
-                        }).unwrap()
-                    }).collect()
+                        })
+                        .unwrap()
+                    })
+                    .collect()
             } else {
                 Vec::new()
             },
@@ -2331,7 +2354,10 @@ impl d::Device<B> for Device {
         })
     }
 
-    unsafe fn create_sampler(&self, info: image::SamplerInfo) -> Result<r::Sampler, d::AllocationError> {
+    unsafe fn create_sampler(
+        &self,
+        info: image::SamplerInfo,
+    ) -> Result<r::Sampler, d::AllocationError> {
         let handle = self.sampler_pool.lock().unwrap().alloc_handle();
 
         let op = match info.comparison {
@@ -2761,7 +2787,10 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), d::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
+        &self,
+        ranges: I,
+    ) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a r::Memory, R)>,
@@ -2957,7 +2986,7 @@ impl d::Device<B> for Device {
         match buffer {
             r::Buffer::Bound(buffer) => unsafe {
                 buffer.resource.destroy();
-            }
+            },
             r::Buffer::Unbound(_) => {}
         }
     }
@@ -2970,7 +2999,7 @@ impl d::Device<B> for Device {
         match image {
             r::Image::Bound(image) => unsafe {
                 image.resource.destroy();
-            }
+            },
             r::Image::Unbound(_) => {}
         }
     }
@@ -3143,7 +3172,8 @@ impl d::Device<B> for Device {
                         type_mask: MEM_TYPE_MASK,
                     },
                 })
-            }).collect();
+            })
+            .collect();
 
         let swapchain = w::Swapchain {
             inner: swap_chain3,

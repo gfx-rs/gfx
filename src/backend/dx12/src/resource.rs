@@ -286,7 +286,7 @@ impl ImageUnbound {
 #[derivative(Debug)]
 pub enum Image {
     Unbound(ImageUnbound),
-    Bound(ImageBound) ,
+    Bound(ImageBound),
 }
 
 impl Image {

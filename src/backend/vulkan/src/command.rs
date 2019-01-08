@@ -151,7 +151,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // but can receive less clear values than total attachments.
         let clear_value_count = 64 - render_pass.clear_attachments_mask.leading_zeros() as u32;
         let mut clear_value_iter = clear_values.into_iter();
-        let raw_clear_values = (0 .. clear_value_count)
+        let raw_clear_values = (0..clear_value_count)
             .map(|i| unsafe {
                 if render_pass.clear_attachments_mask & (1 << i) != 0 {
                     // Vulkan and HAL share same memory layout

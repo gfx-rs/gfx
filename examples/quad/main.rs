@@ -80,7 +80,8 @@ fn main() {
         .with_dimensions(winit::dpi::LogicalSize::new(
             DIMS.width as _,
             DIMS.height as _,
-        )).with_title("quad".to_string());
+        ))
+        .with_title("quad".to_string());
     // instantiate backend
     #[cfg(not(feature = "gl"))]
     let (_window, _instance, mut adapters, mut surface) = {
@@ -119,7 +120,8 @@ fn main() {
 
     let mut command_pool = unsafe {
         device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
-    }.expect("Can't create command pool");
+    }
+    .expect("Can't create command pool");
 
     // Setup renderpass and pipeline
     let set_layout = unsafe {
@@ -142,7 +144,8 @@ fn main() {
             ],
             &[],
         )
-    }.expect("Can't create descriptor set layout");
+    }
+    .expect("Can't create descriptor set layout");
 
     // Descriptors
     let mut desc_pool = unsafe {
@@ -159,10 +162,9 @@ fn main() {
                 },
             ],
         )
-    }.expect("Can't create descriptor pool");
-    let desc_set = unsafe {
-        desc_pool.allocate_set(&set_layout)
-    }.unwrap();
+    }
+    .expect("Can't create descriptor pool");
+    let desc_set = unsafe { desc_pool.allocate_set(&set_layout) }.unwrap();
 
     // Buffer allocations
     println!("Memory types: {:?}", memory_types);
@@ -171,13 +173,10 @@ fn main() {
     let buffer_len = QUAD.len() as u64 * buffer_stride;
 
     assert_ne!(buffer_len, 0);
-    let mut vertex_buffer = unsafe {
-        device.create_buffer(buffer_len, buffer::Usage::VERTEX)
-    }.unwrap();
+    let mut vertex_buffer =
+        unsafe { device.create_buffer(buffer_len, buffer::Usage::VERTEX) }.unwrap();
 
-    let buffer_req = unsafe {
-        device.get_buffer_requirements(&vertex_buffer)
-    };
+    let buffer_req = unsafe { device.get_buffer_requirements(&vertex_buffer) };
 
     let upload_type = memory_types
         .iter()
@@ -188,16 +187,13 @@ fn main() {
             // memory type that has a `1` (or, is allowed), and is visible to the CPU.
             buffer_req.type_mask & (1 << id) != 0
                 && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
-        }).unwrap()
+        })
+        .unwrap()
         .into();
 
-    let buffer_memory = unsafe {
-        device.allocate_memory(upload_type, buffer_req.size)
-    }.unwrap();
+    let buffer_memory = unsafe { device.allocate_memory(upload_type, buffer_req.size) }.unwrap();
 
-    unsafe {
-        device.bind_buffer_memory(&buffer_memory, 0, &mut vertex_buffer)
-    }.unwrap();
+    unsafe { device.bind_buffer_memory(&buffer_memory, 0, &mut vertex_buffer) }.unwrap();
 
     // TODO: check transitions: read/write mapping and vertex buffer read
     unsafe {
@@ -221,19 +217,14 @@ fn main() {
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;
 
-    let mut image_upload_buffer = unsafe {
-        device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC)
-    }.unwrap();
-    let image_mem_reqs = unsafe {
-        device.get_buffer_requirements(&image_upload_buffer)
-    };
-    let image_upload_memory = unsafe {
-        device.allocate_memory(upload_type, image_mem_reqs.size)
-    }.unwrap();
-    
-    unsafe {
-        device.bind_buffer_memory(&image_upload_memory, 0, &mut image_upload_buffer)
-    }.unwrap();
+    let mut image_upload_buffer =
+        unsafe { device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC) }.unwrap();
+    let image_mem_reqs = unsafe { device.get_buffer_requirements(&image_upload_buffer) };
+    let image_upload_memory =
+        unsafe { device.allocate_memory(upload_type, image_mem_reqs.size) }.unwrap();
+
+    unsafe { device.bind_buffer_memory(&image_upload_memory, 0, &mut image_upload_buffer) }
+        .unwrap();
 
     // copy image data into staging buffer
     unsafe {
@@ -250,19 +241,17 @@ fn main() {
     }
 
     let mut image_logo = unsafe {
-        device
-            .create_image(
-                kind,
-                1,
-                ColorFormat::SELF,
-                i::Tiling::Optimal,
-                i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
-                i::ViewCapabilities::empty(),
-            )
-    }.unwrap(); // TODO: usage
-    let image_req = unsafe {
-        device.get_image_requirements(&image_logo)
-    };
+        device.create_image(
+            kind,
+            1,
+            ColorFormat::SELF,
+            i::Tiling::Optimal,
+            i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
+            i::ViewCapabilities::empty(),
+        )
+    }
+    .unwrap(); // TODO: usage
+    let image_req = unsafe { device.get_image_requirements(&image_logo) };
 
     let device_type = memory_types
         .iter()
@@ -270,29 +259,27 @@ fn main() {
         .position(|(id, memory_type)| {
             image_req.type_mask & (1 << id) != 0
                 && memory_type.properties.contains(m::Properties::DEVICE_LOCAL)
-        }).unwrap()
+        })
+        .unwrap()
         .into();
-    let image_memory = unsafe {
-        device.allocate_memory(device_type, image_req.size)
-    }.unwrap();
+    let image_memory = unsafe { device.allocate_memory(device_type, image_req.size) }.unwrap();
 
-    unsafe {
-        device.bind_image_memory(&image_memory, 0, &mut image_logo)
-    }.unwrap();
+    unsafe { device.bind_image_memory(&image_memory, 0, &mut image_logo) }.unwrap();
     let image_srv = unsafe {
-        device
-            .create_image_view(
-                &image_logo,
-                i::ViewKind::D2,
-                ColorFormat::SELF,
-                Swizzle::NO,
-                COLOR_RANGE.clone(),
-            )
-    }.unwrap();
+        device.create_image_view(
+            &image_logo,
+            i::ViewKind::D2,
+            ColorFormat::SELF,
+            Swizzle::NO,
+            COLOR_RANGE.clone(),
+        )
+    }
+    .unwrap();
 
     let sampler = unsafe {
         device.create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
-    }.expect("Can't create sampler");
+    }
+    .expect("Can't create sampler");
 
     unsafe {
         device.write_descriptor_sets(vec![
@@ -392,9 +379,9 @@ fn main() {
     println!("{:?}", swap_config);
     let extent = swap_config.extent.to_extent();
 
-    let (mut swap_chain, mut backbuffer) = unsafe {
-        device.create_swapchain(&mut surface, swap_config, None)
-    }.expect("Can't create swapchain");
+    let (mut swap_chain, mut backbuffer) =
+        unsafe { device.create_swapchain(&mut surface, swap_config, None) }
+            .expect("Can't create swapchain");
 
     let render_pass = {
         let attachment = pass::Attachment {
@@ -423,9 +410,8 @@ fn main() {
                 ..(i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
         };
 
-        unsafe {
-            device.create_render_pass(&[attachment], &[subpass], &[dependency])
-        }.expect("Can't create render pass")
+        unsafe { device.create_render_pass(&[attachment], &[subpass], &[dependency]) }
+            .expect("Can't create render pass")
     };
     let (mut frame_images, mut framebuffers) = match backbuffer {
         Backbuffer::Images(images) => {
@@ -439,16 +425,19 @@ fn main() {
                             format,
                             Swizzle::NO,
                             COLOR_RANGE.clone(),
-                        ).unwrap();
+                        )
+                        .unwrap();
                     (image, rtv)
-                }).collect::<Vec<_>>();
+                })
+                .collect::<Vec<_>>();
             let fbos = pairs
                 .iter()
                 .map(|&(_, ref rtv)| unsafe {
                     device
                         .create_framebuffer(&render_pass, Some(rtv), extent)
                         .unwrap()
-                }).collect();
+                })
+                .collect();
             (pairs, fbos)
         }
         Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
@@ -459,7 +448,8 @@ fn main() {
             std::iter::once(&set_layout),
             &[(pso::ShaderStageFlags::VERTEX, 0..8)],
         )
-    }.expect("Can't create pipeline layout");
+    }
+    .expect("Can't create pipeline layout");
     let pipeline = {
         let vs_module = {
             let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
@@ -468,9 +458,7 @@ fn main() {
                 .bytes()
                 .map(|b| b.unwrap())
                 .collect();
-            unsafe {
-                device.create_shader_module(&spirv)
-            }.unwrap()
+            unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
         let fs_module = {
             let glsl = fs::read_to_string("quad/data/quad.frag").unwrap();
@@ -479,9 +467,7 @@ fn main() {
                 .bytes()
                 .map(|b| b.unwrap())
                 .collect();
-            unsafe {
-                device.create_shader_module(&spirv)
-            }.unwrap()
+            unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
 
         let pipeline = {
@@ -548,9 +534,7 @@ fn main() {
                 },
             });
 
-            unsafe {
-                device.create_graphics_pipeline(&pipeline_desc, None)
-            }
+            unsafe { device.create_graphics_pipeline(&pipeline_desc, None) }
         };
 
         unsafe {
@@ -623,9 +607,9 @@ fn main() {
             println!("{:?}", swap_config);
             let extent = swap_config.extent.to_extent();
 
-            let (new_swap_chain, new_backbuffer) = unsafe {
-                device.create_swapchain(&mut surface, swap_config, Some(swap_chain))
-            }.expect("Can't create swapchain");
+            let (new_swap_chain, new_backbuffer) =
+                unsafe { device.create_swapchain(&mut surface, swap_config, Some(swap_chain)) }
+                    .expect("Can't create swapchain");
 
             unsafe {
                 // Clean up the old framebuffers, images and swapchain
@@ -645,22 +629,26 @@ fn main() {
                     let pairs = images
                         .into_iter()
                         .map(|image| unsafe {
-                            let rtv = device.create_image_view(
+                            let rtv = device
+                                .create_image_view(
                                     &image,
                                     i::ViewKind::D2,
                                     format,
                                     Swizzle::NO,
                                     COLOR_RANGE.clone(),
-                                ).unwrap();
+                                )
+                                .unwrap();
                             (image, rtv)
-                        }).collect::<Vec<_>>();
+                        })
+                        .collect::<Vec<_>>();
                     let fbos = pairs
                         .iter()
                         .map(|&(_, ref rtv)| unsafe {
                             device
                                 .create_framebuffer(&render_pass, Some(rtv), extent)
                                 .unwrap()
-                        }).collect();
+                        })
+                        .collect();
                     (pairs, fbos)
                 }
                 Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),

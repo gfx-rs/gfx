@@ -1042,7 +1042,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn reset(&mut self, release_resources: bool) {
         if release_resources {
-            unsafe { self.allocator.Reset(); }
+            unsafe {
+                self.allocator.Reset();
+            }
         }
         self.reset();
     }
@@ -1063,13 +1065,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // This wouldn't make much sense, and proceeding with this constraint
         // allows the state transitions generated from subpass dependencies
         // to ignore the layouts completely.
-        assert!(!render_pass.subpasses.iter().any(|sp| {
-            sp.color_attachments
-                .iter()
-                .chain(sp.depth_stencil_attachment.iter())
-                .chain(sp.input_attachments.iter())
-                .any(|aref| aref.1 == image::Layout::Present)
-        }));
+        assert!(!render_pass.subpasses.iter().any(|sp| sp
+            .color_attachments
+            .iter()
+            .chain(sp.depth_stencil_attachment.iter())
+            .chain(sp.input_attachments.iter())
+            .any(|aref| aref.1 == image::Layout::Present)));
 
         let mut clear_iter = clear_values.into_iter();
         let attachment_clears = render_pass
@@ -1157,7 +1158,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     };
                     raw_barriers.push(bar);
                 }
-                memory::Barrier::Buffer { ref states, target, ref families, ref range, } => {
+                memory::Barrier::Buffer {
+                    ref states,
+                    target,
+                    ref families,
+                    ref range,
+                } => {
                     // TODO: Implement queue family ownership transitions for dx12
                     if let Some(f) = families {
                         if f.start.0 != f.end.0 {
@@ -1426,14 +1432,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         {
             // Insert barrier for `COPY_DEST` to `RESOLVE_DEST` as we only expose
             // `TRANSFER_WRITE` which is used for all copy commands.
-            let transition_barrier = Self::transition_barrier(
-                d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+            let transition_barrier =
+                Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                     pResource: dst.resource.as_mut_ptr(),
                     Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, // TODO: only affected ranges
                     StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
                     StateAfter: d3d12::D3D12_RESOURCE_STATE_RESOLVE_DEST,
-                },
-            );
+                });
             unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
         }
 
@@ -1462,14 +1467,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         {
             // Insert barrier for back transition from `RESOLVE_DEST` to `COPY_DEST`.
-            let transition_barrier = Self::transition_barrier(
-                d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+            let transition_barrier =
+                Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
                     pResource: dst.resource.as_mut_ptr(),
                     Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, // TODO: only affected ranges
                     StateBefore: d3d12::D3D12_RESOURCE_STATE_RESOLVE_DEST,
                     StateAfter: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
-                },
-            );
+                });
             unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
         }
     }
@@ -1506,20 +1510,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             descriptor::HeapFlags::SHADER_VISIBLE,
             0,
         );
-        let srv_desc = Device::build_image_as_shader_resource_desc(
-            &ViewInfo {
-                resource: src.resource,
-                kind: src.kind,
-                caps: src.view_caps,
-                view_kind: image::ViewKind::D2Array, // TODO
-                format: src.descriptor.Format,
-                range: image::SubresourceRange {
-                    aspects: format::Aspects::COLOR, // TODO
-                    levels: 0..src.descriptor.MipLevels as _,
-                    layers: 0..src.kind.num_layers(),
-                },
-            }
-        ).unwrap();
+        let srv_desc = Device::build_image_as_shader_resource_desc(&ViewInfo {
+            resource: src.resource,
+            kind: src.kind,
+            caps: src.view_caps,
+            view_kind: image::ViewKind::D2Array, // TODO
+            format: src.descriptor.Format,
+            range: image::SubresourceRange {
+                aspects: format::Aspects::COLOR, // TODO
+                levels: 0..src.descriptor.MipLevels as _,
+                layers: 0..src.kind.num_layers(),
+            },
+        })
+        .unwrap();
         unsafe {
             device.CreateShaderResourceView(
                 src.resource.as_mut_ptr(),

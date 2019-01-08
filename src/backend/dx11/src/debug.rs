@@ -9,11 +9,11 @@ use std::{env, fmt};
 // TODO: replace with new winapi version when available
 #[allow(bad_style, unused)]
 mod temp {
-    use winapi::shared::minwindef::{BOOL, INT}; 
-    use winapi::um::unknwnbase::{IUnknown, IUnknownVtbl}; 
-    use winapi::um::winnt::LPCWSTR; 
+    use winapi::shared::minwindef::{BOOL, INT};
+    use winapi::um::unknwnbase::{IUnknown, IUnknownVtbl};
+    use winapi::um::winnt::LPCWSTR;
 
-    RIDL!{#[uuid(0xb2daad8b, 0x03d4, 0x4dbf, 0x95, 0xeb, 0x32, 0xab, 0x4b, 0x63, 0xd0, 0xab)]
+    RIDL! {#[uuid(0xb2daad8b, 0x03d4, 0x4dbf, 0x95, 0xeb, 0x32, 0xab, 0x4b, 0x63, 0xd0, 0xab)]
     interface ID3DUserDefinedAnnotation(ID3DUserDefinedAnnotationVtbl):
         IUnknown(IUnknownVtbl) {
         fn BeginEvent(
@@ -30,12 +30,15 @@ mod temp {
 #[must_use]
 #[cfg(debug_assertions)]
 pub struct DebugScope {
-    annotation: ComPtr<temp::ID3DUserDefinedAnnotation>
+    annotation: ComPtr<temp::ID3DUserDefinedAnnotation>,
 }
 
 #[cfg(debug_assertions)]
 impl DebugScope {
-    pub fn with_name(context: &ComPtr<d3d11::ID3D11DeviceContext>, args: fmt::Arguments) -> Option<Self> {
+    pub fn with_name(
+        context: &ComPtr<d3d11::ID3D11DeviceContext>,
+        args: fmt::Arguments,
+    ) -> Option<Self> {
         let name = format!("{}", args);
 
         // debugging with visual studio and its ilk *really* doesn't like calling this on a
@@ -55,9 +58,7 @@ impl DebugScope {
             annotation.BeginEvent(msg.as_ptr() as _);
         }
 
-        Some(DebugScope {
-            annotation
-        })
+        Some(DebugScope { annotation })
     }
 }
 
@@ -89,4 +90,3 @@ pub fn debug_marker(context: &ComPtr<d3d11::ID3D11DeviceContext>, args: fmt::Arg
         annotation.SetMarker(msg.as_ptr() as _);
     }
 }
-

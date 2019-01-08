@@ -37,11 +37,11 @@ struct Dimensions<T> {
     height: T,
 }
 
-use std::{fs, iter};
 use std::cell::RefCell;
 use std::io::{Cursor, Read};
 use std::mem::size_of;
 use std::rc::Rc;
+use std::{fs, iter};
 
 use hal::{
     buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
@@ -53,7 +53,6 @@ use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
 use hal::pass::Subpass;
 use hal::pso::{PipelineStage, ShaderStageFlags};
 use hal::queue::Submission;
-
 
 const ENTRY_NAME: &str = "main";
 const DIMS: Extent2D = Extent2D {
@@ -189,7 +188,8 @@ impl<B: Backend> RendererState<B> {
                         count: 1,
                     },
                 ],
-            ).ok();
+            )
+            .ok();
 
         let mut uniform_desc_pool = device
             .borrow()
@@ -200,7 +200,8 @@ impl<B: Backend> RendererState<B> {
                     ty: pso::DescriptorType::UniformBuffer,
                     count: 1,
                 }],
-            ).ok();
+            )
+            .ok();
 
         let image_desc = image_desc.create_desc_set(img_desc_pool.as_mut().unwrap());
         let uniform_desc = uniform_desc.create_desc_set(uniform_desc_pool.as_mut().unwrap());
@@ -292,12 +293,8 @@ impl<B: Backend> RendererState<B> {
 
         self.swapchain.take().unwrap();
 
-        self.swapchain = Some(unsafe {
-            SwapchainState::new(
-                &mut self.backend,
-                Rc::clone(&self.device),
-            )
-        });
+        self.swapchain =
+            Some(unsafe { SwapchainState::new(&mut self.backend, Rc::clone(&self.device)) });
 
         self.render_pass = unsafe {
             RenderPassState::new(self.swapchain.as_ref().unwrap(), Rc::clone(&self.device))
@@ -548,10 +545,7 @@ impl<B: Backend> RendererState<B> {
                 cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
                 cmd_buffer.set_scissors(0, &[self.viewport.rect]);
                 cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
-                cmd_buffer.bind_vertex_buffers(
-                    0,
-                    Some((self.vertex_buffer.get_buffer(), 0)),
-                );
+                cmd_buffer.bind_vertex_buffers(0, Some((self.vertex_buffer.get_buffer(), 0)));
                 cmd_buffer.bind_graphics_descriptor_sets(
                     self.pipeline.pipeline_layout.as_ref().unwrap(),
                     0,
@@ -581,7 +575,8 @@ impl<B: Backend> RendererState<B> {
                     signal_semaphores: iter::once(&*image_present),
                 };
 
-                self.device.borrow_mut().queues.queues[0].submit(submission, Some(framebuffer_fence));
+                self.device.borrow_mut().queues.queues[0]
+                    .submit(submission, Some(framebuffer_fence));
 
                 // present frame
                 if let Err(_) = self
@@ -595,7 +590,8 @@ impl<B: Backend> RendererState<B> {
                         &mut self.device.borrow_mut().queues.queues[0],
                         frame,
                         Some(&*image_present),
-                    ) {
+                    )
+                {
                     recreate_swapchain = true;
                     continue;
                 }
@@ -634,7 +630,8 @@ impl WindowState {
             .with_dimensions(winit::dpi::LogicalSize::new(
                 DIMS.width as _,
                 DIMS.height as _,
-            )).with_title("quad".to_string());
+            ))
+            .with_title("quad".to_string());
 
         WindowState {
             events_loop,
@@ -682,7 +679,8 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
             window_state.wb.take().unwrap(),
             builder,
             &window_state.events_loop,
-        ).unwrap()
+        )
+        .unwrap()
     };
 
     let surface = back::Surface::from_window(window);
@@ -849,7 +847,8 @@ impl<B: Backend> BufferState<B> {
                 .position(|(id, mem_type)| {
                     mem_req.type_mask & (1 << id) != 0
                         && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
-                }).unwrap()
+                })
+                .unwrap()
                 .into();
 
             memory = device.allocate_memory(upload_type, mem_req.size).unwrap();
@@ -924,7 +923,8 @@ impl<B: Backend> BufferState<B> {
                 .position(|(id, mem_type)| {
                     mem_reqs.type_mask & (1 << id) != 0
                         && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
-                }).unwrap()
+                })
+                .unwrap()
                 .into();
 
             memory = device.allocate_memory(upload_type, mem_reqs.size).unwrap();
@@ -1091,7 +1091,8 @@ impl<B: Backend> DescSet<B> {
                 array_offset: d.array_offset,
                 descriptors: d.descriptors,
                 set,
-            }).collect();
+            })
+            .collect();
         device.write_descriptor_sets(write);
     }
 
@@ -1139,7 +1140,8 @@ impl<B: Backend> ImageState<B> {
                 i::Tiling::Optimal,
                 i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
                 i::ViewCapabilities::empty(),
-            ).unwrap(); // TODO: usage
+            )
+            .unwrap(); // TODO: usage
         let req = device.get_image_requirements(&image);
 
         let device_type = adapter
@@ -1149,7 +1151,8 @@ impl<B: Backend> ImageState<B> {
             .position(|(id, memory_type)| {
                 req.type_mask & (1 << id) != 0
                     && memory_type.properties.contains(m::Properties::DEVICE_LOCAL)
-            }).unwrap()
+            })
+            .unwrap()
             .into();
 
         let memory = device.allocate_memory(device_type, req.size).unwrap();
@@ -1162,7 +1165,8 @@ impl<B: Backend> ImageState<B> {
                 ColorFormat::SELF,
                 Swizzle::NO,
                 COLOR_RANGE.clone(),
-            ).unwrap();
+            )
+            .unwrap();
 
         let sampler = device
             .create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
@@ -1242,10 +1246,8 @@ impl<B: Backend> ImageState<B> {
 
             cmd_buffer.finish();
 
-            device_state.queues.queues[0].submit_nosemaphores(
-                iter::once(&cmd_buffer),
-                Some(&mut transfered_image_fence),
-            );
+            device_state.queues.queues[0]
+                .submit_nosemaphores(iter::once(&cmd_buffer), Some(&mut transfered_image_fence));
         }
 
         ImageState {
@@ -1515,9 +1517,11 @@ impl<B: Backend> FramebufferState<B> {
                                 swapchain.format,
                                 Swizzle::NO,
                                 COLOR_RANGE.clone(),
-                            ).unwrap();
+                            )
+                            .unwrap();
                         (image, rtv)
-                    }).collect::<Vec<_>>();
+                    })
+                    .collect::<Vec<_>>();
                 let fbos = pairs
                     .iter()
                     .map(|&(_, ref rtv)| {
@@ -1528,8 +1532,10 @@ impl<B: Backend> FramebufferState<B> {
                                 render_pass.render_pass.as_ref().unwrap(),
                                 Some(rtv),
                                 extent,
-                            ).unwrap()
-                    }).collect();
+                            )
+                            .unwrap()
+                    })
+                    .collect();
                 (pairs, fbos)
             }
             Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
@@ -1664,9 +1670,7 @@ fn main() {
     let mut window = WindowState::new();
     let (backend, _instance) = create_backend(&mut window);
 
-    let mut renderer_state = unsafe {
-        RendererState::new(backend, window)
-    };
+    let mut renderer_state = unsafe { RendererState::new(backend, window) };
     renderer_state.mainloop();
 }
 

@@ -1,13 +1,12 @@
 //! Functionality only required for backend implementations.
 
-use Backend;
 use queue::{QueueFamily, Queues};
+use Backend;
 
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
 
 use fxhash::FxHasher;
-
 
 /// Bare-metal queue group.
 ///

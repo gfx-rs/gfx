@@ -1,7 +1,7 @@
 //! Compute pipeline descriptor.
 
-use Backend;
 use super::{BasePipeline, EntryPoint, PipelineCreationFlags};
+use Backend;
 
 /// A description of the data needed to construct a compute pipeline.
 #[derive(Debug)]
@@ -18,10 +18,7 @@ pub struct ComputePipelineDesc<'a, B: Backend> {
 
 impl<'a, B: Backend> ComputePipelineDesc<'a, B> {
     /// Create a new empty PSO descriptor.
-    pub fn new(
-        shader: EntryPoint<'a, B>,
-        layout: &'a B::PipelineLayout,
-    ) -> Self {
+    pub fn new(shader: EntryPoint<'a, B>, layout: &'a B::PipelineLayout) -> Self {
         ComputePipelineDesc {
             shader,
             layout,

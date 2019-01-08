@@ -1,11 +1,15 @@
 #![allow(dead_code)] //TODO: remove
 
-use hal::{ColorSlot};
 use hal::pso;
-use {gl, GlContainer};
+use hal::ColorSlot;
 use smallvec::SmallVec;
+use {gl, GlContainer};
 
-pub(crate) fn bind_polygon_mode(gl: &GlContainer, mode: pso::PolygonMode, bias: Option<pso::State<pso::DepthBias>>) {
+pub(crate) fn bind_polygon_mode(
+    gl: &GlContainer,
+    mode: pso::PolygonMode,
+    bias: Option<pso::State<pso::DepthBias>>,
+) {
     use hal::pso::PolygonMode::*;
 
     let (gl_draw, gl_offset) = match mode {
@@ -13,7 +17,7 @@ pub(crate) fn bind_polygon_mode(gl: &GlContainer, mode: pso::PolygonMode, bias: 
         Line(width) => {
             unsafe { gl.LineWidth(width) };
             (gl::LINE, gl::POLYGON_OFFSET_LINE)
-        },
+        }
         Fill => (gl::FILL, gl::POLYGON_OFFSET_FILL),
     };
 
@@ -24,9 +28,7 @@ pub(crate) fn bind_polygon_mode(gl: &GlContainer, mode: pso::PolygonMode, bias: 
             gl.Enable(gl_offset);
             gl.PolygonOffset(bias.slope_factor as _, bias.const_factor as _);
         },
-        _ => unsafe {
-            gl.Disable(gl_offset)
-        },
+        _ => unsafe { gl.Disable(gl_offset) },
     }
 }
 
@@ -57,7 +59,8 @@ pub(crate) fn bind_rasterizer(gl: &GlContainer, r: &pso::Rasterizer, is_embedded
 
     if !is_embedded {
         bind_polygon_mode(gl, r.polygon_mode, r.depth_bias);
-        match false { //TODO
+        match false {
+            //TODO
             true => unsafe { gl.Enable(gl::MULTISAMPLE) },
             false => unsafe { gl.Disable(gl::MULTISAMPLE) },
         }
@@ -73,14 +76,14 @@ pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
 pub fn map_comparison(cmp: pso::Comparison) -> gl::types::GLenum {
     use hal::pso::Comparison::*;
     match cmp {
-        Never        => gl::NEVER,
-        Less         => gl::LESS,
-        LessEqual    => gl::LEQUAL,
-        Equal        => gl::EQUAL,
+        Never => gl::NEVER,
+        Less => gl::LESS,
+        LessEqual => gl::LEQUAL,
+        Equal => gl::EQUAL,
         GreaterEqual => gl::GEQUAL,
-        Greater      => gl::GREATER,
-        NotEqual     => gl::NOTEQUAL,
-        Always       => gl::ALWAYS,
+        Greater => gl::GREATER,
+        NotEqual => gl::NOTEQUAL,
+        Always => gl::ALWAYS,
     }
 }
 
@@ -100,14 +103,14 @@ pub(crate) fn bind_depth(gl: &GlContainer, depth: &pso::DepthTest) {
 fn map_operation(op: pso::StencilOp) -> gl::types::GLenum {
     use hal::pso::StencilOp::*;
     match op {
-        Keep          => gl::KEEP,
-        Zero          => gl::ZERO,
-        Replace       => gl::REPLACE,
-        IncrementClamp=> gl::INCR,
+        Keep => gl::KEEP,
+        Zero => gl::ZERO,
+        Replace => gl::REPLACE,
+        IncrementClamp => gl::INCR,
         IncrementWrap => gl::INCR_WRAP,
-        DecrementClamp=> gl::DECR,
+        DecrementClamp => gl::DECR,
         DecrementWrap => gl::DECR_WRAP,
-        Invert        => gl::INVERT,
+        Invert => gl::INVERT,
     }
 }
 
@@ -117,7 +120,12 @@ pub(crate) fn bind_stencil(
     (ref_front, ref_back): (pso::StencilValue, pso::StencilValue),
     cull: Option<pso::Face>,
 ) {
-    fn bind_side(gl: &GlContainer, face: gl::types::GLenum, side: &pso::StencilFace, ref_value: pso::StencilValue) {
+    fn bind_side(
+        gl: &GlContainer,
+        face: gl::types::GLenum,
+        side: &pso::StencilFace,
+        ref_value: pso::StencilValue,
+    ) {
         unsafe {
             let mr = match side.mask_read {
                 pso::State::Static(v) => v,
@@ -129,11 +137,19 @@ pub(crate) fn bind_stencil(
             };
             gl.StencilFuncSeparate(face, map_comparison(side.fun), ref_value as _, mr);
             gl.StencilMaskSeparate(face, mw);
-            gl.StencilOpSeparate(face, map_operation(side.op_fail), map_operation(side.op_depth_fail), map_operation(side.op_pass));
+            gl.StencilOpSeparate(
+                face,
+                map_operation(side.op_fail),
+                map_operation(side.op_depth_fail),
+                map_operation(side.op_pass),
+            );
         }
     }
     match *stencil {
-        pso::StencilTest::On { ref front, ref back } => {
+        pso::StencilTest::On {
+            ref front,
+            ref back,
+        } => {
             unsafe { gl.Enable(gl::STENCIL_TEST) };
             if let Some(cf) = cull {
                 if !cf.contains(pso::Face::FRONT) {
@@ -175,11 +191,15 @@ fn map_factor(factor: pso::Factor) -> gl::types::GLenum {
     }
 }
 
-fn map_blend_op(operation: pso::BlendOp) -> (gl::types::GLenum, gl::types::GLenum, gl::types::GLenum) {
+fn map_blend_op(
+    operation: pso::BlendOp,
+) -> (gl::types::GLenum, gl::types::GLenum, gl::types::GLenum) {
     match operation {
-        pso::BlendOp::Add { src, dst }    => (gl::FUNC_ADD,              map_factor(src), map_factor(dst)),
-        pso::BlendOp::Sub { src, dst }    => (gl::FUNC_SUBTRACT,         map_factor(src), map_factor(dst)),
-        pso::BlendOp::RevSub { src, dst } => (gl::FUNC_REVERSE_SUBTRACT, map_factor(src), map_factor(dst)),
+        pso::BlendOp::Add { src, dst } => (gl::FUNC_ADD, map_factor(src), map_factor(dst)),
+        pso::BlendOp::Sub { src, dst } => (gl::FUNC_SUBTRACT, map_factor(src), map_factor(dst)),
+        pso::BlendOp::RevSub { src, dst } => {
+            (gl::FUNC_REVERSE_SUBTRACT, map_factor(src), map_factor(dst))
+        }
         pso::BlendOp::Min => (gl::MIN, gl::ZERO, gl::ZERO),
         pso::BlendOp::Max => (gl::MAX, gl::ZERO, gl::ZERO),
     }
@@ -201,12 +221,14 @@ pub(crate) fn bind_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
         },
     };
 
-    unsafe { gl.ColorMask(
-        desc.0.contains(Cm::RED) as _,
-        desc.0.contains(Cm::GREEN) as _,
-        desc.0.contains(Cm::BLUE) as _,
-        desc.0.contains(Cm::ALPHA) as _,
-    )};
+    unsafe {
+        gl.ColorMask(
+            desc.0.contains(Cm::RED) as _,
+            desc.0.contains(Cm::GREEN) as _,
+            desc.0.contains(Cm::BLUE) as _,
+            desc.0.contains(Cm::ALPHA) as _,
+        )
+    };
 }
 
 pub(crate) fn bind_blend_slot(gl: &GlContainer, slot: ColorSlot, desc: &pso::ColorBlendDesc) {
@@ -226,12 +248,15 @@ pub(crate) fn bind_blend_slot(gl: &GlContainer, slot: ColorSlot, desc: &pso::Col
         },
     };
 
-    unsafe { gl.ColorMaski(slot as _,
-        desc.0.contains(Cm::RED) as _,
-        desc.0.contains(Cm::GREEN) as _,
-        desc.0.contains(Cm::BLUE) as _,
-        desc.0.contains(Cm::ALPHA) as _,
-    )};
+    unsafe {
+        gl.ColorMaski(
+            slot as _,
+            desc.0.contains(Cm::RED) as _,
+            desc.0.contains(Cm::GREEN) as _,
+            desc.0.contains(Cm::BLUE) as _,
+            desc.0.contains(Cm::ALPHA) as _,
+        )
+    };
 }
 
 pub(crate) fn unlock_color_mask(gl: &GlContainer) {
@@ -239,7 +264,5 @@ pub(crate) fn unlock_color_mask(gl: &GlContainer) {
 }
 
 pub(crate) fn set_blend_color(gl: &GlContainer, color: pso::ColorValue) {
-    unsafe {
-        gl.BlendColor(color[0], color[1], color[2], color[3])
-    };
+    unsafe { gl.BlendColor(color[0], color[1], color[2], color[3]) };
 }

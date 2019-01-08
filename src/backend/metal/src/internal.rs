@@ -1,18 +1,17 @@
-use PrivateCapabilities;
 use conversions as conv;
+use PrivateCapabilities;
 
 use metal;
 use parking_lot::{Mutex, RawRwLock};
 use storage_map::{StorageMap, StorageMapGuard};
 
-use hal::pso;
 use hal::backend::FastHashMap;
 use hal::command::ClearColorRaw;
 use hal::format::{Aspects, ChannelType};
 use hal::image::Filter;
+use hal::pso;
 
 use std::mem;
-
 
 pub type FastStorageMap<K, V> = StorageMap<RawRwLock, FastHashMap<K, V>>;
 pub type FastStorageGuard<'a, V> = StorageMapGuard<'a, RawRwLock, V>;
@@ -38,13 +37,13 @@ pub enum Channel {
 impl From<ChannelType> for Channel {
     fn from(channel_type: ChannelType) -> Self {
         match channel_type {
-            ChannelType::Unorm |
-            ChannelType::Inorm |
-            ChannelType::Ufloat |
-            ChannelType::Float |
-            ChannelType::Uscaled |
-            ChannelType::Iscaled |
-            ChannelType::Srgb => Channel::Float,
+            ChannelType::Unorm
+            | ChannelType::Inorm
+            | ChannelType::Ufloat
+            | ChannelType::Float
+            | ChannelType::Uscaled
+            | ChannelType::Iscaled
+            | ChannelType::Srgb => Channel::Float,
             ChannelType::Uint => Channel::Uint,
             ChannelType::Int => Channel::Int,
         }
@@ -78,7 +77,6 @@ impl Channel {
     }
 }
 
-
 pub struct SamplerStates {
     nearest: metal::SamplerState,
     linear: metal::SamplerState,
@@ -95,10 +93,7 @@ impl SamplerStates {
         desc.set_mag_filter(metal::MTLSamplerMinMagFilter::Linear);
         let linear = device.new_sampler(&desc);
 
-        SamplerStates {
-            nearest,
-            linear,
-        }
+        SamplerStates { nearest, linear }
     }
 
     pub fn get(&self, filter: Filter) -> &metal::SamplerStateRef {
@@ -193,10 +188,7 @@ impl DepthStencilStates {
 
     pub fn prepare(&self, desc: &pso::DepthStencilDesc, device: &metal::DeviceRef) {
         self.map.prepare_maybe(desc, || {
-            Self::create_desc(desc)
-                .map(|raw_desc| {
-                    device.new_depth_stencil_state(&raw_desc)
-                })
+            Self::create_desc(desc).map(|raw_desc| device.new_depth_stencil_state(&raw_desc))
         });
     }
 
@@ -206,12 +198,10 @@ impl DepthStencilStates {
         desc: pso::DepthStencilDesc,
         device: &Mutex<metal::Device>,
     ) -> FastStorageGuard<metal::DepthStencilState> {
-        self.map
-            .get_or_create_with(&desc, || {
-                let raw_desc = Self::create_desc(&desc)
-                    .expect("Incomplete descriptor provided");
-                device.lock().new_depth_stencil_state(&raw_desc)
-            })
+        self.map.get_or_create_with(&desc, || {
+            let raw_desc = Self::create_desc(&desc).expect("Incomplete descriptor provided");
+            device.lock().new_depth_stencil_state(&raw_desc)
+        })
     }
 
     fn create_stencil(face: &pso::StencilFace) -> Option<metal::StencilDescriptor> {
@@ -242,7 +232,10 @@ impl DepthStencilStates {
             pso::DepthTest::Off => {}
         }
         match desc.stencil {
-            pso::StencilTest::On { ref front, ref back } => {
+            pso::StencilTest::On {
+                ref front,
+                ref back,
+            } => {
                 let front_desc = Self::create_stencil(front)?;
                 raw.set_front_face_stencil(Some(&front_desc));
                 let back_desc = if front == back {
@@ -258,7 +251,6 @@ impl DepthStencilStates {
         Some(raw)
     }
 }
-
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ClearKey {
@@ -280,14 +272,16 @@ impl ImageClearPipes {
         device: &Mutex<metal::Device>,
         private_caps: &PrivateCapabilities,
     ) -> FastStorageGuard<metal::RenderPipelineState> {
-        self.map
-            .get_or_create_with(&key, || {
-                Self::create(key, &*library.lock(), &*device.lock(), private_caps)
-            })
+        self.map.get_or_create_with(&key, || {
+            Self::create(key, &*library.lock(), &*device.lock(), private_caps)
+        })
     }
 
     fn create(
-        key: ClearKey, library: &metal::LibraryRef, device: &metal::DeviceRef, private_caps: &PrivateCapabilities,
+        key: ClearKey,
+        library: &metal::LibraryRef,
+        device: &metal::DeviceRef,
+        private_caps: &PrivateCapabilities,
     ) -> metal::RenderPipelineState {
         let pipeline = metal::RenderPipelineDescriptor::new();
         if private_caps.layered_rendering {
@@ -327,12 +321,9 @@ impl ImageClearPipes {
 
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();
-        let mtl_buffer_desc = vertex_descriptor
-            .layouts()
-            .object_at(0)
-            .unwrap();
+        let mtl_buffer_desc = vertex_descriptor.layouts().object_at(0).unwrap();
         mtl_buffer_desc.set_stride(mem::size_of::<ClearVertex>() as _);
-        for i in 0 .. 1 {
+        for i in 0..1 {
             let mtl_attribute_desc = vertex_descriptor
                 .attributes()
                 .object_at(i)
@@ -347,8 +338,12 @@ impl ImageClearPipes {
     }
 }
 
-
-pub type BlitKey = (metal::MTLTextureType, metal::MTLPixelFormat, Aspects, Channel);
+pub type BlitKey = (
+    metal::MTLTextureType,
+    metal::MTLPixelFormat,
+    Aspects,
+    Channel,
+);
 
 pub struct ImageBlitPipes {
     map: FastStorageMap<BlitKey, metal::RenderPipelineState>,
@@ -362,10 +357,9 @@ impl ImageBlitPipes {
         device: &Mutex<metal::Device>,
         private_caps: &PrivateCapabilities,
     ) -> FastStorageGuard<metal::RenderPipelineState> {
-        self.map
-            .get_or_create_with(&key, || {
-                Self::create(key, &*library.lock(), &*device.lock(), private_caps)
-            })
+        self.map.get_or_create_with(&key, || {
+            Self::create(key, &*library.lock(), &*device.lock(), private_caps)
+        })
     }
 
     fn create(
@@ -378,7 +372,7 @@ impl ImageBlitPipes {
 
         let pipeline = metal::RenderPipelineDescriptor::new();
         if private_caps.layered_rendering {
-        	pipeline.set_input_primitive_topology(metal::MTLPrimitiveTopologyClass::Triangle);
+            pipeline.set_input_primitive_topology(metal::MTLPrimitiveTopologyClass::Triangle);
         }
 
         let s_type = match key.0 {
@@ -388,8 +382,7 @@ impl ImageBlitPipes {
             Tt::D2Array => "2d_array",
             Tt::D3 => "3d",
             Tt::D2Multisample => panic!("Can't blit MSAA surfaces"),
-            Tt::Cube |
-            Tt::CubeArray => unimplemented!()
+            Tt::Cube | Tt::CubeArray => unimplemented!(),
         };
         let s_channel = if key.2.contains(Aspects::COLOR) {
             match key.3 {
@@ -423,12 +416,9 @@ impl ImageBlitPipes {
 
         // Vertex buffers
         let vertex_descriptor = metal::VertexDescriptor::new();
-        let mtl_buffer_desc = vertex_descriptor
-            .layouts()
-            .object_at(0)
-            .unwrap();
+        let mtl_buffer_desc = vertex_descriptor.layouts().object_at(0).unwrap();
         mtl_buffer_desc.set_stride(mem::size_of::<BlitVertex>() as _);
-        for i in 0 .. 2 {
+        for i in 0..2 {
             let mtl_attribute_desc = vertex_descriptor
                 .attributes()
                 .object_at(i)
@@ -442,7 +432,6 @@ impl ImageBlitPipes {
         device.new_render_pipeline_state(&pipeline).unwrap()
     }
 }
-
 
 pub struct ServicePipes {
     pub library: Mutex<metal::Library>,
@@ -478,7 +467,8 @@ impl ServicePipes {
     }
 
     fn create_copy_buffer(
-        library: &metal::LibraryRef, device: &metal::DeviceRef
+        library: &metal::LibraryRef,
+        device: &metal::DeviceRef,
     ) -> metal::ComputePipelineState {
         let pipeline = metal::ComputePipelineDescriptor::new();
 
@@ -497,7 +487,8 @@ impl ServicePipes {
     }
 
     fn create_fill_buffer(
-        library: &metal::LibraryRef, device: &metal::DeviceRef
+        library: &metal::LibraryRef,
+        device: &metal::DeviceRef,
     ) -> metal::ComputePipelineState {
         let pipeline = metal::ComputePipelineDescriptor::new();
 
@@ -515,10 +506,19 @@ impl ServicePipes {
     }
 
     pub(crate) fn simple_blit(
-        &self, device: &Mutex<metal::Device>, cmd_buffer: &metal::CommandBufferRef,
-        src: &metal::TextureRef, dst: &metal::TextureRef, private_caps: &PrivateCapabilities,
+        &self,
+        device: &Mutex<metal::Device>,
+        cmd_buffer: &metal::CommandBufferRef,
+        src: &metal::TextureRef,
+        dst: &metal::TextureRef,
+        private_caps: &PrivateCapabilities,
     ) {
-        let key = (metal::MTLTextureType::D2, dst.pixel_format(), Aspects::COLOR, Channel::Float);
+        let key = (
+            metal::MTLTextureType::D2,
+            dst.pixel_format(),
+            Aspects::COLOR,
+            Channel::Float,
+        );
         let pso = self.blits.get(key, &self.library, device, private_caps);
         let vertices = [
             BlitVertex {
@@ -543,10 +543,7 @@ impl ServicePipes {
         if private_caps.layered_rendering {
             descriptor.set_render_target_array_length(1);
         }
-        let attachment = descriptor
-            .color_attachments()
-            .object_at(0)
-            .unwrap();
+        let attachment = descriptor.color_attachments().object_at(0).unwrap();
         attachment.set_texture(Some(dst));
         attachment.set_load_action(metal::MTLLoadAction::DontCare);
         attachment.set_store_action(metal::MTLStoreAction::Store);
@@ -555,7 +552,8 @@ impl ServicePipes {
         encoder.set_render_pipeline_state(pso.as_ref());
         encoder.set_fragment_sampler_state(0, Some(&self.sampler_states.linear));
         encoder.set_fragment_texture(0, Some(src));
-        encoder.set_vertex_bytes(0,
+        encoder.set_vertex_bytes(
+            0,
             (vertices.len() * mem::size_of::<BlitVertex>()) as u64,
             vertices.as_ptr() as *const _,
         );

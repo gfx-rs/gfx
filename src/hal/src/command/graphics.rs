@@ -2,16 +2,13 @@
 use std::borrow::Borrow;
 use std::ops::Range;
 
+use super::{
+    ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw, CommandBuffer, DescriptorSetOffset, Level,
+    Primary, RawCommandBuffer, RenderPassInlineEncoder, RenderPassSecondaryEncoder, Shot,
+};
+use queue::capability::{Graphics, GraphicsOrCompute, Supports};
 use Backend;
 use {buffer, image, pso, query};
-use queue::capability::{Graphics, GraphicsOrCompute, Supports};
-use super::{
-    CommandBuffer, RawCommandBuffer,
-    RenderPassInlineEncoder, RenderPassSecondaryEncoder,
-    Shot, Level, Primary,
-    ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw, DescriptorSetOffset,
-};
-
 
 /// A universal clear color supporting integer formats
 /// as well as the standard floating-point.
@@ -103,8 +100,12 @@ pub enum ClearValue {
 impl From<ClearValue> for ClearValueRaw {
     fn from(value: ClearValue) -> Self {
         match value {
-            ClearValue::Color(color) => ClearValueRaw { color: color.into() },
-            ClearValue::DepthStencil(ds) => ClearValueRaw { depth_stencil: ds.into() },
+            ClearValue::Color(color) => ClearValueRaw {
+                color: color.into(),
+            },
+            ClearValue::DepthStencil(ds) => ClearValueRaw {
+                depth_stencil: ds.into(),
+            },
         }
     }
 }
@@ -175,7 +176,13 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
         T: IntoIterator,
         T::Item: Borrow<image::SubresourceRange>,
     {
-        self.raw.clear_image(image, layout, color.into(), depth_stencil.into(), subresource_ranges)
+        self.raw.clear_image(
+            image,
+            layout,
+            color.into(),
+            depth_stencil.into(),
+            subresource_ranges,
+        )
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
@@ -210,7 +217,8 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
         J: IntoIterator,
         J::Item: Borrow<DescriptorSetOffset>,
     {
-        self.raw.bind_graphics_descriptor_sets(layout, first_set, sets, offsets)
+        self.raw
+            .bind_graphics_descriptor_sets(layout, first_set, sets, offsets)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
@@ -267,8 +275,15 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub unsafe fn push_graphics_constants(&mut self, layout: &B::PipelineLayout, stages: pso::ShaderStageFlags, offset: u32, constants: &[u32]) {
-        self.raw.push_graphics_constants(layout, stages, offset, constants)
+    pub unsafe fn push_graphics_constants(
+        &mut self,
+        layout: &B::PipelineLayout,
+        stages: pso::ShaderStageFlags,
+        offset: u32,
+        constants: &[u32],
+    ) {
+        self.raw
+            .push_graphics_constants(layout, stages, offset, constants)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
@@ -281,9 +296,10 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
         regions: T,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<ImageResolve>
+        T::Item: Borrow<ImageResolve>,
     {
-        self.raw.resolve_image(src, src_layout, dst, dst_layout, regions)
+        self.raw
+            .resolve_image(src, src_layout, dst, dst_layout, regions)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
@@ -299,7 +315,8 @@ impl<B: Backend, C: Supports<Graphics>, S: Shot, L: Level> CommandBuffer<B, C, S
         T: IntoIterator,
         T::Item: Borrow<ImageBlit>,
     {
-        self.raw.blit_image(src, src_layout, dst, dst_layout, filter, regions)
+        self.raw
+            .blit_image(src, src_layout, dst, dst_layout, filter, regions)
     }
 }
 
@@ -361,7 +378,8 @@ impl<B: Backend, C: Supports<GraphicsOrCompute>, S: Shot, L: Level> CommandBuffe
         stride: buffer::Offset,
         flags: query::ResultFlags,
     ) {
-        self.raw.copy_query_pool_results(pool, queries, buffer, offset, stride, flags)
+        self.raw
+            .copy_query_pool_results(pool, queries, buffer, offset, stride, flags)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

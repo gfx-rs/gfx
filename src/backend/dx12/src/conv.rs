@@ -20,11 +20,11 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     // Handling packed formats according to the platform endianness.
     let reverse = unsafe { 1 == *(&1u32 as *const _ as *const u8) };
     let format = match format {
-        Bgra4Unorm    if !reverse => DXGI_FORMAT_B4G4R4A4_UNORM,
-        R5g6b5Unorm    if reverse => DXGI_FORMAT_B5G6R5_UNORM,
-        B5g6r5Unorm   if !reverse => DXGI_FORMAT_B5G6R5_UNORM,
+        Bgra4Unorm if !reverse => DXGI_FORMAT_B4G4R4A4_UNORM,
+        R5g6b5Unorm if reverse => DXGI_FORMAT_B5G6R5_UNORM,
+        B5g6r5Unorm if !reverse => DXGI_FORMAT_B5G6R5_UNORM,
         B5g5r5a1Unorm if !reverse => DXGI_FORMAT_B5G5R5A1_UNORM,
-        A1r5g5b5Unorm if reverse  => DXGI_FORMAT_B5G5R5A1_UNORM,
+        A1r5g5b5Unorm if reverse => DXGI_FORMAT_B5G5R5A1_UNORM,
         R8Unorm => DXGI_FORMAT_R8_UNORM,
         R8Inorm => DXGI_FORMAT_R8_SNORM,
         R8Uint => DXGI_FORMAT_R8_UINT,
@@ -42,11 +42,11 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
         Bgra8Srgb => DXGI_FORMAT_B8G8R8A8_UNORM_SRGB,
         Abgr8Unorm if reverse => DXGI_FORMAT_R8G8B8A8_UNORM,
         Abgr8Inorm if reverse => DXGI_FORMAT_R8G8B8A8_SNORM,
-        Abgr8Uint  if reverse => DXGI_FORMAT_R8G8B8A8_UINT,
-        Abgr8Int   if reverse => DXGI_FORMAT_R8G8B8A8_SINT,
-        Abgr8Srgb  if reverse => DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
+        Abgr8Uint if reverse => DXGI_FORMAT_R8G8B8A8_UINT,
+        Abgr8Int if reverse => DXGI_FORMAT_R8G8B8A8_SINT,
+        Abgr8Srgb if reverse => DXGI_FORMAT_R8G8B8A8_UNORM_SRGB,
         A2b10g10r10Unorm if reverse => DXGI_FORMAT_R10G10B10A2_UNORM,
-        A2b10g10r10Uint  if reverse => DXGI_FORMAT_R10G10B10A2_UINT,
+        A2b10g10r10Uint if reverse => DXGI_FORMAT_R10G10B10A2_UINT,
         R16Unorm => DXGI_FORMAT_R16_UNORM,
         R16Inorm => DXGI_FORMAT_R16_SNORM,
         R16Uint => DXGI_FORMAT_R16_UINT,
@@ -75,7 +75,7 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
         Rgba32Int => DXGI_FORMAT_R32G32B32A32_SINT,
         Rgba32Float => DXGI_FORMAT_R32G32B32A32_FLOAT,
         B10g11r11Ufloat if reverse => DXGI_FORMAT_R11G11B10_FLOAT,
-        E5b9g9r9Ufloat  if reverse => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
+        E5b9g9r9Ufloat if reverse => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
         D16Unorm => DXGI_FORMAT_D16_UNORM,
         D24UnormS8Uint => DXGI_FORMAT_D24_UNORM_S8_UINT,
         X8D24Unorm if reverse => DXGI_FORMAT_D24_UNORM_S8_UINT,
@@ -104,10 +104,9 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
 
 pub fn map_format_dsv(surface: SurfaceType) -> Option<DXGI_FORMAT> {
     Some(match surface {
-        SurfaceType::D16    => DXGI_FORMAT_D16_UNORM,
-        SurfaceType::X8D24 |
-        SurfaceType::D24_S8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
-        SurfaceType::D32    => DXGI_FORMAT_D32_FLOAT,
+        SurfaceType::D16 => DXGI_FORMAT_D16_UNORM,
+        SurfaceType::X8D24 | SurfaceType::D24_S8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        SurfaceType::D32 => DXGI_FORMAT_D32_FLOAT,
         SurfaceType::D32_S8 => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
         _ => return None,
     })
@@ -130,14 +129,14 @@ pub fn map_topology_type(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY_TYPE 
 pub fn map_topology(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY {
     use hal::Primitive::*;
     match primitive {
-        PointList              => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
-        LineList               => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
-        LineListAdjacency      => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
-        LineStrip              => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
-        LineStripAdjacency     => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
-        TriangleList           => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        TriangleListAdjacency  => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        TriangleStrip          => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        PointList => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
+        LineList => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+        LineListAdjacency => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
+        LineStrip => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
+        LineStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
+        TriangleList => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        TriangleListAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        TriangleStrip => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
         TriangleStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
         PatchList(num) => {
             assert!(num != 0);
@@ -220,9 +219,13 @@ fn map_factor(factor: pso::Factor) -> D3D12_BLEND {
 fn map_blend_op(operation: pso::BlendOp) -> (D3D12_BLEND_OP, D3D12_BLEND, D3D12_BLEND) {
     use hal::pso::BlendOp::*;
     match operation {
-        Add    { src, dst } => (D3D12_BLEND_OP_ADD,          map_factor(src), map_factor(dst)),
-        Sub    { src, dst } => (D3D12_BLEND_OP_SUBTRACT,     map_factor(src), map_factor(dst)),
-        RevSub { src, dst } => (D3D12_BLEND_OP_REV_SUBTRACT, map_factor(src), map_factor(dst)),
+        Add { src, dst } => (D3D12_BLEND_OP_ADD, map_factor(src), map_factor(dst)),
+        Sub { src, dst } => (D3D12_BLEND_OP_SUBTRACT, map_factor(src), map_factor(dst)),
+        RevSub { src, dst } => (
+            D3D12_BLEND_OP_REV_SUBTRACT,
+            map_factor(src),
+            map_factor(dst),
+        ),
         Min => (D3D12_BLEND_OP_MIN, D3D12_BLEND_ZERO, D3D12_BLEND_ZERO),
         Max => (D3D12_BLEND_OP_MAX, D3D12_BLEND_ZERO, D3D12_BLEND_ZERO),
     }
@@ -354,9 +357,9 @@ fn map_stencil_side(side: &pso::StencilFace) -> D3D12_DEPTH_STENCILOP_DESC {
 pub fn map_wrap(wrap: image::WrapMode) -> D3D12_TEXTURE_ADDRESS_MODE {
     use hal::image::WrapMode::*;
     match wrap {
-        Tile   => D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        Tile => D3D12_TEXTURE_ADDRESS_MODE_WRAP,
         Mirror => D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
-        Clamp  => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        Clamp => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         Border => D3D12_TEXTURE_ADDRESS_MODE_BORDER,
     }
 }
@@ -502,11 +505,13 @@ pub fn map_descriptor_range(
             pso::DescriptorType::UniformBuffer | pso::DescriptorType::UniformBufferDynamic => {
                 DescriptorRangeType::CBV
             }
-            pso::DescriptorType::CombinedImageSampler => if sampler {
-                DescriptorRangeType::Sampler
-            } else {
-                DescriptorRangeType::SRV
-            },
+            pso::DescriptorType::CombinedImageSampler => {
+                if sampler {
+                    DescriptorRangeType::Sampler
+                } else {
+                    DescriptorRangeType::SRV
+                }
+            }
         },
         bind.count as _,
         Binding {

@@ -3,8 +3,8 @@
 use format::Format;
 use image;
 use pso::PipelineStage;
-use Backend;
 use std::ops::Range;
+use Backend;
 
 /// Specifies the operation which will be applied at the beginning of a subpass.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -57,10 +57,7 @@ impl AttachmentOps {
 
     /// Convenience function to create a new `AttachmentOps`.
     pub fn new(load: AttachmentLoadOp, store: AttachmentStoreOp) -> Self {
-        AttachmentOps {
-            load,
-            store,
-        }
+        AttachmentOps { load, store }
     }
 
     /// A method to provide `AttachmentOps::DONT_CARE` to things that expect
@@ -178,8 +175,7 @@ impl<'a, B: Backend> Clone for Subpass<'a, B> {
 
 impl<'a, B: Backend> PartialEq for Subpass<'a, B> {
     fn eq(&self, other: &Self) -> bool {
-        self.index == other.index &&
-        self.main_pass as *const _ == other.main_pass as *const _
+        self.index == other.index && self.main_pass as *const _ == other.main_pass as *const _
     }
 }
 

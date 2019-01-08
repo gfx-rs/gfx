@@ -1,9 +1,9 @@
 //! Queue family and groups.
 
-use Backend;
 use backend::RawQueueGroup;
+use queue::capability::{Capability, Compute, Graphics, Transfer};
 use queue::{CommandQueue, QueueType};
-use queue::capability::{Capability, Graphics, Compute, Transfer};
+use Backend;
 
 use std::any::Any;
 use std::fmt::Debug;
@@ -60,7 +60,8 @@ impl<B: Backend, C: Capability> QueueGroup<B, C> {
         assert!(C::supported_by(raw.family.queue_type()));
         QueueGroup {
             family: raw.family.id(),
-            queues: raw.queues
+            queues: raw
+                .queues
                 .into_iter()
                 .map(|q| unsafe { CommandQueue::new(q) })
                 .collect(),

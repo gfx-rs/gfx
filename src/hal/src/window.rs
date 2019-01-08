@@ -56,10 +56,10 @@ use image;
 use queue::{Capability, CommandQueue};
 use Backend;
 
-use std::iter;
 use std::any::Any;
 use std::borrow::Borrow;
 use std::cmp::{max, min};
+use std::iter;
 use std::ops::Range;
 
 /// Error occurred during swapchain creation.
@@ -191,7 +191,12 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
     fn compatibility(
         &self,
         physical_device: &B::PhysicalDevice,
-    ) -> (SurfaceCapabilities, Option<Vec<Format>>, Vec<PresentMode>, Vec<CompositeAlpha>);
+    ) -> (
+        SurfaceCapabilities,
+        Option<Vec<Format>>,
+        Vec<PresentMode>,
+        Vec<CompositeAlpha>,
+    );
 }
 
 /// Index of an image in the swapchain.

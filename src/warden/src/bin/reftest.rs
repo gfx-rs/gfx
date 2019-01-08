@@ -1,5 +1,10 @@
 #![cfg_attr(
-    not(any(feature = "vulkan", feature = "dx12", feature = "metal", feature = "gl")),
+    not(any(
+        feature = "vulkan",
+        feature = "dx12",
+        feature = "metal",
+        feature = "gl"
+    )),
     allow(dead_code)
 )]
 
@@ -11,21 +16,20 @@ extern crate serde;
 
 #[cfg(feature = "env_logger")]
 extern crate env_logger;
-#[cfg(feature = "vulkan")]
-extern crate gfx_backend_vulkan;
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12;
-#[cfg(feature = "metal")]
-extern crate gfx_backend_metal;
 #[cfg(any(feature = "gl", feature = "gl-headless"))]
 extern crate gfx_backend_gl;
+#[cfg(feature = "metal")]
+extern crate gfx_backend_metal;
+#[cfg(feature = "vulkan")]
+extern crate gfx_backend_vulkan;
 
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
 
 use ron::de;
-
 
 #[derive(Debug, Deserialize)]
 enum Expectation {
@@ -56,9 +60,7 @@ struct TestResults {
 }
 
 #[derive(Default)]
-struct Disabilities {
-}
-
+struct Disabilities {}
 
 struct Harness {
     base_path: PathBuf,
@@ -67,49 +69,30 @@ struct Harness {
 
 impl Harness {
     fn new(suite_name: &str) -> Self {
-        let base_path = PathBuf::from(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/../../reftests",
-        ));
+        let base_path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../reftests",));
         println!("Parsing test suite '{}'...", suite_name);
 
-        let suite_path = base_path
-            .join(suite_name)
-            .with_extension("ron");
+        let suite_path = base_path.join(suite_name).with_extension("ron");
         let suite = File::open(suite_path)
             .map_err(de::Error::from)
             .and_then(de::from_reader::<_, Suite>)
             .expect("failed to open/parse the suite")
             .into_iter()
             .map(|(name, tests)| {
-                let path = base_path
-                    .join("scenes")
-                    .join(&name)
-                    .with_extension("ron");
+                let path = base_path.join("scenes").join(&name).with_extension("ron");
                 let scene = File::open(path)
                     .map_err(de::Error::from)
                     .and_then(de::from_reader)
                     .expect("failed to open/parse the scene");
-                TestGroup {
-                    name,
-                    scene,
-                    tests,
-                }
+                TestGroup { name, scene, tests }
             })
             .collect();
 
-        Harness {
-            base_path,
-            suite,
-        }
+        Harness { base_path, suite }
     }
 
-    fn run<I: hal::Instance>(
-        &self,
-        instance: I,
-        _disabilities: Disabilities,
-    ) -> usize {
-        use hal::{PhysicalDevice};
+    fn run<I: hal::Instance>(&self, instance: I, _disabilities: Disabilities) -> usize {
+        use hal::PhysicalDevice;
 
         let mut results = TestResults {
             pass: 0,
@@ -126,16 +109,14 @@ impl Harness {
 
             #[cfg(not(feature = "glsl-to-spirv"))]
             {
-                let all_spirv = tg.scene.resources
-                    .values()
-                    .all(|res| match *res {
-                        warden::raw::Resource::Shader(ref name) => name.ends_with(".spirv"),
-                        _ => true,
-                    });
+                let all_spirv = tg.scene.resources.values().all(|res| match *res {
+                    warden::raw::Resource::Shader(ref name) => name.ends_with(".spirv"),
+                    _ => true,
+                });
                 if !all_spirv {
                     println!("\t\tskipped {} tests (GLSL shaders)", tg.tests.len());
                     results.skip += tg.tests.len();
-                    continue
+                    continue;
                 }
             }
 
@@ -143,12 +124,16 @@ impl Harness {
                 adapter,
                 &tg.scene,
                 self.base_path.join("data"),
-            ).unwrap();
+            )
+            .unwrap();
 
             for (test_name, test) in &tg.tests {
                 print!("\t\tTest '{}' ...", test_name);
                 if !features.contains(test.features) {
-                    println!("\tskipped (features missing: {:?})", test.features - features);
+                    println!(
+                        "\tskipped (features missing: {:?})",
+                        test.features - features
+                    );
                     results.skip += 1;
                 }
                 let mut max_compute_groups = [0; 3];
@@ -159,23 +144,25 @@ impl Harness {
                         }
                     }
                 }
-                if  max_compute_groups[0] > limits.max_compute_group_size[0] ||
-                    max_compute_groups[1] > limits.max_compute_group_size[1] ||
-                    max_compute_groups[2] > limits.max_compute_group_size[2]
+                if max_compute_groups[0] > limits.max_compute_group_size[0]
+                    || max_compute_groups[1] > limits.max_compute_group_size[1]
+                    || max_compute_groups[2] > limits.max_compute_group_size[2]
                 {
                     println!("\tskipped (compute {:?})", max_compute_groups);
                     results.skip += 1;
-                    continue
+                    continue;
                 }
 
                 scene.run(test.jobs.iter().map(|x| x.as_str()));
 
                 print!("\tran: ");
                 let (guard, row, data) = match test.expect {
-                    Expectation::Buffer(ref buffer, ref data) =>
-                        (scene.fetch_buffer(buffer), 0, data),
-                    Expectation::ImageRow(ref image, row, ref data) =>
-                        (scene.fetch_image(image), row, data),
+                    Expectation::Buffer(ref buffer, ref data) => {
+                        (scene.fetch_buffer(buffer), 0, data)
+                    }
+                    Expectation::ImageRow(ref image, row, ref data) => {
+                        (scene.fetch_image(image), row, data)
+                    }
                 };
 
                 if data.as_slice() == guard.row(row) {
@@ -204,7 +191,7 @@ fn main() {
         Some(name) => name,
         None => {
             println!("Call with the argument of the reftest suite name");
-            return
+            return;
         }
     };
 
@@ -225,9 +212,12 @@ fn main() {
     {
         println!("Warding Metal:");
         let instance = gfx_backend_metal::Instance::create("warden", 1);
-        num_failures += harness.run(instance, Disabilities {
-            .. Disabilities::default()
-        });
+        num_failures += harness.run(
+            instance,
+            Disabilities {
+                ..Disabilities::default()
+            },
+        );
     }
     #[cfg(feature = "gl")]
     {
@@ -236,10 +226,10 @@ fn main() {
         let events_loop = glutin::EventsLoop::new();
         let window = glutin::GlWindow::new(
             glutin::WindowBuilder::new(),
-            glutin::ContextBuilder::new()
-                .with_gl_profile(glutin::GlProfile::Core),
+            glutin::ContextBuilder::new().with_gl_profile(glutin::GlProfile::Core),
             &events_loop,
-            ).unwrap();
+        )
+        .unwrap();
         let instance = gfx_backend_gl::Surface::from_window(window);
         num_failures += harness.run(instance, Disabilities::default());
     }
