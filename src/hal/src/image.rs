@@ -4,11 +4,10 @@
 
 use std::ops::Range;
 
+use buffer::Offset as RawOffset;
 use device;
 use format;
-use buffer::Offset as RawOffset;
 use pso::{Comparison, Rect};
-
 
 /// Dimension size.
 pub type Size = u32;
@@ -80,7 +79,7 @@ impl Offset {
             y: self.y + extent.height as i32,
             z: self.z + extent.depth as i32,
         };
-        self .. end
+        self..end
     }
 }
 
@@ -109,16 +108,25 @@ pub enum CreationError {
     #[fail(display = "The kind doesn't support a particular operation")]
     Kind,
     /// Failed to map a given multisampled kind to the device.
-    #[fail(display = "Failed to map a given multisampled kind ({}) to the device", _0)]
+    #[fail(
+        display = "Failed to map a given multisampled kind ({}) to the device",
+        _0
+    )]
     Samples(NumSamples),
     /// Unsupported size in one of the dimensions.
     #[fail(display = "Unsupported size ({}) in one of the dimensions", _0)]
     Size(Size),
     /// The given data has a different size than the target image slice.
-    #[fail(display = "The given data has a different size ({}) than the target image slice", _0)]
+    #[fail(
+        display = "The given data has a different size ({}) than the target image slice",
+        _0
+    )]
     Data(usize),
     /// The mentioned usage mode is not supported
-    #[fail(display = "The expected image usage mode ({:?}) is not supported by a graphic API", _0)]
+    #[fail(
+        display = "The expected image usage mode ({:?}) is not supported by a graphic API",
+        _0
+    )]
     Usage(Usage),
 }
 
@@ -132,7 +140,10 @@ impl From<device::OutOfMemory> for CreationError {
 #[derive(Clone, Debug, PartialEq, Eq, Fail)]
 pub enum ViewError {
     /// The required usage flag is not present in the image.
-    #[fail(display = "The required usage flag ({:?}) is not present in the image", _0)]
+    #[fail(
+        display = "The required usage flag ({:?}) is not present in the image",
+        _0
+    )]
     Usage(Usage),
     /// Selected mip levels doesn't exist.
     #[fail(display = "Selected mip level ({}) doesn't exist", _0)]
@@ -141,7 +152,10 @@ pub enum ViewError {
     #[fail(display = "Selected mip layer ({}) doesn't exist", _0)]
     Layer(LayerError),
     /// An incompatible format was requested for the view.
-    #[fail(display = "An incompatible format ({:?}) was requested for the view", _0)]
+    #[fail(
+        display = "An incompatible format ({:?}) was requested for the view",
+        _0
+    )]
     BadFormat(format::Format),
     /// Unsupported view kind.
     #[fail(display = "An incompatible kind ({:?}) was requested for the view", _0)]
@@ -164,10 +178,16 @@ impl From<device::OutOfMemory> for ViewError {
 #[derive(Clone, Debug, Eq, Hash, PartialEq, Fail)]
 pub enum LayerError {
     /// The source image kind doesn't support array slices.
-    #[fail(display = "The source image kind ({:?}) doesn't support array slices", _0)]
+    #[fail(
+        display = "The source image kind ({:?}) doesn't support array slices",
+        _0
+    )]
     NotExpected(Kind),
     /// Selected layer is outside of the provided range.
-    #[fail(display = "Selected layers ({:?}) are outside of the provided range", _0)]
+    #[fail(
+        display = "Selected layers ({:?}) are outside of the provided range",
+        _0
+    )]
     OutOfBounds(Range<Layer>),
 }
 
@@ -214,9 +234,12 @@ pub enum CubeFace {
 
 /// A constant array of cube faces in the order they map to the hardware.
 pub const CUBE_FACES: [CubeFace; 6] = [
-    CubeFace::PosX, CubeFace::NegX,
-    CubeFace::PosY, CubeFace::NegY,
-    CubeFace::PosZ, CubeFace::NegZ,
+    CubeFace::PosX,
+    CubeFace::NegX,
+    CubeFace::PosY,
+    CubeFace::NegY,
+    CubeFace::PosZ,
+    CubeFace::NegZ,
 ];
 
 /// Specifies the kind of an image to be allocated.
@@ -288,7 +311,7 @@ impl Kind {
             _ => {
                 let extent = self.extent();
                 let dominant = max(max(extent.width, extent.height), extent.depth);
-                (1..).find(|level| dominant>>level == 0).unwrap()
+                (1..).find(|level| dominant >> level == 0).unwrap()
             }
         }
     }
@@ -298,8 +321,7 @@ impl Kind {
     /// Each cube face counts as separate layer.
     pub fn num_layers(&self) -> Layer {
         match *self {
-            Kind::D1(_, a) |
-            Kind::D2(_, _, a, _) => a,
+            Kind::D1(_, a) | Kind::D2(_, _, a, _) => a,
             Kind::D3(..) => 1,
         }
     }
@@ -428,17 +450,19 @@ pub struct PackedColor(pub u32);
 
 impl From<[f32; 4]> for PackedColor {
     fn from(c: [f32; 4]) -> PackedColor {
-        PackedColor(c.iter().rev().fold(0, |u, &c| {
-            (u<<8) + (c * 255.0) as u32
-        }))
+        PackedColor(
+            c.iter()
+                .rev()
+                .fold(0, |u, &c| (u << 8) + (c * 255.0) as u32),
+        )
     }
 }
 
 impl Into<[f32; 4]> for PackedColor {
     fn into(self) -> [f32; 4] {
         let mut out = [0.0; 4];
-        for i in 0 .. 4 {
-            let byte = (self.0 >> (i<<3)) & 0xFF;
+        for i in 0..4 {
+            let byte = (self.0 >> (i << 3)) & 0xFF;
             out[i] = byte as f32 / 255.0;
         }
         out

@@ -1,10 +1,10 @@
-use hal::format::{Format};
+use hal::format::Format;
+use hal::image::{Anisotropic, Filter, WrapMode};
 use hal::pso::{
     BlendDesc, BlendOp, BlendState, ColorBlendDesc, Comparison, DepthBias, DepthStencilDesc,
-    DepthTest, Face, Factor, PolygonMode, Rasterizer, Rect, StencilFace, StencilOp, StencilTest,
-    Viewport, Stage, State, StencilValue, FrontFace,
+    DepthTest, Face, Factor, FrontFace, PolygonMode, Rasterizer, Rect, Stage, State, StencilFace,
+    StencilOp, StencilTest, StencilValue, Viewport,
 };
-use hal::image::{Anisotropic, Filter, WrapMode};
 use hal::{IndexType, Primitive};
 
 use spirv_cross::spirv;
@@ -12,8 +12,8 @@ use spirv_cross::spirv;
 use winapi::shared::dxgiformat::*;
 use winapi::shared::minwindef::{FALSE, INT, TRUE};
 
-use winapi::um::d3dcommon::*;
 use winapi::um::d3d11::*;
+use winapi::um::d3dcommon::*;
 
 use std::mem;
 
@@ -30,7 +30,7 @@ pub fn viewable_format(format: DXGI_FORMAT) -> DXGI_FORMAT {
         DXGI_FORMAT_D32_FLOAT_S8X24_UINT => DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS,
         DXGI_FORMAT_D32_FLOAT => DXGI_FORMAT_R32_FLOAT,
         DXGI_FORMAT_D16_UNORM => DXGI_FORMAT_R16_UNORM,
-        _ => format
+        _ => format,
     }
 }
 
@@ -142,11 +142,11 @@ impl DecomposedDxgiFormat {
     // TODO: we also want aspect for determining depth/stencil
     pub fn from_dxgi_format(format: DXGI_FORMAT) -> DecomposedDxgiFormat {
         match format {
-            DXGI_FORMAT_R8G8B8A8_UNORM |
-            DXGI_FORMAT_R8G8B8A8_SNORM |
-            DXGI_FORMAT_R8G8B8A8_UINT |
-            DXGI_FORMAT_R8G8B8A8_SINT |
-            DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => DecomposedDxgiFormat {
+            DXGI_FORMAT_R8G8B8A8_UNORM
+            | DXGI_FORMAT_R8G8B8A8_SNORM
+            | DXGI_FORMAT_R8G8B8A8_UINT
+            | DXGI_FORMAT_R8G8B8A8_SINT
+            | DXGI_FORMAT_R8G8B8A8_UNORM_SRGB => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_R8G8B8A8_TYPELESS,
                 srv: Some(format),
                 rtv: Some(format),
@@ -156,8 +156,7 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(DXGI_FORMAT_R8G8B8A8_UINT),
             },
 
-            DXGI_FORMAT_B8G8R8A8_UNORM |
-            DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => DecomposedDxgiFormat {
+            DXGI_FORMAT_B8G8R8A8_UNORM | DXGI_FORMAT_B8G8R8A8_UNORM_SRGB => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_B8G8R8A8_TYPELESS,
                 srv: Some(format),
                 rtv: Some(format),
@@ -177,10 +176,8 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(format),
             },
 
-            DXGI_FORMAT_R8_UNORM |
-            DXGI_FORMAT_R8_SNORM |
-            DXGI_FORMAT_R8_UINT |
-            DXGI_FORMAT_R8_SINT => DecomposedDxgiFormat {
+            DXGI_FORMAT_R8_UNORM | DXGI_FORMAT_R8_SNORM | DXGI_FORMAT_R8_UINT
+            | DXGI_FORMAT_R8_SINT => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_R8_TYPELESS,
                 srv: Some(format),
                 rtv: Some(format),
@@ -190,10 +187,10 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(DXGI_FORMAT_R8_UINT),
             },
 
-            DXGI_FORMAT_R8G8_UNORM |
-            DXGI_FORMAT_R8G8_SNORM |
-            DXGI_FORMAT_R8G8_UINT |
-            DXGI_FORMAT_R8G8_SINT => DecomposedDxgiFormat {
+            DXGI_FORMAT_R8G8_UNORM
+            | DXGI_FORMAT_R8G8_SNORM
+            | DXGI_FORMAT_R8G8_UINT
+            | DXGI_FORMAT_R8G8_SINT => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_R8G8_TYPELESS,
                 srv: Some(format),
                 rtv: Some(format),
@@ -213,11 +210,11 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(DXGI_FORMAT_R16_UINT),
             },
 
-            DXGI_FORMAT_R16_UNORM |
-            DXGI_FORMAT_R16_SNORM |
-            DXGI_FORMAT_R16_UINT |
-            DXGI_FORMAT_R16_SINT |
-            DXGI_FORMAT_R16_FLOAT => DecomposedDxgiFormat {
+            DXGI_FORMAT_R16_UNORM
+            | DXGI_FORMAT_R16_SNORM
+            | DXGI_FORMAT_R16_UINT
+            | DXGI_FORMAT_R16_SINT
+            | DXGI_FORMAT_R16_FLOAT => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_R16_TYPELESS,
                 srv: Some(format),
                 rtv: Some(format),
@@ -227,11 +224,11 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(DXGI_FORMAT_R16_UINT),
             },
 
-            DXGI_FORMAT_R16G16_UNORM |
-            DXGI_FORMAT_R16G16_SNORM |
-            DXGI_FORMAT_R16G16_UINT |
-            DXGI_FORMAT_R16G16_SINT |
-            DXGI_FORMAT_R16G16_FLOAT => DecomposedDxgiFormat {
+            DXGI_FORMAT_R16G16_UNORM
+            | DXGI_FORMAT_R16G16_SNORM
+            | DXGI_FORMAT_R16G16_UINT
+            | DXGI_FORMAT_R16G16_SINT
+            | DXGI_FORMAT_R16G16_FLOAT => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_R16G16_TYPELESS,
                 srv: Some(format),
                 rtv: Some(format),
@@ -241,11 +238,11 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(DXGI_FORMAT_R16G16_UINT),
             },
 
-            DXGI_FORMAT_R16G16B16A16_UNORM |
-            DXGI_FORMAT_R16G16B16A16_SNORM |
-            DXGI_FORMAT_R16G16B16A16_UINT |
-            DXGI_FORMAT_R16G16B16A16_SINT |
-            DXGI_FORMAT_R16G16B16A16_FLOAT => DecomposedDxgiFormat {
+            DXGI_FORMAT_R16G16B16A16_UNORM
+            | DXGI_FORMAT_R16G16B16A16_SNORM
+            | DXGI_FORMAT_R16G16B16A16_UINT
+            | DXGI_FORMAT_R16G16B16A16_SINT
+            | DXGI_FORMAT_R16G16B16A16_FLOAT => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_R16G16B16A16_TYPELESS,
                 srv: Some(format),
                 rtv: Some(format),
@@ -276,34 +273,34 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(DXGI_FORMAT_R32_UINT),
             },
 
-            DXGI_FORMAT_R32_UINT |
-            DXGI_FORMAT_R32_SINT |
-            DXGI_FORMAT_R32_FLOAT => DecomposedDxgiFormat {
-                typeless: DXGI_FORMAT_R32_TYPELESS,
-                srv: Some(format),
-                rtv: Some(format),
-                uav: Some(format),
-                dsv: Some(DXGI_FORMAT_D32_FLOAT),
-                copy_uav: Some(DXGI_FORMAT_R32_UINT),
-                copy_srv: Some(DXGI_FORMAT_R32_UINT),
-            },
+            DXGI_FORMAT_R32_UINT | DXGI_FORMAT_R32_SINT | DXGI_FORMAT_R32_FLOAT => {
+                DecomposedDxgiFormat {
+                    typeless: DXGI_FORMAT_R32_TYPELESS,
+                    srv: Some(format),
+                    rtv: Some(format),
+                    uav: Some(format),
+                    dsv: Some(DXGI_FORMAT_D32_FLOAT),
+                    copy_uav: Some(DXGI_FORMAT_R32_UINT),
+                    copy_srv: Some(DXGI_FORMAT_R32_UINT),
+                }
+            }
 
-            DXGI_FORMAT_R32G32_UINT |
-            DXGI_FORMAT_R32G32_SINT |
-            DXGI_FORMAT_R32G32_FLOAT => DecomposedDxgiFormat {
-                typeless: DXGI_FORMAT_R32G32_TYPELESS,
-                srv: Some(format),
-                rtv: Some(format),
-                uav: Some(format),
-                dsv: None,
-                copy_uav: Some(DXGI_FORMAT_R32G32_UINT),
-                copy_srv: Some(DXGI_FORMAT_R32G32_UINT),
-            },
+            DXGI_FORMAT_R32G32_UINT | DXGI_FORMAT_R32G32_SINT | DXGI_FORMAT_R32G32_FLOAT => {
+                DecomposedDxgiFormat {
+                    typeless: DXGI_FORMAT_R32G32_TYPELESS,
+                    srv: Some(format),
+                    rtv: Some(format),
+                    uav: Some(format),
+                    dsv: None,
+                    copy_uav: Some(DXGI_FORMAT_R32G32_UINT),
+                    copy_srv: Some(DXGI_FORMAT_R32G32_UINT),
+                }
+            }
 
             // TODO: should we just convert to Rgba32 internally?
-            DXGI_FORMAT_R32G32B32_UINT |
-            DXGI_FORMAT_R32G32B32_SINT |
-            DXGI_FORMAT_R32G32B32_FLOAT => DecomposedDxgiFormat {
+            DXGI_FORMAT_R32G32B32_UINT
+            | DXGI_FORMAT_R32G32B32_SINT
+            | DXGI_FORMAT_R32G32B32_FLOAT => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_R32G32_TYPELESS,
                 srv: Some(format),
                 rtv: None,
@@ -313,9 +310,9 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(DXGI_FORMAT_R32G32B32_UINT),
             },
 
-            DXGI_FORMAT_R32G32B32A32_UINT |
-            DXGI_FORMAT_R32G32B32A32_SINT |
-            DXGI_FORMAT_R32G32B32A32_FLOAT => DecomposedDxgiFormat {
+            DXGI_FORMAT_R32G32B32A32_UINT
+            | DXGI_FORMAT_R32G32B32A32_SINT
+            | DXGI_FORMAT_R32G32B32A32_FLOAT => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_R32G32B32A32_TYPELESS,
                 srv: Some(format),
                 rtv: Some(format),
@@ -325,8 +322,7 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(DXGI_FORMAT_R32G32B32A32_UINT),
             },
 
-            DXGI_FORMAT_R10G10B10A2_UNORM |
-            DXGI_FORMAT_R10G10B10A2_UINT => DecomposedDxgiFormat {
+            DXGI_FORMAT_R10G10B10A2_UNORM | DXGI_FORMAT_R10G10B10A2_UINT => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_R10G10B10A2_TYPELESS,
                 srv: Some(format),
                 rtv: Some(format),
@@ -357,8 +353,7 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(format),
             },
 
-            DXGI_FORMAT_BC1_UNORM |
-            DXGI_FORMAT_BC1_UNORM_SRGB => DecomposedDxgiFormat {
+            DXGI_FORMAT_BC1_UNORM | DXGI_FORMAT_BC1_UNORM_SRGB => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_BC1_TYPELESS,
                 srv: Some(format),
                 rtv: None,
@@ -369,8 +364,7 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(format),
             },
 
-            DXGI_FORMAT_BC2_UNORM |
-            DXGI_FORMAT_BC2_UNORM_SRGB => DecomposedDxgiFormat {
+            DXGI_FORMAT_BC2_UNORM | DXGI_FORMAT_BC2_UNORM_SRGB => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_BC2_TYPELESS,
                 srv: Some(format),
                 rtv: None,
@@ -381,8 +375,7 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(format),
             },
 
-            DXGI_FORMAT_BC3_UNORM |
-            DXGI_FORMAT_BC3_UNORM_SRGB => DecomposedDxgiFormat {
+            DXGI_FORMAT_BC3_UNORM | DXGI_FORMAT_BC3_UNORM_SRGB => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_BC3_TYPELESS,
                 srv: Some(format),
                 rtv: None,
@@ -393,8 +386,7 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(format),
             },
 
-            DXGI_FORMAT_BC4_UNORM |
-            DXGI_FORMAT_BC4_SNORM => DecomposedDxgiFormat {
+            DXGI_FORMAT_BC4_UNORM | DXGI_FORMAT_BC4_SNORM => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_BC4_TYPELESS,
                 srv: Some(format),
                 rtv: None,
@@ -405,8 +397,7 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(format),
             },
 
-            DXGI_FORMAT_BC5_UNORM |
-            DXGI_FORMAT_BC5_SNORM => DecomposedDxgiFormat {
+            DXGI_FORMAT_BC5_UNORM | DXGI_FORMAT_BC5_SNORM => DecomposedDxgiFormat {
                 typeless: format,
                 srv: Some(format),
                 rtv: None,
@@ -417,8 +408,7 @@ impl DecomposedDxgiFormat {
                 copy_srv: Some(format),
             },
 
-            DXGI_FORMAT_BC6H_UF16 |
-            DXGI_FORMAT_BC6H_SF16 => DecomposedDxgiFormat {
+            DXGI_FORMAT_BC6H_UF16 | DXGI_FORMAT_BC6H_SF16 => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_BC6H_TYPELESS,
                 srv: Some(format),
                 rtv: None,
@@ -430,8 +420,7 @@ impl DecomposedDxgiFormat {
             },
 
             // TODO: srgb craziness
-            DXGI_FORMAT_BC7_UNORM |
-            DXGI_FORMAT_BC7_UNORM_SRGB => DecomposedDxgiFormat {
+            DXGI_FORMAT_BC7_UNORM | DXGI_FORMAT_BC7_UNORM_SRGB => DecomposedDxgiFormat {
                 typeless: DXGI_FORMAT_BC7_TYPELESS,
                 srv: Some(format),
                 rtv: None,
@@ -469,18 +458,19 @@ pub fn map_rect(rect: &Rect) -> D3D11_RECT {
 
 pub fn map_topology(primitive: Primitive) -> D3D11_PRIMITIVE_TOPOLOGY {
     match primitive {
-        Primitive::PointList              => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
-        Primitive::LineList               => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
-        Primitive::LineListAdjacency      => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
-        Primitive::LineStrip              => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
-        Primitive::LineStripAdjacency     => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
-        Primitive::TriangleList           => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        Primitive::TriangleListAdjacency  => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        Primitive::TriangleStrip          => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        Primitive::PointList => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
+        Primitive::LineList => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+        Primitive::LineListAdjacency => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
+        Primitive::LineStrip => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
+        Primitive::LineStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
+        Primitive::TriangleList => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        Primitive::TriangleListAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        Primitive::TriangleStrip => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
         Primitive::TriangleStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-        Primitive::PatchList(num) => { assert!(num != 0);
+        Primitive::PatchList(num) => {
+            assert!(num != 0);
             D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + (num as u32) - 1
-        },
+        }
     }
 }
 
@@ -489,7 +479,7 @@ fn map_fill_mode(mode: PolygonMode) -> D3D11_FILL_MODE {
         PolygonMode::Fill => D3D11_FILL_SOLID,
         PolygonMode::Line(_) => D3D11_FILL_WIREFRAME,
         // TODO: return error
-        _ => unimplemented!()
+        _ => unimplemented!(),
     }
 }
 
@@ -503,7 +493,8 @@ fn map_cull_mode(mode: Face) -> D3D11_CULL_MODE {
 }
 
 pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
-    let bias = match desc.depth_bias { //TODO: support dynamic depth bias
+    let bias = match desc.depth_bias {
+        //TODO: support dynamic depth bias
         Some(State::Static(db)) => db,
         Some(_) | None => DepthBias::default(),
     };
@@ -554,29 +545,35 @@ fn map_alpha_blend_factor(factor: Factor) -> D3D11_BLEND {
     match factor {
         Factor::Zero => D3D11_BLEND_ZERO,
         Factor::One => D3D11_BLEND_ONE,
-        Factor::SrcColor |
-        Factor::SrcAlpha => D3D11_BLEND_SRC_ALPHA,
-        Factor::DstColor |
-        Factor::DstAlpha => D3D11_BLEND_DEST_ALPHA,
-        Factor::OneMinusSrcColor |
-        Factor::OneMinusSrcAlpha => D3D11_BLEND_INV_SRC_ALPHA,
-        Factor::OneMinusDstColor |
-        Factor::OneMinusDstAlpha => D3D11_BLEND_INV_DEST_ALPHA,
+        Factor::SrcColor | Factor::SrcAlpha => D3D11_BLEND_SRC_ALPHA,
+        Factor::DstColor | Factor::DstAlpha => D3D11_BLEND_DEST_ALPHA,
+        Factor::OneMinusSrcColor | Factor::OneMinusSrcAlpha => D3D11_BLEND_INV_SRC_ALPHA,
+        Factor::OneMinusDstColor | Factor::OneMinusDstAlpha => D3D11_BLEND_INV_DEST_ALPHA,
         Factor::ConstColor | Factor::ConstAlpha => D3D11_BLEND_BLEND_FACTOR,
         Factor::OneMinusConstColor | Factor::OneMinusConstAlpha => D3D11_BLEND_INV_BLEND_FACTOR,
         Factor::SrcAlphaSaturate => D3D11_BLEND_SRC_ALPHA_SAT,
-        Factor::Src1Color |
-        Factor::Src1Alpha => D3D11_BLEND_SRC1_ALPHA,
-        Factor::OneMinusSrc1Color |
-        Factor::OneMinusSrc1Alpha => D3D11_BLEND_INV_SRC1_ALPHA,
+        Factor::Src1Color | Factor::Src1Alpha => D3D11_BLEND_SRC1_ALPHA,
+        Factor::OneMinusSrc1Color | Factor::OneMinusSrc1Alpha => D3D11_BLEND_INV_SRC1_ALPHA,
     }
 }
 
 fn map_blend_op(operation: BlendOp) -> (D3D11_BLEND_OP, D3D11_BLEND, D3D11_BLEND) {
     match operation {
-        BlendOp::Add    { src, dst } => (D3D11_BLEND_OP_ADD,          map_blend_factor(src), map_blend_factor(dst)),
-        BlendOp::Sub    { src, dst } => (D3D11_BLEND_OP_SUBTRACT,     map_blend_factor(src), map_blend_factor(dst)),
-        BlendOp::RevSub { src, dst } => (D3D11_BLEND_OP_REV_SUBTRACT, map_blend_factor(src), map_blend_factor(dst)),
+        BlendOp::Add { src, dst } => (
+            D3D11_BLEND_OP_ADD,
+            map_blend_factor(src),
+            map_blend_factor(dst),
+        ),
+        BlendOp::Sub { src, dst } => (
+            D3D11_BLEND_OP_SUBTRACT,
+            map_blend_factor(src),
+            map_blend_factor(dst),
+        ),
+        BlendOp::RevSub { src, dst } => (
+            D3D11_BLEND_OP_REV_SUBTRACT,
+            map_blend_factor(src),
+            map_blend_factor(dst),
+        ),
         BlendOp::Min => (D3D11_BLEND_OP_MIN, D3D11_BLEND_ZERO, D3D11_BLEND_ZERO),
         BlendOp::Max => (D3D11_BLEND_OP_MAX, D3D11_BLEND_ZERO, D3D11_BLEND_ZERO),
     }
@@ -584,15 +581,29 @@ fn map_blend_op(operation: BlendOp) -> (D3D11_BLEND_OP, D3D11_BLEND, D3D11_BLEND
 
 fn map_alpha_blend_op(operation: BlendOp) -> (D3D11_BLEND_OP, D3D11_BLEND, D3D11_BLEND) {
     match operation {
-        BlendOp::Add    { src, dst } => (D3D11_BLEND_OP_ADD,          map_alpha_blend_factor(src), map_alpha_blend_factor(dst)),
-        BlendOp::Sub    { src, dst } => (D3D11_BLEND_OP_SUBTRACT,     map_alpha_blend_factor(src), map_alpha_blend_factor(dst)),
-        BlendOp::RevSub { src, dst } => (D3D11_BLEND_OP_REV_SUBTRACT, map_alpha_blend_factor(src), map_alpha_blend_factor(dst)),
+        BlendOp::Add { src, dst } => (
+            D3D11_BLEND_OP_ADD,
+            map_alpha_blend_factor(src),
+            map_alpha_blend_factor(dst),
+        ),
+        BlendOp::Sub { src, dst } => (
+            D3D11_BLEND_OP_SUBTRACT,
+            map_alpha_blend_factor(src),
+            map_alpha_blend_factor(dst),
+        ),
+        BlendOp::RevSub { src, dst } => (
+            D3D11_BLEND_OP_REV_SUBTRACT,
+            map_alpha_blend_factor(src),
+            map_alpha_blend_factor(dst),
+        ),
         BlendOp::Min => (D3D11_BLEND_OP_MIN, D3D11_BLEND_ZERO, D3D11_BLEND_ZERO),
         BlendOp::Max => (D3D11_BLEND_OP_MAX, D3D11_BLEND_ZERO, D3D11_BLEND_ZERO),
     }
 }
 
-fn map_blend_targets(render_target_blends: &[ColorBlendDesc]) -> [D3D11_RENDER_TARGET_BLEND_DESC; 8] {
+fn map_blend_targets(
+    render_target_blends: &[ColorBlendDesc],
+) -> [D3D11_RENDER_TARGET_BLEND_DESC; 8] {
     let mut targets: [D3D11_RENDER_TARGET_BLEND_DESC; 8] = [unsafe { mem::zeroed() }; 8];
 
     for (mut target, &ColorBlendDesc(mask, blend)) in
@@ -620,7 +631,7 @@ pub(crate) fn map_blend_desc(desc: &BlendDesc) -> D3D11_BLEND_DESC {
         // TODO: msaa
         AlphaToCoverageEnable: FALSE,
         IndependentBlendEnable: TRUE,
-        RenderTarget: map_blend_targets(&desc.targets)
+        RenderTarget: map_blend_targets(&desc.targets),
     }
 }
 
@@ -659,39 +670,61 @@ fn map_stencil_side(side: &StencilFace) -> D3D11_DEPTH_STENCILOP_DESC {
     }
 }
 
-pub(crate) fn map_depth_stencil_desc(desc: &DepthStencilDesc) -> (D3D11_DEPTH_STENCIL_DESC, State<StencilValue>) {
+pub(crate) fn map_depth_stencil_desc(
+    desc: &DepthStencilDesc,
+) -> (D3D11_DEPTH_STENCIL_DESC, State<StencilValue>) {
     let (depth_on, depth_write, depth_func) = match desc.depth {
         DepthTest::On { fun, write } => (TRUE, write, map_comparison(fun)),
         DepthTest::Off => unsafe { mem::zeroed() },
     };
 
     let (stencil_on, front, back, read_mask, write_mask, stencil_ref) = match desc.stencil {
-        StencilTest::On { ref front, ref back } => {
+        StencilTest::On {
+            ref front,
+            ref back,
+        } => {
             // TODO: cascade to create_pipeline
             if front.mask_read != back.mask_read || front.mask_write != back.mask_write {
-                error!("Different masks on stencil front ({:?}) and back ({:?}) are not supported", front, back);
+                error!(
+                    "Different masks on stencil front ({:?}) and back ({:?}) are not supported",
+                    front, back
+                );
             }
-            (TRUE, map_stencil_side(front), map_stencil_side(back), front.mask_read, front.mask_write, front.reference)
-        },
+            (
+                TRUE,
+                map_stencil_side(front),
+                map_stencil_side(back),
+                front.mask_read,
+                front.mask_write,
+                front.reference,
+            )
+        }
         StencilTest::Off => unsafe { mem::zeroed() },
     };
 
-    (D3D11_DEPTH_STENCIL_DESC {
-        DepthEnable: depth_on,
-        DepthWriteMask: if depth_write {D3D11_DEPTH_WRITE_MASK_ALL} else {D3D11_DEPTH_WRITE_MASK_ZERO},
-        DepthFunc: depth_func,
-        StencilEnable: stencil_on,
-        StencilReadMask: match read_mask {
-            State::Static(rm) => rm as _,
-            State::Dynamic => !0,
+    (
+        D3D11_DEPTH_STENCIL_DESC {
+            DepthEnable: depth_on,
+            DepthWriteMask: if depth_write {
+                D3D11_DEPTH_WRITE_MASK_ALL
+            } else {
+                D3D11_DEPTH_WRITE_MASK_ZERO
+            },
+            DepthFunc: depth_func,
+            StencilEnable: stencil_on,
+            StencilReadMask: match read_mask {
+                State::Static(rm) => rm as _,
+                State::Dynamic => !0,
+            },
+            StencilWriteMask: match write_mask {
+                State::Static(wm) => wm as _,
+                State::Dynamic => !0,
+            },
+            FrontFace: front,
+            BackFace: back,
         },
-        StencilWriteMask: match write_mask {
-            State::Static(wm) => wm as _,
-            State::Dynamic => !0
-        },
-        FrontFace: front,
-        BackFace: back,
-    }, stencil_ref)
+        stencil_ref,
+    )
 }
 
 pub fn map_execution_model(model: spirv::ExecutionModel) -> Stage {
@@ -719,9 +752,9 @@ pub fn map_stage(stage: Stage) -> spirv::ExecutionModel {
 
 pub fn map_wrapping(wrap: WrapMode) -> D3D11_TEXTURE_ADDRESS_MODE {
     match wrap {
-        WrapMode::Tile   => D3D11_TEXTURE_ADDRESS_WRAP,
+        WrapMode::Tile => D3D11_TEXTURE_ADDRESS_WRAP,
         WrapMode::Mirror => D3D11_TEXTURE_ADDRESS_MIRROR,
-        WrapMode::Clamp  => D3D11_TEXTURE_ADDRESS_CLAMP,
+        WrapMode::Clamp => D3D11_TEXTURE_ADDRESS_CLAMP,
         WrapMode::Border => D3D11_TEXTURE_ADDRESS_BORDER,
     }
 }
@@ -752,10 +785,9 @@ pub fn map_filter(
     let min = map_filter_type(min_filter);
     let mip = map_filter_type(mip_filter);
 
-    (min & D3D11_FILTER_TYPE_MASK) << D3D11_MIN_FILTER_SHIFT |
-    (mag & D3D11_FILTER_TYPE_MASK) << D3D11_MAG_FILTER_SHIFT |
-    (mip & D3D11_FILTER_TYPE_MASK) << D3D11_MIP_FILTER_SHIFT |
-    (reduction & D3D11_FILTER_REDUCTION_TYPE_MASK) << D3D11_FILTER_REDUCTION_TYPE_SHIFT |
-    map_anisotropic(anisotropic)
+    (min & D3D11_FILTER_TYPE_MASK) << D3D11_MIN_FILTER_SHIFT
+        | (mag & D3D11_FILTER_TYPE_MASK) << D3D11_MAG_FILTER_SHIFT
+        | (mip & D3D11_FILTER_TYPE_MASK) << D3D11_MIP_FILTER_SHIFT
+        | (reduction & D3D11_FILTER_REDUCTION_TYPE_MASK) << D3D11_FILTER_REDUCTION_TYPE_SHIFT
+        | map_anisotropic(anisotropic)
 }
-

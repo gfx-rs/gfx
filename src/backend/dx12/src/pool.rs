@@ -57,7 +57,9 @@ impl RawCommandPool {
 
     pub(crate) fn destroy(self) {
         match self.allocator {
-            CommandPoolAllocator::Shared(ref allocator) => unsafe { allocator.destroy(); },
+            CommandPoolAllocator::Shared(ref allocator) => unsafe {
+                allocator.destroy();
+            },
             CommandPoolAllocator::Individual(ref allocators) => {
                 for allocator in allocators.iter() {
                     unsafe {
@@ -75,7 +77,9 @@ unsafe impl Sync for RawCommandPool {}
 impl pool::RawCommandPool<Backend> for RawCommandPool {
     unsafe fn reset(&mut self) {
         match self.allocator {
-            CommandPoolAllocator::Shared(ref allocator) => unsafe { allocator.Reset(); },
+            CommandPoolAllocator::Shared(ref allocator) => unsafe {
+                allocator.Reset();
+            },
             CommandPoolAllocator::Individual(ref mut allocators) => {
                 for allocator in allocators.iter_mut() {
                     unsafe {
@@ -94,7 +98,9 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
     }
 
     unsafe fn free<I>(&mut self, cbufs: I)
-    where I: IntoIterator<Item = CommandBuffer> {
+    where
+        I: IntoIterator<Item = CommandBuffer>,
+    {
         for mut cbuf in cbufs {
             cbuf.destroy();
         }

@@ -1,11 +1,10 @@
-use hal::{self, pool};
-use hal::backend::FastHashMap;
 use command::{self, Command, RawCommandBuffer};
+use hal::backend::FastHashMap;
+use hal::{self, pool};
 use native as n;
 use Backend;
 
 use std::sync::{Arc, Mutex};
-
 
 pub struct OwnedBuffer {
     pub(crate) commands: Vec<Command>,
@@ -52,7 +51,6 @@ pub enum BufferMemory {
     },
 }
 
-
 pub struct RawCommandPool {
     pub(crate) fbo: Option<n::FrameBuffer>,
     pub(crate) limits: command::Limits,
@@ -70,7 +68,9 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             BufferMemory::Linear(ref mut buffer) => {
                 buffer.clear();
             }
-            BufferMemory::Individual { ref mut storage, .. } => {
+            BufferMemory::Individual {
+                ref mut storage, ..
+            } => {
                 for (_, ref mut buffer) in storage {
                     buffer.clear();
                 }
@@ -78,24 +78,24 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn allocate_one(
-        &mut self, _level: hal::command::RawLevel
-    ) -> RawCommandBuffer { // TODO: Implement secondary buffers
-        RawCommandBuffer::new(
-            self.fbo,
-            self.limits,
-            self.memory.clone(),
-        )
+    fn allocate_one(&mut self, _level: hal::command::RawLevel) -> RawCommandBuffer {
+        // TODO: Implement secondary buffers
+        RawCommandBuffer::new(self.fbo, self.limits, self.memory.clone())
     }
 
     unsafe fn free<I>(&mut self, buffers: I)
-    where I: IntoIterator<Item = RawCommandBuffer> {
+    where
+        I: IntoIterator<Item = RawCommandBuffer>,
+    {
         let mut memory = self
             .memory
             .try_lock()
             .expect("Trying to free command buffers, while memory is still in-use.");
 
-        if let BufferMemory::Individual { ref mut storage, .. } = *memory {
+        if let BufferMemory::Individual {
+            ref mut storage, ..
+        } = *memory
+        {
             // Expecting that the buffers actually are allocated from this pool.
             for buffer in buffers {
                 storage.remove(&buffer.id);

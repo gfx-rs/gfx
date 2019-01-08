@@ -1,12 +1,11 @@
 //! Graphics pipeline descriptor.
 
-use {image, pass, Backend, Primitive};
-use super::{BasePipeline, EntryPoint, PipelineCreationFlags, State};
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorBlendDesc, DepthStencilDesc, Face};
+use super::{BasePipeline, EntryPoint, PipelineCreationFlags, State};
+use {image, pass, Backend, Primitive};
 
 use std::ops::Range;
-
 
 /// A simple struct describing a rect with integer coordinates.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, PartialOrd)]

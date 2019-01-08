@@ -2,10 +2,10 @@
 
 use std::borrow::Borrow;
 
-use {Backend, WorkGroupCount};
+use super::{CommandBuffer, DescriptorSetOffset, Level, RawCommandBuffer, Shot};
 use buffer::Offset;
 use queue::capability::{Compute, Supports};
-use super::{CommandBuffer, DescriptorSetOffset, RawCommandBuffer, Shot, Level};
+use {Backend, WorkGroupCount};
 
 impl<B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
@@ -26,7 +26,8 @@ impl<B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<B, C, S,
         J: IntoIterator,
         J::Item: Borrow<DescriptorSetOffset>,
     {
-        self.raw.bind_compute_descriptor_sets(layout, first_set, sets, offsets)
+        self.raw
+            .bind_compute_descriptor_sets(layout, first_set, sets, offsets)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
@@ -40,7 +41,12 @@ impl<B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<B, C, S,
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub unsafe fn push_compute_constants(&mut self, layout: &B::PipelineLayout, offset: u32, constants: &[u32]) {
+    pub unsafe fn push_compute_constants(
+        &mut self,
+        layout: &B::PipelineLayout,
+        offset: u32,
+        constants: &[u32],
+    ) {
         self.raw.push_compute_constants(layout, offset, constants);
     }
 }

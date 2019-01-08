@@ -275,7 +275,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 }
 
                 group
-            }).collect();
+            })
+            .collect();
 
         *open_guard = true;
 
@@ -450,7 +451,11 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(
+        &mut self,
+        swapchains: Is,
+        _wait_semaphores: Iw,
+    ) -> Result<(), ()>
     where
         W: 'a + Borrow<window::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,

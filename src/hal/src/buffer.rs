@@ -6,7 +6,7 @@
 //! They can be used as shader resources, vertex buffers, index buffers or for
 //! specifying the action commands for indirect execution.
 
-use {device, format, IndexType, Backend};
+use {device, format, Backend, IndexType};
 
 /// An offset inside a buffer, in bytes.
 pub type Offset = u64;

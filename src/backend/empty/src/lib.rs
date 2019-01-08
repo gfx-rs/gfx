@@ -3,17 +3,16 @@
 
 extern crate gfx_hal as hal;
 
+use hal::range::RangeArg;
+use hal::{
+    buffer, command, device, error, format, image, mapping, memory, pass, pool, pso, query, queue,
+};
 use std::borrow::Borrow;
 use std::ops::Range;
-use hal::{
-    buffer, command, device, error, format, image, mapping,
-    memory, pass, pool, pso, query, queue
-};
-use hal::range::RangeArg;
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Backend { }
+pub enum Backend {}
 impl hal::Backend for Backend {
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
@@ -55,7 +54,9 @@ impl hal::Backend for Backend {
 pub struct PhysicalDevice;
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
-        &self, _: &[(&QueueFamily, &[hal::QueuePriority])], _: hal::Features,
+        &self,
+        _: &[(&QueueFamily, &[hal::QueuePriority])],
+        _: hal::Features,
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         unimplemented!()
     }
@@ -65,8 +66,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn image_format_properties(
-        &self, _: format::Format, _dim: u8, _: image:: Tiling,
-        _: image::Usage, _: image::ViewCapabilities,
+        &self,
+        _: format::Format,
+        _dim: u8,
+        _: image::Tiling,
+        _: image::Usage,
+        _: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         unimplemented!()
     }
@@ -88,7 +93,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 pub struct RawCommandQueue;
 impl queue::RawCommandQueue<Backend> for RawCommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
-        &mut self, _: queue::Submission<Ic, Iw, Is>, _: Option<&()>
+        &mut self,
+        _: queue::Submission<Ic, Iw, Is>,
+        _: Option<&()>,
     ) where
         T: 'a + Borrow<RawCommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
@@ -117,7 +124,11 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
 /// Dummy device doing nothing.
 pub struct Device;
 impl hal::Device<Backend> for Device {
-    unsafe fn create_command_pool(&self, _: queue::QueueFamilyId, _: pool::CommandPoolCreateFlags) -> Result<RawCommandPool, device::OutOfMemory> {
+    unsafe fn create_command_pool(
+        &self,
+        _: queue::QueueFamilyId,
+        _: pool::CommandPoolCreateFlags,
+    ) -> Result<RawCommandPool, device::OutOfMemory> {
         unimplemented!()
     }
 
@@ -125,11 +136,20 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn allocate_memory(&self, _: hal::MemoryTypeId, _: u64) -> Result<(), device::AllocationError> {
+    unsafe fn allocate_memory(
+        &self,
+        _: hal::MemoryTypeId,
+        _: u64,
+    ) -> Result<(), device::AllocationError> {
         unimplemented!()
     }
 
-    unsafe fn create_render_pass<'a ,IA, IS, ID>(&self, _: IA, _: IS, _: ID) -> Result<(), device::OutOfMemory>
+    unsafe fn create_render_pass<'a, IA, IS, ID>(
+        &self,
+        _: IA,
+        _: IS,
+        _: ID,
+    ) -> Result<(), device::OutOfMemory>
     where
         IA: IntoIterator,
         IA::Item: Borrow<pass::Attachment>,
@@ -168,7 +188,10 @@ impl hal::Device<Backend> for Device {
     }
 
     unsafe fn create_framebuffer<I>(
-        &self, _: &(), _: I, _: image::Extent
+        &self,
+        _: &(),
+        _: I,
+        _: image::Extent,
     ) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
@@ -192,11 +215,21 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn bind_buffer_memory(&self, _: &(), _: u64, _: &mut ()) -> Result<(), device::BindError> {
+    unsafe fn bind_buffer_memory(
+        &self,
+        _: &(),
+        _: u64,
+        _: &mut (),
+    ) -> Result<(), device::BindError> {
         unimplemented!()
     }
 
-    unsafe fn create_buffer_view<R: RangeArg<u64>>(&self, _: &(), _: Option<format::Format>, _: R) -> Result<(), buffer::ViewCreationError> {
+    unsafe fn create_buffer_view<R: RangeArg<u64>>(
+        &self,
+        _: &(),
+        _: Option<format::Format>,
+        _: R,
+    ) -> Result<(), buffer::ViewCreationError> {
         unimplemented!()
     }
 
@@ -216,11 +249,20 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn get_image_subresource_footprint(&self, _: &(), _: image::Subresource) -> image::SubresourceFootprint {
+    unsafe fn get_image_subresource_footprint(
+        &self,
+        _: &(),
+        _: image::Subresource,
+    ) -> image::SubresourceFootprint {
         unimplemented!()
     }
 
-    unsafe fn bind_image_memory(&self, _: &(), _: u64, _: &mut ()) -> Result<(), device::BindError> {
+    unsafe fn bind_image_memory(
+        &self,
+        _: &(),
+        _: u64,
+        _: &mut (),
+    ) -> Result<(), device::BindError> {
         unimplemented!()
     }
 
@@ -235,7 +277,11 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn create_descriptor_pool<I>(&self, _: usize, _: I) -> Result<DescriptorPool, device::OutOfMemory>
+    unsafe fn create_descriptor_pool<I>(
+        &self,
+        _: usize,
+        _: I,
+    ) -> Result<DescriptorPool, device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
@@ -243,12 +289,16 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn create_descriptor_set_layout<I, J>(&self, _: I, _: J) -> Result<(), device::OutOfMemory>
+    unsafe fn create_descriptor_set_layout<I, J>(
+        &self,
+        _: I,
+        _: J,
+    ) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
         J: IntoIterator,
-        J::Item: Borrow<()>
+        J::Item: Borrow<()>,
     {
         unimplemented!()
     }
@@ -265,7 +315,7 @@ impl hal::Device<Backend> for Device {
     unsafe fn copy_descriptor_sets<'a, I>(&self, _: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
     {
         unimplemented!()
     }
@@ -291,8 +341,11 @@ impl hal::Device<Backend> for Device {
     }
 
     unsafe fn get_query_pool_results(
-        &self, _: &(), _: Range<query::Id>,
-        _: &mut [u8], _: buffer::Offset,
+        &self,
+        _: &(),
+        _: Range<query::Id>,
+        _: &mut [u8],
+        _: buffer::Offset,
         _: query::ResultFlags,
     ) -> Result<bool, device::OomOrDeviceLost> {
         unimplemented!()
@@ -315,7 +368,10 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(&self, _: I) -> Result<(), device::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
+        &self,
+        _: I,
+    ) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a (), R)>,
@@ -421,7 +477,8 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
     }
 
     unsafe fn free<I>(&mut self, _: I)
-    where I: IntoIterator<Item = RawCommandBuffer>
+    where
+        I: IntoIterator<Item = RawCommandBuffer>,
     {
         unimplemented!()
     }
@@ -430,7 +487,11 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
 /// Dummy command buffer, which ignores all the calls.
 pub struct RawCommandBuffer;
 impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
-    unsafe fn begin(&mut self, _: command::CommandBufferFlags, _: command::CommandBufferInheritanceInfo<Backend>) {
+    unsafe fn begin(
+        &mut self,
+        _: command::CommandBufferFlags,
+        _: command::CommandBufferInheritanceInfo<Backend>,
+    ) {
         unimplemented!()
     }
 
@@ -489,14 +550,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn resolve_image<T>(
-        &mut self,
-        _: &(),
-        _: image::Layout,
-        _: &(),
-        _: image::Layout,
-        _: T,
-    ) where
+    unsafe fn resolve_image<T>(&mut self, _: &(), _: image::Layout, _: &(), _: image::Layout, _: T)
+    where
         T: IntoIterator,
         T::Item: Borrow<command::ImageResolve>,
     {
@@ -640,50 +695,31 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn copy_image<T>(
-        &mut self,
-        _: &(),
-        _: image::Layout,
-        _: &(),
-        _: image::Layout,
-        _: T,
-    ) where
+    unsafe fn copy_image<T>(&mut self, _: &(), _: image::Layout, _: &(), _: image::Layout, _: T)
+    where
         T: IntoIterator,
         T::Item: Borrow<command::ImageCopy>,
     {
         unimplemented!()
     }
 
-    unsafe fn copy_buffer_to_image<T>(
-        &mut self,
-        _: &(),
-        _: &(),
-        _: image::Layout,
-        _: T,
-    ) where
+    unsafe fn copy_buffer_to_image<T>(&mut self, _: &(), _: &(), _: image::Layout, _: T)
+    where
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
         unimplemented!()
     }
 
-    unsafe fn copy_image_to_buffer<T>(
-        &mut self,
-        _: &(),
-        _: image::Layout,
-        _: &(),
-        _: T,
-    ) where
+    unsafe fn copy_image_to_buffer<T>(&mut self, _: &(), _: image::Layout, _: &(), _: T)
+    where
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
         unimplemented!()
     }
 
-    unsafe fn draw(&mut self,
-        _: Range<hal::VertexCount>,
-        _: Range<hal::InstanceCount>,
-    ) {
+    unsafe fn draw(&mut self, _: Range<hal::VertexCount>, _: Range<hal::InstanceCount>) {
         unimplemented!()
     }
 
@@ -696,13 +732,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn draw_indirect(
-        &mut self,
-        _: &(),
-        _: buffer::Offset,
-        _: hal::DrawCount,
-        _: u32,
-    ) {
+    unsafe fn draw_indirect(&mut self, _: &(), _: buffer::Offset, _: hal::DrawCount, _: u32) {
         unimplemented!()
     }
 
@@ -716,26 +746,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn begin_query(
-        &mut self,
-        _: query::Query<Backend>,
-        _: query::ControlFlags,
-    ) {
+    unsafe fn begin_query(&mut self, _: query::Query<Backend>, _: query::ControlFlags) {
         unimplemented!()
     }
 
-    unsafe fn end_query(
-        &mut self,
-        _: query::Query<Backend>,
-    ) {
+    unsafe fn end_query(&mut self, _: query::Query<Backend>) {
         unimplemented!()
     }
 
-    unsafe fn reset_query_pool(
-        &mut self,
-        _: &(),
-        _: Range<query::Id>,
-    ) {
+    unsafe fn reset_query_pool(&mut self, _: &(), _: Range<query::Id>) {
         unimplemented!()
     }
 
@@ -751,11 +770,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn write_timestamp(
-        &mut self,
-        _: pso::PipelineStage,
-        _: query::Query<Backend>,
-    ) {
+    unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, _: query::Query<Backend>) {
         unimplemented!()
     }
 
@@ -769,19 +784,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn push_compute_constants(
-        &mut self,
-        _: &(),
-        _: u32,
-        _: &[u32],
-    ) {
+    unsafe fn push_compute_constants(&mut self, _: &(), _: u32, _: &[u32]) {
         unimplemented!()
     }
 
-    unsafe fn execute_commands<'a, T, I>(
-        &mut self,
-        _: I,
-    ) where
+    unsafe fn execute_commands<'a, T, I>(&mut self, _: I)
+    where
         T: 'a + Borrow<RawCommandBuffer>,
         I: IntoIterator<Item = &'a T>,
     {
@@ -795,7 +803,7 @@ pub struct DescriptorPool;
 impl pso::DescriptorPool<Backend> for DescriptorPool {
     unsafe fn free_sets<I>(&mut self, _descriptor_sets: I)
     where
-        I: IntoIterator<Item = ()>
+        I: IntoIterator<Item = ()>,
     {
         unimplemented!()
     }
@@ -813,8 +821,14 @@ impl hal::Surface<Backend> for Surface {
     }
 
     fn compatibility(
-        &self, _: &PhysicalDevice,
-    ) -> (hal::SurfaceCapabilities, Option<Vec<format::Format>>, Vec<hal::PresentMode>, Vec<hal::CompositeAlpha>) {
+        &self,
+        _: &PhysicalDevice,
+    ) -> (
+        hal::SurfaceCapabilities,
+        Option<Vec<format::Format>>,
+        Vec<hal::PresentMode>,
+        Vec<hal::CompositeAlpha>,
+    ) {
         unimplemented!()
     }
 
@@ -827,7 +841,9 @@ impl hal::Surface<Backend> for Surface {
 pub struct Swapchain;
 impl hal::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
-        &mut self, _: u64, _: hal::FrameSync<Backend>
+        &mut self,
+        _: u64,
+        _: hal::FrameSync<Backend>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         unimplemented!()
     }

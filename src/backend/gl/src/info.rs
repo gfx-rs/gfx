@@ -1,7 +1,7 @@
+use hal::{Features, Limits};
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
-use {gl, GlContainer, Error};
-use hal::{Features, Limits};
+use {gl, Error, GlContainer};
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -15,10 +15,7 @@ pub struct Version {
 
 impl Version {
     /// Create a new OpenGL version number
-    pub fn new(
-        major: u32, minor: u32, revision: Option<u32>,
-        vendor_info: &'static str,
-    ) -> Self {
+    pub fn new(major: u32, minor: u32, revision: Option<u32>, vendor_info: &'static str) -> Self {
         Version {
             is_embedded: false,
             major: major,
@@ -62,13 +59,13 @@ impl Version {
         let es_sig = " ES ";
         let is_es = match src.rfind(es_sig) {
             Some(pos) => {
-                src = &src[pos + es_sig.len() ..];
+                src = &src[pos + es_sig.len()..];
                 true
-            },
+            }
             None => false,
         };
         let (version, vendor_info) = match src.find(' ') {
-            Some(i) => (&src[..i], &src[i+1..]),
+            Some(i) => (&src[..i], &src[i + 1..]),
             None => (src, ""),
         };
 
@@ -95,14 +92,12 @@ impl Version {
 impl fmt::Debug for Version {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match (self.major, self.minor, self.revision, self.vendor_info) {
-            (major, minor, Some(revision), "") =>
-                write!(f, "{}.{}.{}", major, minor, revision),
-            (major, minor, None, "") =>
-                write!(f, "{}.{}", major, minor),
-            (major, minor, Some(revision), vendor_info) =>
-                write!(f, "{}.{}.{}, {}", major, minor, revision, vendor_info),
-            (major, minor, None, vendor_info) =>
-                write!(f, "{}.{}, {}", major, minor, vendor_info),
+            (major, minor, Some(revision), "") => write!(f, "{}.{}.{}", major, minor, revision),
+            (major, minor, None, "") => write!(f, "{}.{}", major, minor),
+            (major, minor, Some(revision), vendor_info) => {
+                write!(f, "{}.{}.{}, {}", major, minor, revision, vendor_info)
+            }
+            (major, minor, None, vendor_info) => write!(f, "{}.{}, {}", major, minor, vendor_info),
         }
     }
 }
@@ -239,7 +234,7 @@ bitflags! {
 
 #[derive(Copy, Clone)]
 pub enum Requirement {
-    Core(u32,u32),
+    Core(u32, u32),
     Es(u32, u32),
     Ext(&'static str),
 }
@@ -248,11 +243,14 @@ impl Info {
     fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
         let version = Version::parse(get_string(gl, gl::VERSION)).unwrap();
-        let shading_language = Version::parse(get_string(gl, gl::SHADING_LANGUAGE_VERSION)).unwrap();
+        let shading_language =
+            Version::parse(get_string(gl, gl::SHADING_LANGUAGE_VERSION)).unwrap();
         let extensions = if version >= Version::new(3, 0, None, "") {
             let num_exts = get_usize(gl, gl::NUM_EXTENSIONS).unwrap() as gl::types::GLuint;
             (0..num_exts)
-                .map(|i| unsafe { c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8) })
+                .map(|i| unsafe {
+                    c_str_as_static_str(gl.GetStringi(gl::EXTENSIONS, i) as *const i8)
+                })
                 .collect()
         } else {
             // Fallback
@@ -279,7 +277,12 @@ impl Info {
         self.extensions.contains(&s)
     }
 
-    pub fn is_version_or_extension_supported(&self, major: u32, minor: u32, ext: &'static str) -> bool {
+    pub fn is_version_or_extension_supported(
+        &self,
+        major: u32,
+        minor: u32,
+        ext: &'static str,
+    ) -> bool {
         self.is_version_supported(major, minor) || self.is_extension_supported(ext)
     }
 
@@ -289,12 +292,10 @@ impl Info {
 
     pub fn is_supported(&self, requirements: &[Requirement]) -> bool {
         use self::Requirement::*;
-        requirements.iter().any(|r| {
-            match *r {
-                Core(major, minor) => self.is_version_supported(major, minor),
-                Es(major, minor) => self.is_embedded_version_supported(major, minor),
-                Ext(extension) => self.is_extension_supported(extension),
-            }
+        requirements.iter().any(|r| match *r {
+            Core(major, minor) => self.is_version_supported(major, minor),
+            Es(major, minor) => self.is_embedded_version_supported(major, minor),
+            Ext(extension) => self.is_extension_supported(extension),
         })
     }
 }
@@ -311,28 +312,30 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         max_viewports: 1,
         min_buffer_copy_offset_alignment: 1,
         min_buffer_copy_pitch_alignment: 1,
-        min_texel_buffer_offset_alignment: 1, // TODO
+        min_texel_buffer_offset_alignment: 1,   // TODO
         min_uniform_buffer_offset_alignment: 1, // TODO
         min_storage_buffer_offset_alignment: 1, // TODO
-        .. Limits::default()
+        ..Limits::default()
     };
 
-    if info.is_supported(&[
-        Core(4,0),
-        Ext("GL_ARB_tessellation_shader"),
-    ]) {
+    if info.is_supported(&[Core(4, 0), Ext("GL_ARB_tessellation_shader")]) {
         limits.max_patch_size = get_usize(gl, gl::MAX_PATCH_VERTICES).unwrap_or(0) as _;
     }
-    if info.is_supported(&[Core(4,1)]) { // TODO: extension
+    if info.is_supported(&[Core(4, 1)]) {
+        // TODO: extension
         limits.max_viewports = get_usize(gl, gl::MAX_VIEWPORTS).unwrap_or(0);
     }
 
-    if false && info.is_supported(&[ //TODO: enable when compute is implemented
-        Core(4, 3),
-        Ext("GL_ARB_compute_shader"),
-    ]) {
+    if false
+        && info.is_supported(&[
+            //TODO: enable when compute is implemented
+            Core(4, 3),
+            Ext("GL_ARB_compute_shader"),
+        ])
+    {
         let mut values = [0 as gl::types::GLint; 2];
-        for (i, (count, size)) in limits.max_compute_group_count
+        for (i, (count, size)) in limits
+            .max_compute_group_count
             .iter_mut()
             .zip(limits.max_compute_group_size.iter_mut())
             .enumerate()
@@ -356,45 +359,37 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     ]) {
         features |= Features::SAMPLER_ANISOTROPY;
     }
-    if info.is_supported(&[
-        Core(4, 2),
-    ]) {
+    if info.is_supported(&[Core(4, 2)]) {
         legacy |= LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER;
     }
-    if info.is_supported(&[
-        Core(3, 3),
-        Es(3, 0),
-        Ext("GL_ARB_instanced_arrays"),
-    ]) {
+    if info.is_supported(&[Core(3, 3), Es(3, 0), Ext("GL_ARB_instanced_arrays")]) {
         features |= Features::INSTANCE_RATE;
     }
 
-    if info.is_supported(&[Core(4, 3), Es(3, 1)]) { // TODO: extension
+    if info.is_supported(&[Core(4, 3), Es(3, 1)]) {
+        // TODO: extension
         legacy |= LegacyFeatures::INDIRECT_EXECUTION;
     }
-    if info.is_supported(&[
-        Core(3, 1),
-        Es(3, 0),
-        Ext("GL_ARB_draw_instanced"),
-    ]) {
+    if info.is_supported(&[Core(3, 1), Es(3, 0), Ext("GL_ARB_draw_instanced")]) {
         legacy |= LegacyFeatures::DRAW_INSTANCED;
     }
-    if info.is_supported(&[
-        Core(4, 2),
-        Ext("GL_ARB_base_instance"),
-    ]) {
+    if info.is_supported(&[Core(4, 2), Ext("GL_ARB_base_instance")]) {
         legacy |= LegacyFeatures::DRAW_INSTANCED_BASE;
     }
-    if info.is_supported(&[Core(3, 2)]) { // TODO: extension
+    if info.is_supported(&[Core(3, 2)]) {
+        // TODO: extension
         legacy |= LegacyFeatures::DRAW_INDEXED_BASE;
     }
-    if info.is_supported(&[Core(3, 1), Es(3, 0)]) { // TODO: extension
+    if info.is_supported(&[Core(3, 1), Es(3, 0)]) {
+        // TODO: extension
         legacy |= LegacyFeatures::DRAW_INDEXED_INSTANCED;
     }
-    if info.is_supported(&[Core(3, 2)]) { // TODO: extension
+    if info.is_supported(&[Core(3, 2)]) {
+        // TODO: extension
         legacy |= LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE_VERTEX;
     }
-    if info.is_supported(&[Core(4, 2)]) { // TODO: extension
+    if info.is_supported(&[Core(4, 2)]) {
+        // TODO: extension
         legacy |= LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE;
     }
     if info.is_supported(&[
@@ -404,20 +399,14 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     ]) {
         legacy |= LegacyFeatures::VERTEX_BASE;
     }
-    if info.is_supported(&[
-        Core(3, 2),
-        Ext("GL_ARB_framebuffer_sRGB"),
-    ]) {
+    if info.is_supported(&[Core(3, 2), Ext("GL_ARB_framebuffer_sRGB")]) {
         legacy |= LegacyFeatures::SRGB_COLOR;
     }
-    if info.is_supported(&[
-        Core(3, 1),
-        Es(3, 0),
-        Ext("GL_ARB_uniform_buffer_object"),
-    ]) {
+    if info.is_supported(&[Core(3, 1), Es(3, 0), Ext("GL_ARB_uniform_buffer_object")]) {
         legacy |= LegacyFeatures::CONSTANT_BUFFER;
     }
-    if info.is_supported(&[Core(4, 0)]) { // TODO: extension
+    if info.is_supported(&[Core(4, 0)]) {
+        // TODO: extension
         legacy |= LegacyFeatures::UNORDERED_ACCESS_VIEW;
     }
     if info.is_supported(&[
@@ -428,47 +417,35 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     ]) {
         legacy |= LegacyFeatures::COPY_BUFFER;
     }
-    if info.is_supported(&[
-        Core(3, 3),
-        Es(3, 0),
-        Ext("GL_ARB_sampler_objects"),
-    ]) {
+    if info.is_supported(&[Core(3, 3), Es(3, 0), Ext("GL_ARB_sampler_objects")]) {
         legacy |= LegacyFeatures::SAMPLER_OBJECTS;
     }
-    if info.is_supported(&[Core(3, 3)]) { // TODO: extension
+    if info.is_supported(&[Core(3, 3)]) {
+        // TODO: extension
         legacy |= LegacyFeatures::SAMPLER_LOD_BIAS;
     }
-    if info.is_supported(&[Core(3, 3)]) { // TODO: extension
+    if info.is_supported(&[Core(3, 3)]) {
+        // TODO: extension
         legacy |= LegacyFeatures::SAMPLER_BORDER_COLOR;
     }
 
     let private = PrivateCaps {
-        vertex_array:                       info.is_supported(&[Core(3,0),
-                                                                Es  (3,0),
-                                                                Ext ("GL_ARB_vertex_array_object")])
-                                                                && gl.GenVertexArrays.is_loaded(),
-        framebuffer:                        info.is_supported(&[Core(3,0),
-                                                                Es  (2,0),
-                                                                Ext ("GL_ARB_framebuffer_object")])
-                                                                && gl.GenFramebuffers.is_loaded(),
-        framebuffer_texture:                info.is_supported(&[Core(3,0)]), //TODO: double check
-        buffer_role_change:                 !info.version.is_embedded,
-        image_storage:                      info.is_supported(&[Core(4,2),
-                                                                Ext ("GL_ARB_texture_storage")]),
-        buffer_storage:                     info.is_supported(&[Core(4,4),
-                                                                Ext ("GL_ARB_buffer_storage")]),
-        clear_buffer:                       info.is_supported(&[Core(3,0),
-                                                                Es  (3,0)]),
-        program_interface:                  info.is_supported(&[Core(4,3),
-                                                                Ext ("GL_ARB_program_interface_query")]),
-        frag_data_location:                 !info.version.is_embedded,
-        sync:                               info.is_supported(&[Core(3,2),
-                                                                Es  (3,0),
-                                                                Ext ("GL_ARB_sync")]),
-        map:                                !info.version.is_embedded, //TODO: OES extension
-        sampler_anisotropy_ext:             !info.is_supported(&[Core(4,6),
-                                                                Ext ("GL_ARB_texture_filter_anisotropic")]) &&
-                                            info.is_supported(&[Ext ("GL_EXT_texture_filter_anisotropic")]),
+        vertex_array: info.is_supported(&[Core(3, 0), Es(3, 0), Ext("GL_ARB_vertex_array_object")])
+            && gl.GenVertexArrays.is_loaded(),
+        framebuffer: info.is_supported(&[Core(3, 0), Es(2, 0), Ext("GL_ARB_framebuffer_object")])
+            && gl.GenFramebuffers.is_loaded(),
+        framebuffer_texture: info.is_supported(&[Core(3, 0)]), //TODO: double check
+        buffer_role_change: !info.version.is_embedded,
+        image_storage: info.is_supported(&[Core(4, 2), Ext("GL_ARB_texture_storage")]),
+        buffer_storage: info.is_supported(&[Core(4, 4), Ext("GL_ARB_buffer_storage")]),
+        clear_buffer: info.is_supported(&[Core(3, 0), Es(3, 0)]),
+        program_interface: info.is_supported(&[Core(4, 3), Ext("GL_ARB_program_interface_query")]),
+        frag_data_location: !info.version.is_embedded,
+        sync: info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]),
+        map: !info.version.is_embedded, //TODO: OES extension
+        sampler_anisotropy_ext: !info
+            .is_supported(&[Core(4, 6), Ext("GL_ARB_texture_filter_anisotropic")])
+            && info.is_supported(&[Ext("GL_EXT_texture_filter_anisotropic")]),
     };
 
     (info, features, legacy, limits, private)
@@ -486,13 +463,37 @@ mod tests {
         assert_eq!(Version::parse("1. h3l1o. W0rld"), Err("1. h3l1o. W0rld"));
         assert_eq!(Version::parse("1.2.3"), Ok(Version::new(1, 2, Some(3), "")));
         assert_eq!(Version::parse("1.2"), Ok(Version::new(1, 2, None, "")));
-        assert_eq!(Version::parse("1.2 h3l1o. W0rld"), Ok(Version::new(1, 2, None, "h3l1o. W0rld")));
-        assert_eq!(Version::parse("1.2.h3l1o. W0rld"), Ok(Version::new(1, 2, None, "W0rld")));
-        assert_eq!(Version::parse("1.2. h3l1o. W0rld"), Ok(Version::new(1, 2, None, "h3l1o. W0rld")));
-        assert_eq!(Version::parse("1.2.3.h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "W0rld")));
-        assert_eq!(Version::parse("1.2.3 h3l1o. W0rld"), Ok(Version::new(1, 2, Some(3), "h3l1o. W0rld")));
-        assert_eq!(Version::parse("OpenGL ES 3.1"), Ok(Version::new_embedded(3, 1, "")));
-        assert_eq!(Version::parse("OpenGL ES 2.0 Google Nexus"), Ok(Version::new_embedded(2, 0, "Google Nexus")));
-        assert_eq!(Version::parse("GLSL ES 1.1"), Ok(Version::new_embedded(1, 1, "")));
+        assert_eq!(
+            Version::parse("1.2 h3l1o. W0rld"),
+            Ok(Version::new(1, 2, None, "h3l1o. W0rld"))
+        );
+        assert_eq!(
+            Version::parse("1.2.h3l1o. W0rld"),
+            Ok(Version::new(1, 2, None, "W0rld"))
+        );
+        assert_eq!(
+            Version::parse("1.2. h3l1o. W0rld"),
+            Ok(Version::new(1, 2, None, "h3l1o. W0rld"))
+        );
+        assert_eq!(
+            Version::parse("1.2.3.h3l1o. W0rld"),
+            Ok(Version::new(1, 2, Some(3), "W0rld"))
+        );
+        assert_eq!(
+            Version::parse("1.2.3 h3l1o. W0rld"),
+            Ok(Version::new(1, 2, Some(3), "h3l1o. W0rld"))
+        );
+        assert_eq!(
+            Version::parse("OpenGL ES 3.1"),
+            Ok(Version::new_embedded(3, 1, ""))
+        );
+        assert_eq!(
+            Version::parse("OpenGL ES 2.0 Google Nexus"),
+            Ok(Version::new_embedded(2, 0, "Google Nexus"))
+        );
+        assert_eq!(
+            Version::parse("GLSL ES 1.1"),
+            Ok(Version::new_embedded(1, 1, ""))
+        );
     }
 }

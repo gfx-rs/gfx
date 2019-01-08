@@ -1,21 +1,20 @@
 use std::cell::Cell;
 use std::sync::{Arc, Mutex, RwLock};
 
-use hal::{format, image as i, pass, pso};
-use hal::memory::{Properties, Requirements};
 use hal::backend::FastHashMap;
+use hal::memory::{Properties, Requirements};
+use hal::{format, image as i, pass, pso};
 
 use gl;
 use Backend;
 
-
-pub type RawBuffer   = gl::types::GLuint;
-pub type Shader      = gl::types::GLuint;
-pub type Program     = gl::types::GLuint;
+pub type RawBuffer = gl::types::GLuint;
+pub type Shader = gl::types::GLuint;
+pub type Program = gl::types::GLuint;
 pub type FrameBuffer = gl::types::GLuint;
-pub type Surface     = gl::types::GLuint;
-pub type Texture     = gl::types::GLuint;
-pub type Sampler     = gl::types::GLuint;
+pub type Surface = gl::types::GLuint;
+pub type Texture = gl::types::GLuint;
+pub type Sampler = gl::types::GLuint;
 
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
 
@@ -50,8 +49,22 @@ pub enum BindingTypes {
 
 #[derive(Clone, Debug)]
 pub struct DescRemapData {
-    bindings: FastHashMap<(BindingTypes, pso::DescriptorSetIndex, pso::DescriptorBinding), Vec<pso::DescriptorBinding>>,
-    names: FastHashMap<String, (BindingTypes, pso::DescriptorSetIndex, pso::DescriptorBinding)>,
+    bindings: FastHashMap<
+        (
+            BindingTypes,
+            pso::DescriptorSetIndex,
+            pso::DescriptorBinding,
+        ),
+        Vec<pso::DescriptorBinding>,
+    >,
+    names: FastHashMap<
+        String,
+        (
+            BindingTypes,
+            pso::DescriptorSetIndex,
+            pso::DescriptorBinding,
+        ),
+    >,
     next_binding: FastHashMap<BindingTypes, pso::DescriptorBinding>,
 }
 
@@ -74,7 +87,10 @@ impl DescRemapData {
         binding: pso::DescriptorBinding,
     ) -> &[pso::DescriptorBinding] {
         let nb = self.next_binding.entry(btype).or_insert(0);
-        let val = self.bindings.entry((btype, set, binding)).or_insert(Vec::new());
+        let val = self
+            .bindings
+            .entry((btype, set, binding))
+            .or_insert(Vec::new());
         val.push(*nb);
         *nb += 1;
         &*val
@@ -93,7 +109,10 @@ impl DescRemapData {
         set: pso::DescriptorSetIndex,
         binding: pso::DescriptorBinding,
     ) -> &[pso::DescriptorBinding] {
-        let val = self.bindings.entry((btype, set, binding)).or_insert(Vec::new());
+        let val = self
+            .bindings
+            .entry((btype, set, binding))
+            .or_insert(Vec::new());
         val.push(nb);
         &*val
     }
@@ -159,7 +178,7 @@ pub(crate) enum DescSetBindings {
         binding: pso::DescriptorBinding,
         buffer: RawBuffer,
         offset: gl::types::GLintptr,
-        size: gl::types::GLsizeiptr
+        size: gl::types::GLsizeiptr,
     },
     Texture(pso::DescriptorBinding, Texture),
     Sampler(pso::DescriptorBinding, Sampler),
@@ -176,7 +195,10 @@ pub struct DescriptorSet {
 pub struct DescriptorPool {}
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    unsafe fn allocate_set(&mut self, layout: &DescriptorSetLayout) -> Result<DescriptorSet, pso::AllocationError> {
+    unsafe fn allocate_set(
+        &mut self,
+        layout: &DescriptorSetLayout,
+    ) -> Result<DescriptorSet, pso::AllocationError> {
         Ok(DescriptorSet {
             layout: layout.clone(),
             bindings: Arc::new(Mutex::new(Vec::new())),
@@ -185,7 +207,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 
     unsafe fn free_sets<I>(&mut self, _descriptor_sets: I)
     where
-        I: IntoIterator<Item = DescriptorSet>
+        I: IntoIterator<Item = DescriptorSet>,
     {
         // Poof!  Does nothing, because OpenGL doesn't have a meaningful concept of a `DescriptorSet`.
     }
@@ -218,7 +240,8 @@ impl Memory {
     }
 
     pub fn can_download(&self) -> bool {
-        self.properties.contains(Properties::CPU_VISIBLE | Properties::CPU_CACHED)
+        self.properties
+            .contains(Properties::CPU_VISIBLE | Properties::CPU_CACHED)
     }
 
     pub fn map_flags(&self) -> gl::types::GLenum {
@@ -247,8 +270,7 @@ pub struct SubpassDesc {
 impl SubpassDesc {
     /// Check if an attachment is used by this sub-pass.
     pub(crate) fn is_using(&self, at_id: pass::AttachmentId) -> bool {
-        self.color_attachments.iter()
-            .any(|id| *id == at_id)
+        self.color_attachments.iter().any(|id| *id == at_id)
     }
 }
 
@@ -273,7 +295,7 @@ pub struct AttributeDesc {
 
 #[derive(Debug, Clone, Copy)]
 pub enum VertexAttribFunction {
-    Float, // glVertexAttribPointer
+    Float,   // glVertexAttribPointer
     Integer, // glVertexAttribIPointer
-    Double, // glVertexAttribLPointer
+    Double,  // glVertexAttribLPointer
 }

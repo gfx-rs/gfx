@@ -2,8 +2,8 @@
 
 use std::mem;
 use std::ops::Range;
-use {buffer, image, queue};
 use Backend;
+use {buffer, image, queue};
 
 /// A trait for plain-old-data types.
 ///
@@ -32,9 +32,7 @@ pub fn cast_slice<A: Pod, B: Pod>(slice: &[A]) -> &[B] {
     let raw_len = mem::size_of::<A>().wrapping_mul(slice.len());
     let len = raw_len / mem::size_of::<B>();
     assert_eq!(raw_len, mem::size_of::<B>().wrapping_mul(len));
-    unsafe {
-        slice::from_raw_parts(slice.as_ptr() as *const B, len)
-    }
+    unsafe { slice::from_raw_parts(slice.as_ptr() as *const B, len) }
 }
 
 bitflags!(
@@ -111,14 +109,14 @@ pub enum Barrier<'a, B: Backend> {
     },
 }
 
-impl<'a, B: Backend> Barrier<'a , B> {
+impl<'a, B: Backend> Barrier<'a, B> {
     /// Create a barrier for the whole buffer between the given states.
     pub fn whole_buffer(target: &'a B::Buffer, states: Range<buffer::State>) -> Self {
         Barrier::Buffer {
             states,
             target,
             families: None,
-            range: None .. None,
+            range: None..None,
         }
     }
 }

@@ -3,7 +3,6 @@ use std::ops::Range;
 
 use hal;
 
-
 #[derive(Debug, Deserialize)]
 pub struct AttachmentRef(pub String, pub hal::pass::AttachmentLayout);
 
@@ -91,7 +90,7 @@ pub enum Resource {
     },
     PipelineLayout {
         set_layouts: Vec<String>,
-        push_constant_ranges: Vec<(hal::pso::ShaderStageFlags, Range<u32>)>
+        push_constant_ranges: Vec<(hal::pso::ShaderStageFlags, Range<u32>)>,
     },
     GraphicsPipeline {
         shaders: GraphicsShaderSet,
@@ -167,7 +166,7 @@ pub enum DescriptorRange {
 }
 
 fn default_instance_range() -> Range<hal::InstanceCount> {
-    0 .. 1
+    0..1
 }
 
 #[derive(Debug, Deserialize)]

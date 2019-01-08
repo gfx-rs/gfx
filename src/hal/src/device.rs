@@ -269,7 +269,11 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     fn create_pipeline_cache(&self) -> Result<B::PipelineCache, OutOfMemory>;
 
     /// Merge a number of source pipeline caches into the target one.
-    unsafe fn merge_pipeline_caches<I>(&self, target: &B::PipelineCache, sources: I) -> Result<(), OutOfMemory>
+    unsafe fn merge_pipeline_caches<I>(
+        &self,
+        target: &B::PipelineCache,
+        sources: I,
+    ) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<B::PipelineCache>;
@@ -362,7 +366,10 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// Once a shader module has been created, any entry points it contains can be used in pipeline
     /// shader stages as described in *Compute Pipelines* and *Graphics Pipelines*.
-    unsafe fn create_shader_module(&self, spirv_data: &[u8]) -> Result<B::ShaderModule, ShaderError>;
+    unsafe fn create_shader_module(
+        &self,
+        spirv_data: &[u8],
+    ) -> Result<B::ShaderModule, ShaderError>;
 
     /// Destroy a shader module module
     ///
@@ -458,7 +465,10 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     unsafe fn destroy_image_view(&self, view: B::ImageView);
 
     /// Create a new sampler object
-    unsafe fn create_sampler(&self, info: image::SamplerInfo) -> Result<B::Sampler, AllocationError>;
+    unsafe fn create_sampler(
+        &self,
+        info: image::SamplerInfo,
+    ) -> Result<B::Sampler, AllocationError>;
 
     /// Destroy a sampler object
     unsafe fn destroy_sampler(&self, sampler: B::Sampler);
@@ -467,7 +477,11 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     ///
     /// Descriptor pools allow allocation of descriptor sets.
     /// The pool can't be modified directly, only through updating descriptor sets.
-    unsafe fn create_descriptor_pool<I>(&self, max_sets: usize, descriptor_ranges: I) -> Result<B::DescriptorPool, OutOfMemory>
+    unsafe fn create_descriptor_pool<I>(
+        &self,
+        max_sets: usize,
+        descriptor_ranges: I,
+    ) -> Result<B::DescriptorPool, OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>;
@@ -527,7 +541,10 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         R: RangeArg<u64>;
 
     /// Invalidate ranges of non-coherent memory from the host caches
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
+        &self,
+        ranges: I,
+    ) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a B::Memory, R)>,
@@ -591,7 +608,10 @@ pub trait Device<B: Backend>: Any + Send + Sync {
     }
 
     /// Release a mapping Writer.
-    unsafe fn release_mapping_writer<'a, T>(&self, mut writer: mapping::Writer<'a, B, T>) -> Result<(), OutOfMemory> {
+    unsafe fn release_mapping_writer<'a, T>(
+        &self,
+        mut writer: mapping::Writer<'a, B, T>,
+    ) -> Result<(), OutOfMemory> {
         writer.released = true;
         self.flush_mapped_memory_ranges(iter::once((writer.memory, writer.range.clone())))?;
         self.unmap_memory(writer.memory);
@@ -632,13 +652,22 @@ pub trait Device<B: Backend>: Any + Send + Sync {
 
     /// Blocks until the given fence is signaled.
     /// Returns true if the fence was signaled before the timeout.
-    unsafe fn wait_for_fence(&self, fence: &B::Fence, timeout_ns: u64) -> Result<bool, OomOrDeviceLost> {
+    unsafe fn wait_for_fence(
+        &self,
+        fence: &B::Fence,
+        timeout_ns: u64,
+    ) -> Result<bool, OomOrDeviceLost> {
         self.wait_for_fences(iter::once(fence), WaitFor::All, timeout_ns)
     }
 
     /// Blocks until all or one of the given fences are signaled.
     /// Returns true if fences were signaled before the timeout.
-    unsafe fn wait_for_fences<I>(&self, fences: I, wait: WaitFor, timeout_ns: u64) -> Result<bool, OomOrDeviceLost>
+    unsafe fn wait_for_fences<I>(
+        &self,
+        fences: I,
+        wait: WaitFor,
+        timeout_ns: u64,
+    ) -> Result<bool, OomOrDeviceLost>
     where
         I: IntoIterator,
         I::Item: Borrow<B::Fence>,

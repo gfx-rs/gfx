@@ -2,7 +2,7 @@
 //! The input assembler collects raw vertex and index data.
 
 use format;
-use {Primitive};
+use Primitive;
 
 /// Shader binding location.
 pub type Location = u32;

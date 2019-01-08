@@ -1,10 +1,8 @@
 //! Command pools
 
-use {Backend};
-use command::{
-    CommandBuffer, SecondaryCommandBuffer, SubpassCommandBuffer, Shot, RawLevel,
-};
-use queue::capability::{Supports, Graphics};
+use command::{CommandBuffer, RawLevel, SecondaryCommandBuffer, Shot, SubpassCommandBuffer};
+use queue::capability::{Graphics, Supports};
+use Backend;
 
 use std::any::Any;
 use std::marker::PhantomData;
@@ -35,12 +33,13 @@ pub trait RawCommandPool<B: Backend>: Any + Send + Sync {
 
     /// Allocate new command buffers from the pool.
     fn allocate_vec(&mut self, num: usize, level: RawLevel) -> Vec<B::CommandBuffer> {
-        (0 .. num).map(|_| self.allocate_one(level)).collect()
+        (0..num).map(|_| self.allocate_one(level)).collect()
     }
 
     /// Free command buffers which are allocated from this pool.
     unsafe fn free<I>(&mut self, buffers: I)
-    where I: IntoIterator<Item = B::CommandBuffer>;
+    where
+        I: IntoIterator<Item = B::CommandBuffer>;
 }
 
 /// Strong-typed command pool.
@@ -74,22 +73,19 @@ impl<B: Backend, C> CommandPool<B, C> {
     /// Allocates a new primary command buffer from the pool.
     pub fn acquire_command_buffer<S: Shot>(&mut self) -> CommandBuffer<B, C, S> {
         let buffer = self.raw.allocate_one(RawLevel::Primary);
-        unsafe {
-            CommandBuffer::new(buffer)
-        }
+        unsafe { CommandBuffer::new(buffer) }
     }
 
     /// Allocates a new secondary command buffer from the pool.
     pub fn acquire_secondary_command_buffer<S: Shot>(&mut self) -> SecondaryCommandBuffer<B, C, S> {
         let buffer = self.raw.allocate_one(RawLevel::Secondary);
-        unsafe {
-            SecondaryCommandBuffer::new(buffer)
-        }
+        unsafe { SecondaryCommandBuffer::new(buffer) }
     }
 
     /// Free the given iterator of command buffers from the pool.
     pub unsafe fn free<S: Shot, I>(&mut self, cmd_buffers: I)
-        where I: IntoIterator<Item = CommandBuffer<B, C, S>>
+    where
+        I: IntoIterator<Item = CommandBuffer<B, C, S>>,
     {
         self.raw.free(cmd_buffers.into_iter().map(|cmb| cmb.raw))
     }
@@ -104,8 +100,6 @@ impl<B: Backend, C: Supports<Graphics>> CommandPool<B, C> {
     /// Allocates a new subpass command buffer from the pool.
     pub fn acquire_subpass_command_buffer<'a, S: Shot>(&mut self) -> SubpassCommandBuffer<B, S> {
         let buffer = self.raw.allocate_one(RawLevel::Secondary);
-        unsafe {
-            SubpassCommandBuffer::new(buffer)
-        }
+        unsafe { SubpassCommandBuffer::new(buffer) }
     }
 }

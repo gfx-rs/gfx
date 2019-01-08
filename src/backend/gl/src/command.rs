@@ -2,17 +2,17 @@
 
 use gl;
 
-use hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
 use hal::format::ChannelType;
 use hal::range::RangeArg;
+use hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
 
-use {native as n, Backend};
 use pool::{self, BufferMemory};
+use {native as n, Backend};
 
 use std::borrow::Borrow;
-use std::{mem, slice};
 use std::ops::Range;
 use std::sync::{Arc, Mutex};
+use std::{mem, slice};
 
 // Command buffer implementation details:
 //
@@ -32,10 +32,7 @@ pub struct BufferSlice {
 
 impl BufferSlice {
     fn new() -> Self {
-        BufferSlice {
-            offset: 0,
-            size: 0,
-        }
+        BufferSlice { offset: 0, size: 0 }
     }
 
     // Append a data pointer, resulting in one data pointer
@@ -111,7 +108,13 @@ pub enum Command {
     CopyImageToTexture(n::ImageKind, n::Texture, command::ImageCopy),
     CopyImageToSurface(n::ImageKind, n::Surface, command::ImageCopy),
 
-    BindBufferRange(gl::types::GLenum, gl::types::GLuint, n::RawBuffer, gl::types::GLintptr, gl::types::GLsizeiptr),
+    BindBufferRange(
+        gl::types::GLenum,
+        gl::types::GLuint,
+        n::RawBuffer,
+        gl::types::GLintptr,
+        gl::types::GLsizeiptr,
+    ),
     BindTexture(gl::types::GLenum, n::Texture),
     BindSampler(gl::types::GLuint, n::Texture),
     SetTextureSamplerSettings(gl::types::GLuint, n::Texture, image::SamplerInfo),
@@ -243,7 +246,10 @@ impl RawCommandBuffer {
 
             match *memory {
                 BufferMemory::Linear(_) => (0, false),
-                BufferMemory::Individual { ref mut storage, ref mut next_buffer_id } => {
+                BufferMemory::Individual {
+                    ref mut storage,
+                    ref mut next_buffer_id,
+                } => {
                     // Add a new pair of buffers
                     storage.insert(*next_buffer_id, pool::OwnedBuffer::new());
                     let id = *next_buffer_id;
@@ -284,25 +290,22 @@ impl RawCommandBuffer {
     /// Copy a given vector slice into the data buffer.
     fn add<T>(&mut self, data: &[T]) -> BufferSlice {
         self.add_raw(unsafe {
-            slice::from_raw_parts(
-                data.as_ptr() as *const _,
-                data.len() * mem::size_of::<T>(),
-            )
+            slice::from_raw_parts(data.as_ptr() as *const _, data.len() * mem::size_of::<T>())
         })
     }
 
     /// Copy a given u8 slice into the data buffer.
     fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
         let mut memory = self
-                .memory
-                .try_lock()
-                .expect("Trying to record a command buffers, while memory is in-use.");
+            .memory
+            .try_lock()
+            .expect("Trying to record a command buffers, while memory is in-use.");
 
         let data_buffer = match *memory {
             BufferMemory::Linear(ref mut buffer) => &mut buffer.data,
-            BufferMemory::Individual { ref mut storage, .. } => {
-                &mut storage.get_mut(&self.id).unwrap().data
-            }
+            BufferMemory::Individual {
+                ref mut storage, ..
+            } => &mut storage.get_mut(&self.id).unwrap().data,
         };
         data_buffer.extend_from_slice(data);
         let slice = BufferSlice {
@@ -433,11 +436,21 @@ impl RawCommandBuffer {
                             let channel = view_format.base_format().1;
 
                             let cmd = match channel {
-                                ChannelType::Unorm | ChannelType::Inorm | ChannelType::Ufloat |
-                                ChannelType::Float | ChannelType::Srgb | ChannelType::Uscaled |
-                                ChannelType::Iscaled => Command::ClearBufferColorF(0, unsafe { cv.color.float32 }),
-                                ChannelType::Uint => Command::ClearBufferColorU(0, unsafe { cv.color.uint32 }),
-                                ChannelType::Int => Command::ClearBufferColorI(0, unsafe { cv.color.int32 }),
+                                ChannelType::Unorm
+                                | ChannelType::Inorm
+                                | ChannelType::Ufloat
+                                | ChannelType::Float
+                                | ChannelType::Srgb
+                                | ChannelType::Uscaled
+                                | ChannelType::Iscaled => {
+                                    Command::ClearBufferColorF(0, unsafe { cv.color.float32 })
+                                }
+                                ChannelType::Uint => {
+                                    Command::ClearBufferColorU(0, unsafe { cv.color.uint32 })
+                                }
+                                ChannelType::Int => {
+                                    Command::ClearBufferColorI(0, unsafe { cv.color.int32 })
+                                }
                             };
 
                             return Some(cmd);
@@ -482,8 +495,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     unsafe fn begin(
         &mut self,
         _flags: hal::command::CommandBufferFlags,
-        _inheritance_info: hal::command::CommandBufferInheritanceInfo<Backend>
-    ) { // TODO: Implement flags!
+        _inheritance_info: hal::command::CommandBufferInheritanceInfo<Backend>,
+    ) {
+        // TODO: Implement flags!
         if self.individual_reset {
             // Implicit buffer reset when individual reset is set.
             self.reset(false);
@@ -499,29 +513,28 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     unsafe fn reset(&mut self, _release_resources: bool) {
         if !self.individual_reset {
             error!("Associated pool must allow individual resets.");
-            return
+            return;
         }
 
         self.soft_reset();
         let mut memory = self
-                .memory
-                .try_lock()
-                .expect("Trying to reset a command buffer, while memory is in-use.");
+            .memory
+            .try_lock()
+            .expect("Trying to reset a command buffer, while memory is in-use.");
 
         match *memory {
             // Linear` can't have individual reset ability.
             BufferMemory::Linear(_) => unreachable!(),
-            BufferMemory::Individual { ref mut storage, .. } => {
+            BufferMemory::Individual {
+                ref mut storage, ..
+            } => {
                 // TODO: should use the `release_resources` and shrink the buffers?
-                storage
-                    .get_mut(&self.id)
-                    .map(|buffer| {
-                        buffer.commands.clear();
-                        buffer.data.clear();
-                    });
+                storage.get_mut(&self.id).map(|buffer| {
+                    buffer.commands.clear();
+                    buffer.data.clear();
+                });
             }
         }
-
     }
 
     unsafe fn pipeline_barrier<'a, T>(
@@ -576,7 +589,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, *framebuffer));
 
         let mut clear_values_iter = clear_values.into_iter();
-        let attachment_clears = render_pass.attachments
+        let attachment_clears = render_pass
+            .attachments
             .iter()
             .enumerate()
             .map(|(i, attachment)| {
@@ -598,7 +612,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         None
                     },
                 }
-            }).collect();
+            })
+            .collect();
 
         self.pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
@@ -644,15 +659,29 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                     n::ImageKind::Texture(id) => n::ImageView::Texture(id, 0), //TODO
                 };
                 self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
-                self.push_cmd(Command::BindTargetView(gl::DRAW_FRAMEBUFFER, gl::COLOR_ATTACHMENT0, view));
+                self.push_cmd(Command::BindTargetView(
+                    gl::DRAW_FRAMEBUFFER,
+                    gl::COLOR_ATTACHMENT0,
+                    view,
+                ));
                 self.push_cmd(Command::SetDrawColorBuffers(1));
 
                 match image.channel {
-                    ChannelType::Unorm | ChannelType::Inorm | ChannelType::Ufloat |
-                    ChannelType::Float | ChannelType::Srgb | ChannelType::Uscaled |
-                    ChannelType::Iscaled => self.push_cmd(Command::ClearBufferColorF(0, unsafe { color.float32 })),
-                    ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, unsafe { color.uint32 })),
-                    ChannelType::Int => self.push_cmd(Command::ClearBufferColorI(0, unsafe { color.int32 })),
+                    ChannelType::Unorm
+                    | ChannelType::Inorm
+                    | ChannelType::Ufloat
+                    | ChannelType::Float
+                    | ChannelType::Srgb
+                    | ChannelType::Uscaled
+                    | ChannelType::Iscaled => {
+                        self.push_cmd(Command::ClearBufferColorF(0, unsafe { color.float32 }))
+                    }
+                    ChannelType::Uint => {
+                        self.push_cmd(Command::ClearBufferColorU(0, unsafe { color.uint32 }))
+                    }
+                    ChannelType::Int => {
+                        self.push_cmd(Command::ClearBufferColorI(0, unsafe { color.int32 }))
+                    }
                 }
             }
             None => {
@@ -702,7 +731,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _regions: T,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<command::ImageBlit>
+        T::Item: Borrow<command::ImageBlit>,
     {
         unimplemented!()
     }
@@ -725,7 +754,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         for (i, (buffer, offset)) in buffers.into_iter().enumerate() {
             let index = first_binding as usize + i;
             if self.cache.vertex_buffers.len() <= index {
-                self.cache.vertex_buffers.resize(index+1, 0);
+                self.cache.vertex_buffers.resize(index + 1, 0);
             }
             self.cache.vertex_buffers[index] = buffer.borrow().raw;
             if offset != 0 {
@@ -750,7 +779,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         let mut len = 0;
         for viewport in viewports {
             let viewport = viewport.borrow();
-            let viewport_rect = &[viewport.rect.x as f32, viewport.rect.y as f32, viewport.rect.w as f32, viewport.rect.h as f32];
+            let viewport_rect = &[
+                viewport.rect.x as f32,
+                viewport.rect.y as f32,
+                viewport.rect.w as f32,
+                viewport.rect.h as f32,
+            ];
             viewport_ptr.append(self.add::<f32>(viewport_rect));
             let depth_range = &[viewport.depth.start as f64, viewport.depth.end as f64];
             depth_range_ptr.append(self.add::<f64>(depth_range));
@@ -763,7 +797,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 self.cache.error_state = true;
             }
             n if n + first_viewport as usize <= self.limits.max_viewports => {
-                self.push_cmd(Command::SetViewports { first_viewport, viewport_ptr, depth_range_ptr });
+                self.push_cmd(Command::SetViewports {
+                    first_viewport,
+                    viewport_ptr,
+                    depth_range_ptr,
+                });
             }
             _ => {
                 error!("Number of viewports and first viewport index exceed the number of maximum viewports");
@@ -781,7 +819,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         let mut len = 0;
         for scissor in scissors {
             let scissor = scissor.borrow();
-            let scissor = &[scissor.x as i32, scissor.y as i32, scissor.w as i32, scissor.h as i32];
+            let scissor = &[
+                scissor.x as i32,
+                scissor.y as i32,
+                scissor.w as i32,
+                scissor.h as i32,
+            ];
             scissors_ptr.append(self.add::<i32>(scissor));
             len += 1;
         }
@@ -908,55 +951,62 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             let bindings = desc_set.bindings.lock().unwrap();
             for new_binding in &*bindings {
                 match new_binding {
-                    n::DescSetBindings::Buffer {ty: btype, binding, buffer, offset, size} => {
+                    n::DescSetBindings::Buffer {
+                        ty: btype,
+                        binding,
+                        buffer,
+                        offset,
+                        size,
+                    } => {
                         let btype = match btype {
                             n::BindingTypes::UniformBuffers => gl::UNIFORM_BUFFER,
                             n::BindingTypes::Images => panic!("Wrong desc set binding"),
                         };
-                        for binding in drd.get_binding(n::BindingTypes::UniformBuffers, set, *binding).unwrap() {
+                        for binding in drd
+                            .get_binding(n::BindingTypes::UniformBuffers, set, *binding)
+                            .unwrap()
+                        {
                             self.push_cmd(Command::BindBufferRange(
-                                btype,
-                                *binding,
-                                *buffer,
-                                *offset,
-                                *size,
+                                btype, *binding, *buffer, *offset, *size,
                             ))
                         }
                     }
                     n::DescSetBindings::Texture(binding, texture) => {
-                        for binding in drd.get_binding(n::BindingTypes::Images, set, *binding).unwrap() {
-                            self.push_cmd(Command::BindTexture(
-                                *binding,
-                                *texture,
-                            ))
+                        for binding in drd
+                            .get_binding(n::BindingTypes::Images, set, *binding)
+                            .unwrap()
+                        {
+                            self.push_cmd(Command::BindTexture(*binding, *texture))
                         }
                     }
                     n::DescSetBindings::Sampler(binding, sampler) => {
-                        for binding in drd.get_binding(n::BindingTypes::Images, set, *binding).unwrap() {
-                            self.push_cmd(Command::BindSampler(
-                                *binding,
-                                *sampler,
-                            ))
+                        for binding in drd
+                            .get_binding(n::BindingTypes::Images, set, *binding)
+                            .unwrap()
+                        {
+                            self.push_cmd(Command::BindSampler(*binding, *sampler))
                         }
                     }
                     n::DescSetBindings::SamplerInfo(binding, sinfo) => {
                         let mut all_txts = drd
-                            .get_binding(n::BindingTypes::Images, set, *binding).unwrap()
+                            .get_binding(n::BindingTypes::Images, set, *binding)
+                            .unwrap()
                             .into_iter()
-                            .flat_map(|binding|
-                                bindings
-                                    .iter()
-                                    .filter_map(move |b|
-                                        if let n::DescSetBindings::Texture(b, t) = b {
-                                            let nbs = drd.get_binding(n::BindingTypes::Images, set, *b)?;
-                                            if nbs.contains(binding) {
-                                                Some((*binding, *t))
-                                            } else {
-                                                None
-                                            }
-                                        } else { None }
-                                    )
-                            )
+                            .flat_map(|binding| {
+                                bindings.iter().filter_map(move |b| {
+                                    if let n::DescSetBindings::Texture(b, t) = b {
+                                        let nbs =
+                                            drd.get_binding(n::BindingTypes::Images, set, *b)?;
+                                        if nbs.contains(binding) {
+                                            Some((*binding, *t))
+                                        } else {
+                                            None
+                                        }
+                                    } else {
+                                        None
+                                    }
+                                })
+                            })
                             .collect::<Vec<_>>();
 
                         // TODO: Check that other samplers aren't using the same
@@ -982,9 +1032,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     unsafe fn bind_compute_pipeline(&mut self, pipeline: &n::ComputePipeline) {
-        let n::ComputePipeline {
-            program,
-        } = *pipeline;
+        let n::ComputePipeline { program } = *pipeline;
 
         if self.cache.program != Some(program) {
             self.cache.program = Some(program);
@@ -1060,16 +1108,16 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-     unsafe fn copy_buffer_to_image<T>(
-         &mut self,
+    unsafe fn copy_buffer_to_image<T>(
+        &mut self,
         src: &n::Buffer,
         dst: &n::Image,
         _: image::Layout,
         regions: T,
-     ) where
-         T: IntoIterator,
-         T::Item: Borrow<command::BufferImageCopy>,
-     {
+    ) where
+        T: IntoIterator,
+        T::Item: Borrow<command::BufferImageCopy>,
+    {
         let old_size = self.buf.size;
 
         for region in regions {
@@ -1121,13 +1169,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         match self.cache.primitive {
             Some(primitive) => {
-                self.push_cmd(
-                    Command::Draw {
-                        primitive,
-                        vertices,
-                        instances,
-                    }
-                );
+                self.push_cmd(Command::Draw {
+                    primitive,
+                    vertices,
+                    instances,
+                });
             }
             None => {
                 warn!("No primitive bound. An active pipeline needs to be bound before calling `draw`.");
@@ -1155,16 +1201,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         };
         match self.cache.primitive {
             Some(primitive) => {
-                self.push_cmd(
-                    Command::DrawIndexed {
-                        primitive,
-                        index_type,
-                        index_count: indices.end - indices.start,
-                        index_buffer_offset: start as _,
-                        base_vertex,
-                        instances,
-                    }
-                );
+                self.push_cmd(Command::DrawIndexed {
+                    primitive,
+                    index_type,
+                    index_count: indices.end - indices.start,
+                    index_buffer_offset: start as _,
+                    base_vertex,
+                    instances,
+                });
             }
             None => {
                 warn!("No primitive bound. An active pipeline needs to be bound before calling `draw_indexed`.");
@@ -1193,11 +1237,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn begin_query(
-        &mut self,
-        _query: query::Query<Backend>,
-        _flags: query::ControlFlags,
-    ) {
+    unsafe fn begin_query(&mut self, _query: query::Query<Backend>, _flags: query::ControlFlags) {
         unimplemented!()
     }
 
@@ -1213,26 +1253,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn end_query(
-        &mut self,
-        _query: query::Query<Backend>,
-    ) {
+    unsafe fn end_query(&mut self, _query: query::Query<Backend>) {
         unimplemented!()
     }
 
-    unsafe fn reset_query_pool(
-        &mut self,
-        _pool: &(),
-        _queries: Range<query::Id>,
-    ) {
+    unsafe fn reset_query_pool(&mut self, _pool: &(), _queries: Range<query::Id>) {
         unimplemented!()
     }
 
-    unsafe fn write_timestamp(
-        &mut self,
-        _: pso::PipelineStage,
-        _: query::Query<Backend>,
-    ) {
+    unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, _: query::Query<Backend>) {
         unimplemented!()
     }
 
@@ -1255,10 +1284,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn execute_commands<'a, T, I>(
-        &mut self,
-        _buffers: I,
-    ) where
+    unsafe fn execute_commands<'a, T, I>(&mut self, _buffers: I)
+    where
         T: 'a + Borrow<RawCommandBuffer>,
         I: IntoIterator<Item = &'a T>,
     {
@@ -1271,16 +1298,21 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 /// `push_cmd`, but this is needed when the caller would like to perform a
 /// partial borrow to `self`. For example, iterating through a field on
 /// `self` and calling `self.push_cmd` per iteration.
-fn push_cmd_internal(id: &u64, memory: &mut Arc<Mutex<BufferMemory>>, buffer: &mut BufferSlice, cmd: Command) {
+fn push_cmd_internal(
+    id: &u64,
+    memory: &mut Arc<Mutex<BufferMemory>>,
+    buffer: &mut BufferSlice,
+    cmd: Command,
+) {
     let mut memory = memory
         .try_lock()
         .expect("Trying to record a command buffers, while memory is in-use.");
 
     let cmd_buffer = match *memory {
         BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
-        BufferMemory::Individual { ref mut storage, .. } => {
-            &mut storage.get_mut(id).unwrap().commands
-        }
+        BufferMemory::Individual {
+            ref mut storage, ..
+        } => &mut storage.get_mut(id).unwrap().commands,
     };
 
     cmd_buffer.push(cmd);

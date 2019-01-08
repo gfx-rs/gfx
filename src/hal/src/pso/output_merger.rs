@@ -186,7 +186,6 @@ impl ColorBlendDesc {
     pub const EMPTY: Self = ColorBlendDesc(ColorMask::ALL, BlendState::Off);
 }
 
-
 /// Depth test state.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

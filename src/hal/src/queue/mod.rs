@@ -9,9 +9,9 @@
 pub mod capability;
 pub mod family;
 
-use std::iter;
 use std::any::Any;
 use std::borrow::Borrow;
+use std::iter;
 use std::marker::PhantomData;
 
 use command::{Primary, Submittable};
@@ -20,14 +20,8 @@ use pso;
 use window::SwapImageIndex;
 use Backend;
 
-pub use self::capability::{
-    Capability, Supports,
-    Compute, Graphics, General, Transfer,
-};
-pub use self::family::{
-    QueueFamily, QueueFamilyId, QueueGroup, Queues,
-};
-
+pub use self::capability::{Capability, Compute, General, Graphics, Supports, Transfer};
+pub use self::family::{QueueFamily, QueueFamilyId, QueueGroup, Queues};
 
 /// The type of the queue, an enum encompassing `queue::Capability`
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -64,7 +58,9 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
     /// Trying to submit compute commands to a graphics queue will result in undefined behavior.
     /// Each queue implements safe wrappers according to their supported functionalities!
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
-        &mut self, submission: Submission<Ic, Iw, Is>, fence: Option<&B::Fence>
+        &mut self,
+        submission: Submission<Ic, Iw, Is>,
+        fence: Option<&B::Fence>,
     ) where
         T: 'a + Borrow<B::CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
@@ -77,7 +73,11 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
     /// list more than once.
     ///
     /// Unsafe for the same reasons as `submit()`.
-    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(
+        &mut self,
+        swapchains: Is,
+        wait_semaphores: Iw,
+    ) -> Result<(), ()>
     where
         Self: Sized,
         W: 'a + Borrow<B::Swapchain>,
@@ -121,7 +121,8 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
     /// Submit command buffers to queue for execution.
     /// `fence` must be in unsignalled state, and will be signalled after all command buffers in the submission have
     /// finished execution.
-    pub unsafe fn submit<'a, T, Ic, S, Iw, Is>(&mut self,
+    pub unsafe fn submit<'a, T, Ic, S, Iw, Is>(
+        &mut self,
         submission: Submission<Ic, Iw, Is>,
         fence: Option<&B::Fence>,
     ) where
@@ -136,10 +137,12 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
 
     /// Submit command buffers without any semaphore waits or signals.
     pub unsafe fn submit_nosemaphores<'a, T, I>(
-        &mut self, command_buffers: I, fence: Option<&B::Fence>
+        &mut self,
+        command_buffers: I,
+        fence: Option<&B::Fence>,
     ) where
         T: 'a + Submittable<B, C, Primary>,
-        I: IntoIterator<Item = &'a T>
+        I: IntoIterator<Item = &'a T>,
     {
         let submission = Submission {
             command_buffers,
@@ -152,7 +155,11 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
     /// Presents the result of the queue to the given swapchains, after waiting on all the
     /// semaphores given in `wait_semaphores`. A given swapchain must not appear in this
     /// list more than once.
-    pub unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, wait_semaphores: Iw) -> Result<(), ()>
+    pub unsafe fn present<'a, W, Is, S, Iw>(
+        &mut self,
+        swapchains: Is,
+        wait_semaphores: Iw,
+    ) -> Result<(), ()>
     where
         W: 'a + Borrow<B::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,

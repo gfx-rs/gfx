@@ -95,11 +95,11 @@ impl Drop for RawInstance {
     fn drop(&mut self) {
         unsafe {
             #[cfg(debug_assertions)]
-                {
-                    if let Some((ref ext, callback)) = self.1 {
-                        ext.destroy_debug_utils_messenger_ext(callback, None);
-                    }
+            {
+                if let Some((ref ext, callback)) = self.1 {
+                    ext.destroy_debug_utils_messenger_ext(callback, None);
                 }
+            }
 
             self.0.destroy_instance(None);
         }
@@ -347,7 +347,7 @@ impl Instance {
         };
 
         #[cfg(debug_assertions)]
-            let debug_messenger = {
+        let debug_messenger = {
             let ext = ext::DebugUtils::new(entry, &instance);
             let info = vk::DebugUtilsMessengerCreateInfoEXT {
                 s_type: vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
@@ -362,7 +362,7 @@ impl Instance {
             Some((ext, handle))
         };
         #[cfg(not(debug_assertions))]
-            let debug_messenger = None;
+        let debug_messenger = None;
 
         Instance {
             raw: Arc::new(RawInstance(instance, debug_messenger)),
@@ -669,9 +669,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let is_windows_intel_dual_src_bug = cfg!(windows)
             && self.properties.vendor_id == info::intel::VENDOR
             && (self.properties.device_id & info::intel::DEVICE_KABY_LAKE_MASK
-            == info::intel::DEVICE_KABY_LAKE_MASK
-            || self.properties.device_id & info::intel::DEVICE_SKY_LAKE_MASK
-            == info::intel::DEVICE_SKY_LAKE_MASK);
+                == info::intel::DEVICE_KABY_LAKE_MASK
+                || self.properties.device_id & info::intel::DEVICE_SKY_LAKE_MASK
+                    == info::intel::DEVICE_SKY_LAKE_MASK);
 
         let features = unsafe { self.instance.0.get_physical_device_features(self.handle) };
         let mut bits = Features::empty();
@@ -883,11 +883,11 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         swapchains: Is,
         wait_semaphores: Iw,
     ) -> Result<(), ()>
-        where
-            W: 'a + Borrow<window::Swapchain>,
-            Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
-            S: 'a + Borrow<native::Semaphore>,
-            Iw: IntoIterator<Item = &'a S>,
+    where
+        W: 'a + Borrow<window::Swapchain>,
+        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
+        S: 'a + Borrow<native::Semaphore>,
+        Iw: IntoIterator<Item = &'a S>,
     {
         let semaphores = wait_semaphores
             .into_iter()
