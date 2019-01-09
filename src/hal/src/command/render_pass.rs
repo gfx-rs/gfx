@@ -7,7 +7,7 @@ use super::{
     CommandBufferInheritanceInfo, DescriptorSetOffset, MultiShot, OneShot, Primary,
     RawCommandBuffer, Secondary, Shot, Submittable,
 };
-use queue::{Graphics, Supports};
+use queue::{Capability, Graphics, Supports};
 use {buffer, pass, pso, query};
 use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset};
 
@@ -366,8 +366,8 @@ impl<'a, B: Backend> Drop for RenderPassSecondaryEncoder<'a, B> {
 }
 
 /// A secondary command buffer recorded entirely within a subpass.
-pub struct SubpassCommandBuffer<B: Backend, S: Shot>(
-    RenderSubpassCommon<B, B::CommandBuffer>,
+pub struct SubpassCommandBuffer<B: Backend, S: Shot, R = <B as Backend>::CommandBuffer>(
+    RenderSubpassCommon<B, R>,
     PhantomData<S>,
 );
 impl<B: Backend, S: Shot> SubpassCommandBuffer<B, S> {
@@ -434,4 +434,23 @@ impl<B: Backend, S: Shot> DerefMut for SubpassCommandBuffer<B, S> {
     fn deref_mut(&mut self) -> &mut RenderSubpassCommon<B, B::CommandBuffer> {
         &mut self.0
     }
+}
+
+impl<B, S, R> Borrow<R> for SubpassCommandBuffer<B, S, R>
+where
+    B: Backend<CommandBuffer = R>,
+    S: Shot,
+    R: RawCommandBuffer<B>,
+{
+    fn borrow(&self) -> &R {
+        &self.0.cmb
+    }
+}
+
+impl<B, C, S> Submittable<B, C, Secondary> for SubpassCommandBuffer<B, S>
+where
+    B: Backend,
+    C: Capability + Supports<Graphics>,
+    S: Shot,
+{
 }
