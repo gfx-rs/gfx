@@ -28,7 +28,8 @@ mod transfer;
 pub use self::graphics::*;
 pub use self::raw::{
     ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw, CommandBufferFlags,
-    CommandBufferInheritanceInfo, DescriptorSetOffset, Level as RawLevel, RawCommandBuffer,
+    CommandBufferInheritanceInfo, DescriptorSetOffset, IntoRawCommandBuffer, Level as RawLevel,
+    RawCommandBuffer,
 };
 pub use self::render_pass::*;
 pub use self::transfer::*;
@@ -89,6 +90,12 @@ where
 impl<B: Backend, C, K: Capability + Supports<C>, S, L: Level> Submittable<B, K, L>
     for CommandBuffer<B, C, S, L>
 {
+}
+
+impl<B: Backend, C, S, L> IntoRawCommandBuffer<B, C> for CommandBuffer<B, C, S, L> {
+    fn into_raw(self) -> B::CommandBuffer {
+        self.raw
+    }
 }
 
 impl<B: Backend, C> CommandBuffer<B, C, OneShot, Primary> {
