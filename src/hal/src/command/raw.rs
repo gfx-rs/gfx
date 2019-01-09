@@ -526,3 +526,9 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
         T: 'a + Borrow<B::CommandBuffer>,
         I: IntoIterator<Item = &'a T>;
 }
+
+/// A trait for types that can be converted into raw command buffer.
+pub trait IntoRawCommandBuffer<B: Backend, C> {
+    /// Converts into raw command buffer.
+    fn into_raw(self) -> B::CommandBuffer;
+}

@@ -1,6 +1,9 @@
 //! Command pools
 
-use command::{CommandBuffer, RawLevel, SecondaryCommandBuffer, Shot, SubpassCommandBuffer};
+use command::{
+    CommandBuffer, IntoRawCommandBuffer, RawLevel, SecondaryCommandBuffer, Shot,
+    SubpassCommandBuffer,
+};
 use queue::capability::{Graphics, Supports};
 use Backend;
 
@@ -83,11 +86,13 @@ impl<B: Backend, C> CommandPool<B, C> {
     }
 
     /// Free the given iterator of command buffers from the pool.
-    pub unsafe fn free<S: Shot, I>(&mut self, cmd_buffers: I)
+    pub unsafe fn free<I>(&mut self, cmd_buffers: I)
     where
-        I: IntoIterator<Item = CommandBuffer<B, C, S>>,
+        I: IntoIterator,
+        I::Item: IntoRawCommandBuffer<B, C>,
     {
-        self.raw.free(cmd_buffers.into_iter().map(|cmb| cmb.raw))
+        self.raw
+            .free(cmd_buffers.into_iter().map(|cmb| cmb.into_raw()))
     }
 
     /// Downgrade a typed command pool to untyped one.

@@ -4,8 +4,8 @@ use std::ops::{Deref, DerefMut, Range};
 
 use super::{
     AttachmentClear, ClearValue, ClearValueRaw, CommandBuffer, CommandBufferFlags,
-    CommandBufferInheritanceInfo, DescriptorSetOffset, MultiShot, OneShot, Primary,
-    RawCommandBuffer, Secondary, Shot, Submittable,
+    CommandBufferInheritanceInfo, DescriptorSetOffset, IntoRawCommandBuffer, MultiShot, OneShot,
+    Primary, RawCommandBuffer, Secondary, Shot, Submittable,
 };
 use queue::{Capability, Graphics, Supports};
 use {buffer, pass, pso, query};
@@ -453,4 +453,14 @@ where
     C: Capability + Supports<Graphics>,
     S: Shot,
 {
+}
+
+impl<B, S> IntoRawCommandBuffer<B, Graphics> for SubpassCommandBuffer<B, S>
+where
+    B: Backend,
+    S: Shot,
+{
+    fn into_raw(self) -> B::CommandBuffer {
+        self.0.cmb
+    }
 }
