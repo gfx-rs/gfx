@@ -117,9 +117,7 @@ fn main() {
             back::glutin::GlWindow::new(wb, builder, &events_loop).unwrap()
         };
         #[cfg(target_arch = "wasm32")]
-        let window = {
-            back::Window
-        };
+        let window = { back::Window };
 
         let surface = back::Surface::from_window(window);
         let adapters = surface.enumerate_adapters();

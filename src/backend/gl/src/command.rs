@@ -375,7 +375,12 @@ impl RawCommandBuffer {
                         &self.id,
                         &mut self.memory,
                         &mut self.buf,
-                        Command::BindAttribute(attribute.clone(), handle.unwrap(), desc.stride as _, desc.rate as u32),
+                        Command::BindAttribute(
+                            attribute.clone(),
+                            handle.unwrap(),
+                            desc.stride as _,
+                            desc.rate as u32,
+                        ),
                     );
                 }
                 _ => error!("No vertex buffer description bound at {}", binding),
@@ -579,7 +584,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         //  >= GL 4.5: Invalidate framebuffer attachment when store op is `DONT_CARE`.
 
         // 2./3.
-        self.push_cmd(Command::BindFrameBuffer(glow::DRAW_FRAMEBUFFER, *framebuffer));
+        self.push_cmd(Command::BindFrameBuffer(
+            glow::DRAW_FRAMEBUFFER,
+            *framebuffer,
+        ));
 
         let mut clear_values_iter = clear_values.into_iter();
         let attachment_clears = render_pass
@@ -651,10 +659,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                     n::ImageKind::Surface(id) => n::ImageView::Surface(id),
                     n::ImageKind::Texture(id) => n::ImageView::Texture(id, 0), //TODO
                 };
-                self.push_cmd(Command::BindFrameBuffer(
-                    glow::DRAW_FRAMEBUFFER,
-                    Some(fbo),
-                ));
+                self.push_cmd(Command::BindFrameBuffer(glow::DRAW_FRAMEBUFFER, Some(fbo)));
                 self.push_cmd(Command::BindTargetView(
                     glow::DRAW_FRAMEBUFFER,
                     glow::COLOR_ATTACHMENT0,
@@ -974,10 +979,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                             .get_binding(n::BindingTypes::Images, set, *binding)
                             .unwrap()
                         {
-                            self.push_cmd(Command::BindTexture(
-                                *binding,
-                                *texture,
-                            ))
+                            self.push_cmd(Command::BindTexture(*binding, *texture))
                         }
                     }
                     n::DescSetBindings::Sampler(binding, sampler) => {
@@ -986,10 +988,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                             .get_binding(n::BindingTypes::Images, set, *binding)
                             .unwrap()
                         {
-                            self.push_cmd(Command::BindSampler(
-                                *binding,
-                                *sampler,
-                            ))
+                            self.push_cmd(Command::BindSampler(*binding, *sampler))
                         }
                     }
                     n::DescSetBindings::SamplerInfo(binding, sinfo) => {
