@@ -2,7 +2,6 @@ use hal::{self, format as f, image};
 
 use {Backend as B, Device, PhysicalDevice, QueueFamily};
 
-
 fn get_window_extent(window: &Window) -> image::Extent {
     image::Extent {
         width: 640 as image::Size,
@@ -46,7 +45,9 @@ pub struct Swapchain {
 
 impl hal::Swapchain<B> for Swapchain {
     unsafe fn acquire_image(
-        &mut self, _timeout_ns: u64, _sync: hal::FrameSync<B>
+        &mut self,
+        _timeout_ns: u64,
+        _sync: hal::FrameSync<B>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         // TODO: sync
         Ok(0)
@@ -59,9 +60,7 @@ pub struct Surface {
 
 impl Surface {
     pub fn from_window(window: Window) -> Self {
-        Surface {
-            window: Window
-        }
+        Surface { window: Window }
     }
 
     pub fn get_window(&self) -> &Window {
@@ -80,14 +79,8 @@ impl Surface {
 
         // TODO: expose more formats
         match (color_bits, alpha_bits, srgb) {
-            (24, 8, true) => vec![
-                f::Format::Rgba8Srgb,
-                f::Format::Bgra8Srgb,
-            ],
-            (24, 8, false) => vec![
-                f::Format::Rgba8Unorm,
-                f::Format::Bgra8Unorm,
-            ],
+            (24, 8, true) => vec![f::Format::Rgba8Srgb, f::Format::Bgra8Srgb],
+            (24, 8, false) => vec![f::Format::Rgba8Unorm, f::Format::Bgra8Unorm],
             _ => vec![],
         }
     }
@@ -96,23 +89,30 @@ impl Surface {
 impl hal::Surface<B> for Surface {
     fn kind(&self) -> hal::image::Kind {
         let ex = get_window_extent(&self.window);
-        let samples = self.window
-            .get_pixel_format()
-            .multisampling
-            .unwrap_or(1);
+        let samples = self.window.get_pixel_format().multisampling.unwrap_or(1);
         hal::image::Kind::D2(ex.width, ex.height, 1, samples as _)
     }
 
     fn compatibility(
-        &self, _: &PhysicalDevice
-    ) -> (hal::SurfaceCapabilities, Option<Vec<f::Format>>, Vec<hal::PresentMode>, Vec<hal::CompositeAlpha>) {
+        &self,
+        _: &PhysicalDevice,
+    ) -> (
+        hal::SurfaceCapabilities,
+        Option<Vec<f::Format>>,
+        Vec<hal::PresentMode>,
+        Vec<hal::CompositeAlpha>,
+    ) {
         let ex = get_window_extent(&self.window);
         let extent = hal::window::Extent2D::from(ex);
 
         let caps = hal::SurfaceCapabilities {
-            image_count: if self.window.get_pixel_format().double_buffer { 2..3 } else { 1..2 },
+            image_count: if self.window.get_pixel_format().double_buffer {
+                2..3
+            } else {
+                1..2
+            },
             current_extent: Some(extent),
-            extents: extent .. hal::window::Extent2D {
+            extents: extent..hal::window::Extent2D {
                 width: ex.width + 1,
                 height: ex.height + 1,
             },
@@ -126,10 +126,17 @@ impl hal::Surface<B> for Surface {
             hal::CompositeAlpha::Inherit, //TODO
         ];
 
-        (caps, Some(self.swapchain_formats()), present_modes, composite_alphas)
+        (
+            caps,
+            Some(self.swapchain_formats()),
+            present_modes,
+            composite_alphas,
+        )
     }
 
-    fn supports_queue_family(&self, _: &QueueFamily) -> bool { true }
+    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
+        true
+    }
 }
 
 impl Device {

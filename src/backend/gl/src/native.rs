@@ -8,7 +8,7 @@ use crate::hal::{format, image as i, pass, pso};
 use crate::Backend;
 use GlContext;
 
-pub type TextureType = gl::types::GLenum;
+pub type TextureType = u32;
 
 pub type VertexArray = <GlContext as glow::Context>::VertexArray;
 pub type RawBuffer = <GlContext as glow::Context>::Buffer;
@@ -181,7 +181,7 @@ pub(crate) enum DescSetBindings {
         binding: pso::DescriptorBinding,
         buffer: RawBuffer,
         offset: i32,
-        size: i32
+        size: i32,
     },
     Texture(pso::DescriptorBinding, Texture, TextureType),
     Sampler(pso::DescriptorBinding, Sampler),

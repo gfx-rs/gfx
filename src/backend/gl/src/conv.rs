@@ -1,5 +1,5 @@
-use crate::hal::{buffer, image as i, Primitive};
 use crate::hal::format::Format;
+use crate::hal::{buffer, image as i, Primitive};
 use crate::native::VertexAttribFunction;
 
 /*
