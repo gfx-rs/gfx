@@ -21,7 +21,6 @@ default = ["glutin"]
 [dependencies]
 bitflags = "1"
 log = { version = "0.4" }
-gfx_gl = "0.5"
 gfx-hal = { path = "../../hal", version = "0.2" }
 smallvec = "0.6"
 spirv_cross = "0.12.1"

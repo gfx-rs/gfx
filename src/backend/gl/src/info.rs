@@ -1,7 +1,8 @@
 use crate::hal::{Features, Limits};
 use crate::{gl, Error, GlContainer};
 use std::collections::HashSet;
-use std::{ffi, fmt, mem, str};
+use std::{fmt, str};
+use crate::{GlContainer, Error};
 
 use glow::Context;
 
@@ -301,8 +302,8 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         max_image_2d_size: max_texture_size,
         max_image_3d_size: max_texture_size,
         max_image_cube_size: max_texture_size,
-        max_image_array_layers: get_usize(gl, gl::MAX_ARRAY_TEXTURE_LAYERS).unwrap_or(1) as u16,
-        max_texel_elements: get_usize(gl, gl::MAX_TEXTURE_BUFFER_SIZE).unwrap_or(0),
+        max_image_array_layers: get_usize(gl, glow::MAX_ARRAY_TEXTURE_LAYERS).unwrap_or(1) as u16,
+        max_texel_elements: get_usize(gl, glow::MAX_TEXTURE_BUFFER_SIZE).unwrap_or(0),
         max_viewports: 1,
         optimal_buffer_copy_offset_alignment: 1,
         optimal_buffer_copy_pitch_alignment: 1,
@@ -313,12 +314,12 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         ..Limits::default()
     };
 
-    if info.is_supported(&[Core(4, 0), Ext("GL_ARB_tessellation_shader")]) {
-        limits.max_patch_size = get_usize(gl, gl::MAX_PATCH_VERTICES).unwrap_or(0) as _;
+    if info.is_supported(&[Core(4,0), Ext("GL_ARB_tessellation_shader")]) {
+        limits.max_patch_size = get_usize(gl, glow::MAX_PATCH_VERTICES).unwrap_or(0) as _;
     }
-    if info.is_supported(&[Core(4, 1)]) {
+    if info.is_supported(&[Core(4,1)]) {
         // TODO: extension
-        limits.max_viewports = get_usize(gl, gl::MAX_VIEWPORTS).unwrap_or(0);
+        limits.max_viewports = get_usize(gl, glow::MAX_VIEWPORTS).unwrap_or(0);
     }
 
     if false

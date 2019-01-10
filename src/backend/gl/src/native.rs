@@ -5,7 +5,6 @@ use crate::hal::backend::FastHashMap;
 use crate::hal::memory::{Properties, Requirements};
 use crate::hal::{format, image as i, pass, pso};
 
-use crate::gl;
 use crate::Backend;
 use GlContext;
 
@@ -131,7 +130,7 @@ impl DescRemapData {
 pub struct GraphicsPipeline {
     pub(crate) program: Program,
     pub(crate) primitive: u32,
-    pub(crate) patch_size: Option<gl::types::GLint>,
+    pub(crate) patch_size: Option<i32>,
     pub(crate) blend_targets: Vec<pso::ColorBlendDesc>,
     pub(crate) attributes: Vec<AttributeDesc>,
     pub(crate) vertex_buffers: Vec<Option<pso::VertexBufferDesc>>,
@@ -180,8 +179,8 @@ pub(crate) enum DescSetBindings {
         ty: BindingTypes,
         binding: pso::DescriptorBinding,
         buffer: RawBuffer,
-        offset: gl::types::GLintptr,
-        size: gl::types::GLsizeiptr,
+        offset: i32,
+        size: i32
     },
     Texture(pso::DescriptorBinding, Texture),
     Sampler(pso::DescriptorBinding, Sampler),
@@ -248,13 +247,13 @@ impl Memory {
             .contains(Properties::CPU_VISIBLE | Properties::CPU_CACHED)
     }
 
-    pub fn map_flags(&self) -> gl::types::GLenum {
+    pub fn map_flags(&self) -> u32 {
         let mut flags = 0;
         if self.can_download() {
-            flags |= gl::MAP_READ_BIT;
+            flags |= glow::MAP_READ_BIT;
         }
         if self.can_upload() {
-            flags |= gl::MAP_WRITE_BIT;
+            flags |= glow::MAP_WRITE_BIT;
         }
         flags
     }
@@ -295,10 +294,10 @@ pub struct Semaphore;
 
 #[derive(Clone, Debug)]
 pub struct AttributeDesc {
-    pub(crate) location: gl::types::GLuint,
+    pub(crate) location: u32,
     pub(crate) offset: u32,
-    pub(crate) binding: gl::types::GLuint,
-    pub(crate) size: gl::types::GLint,
+    pub(crate) binding: u32,
+    pub(crate) size: i32,
     pub(crate) format: u32,
     pub(crate) vertex_attrib_fn: VertexAttribFunction,
 }

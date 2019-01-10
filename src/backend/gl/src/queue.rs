@@ -1,12 +1,12 @@
 use crate::Starc;
 use std::borrow::Borrow;
-use std::{mem, ptr, slice};
+use std::{mem, slice};
+use crate::Starc;
 
 use crate::hal;
 use crate::hal::error;
 
 use glow::Context;
-use crate::gl;
 use smallvec::SmallVec;
 
 use crate::info::LegacyFeatures;
@@ -96,10 +96,10 @@ impl CommandQueue {
         use core::format::ChannelType as C;
         let (fm8, fm16, fm32) = match bel.elem.format.1 {
             C::Int | C::Inorm =>
-                (gl::BYTE, gl::SHORT, gl::INT),
+                (glow::BYTE, glow::SHORT, glow::INT),
             C::Uint | C::Unorm =>
-                (gl::UNSIGNED_BYTE, gl::UNSIGNED_SHORT, gl::UNSIGNED_INT),
-            C::Float => (gl::ZERO, gl::HALF_FLOAT, gl::FLOAT),
+                (glow::UNSIGNED_BYTE, glow::UNSIGNED_SHORT, glow::UNSIGNED_INT),
+            C::Float => (glow::ZERO, glow::HALF_FLOAT, glow::FLOAT),
             C::Srgb => {
                 error!("Unsupported Srgb channel type");
                 return
@@ -123,32 +123,32 @@ impl CommandQueue {
             }
         };
         let gl = &self.share.context;
-        unsafe { gl.BindBuffer(gl::ARRAY_BUFFER, buffer) };
-        let offset = bel.elem.offset as *const gl::types::GLvoid;
-        let stride = bel.desc.stride as gl::types::GLint;
+        unsafe { gl.BindBuffer(glow::ARRAY_BUFFER, buffer) };
+        let offset = bel.elem.offset as *const glow::types::GLvoid;
+        let stride = bel.desc.stride as i32;
         match bel.elem.format.1 {
             C::Int | C::Uint => unsafe {
-                gl.VertexAttribIPointer(slot as gl::types::GLuint,
+                gl.VertexAttribIPointer(slot as glow::types::GLuint,
                     count, gl_type, stride, offset);
             },
             C::Inorm | C::Unorm => unsafe {
-                gl.VertexAttribPointer(slot as gl::types::GLuint,
-                    count, gl_type, gl::TRUE, stride, offset);
+                gl.VertexAttribPointer(slot as glow::types::GLuint,
+                    count, gl_type, glow::TRUE, stride, offset);
             },
             //C::Sscaled | C::Uscaled => unsafe {
-            //    gl.VertexAttribPointer(slot as gl::types::GLuint,
-            //        count, gl_type, gl::FALSE, stride, offset);
+            //    gl.VertexAttribPointer(slot as glow::types::GLuint,
+            //        count, gl_type, glow::FALSE, stride, offset);
             //},
             C::Float => unsafe {
-                gl.VertexAttribPointer(slot as gl::types::GLuint,
-                    count, gl_type, gl::FALSE, stride, offset);
+                gl.VertexAttribPointer(slot as glow::types::GLuint,
+                    count, gl_type, glow::FALSE, stride, offset);
             },
             C::Srgb => (),
         }
-        unsafe { gl.EnableVertexAttribArray(slot as gl::types::GLuint) };
+        unsafe { gl.EnableVertexAttribArray(slot as glow::types::GLuint) };
         if self.share.capabilities.instance_rate {
-            unsafe { gl.VertexAttribDivisor(slot as gl::types::GLuint,
-                bel.desc.rate as gl::types::GLuint) };
+            unsafe { gl.VertexAttribDivisor(slot as glow::types::GLuint,
+                bel.desc.rate as glow::types::GLuint) };
         } else if bel.desc.rate != 0 {
             error!("Instanced arrays are not supported");
         }
@@ -176,7 +176,7 @@ impl CommandQueue {
         }
     }
 
-    fn _unbind_target(&mut self, point: u32, attachment: gl::types::GLenum) {
+    fn _unbind_target(&mut self, point: u32, attachment: u32) {
         let gl = &self.share.context;
         // TODO: Find workaround or use explicit `textarget` with the other `framebuffer_texture`
         unsafe { gl.framebuffer_texture(point, attachment, None, 0) };
@@ -496,7 +496,7 @@ impl CommandQueue {
             com::Command::DrawBuffers(draw_buffers) => unsafe {
                 #[cfg(not(target_arch = "wasm32"))] // TODO
                 {
-                    let draw_buffers = Self::get::<gl::types::GLenum>(data_buf, draw_buffers);
+                    let draw_buffers = Self::get::<u32>(data_buf, draw_buffers);
                     self.share.context.draw_buffers(draw_buffers);
                 }
             }
@@ -604,7 +604,7 @@ impl CommandQueue {
                 // TODO: handle partial copies gracefully
                 assert_eq!(r.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
                 let gl = &self.share.context;
-                gl.active_texture(gl::TEXTURE0);
+                gl.active_texture(glow::TEXTURE0);
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer));
                 gl.bind_texture(glow::TEXTURE_2D, Some(texture));
                 gl.get_tex_image(

@@ -108,7 +108,7 @@ pub enum Command {
     SetPatchSize(i32),
     BindProgram(<GlContext as glow::Context>::Program),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
-    BindAttribute(n::AttributeDesc, n::RawBuffer, gl::types::GLuint, gl::types::GLsizei, gl::types::GLuint),
+    BindAttribute(n::AttributeDesc, n::RawBuffer, i32),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
     CopyBufferToTexture(n::RawBuffer, n::Texture, command::BufferImageCopy),
@@ -125,7 +125,7 @@ pub enum Command {
 }
 
 pub type FrameBufferTarget = u32;
-pub type AttachmentPoint = gl::types::GLenum;
+pub type AttachmentPoint = u32;
 pub type DrawBuffer = u32;
 
 #[derive(Clone, Debug)]
@@ -159,7 +159,7 @@ struct Cache {
     // Indicates that invalid commands have been recorded.
     error_state: bool,
     // Vertices per patch for tessellation primitives (patches).
-    patch_size: Option<gl::types::GLint>,
+    patch_size: Option<i32>,
     // Active program name.
     program: Option<n::Program>,
     // Blend per attachment.
@@ -413,12 +413,12 @@ impl RawCommandBuffer {
                 // We don't have influence on its layout and we treat it as single image.
                 //
                 // TODO: handle case where we don't do double-buffering?
-                vec![gl::BACK_LEFT]
+                vec![glow::BACK_LEFT]
             } else {
                 subpass
                     .color_attachments
                     .iter()
-                    .map(|id| gl::COLOR_ATTACHMENT0 + *id as gl::types::GLenum)
+                    .map(|id| glow::COLOR_ATTACHMENT0 + *id as u32)
                     .collect::<Vec<_>>()
             };
 
