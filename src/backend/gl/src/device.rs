@@ -1,11 +1,11 @@
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
-use std::{mem, slice};
 use std::sync::{Arc, Mutex, RwLock};
+use std::{mem, slice};
 
-use crate::{GlContainer, GlContext};
 use glow::Context;
+use crate::{GlContainer, GlContext};
 
 use crate::hal::backend::FastHashMap;
 use crate::hal::format::{Format, Swizzle};
@@ -75,7 +75,7 @@ impl Device {
         let can_tessellate = self.share.limits.max_patch_size != 0;
         let target = match stage {
             pso::Stage::Vertex => glow::VERTEX_SHADER,
-            pso::Stage::Hull if can_tessellate  => glow::TESS_CONTROL_SHADER,
+            pso::Stage::Hull if can_tessellate => glow::TESS_CONTROL_SHADER,
             pso::Stage::Domain if can_tessellate => glow::TESS_EVALUATION_SHADER,
             pso::Stage::Geometry => glow::GEOMETRY_SHADER,
             pso::Stage::Fragment => glow::FRAGMENT_SHADER,
@@ -85,7 +85,10 @@ impl Device {
 
         let name = unsafe { gl.create_shader(target) }.unwrap();
         unsafe {
-            gl.shader_source(name, std::str::from_utf8(data).expect("Invalid shader source"));
+            gl.shader_source(
+                name,
+                std::str::from_utf8(data).expect("Invalid shader source"),
+            );
             gl.compile_shader(name);
         }
         info!("\tCompiled shader {:?}", name);
@@ -105,23 +108,31 @@ impl Device {
         }
     }
 
-    fn bind_target_compat(
-        gl: &GlContainer,
-        point: u32,
-        attachment: u32,
-        view: &n::ImageView,
-    ) {
+    fn bind_target_compat(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
         match *view {
             n::ImageView::Surface(surface) => unsafe {
                 gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(surface));
             },
             n::ImageView::Texture(texture, level) => unsafe {
                 gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                gl.framebuffer_texture_2d(point, attachment, glow::TEXTURE_2D, Some(texture), level as _);
+                gl.framebuffer_texture_2d(
+                    point,
+                    attachment,
+                    glow::TEXTURE_2D,
+                    Some(texture),
+                    level as _,
+                );
             },
             n::ImageView::TextureLayer(texture, level, layer) => unsafe {
                 gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                gl.framebuffer_texture_3d(point, attachment, glow::TEXTURE_2D, Some(texture), level as _, layer as _);
+                gl.framebuffer_texture_3d(
+                    point,
+                    attachment,
+                    glow::TEXTURE_2D,
+                    Some(texture),
+                    level as _,
+                    layer as _,
+                );
             },
         }
     }
@@ -135,7 +146,13 @@ impl Device {
                 gl.framebuffer_texture(point, attachment, Some(texture), level as _);
             },
             n::ImageView::TextureLayer(texture, level, layer) => unsafe {
-                gl.framebuffer_texture_layer(point, attachment, Some(texture), level as _, layer as _);
+                gl.framebuffer_texture_layer(
+                    point,
+                    attachment,
+                    Some(texture),
+                    level as _,
+                    layer as _,
+                );
             },
         }
     }
@@ -379,8 +396,8 @@ impl Device {
             #[cfg(target_arch = "wasm32")]
             n::ShaderModule::Spirv(ref spirv) => {
                 let shader_source = match stage {
-                        pso::Stage::Vertex => {
-                            r"#version 300 es
+                    pso::Stage::Vertex => {
+                        r"#version 300 es
                             const float scale = 1.2f;
  
                             layout(location = 0) in vec2 a_pos;
@@ -393,9 +410,9 @@ impl Device {
                                 gl_Position.y = -gl_Position.y;
                             }
                             "
-                        }
-                        pso::Stage::Fragment => {
-                            r"#version 300 es
+                    }
+                    pso::Stage::Fragment => {
+                        r"#version 300 es
                             precision mediump float;
  
                             in vec2 v_uv;
@@ -407,15 +424,16 @@ impl Device {
                                 target0 = texture(u_texture, v_uv);
                             }
                             "
-                        }
-                        _ => "",
-                    }.as_bytes();
+                    }
+                    _ => "",
+                }
+                .as_bytes();
                 let compiled = self.create_shader_module_from_source(shader_source, stage);
                 let shader = match compiled.unwrap() {
                     n::ShaderModule::Raw(raw) => raw,
-                    _ => panic!("Unhandled")
+                    _ => panic!("Unhandled"),
                 };
- 
+
                 shader
             }
             #[cfg(not(target_arch = "wasm32"))]
@@ -1092,14 +1110,9 @@ impl d::Device<B> for Device {
             let flags = memory.map_flags();
             //TODO: use *Named calls to avoid binding
             gl.bind_buffer(target, Some(buffer.raw));
-            gl.buffer_storage(target,
-                buffer.requirements.size as _,
-                None,
-                flags,
-            );
+            gl.buffer_storage(target, buffer.requirements.size as _, None, flags);
             gl.bind_buffer(target, None);
-        }
-        else {
+        } else {
             let flags = if cpu_can_read && cpu_can_write {
                 glow::DYNAMIC_DRAW
             } else if cpu_can_write {
@@ -1111,11 +1124,7 @@ impl d::Device<B> for Device {
             };
 
             gl.bind_buffer(target, Some(buffer.raw));
-            gl.buffer_data_size(
-                target,
-                buffer.requirements.size as i32,
-                flags,
-            );
+            gl.buffer_data_size(target, buffer.requirements.size as i32, flags);
             gl.bind_buffer(target, None);
         }
 
@@ -1690,7 +1699,11 @@ pub(crate) fn wait_fence(fence: &n::Fence, share: &Starc<Share>, timeout_ns: u64
     unsafe {
         if share.private_caps.sync {
             // TODO: Could `wait_sync` be used here instead?
-            gl.client_wait_sync(fence.0.get().expect("No fence was set"), glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32)
+            gl.client_wait_sync(
+                fence.0.get().expect("No fence was set"),
+                glow::SYNC_FLUSH_COMMANDS_BIT,
+                timeout_ns as i32,
+            )
         } else {
             // We fallback to waiting for *everything* to finish
             gl.flush();

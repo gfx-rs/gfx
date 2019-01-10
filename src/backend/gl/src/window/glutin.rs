@@ -282,7 +282,8 @@ impl hal::Instance for Surface {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
         unsafe { self.window.make_current().unwrap() };
-        let adapter = PhysicalDevice::new_adapter(|s| self.window.get_proc_address(s) as *const _, None);
+        let adapter =
+            PhysicalDevice::new_adapter(|s| self.window.get_proc_address(s) as *const _, None);
         vec![adapter]
     }
 }

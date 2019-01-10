@@ -417,7 +417,7 @@ impl CommandQueue {
 
                 if num_viewports == 1 {
                     let view = viewports[0];
-                    let depth_range  = depth_ranges[0];
+                    let depth_range = depth_ranges[0];
                     unsafe {
                         gl.viewport(
                             view[0] as i32,
@@ -433,7 +433,11 @@ impl CommandQueue {
                     // of multiple viewports.
                     unsafe {
                         gl.viewport_f32_slice(first_viewport, num_viewports as i32, &viewports);
-                        gl.depth_range_f64_slice(first_viewport, num_viewports as i32, &depth_ranges);
+                        gl.depth_range_f64_slice(
+                            first_viewport,
+                            num_viewports as i32,
+                            &depth_ranges,
+                        );
                     };
                 }
             }
@@ -458,18 +462,18 @@ impl CommandQueue {
             com::Command::ClearBufferColorF(draw_buffer, mut cv) => unsafe {
                 self.share
                     .context
-                    .clear_buffer_f32_slice(glow::COLOR, draw_buffer, cv.as_ptr());
-            }
+                    .clear_buffer_f32_slice(glow::COLOR, draw_buffer, &mut cv);
+            },
             com::Command::ClearBufferColorU(draw_buffer, mut cv) => unsafe {
                 self.share
                     .context
-                    .clear_buffer_u32_slice(glow::COLOR, draw_buffer, cv.as_ptr());
-            }
+                    .clear_buffer_u32_slice(glow::COLOR, draw_buffer, &mut cv);
+            },
             com::Command::ClearBufferColorI(draw_buffer, mut cv) => unsafe {
                 self.share
                     .context
-                    .clear_buffer_i32_slice(glow::COLOR, draw_buffer, cv.as_ptr());
-            }
+                    .clear_buffer_i32_slice(glow::COLOR, draw_buffer, &mut cv);
+            },
             com::Command::ClearBufferDepthStencil(depth, stencil) => unsafe {
                 match (depth, stencil) {
                     (Some(depth), Some(stencil)) => {
@@ -499,7 +503,7 @@ impl CommandQueue {
                     let draw_buffers = Self::get::<u32>(data_buf, draw_buffers);
                     self.share.context.draw_buffers(draw_buffers);
                 }
-            }
+            },
             com::Command::BindFrameBuffer(point, frame_buffer) => {
                 if self.share.private_caps.framebuffer {
                     let gl = &self.share.context;
@@ -516,11 +520,13 @@ impl CommandQueue {
                 state::bind_draw_color_buffers(&self.share.context, num);
             }
             com::Command::SetPatchSize(num) => unsafe {
-                self.share.context.patch_parameter_i32(glow::PATCH_VERTICES, num);
-            }
+                self.share
+                    .context
+                    .patch_parameter_i32(glow::PATCH_VERTICES, num);
+            },
             com::Command::BindProgram(program) => unsafe {
                 self.share.context.use_program(Some(program));
-            }
+            },
             com::Command::BindBlendSlot(slot, ref blend) => {
                 state::bind_blend_slot(&self.share.context, slot, blend);
             }
@@ -540,11 +546,20 @@ impl CommandQueue {
                 gl.bind_buffer(glow::ARRAY_BUFFER, Some(handle));
 
                 match vertex_attrib_fn {
-                    Float => {
-                        gl.vertex_attrib_pointer_f32(location, size, format, false, stride, offset as i32)
+                    Float => gl.vertex_attrib_pointer_f32(
+                        location,
+                        size,
+                        format,
+                        false,
+                        stride,
+                        offset as i32,
+                    ),
+                    Integer => {
+                        gl.vertex_attrib_pointer_i32(location, size, format, stride, offset as i32)
                     }
-                    Integer => gl.vertex_attrib_pointer_i32(location, size, format, stride, offset as i32),
-                    Double => gl.vertex_attrib_pointer_f64(location, size, format, stride, offset as i32),
+                    Double => {
+                        gl.vertex_attrib_pointer_f64(location, size, format, stride, offset as i32)
+                    }
                 }
 
                 if rate != 0 {
@@ -557,7 +572,7 @@ impl CommandQueue {
 
                 gl.enable_vertex_attrib_array(location);
                 gl.bind_buffer(glow::ARRAY_BUFFER, None);
-            }
+            },
             /*
             com::Command::UnbindAttribute(ref attribute) => unsafe {
                 self.share.context.DisableVertexAttribArray(attribute.location);
@@ -575,7 +590,7 @@ impl CommandQueue {
                 );
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
-            }
+            },
             com::Command::CopyBufferToTexture(buffer, texture, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 assert_eq!(r.image_offset.z, 0);
@@ -595,7 +610,7 @@ impl CommandQueue {
                     0,
                 );
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
-            }
+            },
             com::Command::CopyBufferToSurface(..) => {
                 unimplemented!() //TODO: use FBO
             }
@@ -608,7 +623,8 @@ impl CommandQueue {
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer));
                 gl.bind_texture(glow::TEXTURE_2D, Some(texture));
                 gl.get_tex_image(
-                    glow::TEXTURE_2D, r.image_layers.level as _,
+                    glow::TEXTURE_2D,
+                    r.image_layers.level as _,
                     //r.image_offset.x,
                     //r.image_offset.y,
                     //r.image_extent.width as _,
@@ -618,7 +634,7 @@ impl CommandQueue {
                     None,
                 );
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
-            }
+            },
             com::Command::CopySurfaceToBuffer(..) => {
                 unimplemented!() //TODO: use FBO
             }
@@ -631,16 +647,16 @@ impl CommandQueue {
             com::Command::BindBufferRange(target, index, buffer, offset, size) => unsafe {
                 let gl = &self.share.context;
                 gl.bind_buffer_range(target, index, Some(buffer), offset, size);
-            }
+            },
             com::Command::BindTexture(index, texture) => unsafe {
                 let gl = &self.share.context;
                 gl.active_texture(glow::TEXTURE0 + index);
                 gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-            }
+            },
             com::Command::BindSampler(index, sampler) => unsafe {
                 let gl = &self.share.context;
                 gl.bind_sampler(index, Some(sampler));
-            }
+            },
             com::Command::SetTextureSamplerSettings(index, texture, ref sinfo) => unsafe {
                 let gl = &self.share.context;
                 gl.active_texture(glow::TEXTURE0 + index);
@@ -1000,7 +1016,11 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 
     #[cfg(target_arch = "wasm32")]
-    unsafe fn present<'a, W, Is, S, Iw>(&mut self, swapchains: Is, _wait_semaphores: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(
+        &mut self,
+        swapchains: Is,
+        _wait_semaphores: Iw,
+    ) -> Result<(), ()>
     where
         W: 'a + Borrow<window::web::Swapchain>,
         Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
