@@ -1,47 +1,46 @@
-use crate::gl::{self, types as t};
-use crate::hal::format::Format;
 use crate::hal::{buffer, image as i, Primitive};
+use crate::hal::format::Format;
 use crate::native::VertexAttribFunction;
 
 /*
 pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
     match kind {
-        i::Kind::D1(_) => gl::TEXTURE_1D,
-        i::Kind::D1Array(_, _) => gl::TEXTURE_1D_ARRAY,
-        i::Kind::D2(_, _, i::AaMode::Single) => gl::TEXTURE_2D,
-        i::Kind::D2(_, _, _) => gl::TEXTURE_2D_MULTISAMPLE,
-        i::Kind::D2Array(_, _, _, i::AaMode::Single) => gl::TEXTURE_2D_ARRAY,
-        i::Kind::D2Array(_, _, _, _) => gl::TEXTURE_2D_MULTISAMPLE_ARRAY,
-        i::Kind::D3(_, _, _) => gl::TEXTURE_3D,
-        i::Kind::Cube(_) => gl::TEXTURE_CUBE_MAP,
-        i::Kind::CubeArray(_, _) => gl::TEXTURE_CUBE_MAP_ARRAY,
+        i::Kind::D1(_) => glow::TEXTURE_1D,
+        i::Kind::D1Array(_, _) => glow::TEXTURE_1D_ARRAY,
+        i::Kind::D2(_, _, i::AaMode::Single) => glow::TEXTURE_2D,
+        i::Kind::D2(_, _, _) => glow::TEXTURE_2D_MULTISAMPLE,
+        i::Kind::D2Array(_, _, _, i::AaMode::Single) => glow::TEXTURE_2D_ARRAY,
+        i::Kind::D2Array(_, _, _, _) => glow::TEXTURE_2D_MULTISAMPLE_ARRAY,
+        i::Kind::D3(_, _, _) => glow::TEXTURE_3D,
+        i::Kind::Cube(_) => glow::TEXTURE_CUBE_MAP,
+        i::Kind::CubeArray(_, _) => glow::TEXTURE_CUBE_MAP_ARRAY,
     }
 }*/
 
-pub fn filter_to_gl(mag: i::Filter, min: i::Filter, mip: i::Filter) -> (t::GLenum, t::GLenum) {
+pub fn filter_to_gl(mag: i::Filter, min: i::Filter, mip: i::Filter) -> (u32, u32) {
     use crate::hal::image::Filter::*;
 
     let mag_filter = match mag {
-        Nearest => gl::NEAREST,
-        Linear => gl::LINEAR,
+        Nearest => glow::NEAREST,
+        Linear => glow::LINEAR,
     };
 
     let min_filter = match (min, mip) {
-        (Nearest, Nearest) => gl::NEAREST_MIPMAP_NEAREST,
-        (Nearest, Linear) => gl::NEAREST_MIPMAP_LINEAR,
-        (Linear, Nearest) => gl::LINEAR_MIPMAP_NEAREST,
-        (Linear, Linear) => gl::LINEAR_MIPMAP_LINEAR,
+        (Nearest, Nearest) => glow::NEAREST_MIPMAP_NEAREST,
+        (Nearest, Linear) => glow::NEAREST_MIPMAP_LINEAR,
+        (Linear, Nearest) => glow::LINEAR_MIPMAP_NEAREST,
+        (Linear, Linear) => glow::LINEAR_MIPMAP_LINEAR,
     };
 
     (min_filter, mag_filter)
 }
 
-pub fn wrap_to_gl(w: i::WrapMode) -> t::GLenum {
+pub fn wrap_to_gl(w: i::WrapMode) -> u32 {
     match w {
-        i::WrapMode::Tile => gl::REPEAT,
-        i::WrapMode::Mirror => gl::MIRRORED_REPEAT,
-        i::WrapMode::Clamp => gl::CLAMP_TO_EDGE,
-        i::WrapMode::Border => gl::CLAMP_TO_BORDER,
+        i::WrapMode::Tile => glow::REPEAT,
+        i::WrapMode::Mirror => glow::MIRRORED_REPEAT,
+        i::WrapMode::Clamp => glow::CLAMP_TO_EDGE,
+        i::WrapMode::Border => glow::CLAMP_TO_BORDER,
     }
 }
 
@@ -73,8 +72,7 @@ pub fn primitive_to_gl_primitive(primitive: Primitive) -> u32 {
 
 pub fn format_to_gl_format(
     format: Format,
-) -> Option<(gl::types::GLint, gl::types::GLenum, VertexAttribFunction)> {
-    use crate::gl::*;
+) -> Option<(i32, u32, VertexAttribFunction)> {
     use crate::hal::format::Format::*;
     use crate::native::VertexAttribFunction::*;
     let _ = Double; //mark as used
