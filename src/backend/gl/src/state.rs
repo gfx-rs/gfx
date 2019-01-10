@@ -1,9 +1,9 @@
 #![allow(dead_code)] //TODO: remove
 
-use crate::hal::{pso, ColorSlot};
-use crate::GlContainer;
 use glow::Context;
+use crate::hal::{pso, ColorSlot};
 use smallvec::SmallVec;
+use crate::GlContainer;
 
 pub(crate) fn bind_polygon_mode(
     gl: &GlContainer,
@@ -17,7 +17,7 @@ pub(crate) fn bind_polygon_mode(
         Line(width) => {
             unsafe { gl.line_width(width) };
             (glow::LINE, glow::POLYGON_OFFSET_LINE)
-        },
+        }
         Fill => (glow::FILL, glow::POLYGON_OFFSET_FILL),
     };
 
@@ -59,7 +59,8 @@ pub(crate) fn bind_rasterizer(gl: &GlContainer, r: &pso::Rasterizer, is_embedded
 
     if !is_embedded {
         bind_polygon_mode(gl, r.polygon_mode, r.depth_bias);
-        match false { //TODO
+        match false {
+            //TODO
             true => unsafe { gl.enable(glow::MULTISAMPLE) },
             false => unsafe { gl.disable(glow::MULTISAMPLE) },
         }
@@ -67,8 +68,9 @@ pub(crate) fn bind_rasterizer(gl: &GlContainer, r: &pso::Rasterizer, is_embedded
 }
 
 pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
-    let attachments: SmallVec<[u32; 16]> =
-        (0..num).map(|x| glow::COLOR_ATTACHMENT0 + x as u32).collect();
+    let attachments: SmallVec<[u32; 16]> = (0..num)
+        .map(|x| glow::COLOR_ATTACHMENT0 + x as u32)
+        .collect();
     unsafe { gl.draw_buffers(&attachments) };
 }
 
@@ -145,7 +147,10 @@ pub(crate) fn bind_stencil(
         }
     }
     match *stencil {
-        pso::StencilTest::On { ref front, ref back } => {
+        pso::StencilTest::On {
+            ref front,
+            ref back,
+        } => {
             unsafe { gl.enable(glow::STENCIL_TEST) };
             if let Some(cf) = cull {
                 if !cf.contains(pso::Face::FRONT) {
@@ -191,9 +196,11 @@ fn map_blend_op(operation: pso::BlendOp) -> (u32, u32, u32) {
     match operation {
         pso::BlendOp::Add { src, dst } => (glow::FUNC_ADD, map_factor(src), map_factor(dst)),
         pso::BlendOp::Sub { src, dst } => (glow::FUNC_SUBTRACT, map_factor(src), map_factor(dst)),
-        pso::BlendOp::RevSub { src, dst } => {
-            (glow::FUNC_REVERSE_SUBTRACT, map_factor(src), map_factor(dst))
-        }
+        pso::BlendOp::RevSub { src, dst } => (
+            glow::FUNC_REVERSE_SUBTRACT,
+            map_factor(src),
+            map_factor(dst),
+        ),
         pso::BlendOp::Min => (glow::MIN, glow::ZERO, glow::ZERO),
         pso::BlendOp::Max => (glow::MAX, glow::ZERO, glow::ZERO),
     }
@@ -236,7 +243,9 @@ pub(crate) fn bind_blend_slot(gl: &GlContainer, slot: ColorSlot, desc: &pso::Col
             {
                 gl.enable_draw_buffer(glow::BLEND, slot as _);
                 gl.blend_equation_separate_draw_buffer(slot as _, color_eq, alpha_eq);
-                gl.blend_func_separate_draw_buffer(slot as _, color_src, color_dst, alpha_src, alpha_dst);
+                gl.blend_func_separate_draw_buffer(
+                    slot as _, color_src, color_dst, alpha_src, alpha_dst,
+                );
             }
         },
         pso::BlendState::Off => unsafe {

@@ -61,13 +61,13 @@ impl Version {
         let es_sig = " ES ";
         let is_es = match src.rfind(es_sig) {
             Some(pos) => {
-                src = src[pos + es_sig.len() ..].to_string();
+                src = src[pos + es_sig.len()..].to_string();
                 true
             }
             None => false,
         };
         let (version, vendor_info) = match src.find(' ') {
-            Some(i) => (src[..i].to_string(), src[i+1..].to_string()),
+            Some(i) => (src[..i].to_string(), src[i + 1..].to_string()),
             None => (src.to_string(), String::from("")),
         };
 
@@ -93,7 +93,12 @@ impl Version {
 
 impl fmt::Debug for Version {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match (self.major, self.minor, self.revision, self.vendor_info.as_str()) {
+        match (
+            self.major,
+            self.minor,
+            self.revision,
+            self.vendor_info.as_str(),
+        ) {
             (major, minor, Some(revision), "") => write!(f, "{}.{}.{}", major, minor, revision),
             (major, minor, None, "") => write!(f, "{}.{}", major, minor),
             (major, minor, Some(revision), vendor_info) => {
@@ -136,7 +141,7 @@ impl PlatformName {
     fn get(gl: &GlContainer) -> Self {
         PlatformName {
             vendor: get_string(gl, glow::VENDOR).unwrap(),
-            renderer: get_string(gl, glow::RENDERER).unwrap()
+            renderer: get_string(gl, glow::RENDERER).unwrap(),
         }
     }
 }
@@ -232,9 +237,12 @@ impl Info {
     fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
         let version =
-            Version::parse(get_string(gl, glow::VERSION).unwrap_or_else(|_| String::from(""))).unwrap();
-        let shading_language =
-            Version::parse(get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_else(|_| String::from(""))).unwrap();
+            Version::parse(get_string(gl, glow::VERSION).unwrap_or_else(|_| String::from("")))
+                .unwrap();
+        let shading_language = Version::parse(
+            get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_else(|_| String::from("")),
+        )
+        .unwrap();
         // TODO: Use separate path for WebGL extensions in `glow` somehow
         // Perhaps automatic fallback for NUM_EXTENSIONS to EXTENSIONS on native
         #[cfg(target_arch = "wasm32")]
@@ -247,7 +255,11 @@ impl Info {
                 .collect()
         } else {
             // Fallback
-            get_string(gl, glow::EXTENSIONS).unwrap_or_else(|_| String::from("")).split(' ').map(|s| s.to_string()).collect()
+            get_string(gl, glow::EXTENSIONS)
+                .unwrap_or_else(|_| String::from(""))
+                .split(' ')
+                .map(|s| s.to_string())
+                .collect()
         };
         Info {
             platform_name,
@@ -258,11 +270,13 @@ impl Info {
     }
 
     pub fn is_version_supported(&self, major: u32, minor: u32) -> bool {
-        !self.version.is_embedded && self.version >= Version::new(major, minor, None, String::from(""))
+        !self.version.is_embedded
+            && self.version >= Version::new(major, minor, None, String::from(""))
     }
 
     pub fn is_embedded_version_supported(&self, major: u32, minor: u32) -> bool {
-        self.version.is_embedded && self.version >= Version::new(major, minor, None, String::from(""))
+        self.version.is_embedded
+            && self.version >= Version::new(major, minor, None, String::from(""))
     }
 
     /// Returns `true` if the implementation supports the extension
@@ -311,10 +325,10 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         ..Limits::default()
     };
 
-    if info.is_supported(&[Core(4,0), Ext("GL_ARB_tessellation_shader")]) {
+    if info.is_supported(&[Core(4, 0), Ext("GL_ARB_tessellation_shader")]) {
         limits.max_patch_size = get_usize(gl, glow::MAX_PATCH_VERTICES).unwrap_or(0) as _;
     }
-    if info.is_supported(&[Core(4,1)]) {
+    if info.is_supported(&[Core(4, 1)]) {
         // TODO: extension
         limits.max_viewports = get_usize(gl, glow::MAX_VIEWPORTS).unwrap_or(0);
     }
@@ -333,8 +347,10 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
             .enumerate()
         {
             unsafe {
-                *count = gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, i as _) as u32;
-                *size = gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, i as _) as u32;
+                *count =
+                    gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_COUNT, i as _) as u32;
+                *size =
+                    gl.get_parameter_indexed_i32(glow::MAX_COMPUTE_WORK_GROUP_SIZE, i as _) as u32;
             }
         }
     }
@@ -361,7 +377,8 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     }
 
     // TODO
-    if false && info.is_supported(&[Core(4, 3), Es(3, 1)]) { // TODO: extension
+    if false && info.is_supported(&[Core(4, 3), Es(3, 1)]) {
+        // TODO: extension
         legacy |= LegacyFeatures::INDIRECT_EXECUTION;
     }
     if info.is_supported(&[Core(3, 1), Es(3, 0), Ext("GL_ARB_draw_instanced")]) {
@@ -422,13 +439,13 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         legacy |= LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING;
     }
 
-    let emulate_map = true;//info.version.is_embedded;
+    let emulate_map = true; //info.version.is_embedded;
 
     let private = PrivateCaps {
-        vertex_array: info.is_supported(&[Core(3,0), Es(3,0), Ext("GL_ARB_vertex_array_object")]),
-            // TODO && gl.GenVertexArrays.is_loaded(),
-        framebuffer: info.is_supported(&[Core(3,0), Es(2,0), Ext ("GL_ARB_framebuffer_object")]),
-            // TODO && gl.GenFramebuffers.is_loaded(),
+        vertex_array: info.is_supported(&[Core(3, 0), Es(3, 0), Ext("GL_ARB_vertex_array_object")]),
+        // TODO && gl.GenVertexArrays.is_loaded(),
+        framebuffer: info.is_supported(&[Core(3, 0), Es(2, 0), Ext("GL_ARB_framebuffer_object")]),
+        // TODO && gl.GenFramebuffers.is_loaded(),
         framebuffer_texture: info.is_supported(&[Core(3, 0)]), //TODO: double check
         buffer_role_change: true || !info.version.is_embedded, // TODO
         image_storage: info.is_supported(&[Core(4, 2), Ext("GL_ARB_texture_storage")]),

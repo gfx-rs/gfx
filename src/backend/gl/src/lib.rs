@@ -8,6 +8,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 extern crate gfx_hal as hal;
+extern crate glow;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub extern crate glutin;
 extern crate smallvec;
@@ -15,7 +16,6 @@ extern crate smallvec;
 extern crate spirv_cross;
 #[cfg(target_arch = "wasm32")]
 extern crate wasm_bindgen;
-extern crate glow;
 
 use std::cell::Cell;
 use std::fmt;
@@ -44,11 +44,11 @@ pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
 #[cfg(target_arch = "wasm32")]
 pub use crate::window::web::{Surface, Swapchain, Window};
 
-use glow::Context;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub use glow::native::Context as GlContext;
 #[cfg(target_arch = "wasm32")]
 pub use glow::web::Context as GlContext;
+use glow::Context;
 
 pub(crate) struct GlContainer {
     context: GlContext,
@@ -274,9 +274,7 @@ impl PhysicalDevice {
         #[cfg(not(target_arch = "wasm32"))]
         let context = glow::native::Context::from_loader_function(fn_proc);
 
-        let gl = GlContainer {
-            context,
-        };
+        let gl = GlContainer { context };
 
         // query information
         let (info, features, legacy_features, limits, private_caps) = info::query_all(&gl);
