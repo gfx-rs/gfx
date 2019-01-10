@@ -1,11 +1,10 @@
 use std::borrow::Borrow;
 use std::cell::{Cell, RefCell};
 use std::ops::Range;
-use std::{mem, ptr, slice};
+use std::{mem, slice};
 use std::sync::{Arc, Mutex, RwLock};
 
-use crate::gl::types::{GLenum, GLfloat, GLint};
-use crate::{gl, GlContainer, GlContext};
+use crate::{GlContainer, GlContext};
 use glow::Context;
 
 use crate::hal::backend::FastHashMap;
@@ -107,7 +106,7 @@ impl Device {
     fn bind_target_compat(
         gl: &GlContainer,
         point: u32,
-        attachment: GLenum,
+        attachment: u32,
         view: &n::ImageView,
     ) {
         match *view {
@@ -125,7 +124,7 @@ impl Device {
         }
     }
 
-    fn bind_target(gl: &GlContainer, point: u32, attachment: GLenum, view: &n::ImageView) {
+    fn bind_target(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
         match *view {
             n::ImageView::Surface(surface) => unsafe {
                 gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(surface));
@@ -1005,7 +1004,7 @@ impl d::Device<B> for Device {
         let cpu_can_write = memory.can_upload();
 
         if self.share.private_caps.buffer_storage {
-            //TODO: gl::DYNAMIC_STORAGE_BIT | gl::MAP_PERSISTENT_BIT
+            //TODO: glow::DYNAMIC_STORAGE_BIT | glow::MAP_PERSISTENT_BIT
             let flags = memory.map_flags();
             //TODO: use *Named calls to avoid binding
             gl.bind_buffer(target, Some(buffer.raw));
@@ -1018,13 +1017,13 @@ impl d::Device<B> for Device {
         }
         else {
             let flags = if cpu_can_read && cpu_can_write {
-                gl::DYNAMIC_DRAW
+                glow::DYNAMIC_DRAW
             } else if cpu_can_write {
-                gl::STREAM_DRAW
+                glow::STREAM_DRAW
             } else if cpu_can_read {
-                gl::STREAM_READ
+                glow::STREAM_READ
             } else {
-                gl::STATIC_DRAW
+                glow::STATIC_DRAW
             };
 
             gl.bind_buffer(target, Some(buffer.raw));
@@ -1096,9 +1095,9 @@ impl d::Device<B> for Device {
 
         if self.share.private_caps.emulate_map {
             let raw = memory.emulate_map_allocation.replace(std::ptr::null_mut());
-            let mut mapped = slice::from_raw_parts_mut(raw, memory.size as usize);
+            let mapped = slice::from_raw_parts_mut(raw, memory.size as usize);
             // TODO: Access
-            gl.buffer_data_u8_slice(target, mapped, gl::DYNAMIC_DRAW);
+            gl.buffer_data_u8_slice(target, mapped, glow::DYNAMIC_DRAW);
             let _ = *Box::from_raw(raw);
         } else {
             gl.unmap_buffer(target);
@@ -1154,9 +1153,9 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
 
         let (int_format, iformat, itype) = match format {
-            Format::Rgba8Unorm => (gl::RGBA8, gl::RGBA, gl::UNSIGNED_BYTE),
-            Format::Rgba8Srgb => (gl::SRGB8_ALPHA8, gl::RGBA, gl::UNSIGNED_BYTE),
-            _ => unimplemented!(),
+            Format::Rgba8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
+            Format::Rgba8Srgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
+            _ => unimplemented!()
         };
 
         let channel = format.base_format().1;
@@ -1187,7 +1186,7 @@ impl d::Device<B> for Device {
                         let mut h = h;
                         for i in 0..num_levels {
                             gl.tex_image_2d(
-                                gl::TEXTURE_2D,
+                                glow::TEXTURE_2D,
                                 i as _,
                                 int_format as _,
                                 w as _,

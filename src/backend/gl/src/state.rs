@@ -1,8 +1,7 @@
 #![allow(dead_code)] //TODO: remove
 
-use crate::hal::pso;
-use crate::hal::ColorSlot;
-use crate::{gl, GlContainer};
+use crate::hal::{pso, ColorSlot};
+use crate::GlContainer;
 use glow::Context;
 use smallvec::SmallVec;
 
@@ -68,8 +67,8 @@ pub(crate) fn bind_rasterizer(gl: &GlContainer, r: &pso::Rasterizer, is_embedded
 }
 
 pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
-    let attachments: SmallVec<[gl::types::GLenum; 16]> =
-        (0..num).map(|x| gl::COLOR_ATTACHMENT0 + x as u32).collect();
+    let attachments: SmallVec<[u32; 16]> =
+        (0..num).map(|x| glow::COLOR_ATTACHMENT0 + x as u32).collect();
     unsafe { gl.draw_buffers(&attachments) };
 }
 
