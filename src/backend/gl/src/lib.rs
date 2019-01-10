@@ -7,7 +7,6 @@
 extern crate bitflags;
 #[macro_use]
 extern crate log;
-extern crate gfx_gl as gl;
 extern crate gfx_hal as hal;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub extern crate glutin;
@@ -121,14 +120,14 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn from_error_code(error_code: gl::types::GLenum) -> Error {
+    pub fn from_error_code(error_code: u32) -> Error {
         match error_code {
-            gl::NO_ERROR => Error::NoError,
-            gl::INVALID_ENUM => Error::InvalidEnum,
-            gl::INVALID_VALUE => Error::InvalidValue,
-            gl::INVALID_OPERATION => Error::InvalidOperation,
-            gl::INVALID_FRAMEBUFFER_OPERATION => Error::InvalidFramebufferOperation,
-            gl::OUT_OF_MEMORY => Error::OutOfMemory,
+            glow::NO_ERROR => Error::NoError,
+            glow::INVALID_ENUM => Error::InvalidEnum,
+            glow::INVALID_VALUE => Error::InvalidValue,
+            glow::INVALID_OPERATION => Error::InvalidOperation,
+            glow::INVALID_FRAMEBUFFER_OPERATION => Error::InvalidFramebufferOperation,
+            glow::OUT_OF_MEMORY => Error::OutOfMemory,
             _ => Error::UnknownError,
         }
     }
