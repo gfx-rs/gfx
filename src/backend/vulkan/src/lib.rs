@@ -21,7 +21,7 @@ extern crate x11;
 #[cfg(all(unix, not(target_os = "android")))]
 extern crate xcb;
 
-use ash::extensions as ext;
+use ash::extensions::{ext, khr};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
@@ -56,15 +56,15 @@ mod window;
 lazy_static! {
     static ref LAYERS: Vec<&'static CStr> = vec![#[cfg(debug_assertions)] CStr::from_bytes_with_nul(b"VK_LAYER_LUNARG_standard_validation\0").expect("Wrong extension string")];
     static ref EXTENSIONS: Vec<&'static CStr> = vec![#[cfg(debug_assertions)] CStr::from_bytes_with_nul(b"VK_EXT_debug_utils\0").expect("Wrong extension string")];
-    static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![ext::Swapchain::name()];
+    static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![khr::Swapchain::name()];
     static ref SURFACE_EXTENSIONS: Vec<&'static CStr> = vec![
-        ext::Surface::name(),
+        khr::Surface::name(),
         // Platform-specific WSI extensions
-        ext::XlibSurface::name(),
-        ext::XcbSurface::name(),
-        ext::WaylandSurface::name(),
-        ext::AndroidSurface::name(),
-        ext::Win32Surface::name(),
+        khr::XlibSurface::name(),
+        khr::XcbSurface::name(),
+        khr::WaylandSurface::name(),
+        khr::AndroidSurface::name(),
+        khr::Win32Surface::name(),
     ];
 }
 
@@ -97,7 +97,7 @@ impl Drop for RawInstance {
             #[cfg(debug_assertions)]
             {
                 if let Some((ref ext, callback)) = self.1 {
-                    ext.destroy_debug_utils_messenger_ext(callback, None);
+                    ext.destroy_debug_utils_messenger(callback, None);
                 }
             }
 
@@ -358,7 +358,7 @@ impl Instance {
                 pfn_user_callback: Some(debug_utils_messenger_callback),
                 p_user_data: ptr::null_mut(),
             };
-            let handle = unsafe { ext.create_debug_utils_messenger_ext(&info, None) }.unwrap();
+            let handle = unsafe { ext.create_debug_utils_messenger(&info, None) }.unwrap();
             Some((ext, handle))
         };
         #[cfg(not(debug_assertions))]
