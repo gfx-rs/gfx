@@ -1,4 +1,4 @@
-use ash::extensions as ext;
+use ash::extensions::khr;
 use ash::version::DeviceV1_0;
 use ash::vk;
 use smallvec::SmallVec;
@@ -1872,7 +1872,7 @@ impl d::Device<B> for Device {
         config: SwapchainConfig,
         provided_old_swapchain: Option<w::Swapchain>,
     ) -> Result<(w::Swapchain, Backbuffer<B>), hal::window::CreationError> {
-        let functor = ext::Swapchain::new(&surface.raw.instance.0, &self.raw.0);
+        let functor = khr::Swapchain::new(&surface.raw.instance.0, &self.raw.0);
 
         let old_swapchain = match provided_old_swapchain {
             Some(osc) => osc.raw,
@@ -1908,10 +1908,10 @@ impl d::Device<B> for Device {
             old_swapchain,
         };
 
-        let result = unsafe { functor.create_swapchain_khr(&info, None) };
+        let result = unsafe { functor.create_swapchain(&info, None) };
 
         if old_swapchain != vk::SwapchainKHR::null() {
-            unsafe { functor.destroy_swapchain_khr(old_swapchain, None) }
+            unsafe { functor.destroy_swapchain(old_swapchain, None) }
         }
 
         let swapchain_raw = match result {
@@ -1928,7 +1928,7 @@ impl d::Device<B> for Device {
             _ => unreachable!("Unexpected result - driver bug? {:?}", result),
         };
 
-        let result = functor.get_swapchain_images_khr(swapchain_raw);
+        let result = functor.get_swapchain_images(swapchain_raw);
 
         let backbuffer_images = match result {
             Ok(backbuffer_images) => backbuffer_images,
@@ -1965,7 +1965,7 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_swapchain(&self, swapchain: w::Swapchain) {
         unsafe {
-            swapchain.functor.destroy_swapchain_khr(swapchain.raw, None);
+            swapchain.functor.destroy_swapchain(swapchain.raw, None);
         }
     }
 
