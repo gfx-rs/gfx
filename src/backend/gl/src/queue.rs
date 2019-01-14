@@ -529,7 +529,7 @@ impl CommandQueue {
             com::Command::BindBlendSlot(slot, ref blend) => {
                 state::bind_blend_slot(&self.share.context, slot, blend);
             }
-            com::Command::BindAttribute(ref attribute, handle, stride) => unsafe {
+            com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
                 use native::VertexAttribFunction::*;
 
                 let &native::AttributeDesc {
@@ -551,6 +551,14 @@ impl CommandQueue {
                     }
                     Integer => gl.VertexAttribIPointer(location, size, format, stride, offset),
                     Double => gl.VertexAttribLPointer(location, size, format, stride, offset),
+                }
+
+                if rate != 0 {
+                    if self.share.legacy_features.contains(LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING) {
+                        gl.VertexAttribDivisor(location, rate);
+                    } else {
+                        error!("Binding attribute with instanced input rate is not supported");
+                    }
                 }
 
                 gl.EnableVertexAttribArray(location);
