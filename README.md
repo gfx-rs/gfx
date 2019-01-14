@@ -32,16 +32,18 @@ gfx-rs is a low-level, cross-platform graphics abstraction library in Rust. It c
 
 ## Example
 
-To run an example, simply use `cargo run` and specify the backend with `--features {backend}` (where `{backend}` is one of `vulkan`, `dx12`, `dx11`, `metal`, or `gl`). For example:
+To run an example, simply `cd` to the `examples` directory, then use `cargo run` with `--features {backend}` to specify the backend (where `{backend}` is either `vulkan`, `dx12`, `dx11`, `metal`, or `gl`). For example:
 
 ```bash
+# Clone the gfx repository
 git clone https://github.com/gfx-rs/gfx
+# Change directory to `examples`
 cd gfx/examples
-# macOS
-cargo run --bin quad --features metal
-# vulkan
+# Vulkan
 cargo run --bin quad --features vulkan
-# Windows
+# Metal (macOS/iOS)
+cargo run --bin quad --features metal
+# DirectX12 (Windows)
 cargo run --bin compute --features dx12 1 2 3 4
 ```
 
@@ -55,7 +57,7 @@ The Hardware Abstraction Layer (HAL), is a thin, low-level graphics layer which 
 
 <p align="center"><img src="info/hal.svg" alt="Hardware Abstraction Layer (HAL)" /></p>
 
-Currently HAL has backends for Vulkan, DirectX 12, Metal, and OpenGL/OpenGL ES/WebGL.
+Currently HAL has backends for Vulkan, DirectX 12/11, Metal, and OpenGL/OpenGL ES/WebGL.
 
 The HAL layer is consumed directly by user applications or libraries. HAL is also used in efforts such as [gfx-portability](https://github.com/gfx-rs/portability).
 
