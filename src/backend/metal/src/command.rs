@@ -2595,6 +2595,22 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             } else {
                 None
             };
+
+            let ext = self.state.target_extent;
+            let rect = pso::Rect {
+                x: 0,
+                y: ext.height as _,
+                w: ext.width as _,
+                h: -(ext.height as i16),
+            };
+            let com_viewport = iter::once(soft::RenderCommand::SetViewport(rect, 0.0..1.0));
+            let com_scissor = iter::once(soft::RenderCommand::SetScissor(MTLScissorRect {
+                x: 0,
+                y: 0,
+                width: ext.width as _,
+                height: ext.height as _,
+            }));
+
             let com_draw = iter::once(soft::RenderCommand::Draw {
                 primitive_type: MTLPrimitiveType::Triangle,
                 vertices: 0..vertices.len() as _,
@@ -2604,6 +2620,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let commands = iter::once(com_clear)
                 .chain(com_pso)
                 .chain(com_rast)
+                .chain(com_viewport)
+                .chain(com_scissor)
                 .chain(com_vertex)
                 .chain(com_draw);
 
