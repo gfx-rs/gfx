@@ -98,7 +98,7 @@ pub enum Command {
     SetPatchSize(gl::types::GLint),
     BindProgram(gl::types::GLuint),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
-    BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei),
+    BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei, gl::types::GLuint),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
     CopyBufferToTexture(n::RawBuffer, n::Texture, command::BufferImageCopy),
@@ -377,12 +377,11 @@ impl RawCommandBuffer {
 
             match vertex_buffer_descs.get(binding) {
                 Some(&Some(desc)) => {
-                    assert_eq!(desc.rate, 0); // TODO: Input rate
                     push_cmd_internal(
                         &self.id,
                         &mut self.memory,
                         &mut self.buf,
-                        Command::BindAttribute(attribute.clone(), handle, desc.stride as _),
+                        Command::BindAttribute(attribute.clone(), handle, desc.stride as _, desc.rate as u32),
                     );
                 }
                 _ => error!("No vertex buffer description bound at {}", binding),

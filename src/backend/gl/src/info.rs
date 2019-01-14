@@ -196,39 +196,41 @@ pub struct Info {
 bitflags! {
     /// Flags for features that are required for Vulkan but may not
     /// be supported by legacy backends (GL/DX11).
-    pub struct LegacyFeatures: u16 {
+    pub struct LegacyFeatures: u32 {
         /// Support indirect drawing and dispatching.
-        const INDIRECT_EXECUTION = 0x0001;
+        const INDIRECT_EXECUTION = 0x00000001;
         /// Support instanced drawing.
-        const DRAW_INSTANCED = 0x0002;
+        const DRAW_INSTANCED = 0x00000002;
         /// Support offsets for instanced drawing with base instance.
-        const DRAW_INSTANCED_BASE = 0x0004;
+        const DRAW_INSTANCED_BASE = 0x00000004;
         /// Support indexed drawing with base vertex.
-        const DRAW_INDEXED_BASE = 0x0008;
+        const DRAW_INDEXED_BASE = 0x00000008;
         /// Support indexed, instanced drawing.
-        const DRAW_INDEXED_INSTANCED = 0x0010;
+        const DRAW_INDEXED_INSTANCED = 0x00000010;
         /// Support indexed, instanced drawing with base vertex only.
-        const DRAW_INDEXED_INSTANCED_BASE_VERTEX = 0x0020;
+        const DRAW_INDEXED_INSTANCED_BASE_VERTEX = 0x00000020;
         /// Support indexed, instanced drawing with base vertex and instance.
-        const DRAW_INDEXED_INSTANCED_BASE = 0x0040;
+        const DRAW_INDEXED_INSTANCED_BASE = 0x00000040;
         /// Support base vertex offset for indexed drawing.
-        const VERTEX_BASE = 0x0080;
+        const VERTEX_BASE = 0x00000080;
         /// Support sRGB textures and rendertargets.
-        const SRGB_COLOR = 0x0100;
+        const SRGB_COLOR = 0x00000100;
         /// Support constant buffers.
-        const CONSTANT_BUFFER = 0x0200;
+        const CONSTANT_BUFFER = 0x00000200;
         /// Support unordered-access views.
-        const UNORDERED_ACCESS_VIEW = 0x0400;
+        const UNORDERED_ACCESS_VIEW = 0x00000400;
         /// Support accelerated buffer copy.
-        const COPY_BUFFER = 0x0800;
+        const COPY_BUFFER = 0x00000800;
         /// Support separation of textures and samplers.
-        const SAMPLER_OBJECTS = 0x1000;
+        const SAMPLER_OBJECTS = 0x00001000;
         /// Support sampler LOD bias.
-        const SAMPLER_LOD_BIAS = 0x2000;
+        const SAMPLER_LOD_BIAS = 0x00002000;
         /// Support setting border texel colors.
-        const SAMPLER_BORDER_COLOR = 0x4000;
+        const SAMPLER_BORDER_COLOR = 0x00004000;
         /// Support explicit layouts in shader.
-        const EXPLICIT_LAYOUTS_IN_SHADER = 0x8000;
+        const EXPLICIT_LAYOUTS_IN_SHADER = 0x00008000;
+        /// Support instanced input rate on attribute binding.
+        const INSTANCED_ATTRIBUTE_BINDING = 0x00010000;
     }
 }
 
@@ -427,6 +429,9 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     if info.is_supported(&[Core(3, 3)]) {
         // TODO: extension
         legacy |= LegacyFeatures::SAMPLER_BORDER_COLOR;
+    }
+    if info.is_supported(&[Core(3, 3), Es(3, 0)]) {
+        legacy |= LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING;
     }
 
     let private = PrivateCaps {
