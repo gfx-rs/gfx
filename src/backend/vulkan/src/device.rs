@@ -285,7 +285,7 @@ impl d::Device<B> for Device {
         &self,
         data: Option<&[u8]>,
     ) -> Result<n::PipelineCache, d::OutOfMemory> {
-        let (data_len, data) = if let Some(d) =  data {
+        let (data_len, data) = if let Some(d) = data {
             (d.len(), d.as_ptr())
         } else {
             (0_usize, ptr::null())
@@ -309,8 +309,11 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn get_pipeline_cache_data(&self, cache: &n::PipelineCache) -> Result<Vec<u8>, d::OutOfMemory> {
-        let result = unsafe {self.raw.0.get_pipeline_cache_data(cache.raw) };
+    unsafe fn get_pipeline_cache_data(
+        &self,
+        cache: &n::PipelineCache,
+    ) -> Result<Vec<u8>, d::OutOfMemory> {
+        let result = unsafe { self.raw.0.get_pipeline_cache_data(cache.raw) };
 
         match result {
             Ok(data) => Ok(data),
@@ -1937,10 +1940,10 @@ impl d::Device<B> for Device {
         let swapchain_raw = match result {
             Ok(swapchain_raw) => swapchain_raw,
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                return Err(d::OutOfMemory::OutOfHostMemory.into())
+                return Err(d::OutOfMemory::OutOfHostMemory.into());
             }
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                return Err(d::OutOfMemory::OutOfDeviceMemory.into())
+                return Err(d::OutOfMemory::OutOfDeviceMemory.into());
             }
             Err(vk::Result::ERROR_DEVICE_LOST) => return Err(d::DeviceLost.into()),
             Err(vk::Result::ERROR_SURFACE_LOST_KHR) => return Err(d::SurfaceLost.into()),
@@ -1953,10 +1956,10 @@ impl d::Device<B> for Device {
         let backbuffer_images = match result {
             Ok(backbuffer_images) => backbuffer_images,
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                return Err(d::OutOfMemory::OutOfHostMemory.into())
+                return Err(d::OutOfMemory::OutOfHostMemory.into());
             }
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                return Err(d::OutOfMemory::OutOfDeviceMemory.into())
+                return Err(d::OutOfMemory::OutOfDeviceMemory.into());
             }
             _ => unreachable!(),
         };

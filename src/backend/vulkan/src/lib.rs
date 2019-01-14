@@ -819,8 +819,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         if cache_info[2] != self.properties.vendor_id {
             warn!(
                 "Vendor ID mismatch. Device: {:?}, cache: {:?}.",
-                self.properties.vendor_id,
-                cache_info[2],
+                self.properties.vendor_id, cache_info[2],
             );
             return false;
         }
@@ -829,17 +828,16 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         if cache_info[3] != self.properties.device_id {
             warn!(
                 "Device ID mismatch. Device: {:?}, cache: {:?}.",
-                self.properties.device_id,
-                cache_info[3],
+                self.properties.device_id, cache_info[3],
             );
             return false;
         }
 
-        if self.properties.pipeline_cache_uuid != cache[16 .. 16 + vk::UUID_SIZE] {
+        if self.properties.pipeline_cache_uuid != cache[16..16 + vk::UUID_SIZE] {
             warn!(
                 "Pipeline cache UUID mismatch. Device: {:?}, cache: {:?}.",
                 self.properties.pipeline_cache_uuid,
-                &cache[16 .. 16 + vk::UUID_SIZE],
+                &cache[16..16 + vk::UUID_SIZE],
             );
             return false;
         }

@@ -171,7 +171,10 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn create_pipeline_cache(&self, _data: Option<&[u8]>) -> Result<(), device::OutOfMemory> {
+    unsafe fn create_pipeline_cache(
+        &self,
+        _data: Option<&[u8]>,
+    ) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 

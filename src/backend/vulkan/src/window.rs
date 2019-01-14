@@ -148,8 +148,7 @@ impl Instance {
                 surface: surface as *mut _,
             };
 
-            unsafe { w_loader.create_wayland_surface(&info, None) }
-                .expect("WaylandSurface failed")
+            unsafe { w_loader.create_wayland_surface(&info, None) }.expect("WaylandSurface failed")
         };
 
         self.create_surface_from_vk_surface_khr(surface, width, height, 1)
@@ -175,8 +174,7 @@ impl Instance {
                 window: window as *const _ as *mut _,
             };
 
-            unsafe { loader.create_android_surface(&info, None) }
-                .expect("AndroidSurface failed")
+            unsafe { loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
         };
 
         self.create_surface_from_vk_surface_khr(surface, width, height, 1)
@@ -321,10 +319,7 @@ impl hal::Surface<Backend> for Surface {
         let caps = unsafe {
             self.raw
                 .functor
-                .get_physical_device_surface_capabilities(
-                    physical_device.handle,
-                    self.raw.handle,
-                )
+                .get_physical_device_surface_capabilities(physical_device.handle, self.raw.handle)
         }
         .expect("Unable to query surface capabilities");
 
@@ -388,10 +383,7 @@ impl hal::Surface<Backend> for Surface {
         let present_modes = unsafe {
             self.raw
                 .functor
-                .get_physical_device_surface_present_modes(
-                    physical_device.handle,
-                    self.raw.handle,
-                )
+                .get_physical_device_surface_present_modes(physical_device.handle, self.raw.handle)
         }
         .expect("Unable to query present modes");
         let present_modes = present_modes
