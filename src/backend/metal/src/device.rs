@@ -459,7 +459,7 @@ impl Device {
             _ => {
                 return Err(ShaderError::CompilationFailed(
                     "shader model not supported".into(),
-                ))
+                ));
             }
         };
         if msl_version > self.shared.private_caps.msl_version {
@@ -1023,10 +1023,21 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn create_pipeline_cache(&self) -> Result<n::PipelineCache, OutOfMemory> {
+    unsafe fn create_pipeline_cache(
+        &self,
+        _data: Option<&[u8]>,
+    ) -> Result<n::PipelineCache, OutOfMemory> {
         Ok(n::PipelineCache {
             modules: FastStorageMap::default(),
         })
+    }
+
+    unsafe fn get_pipeline_cache_data(
+        &self,
+        cache: &n::PipelineCache,
+    ) -> Result<Vec<u8>, OutOfMemory> {
+        //empty
+        Ok(Vec::new())
     }
 
     unsafe fn destroy_pipeline_cache(&self, _cache: n::PipelineCache) {
@@ -2050,7 +2061,7 @@ impl hal::Device<Backend> for Device {
             None => {
                 return Err(buffer::ViewCreationError::UnsupportedFormat {
                     format: format_maybe,
-                })
+                });
             }
         };
         let format_desc = format.surface_desc();

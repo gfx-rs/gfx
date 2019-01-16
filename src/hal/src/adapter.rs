@@ -101,6 +101,9 @@ pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
 
     /// Returns the resource limits of this `Device`.
     fn limits(&self) -> Limits;
+
+    /// Check cache compatibility with the `Device`.
+    fn is_valid_cache(&self, _cache: &[u8]) -> bool { false }
 }
 
 /// Supported physical device types

@@ -798,6 +798,51 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_sampler_anisotropy: limits.max_sampler_anisotropy,
         }
     }
+
+    fn is_valid_cache(&self, cache: &[u8]) -> bool {
+        assert!(cache.len() > 16 + vk::UUID_SIZE);
+        let cache_info: &[u32] = unsafe { slice::from_raw_parts(cache as *const _ as *const _, 4) };
+
+        // header length
+        if cache_info[0] <= 0 {
+            warn!("Bad header length {:?}", cache_info[0]);
+            return false;
+        }
+
+        // cache header version
+        if cache_info[1] != vk::PipelineCacheHeaderVersion::ONE.as_raw() as u32 {
+            warn!("Unsupported cache header version: {:?}", cache_info[1]);
+            return false;
+        }
+
+        // vendor id
+        if cache_info[2] != self.properties.vendor_id {
+            warn!(
+                "Vendor ID mismatch. Device: {:?}, cache: {:?}.",
+                self.properties.vendor_id, cache_info[2],
+            );
+            return false;
+        }
+
+        // device id
+        if cache_info[3] != self.properties.device_id {
+            warn!(
+                "Device ID mismatch. Device: {:?}, cache: {:?}.",
+                self.properties.device_id, cache_info[3],
+            );
+            return false;
+        }
+
+        if self.properties.pipeline_cache_uuid != cache[16..16 + vk::UUID_SIZE] {
+            warn!(
+                "Pipeline cache UUID mismatch. Device: {:?}, cache: {:?}.",
+                self.properties.pipeline_cache_uuid,
+                &cache[16..16 + vk::UUID_SIZE],
+            );
+            return false;
+        }
+        true
+    }
 }
 
 #[doc(hidden)]

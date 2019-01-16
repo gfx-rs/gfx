@@ -281,19 +281,42 @@ impl d::Device<B> for Device {
         }
     }
 
-    fn create_pipeline_cache(&self) -> Result<n::PipelineCache, d::OutOfMemory> {
+    unsafe fn create_pipeline_cache(
+        &self,
+        data: Option<&[u8]>,
+    ) -> Result<n::PipelineCache, d::OutOfMemory> {
+        let (data_len, data) = if let Some(d) = data {
+            (d.len(), d.as_ptr())
+        } else {
+            (0_usize, ptr::null())
+        };
+
         let info = vk::PipelineCacheCreateInfo {
             s_type: vk::StructureType::PIPELINE_CACHE_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::PipelineCacheCreateFlags::empty(),
-            initial_data_size: 0, //TODO.
-            p_initial_data: ptr::null(),
+            initial_data_size: data_len,
+            p_initial_data: data as _,
         };
 
         let result = unsafe { self.raw.0.create_pipeline_cache(&info, None) };
 
         match result {
             Ok(raw) => Ok(n::PipelineCache { raw }),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::OutOfDeviceMemory),
+            _ => unreachable!(),
+        }
+    }
+
+    unsafe fn get_pipeline_cache_data(
+        &self,
+        cache: &n::PipelineCache,
+    ) -> Result<Vec<u8>, d::OutOfMemory> {
+        let result = unsafe { self.raw.0.get_pipeline_cache_data(cache.raw) };
+
+        match result {
+            Ok(data) => Ok(data),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::OutOfDeviceMemory),
             _ => unreachable!(),
@@ -1917,10 +1940,10 @@ impl d::Device<B> for Device {
         let swapchain_raw = match result {
             Ok(swapchain_raw) => swapchain_raw,
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                return Err(d::OutOfMemory::OutOfHostMemory.into())
+                return Err(d::OutOfMemory::OutOfHostMemory.into());
             }
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                return Err(d::OutOfMemory::OutOfDeviceMemory.into())
+                return Err(d::OutOfMemory::OutOfDeviceMemory.into());
             }
             Err(vk::Result::ERROR_DEVICE_LOST) => return Err(d::DeviceLost.into()),
             Err(vk::Result::ERROR_SURFACE_LOST_KHR) => return Err(d::SurfaceLost.into()),
@@ -1933,10 +1956,10 @@ impl d::Device<B> for Device {
         let backbuffer_images = match result {
             Ok(backbuffer_images) => backbuffer_images,
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                return Err(d::OutOfMemory::OutOfHostMemory.into())
+                return Err(d::OutOfMemory::OutOfHostMemory.into());
             }
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                return Err(d::OutOfMemory::OutOfDeviceMemory.into())
+                return Err(d::OutOfMemory::OutOfDeviceMemory.into());
             }
             _ => unreachable!(),
         };

@@ -1445,8 +1445,16 @@ impl d::Device<B> for Device {
         })
     }
 
-    fn create_pipeline_cache(&self) -> Result<(), d::OutOfMemory> {
+    unsafe fn create_pipeline_cache(
+        &self,
+        _data: Option<&[u8]>
+    ) -> Result<(), d::OutOfMemory> {
         Ok(())
+    }
+
+    unsafe fn get_pipeline_cache_data(&self, cache: &()) -> Result<Vec<u8>, d::OutOfMemory> {
+        //empty
+        Ok(Vec::new())
     }
 
     unsafe fn destroy_pipeline_cache(&self, _: ()) {

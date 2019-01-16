@@ -904,8 +904,16 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    fn create_pipeline_cache(&self) -> Result<(), device::OutOfMemory> {
+    unsafe fn create_pipeline_cache(
+        &self,
+        _data: Option<&[u8]>,
+    ) -> Result<(), device::OutOfMemory> {
         Ok(())
+    }
+
+    unsafe fn get_pipeline_cache_data(&self, cache: &()) -> Result<Vec<u8>, device::OutOfMemory> {
+        //empty
+        Ok(Vec::new())
     }
 
     unsafe fn destroy_pipeline_cache(&self, _: ()) {
