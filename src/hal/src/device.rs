@@ -6,7 +6,7 @@
 //! and managing graphics resources such as buffers, images and memory.
 //!
 //! The `Adapter` and `Device` types are very similar to the Vulkan concept of
-//! "physical devices" vs. "logical devices"; an `Adapter` is single GPU
+//! "logical devices" vs. "physical devices"; an `Adapter` is single GPU
 //! (or CPU) that implements a backend, a `Device` is a
 //! handle to that physical device that has the requested capabilities
 //! and is used to actually do things.
