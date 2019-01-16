@@ -137,7 +137,7 @@ pub struct AdapterInfo {
 ///
 /// Given an `Adapter` a `Gpu` can be constructed by calling `PhysicalDevice::open()` on its
 /// `physical_device` field. However, if only a single queue family is needed or if no
-/// additional device features are required, than then the `Adapter::open_with` convenience method
+/// additional device features are required, then the `Adapter::open_with` convenience method
 /// can be used instead.
 pub struct Adapter<B: Backend> {
     /// General information about this adapter.
