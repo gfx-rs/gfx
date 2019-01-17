@@ -143,7 +143,7 @@ struct PipelineCache {
     // Bound pipeline and root signature.
     // Changed on bind pipeline calls.
     pipeline: Option<(native::PipelineState, native::RootSignature)>,
-    // Paramter slots of the current root signature.
+    // Parameter slots of the current root signature.
     num_parameter_slots: usize,
     //
     root_constants: Vec<RootConstant>,
