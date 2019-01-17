@@ -108,7 +108,7 @@ pub enum Command {
     SetPatchSize(i32),
     BindProgram(<GlContext as glow::Context>::Program),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
-    BindAttribute(n::AttributeDesc, n::RawBuffer, i32),
+    BindAttribute(n::AttributeDesc, n::RawBuffer, i32, u32),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
     CopyBufferToTexture(n::RawBuffer, n::Texture, command::BufferImageCopy),
