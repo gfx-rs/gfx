@@ -2,6 +2,8 @@
 //! outside of the graphics development environment.
 
 extern crate gfx_hal as hal;
+#[cfg(feature = "winit")]
+extern crate winit;
 
 use hal::range::RangeArg;
 use hal::{
@@ -862,6 +864,11 @@ impl Instance {
     /// Create instance.
     pub fn create(_name: &str, _version: u32) -> Self {
         Instance
+    }
+
+    #[cfg(feature = "winit")]
+    pub fn create_surface(&self, _: &winit::Window) -> Surface {
+        unimplemented!()
     }
 }
 
