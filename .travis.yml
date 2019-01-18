@@ -1,9 +1,10 @@
 sudo: false
 language: rust
 cache:
-  cargo: true
   directories:
-   - $HOME/deps
+   - $HOME/.cargo
+before-cache:
+  - rm -rf $HOME/.cargo/registry
 
 matrix:
   include:
