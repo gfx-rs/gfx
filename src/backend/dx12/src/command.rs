@@ -297,11 +297,8 @@ pub struct CommandBuffer {
     occlusion_query: Option<OcclusionQuery>,
     pipeline_stats_query: Option<UINT>,
 
-    // Cached vertex buffer views to bind.
-    // `Stride` values are not known at `bind_vertex_buffers` time because they are only stored
-    // inside the pipeline state.
+    // VertexBindings for the currently bound pipeline
     vertex_bindings_remap: [Option<r::VertexBinding>; MAX_VERTEX_BUFFERS],
-    vertex_buffer_views: [d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
 
     // Re-using allocation for the image-buffer copies.
     copies: Vec<Copy>,
@@ -356,7 +353,6 @@ impl CommandBuffer {
             occlusion_query: None,
             pipeline_stats_query: None,
             vertex_bindings_remap: [None; MAX_VERTEX_BUFFERS],
-            vertex_buffer_views: [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
             copies: Vec::new(),
             viewport_cache: SmallVec::new(),
             scissor_cache: SmallVec::new(),
@@ -396,7 +392,6 @@ impl CommandBuffer {
         self.occlusion_query = None;
         self.pipeline_stats_query = None;
         self.vertex_bindings_remap = [None; MAX_VERTEX_BUFFERS];
-        self.vertex_buffer_views = [NULL_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS];
         for heap in self.rtv_pools.drain(..) {
             unsafe {
                 heap.destroy();
@@ -628,52 +623,6 @@ impl CommandBuffer {
 
         self.active_bindpoint = BindPoint::Graphics { internal: false };
         let cmd_buffer = &mut self.raw;
-
-        // Bind vertex buffers
-        // Use needs_bind array to determine which buffers still need to be bound
-        // and bind them one continuous group at a time.
-        {
-            let vbs_remap = &self.vertex_bindings_remap;
-            let vbs = &self.vertex_buffer_views;
-            let mut last_end_slot = 0;
-            loop {
-                match vbs_remap[last_end_slot..]
-                    .iter()
-                    .position(|remap| remap.is_some())
-                {
-                    Some(start_offset) => {
-                        let start_slot = last_end_slot + start_offset;
-                        let buffers = vbs_remap[start_slot..]
-                            .iter()
-                            .take_while(|x| x.is_some())
-                            .filter_map(|x| *x)
-                            .map(|mapping| {
-                                let view = vbs[mapping.mapped_binding];
-
-                                d3d12::D3D12_VERTEX_BUFFER_VIEW {
-                                    BufferLocation: view.BufferLocation + mapping.offset as u64,
-                                    SizeInBytes: view.SizeInBytes - mapping.offset,
-                                    StrideInBytes: mapping.stride,
-                                }
-                            })
-                            .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
-                        let num_views = buffers.len();
-
-                        unsafe {
-                            cmd_buffer.IASetVertexBuffers(
-                                start_slot as _,
-                                buffers.len() as _,
-                                buffers.as_ptr(),
-                            );
-                        }
-                        last_end_slot = start_slot + num_views;
-                    }
-                    None => break,
-                }
-            }
-        }
-        // Don't re-bind vertex buffers again.
-        self.vertex_bindings_remap = [None; MAX_VERTEX_BUFFERS];
 
         // Flush root signature data
         Self::flush_user_data(
@@ -1734,21 +1683,65 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, bind_buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<r::Buffer>,
     {
-        // Only cache the vertex buffer views as we don't know the stride (PSO).
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
-        for ((buffer, offset), view) in buffers
+        assert!(
+            self.vertex_bindings_remap
+                .iter()
+                .find(|vb| vb.is_some())
+                .is_some(),
+            "A pipeline with vertex bindings must be bound before vertex_buffers can be bound"
+        );
+        let cmd_buffer = &self.raw;
+        let bind_buffers = bind_buffers
             .into_iter()
-            .zip(self.vertex_buffer_views[first_binding as _..].iter_mut())
-        {
-            let b = buffer.borrow().expect_bound();
-            let base = unsafe { (*b.resource).GetGPUVirtualAddress() };
-            view.BufferLocation = base + offset;
-            view.SizeInBytes = (b.requirements.size - offset) as u32;
+            .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
+
+        let vbs_remap = &self.vertex_bindings_remap;
+        let mut last_end_slot = 0;
+        loop {
+            match vbs_remap[last_end_slot..]
+                .iter()
+                .position(|remap| remap.is_some())
+            {
+                Some(start_offset) => {
+                    let start_slot = last_end_slot + start_offset;
+                    let buffers = vbs_remap[start_slot..]
+                        .iter()
+                        .take_while(|x| x.is_some())
+                        .filter_map(|x| *x)
+                        .map(|mapping| {
+
+                            let (buf, offset) = &bind_buffers[mapping.mapped_binding];
+                            let b = buf.borrow().expect_bound();
+                            let base = unsafe { (*b.resource).GetGPUVirtualAddress() };
+                            let buffer_location = base + offset;
+                            let size_in_bytes = (b.requirements.size - offset) as u32;
+
+                            d3d12::D3D12_VERTEX_BUFFER_VIEW {
+                                BufferLocation: buffer_location + mapping.offset as u64,
+                                SizeInBytes: size_in_bytes - mapping.offset,
+                                StrideInBytes: mapping.stride,
+                            }
+                        })
+                        .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
+                    let num_views = buffers.len();
+
+                    unsafe {
+                        cmd_buffer.IASetVertexBuffers(
+                            start_slot as _,
+                            num_views as _,
+                            buffers.as_ptr(),
+                        );
+                    }
+                    last_end_slot = start_slot + num_views;
+                }
+                None => break,
+            }
         }
     }
 
