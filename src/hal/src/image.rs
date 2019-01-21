@@ -515,63 +515,6 @@ impl SamplerInfo {
     }
 }
 
-/// Texture resource view descriptor.
-/// Legacy code to be removed, per msiglreith.
-#[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[allow(missing_docs)]
-pub struct ResourceDesc {
-    pub channel: format::ChannelType,
-    pub layer: Option<Layer>,
-    pub levels: Range<Level>,
-    pub swizzle: format::Swizzle,
-}
-
-/// Texture render view descriptor.
-/// Legacy code to be removed, per msiglreith.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[allow(missing_docs)]
-pub struct RenderDesc {
-    pub channel: format::ChannelType,
-    pub level: Level,
-    pub layer: Option<Layer>,
-}
-
-bitflags!(
-    /// Depth-stencil read-only flags
-    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct DepthStencilFlags: u8 {
-        /// Depth is read-only in the view.
-        const RO_DEPTH    = 0x1;
-        /// Stencil is read-only in the view.
-        const RO_STENCIL  = 0x2;
-        /// Both depth and stencil are read-only.
-        const RO_DEPTH_STENCIL = 0x3;
-    }
-);
-
-/// Texture depth-stencil view descriptor.
-/// Legacy code to be removed, per msiglreith.
-#[allow(missing_docs)]
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct DepthStencilDesc {
-    pub level: Level,
-    pub layer: Option<Layer>,
-    pub flags: DepthStencilFlags,
-}
-
-impl From<RenderDesc> for DepthStencilDesc {
-    fn from(rd: RenderDesc) -> DepthStencilDesc {
-        DepthStencilDesc {
-            level: rd.level,
-            layer: rd.layer,
-            flags: DepthStencilFlags::empty(),
-        }
-    }
-}
-
 /// Specifies options for how memory for an image is arranged.
 /// These are hints to the GPU driver and may or may not have actual
 /// performance effects, but describe constraints on how the data
