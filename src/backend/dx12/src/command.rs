@@ -629,52 +629,6 @@ impl CommandBuffer {
         self.active_bindpoint = BindPoint::Graphics { internal: false };
         let cmd_buffer = &mut self.raw;
 
-        // Bind vertex buffers
-        // Use needs_bind array to determine which buffers still need to be bound
-        // and bind them one continuous group at a time.
-        {
-            let vbs_remap = &self.vertex_bindings_remap;
-            let vbs = &self.vertex_buffer_views;
-            let mut last_end_slot = 0;
-            loop {
-                match vbs_remap[last_end_slot..]
-                    .iter()
-                    .position(|remap| remap.is_some())
-                {
-                    Some(start_offset) => {
-                        let start_slot = last_end_slot + start_offset;
-                        let buffers = vbs_remap[start_slot..]
-                            .iter()
-                            .take_while(|x| x.is_some())
-                            .filter_map(|x| *x)
-                            .map(|mapping| {
-                                let view = vbs[mapping.mapped_binding];
-
-                                d3d12::D3D12_VERTEX_BUFFER_VIEW {
-                                    BufferLocation: view.BufferLocation + mapping.offset as u64,
-                                    SizeInBytes: view.SizeInBytes - mapping.offset,
-                                    StrideInBytes: mapping.stride,
-                                }
-                            })
-                            .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
-                        let num_views = buffers.len();
-
-                        unsafe {
-                            cmd_buffer.IASetVertexBuffers(
-                                start_slot as _,
-                                buffers.len() as _,
-                                buffers.as_ptr(),
-                            );
-                        }
-                        last_end_slot = start_slot + num_views;
-                    }
-                    None => break,
-                }
-            }
-        }
-        // Don't re-bind vertex buffers again.
-        self.vertex_bindings_remap = [None; MAX_VERTEX_BUFFERS];
-
         // Flush root signature data
         Self::flush_user_data(
             &mut self.gr_pipeline,
@@ -1019,6 +973,48 @@ impl CommandBuffer {
                         });
                     }
                 }
+            }
+        }
+    }
+
+    fn set_vertex_buffers(&mut self) {
+        let cmd_buffer = &mut self.raw;
+        let vbs_remap = &self.vertex_bindings_remap;
+        let vbs = &self.vertex_buffer_views;
+        let mut last_end_slot = 0;
+        loop {
+            match vbs_remap[last_end_slot..]
+                .iter()
+                .position(|remap| remap.is_some())
+            {
+                Some(start_offset) => {
+                    let start_slot = last_end_slot + start_offset;
+                    let buffers = vbs_remap[start_slot..]
+                        .iter()
+                        .take_while(|x| x.is_some())
+                        .filter_map(|x| *x)
+                        .map(|mapping| {
+                            let view = vbs[mapping.mapped_binding];
+
+                            d3d12::D3D12_VERTEX_BUFFER_VIEW {
+                                BufferLocation: view.BufferLocation + mapping.offset as u64,
+                                SizeInBytes: view.SizeInBytes - mapping.offset,
+                                StrideInBytes: mapping.stride,
+                            }
+                        })
+                        .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
+                    let num_views = buffers.len();
+
+                    unsafe {
+                        cmd_buffer.IASetVertexBuffers(
+                            start_slot as _,
+                            num_views as _,
+                            buffers.as_ptr(),
+                        );
+                    }
+                    last_end_slot = start_slot + num_views;
+                }
+                None => break,
             }
         }
     }
@@ -1739,8 +1735,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<r::Buffer>,
     {
-        // Only cache the vertex buffer views as we don't know the stride (PSO).
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
+
         for ((buffer, offset), view) in buffers
             .into_iter()
             .zip(self.vertex_buffer_views[first_binding as _..].iter_mut())
@@ -1750,6 +1746,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             view.BufferLocation = base + offset;
             view.SizeInBytes = (b.requirements.size - offset) as u32;
         }
+        self.set_vertex_buffers();
     }
 
     unsafe fn set_viewports<T>(&mut self, first_viewport: u32, viewports: T)
@@ -1877,6 +1874,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.active_bindpoint = BindPoint::Graphics { internal: false };
         self.gr_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
         self.vertex_bindings_remap = pipeline.vertex_bindings;
+
+        self.set_vertex_buffers();
 
         if let Some(ref vp) = pipeline.baked_states.viewport {
             self.set_viewports(0, iter::once(vp));
