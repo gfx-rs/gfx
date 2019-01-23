@@ -256,6 +256,7 @@ impl PhysicalDevice {
             debug!("- {}", *extension);
         }
         let name = info.platform_name.renderer.into();
+        let vendor: std::string::String = info.platform_name.vendor.into();
 
         // create the shared context
         let share = Share {
@@ -271,12 +272,25 @@ impl PhysicalDevice {
             panic!("Error querying info: {:?}", err);
         }
 
+        // opengl has no way to discern device_type, so we can try to infer it from the vendor string
+        let vender_lower = vendor.to_lowercase();
+        let inferred_device_type = if vender_lower.contains("intel") {
+            hal::adapter::DeviceType::IntegratedGpu
+        } else if vender_lower.contains("nvidia")
+            || vender_lower.contains("ati")
+            || vender_lower.contains("amd")
+        {
+            hal::adapter::DeviceType::DiscreteGpu
+        } else {
+            hal::adapter::DeviceType::Other
+        };
+
         hal::Adapter {
             info: hal::AdapterInfo {
                 name,
-                vendor: 0,                                          // TODO
-                device: 0,                                          // TODO
-                device_type: hal::adapter::DeviceType::DiscreteGpu, // TODO Is there a way to detect this?
+                vendor: 0,
+                device: 0,
+                device_type: inferred_device_type,
             },
             physical_device: PhysicalDevice(Starc::new(share)),
             queue_families: vec![QueueFamily],
