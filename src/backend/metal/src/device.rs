@@ -1382,22 +1382,20 @@ impl hal::Device<Backend> for Device {
         )?;
         pipeline.set_compute_function(Some(&cs_function));
 
-        unsafe {
-            self.shared
-                .device
-                .lock()
-                .new_compute_pipeline_state(&pipeline)
-        }
-        .map(|raw| n::ComputePipeline {
-            cs_lib,
-            raw,
-            work_group_size,
-            pc_info: pipeline_desc.layout.push_constants.cs,
-        })
-        .map_err(|err| {
-            error!("PSO creation failed: {}", err);
-            pso::CreationError::Other
-        })
+        self.shared
+            .device
+            .lock()
+            .new_compute_pipeline_state(&pipeline)
+            .map(|raw| n::ComputePipeline {
+                cs_lib,
+                raw,
+                work_group_size,
+                pc_info: pipeline_desc.layout.push_constants.cs,
+            })
+            .map_err(|err| {
+                error!("PSO creation failed: {}", err);
+                pso::CreationError::Other
+            })
     }
 
     unsafe fn create_framebuffer<I>(
@@ -1465,7 +1463,7 @@ impl hal::Device<Backend> for Device {
         descriptor.set_address_mode_t(conv::map_wrap_mode(t));
         descriptor.set_address_mode_r(conv::map_wrap_mode(r));
 
-        unsafe { descriptor.set_lod_bias(info.lod_bias.into()) };
+        descriptor.set_lod_bias(info.lod_bias.into());
         descriptor.set_lod_min_clamp(info.lod_range.start.into());
         descriptor.set_lod_max_clamp(info.lod_range.end.into());
 
@@ -1511,7 +1509,7 @@ impl hal::Device<Backend> for Device {
             n::MemoryHeap::Public(_, ref cpu_buffer) => cpu_buffer.contents() as *mut u8,
             n::MemoryHeap::Native(_) | n::MemoryHeap::Private => panic!("Unable to map memory!"),
         };
-        Ok(unsafe { base_ptr.offset(range.start as _) })
+        Ok(base_ptr.offset(range.start as _))
     }
 
     unsafe fn unmap_memory(&self, memory: &n::Memory) {
@@ -2510,39 +2508,32 @@ impl hal::Device<Backend> for Device {
                     && !flags.contains(query::ResultFlags::WITH_AVAILABILITY)
                 {
                     // if stride is matching, copy everything in one go
-                    unsafe {
-                        ptr::copy_nonoverlapping(
-                            (visibility.buffer.contents() as *const u8).offset(
-                                (pool_range.start + queries.start) as isize * size_data as isize,
-                            ),
-                            data.as_mut_ptr(),
-                            stride as usize * (queries.end - queries.start) as usize,
-                        )
-                    };
+                    ptr::copy_nonoverlapping(
+                        (visibility.buffer.contents() as *const u8).offset(
+                            (pool_range.start + queries.start) as isize * size_data as isize,
+                        ),
+                        data.as_mut_ptr(),
+                        stride as usize * (queries.end - queries.start) as usize,
+                    );
                 } else {
                     // copy parts of individual entries
                     for i in 0..queries.end - queries.start {
                         let absolute_index = (pool_range.start + queries.start + i) as isize;
-                        let value = unsafe {
-                            *(visibility.buffer.contents() as *const u64).offset(absolute_index)
-                        };
-                        let availability = unsafe {
-                            let base = (visibility.buffer.contents() as *const u8)
-                                .offset(visibility.availability_offset as isize);
-                            *(base as *const u32).offset(absolute_index)
-                        };
+                        let value =
+                            *(visibility.buffer.contents() as *const u64).offset(absolute_index);
+                        let base = (visibility.buffer.contents() as *const u8)
+                            .offset(visibility.availability_offset as isize);
+                        let availability = *(base as *const u32).offset(absolute_index);
                         let data_ptr = data[i as usize * stride as usize..].as_mut_ptr();
-                        unsafe {
-                            if flags.contains(query::ResultFlags::BITS_64) {
-                                *(data_ptr as *mut u64) = value;
-                                if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
-                                    *(data_ptr as *mut u64).offset(1) = availability as u64;
-                                }
-                            } else {
-                                *(data_ptr as *mut u32) = value as u32;
-                                if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
-                                    *(data_ptr as *mut u32).offset(1) = availability;
-                                }
+                        if flags.contains(query::ResultFlags::BITS_64) {
+                            *(data_ptr as *mut u64) = value;
+                            if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
+                                *(data_ptr as *mut u64).offset(1) = availability as u64;
+                            }
+                        } else {
+                            *(data_ptr as *mut u32) = value as u32;
+                            if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
+                                *(data_ptr as *mut u32).offset(1) = availability;
                             }
                         }
                     }

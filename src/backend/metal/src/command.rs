@@ -2539,12 +2539,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     let com = soft::RenderCommand::BindBufferData {
                         stage: pso::Stage::Fragment,
                         index: 0,
-                        words: unsafe {
-                            slice::from_raw_parts(
-                                raw_value.float32.as_ptr() as *const u32,
-                                mem::size_of::<com::ClearColorRaw>() / WORD_SIZE,
-                            )
-                        },
+                        words: slice::from_raw_parts(
+                            raw_value.float32.as_ptr() as *const u32,
+                            mem::size_of::<com::ClearColorRaw>() / WORD_SIZE,
+                        ),
                     };
                     (com, Some((index as u8, channel)))
                 }
@@ -2585,12 +2583,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 Some(soft::RenderCommand::BindBufferData {
                     stage: pso::Stage::Vertex,
                     index: 0,
-                    words: unsafe {
-                        slice::from_raw_parts(
-                            vertices.as_ptr() as *const u32,
-                            vertices.len() * mem::size_of::<ClearVertex>() / WORD_SIZE,
-                        )
-                    },
+                    words: slice::from_raw_parts(
+                        vertices.as_ptr() as *const u32,
+                        vertices.len() * mem::size_of::<ClearVertex>() / WORD_SIZE,
+                    ),
                 })
             } else {
                 None
@@ -2905,12 +2901,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     soft::RenderCommand::BindBufferData {
                         stage: pso::Stage::Vertex,
                         index: 0,
-                        words: unsafe {
-                            slice::from_raw_parts(
-                                list.as_ptr() as *const u32,
-                                list.len() * mem::size_of::<BlitVertex>() / WORD_SIZE,
-                            )
-                        },
+                        words: slice::from_raw_parts(
+                            list.as_ptr() as *const u32,
+                            list.len() * mem::size_of::<BlitVertex>() / WORD_SIZE,
+                        ),
                     },
                     soft::RenderCommand::Draw {
                         primitive_type: MTLPrimitiveType::Triangle,
@@ -3123,7 +3117,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     desc.set_load_action(conv::map_load_operation(rat.ops.load));
                     if rat.ops.load == AttachmentLoadOp::Clear {
                         let channel = subpass.target_formats.colors[i].1;
-                        let raw = unsafe { self.temp.clear_values[at_id].unwrap().color };
+                        let raw = self.temp.clear_values[at_id].unwrap().color;
                         desc.set_clear_color(channel.interpret(raw));
                     }
                 }
@@ -3145,8 +3139,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     if op_flags.contains(native::SubpassOps::LOAD) {
                         desc.set_load_action(conv::map_load_operation(rat.ops.load));
                         if rat.ops.load == AttachmentLoadOp::Clear {
-                            let raw =
-                                unsafe { self.temp.clear_values[at_id].unwrap().depth_stencil };
+                            let raw = self.temp.clear_values[at_id].unwrap().depth_stencil;
                             desc.set_clear_depth(raw.depth as f64);
                         }
                     }
@@ -3161,8 +3154,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     if op_flags.contains(native::SubpassOps::LOAD) {
                         desc.set_load_action(conv::map_load_operation(rat.stencil_ops.load));
                         if rat.stencil_ops.load == AttachmentLoadOp::Clear {
-                            let raw =
-                                unsafe { self.temp.clear_values[at_id].unwrap().depth_stencil };
+                            let raw = self.temp.clear_values[at_id].unwrap().depth_stencil;
                             desc.set_clear_stencil(raw.stencil);
                         }
                     }
@@ -3721,11 +3713,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 });
                 compute_commands.push(soft::ComputeCommand::BindBufferData {
                     index: 2,
-                    words: unsafe {
-                        // Rust doesn't see that compute_datas will not lose this item
-                        // and the boxed contents can't be moved otherwise.
-                        mem::transmute(&compute_datas.last().unwrap()[..])
-                    },
+                    // Rust doesn't see that compute_datas will not lose this
+                    // item and the boxed contents can't be moved otherwise.
+                    words: mem::transmute(&compute_datas.last().unwrap()[..]),
                 });
                 compute_commands.push(soft::ComputeCommand::Dispatch { wg_size, wg_count });
             }
