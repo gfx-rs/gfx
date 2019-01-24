@@ -256,6 +256,7 @@ impl PhysicalDevice {
             debug!("- {}", *extension);
         }
         let name = info.platform_name.renderer.into();
+        let renderer: std::string::String = info.platform_name.renderer.into();
 
         // create the shared context
         let share = Share {
@@ -271,12 +272,40 @@ impl PhysicalDevice {
             panic!("Error querying info: {:?}", err);
         }
 
+        // opengl has no way to discern device_type, so we can try to infer it from the renderer string
+        
+        let renderer_lower = renderer.to_lowercase();
+        let strings_that_imply_integrated = [
+            " xpress", // space here is on purpose so we don't match express
+            "radeon hd 4200",  
+            "radeon hd 4250",
+            "radeon hd 4290",
+            "radeon hd 4270",
+            "radeon hd 4225",
+            "radeon hd 3100",
+            "radeon hd 3200",
+            "radeon hd 3000",
+            "radeon hd 3300",
+            "nforce", // All nvidia nforce appear to be integrated
+            "igp",
+            "intel", // todo Intel will release a discrete gpu soon, and we will need to update this logic when they do    
+        ];
+
+        let inferred_device_type = if strings_that_imply_integrated
+            .into_iter()
+            .any(|&s| renderer_lower.contains(s))
+        {
+            hal::adapter::DeviceType::IntegratedGpu
+        } else {
+            hal::adapter::DeviceType::DiscreteGpu
+        };
+
         hal::Adapter {
             info: hal::AdapterInfo {
                 name,
-                vendor: 0,                                          // TODO
-                device: 0,                                          // TODO
-                device_type: hal::adapter::DeviceType::DiscreteGpu, // TODO Is there a way to detect this?
+                vendor: 0,
+                device: 0,
+                device_type: inferred_device_type,
             },
             physical_device: PhysicalDevice(Starc::new(share)),
             queue_families: vec![QueueFamily],
