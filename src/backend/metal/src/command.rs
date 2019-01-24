@@ -15,7 +15,7 @@ use hal::{
     queue::{RawCommandQueue, Submission},
     range::RangeArg,
     DrawCount, IndexCount, IndexType, InstanceCount, SwapImageIndex, VertexCount, VertexOffset,
-    WorkGroupCount
+    WorkGroupCount, window::PresentError,
 };
 
 use block::ConcreteBlock;
@@ -2078,7 +2078,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         &mut self,
         swapchains: Is,
         wait_semaphores: Iw,
-    ) -> Result<(), ()>
+    ) -> Result<(), PresentError>
     where
         W: 'a + Borrow<window::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
@@ -2095,7 +2095,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
             for (swapchain, index) in swapchains {
                 debug!("presenting frame {}", index);
-                let drawable = swapchain.borrow().take_drawable(index)?;
+                let drawable = swapchain.borrow().take_drawable(index).map_err(|()| PresentError::OutOfDate)?; // What `Err(())` represents?
                 command_buffer.present_drawable(&drawable);
             }
             command_buffer.commit();

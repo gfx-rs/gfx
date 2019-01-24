@@ -7,7 +7,7 @@ extern crate winit;
 
 use crate::hal::range::RangeArg;
 use crate::hal::{
-    buffer, command, device, error, format, image, mapping, memory, pass, pool, pso, query, queue,
+    buffer, command, device, error, format, image, mapping, memory, pass, pool, pso, query, queue, window,
 };
 use std::borrow::Borrow;
 use std::ops::Range;
@@ -108,7 +108,7 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
         unimplemented!()
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(&mut self, _: Is, _: Iw) -> Result<(), ()>
+    unsafe fn present<'a, W, Is, S, Iw>(&mut self, _: Is, _: Iw) -> Result<(), window::PresentError>
     where
         W: 'a + Borrow<Swapchain>,
         Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,

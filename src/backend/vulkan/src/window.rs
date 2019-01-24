@@ -439,6 +439,15 @@ impl hal::Swapchain<Backend> for Swapchain {
             Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
                 Err(hal::AcquireError::SurfaceLost(hal::device::SurfaceLost))
             }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(hal::AcquireError::OutOfMemory(hal::device::OutOfMemory::OutOfHostMemory))
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(hal::AcquireError::OutOfMemory(hal::device::OutOfMemory::OutOfDeviceMemory))
+            }
+            Err(vk::Result::ERROR_DEVICE_LOST) => {
+                Err(hal::AcquireError::DeviceLost(hal::device::DeviceLost))
+            }
             _ => panic!("Failed to acquire image."),
         }
     }

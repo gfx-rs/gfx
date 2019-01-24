@@ -381,14 +381,40 @@ pub enum Backbuffer<B: Backend> {
 }
 
 /// Error on acquiring the next image from a swapchain.
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
 pub enum AcquireError {
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
     /// No image was ready after the specified timeout expired.
+    #[fail(display = "No images ready")]
     NotReady,
     /// The swapchain is no longer in sync with the surface, needs to be re-created.
+    #[fail(display = "Swapchain is out of date")]
     OutOfDate,
     /// The surface was lost, and the swapchain is no longer usable.
+    #[fail(display = "{}", _0)]
     SurfaceLost(device::SurfaceLost),
+    /// Device is lost
+    #[fail(display = "{}", _0)]
+    DeviceLost(device::DeviceLost),
+}
+
+/// Error on acquiring the next image from a swapchain.
+#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+pub enum PresentError {
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
+    /// The swapchain is no longer in sync with the surface, needs to be re-created.
+    #[fail(display = "Swapchain is out of date")]
+    OutOfDate,
+    /// The surface was lost, and the swapchain is no longer usable.
+    #[fail(display = "{}", _0)]
+    SurfaceLost(device::SurfaceLost),
+    /// Device is lost
+    #[fail(display = "{}", _0)]
+    DeviceLost(device::DeviceLost),
 }
 
 /// The `Swapchain` is the backend representation of the surface.
@@ -433,7 +459,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
         present_queue: &mut CommandQueue<B, C>,
         image_index: SwapImageIndex,
         wait_semaphores: Iw,
-    ) -> Result<(), ()>
+    ) -> Result<(), PresentError>
     where
         Self: 'a + Sized + Borrow<B::Swapchain>,
         C: Capability,
@@ -448,7 +474,7 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
         &'a self,
         present_queue: &mut CommandQueue<B, C>,
         image_index: SwapImageIndex,
-    ) -> Result<(), ()>
+    ) -> Result<(), PresentError>
     where
         Self: 'a + Sized + Borrow<B::Swapchain>,
         C: Capability,

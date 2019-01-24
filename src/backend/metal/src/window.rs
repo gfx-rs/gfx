@@ -8,7 +8,7 @@ use crate::{
 use hal::{
     format, image,
     Backbuffer, SwapchainConfig, CompositeAlpha,
-    window::Extent2D,
+    window::{Extent2D, PresentError},
 };
 
 use core_graphics::base::CGFloat;

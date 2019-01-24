@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 use crate::command::{Primary, Submittable};
 use crate::error::HostExecutionError;
 use crate::pso;
-use crate::window::SwapImageIndex;
+use crate::window::{SwapImageIndex, PresentError};
 use crate::Backend;
 
 pub use self::capability::{Capability, Compute, General, Graphics, Supports, Transfer};
@@ -77,7 +77,7 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
         &mut self,
         swapchains: Is,
         wait_semaphores: Iw,
-    ) -> Result<(), ()>
+    ) -> Result<(), PresentError>
     where
         Self: Sized,
         W: 'a + Borrow<B::Swapchain>,
@@ -159,7 +159,7 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
         &mut self,
         swapchains: Is,
         wait_semaphores: Iw,
-    ) -> Result<(), ()>
+    ) -> Result<(), PresentError>
     where
         W: 'a + Borrow<B::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,

@@ -455,7 +455,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         &mut self,
         swapchains: Is,
         _wait_semaphores: Iw,
-    ) -> Result<(), ()>
+    ) -> Result<(), hal::window::PresentError>
     where
         W: 'a + Borrow<window::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
