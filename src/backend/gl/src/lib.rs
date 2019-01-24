@@ -256,7 +256,7 @@ impl PhysicalDevice {
             debug!("- {}", *extension);
         }
         let name = info.platform_name.renderer.into();
-        let vendor: std::string::String = info.platform_name.vendor.into();
+        let renderer: std::string::String = info.platform_name.renderer.into();
 
         // create the shared context
         let share = Share {
@@ -272,17 +272,32 @@ impl PhysicalDevice {
             panic!("Error querying info: {:?}", err);
         }
 
-        // opengl has no way to discern device_type, so we can try to infer it from the vendor string
-        let vender_lower = vendor.to_lowercase();
-        let inferred_device_type = if vender_lower.contains("intel") {
-            hal::adapter::DeviceType::IntegratedGpu
-        } else if vender_lower.contains("nvidia")
-            || vender_lower.contains("ati")
-            || vender_lower.contains("amd")
+        // opengl has no way to discern device_type, so we can try to infer it from the renderer string
+        
+        let renderer_lower = renderer.to_lowercase();
+        let strings_that_imply_integrated = [
+            " xpress", // space here is on purpose so we don't match express
+            "radeon hd 4200",  
+            "radeon hd 4250",
+            "radeon hd 4290",
+            "radeon hd 4270",
+            "radeon hd 4225",
+            "radeon hd 3100",
+            "radeon hd 3200",
+            "radeon hd 3000",
+            "radeon hd 3300",
+            "nforce", // All nvidia nforce appear to be integrated
+            "igp",
+            "intel", // todo Intel will release a discrete gpu soon, and we will need to update this logic when they do    
+        ];
+
+        let inferred_device_type = if strings_that_imply_integrated
+            .into_iter()
+            .any(|&s| renderer_lower.contains(s))
         {
-            hal::adapter::DeviceType::DiscreteGpu
+            hal::adapter::DeviceType::IntegratedGpu
         } else {
-            hal::adapter::DeviceType::Other
+            hal::adapter::DeviceType::DiscreteGpu
         };
 
         hal::Adapter {
