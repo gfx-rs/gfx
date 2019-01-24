@@ -375,7 +375,7 @@ impl hal::Instance for Instance {
     type Backend = Backend;
 
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
-        let mut devices = unsafe { self.raw.0.enumerate_physical_devices() }
+        let devices = unsafe { self.raw.0.enumerate_physical_devices() }
             .expect("Unable to enumerate adapters");
 
         devices
@@ -500,16 +500,14 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 p_enabled_features: &enabled_features,
             };
 
-            unsafe {
-                self.instance
-                    .0
-                    .create_device(self.handle, &info, None)
-                    .map_err(Into::<result::Error>::into)
-                    .map_err(Into::<DeviceCreationError>::into)?
-            }
+            self.instance
+                .0
+                .create_device(self.handle, &info, None)
+                .map_err(Into::<result::Error>::into)
+                .map_err(Into::<DeviceCreationError>::into)?
         };
 
-        let swapchain_fn = vk::KhrSwapchainFn::load(|name| unsafe {
+        let swapchain_fn = vk::KhrSwapchainFn::load(|name| {
             mem::transmute(
                 self.instance
                     .0
@@ -528,7 +526,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 let family_index = family.index;
                 let mut family_raw = hal::backend::RawQueueGroup::new(family.clone());
                 for id in 0..priorities.len() {
-                    let queue_raw = unsafe { device_arc.0.get_device_queue(family_index, id as _) };
+                    let queue_raw = device_arc.0.get_device_queue(family_index, id as _);
                     family_raw.add_queue(CommandQueue {
                         raw: Arc::new(queue_raw),
                         device: device_arc.clone(),
@@ -957,7 +955,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             p_results: ptr::null_mut(),
         };
 
-        match unsafe { self.swapchain_fn.queue_present_khr(*self.raw, &info) } {
+        match self.swapchain_fn.queue_present_khr(*self.raw, &info) {
             vk::Result::SUCCESS => Ok(()),
             vk::Result::SUBOPTIMAL_KHR | vk::Result::ERROR_OUT_OF_DATE_KHR => Err(()),
             _ => panic!("Failed to present frame"),
