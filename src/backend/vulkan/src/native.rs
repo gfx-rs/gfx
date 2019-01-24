@@ -127,7 +127,9 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
             p_set_layouts: raw_layouts.as_ptr(),
         };
 
-        unsafe { self.device.0.allocate_descriptor_sets(&info) }
+        self.device
+            .0
+            .allocate_descriptor_sets(&info)
             .map(|sets| {
                 output.extend(
                     sets.into_iter()
@@ -150,19 +152,18 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         self.set_free_vec.clear();
         self.set_free_vec
             .extend(descriptor_sets.into_iter().map(|d| d.raw));
-        unsafe {
-            self.device
-                .0
-                .free_descriptor_sets(self.raw, &self.set_free_vec);
-        }
+        self.device
+            .0
+            .free_descriptor_sets(self.raw, &self.set_free_vec);
     }
 
     unsafe fn reset(&mut self) {
-        assert_eq!(Ok(()), unsafe {
+        assert_eq!(
+            Ok(()),
             self.device
                 .0
                 .reset_descriptor_pool(self.raw, vk::DescriptorPoolResetFlags::empty())
-        });
+        );
     }
 }
 

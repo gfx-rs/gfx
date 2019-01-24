@@ -429,11 +429,10 @@ impl hal::Swapchain<Backend> for Swapchain {
             hal::FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
         };
 
-        let index = unsafe {
-            // will block if no image is available
-            self.functor
-                .acquire_next_image(self.raw, timeout_ns, semaphore, fence)
-        };
+        // will block if no image is available
+        let index = self
+            .functor
+            .acquire_next_image(self.raw, timeout_ns, semaphore, fence);
 
         match index {
             Ok((i, suboptimal)) => {

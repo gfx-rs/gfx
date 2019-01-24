@@ -16,11 +16,12 @@ pub struct RawCommandPool {
 
 impl pool::RawCommandPool<Backend> for RawCommandPool {
     unsafe fn reset(&mut self) {
-        assert_eq!(Ok(()), unsafe {
+        assert_eq!(
+            Ok(()),
             self.device
                 .0
                 .reset_command_pool(self.raw, vk::CommandPoolResetFlags::empty())
-        });
+        );
     }
 
     fn allocate_vec(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
