@@ -311,10 +311,7 @@ impl hal::Surface<Backend> for Surface {
         hal::SurfaceCapabilities,
         Option<Vec<Format>>,
         Vec<hal::PresentMode>,
-        Vec<hal::CompositeAlpha>,
     ) {
-        use std::mem;
-
         // Capabilities
         let caps = unsafe {
             self.raw
@@ -357,6 +354,7 @@ impl hal::Surface<Backend> for Surface {
             extents: min_extent..max_extent,
             max_image_layers: caps.max_image_array_layers as _,
             usage: conv::map_vk_image_usage(caps.supported_usage_flags),
+            composite_alpha: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
         };
 
         // Swapchain formats
@@ -391,15 +389,7 @@ impl hal::Surface<Backend> for Surface {
             .map(conv::map_vk_present_mode)
             .collect();
 
-        let composite_alphas = (0u32..10u32)
-            .filter(|i| {
-                let flag = vk::CompositeAlphaFlagsKHR::from_raw(1u32 << i);
-                caps.supported_composite_alpha.intersects(flag)
-            })
-            .map(|i| unsafe { mem::transmute(i) })
-            .collect();
-
-        (capabilities, formats, present_modes, composite_alphas)
+        (capabilities, formats, present_modes)
     }
 
     fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {

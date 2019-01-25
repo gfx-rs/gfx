@@ -2,7 +2,7 @@ use ash::vk;
 
 use hal::range::RangeArg;
 use hal::{buffer, command, format, image, pass, pso, query};
-use hal::{Features, IndexType, PresentMode, Primitive};
+use hal::{CompositeAlpha, Features, IndexType, PresentMode, Primitive};
 
 use native as n;
 use std::borrow::Borrow;
@@ -556,6 +556,18 @@ pub fn map_view_capabilities(caps: image::ViewCapabilities) -> vk::ImageCreateFl
     vk::ImageCreateFlags::from_raw(caps.bits())
 }
 
+pub fn map_present_mode(mode: PresentMode) -> vk::PresentModeKHR {
+    vk::PresentModeKHR::from_raw(mode as i32)
+}
+
 pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> PresentMode {
     unsafe { mem::transmute(mode) }
+}
+
+pub fn map_composite_alpha(composite_alpha: CompositeAlpha) -> vk::CompositeAlphaFlagsKHR {
+    vk::CompositeAlphaFlagsKHR::from_raw(composite_alpha.bits())
+}
+
+pub fn map_vk_composite_alpha(composite_alpha: vk::CompositeAlphaFlagsKHR) -> CompositeAlpha {
+    CompositeAlpha::from_bits_truncate(composite_alpha.as_raw())
 }

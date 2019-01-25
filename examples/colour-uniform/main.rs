@@ -1438,7 +1438,7 @@ struct SwapchainState<B: Backend> {
 
 impl<B: Backend> SwapchainState<B> {
     unsafe fn new(backend: &mut BackendState<B>, device: Rc<RefCell<DeviceState<B>>>) -> Self {
-        let (caps, formats, _present_modes, _composite_alphas) = backend
+        let (caps, formats, _present_modes) = backend
             .surface
             .compatibility(&device.borrow().physical_device);
         println!("formats: {:?}", formats);
