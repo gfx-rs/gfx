@@ -554,7 +554,11 @@ impl CommandQueue {
                 }
 
                 if rate != 0 {
-                    if self.share.legacy_features.contains(LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING) {
+                    if self
+                        .share
+                        .legacy_features
+                        .contains(LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING)
+                    {
                         gl.VertexAttribDivisor(location, rate);
                     } else {
                         error!("Binding attribute with instanced input rate is not supported");

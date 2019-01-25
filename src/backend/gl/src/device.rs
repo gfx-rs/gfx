@@ -556,11 +556,9 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_command_pool(&self, pool: RawCommandPool) {
-        unsafe {
-            if let Some(fbo) = pool.fbo {
-                let gl = &self.share.context;
-                gl.DeleteFramebuffers(1, &fbo);
-            }
+        if let Some(fbo) = pool.fbo {
+            let gl = &self.share.context;
+            gl.DeleteFramebuffers(1, &fbo);
         }
     }
 
@@ -658,10 +656,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    unsafe fn create_pipeline_cache(
-        &self,
-        _data: Option<&[u8]>
-    ) -> Result<(), d::OutOfMemory> {
+    unsafe fn create_pipeline_cache(&self, _data: Option<&[u8]>) -> Result<(), d::OutOfMemory> {
         Ok(())
     }
 
@@ -700,7 +695,7 @@ impl d::Device<B> for Device {
         };
 
         let program = {
-            let name = unsafe { gl.CreateProgram() };
+            let name = gl.CreateProgram();
 
             // Attach shaders to program
             let shaders = [
@@ -722,9 +717,9 @@ impl d::Device<B> for Device {
                             &mut desc.layout.desc_remap_data.write().unwrap(),
                             &mut name_binding_map,
                         );
-                        unsafe {
-                            gl.AttachShader(name, shader_name);
-                        }
+
+                        gl.AttachShader(name, shader_name);
+
                         shader_name
                     })
                 })
@@ -733,27 +728,23 @@ impl d::Device<B> for Device {
             if !share.private_caps.program_interface && share.private_caps.frag_data_location {
                 for i in 0..subpass.color_attachments.len() {
                     let color_name = format!("Target{}\0", i);
-                    unsafe {
-                        gl.BindFragDataLocation(
-                            name,
-                            i as u32,
-                            (&color_name[..]).as_ptr() as *mut gl::types::GLchar,
-                        );
-                    }
+                    gl.BindFragDataLocation(
+                        name,
+                        i as u32,
+                        (&color_name[..]).as_ptr() as *mut gl::types::GLchar,
+                    );
                 }
             }
 
-            unsafe { gl.LinkProgram(name) };
+            gl.LinkProgram(name);
             info!("\tLinked program {}", name);
             if let Err(err) = share.check() {
                 panic!("Error linking program: {:?}", err);
             }
 
             for shader_name in shader_names {
-                unsafe {
-                    gl.DetachShader(name, *shader_name);
-                    gl.DeleteShader(*shader_name);
-                }
+                gl.DetachShader(name, *shader_name);
+                gl.DeleteShader(*shader_name);
             }
 
             if !self
@@ -762,12 +753,10 @@ impl d::Device<B> for Device {
                 .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
             {
                 let gl = &self.share.context;
-                unsafe {
-                    gl.UseProgram(name);
-                    for (bname, binding) in name_binding_map.iter() {
-                        let loc = gl.GetUniformLocation(name, bname.as_ptr() as _);
-                        gl.Uniform1i(loc, *binding as _);
-                    }
+                gl.UseProgram(name);
+                for (bname, binding) in name_binding_map.iter() {
+                    let loc = gl.GetUniformLocation(name, bname.as_ptr() as _);
+                    gl.Uniform1i(loc, *binding as _);
                 }
             }
 
@@ -833,7 +822,7 @@ impl d::Device<B> for Device {
         let share = &self.share;
 
         let program = {
-            let name = unsafe { gl.CreateProgram() };
+            let name = gl.CreateProgram();
 
             let mut name_binding_map = FastHashMap::<String, pso::DescriptorBinding>::default();
             let shader = self.compile_shader(
@@ -842,18 +831,16 @@ impl d::Device<B> for Device {
                 &mut desc.layout.desc_remap_data.write().unwrap(),
                 &mut name_binding_map,
             );
-            unsafe { gl.AttachShader(name, shader) };
+            gl.AttachShader(name, shader);
 
-            unsafe { gl.LinkProgram(name) };
+            gl.LinkProgram(name);
             info!("\tLinked program {}", name);
             if let Err(err) = share.check() {
                 panic!("Error linking program: {:?}", err);
             }
 
-            unsafe {
-                gl.DetachShader(name, shader);
-                gl.DeleteShader(shader);
-            }
+            gl.DetachShader(name, shader);
+            gl.DeleteShader(shader);
 
             if !self
                 .share
@@ -861,12 +848,10 @@ impl d::Device<B> for Device {
                 .contains(LegacyFeatures::EXPLICIT_LAYOUTS_IN_SHADER)
             {
                 let gl = &self.share.context;
-                unsafe {
-                    gl.UseProgram(name);
-                    for (bname, binding) in name_binding_map.iter() {
-                        let loc = gl.GetUniformLocation(name, bname.as_ptr() as _);
-                        gl.Uniform1i(loc, *binding as _);
-                    }
+                gl.UseProgram(name);
+                for (bname, binding) in name_binding_map.iter() {
+                    let loc = gl.GetUniformLocation(name, bname.as_ptr() as _);
+                    gl.Uniform1i(loc, *binding as _);
                 }
             }
 
@@ -903,10 +888,8 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         let target = gl::DRAW_FRAMEBUFFER;
         let mut name = 0;
-        unsafe {
-            gl.GenFramebuffers(1, &mut name);
-            gl.BindFramebuffer(target, name);
-        }
+        gl.GenFramebuffers(1, &mut name);
+        gl.BindFramebuffer(target, name);
 
         let att_points = [
             gl::COLOR_ATTACHMENT0,
@@ -928,12 +911,11 @@ impl d::Device<B> for Device {
         assert_eq!(attachments_len, pass.attachments.len());
         // attachments_len actually equals min(attachments.len(), att_points.len()) until the next assert
 
-        unsafe {
-            assert!(pass.attachments.len() <= att_points.len());
-            gl.DrawBuffers(attachments_len as _, att_points.as_ptr());
-            let _status = gl.CheckFramebufferStatus(target); //TODO: check status
-            gl.BindFramebuffer(target, 0);
-        }
+        assert!(pass.attachments.len() <= att_points.len());
+        gl.DrawBuffers(attachments_len as _, att_points.as_ptr());
+        let _status = gl.CheckFramebufferStatus(target); //TODO: check status
+        gl.BindFramebuffer(target, 0);
+
         if let Err(err) = self.share.check() {
             //TODO: attachments have been consumed
             panic!(
@@ -967,16 +949,14 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         let mut name = 0 as n::Sampler;
 
-        unsafe {
-            gl.GenSamplers(1, &mut name);
-            set_sampler_info(
-                &self.share,
-                &info,
-                |a, b| gl.SamplerParameterf(name, a, b),
-                |a, b| gl.SamplerParameterfv(name, a, &b[0]),
-                |a, b| gl.SamplerParameteri(name, a, b),
-            );
-        }
+        gl.GenSamplers(1, &mut name);
+        set_sampler_info(
+            &self.share,
+            &info,
+            |a, b| gl.SamplerParameterf(name, a, b),
+            |a, b| gl.SamplerParameterfv(name, a, &b[0]),
+            |a, b| gl.SamplerParameteri(name, a, b),
+        );
 
         if let Err(_) = self.share.check() {
             Err(d::AllocationError::OutOfMemory(
@@ -1012,9 +992,7 @@ impl d::Device<B> for Device {
 
         let gl = &self.share.context;
         let mut name = 0;
-        unsafe {
-            gl.GenBuffers(1, &mut name);
-        }
+        gl.GenBuffers(1, &mut name);
 
         Ok(n::Buffer {
             raw: name,
@@ -1053,11 +1031,9 @@ impl d::Device<B> for Device {
             //TODO: gl::DYNAMIC_STORAGE_BIT | gl::MAP_PERSISTENT_BIT
             let flags = memory.map_flags();
             //TODO: use *Named calls to avoid binding
-            unsafe {
-                gl.BindBuffer(target, buffer.raw);
-                gl.BufferStorage(target, buffer.requirements.size as _, ptr::null(), flags);
-                gl.BindBuffer(target, 0);
-            }
+            gl.BindBuffer(target, buffer.raw);
+            gl.BufferStorage(target, buffer.requirements.size as _, ptr::null(), flags);
+            gl.BindBuffer(target, 0);
         } else {
             let flags = if cpu_can_read && cpu_can_write {
                 gl::DYNAMIC_DRAW
@@ -1068,11 +1044,9 @@ impl d::Device<B> for Device {
             } else {
                 gl::STATIC_DRAW
             };
-            unsafe {
-                gl.BindBuffer(target, buffer.raw);
-                gl.BufferData(target, buffer.requirements.size as _, ptr::null(), flags);
-                gl.BindBuffer(target, 0);
-            }
+            gl.BindBuffer(target, buffer.raw);
+            gl.BufferData(target, buffer.requirements.size as _, ptr::null(), flags);
+            gl.BindBuffer(target, 0);
         }
 
         if let Err(err) = self.share.check() {
@@ -1103,7 +1077,7 @@ impl d::Device<B> for Device {
         let offset = *range.start().unwrap_or(&0);
         let size = *range.end().unwrap_or(&memory.size) - offset;
 
-        let ptr = unsafe {
+        let ptr = {
             gl.BindBuffer(target, buffer);
             let ptr = gl.MapBufferRange(target, offset as _, size as _, access);
             gl.BindBuffer(target, 0);
@@ -1125,11 +1099,9 @@ impl d::Device<B> for Device {
         };
         let target = gl::PIXEL_PACK_BUFFER;
 
-        unsafe {
-            gl.BindBuffer(target, buffer);
-            gl.UnmapBuffer(target);
-            gl.BindBuffer(target, 0);
-        }
+        gl.BindBuffer(target, buffer);
+        gl.UnmapBuffer(target);
+        gl.BindBuffer(target, 0);
 
         if let Err(err) = self.share.check() {
             panic!("Error unmapping memory: {:?} for memory {:?}", err, memory);
@@ -1191,9 +1163,9 @@ impl d::Device<B> for Device {
             || usage.contains(i::Usage::SAMPLED)
         {
             let mut name = 0;
-            unsafe { gl.GenTextures(1, &mut name) };
+            gl.GenTextures(1, &mut name);
             match kind {
-                i::Kind::D2(w, h, 1, 1) => unsafe {
+                i::Kind::D2(w, h, 1, 1) => {
                     gl.BindTexture(gl::TEXTURE_2D, name);
                     if self.share.private_caps.image_storage {
                         gl.TexStorage2D(
@@ -1227,18 +1199,18 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
-                },
+                }
                 _ => unimplemented!(),
             };
             n::ImageKind::Texture(name)
         } else {
             let mut name = 0;
-            unsafe { gl.GenRenderbuffers(1, &mut name) };
+            gl.GenRenderbuffers(1, &mut name);
             match kind {
-                i::Kind::D2(w, h, 1, 1) => unsafe {
+                i::Kind::D2(w, h, 1, 1) => {
                     gl.BindRenderbuffer(gl::RENDERBUFFER, name);
                     gl.RenderbufferStorage(gl::RENDERBUFFER, int_format, w as _, h as _);
-                },
+                }
                 _ => unimplemented!(),
             };
             n::ImageKind::Surface(name)
@@ -1460,10 +1432,8 @@ impl d::Device<B> for Device {
             let fence = fence.borrow();
             let sync = fence.0.get();
             if !sync.is_null() {
-                unsafe {
-                    if self.share.private_caps.sync && gl.IsSync(sync) == gl::TRUE {
-                        gl.DeleteSync(sync);
-                    }
+                if self.share.private_caps.sync && gl.IsSync(sync) == gl::TRUE {
+                    gl.DeleteSync(sync);
                 }
             }
             fence.0.set(ptr::null())
@@ -1535,28 +1505,20 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_graphics_pipeline(&self, pipeline: n::GraphicsPipeline) {
-        unsafe {
-            self.share.context.DeleteProgram(pipeline.program);
-        }
+        self.share.context.DeleteProgram(pipeline.program);
     }
 
     unsafe fn destroy_compute_pipeline(&self, pipeline: n::ComputePipeline) {
-        unsafe {
-            self.share.context.DeleteProgram(pipeline.program);
-        }
+        self.share.context.DeleteProgram(pipeline.program);
     }
 
     unsafe fn destroy_framebuffer(&self, frame_buffer: n::FrameBuffer) {
         let gl = &self.share.context;
-        unsafe {
-            gl.DeleteFramebuffers(1, &frame_buffer);
-        }
+        gl.DeleteFramebuffers(1, &frame_buffer);
     }
 
     unsafe fn destroy_buffer(&self, buffer: n::Buffer) {
-        unsafe {
-            self.share.context.DeleteBuffers(1, &buffer.raw);
-        }
+        self.share.context.DeleteBuffers(1, &buffer.raw);
     }
     unsafe fn destroy_buffer_view(&self, _: n::BufferView) {
         // Nothing to do
@@ -1565,8 +1527,8 @@ impl d::Device<B> for Device {
     unsafe fn destroy_image(&self, image: n::Image) {
         let gl = &self.share.context;
         match image.kind {
-            n::ImageKind::Surface(rb) => unsafe { gl.DeleteRenderbuffers(1, &rb) },
-            n::ImageKind::Texture(t) => unsafe { gl.DeleteTextures(1, &t) },
+            n::ImageKind::Surface(rb) => gl.DeleteRenderbuffers(1, &rb),
+            n::ImageKind::Texture(t) => gl.DeleteTextures(1, &t),
         }
     }
 
@@ -1577,7 +1539,7 @@ impl d::Device<B> for Device {
     unsafe fn destroy_sampler(&self, sampler: n::FatSampler) {
         let gl = &self.share.context;
         match sampler {
-            n::FatSampler::Sampler(s) => unsafe { gl.DeleteSamplers(1, &s) },
+            n::FatSampler::Sampler(s) => gl.DeleteSamplers(1, &s),
             _ => (),
         }
     }
@@ -1591,12 +1553,10 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_fence(&self, fence: n::Fence) {
-        unsafe {
-            let gl = &self.share.context;
-            let sync = fence.0.get();
-            if self.share.private_caps.sync && gl.IsSync(sync) == gl::TRUE {
-                gl.DeleteSync(sync);
-            }
+        let gl = &self.share.context;
+        let sync = fence.0.get();
+        if self.share.private_caps.sync && gl.IsSync(sync) == gl::TRUE {
+            gl.DeleteSync(sync);
         }
     }
 
