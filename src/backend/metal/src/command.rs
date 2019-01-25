@@ -765,6 +765,49 @@ impl Journal {
             }
         }
     }
+
+    fn extend(&mut self, other: &Self, inherit_pass: bool) {
+        if inherit_pass {
+            assert_eq!(other.passes.len(), 1);
+            match *self.passes.last_mut().unwrap() {
+                (soft::Pass::Render(_), ref mut range) => {
+                    range.end += other.render_commands.len();
+                }
+                (soft::Pass::Compute, _) |
+                (soft::Pass::Blit, _) => panic!("Only render passes can inherit"),
+            }
+        } else {
+            for (ref pass, ref range) in &other.passes {
+                let offset = match *pass {
+                    soft::Pass::Render(_) => self.render_commands.len(),
+                    soft::Pass::Compute => self.compute_commands.len(),
+                    soft::Pass::Blit => self.blit_commands.len(),
+                };
+                self.passes.push((
+                    pass.clone(),
+                    range.start + offset .. range.end + offset,
+                ));
+            }
+        }
+
+        // Note: journals contain 3 levels of stuff:
+        // resources, commands, and passes
+        // Each upper level points to the lower one with index
+        // sub-ranges. In order to merge two journals, we need
+        // to fix those indices of the one that goes on top.
+        // This is referred here as "rebasing". 
+        for mut com in other.render_commands.iter().cloned() {
+            self.resources.rebase_render(&mut com);
+            self.render_commands.push(com);
+        }
+        for mut com in other.compute_commands.iter().cloned() {
+            self.resources.rebase_compute(&mut com);
+            self.compute_commands.push(com);
+        }
+        self.blit_commands.extend_from_slice(&other.blit_commands);
+
+        self.resources.extend(&other.resources);
+    }
 }
 
 enum CommandSink {
@@ -776,6 +819,7 @@ enum CommandSink {
     },
     Deferred {
         is_encoding: bool,
+        is_inheriting: bool,
         journal: Journal,
     },
     #[cfg(feature = "dispatch")]
@@ -887,6 +931,7 @@ impl CommandSink {
             CommandSink::Deferred {
                 ref mut is_encoding,
                 ref mut journal,
+                ..
             } => {
                 *is_encoding = false;
                 journal.stop();
@@ -918,6 +963,7 @@ impl CommandSink {
             CommandSink::Deferred {
                 is_encoding: true,
                 ref mut journal,
+                ..
             } => match journal.passes.last() {
                 Some(&(soft::Pass::Render(_), _)) => {
                     PreRender::Deferred(&mut journal.resources, &mut journal.render_commands)
@@ -953,11 +999,12 @@ impl CommandSink {
             CommandSink::Deferred {
                 ref mut is_encoding,
                 ref mut journal,
+                is_inheriting,
             } => {
-                let pass = soft::Pass::Render(descriptor);
+                assert!(!is_inheriting);
                 *is_encoding = true;
-                journal
-                    .passes
+                let pass = soft::Pass::Render(descriptor);
+                journal.passes
                     .push((pass, journal.render_commands.len()..0));
                 PreRender::Deferred(&mut journal.resources, &mut journal.render_commands)
             }
@@ -1025,8 +1072,10 @@ impl CommandSink {
             }
             CommandSink::Deferred {
                 ref mut is_encoding,
+                is_inheriting,
                 ref mut journal,
             } => {
+                assert!(!is_inheriting);
                 *is_encoding = true;
                 if let Some(&(soft::Pass::Blit, _)) = journal.passes.last() {
                 } else {
@@ -1085,6 +1134,7 @@ impl CommandSink {
             } => PreCompute::Immediate(encoder),
             CommandSink::Deferred {
                 is_encoding: true,
+                is_inheriting: false,
                 ref mut journal,
             } => match journal.passes.last() {
                 Some(&(soft::Pass::Compute, _)) => {
@@ -1123,8 +1173,10 @@ impl CommandSink {
             }
             CommandSink::Deferred {
                 ref mut is_encoding,
+                is_inheriting,
                 ref mut journal,
             } => {
+                assert!(!is_inheriting);
                 *is_encoding = true;
                 let switch = if let Some(&(soft::Pass::Compute, _)) = journal.passes.last() {
                     false
@@ -1193,6 +1245,7 @@ pub struct IndexBuffer<B> {
 
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
+    level: com::RawLevel,
     backup_journal: Option<Journal>,
     #[cfg(feature = "dispatch")]
     backup_capacity: Option<Capacity>,
@@ -2071,12 +2124,12 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate_one(&mut self, _level: com::RawLevel) -> CommandBuffer {
+    fn allocate_one(&mut self, level: com::RawLevel) -> CommandBuffer {
         //TODO: fail with OOM if we allocate more actual command buffers
         // than our mega-queue supports.
-        //TODO: Implement secondary buffers
         let inner = Arc::new(RefCell::new(CommandBufferInner {
             sink: None,
+            level,
             backup_journal: None,
             #[cfg(feature = "dispatch")]
             backup_capacity: None,
@@ -2173,14 +2226,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         flags: com::CommandBufferFlags,
-        _info: com::CommandBufferInheritanceInfo<Backend>,
+        info: com::CommandBufferInheritanceInfo<Backend>,
     ) {
         self.reset(false);
+
         let mut inner = self.inner.borrow_mut();
-        //TODO: Implement secondary command buffers
-        let oneshot = flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT);
+        let can_immediate = inner.level == com::RawLevel::Primary &&
+            flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT);
         let sink = match self.pool_shared.borrow_mut().online_recording {
-            OnlineRecording::Immediate if oneshot => {
+            OnlineRecording::Immediate if can_immediate => {
                 let (cmd_buffer, token) = self.shared.queue.lock().spawn();
                 CommandSink::Immediate {
                     cmd_buffer,
@@ -2190,7 +2244,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
             }
             #[cfg(feature = "dispatch")]
-            OnlineRecording::Remote(_) if oneshot => {
+            OnlineRecording::Remote(_) if can_immediate => {
                 let (cmd_buffer, token) = self.shared.queue.lock().spawn();
                 CommandSink::Remote {
                     queue: dispatch::Queue::with_target_queue(
@@ -2210,11 +2264,38 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
             _ => CommandSink::Deferred {
                 is_encoding: false,
+                is_inheriting: info.subpass.is_some(),
                 journal: inner.backup_journal.take().unwrap_or_default(),
             },
         };
         inner.sink = Some(sink);
-        self.state.reset_resources();
+
+        if let Some(framebuffer) = info.framebuffer {
+            self.state.target_extent = framebuffer.extent;
+        }
+        if let Some(sp) = info.subpass {
+            let subpass = &sp.main_pass.subpasses[sp.index];
+            self.state.target_formats.copy_from(&subpass.target_formats);
+
+            self.state.target_aspects = Aspects::empty();
+            if !subpass.colors.is_empty() {
+                self.state.target_aspects |= Aspects::COLOR;
+            }
+            if let Some((at_id, _)) = subpass.depth_stencil {
+                let rat = &sp.main_pass.attachments[at_id];
+                let aspects = rat.format.unwrap().surface_desc().aspects;
+                self.state.target_aspects |= aspects;
+            }
+
+            match inner.sink {
+                Some(CommandSink::Deferred { ref mut is_encoding, ref mut journal, .. }) => {
+                    *is_encoding = true;
+                    let pass_desc = metal::RenderPassDescriptor::new().to_owned();
+                    journal.passes.push((soft::Pass::Render(pass_desc), 0..0));
+                }
+                _ => unreachable!()
+            }
+        }
     }
 
     unsafe fn finish(&mut self) {
@@ -4241,11 +4322,47 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue(self.state.push_cs_constants(pc));
     }
 
-    unsafe fn execute_commands<'a, T, I>(&mut self, _cmd_buffers: I)
+    unsafe fn execute_commands<'a, T, I>(&mut self, cmd_buffers: I)
     where
         T: 'a + Borrow<CommandBuffer>,
         I: IntoIterator<Item = &'a T>,
     {
-        unimplemented!()
+        for cmd_buffer in cmd_buffers {
+            let outer_borrowed = cmd_buffer.borrow();
+            let inner_borrowed = outer_borrowed.inner.borrow_mut();
+
+            let (exec_journal, is_inheriting) = match inner_borrowed.sink {
+                Some(CommandSink::Deferred { ref journal, is_inheriting, .. }) => {
+                    (journal, is_inheriting)
+                }
+                _ => panic!("Unexpected secondary sink!"),
+            };
+
+            match *self.inner
+                .borrow_mut()
+                .sink()
+            {
+                CommandSink::Immediate { ref mut cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
+                    if is_inheriting {
+                        let encoder = match encoder_state {
+                            EncoderState::Render(ref encoder) => encoder,
+                            _ => panic!("Expected Render encoder!"),
+                        };
+                        for command in &exec_journal.render_commands {
+                            exec_render(encoder, command, &exec_journal.resources);
+                        }
+                    } else {
+                        encoder_state.end();
+                        *num_passes += exec_journal.passes.len();
+                        exec_journal.record(cmd_buffer);
+                    }
+                }
+                CommandSink::Deferred { ref mut journal, .. } => {
+                    journal.extend(exec_journal, is_inheriting);
+                }
+                #[cfg(feature = "dispatch")]
+                CommandSink::Remote {..} => unimplemented!(),
+            }
+        }
     }
 }
