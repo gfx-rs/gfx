@@ -696,7 +696,7 @@ impl hal::Surface<Backend> for Surface {
             extents: extent..extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
-            composite_alpha: CompositeAlpha::INHERIT, //TODO
+            composite_alpha: CompositeAlpha::OPAQUE, //TODO
         };
 
         let formats = vec![

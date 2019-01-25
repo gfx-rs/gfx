@@ -301,7 +301,7 @@ impl hal::Surface<Backend> for Surface {
                 | image::Usage::SAMPLED
                 | image::Usage::TRANSFER_SRC
                 | image::Usage::TRANSFER_DST,
-            composite_alpha: CompositeAlpha::INHERIT, //TODO
+            composite_alpha: CompositeAlpha::OPAQUE, //TODO
         };
 
         let formats = vec![

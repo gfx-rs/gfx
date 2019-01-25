@@ -312,7 +312,7 @@ impl SwapchainConfig {
     pub fn new(width: u32, height: u32, format: Format, image_count: SwapImageIndex) -> Self {
         SwapchainConfig {
             present_mode: PresentMode::Fifo,
-            composite_alpha: CompositeAlpha::INHERIT,
+            composite_alpha: CompositeAlpha::OPAQUE,
             format,
             extent: Extent2D { width, height },
             image_count,
@@ -340,9 +340,17 @@ impl SwapchainConfig {
             }
         };
 
+        let composite_alpha = if caps.composite_alpha.contains(CompositeAlpha::INHERIT) {
+            CompositeAlpha::INHERIT
+        } else if caps.composite_alpha.contains(CompositeAlpha::OPAQUE) {
+            CompositeAlpha::OPAQUE
+        } else {
+            unreachable!("neither INHERIT or OPAQUE CompositeAlpha modes are supported")
+        };
+
         SwapchainConfig {
             present_mode: PresentMode::Fifo,
-            composite_alpha: CompositeAlpha::INHERIT,
+            composite_alpha,
             format,
             extent: clamped_extent,
             image_count: caps.image_count.start,

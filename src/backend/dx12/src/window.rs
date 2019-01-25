@@ -81,7 +81,7 @@ impl hal::Surface<Backend> for Surface {
             extents: extent..extent,
             max_image_layers: 1,
             usage: i::Usage::COLOR_ATTACHMENT | i::Usage::TRANSFER_SRC | i::Usage::TRANSFER_DST,
-            composite_alpha: CompositeAlpha::INHERIT, //TODO
+            composite_alpha: CompositeAlpha::OPAQUE, //TODO
         };
 
         // Sticking to FLIP swap effects for the moment.
