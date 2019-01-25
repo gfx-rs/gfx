@@ -378,7 +378,7 @@ impl ImageBlitPipes {
 
         let pipeline = metal::RenderPipelineDescriptor::new();
         if private_caps.layered_rendering {
-        	pipeline.set_input_primitive_topology(metal::MTLPrimitiveTopologyClass::Triangle);
+            pipeline.set_input_primitive_topology(metal::MTLPrimitiveTopologyClass::Triangle);
         }
 
         let s_type = match key.0 {

@@ -20,7 +20,7 @@ pub trait Resources {
     type ComputePipeline;
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 pub struct Own {
     pub buffers: Vec<Option<BufferPtr>>,
     pub buffer_offsets: Vec<hal::buffer::Offset>,
@@ -114,7 +114,7 @@ pub enum RenderCommand<R: Resources> {
     },
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum BlitCommand {
     FillBuffer {
         dst: BufferPtr,
@@ -180,8 +180,7 @@ pub enum ComputeCommand<R: Resources> {
     },
 }
 
-
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Pass {
     Render(metal::RenderPassDescriptor),
     Blit,
@@ -321,6 +320,69 @@ impl Own {
                 offset,
             },
         }
+    }
+
+    pub fn rebase_render(&self, com: &mut RenderCommand<Own>) {
+        use self::RenderCommand::*;
+        match *com {
+            SetViewport(..) |
+            SetScissor(..) |
+            SetBlendColor(..) |
+            SetDepthBias(..) |
+            SetDepthStencilState(..) |
+            SetStencilReferenceValues(..) |
+            SetRasterizerState(..) |
+            SetVisibilityResult(..) |
+            BindBuffer { .. } => {}
+            BindBuffers { ref mut buffers, .. } => {
+                buffers.start += self.buffers.len() as CacheResourceIndex;
+                buffers.end += self.buffers.len() as CacheResourceIndex;
+            }
+            BindBufferData { .. } => {}
+            BindTextures { ref mut textures, .. } => {
+                textures.start += self.textures.len() as CacheResourceIndex;
+                textures.end += self.textures.len() as CacheResourceIndex;
+            }
+            BindSamplers { ref mut samplers, .. } => {
+                samplers.start += self.samplers.len() as CacheResourceIndex;
+                samplers.end += self.samplers.len() as CacheResourceIndex;
+            }
+            BindPipeline(..) |
+            Draw { .. } |
+            DrawIndexed { .. } |
+            DrawIndirect { .. } |
+            DrawIndexedIndirect { .. } => {}
+        }
+    }
+
+    pub fn rebase_compute(&self, com: &mut ComputeCommand<Own>) {
+        use self::ComputeCommand::*;
+        match *com {
+            BindBuffer { .. } => {}
+            BindBuffers { ref mut buffers, .. } => {
+                buffers.start += self.buffers.len() as CacheResourceIndex;
+                buffers.end += self.buffers.len() as CacheResourceIndex;
+            }
+            BindBufferData { .. } => {}
+            BindTextures { ref mut textures, .. } => {
+                textures.start += self.textures.len() as CacheResourceIndex;
+                textures.end += self.textures.len() as CacheResourceIndex;
+            }
+            BindSamplers { ref mut samplers, .. } => {
+                samplers.start += self.samplers.len() as CacheResourceIndex;
+                samplers.end += self.samplers.len() as CacheResourceIndex;
+            }
+            BindPipeline(..) |
+            Dispatch { .. } |
+            DispatchIndirect { .. } => {}
+        }
+    }
+
+    pub fn extend(&mut self, other: &Self) {
+        self.buffers.extend_from_slice(&other.buffers);
+        self.buffer_offsets.extend_from_slice(&other.buffer_offsets);
+        self.textures.extend_from_slice(&other.textures);
+        self.samplers.extend_from_slice(&other.samplers);
     }
 }
 
