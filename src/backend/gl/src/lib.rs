@@ -297,7 +297,7 @@ impl PhysicalDevice {
             "shield",
             "igp",
             "mali",
-            "intel", 
+            "intel",
         ];
         // todo Intel will release a discrete gpu soon, and we will need to update this logic when they do
         let inferred_device_type = if vendor_lower.contains("qualcomm")
