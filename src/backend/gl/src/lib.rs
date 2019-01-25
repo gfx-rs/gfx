@@ -292,14 +292,14 @@ impl PhysicalDevice {
             "radeon(tm) r6 graphics",
             "radeon(tm) r7 graphics",
             "radeon r7 graphics",
-            "nforce", // All nvidia nforce are integrated
+            "nforce", // all nvidia nforce are integrated
             "tegra",  // all nvidia tegra are integrated
-            "shield",
+            "shield", // all nvidia shield are integrated
             "igp",
             "mali",
             "intel",
         ];
-        // todo Intel will release a discrete gpu soon, and we will need to update this logic when they do
+        // todo: Intel will release a discrete gpu soon, and we will need to update this logic when they do
         let inferred_device_type = if vendor_lower.contains("qualcomm")
             || vendor_lower.contains("intel")
             || strings_that_imply_integrated
@@ -372,25 +372,21 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .contains(info::LegacyFeatures::SRGB_COLOR)
         {
             // TODO: Find way to emulate this on older Opengl versions.
-            unsafe {
-                gl.Enable(gl::FRAMEBUFFER_SRGB);
-            }
-        }
-        unsafe {
-            gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
 
-            if !self.0.info.version.is_embedded {
-                gl.Enable(gl::PROGRAM_POINT_SIZE);
-            }
+            gl.Enable(gl::FRAMEBUFFER_SRGB);
+        }
+
+        gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
+
+        if !self.0.info.version.is_embedded {
+            gl.Enable(gl::PROGRAM_POINT_SIZE);
         }
 
         // create main VAO and bind it
         let mut vao = 0;
         if self.0.private_caps.vertex_array {
-            unsafe {
-                gl.GenVertexArrays(1, &mut vao);
-                gl.BindVertexArray(vao);
-            }
+            gl.GenVertexArrays(1, &mut vao);
+            gl.BindVertexArray(vao);
         }
 
         if let Err(err) = self.0.check() {

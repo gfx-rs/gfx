@@ -98,7 +98,12 @@ pub enum Command {
     SetPatchSize(gl::types::GLint),
     BindProgram(gl::types::GLuint),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
-    BindAttribute(n::AttributeDesc, gl::types::GLuint, gl::types::GLsizei, gl::types::GLuint),
+    BindAttribute(
+        n::AttributeDesc,
+        gl::types::GLuint,
+        gl::types::GLsizei,
+        gl::types::GLuint,
+    ),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
     CopyBufferToTexture(n::RawBuffer, n::Texture, command::BufferImageCopy),
@@ -381,7 +386,12 @@ impl RawCommandBuffer {
                         &self.id,
                         &mut self.memory,
                         &mut self.buf,
-                        Command::BindAttribute(attribute.clone(), handle, desc.stride as _, desc.rate as u32),
+                        Command::BindAttribute(
+                            attribute.clone(),
+                            handle,
+                            desc.stride as _,
+                            desc.rate as u32,
+                        ),
                     );
                 }
                 _ => error!("No vertex buffer description bound at {}", binding),
@@ -673,14 +683,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                     | ChannelType::Srgb
                     | ChannelType::Uscaled
                     | ChannelType::Iscaled => {
-                        self.push_cmd(Command::ClearBufferColorF(0, unsafe { color.float32 }))
+                        self.push_cmd(Command::ClearBufferColorF(0, color.float32))
                     }
-                    ChannelType::Uint => {
-                        self.push_cmd(Command::ClearBufferColorU(0, unsafe { color.uint32 }))
-                    }
-                    ChannelType::Int => {
-                        self.push_cmd(Command::ClearBufferColorI(0, unsafe { color.int32 }))
-                    }
+                    ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, color.uint32)),
+                    ChannelType::Int => self.push_cmd(Command::ClearBufferColorI(0, color.int32)),
                 }
             }
             None => {
@@ -691,7 +697,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 };
 
                 self.push_cmd(Command::BindTexture(0, text));
-                self.push_cmd(Command::ClearTexture(unsafe { color.float32 }));
+                self.push_cmd(Command::ClearTexture(color.float32));
             }
         }
     }
