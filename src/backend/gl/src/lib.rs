@@ -256,6 +256,7 @@ impl PhysicalDevice {
             debug!("- {}", *extension);
         }
         let name = info.platform_name.renderer.into();
+        let vendor: std::string::String = info.platform_name.vendor.into();
         let renderer: std::string::String = info.platform_name.renderer.into();
 
         // create the shared context
@@ -273,11 +274,11 @@ impl PhysicalDevice {
         }
 
         // opengl has no way to discern device_type, so we can try to infer it from the renderer string
-        
+        let vendor_lower = vendor.to_lowercase();
         let renderer_lower = renderer.to_lowercase();
         let strings_that_imply_integrated = [
             " xpress", // space here is on purpose so we don't match express
-            "radeon hd 4200",  
+            "radeon hd 4200",
             "radeon hd 4250",
             "radeon hd 4290",
             "radeon hd 4270",
@@ -286,24 +287,51 @@ impl PhysicalDevice {
             "radeon hd 3200",
             "radeon hd 3000",
             "radeon hd 3300",
-            "nforce", // All nvidia nforce appear to be integrated
+            "radeon(tm) r4 graphics",
+            "radeon(tm) r5 graphics",
+            "radeon(tm) r6 graphics",
+            "radeon(tm) r7 graphics",
+            "radeon r7 graphics",
+            "nforce", // All nvidia nforce are integrated
+            "tegra",  // all nvidia tegra are integrated
+            "shield",
             "igp",
-            "intel", // todo Intel will release a discrete gpu soon, and we will need to update this logic when they do    
+            "mali",
+            "intel", 
         ];
-
-        let inferred_device_type = if strings_that_imply_integrated
-            .into_iter()
-            .any(|&s| renderer_lower.contains(s))
+        // todo Intel will release a discrete gpu soon, and we will need to update this logic when they do
+        let inferred_device_type = if vendor_lower.contains("qualcomm")
+            || vendor_lower.contains("intel")
+            || strings_that_imply_integrated
+                .into_iter()
+                .any(|&s| renderer_lower.contains(s))
         {
             hal::adapter::DeviceType::IntegratedGpu
         } else {
             hal::adapter::DeviceType::DiscreteGpu
         };
 
+        // source: Sascha Willems at Vulkan
+        let vendor_id = if vendor_lower.contains("amd") {
+            0x1002
+        } else if vendor_lower.contains("imgtec") {
+            0x1010
+        } else if vendor_lower.contains("nvidia") {
+            0x10DE
+        } else if vendor_lower.contains("arm") {
+            0x13B5
+        } else if vendor_lower.contains("qualcomm") {
+            0x5143
+        } else if vendor_lower.contains("intel") {
+            0x8086
+        } else {
+            0
+        };
+
         hal::Adapter {
             info: hal::AdapterInfo {
                 name,
-                vendor: 0,
+                vendor: vendor_id,
                 device: 0,
                 device_type: inferred_device_type,
             },
