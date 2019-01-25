@@ -23,7 +23,8 @@ use hal::format::ChannelType;
 use hal::queue::{QueueFamilyId, Queues};
 use hal::range::RangeArg;
 use hal::{
-    buffer, command, error, format, image, memory, pass, pso, query, Features, Limits, QueueType,
+    buffer, command, error, format, image, memory, pass, pso, query, CompositeAlpha, Features,
+    Limits, QueueType,
 };
 use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 
@@ -680,7 +681,6 @@ impl hal::Surface<Backend> for Surface {
         hal::SurfaceCapabilities,
         Option<Vec<format::Format>>,
         Vec<hal::PresentMode>,
-        Vec<hal::CompositeAlpha>,
     ) {
         let extent = hal::window::Extent2D {
             width: self.width,
@@ -696,6 +696,7 @@ impl hal::Surface<Backend> for Surface {
             extents: extent..extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
+            composite_alpha: CompositeAlpha::OPAQUE, //TODO
         };
 
         let formats = vec![
@@ -710,11 +711,8 @@ impl hal::Surface<Backend> for Surface {
         let present_modes = vec![
             hal::PresentMode::Fifo, //TODO
         ];
-        let composite_alphas = vec![
-            hal::CompositeAlpha::Inherit, //TODO
-        ];
 
-        (capabilities, Some(formats), present_modes, composite_alphas)
+        (capabilities, Some(formats), present_modes)
     }
 }
 

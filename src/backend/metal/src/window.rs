@@ -9,7 +9,7 @@ use std::thread;
 
 use hal::window::Extent2D;
 use hal::{self, format, image};
-use hal::{Backbuffer, SwapchainConfig};
+use hal::{Backbuffer, SwapchainConfig, CompositeAlpha};
 
 use core_graphics::geometry::{CGRect, CGSize};
 use foreign_types::{ForeignType, ForeignTypeRef};
@@ -264,7 +264,6 @@ impl hal::Surface<Backend> for Surface {
         hal::SurfaceCapabilities,
         Option<Vec<format::Format>>,
         Vec<hal::PresentMode>,
-        Vec<hal::CompositeAlpha>,
     ) {
         let current_extent = if self.main_thread_id == thread::current().id() {
             Some(self.inner.dimensions())
@@ -302,6 +301,7 @@ impl hal::Surface<Backend> for Surface {
                 | image::Usage::SAMPLED
                 | image::Usage::TRANSFER_SRC
                 | image::Usage::TRANSFER_DST,
+            composite_alpha: CompositeAlpha::OPAQUE, //TODO
         };
 
         let formats = vec![
@@ -318,11 +318,8 @@ impl hal::Surface<Backend> for Surface {
         } else {
             vec![hal::PresentMode::Fifo]
         };
-        let composite_alphas = vec![
-            hal::CompositeAlpha::Inherit, //TODO
-        ];
 
-        (caps, Some(formats), present_modes, composite_alphas)
+        (caps, Some(formats), present_modes)
     }
 
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {

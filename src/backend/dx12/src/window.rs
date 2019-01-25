@@ -8,7 +8,7 @@ use winapi::shared::dxgi1_4;
 use winapi::shared::windef::{HWND, RECT};
 use winapi::um::winuser::GetClientRect;
 
-use hal::{self, format as f, image as i};
+use hal::{self, format as f, image as i, CompositeAlpha};
 use {native, resource as r, Backend, Instance, PhysicalDevice, QueueFamily};
 
 use std::os::raw::c_void;
@@ -71,7 +71,6 @@ impl hal::Surface<Backend> for Surface {
         hal::SurfaceCapabilities,
         Option<Vec<f::Format>>,
         Vec<hal::PresentMode>,
-        Vec<hal::CompositeAlpha>,
     ) {
         let (width, height) = self.get_extent();
         let extent = hal::window::Extent2D { width, height };
@@ -82,6 +81,7 @@ impl hal::Surface<Backend> for Surface {
             extents: extent..extent,
             max_image_layers: 1,
             usage: i::Usage::COLOR_ATTACHMENT | i::Usage::TRANSFER_SRC | i::Usage::TRANSFER_DST,
+            composite_alpha: CompositeAlpha::OPAQUE, //TODO
         };
 
         // Sticking to FLIP swap effects for the moment.
@@ -99,11 +99,8 @@ impl hal::Surface<Backend> for Surface {
         let present_modes = vec![
             hal::PresentMode::Fifo, //TODO
         ];
-        let composite_alphas = vec![
-            hal::CompositeAlpha::Inherit, //TODO
-        ];
 
-        (capabilities, Some(formats), present_modes, composite_alphas)
+        (capabilities, Some(formats), present_modes)
     }
 }
 

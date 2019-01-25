@@ -164,6 +164,9 @@ pub struct SurfaceCapabilities {
 
     /// Supported image usage flags.
     pub usage: image::Usage,
+
+    /// A bitmask of supported alpha composition modes.
+    pub composite_alpha: CompositeAlpha,
 }
 
 /// A `Surface` abstracts the surface of a native window, which will be presented
@@ -191,12 +194,7 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
     fn compatibility(
         &self,
         physical_device: &B::PhysicalDevice,
-    ) -> (
-        SurfaceCapabilities,
-        Option<Vec<Format>>,
-        Vec<PresentMode>,
-        Vec<CompositeAlpha>,
-    );
+    ) -> (SurfaceCapabilities, Option<Vec<Format>>, Vec<PresentMode>);
 }
 
 /// Index of an image in the swapchain.
@@ -236,19 +234,35 @@ pub enum PresentMode {
     Relaxed = 3,
 }
 
-/// Specifies the composition of the swapchain with regards to alpha component.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum CompositeAlpha {
-    /// Ignore alpha and treat it as 1.0 at all times.
-    Opaque = 0,
-    /// Use the alpha, expect the color to already be multiplied by it.
-    PreMultiplied = 1,
-    /// Use the alpha, let the compositor multiply the color by it.
-    PostMultiplied = 2,
-    /// Default to native system settings.
-    Inherit = 3,
-}
+bitflags!(
+    /// Specifies how the alpha channel of the images should be handled during
+    /// compositing.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct CompositeAlpha: u32 {
+        /// The alpha channel, if it exists, of the images is ignored in the
+        /// compositing process. Instead, the image is treated as if it has a
+        /// constant alpha of 1.0.
+        const OPAQUE = 0x1;
+        /// The alpha channel, if it exists, of the images is respected in the
+        /// compositing process. The non-alpha channels of the image are
+        /// expected to already be multiplied by the alpha channel by the
+        /// application.
+        const PREMULTIPLIED = 0x2;
+        /// The alpha channel, if it exists, of the images is respected in the
+        /// compositing process. The non-alpha channels of the image are not
+        /// expected to already be multiplied by the alpha channel by the
+        /// application; instead, the compositor will multiply the non-alpha
+        /// channels of the image by the alpha channel during compositing.
+        const POSTMULTIPLIED = 0x4;
+        /// The way in which the presentation engine treats the alpha channel in
+        /// the images is unknown to gfx-hal. Instead, the application is
+        /// responsible for setting the composite alpha blending mode using
+        /// native window system commands. If the application does not set the
+        /// blending mode using native window system commands, then a
+        /// platform-specific default will be used.
+        const INHERIT = 0x8;
+    }
+);
 
 /// Contains all the data necessary to create a new `Swapchain`:
 /// color, depth, and number of images.
@@ -298,7 +312,7 @@ impl SwapchainConfig {
     pub fn new(width: u32, height: u32, format: Format, image_count: SwapImageIndex) -> Self {
         SwapchainConfig {
             present_mode: PresentMode::Fifo,
-            composite_alpha: CompositeAlpha::Inherit,
+            composite_alpha: CompositeAlpha::OPAQUE,
             format,
             extent: Extent2D { width, height },
             image_count,
@@ -326,9 +340,17 @@ impl SwapchainConfig {
             }
         };
 
+        let composite_alpha = if caps.composite_alpha.contains(CompositeAlpha::INHERIT) {
+            CompositeAlpha::INHERIT
+        } else if caps.composite_alpha.contains(CompositeAlpha::OPAQUE) {
+            CompositeAlpha::OPAQUE
+        } else {
+            unreachable!("neither INHERIT or OPAQUE CompositeAlpha modes are supported")
+        };
+
         SwapchainConfig {
             present_mode: PresentMode::Fifo,
-            composite_alpha: CompositeAlpha::Inherit,
+            composite_alpha,
             format,
             extent: clamped_extent,
             image_count: caps.image_count.start,

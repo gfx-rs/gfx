@@ -1907,10 +1907,8 @@ impl d::Device<B> for Device {
             queue_family_index_count: 0,
             p_queue_family_indices: ptr::null(),
             pre_transform: vk::SurfaceTransformFlagsKHR::IDENTITY,
-            composite_alpha: vk::CompositeAlphaFlagsKHR::from_raw(
-                1 << config.composite_alpha as u32,
-            ),
-            present_mode: mem::transmute(config.present_mode),
+            composite_alpha: conv::map_composite_alpha(config.composite_alpha),
+            present_mode: conv::map_present_mode(config.present_mode),
             clipped: 1,
             old_swapchain,
         };

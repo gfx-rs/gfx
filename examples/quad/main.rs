@@ -364,7 +364,7 @@ fn main() {
             .expect("Can't wait for fence");
     }
 
-    let (caps, formats, _present_modes, _composite_alphas) =
+    let (caps, formats, _present_modes) =
         surface.compatibility(&mut adapter.physical_device);
     println!("formats: {:?}", formats);
     let format = formats.map_or(f::Format::Rgba8Srgb, |formats| {
@@ -598,7 +598,7 @@ fn main() {
         if recreate_swapchain {
             device.wait_idle().unwrap();
 
-            let (caps, formats, _present_modes, _composite_alphas) =
+            let (caps, formats, _present_modes) =
                 surface.compatibility(&mut adapter.physical_device);
             // Verify that previous format still exists so we may reuse it.
             assert!(formats.iter().any(|fs| fs.contains(&format)));

@@ -836,7 +836,6 @@ impl hal::Surface<Backend> for Surface {
         hal::SurfaceCapabilities,
         Option<Vec<format::Format>>,
         Vec<hal::PresentMode>,
-        Vec<hal::CompositeAlpha>,
     ) {
         unimplemented!()
     }
