@@ -107,7 +107,8 @@ impl SurfaceInner {
         let size = match self.view {
             Some(view) => unsafe {
                 let bounds: CGRect = msg_send![view.as_ptr(), bounds];
-                bounds.size
+                let backing_bounds: CGRect = msg_send![view.as_ptr(), convertRectToBacking: bounds];
+                backing_bounds.size
             },
             None => unsafe { msg_send![*self.render_layer.lock(), drawableSize] },
         };
