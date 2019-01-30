@@ -995,11 +995,10 @@ impl d::Device<B> for Device {
         };
 
         let mut heap = native::Heap::null();
-        let hr = unsafe {
-            self.raw
-                .clone()
-                .CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), heap.mut_void())
-        };
+        let hr = self
+            .raw
+            .clone()
+            .CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), heap.mut_void());
         if hr == winerror::E_OUTOFMEMORY {
             return Err(d::OutOfMemory::OutOfDeviceMemory.into());
         }
@@ -1032,7 +1031,8 @@ impl d::Device<B> for Device {
                 Flags: d3d12::D3D12_RESOURCE_FLAG_NONE,
             };
 
-            assert_eq!(winerror::S_OK, unsafe {
+            assert_eq!(
+                winerror::S_OK,
                 self.raw.clone().CreatePlacedResource(
                     heap.as_mut_ptr(),
                     0,
@@ -1042,7 +1042,7 @@ impl d::Device<B> for Device {
                     &d3d12::ID3D12Resource::uuidof(),
                     resource.mut_void(),
                 )
-            });
+            );
 
             Some(resource)
         } else {
@@ -1423,19 +1423,16 @@ impl d::Device<B> for Device {
         );
 
         if !error.is_null() {
-            error!("Root signature serialization error: {:?}", unsafe {
+            error!(
+                "Root signature serialization error: {:?}",
                 error.as_c_str().to_str().unwrap()
-            });
-            unsafe {
-                error.destroy();
-            }
+            );
+            error.destroy();
         }
 
         // TODO: error handling
         let (signature, _hr) = self.raw.create_root_signature(signature_raw, 0);
-        unsafe {
-            signature_raw.destroy();
-        }
+        signature_raw.destroy();
 
         Ok(r::PipelineLayout {
             raw: signature,
@@ -1692,38 +1689,32 @@ impl d::Device<B> for Device {
         let hr = if desc.depth_stencil.depth_bounds {
             // The DepthBoundsTestEnable option isn't available in the original D3D12_GRAPHICS_PIPELINE_STATE_DESC struct.
             // Instead, we must use the newer subobject stream method.
-            let (device2, hr) = unsafe { self.raw.cast::<d3d12::ID3D12Device2>() };
+            let (device2, hr) = self.raw.cast::<d3d12::ID3D12Device2>();
             if winerror::SUCCEEDED(hr) {
                 let mut pss_stream = GraphicsPipelineStateSubobjectStream::new(&pso_desc, true);
                 let pss_desc = d3d12::D3D12_PIPELINE_STATE_STREAM_DESC {
                     SizeInBytes: mem::size_of_val(&pss_stream),
                     pPipelineStateSubobjectStream: &mut pss_stream as *mut _ as _,
                 };
-                unsafe {
-                    device2.CreatePipelineState(
-                        &pss_desc,
-                        &d3d12::ID3D12PipelineState::uuidof(),
-                        pipeline.mut_void(),
-                    )
-                }
+                device2.CreatePipelineState(
+                    &pss_desc,
+                    &d3d12::ID3D12PipelineState::uuidof(),
+                    pipeline.mut_void(),
+                )
             } else {
                 hr
             }
         } else {
-            unsafe {
-                self.raw.clone().CreateGraphicsPipelineState(
-                    &pso_desc,
-                    &d3d12::ID3D12PipelineState::uuidof(),
-                    pipeline.mut_void(),
-                )
-            }
+            self.raw.clone().CreateGraphicsPipelineState(
+                &pso_desc,
+                &d3d12::ID3D12PipelineState::uuidof(),
+                pipeline.mut_void(),
+            )
         };
 
         let destroy_shader = |shader: ShaderBc| {
             if let ShaderBc::Owned(bc) = shader {
-                unsafe {
-                    bc.destroy();
-                }
+                bc.destroy();
             }
         };
 
@@ -1771,9 +1762,7 @@ impl d::Device<B> for Device {
         );
 
         if cs_destroy {
-            unsafe {
-                cs.destroy();
-            }
+            cs.destroy();
         }
 
         if winerror::SUCCEEDED(hr) {
@@ -1887,7 +1876,8 @@ impl d::Device<B> for Device {
             Flags: conv::map_buffer_flags(buffer_unbound.usage),
         };
 
-        assert_eq!(winerror::S_OK, unsafe {
+        assert_eq!(
+            winerror::S_OK,
             self.raw.clone().CreatePlacedResource(
                 memory.heap.as_mut_ptr(),
                 offset,
@@ -1897,17 +1887,17 @@ impl d::Device<B> for Device {
                 &d3d12::ID3D12Resource::uuidof(),
                 resource.mut_void(),
             )
-        });
+        );
 
         let clear_uav = if buffer_unbound.usage.contains(buffer::Usage::TRANSFER_DST) {
             let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
             let mut view_desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                 Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
                 ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
-                u: unsafe { mem::zeroed() },
+                u: mem::zeroed(),
             };
 
-            *unsafe { view_desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
+            *view_desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
                 FirstElement: 0,
                 NumElements: (buffer_unbound.requirements.size / 4) as _,
                 StructureByteStride: 0,
@@ -1915,14 +1905,12 @@ impl d::Device<B> for Device {
                 Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
             };
 
-            unsafe {
-                self.raw.CreateUnorderedAccessView(
-                    resource.as_mut_ptr(),
-                    ptr::null_mut(),
-                    &view_desc,
-                    handle,
-                );
-            }
+            self.raw.CreateUnorderedAccessView(
+                resource.as_mut_ptr(),
+                ptr::null_mut(),
+                &view_desc,
+                handle,
+            );
             Some(handle)
         } else {
             None
@@ -1967,10 +1955,10 @@ impl d::Device<B> for Device {
                 Format: format,
                 ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
                 Shader4ComponentMapping: 0x1688, // TODO: verify
-                u: unsafe { mem::zeroed() },
+                u: mem::zeroed(),
             };
 
-            *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_SRV {
+            *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
                 FirstElement: first_element,
                 NumElements: num_elements as _,
                 StructureByteStride: bytes_per_texel as _,
@@ -1978,13 +1966,9 @@ impl d::Device<B> for Device {
             };
 
             let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
-            unsafe {
-                self.raw.clone().CreateShaderResourceView(
-                    buffer.resource.as_mut_ptr(),
-                    &desc,
-                    handle,
-                );
-            }
+            self.raw
+                .clone()
+                .CreateShaderResourceView(buffer.resource.as_mut_ptr(), &desc, handle);
             handle
         } else {
             d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 }
@@ -1996,10 +1980,10 @@ impl d::Device<B> for Device {
             let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                 Format: format,
                 ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
-                u: unsafe { mem::zeroed() },
+                u: mem::zeroed(),
             };
 
-            *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
+            *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
                 FirstElement: first_element,
                 NumElements: num_elements as _,
                 StructureByteStride: bytes_per_texel as _,
@@ -2008,14 +1992,12 @@ impl d::Device<B> for Device {
             };
 
             let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
-            unsafe {
-                self.raw.clone().CreateUnorderedAccessView(
-                    buffer.resource.as_mut_ptr(),
-                    ptr::null_mut(),
-                    &desc,
-                    handle,
-                );
-            }
+            self.raw.clone().CreateUnorderedAccessView(
+                buffer.resource.as_mut_ptr(),
+                ptr::null_mut(),
+                &desc,
+                handle,
+            );
             handle
         } else {
             d3d12::D3D12_CPU_DESCRIPTOR_HANDLE { ptr: 0 }
@@ -2083,7 +2065,7 @@ impl d::Device<B> for Device {
             Flags: conv::map_image_flags(usage, features),
         };
 
-        let alloc_info = unsafe { self.raw.clone().GetResourceAllocationInfo(0, 1, &desc) };
+        let alloc_info = self.raw.clone().GetResourceAllocationInfo(0, 1, &desc);
 
         // Image usages which require RT/DS heap due to internal implementation.
         let target_usage = image::Usage::COLOR_ATTACHMENT
@@ -2135,7 +2117,7 @@ impl d::Device<B> for Device {
             r::Image::Bound(i) => i.descriptor,
             r::Image::Unbound(i) => i.desc,
         };
-        let footprint = unsafe {
+        let footprint = {
             let mut footprint = mem::zeroed();
             self.raw.GetCopyableFootprints(
                 image.get_desc(),
@@ -2183,7 +2165,8 @@ impl d::Device<B> for Device {
         let mut resource = native::Resource::null();
         let num_layers = image_unbound.kind.num_layers();
 
-        assert_eq!(winerror::S_OK, unsafe {
+        assert_eq!(
+            winerror::S_OK,
             self.raw.clone().CreatePlacedResource(
                 memory.heap.as_mut_ptr(),
                 offset,
@@ -2193,7 +2176,7 @@ impl d::Device<B> for Device {
                 &d3d12::ID3D12Resource::uuidof(),
                 resource.mut_void(),
             )
-        });
+        );
 
         let info = ViewInfo {
             resource,
@@ -2547,23 +2530,21 @@ impl d::Device<B> for Device {
                             let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                                 Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
                                 ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
-                                u: unsafe { mem::zeroed() },
+                                u: mem::zeroed(),
                             };
-                            *unsafe { desc.u.Buffer_mut() } = d3d12::D3D12_BUFFER_UAV {
+                            *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
                                 FirstElement: start as _,
                                 NumElements: ((end - start) / 4) as _,
                                 StructureByteStride: 0,
                                 CounterOffsetInBytes: 0,
                                 Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
                             };
-                            unsafe {
-                                self.raw.CreateUnorderedAccessView(
-                                    buffer.resource.as_mut_ptr(),
-                                    ptr::null_mut(),
-                                    &desc,
-                                    handle,
-                                );
-                            }
+                            self.raw.CreateUnorderedAccessView(
+                                buffer.resource.as_mut_ptr(),
+                                ptr::null_mut(),
+                                &desc,
+                                handle,
+                            );
                         } else {
                             // Making the size field of buffer requirements for uniform
                             // buffers a multiple of 256 and setting the required offset
@@ -2572,14 +2553,10 @@ impl d::Device<B> for Device {
                             // CBVs without going out-of-bounds.
                             let size = ((end - start) + 255) & !255;
                             let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
-                                BufferLocation: unsafe {
-                                    (*buffer.resource).GetGPUVirtualAddress()
-                                } + start,
+                                BufferLocation: (*buffer.resource).GetGPUVirtualAddress() + start,
                                 SizeInBytes: size as _,
                             };
-                            unsafe {
-                                self.raw.CreateConstantBufferView(&desc, handle);
-                            }
+                            self.raw.CreateConstantBufferView(&desc, handle);
                         }
 
                         src_views.push(handle);
@@ -2635,30 +2612,26 @@ impl d::Device<B> for Device {
         }
 
         if !num_views.is_empty() {
-            unsafe {
-                self.raw.clone().CopyDescriptors(
-                    dst_views.len() as u32,
-                    dst_views.as_ptr(),
-                    num_views.as_ptr(),
-                    src_views.len() as u32,
-                    src_views.as_ptr(),
-                    num_views.as_ptr(),
-                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                );
-            }
+            self.raw.clone().CopyDescriptors(
+                dst_views.len() as u32,
+                dst_views.as_ptr(),
+                num_views.as_ptr(),
+                src_views.len() as u32,
+                src_views.as_ptr(),
+                num_views.as_ptr(),
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            );
         }
         if !num_samplers.is_empty() {
-            unsafe {
-                self.raw.clone().CopyDescriptors(
-                    dst_samplers.len() as u32,
-                    dst_samplers.as_ptr(),
-                    num_samplers.as_ptr(),
-                    src_samplers.len() as u32,
-                    src_samplers.as_ptr(),
-                    num_samplers.as_ptr(),
-                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-                );
-            }
+            self.raw.clone().CopyDescriptors(
+                dst_samplers.len() as u32,
+                dst_samplers.as_ptr(),
+                num_samplers.as_ptr(),
+                src_samplers.len() as u32,
+                src_samplers.as_ptr(),
+                num_samplers.as_ptr(),
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+            );
         }
 
         // reset the temporary CPU-size descriptor pools
@@ -2705,30 +2678,26 @@ impl d::Device<B> for Device {
         }
 
         if !num_views.is_empty() {
-            unsafe {
-                self.raw.clone().CopyDescriptors(
-                    dst_views.len() as u32,
-                    dst_views.as_ptr(),
-                    num_views.as_ptr(),
-                    src_views.len() as u32,
-                    src_views.as_ptr(),
-                    num_views.as_ptr(),
-                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
-                );
-            }
+            self.raw.clone().CopyDescriptors(
+                dst_views.len() as u32,
+                dst_views.as_ptr(),
+                num_views.as_ptr(),
+                src_views.len() as u32,
+                src_views.as_ptr(),
+                num_views.as_ptr(),
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+            );
         }
         if !num_samplers.is_empty() {
-            unsafe {
-                self.raw.clone().CopyDescriptors(
-                    dst_samplers.len() as u32,
-                    dst_samplers.as_ptr(),
-                    num_samplers.as_ptr(),
-                    src_samplers.len() as u32,
-                    src_samplers.as_ptr(),
-                    num_samplers.as_ptr(),
-                    d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
-                );
-            }
+            self.raw.clone().CopyDescriptors(
+                dst_samplers.len() as u32,
+                dst_samplers.as_ptr(),
+                num_samplers.as_ptr(),
+                src_samplers.len() as u32,
+                src_samplers.as_ptr(),
+                num_samplers.as_ptr(),
+                d3d12::D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+            );
         }
     }
 
@@ -2742,12 +2711,11 @@ impl d::Device<B> for Device {
             assert!(start <= end);
 
             let mut ptr = ptr::null_mut();
-            assert_eq!(winerror::S_OK, unsafe {
+            assert_eq!(
+                winerror::S_OK,
                 (*mem).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, &mut ptr)
-            });
-            unsafe {
-                ptr = ptr.offset(*start as _);
-            }
+            );
+            ptr = ptr.offset(*start as _);
             Ok(ptr as *mut _)
         } else {
             panic!("Memory not created with a memory type exposing `CPU_VISIBLE`.")
@@ -2756,9 +2724,7 @@ impl d::Device<B> for Device {
 
     unsafe fn unmap_memory(&self, memory: &r::Memory) {
         if let Some(mem) = memory.resource {
-            unsafe {
-                (*mem).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
-            }
+            (*mem).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
         }
     }
 
@@ -2773,22 +2739,21 @@ impl d::Device<B> for Device {
             if let Some(mem) = memory.resource {
                 // map and immediately unmap, hoping that dx12 drivers internally cache
                 // currently mapped buffers.
-                assert_eq!(winerror::S_OK, unsafe {
+                assert_eq!(
+                    winerror::S_OK,
                     (*mem).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, ptr::null_mut())
-                });
+                );
 
                 let start = *range.start().unwrap_or(&0);
                 let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
 
-                unsafe {
-                    (*mem).Unmap(
-                        0,
-                        &d3d12::D3D12_RANGE {
-                            Begin: start as _,
-                            End: end as _,
-                        },
-                    );
-                }
+                (*mem).Unmap(
+                    0,
+                    &d3d12::D3D12_RANGE {
+                        Begin: start as _,
+                        End: end as _,
+                    },
+                );
             }
         }
 
@@ -2812,7 +2777,8 @@ impl d::Device<B> for Device {
 
                 // map and immediately unmap, hoping that dx12 drivers internally cache
                 // currently mapped buffers.
-                assert_eq!(winerror::S_OK, unsafe {
+                assert_eq!(
+                    winerror::S_OK,
                     (*mem).Map(
                         0,
                         &d3d12::D3D12_RANGE {
@@ -2821,11 +2787,9 @@ impl d::Device<B> for Device {
                         },
                         ptr::null_mut(),
                     )
-                });
+                );
 
-                unsafe {
-                    (*mem).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
-                }
+                (*mem).Unmap(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 });
             }
         }
 
@@ -2865,17 +2829,19 @@ impl d::Device<B> for Device {
         }
 
         for (&event, fence) in events.iter().zip(fences.iter()) {
-            assert_eq!(winerror::S_OK, unsafe {
-                synchapi::ResetEvent(event.0);
+            synchapi::ResetEvent(event.0);
+            assert_eq!(
+                winerror::S_OK,
                 fence.borrow().raw.set_event_on_completion(event, 1)
-            });
+            );
         }
 
         let all = match wait {
             d::WaitFor::Any => FALSE,
             d::WaitFor::All => TRUE,
         };
-        let hr = unsafe {
+
+        let hr = {
             // This block handles overflow when converting to u32 and always rounds up
             // The Vulkan specification allows to wait more than specified
             let timeout_ms = {
@@ -2940,9 +2906,7 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_query_pool(&self, pool: r::QueryPool) {
-        unsafe {
-            pool.raw.destroy();
-        }
+        pool.raw.destroy();
     }
 
     unsafe fn get_query_pool_results(
@@ -2959,9 +2923,7 @@ impl d::Device<B> for Device {
     unsafe fn destroy_shader_module(&self, shader_lib: r::ShaderModule) {
         if let r::ShaderModule::Compiled(shaders) = shader_lib {
             for (_, blob) in shaders {
-                unsafe {
-                    blob.destroy();
-                }
+                blob.destroy();
             }
         }
     }
@@ -2971,21 +2933,15 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_pipeline_layout(&self, layout: r::PipelineLayout) {
-        unsafe {
-            layout.raw.destroy();
-        }
+        layout.raw.destroy();
     }
 
     unsafe fn destroy_graphics_pipeline(&self, pipeline: r::GraphicsPipeline) {
-        unsafe {
-            pipeline.raw.destroy();
-        }
+        pipeline.raw.destroy();
     }
 
     unsafe fn destroy_compute_pipeline(&self, pipeline: r::ComputePipeline) {
-        unsafe {
-            pipeline.raw.destroy();
-        }
+        pipeline.raw.destroy();
     }
 
     unsafe fn destroy_framebuffer(&self, _fb: r::Framebuffer) {
@@ -2994,9 +2950,9 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_buffer(&self, buffer: r::Buffer) {
         match buffer {
-            r::Buffer::Bound(buffer) => unsafe {
+            r::Buffer::Bound(buffer) => {
                 buffer.resource.destroy();
-            },
+            }
             r::Buffer::Unbound(_) => {}
         }
     }
@@ -3007,9 +2963,9 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_image(&self, image: r::Image) {
         match image {
-            r::Image::Bound(image) => unsafe {
+            r::Image::Bound(image) => {
                 image.resource.destroy();
-            },
+            }
             r::Image::Unbound(_) => {}
         }
     }
@@ -3032,15 +2988,11 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_fence(&self, fence: r::Fence) {
-        unsafe {
-            fence.raw.destroy();
-        }
+        fence.raw.destroy();
     }
 
     unsafe fn destroy_semaphore(&self, semaphore: r::Semaphore) {
-        unsafe {
-            semaphore.raw.destroy();
-        }
+        semaphore.raw.destroy();
     }
 
     unsafe fn create_swapchain(
@@ -3072,7 +3024,7 @@ impl d::Device<B> for Device {
         let rtv_desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
             Format: conv::map_format(config.format).unwrap(),
             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
-            ..unsafe { mem::zeroed() }
+            ..mem::zeroed()
         };
         let rtv_heap = Device::create_descriptor_heap_impl(
             self.raw,
@@ -3099,49 +3051,41 @@ impl d::Device<B> for Device {
             SwapEffect: dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
         };
 
-        let hr = unsafe {
-            // TODO
-            surface.factory.CreateSwapChainForHwnd(
-                self.present_queue.as_mut_ptr() as *mut _,
-                surface.wnd_handle,
-                &desc,
-                ptr::null(),
-                ptr::null_mut(),
-                swap_chain1.mut_void() as *mut *mut _,
-            )
-        };
+        // TODO
+        let hr = surface.factory.CreateSwapChainForHwnd(
+            self.present_queue.as_mut_ptr() as *mut _,
+            surface.wnd_handle,
+            &desc,
+            ptr::null(),
+            ptr::null_mut(),
+            swap_chain1.mut_void() as *mut *mut _,
+        );
 
         if !winerror::SUCCEEDED(hr) {
             error!("error on swapchain creation 0x{:x}", hr);
         }
 
-        let (swap_chain3, hr3) = unsafe { swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>() };
+        let (swap_chain3, hr3) = swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>();
         if !winerror::SUCCEEDED(hr3) {
             error!("error on swapchain cast 0x{:x}", hr3);
         }
 
-        unsafe {
-            swap_chain1.destroy();
-        }
+        swap_chain1.destroy();
 
         // Get backbuffer images
         let mut resources: Vec<native::Resource> = Vec::new();
         let images = (0..config.image_count)
             .map(|i| {
                 let mut resource = native::Resource::null();
-                unsafe {
-                    swap_chain3.GetBuffer(
-                        i as _,
-                        &d3d12::ID3D12Resource::uuidof(),
-                        resource.mut_void(),
-                    );
-                }
+                swap_chain3.GetBuffer(
+                    i as _,
+                    &d3d12::ID3D12Resource::uuidof(),
+                    resource.mut_void(),
+                );
 
                 let rtv_handle = rtv_heap.at(i as _, 0).cpu;
-                unsafe {
-                    self.raw
-                        .CreateRenderTargetView(resource.as_mut_ptr(), &rtv_desc, rtv_handle);
-                }
+                self.raw
+                    .CreateRenderTargetView(resource.as_mut_ptr(), &rtv_desc, rtv_handle);
                 resources.push(resource);
 
                 let surface_type = config.format.base_format().0;
@@ -3197,13 +3141,11 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_swapchain(&self, swapchain: w::Swapchain) {
-        unsafe {
-            for resource in &swapchain.resources {
-                resource.destroy();
-            }
-            swapchain.inner.destroy();
-            swapchain.rtv_heap.destroy();
+        for resource in &swapchain.resources {
+            resource.destroy();
         }
+        swapchain.inner.destroy();
+        swapchain.rtv_heap.destroy();
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {

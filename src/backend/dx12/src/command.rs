@@ -1031,16 +1031,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn finish(&mut self) {
-        unsafe {
-            self.raw.Close();
-        }
+        self.raw.Close();
     }
 
     unsafe fn reset(&mut self, release_resources: bool) {
         if release_resources {
-            unsafe {
-                self.allocator.Reset();
-            }
+            self.allocator.Reset();
         }
         self.reset();
     }
@@ -1147,9 +1143,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     let mut bar = d3d12::D3D12_RESOURCE_BARRIER {
                         Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                         Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                        u: unsafe { mem::zeroed() },
+                        u: mem::zeroed(),
                     };
-                    *unsafe { bar.u.UAV_mut() } = d3d12::D3D12_RESOURCE_UAV_BARRIER {
+                    *bar.u.UAV_mut() = d3d12::D3D12_RESOURCE_UAV_BARRIER {
                         pResource: ptr::null_mut(),
                     };
                     raw_barriers.push(bar);
@@ -1220,8 +1216,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         for level in range.levels.clone() {
                             for layer in range.layers.clone() {
                                 {
-                                    let transition_barrier =
-                                        &mut *unsafe { bar.u.Transition_mut() };
+                                    let transition_barrier = &mut *bar.u.Transition_mut();
                                     transition_barrier.Subresource =
                                         target.calc_subresource(level as _, layer as _, 0);
                                 }
@@ -1242,9 +1237,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
                 Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_UAV,
                 Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                u: unsafe { mem::zeroed() },
+                u: mem::zeroed(),
             };
-            *unsafe { barrier.u.UAV_mut() } = d3d12::D3D12_RESOURCE_UAV_BARRIER {
+            *barrier.u.UAV_mut() = d3d12::D3D12_RESOURCE_UAV_BARRIER {
                 pResource: ptr::null_mut(),
             };
             raw_barriers.push(barrier);
@@ -1257,19 +1252,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
                 Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_ALIASING,
                 Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                u: unsafe { mem::zeroed() },
+                u: mem::zeroed(),
             };
-            *unsafe { barrier.u.Aliasing_mut() } = d3d12::D3D12_RESOURCE_ALIASING_BARRIER {
+            *barrier.u.Aliasing_mut() = d3d12::D3D12_RESOURCE_ALIASING_BARRIER {
                 pResourceBefore: ptr::null_mut(),
                 pResourceAfter: ptr::null_mut(),
             };
             raw_barriers.push(barrier);
         }
 
-        unsafe {
-            self.raw
-                .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
-        }
+        self.raw
+            .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
     }
 
     unsafe fn clear_image<T>(
@@ -1358,9 +1351,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         self.clear_render_target_view(rtv, value.into(), &rect);
                     }
 
-                    unsafe {
-                        rtv_pool.destroy();
-                    }
+                    rtv_pool.destroy();
                 }
                 com::AttachmentClear::DepthStencil { depth, stencil } => {
                     let attachment = {
@@ -1402,9 +1393,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         self.clear_depth_stencil_view(dsv, depth, stencil, &rect);
                     }
 
-                    unsafe {
-                        dsv_pool.destroy();
-                    }
+                    dsv_pool.destroy();
                 }
             }
         }
@@ -1435,29 +1424,27 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
                     StateAfter: d3d12::D3D12_RESOURCE_STATE_RESOLVE_DEST,
                 });
-            unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
+            self.raw.ResourceBarrier(1, &transition_barrier);
         }
 
         for region in regions {
             let r = region.borrow();
             for layer in 0..r.extent.depth as UINT {
-                unsafe {
-                    self.raw.ResolveSubresource(
-                        src.resource.as_mut_ptr(),
-                        src.calc_subresource(
-                            r.src_subresource.level as UINT,
-                            r.src_subresource.layers.start as UINT + layer,
-                            0,
-                        ),
-                        dst.resource.as_mut_ptr(),
-                        dst.calc_subresource(
-                            r.dst_subresource.level as UINT,
-                            r.dst_subresource.layers.start as UINT + layer,
-                            0,
-                        ),
-                        src.descriptor.Format,
-                    );
-                }
+                self.raw.ResolveSubresource(
+                    src.resource.as_mut_ptr(),
+                    src.calc_subresource(
+                        r.src_subresource.level as UINT,
+                        r.src_subresource.layers.start as UINT + layer,
+                        0,
+                    ),
+                    dst.resource.as_mut_ptr(),
+                    dst.calc_subresource(
+                        r.dst_subresource.level as UINT,
+                        r.dst_subresource.layers.start as UINT + layer,
+                        0,
+                    ),
+                    src.descriptor.Format,
+                );
             }
         }
 
@@ -1470,7 +1457,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     StateBefore: d3d12::D3D12_RESOURCE_STATE_RESOLVE_DEST,
                     StateAfter: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
                 });
-            unsafe { self.raw.ResourceBarrier(1, &transition_barrier) };
+            self.raw.ResourceBarrier(1, &transition_barrier);
         }
     }
 
@@ -1519,14 +1506,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             },
         })
         .unwrap();
-        unsafe {
-            device.CreateShaderResourceView(
-                src.resource.as_mut_ptr(),
-                &srv_desc,
-                srv_heap.start_cpu_descriptor(),
-            );
-            self.raw.set_descriptor_heaps(&[srv_heap]);
-        }
+        device.CreateShaderResourceView(
+            src.resource.as_mut_ptr(),
+            &srv_desc,
+            srv_heap.start_cpu_descriptor(),
+        );
+        self.raw.set_descriptor_heaps(&[srv_heap]);
         self.temporary_gpu_heaps.push(srv_heap);
 
         let filter = match filter {
@@ -1564,10 +1549,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
                             Format: dst.descriptor.Format,
                             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
-                            u: unsafe { mem::zeroed() },
+                            u: mem::zeroed(),
                         };
 
-                        *unsafe { desc.u.Texture2DArray_mut() } = d3d12::D3D12_TEX2D_ARRAY_RTV {
+                        *desc.u.Texture2DArray_mut() = d3d12::D3D12_TEX2D_ARRAY_RTV {
                             MipSlice: r.dst_subresource.level as _,
                             FirstArraySlice: (i + first_layer) as u32,
                             ArraySize: 1,
@@ -1575,9 +1560,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         };
 
                         let view = rtv_pool.at(i as _, 0).cpu;
-                        unsafe {
-                            device.CreateRenderTargetView(dst.resource.as_mut_ptr(), &desc, view);
-                        }
+                        device.CreateRenderTargetView(dst.resource.as_mut_ptr(), &desc, view);
                     }
 
                     (dst.descriptor.Format, filter)
@@ -1657,22 +1640,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         // pre barriers
-        unsafe {
-            self.raw
-                .ResourceBarrier(barriers.len() as _, barriers.as_ptr());
-        }
+        self.raw
+            .ResourceBarrier(barriers.len() as _, barriers.as_ptr());
         // execute blits
         self.set_internal_graphics_pipeline();
         for (key, list) in instances {
             let blit = self.shared.service_pipes.get_blit_2d_color(key);
-            unsafe {
-                self.raw
-                    .IASetPrimitiveTopology(d3dcommon::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-                self.raw.set_pipeline_state(blit.pipeline);
-                self.raw.set_graphics_root_signature(blit.signature);
-                self.raw
-                    .set_graphics_root_descriptor_table(0, srv_heap.start_gpu_descriptor());
-            }
+            self.raw
+                .IASetPrimitiveTopology(d3dcommon::D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+            self.raw.set_pipeline_state(blit.pipeline);
+            self.raw.set_graphics_root_signature(blit.signature);
+            self.raw
+                .set_graphics_root_descriptor_table(0, srv_heap.start_gpu_descriptor());
             for inst in list {
                 let scissor = d3d12::D3D12_RECT {
                     left: inst.viewport.TopLeftX as _,
@@ -1680,39 +1659,33 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     right: (inst.viewport.TopLeftX + inst.viewport.Width) as _,
                     bottom: (inst.viewport.TopLeftY + inst.viewport.Height) as _,
                 };
-                unsafe {
-                    self.raw.RSSetViewports(1, &inst.viewport);
-                    self.raw.RSSetScissorRects(1, &scissor);
-                    self.raw.SetGraphicsRoot32BitConstants(
-                        1,
-                        (mem::size_of::<internal::BlitData>() / 4) as _,
-                        &inst.data as *const _ as *const _,
-                        0,
-                    );
-                    self.raw.OMSetRenderTargets(1, &inst.rtv, TRUE, ptr::null());
-                    self.raw.draw(3, 1, 0, 0);
-                }
+                self.raw.RSSetViewports(1, &inst.viewport);
+                self.raw.RSSetScissorRects(1, &scissor);
+                self.raw.SetGraphicsRoot32BitConstants(
+                    1,
+                    (mem::size_of::<internal::BlitData>() / 4) as _,
+                    &inst.data as *const _ as *const _,
+                    0,
+                );
+                self.raw.OMSetRenderTargets(1, &inst.rtv, TRUE, ptr::null());
+                self.raw.draw(3, 1, 0, 0);
             }
         }
         // post barriers
         for bar in &mut barriers {
-            let mut transition = *unsafe { bar.u.Transition_mut() };
+            let mut transition = *bar.u.Transition_mut();
             mem::swap(&mut transition.StateBefore, &mut transition.StateAfter);
         }
-        unsafe {
-            self.raw
-                .ResourceBarrier(barriers.len() as _, barriers.as_ptr());
-        }
+        self.raw
+            .ResourceBarrier(barriers.len() as _, barriers.as_ptr());
 
         // Reset states
-        unsafe {
-            self.raw
-                .RSSetViewports(self.viewport_cache.len() as _, self.viewport_cache.as_ptr());
-            self.raw
-                .RSSetScissorRects(self.scissor_cache.len() as _, self.scissor_cache.as_ptr());
-            if self.primitive_topology != d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED {
-                self.raw.IASetPrimitiveTopology(self.primitive_topology);
-            }
+        self.raw
+            .RSSetViewports(self.viewport_cache.len() as _, self.viewport_cache.as_ptr());
+        self.raw
+            .RSSetScissorRects(self.scissor_cache.len() as _, self.scissor_cache.as_ptr());
+        if self.primitive_topology != d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED {
+            self.raw.IASetPrimitiveTopology(self.primitive_topology);
         }
     }
 
@@ -1742,7 +1715,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .zip(self.vertex_buffer_views[first_binding as _..].iter_mut())
         {
             let b = buffer.borrow().expect_bound();
-            let base = unsafe { (*b.resource).GetGPUVirtualAddress() };
+            let base = (*b.resource).GetGPUVirtualAddress();
             view.BufferLocation = base + offset;
             view.SizeInBytes = (b.requirements.size - offset) as u32;
         }
@@ -1777,10 +1750,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        unsafe {
-            self.raw
-                .RSSetViewports(self.viewport_cache.len() as _, self.viewport_cache.as_ptr());
-        }
+        self.raw
+            .RSSetViewports(self.viewport_cache.len() as _, self.viewport_cache.as_ptr());
     }
 
     unsafe fn set_scissors<T>(&mut self, first_scissor: u32, scissors: T)
@@ -1801,10 +1772,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
         }
 
-        unsafe {
-            self.raw
-                .RSSetScissorRects(self.scissor_cache.len() as _, self.scissor_cache.as_ptr())
-        };
+        self.raw
+            .RSSetScissorRects(self.scissor_cache.len() as _, self.scissor_cache.as_ptr())
     }
 
     unsafe fn set_blend_constants(&mut self, color: pso::ColorValue) {
@@ -1833,12 +1802,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn set_depth_bounds(&mut self, bounds: Range<f32>) {
-        let (cmd_list1, hr) = unsafe { self.raw.cast::<d3d12::ID3D12GraphicsCommandList1>() };
+        let (cmd_list1, hr) = self.raw.cast::<d3d12::ID3D12GraphicsCommandList1>();
         if winerror::SUCCEEDED(hr) {
-            unsafe {
-                cmd_list1.OMSetDepthBounds(bounds.start, bounds.end);
-                cmd_list1.destroy();
-            }
+            cmd_list1.OMSetDepthBounds(bounds.start, bounds.end);
+            cmd_list1.destroy();
         } else {
             warn!("Depth bounds test is not supported");
         }
@@ -1853,23 +1820,21 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn bind_graphics_pipeline(&mut self, pipeline: &r::GraphicsPipeline) {
-        unsafe {
-            match self.gr_pipeline.pipeline {
-                Some((_, signature)) if signature == pipeline.signature => {
-                    // Same root signature, nothing to do
-                }
-                _ => {
-                    self.raw.set_graphics_root_signature(pipeline.signature);
-                    self.gr_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
-                    self.gr_pipeline.root_constants = pipeline.constants.clone();
-                    // All slots need to be rebound internally on signature change.
-                    self.gr_pipeline.user_data.dirty_all();
-                }
+        match self.gr_pipeline.pipeline {
+            Some((_, signature)) if signature == pipeline.signature => {
+                // Same root signature, nothing to do
             }
-            self.raw.set_pipeline_state(pipeline.raw);
-            self.raw.IASetPrimitiveTopology(pipeline.topology);
-            self.primitive_topology = pipeline.topology;
-        };
+            _ => {
+                self.raw.set_graphics_root_signature(pipeline.signature);
+                self.gr_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
+                self.gr_pipeline.root_constants = pipeline.constants.clone();
+                // All slots need to be rebound internally on signature change.
+                self.gr_pipeline.user_data.dirty_all();
+            }
+        }
+        self.raw.set_pipeline_state(pipeline.raw);
+        self.raw.IASetPrimitiveTopology(pipeline.topology);
+        self.primitive_topology = pipeline.topology;
 
         self.active_bindpoint = BindPoint::Graphics { internal: false };
         self.gr_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
@@ -1954,16 +1919,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     unsafe fn dispatch_indirect(&mut self, buffer: &r::Buffer, offset: buffer::Offset) {
         let buffer = buffer.expect_bound();
         self.set_compute_bind_point();
-        unsafe {
-            self.raw.ExecuteIndirect(
-                self.shared.signatures.dispatch.as_mut_ptr(),
-                1,
-                buffer.resource.as_mut_ptr(),
-                offset,
-                ptr::null_mut(),
-                0,
-            );
-        }
+        self.raw.ExecuteIndirect(
+            self.shared.signatures.dispatch.as_mut_ptr(),
+            1,
+            buffer.resource.as_mut_ptr(),
+            offset,
+            ptr::null_mut(),
+            0,
+        );
     }
 
     unsafe fn fill_buffer<R>(&mut self, buffer: &r::Buffer, range: R, data: u32)
@@ -1996,7 +1959,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             StateBefore: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
             StateAfter: d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         });
-        unsafe { self.raw.ResourceBarrier(1, &pre_barrier) };
+        self.raw.ResourceBarrier(1, &pre_barrier);
 
         error!("fill_buffer currently unimplemented");
         // TODO: GPU handle must be in the current heap. Atm we use a CPU descriptor heap for allocation
@@ -2021,7 +1984,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             StateBefore: d3d12::D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
             StateAfter: d3d12::D3D12_RESOURCE_STATE_COPY_DEST,
         });
-        unsafe { self.raw.ResourceBarrier(1, &post_barrier) };
+        self.raw.ResourceBarrier(1, &post_barrier);
     }
 
     unsafe fn update_buffer(&mut self, _buffer: &r::Buffer, _offset: buffer::Offset, _data: &[u8]) {
@@ -2038,15 +2001,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // copy each region
         for region in regions {
             let region = region.borrow();
-            unsafe {
-                self.raw.CopyBufferRegion(
-                    dst.resource.as_mut_ptr(),
-                    region.dst as _,
-                    src.resource.as_mut_ptr(),
-                    region.src as _,
-                    region.size as _,
-                );
-            }
+            self.raw.CopyBufferRegion(
+                dst.resource.as_mut_ptr(),
+                region.dst as _,
+                src.resource.as_mut_ptr(),
+                region.src as _,
+                region.size as _,
+            );
         }
 
         // TODO: Optimization: Copy whole resource if possible
@@ -2068,12 +2029,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut src_image = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: src.resource.as_mut_ptr(),
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
-            u: unsafe { mem::zeroed() },
+            u: mem::zeroed(),
         };
         let mut dst_image = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: dst.resource.as_mut_ptr(),
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
-            u: unsafe { mem::zeroed() },
+            u: mem::zeroed(),
         };
 
         let device = self.shared.service_pipes.device.clone();
@@ -2103,7 +2064,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
                 r::Place::Heap { ref raw, offset } => (raw.as_mut_ptr(), offset),
             };
-            assert_eq!(winerror::S_OK, unsafe {
+            assert_eq!(
+                winerror::S_OK,
                 device.CreatePlacedResource(
                     heap_ptr,
                     offset,
@@ -2113,7 +2075,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     &d3d12::ID3D12Resource::uuidof(),
                     alias.mut_void(),
                 )
-            });
+            );
             src_image.pResource = alias.as_mut_ptr();
             self.retained_resources.push(alias);
 
@@ -2125,12 +2087,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
                 Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_ALIASING,
                 Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                u: unsafe { mem::zeroed() },
+                u: mem::zeroed(),
             };
-            unsafe {
-                *barrier.u.Aliasing_mut() = sub_barrier;
-                self.raw.ResourceBarrier(1, &barrier as *const _);
-            }
+            *barrier.u.Aliasing_mut() = sub_barrier;
+            self.raw.ResourceBarrier(1, &barrier as *const _);
         }
 
         for region in regions {
@@ -2154,20 +2114,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .clone()
                 .zip(r.dst_subresource.layers.clone())
             {
-                *unsafe { src_image.u.SubresourceIndex_mut() } =
+                *src_image.u.SubresourceIndex_mut() =
                     src.calc_subresource(r.src_subresource.level as _, src_layer as _, 0);
-                *unsafe { dst_image.u.SubresourceIndex_mut() } =
+                *dst_image.u.SubresourceIndex_mut() =
                     dst.calc_subresource(r.dst_subresource.level as _, dst_layer as _, 0);
-                unsafe {
-                    self.raw.CopyTextureRegion(
-                        &dst_image,
-                        r.dst_offset.x as _,
-                        r.dst_offset.y as _,
-                        r.dst_offset.z as _,
-                        &src_image,
-                        &src_box,
-                    );
-                }
+                self.raw.CopyTextureRegion(
+                    &dst_image,
+                    r.dst_offset.x as _,
+                    r.dst_offset.y as _,
+                    r.dst_offset.z as _,
+                    &src_image,
+                    &src_box,
+                );
             }
         }
 
@@ -2180,12 +2138,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let mut barrier = d3d12::D3D12_RESOURCE_BARRIER {
                 Type: d3d12::D3D12_RESOURCE_BARRIER_TYPE_ALIASING,
                 Flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_NONE,
-                u: unsafe { mem::zeroed() },
+                u: mem::zeroed(),
             };
-            unsafe {
-                *barrier.u.Aliasing_mut() = sub_barrier;
-                self.raw.ResourceBarrier(1, &barrier as *const _);
-            }
+            *barrier.u.Aliasing_mut() = sub_barrier;
+            self.raw.ResourceBarrier(1, &barrier as *const _);
         }
     }
 
@@ -2215,12 +2171,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut src = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: buffer.resource.as_mut_ptr(),
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
-            u: unsafe { mem::zeroed() },
+            u: mem::zeroed(),
         };
         let mut dst = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: image.resource.as_mut_ptr(),
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
-            u: unsafe { mem::zeroed() },
+            u: mem::zeroed(),
         };
 
         for c in self.copies.drain(..) {
@@ -2242,18 +2198,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     RowPitch: c.row_pitch,
                 },
             };
-            unsafe {
-                *src.u.PlacedFootprint_mut() = footprint;
-                *dst.u.SubresourceIndex_mut() = c.img_subresource;
-                self.raw.CopyTextureRegion(
-                    &dst,
-                    c.img_offset.x as _,
-                    c.img_offset.y as _,
-                    c.img_offset.z as _,
-                    &src,
-                    &src_box,
-                );
-            }
+            *src.u.PlacedFootprint_mut() = footprint;
+            *dst.u.SubresourceIndex_mut() = c.img_subresource;
+            self.raw.CopyTextureRegion(
+                &dst,
+                c.img_offset.x as _,
+                c.img_offset.y as _,
+                c.img_offset.z as _,
+                &src,
+                &src_box,
+            );
         }
     }
 
@@ -2283,12 +2237,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let mut src = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: image.resource.as_mut_ptr(),
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX,
-            u: unsafe { mem::zeroed() },
+            u: mem::zeroed(),
         };
         let mut dst = d3d12::D3D12_TEXTURE_COPY_LOCATION {
             pResource: buffer.resource.as_mut_ptr(),
             Type: d3d12::D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT,
-            u: unsafe { mem::zeroed() },
+            u: mem::zeroed(),
         };
 
         for c in self.copies.drain(..) {
@@ -2310,18 +2264,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     RowPitch: c.row_pitch,
                 },
             };
-            unsafe {
-                *dst.u.PlacedFootprint_mut() = footprint;
-                *src.u.SubresourceIndex_mut() = c.img_subresource;
-                self.raw.CopyTextureRegion(
-                    &dst,
-                    c.buf_offset.x as _,
-                    c.buf_offset.y as _,
-                    c.buf_offset.z as _,
-                    &src,
-                    &src_box,
-                );
-            }
+            *dst.u.PlacedFootprint_mut() = footprint;
+            *src.u.SubresourceIndex_mut() = c.img_subresource;
+            self.raw.CopyTextureRegion(
+                &dst,
+                c.buf_offset.x as _,
+                c.buf_offset.y as _,
+                c.buf_offset.z as _,
+                &src,
+                &src_box,
+            );
         }
     }
 
@@ -2361,16 +2313,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         assert_eq!(stride, 16);
         let buffer = buffer.expect_bound();
         self.set_graphics_bind_point();
-        unsafe {
-            self.raw.ExecuteIndirect(
-                self.shared.signatures.draw.as_mut_ptr(),
-                draw_count,
-                buffer.resource.as_mut_ptr(),
-                offset,
-                ptr::null_mut(),
-                0,
-            );
-        }
+        self.raw.ExecuteIndirect(
+            self.shared.signatures.draw.as_mut_ptr(),
+            draw_count,
+            buffer.resource.as_mut_ptr(),
+            offset,
+            ptr::null_mut(),
+            0,
+        );
     }
 
     unsafe fn draw_indexed_indirect(
@@ -2383,16 +2333,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         assert_eq!(stride, 20);
         let buffer = buffer.expect_bound();
         self.set_graphics_bind_point();
-        unsafe {
-            self.raw.ExecuteIndirect(
-                self.shared.signatures.draw_indexed.as_mut_ptr(),
-                draw_count,
-                buffer.resource.as_mut_ptr(),
-                offset,
-                ptr::null_mut(),
-                0,
-            );
-        }
+        self.raw.ExecuteIndirect(
+            self.shared.signatures.draw_indexed.as_mut_ptr(),
+            draw_count,
+            buffer.resource.as_mut_ptr(),
+            offset,
+            ptr::null_mut(),
+            0,
+        );
     }
 
     unsafe fn begin_query(&mut self, query: query::Query<Backend>, flags: query::ControlFlags) {
@@ -2416,10 +2364,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             _ => unreachable!(),
         };
 
-        unsafe {
-            self.raw
-                .BeginQuery(query.pool.raw.as_mut_ptr(), query_ty, query.id);
-        }
+        self.raw
+            .BeginQuery(query.pool.raw.as_mut_ptr(), query_ty, query.id);
     }
 
     unsafe fn end_query(&mut self, query: query::Query<Backend>) {
@@ -2446,9 +2392,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             _ => panic!("Missing `begin_query` call for query: {:?}", query),
         };
 
-        unsafe {
-            self.raw.EndQuery(query.pool.raw.as_mut_ptr(), query_ty, id);
-        }
+        self.raw.EndQuery(query.pool.raw.as_mut_ptr(), query_ty, id);
     }
 
     unsafe fn reset_query_pool(&mut self, _pool: &r::QueryPool, _queries: Range<query::Id>) {
@@ -2473,13 +2417,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, query: query::Query<Backend>) {
-        unsafe {
-            self.raw.EndQuery(
-                query.pool.raw.as_mut_ptr(),
-                d3d12::D3D12_QUERY_TYPE_TIMESTAMP,
-                query.id,
-            );
-        }
+        self.raw.EndQuery(
+            query.pool.raw.as_mut_ptr(),
+            d3d12::D3D12_QUERY_TYPE_TIMESTAMP,
+            query.id,
+        );
     }
 
     unsafe fn push_graphics_constants(

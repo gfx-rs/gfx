@@ -464,9 +464,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     {
         // TODO: semaphores
         for (swapchain, _) in swapchains {
-            unsafe {
-                swapchain.borrow().inner.Present(1, 0);
-            }
+            swapchain.borrow().inner.Present(1, 0);
         }
 
         Ok(())

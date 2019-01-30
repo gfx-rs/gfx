@@ -133,7 +133,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         }
 
         // TODO:
-        Ok(unsafe { self.inner.GetCurrentBackBufferIndex() })
+        Ok(self.inner.GetCurrentBackBufferIndex())
     }
 }
 
