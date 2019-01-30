@@ -685,23 +685,6 @@ impl CommandBuffer {
         );
     }
 
-    fn push_constants(
-        user_data: &mut UserData,
-        layout: &r::PipelineLayout,
-        offset: u32,
-        constants: &[u32],
-    ) {
-        let num = constants.len() as u32;
-        for root_constant in &layout.root_constants {
-            assert!(root_constant.range.start <= root_constant.range.end);
-            if root_constant.range.start >= offset && root_constant.range.start < offset + num {
-                let start = (root_constant.range.start - offset) as _;
-                let end = num.min(root_constant.range.end - offset) as _;
-                user_data.set_constants(offset as _, &constants[start..end]);
-            }
-        }
-    }
-
     fn flush_user_data<F, G>(
         pipeline: &mut PipelineCache,
         mut constants_update: F,
@@ -2426,21 +2409,27 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn push_graphics_constants(
         &mut self,
-        layout: &r::PipelineLayout,
+        _layout: &r::PipelineLayout,
         _stages: pso::ShaderStageFlags,
         offset: u32,
         constants: &[u32],
     ) {
-        Self::push_constants(&mut self.gr_pipeline.user_data, layout, offset, constants);
+        assert!(offset % 4 == 0);
+        self.gr_pipeline
+            .user_data
+            .set_constants(offset as usize / 4, constants);
     }
 
     unsafe fn push_compute_constants(
         &mut self,
-        layout: &r::PipelineLayout,
+        _layout: &r::PipelineLayout,
         offset: u32,
         constants: &[u32],
     ) {
-        Self::push_constants(&mut self.comp_pipeline.user_data, layout, offset, constants);
+        assert!(offset % 4 == 0);
+        self.comp_pipeline
+            .user_data
+            .set_constants(offset as usize / 4, constants);
     }
 
     unsafe fn execute_commands<'a, T, I>(&mut self, cmd_buffers: I)
