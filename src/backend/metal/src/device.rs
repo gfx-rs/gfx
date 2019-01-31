@@ -1034,7 +1034,7 @@ impl hal::Device<Backend> for Device {
 
     unsafe fn get_pipeline_cache_data(
         &self,
-        cache: &n::PipelineCache,
+        _cache: &n::PipelineCache,
     ) -> Result<Vec<u8>, OutOfMemory> {
         //empty
         Ok(Vec::new())
