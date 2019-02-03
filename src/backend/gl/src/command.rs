@@ -390,7 +390,7 @@ impl RawCommandBuffer {
                             attribute.clone(),
                             handle,
                             desc.stride as _,
-                            desc.rate as u32,
+                            desc.rate.as_uint() as u32,
                         ),
                     );
                 }

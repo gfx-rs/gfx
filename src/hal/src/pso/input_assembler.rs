@@ -12,8 +12,28 @@ pub type BufferIndex = u32;
 pub type ElemOffset = u32;
 /// Offset between attribute values, in bytes
 pub type ElemStride = u32;
-/// The number of instances between each subsequent attribute value
+/// Number of instances between each advancement of the vertex buffer.
 pub type InstanceRate = u8;
+
+/// The rate at which to advance input data to shaders for the given buffer
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum VertexInputRate {
+    /// Advance the buffer after every vertex
+    Vertex,
+    /// Advance the buffer after every instance
+    Instance(InstanceRate),
+}
+
+impl VertexInputRate {
+    /// Get the numeric representation of the rate
+    pub fn as_uint(&self) -> u8 {
+        match *self {
+            VertexInputRate::Vertex => 0,
+            VertexInputRate::Instance(divisor) => divisor,
+        }
+    }
+}
 
 /// A struct element descriptor.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -34,8 +54,11 @@ pub struct VertexBufferDesc {
     /// Total container size, in bytes.
     /// Specifies the byte distance between two consecutive elements.
     pub stride: ElemStride,
-    /// Rate of the input for the given buffer
-    pub rate: InstanceRate,
+    /// The rate at which to advance data for the given buffer
+    ///
+    /// i.e. the rate at which data passed to shaders will get advanced by
+    /// `stride` bytes
+    pub rate: VertexInputRate,
 }
 
 /// PSO vertex attribute descriptor

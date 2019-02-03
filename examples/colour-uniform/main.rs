@@ -51,7 +51,7 @@ use hal::{
 
 use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
 use hal::pass::Subpass;
-use hal::pso::{PipelineStage, ShaderStageFlags};
+use hal::pso::{PipelineStage, ShaderStageFlags, VertexInputRate};
 use hal::queue::Submission;
 
 const ENTRY_NAME: &str = "main";
@@ -1381,7 +1381,7 @@ impl<B: Backend> PipelineState<B> {
                 pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
                     binding: 0,
                     stride: size_of::<Vertex>() as u32,
-                    rate: 0,
+                    rate: VertexInputRate::Vertex,
                 });
 
                 pipeline_desc.attributes.push(pso::AttributeDesc {

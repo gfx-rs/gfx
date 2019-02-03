@@ -21,6 +21,7 @@ use hal::device::{
 };
 use hal::memory::Properties;
 use hal::pool::CommandPoolCreateFlags;
+use hal::pso::VertexInputRate;
 use hal::queue::{QueueFamilyId, Queues};
 use hal::range::RangeArg;
 use hal::{self, buffer, error, format, image, mapping, memory, pass, pso, query, window};
@@ -1289,11 +1290,14 @@ impl hal::Device<Backend> for Device {
             }
             if vb.stride != 0 {
                 mtl_buffer_desc.set_stride(vb.stride as u64);
-                if vb.rate == 0 {
-                    mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
-                } else {
-                    mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerInstance);
-                    mtl_buffer_desc.set_step_rate(vb.rate as u64);
+                match vb.rate {
+                    VertexInputRate::Vertex => {
+                        mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerVertex);
+                    }
+                    VertexInputRate::Instance(divisor) => {
+                        mtl_buffer_desc.set_step_function(MTLVertexStepFunction::PerInstance);
+                        mtl_buffer_desc.set_step_rate(divisor as u64);
+                    }
                 }
             } else {
                 mtl_buffer_desc.set_stride(256); // big enough to fit all the elements
