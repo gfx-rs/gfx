@@ -2867,16 +2867,18 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn get_fence_status(&self, _fence: &r::Fence) -> Result<bool, d::DeviceLost> {
-        unimplemented!()
+    unsafe fn get_fence_status(&self, fence: &r::Fence) -> Result<bool, d::DeviceLost> {
+        match fence.raw.GetCompletedValue() {
+            0 => Ok(false),
+            1 => Ok(true),
+            _ => Err(d::DeviceLost),
+        }
     }
 
     unsafe fn free_memory(&self, memory: r::Memory) {
-        unsafe {
-            memory.heap.destroy();
-            if let Some(buffer) = memory.resource {
-                buffer.destroy();
-            }
+        memory.heap.destroy();
+        if let Some(buffer) = memory.resource {
+            buffer.destroy();
         }
     }
 

@@ -221,12 +221,12 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         })
                         .unwrap()
                         .into();
-                    let memory = unsafe {
+                    let gpu_memory = unsafe {
                         device.allocate_memory(memory_type, requirements.size)
                     }.unwrap();
 
                     unsafe {
-                        device.bind_buffer_memory(&memory, 0, &mut buffer)
+                        device.bind_buffer_memory(&gpu_memory, 0, &mut buffer)
                         .unwrap();
                     }
 
@@ -260,7 +260,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         }.unwrap();
 
                         unsafe {
-                        device.bind_buffer_memory(&memory, 0, &mut upload_buffer)
+                            device.bind_buffer_memory(&upload_memory, 0, &mut upload_buffer)
                         }.unwrap();
                         // write the data
                         unsafe {
@@ -311,7 +311,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 
                     resources.buffers.insert(name.clone(), Buffer {
                         handle: buffer,
-                        _memory: memory,
+                        _memory: gpu_memory,
                         size,
                         stable_state,
                     });
@@ -335,11 +335,11 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         })
                         .unwrap()
                         .into();
-                    let memory = unsafe {
+                    let gpu_memory = unsafe {
                         device.allocate_memory(memory_type, requirements.size)
                     }.unwrap();
                     unsafe {
-                        device.bind_image_memory(&memory, 0, &mut image)
+                        device.bind_image_memory(&gpu_memory, 0, &mut image)
                     }.unwrap();
 
                     // process initial data for the image
@@ -473,7 +473,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 
                     resources.images.insert(name.clone(), Image {
                         handle: image,
-                        _memory: memory,
+                        _memory: gpu_memory,
                         kind,
                         format,
                         range: COLOR_RANGE.clone(),
