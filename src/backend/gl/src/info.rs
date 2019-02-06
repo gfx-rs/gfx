@@ -223,14 +223,12 @@ bitflags! {
         const COPY_BUFFER = 0x00000800;
         /// Support separation of textures and samplers.
         const SAMPLER_OBJECTS = 0x00001000;
-        /// Support sampler LOD bias.
-        const SAMPLER_LOD_BIAS = 0x00002000;
         /// Support setting border texel colors.
-        const SAMPLER_BORDER_COLOR = 0x00004000;
+        const SAMPLER_BORDER_COLOR = 0x00002000;
         /// Support explicit layouts in shader.
-        const EXPLICIT_LAYOUTS_IN_SHADER = 0x00008000;
+        const EXPLICIT_LAYOUTS_IN_SHADER = 0x00004000;
         /// Support instanced input rate on attribute binding.
-        const INSTANCED_ATTRIBUTE_BINDING = 0x00010000;
+        const INSTANCED_ATTRIBUTE_BINDING = 0x00008000;
     }
 }
 
@@ -367,6 +365,10 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     if info.is_supported(&[Core(3, 3), Es(3, 0), Ext("GL_ARB_instanced_arrays")]) {
         features |= Features::INSTANCE_RATE;
     }
+    if info.is_supported(&[Core(3, 3)]) {
+        // TODO: extension
+        features |= Features::SAMPLER_MIP_LOD_BIAS;
+    }
 
     if info.is_supported(&[Core(4, 3), Es(3, 1)]) {
         // TODO: extension
@@ -421,10 +423,6 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     }
     if info.is_supported(&[Core(3, 3), Es(3, 0), Ext("GL_ARB_sampler_objects")]) {
         legacy |= LegacyFeatures::SAMPLER_OBJECTS;
-    }
-    if info.is_supported(&[Core(3, 3)]) {
-        // TODO: extension
-        legacy |= LegacyFeatures::SAMPLER_LOD_BIAS;
     }
     if info.is_supported(&[Core(3, 3)]) {
         // TODO: extension

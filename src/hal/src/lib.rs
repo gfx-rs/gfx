@@ -219,7 +219,9 @@ bitflags! {
         /// Support separate stencil reference values for front and back sides.
         const SEPARATE_STENCIL_REF_VALUES = 0x2000_0000_0000_0000;
         /// Support manually specified vertex attribute rates (divisors).
-        const INSTANCE_RATE = 0x8000_0000_0000_0000;
+        const INSTANCE_RATE = 0x4000_0000_0000_0000;
+        /// Support non-zero mipmap bias on samplers.
+        const SAMPLER_MIP_LOD_BIAS = 0x8000_0000_0000_0000;
     }
 }
 
@@ -274,6 +276,9 @@ pub struct Limits {
     pub non_coherent_atom_size: usize,
     /// Maximum degree of sampler anisotropy.
     pub max_sampler_anisotropy: f32,
+
+    /// The alignment of the vertex buffer stride.
+    pub min_vertex_input_binding_stride_alignment: buffer::Offset,
 }
 
 /// Describes the type of geometric primitives,

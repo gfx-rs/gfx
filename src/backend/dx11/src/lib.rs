@@ -155,7 +155,11 @@ fn get_features(
     use hal::Features;
 
     let features =
-        Features::ROBUST_BUFFER_ACCESS | Features::FULL_DRAW_INDEX_U32 | Features::FORMAT_BC;
+        Features::ROBUST_BUFFER_ACCESS |
+        Features::FULL_DRAW_INDEX_U32 |
+        Features::FORMAT_BC |
+        Features::INSTANCE_RATE |
+        Features::SAMPLER_MIP_LOD_BIAS;
 
     features
 }
@@ -361,6 +365,7 @@ impl hal::Instance for Instance {
                 max_color_attachments: 1,                // TODO
                 non_coherent_atom_size: 1,               // TODO
                 max_sampler_anisotropy: 16.,
+                min_vertex_input_binding_stride_alignment: 1,
             };
 
             let features = get_features(device.clone(), feature_level);

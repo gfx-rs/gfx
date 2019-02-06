@@ -485,8 +485,8 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     set_param_int(gl::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as GLint);
 
     if share
-        .legacy_features
-        .contains(LegacyFeatures::SAMPLER_LOD_BIAS)
+        .features
+        .contains(hal::Features::SAMPLER_MIP_LOD_BIAS)
     {
         set_param_float(gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
     }

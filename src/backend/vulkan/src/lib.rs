@@ -672,7 +672,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     == info::intel::DEVICE_SKY_LAKE_MASK);
 
         let features = unsafe { self.instance.0.get_physical_device_features(self.handle) };
-        let mut bits = Features::empty();
+        let mut bits = Features::TRIANGLE_FAN |
+            Features::SEPARATE_STENCIL_REF_VALUES |
+            Features::SAMPLER_MIP_LOD_BIAS;
 
         if features.robust_buffer_access != 0 {
             bits |= Features::ROBUST_BUFFER_ACCESS;
@@ -794,6 +796,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_color_attachments: limits.max_color_attachments as _,
             non_coherent_atom_size: limits.non_coherent_atom_size as _,
             max_sampler_anisotropy: limits.max_sampler_anisotropy,
+            min_vertex_input_binding_stride_alignment: 1,
         }
     }
 
