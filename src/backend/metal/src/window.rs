@@ -99,12 +99,25 @@ impl SurfaceInner {
     }
 
     fn dimensions(&self) -> Extent2D {
-        let size = match self.view {
-            Some(view) => unsafe {
+        let size: CGSize = match self.view {
+            Some(view) if !cfg!(not(target_os = "macos")) => unsafe {
                 let bounds: CGRect = msg_send![view.as_ptr(), bounds];
-                bounds.size
+                let window: Option<NonNull<Object>> = msg_send![view.as_ptr(), window];
+                let screen = window.and_then(|window| -> Option<NonNull<Object>> {
+                    msg_send![window.as_ptr(), screen]
+                });
+                match screen {
+                    Some(screen) => {
+                        let screen_space: *mut Object = msg_send![screen.as_ptr(), coordinateSpace];
+                        let rect: CGRect = msg_send![view.as_ptr(), convertRect:bounds toCoordinateSpace:screen_space];
+                        let scale_factor: CGFloat = msg_send![screen.as_ptr(), nativeScale];
+                        CGSize {
+                            width: rect.size.width * scale_factor,
+                            height: rect.size.height * scale_factor,
+                    None => bounds.size
+                }
             },
-            None => unsafe {
+            _ => unsafe {
                 msg_send![*self.render_layer.lock(), drawableSize]
             },
         };
