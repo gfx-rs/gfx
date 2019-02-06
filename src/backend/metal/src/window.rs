@@ -12,7 +12,7 @@ use hal::{self, format, image};
 use hal::{Backbuffer, SwapchainConfig, CompositeAlpha};
 
 use core_graphics::base::CGFloat;
-use core_graphics::geometry::{CGPoint, CGRect, CGSize};
+use core_graphics::geometry::{CGRect, CGSize};
 use foreign_types::{ForeignType, ForeignTypeRef};
 use metal;
 use objc::rc::autoreleasepool;
@@ -105,38 +105,29 @@ impl SurfaceInner {
     }
 
     fn dimensions(&self) -> Extent2D {
-        let size = match self.view {
-            Some(view) => unsafe {
+        let size: CGSize = match self.view {
+            Some(view) if !cfg!(not(target_os = "macos")) => unsafe {
                 let bounds: CGRect = msg_send![view.as_ptr(), bounds];
-                let backing_bounds: CGRect = if cfg!(target_os = "macos") {
-                    msg_send![view.as_ptr(), convertRectToBacking: bounds]
-                } else {
-                    let window: Option<NonNull<Object>> = msg_send![view.as_ptr(), window];
-                    let screen = window.and_then(|window| -> Option<NonNull<Object>> {
-                        msg_send![window.as_ptr(), screen]
-                    });
-                    match screen {
-                        Some(screen) => {
-                            let screen_space: *mut Object = msg_send![screen.as_ptr(), coordinateSpace];
-                            let rect: CGRect = msg_send![view.as_ptr(), convertRect:bounds toCoordinateSpace:screen_space];
-                            let scale_factor: CGFloat = msg_send![screen.as_ptr(), nativeScale];
-                            CGRect {
-                                origin: CGPoint {
-                                    x: rect.origin.x * scale_factor,
-                                    y: rect.origin.y * scale_factor,
-                                },
-                                size: CGSize {
-                                    width: rect.size.width * scale_factor,
-                                    height: rect.size.height * scale_factor,
-                                }
-                            }
+                let window: Option<NonNull<Object>> = msg_send![view.as_ptr(), window];
+                let screen = window.and_then(|window| -> Option<NonNull<Object>> {
+                    msg_send![window.as_ptr(), screen]
+                });
+                match screen {
+                    Some(screen) => {
+                        let screen_space: *mut Object = msg_send![screen.as_ptr(), coordinateSpace];
+                        let rect: CGRect = msg_send![view.as_ptr(), convertRect:bounds toCoordinateSpace:screen_space];
+                        let scale_factor: CGFloat = msg_send![screen.as_ptr(), nativeScale];
+                        CGSize {
+                            width: rect.size.width * scale_factor,
+                            height: rect.size.height * scale_factor,
                         }
-                        None => bounds
                     }
-                };
-                backing_bounds.size
+                    None => bounds.size
+                }
             },
-            None => unsafe { msg_send![*self.render_layer.lock(), drawableSize] },
+            _ => unsafe {
+                msg_send![*self.render_layer.lock(), drawableSize]
+            },
         };
         Extent2D {
             width: size.width as _,
