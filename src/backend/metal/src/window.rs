@@ -88,7 +88,7 @@ impl SurfaceInner {
                     assert!(frame.drawable.is_none());
                     frame.drawable = Some(drawable.to_owned());
 
-                    debug!("next is frame[{}]", index);
+                    debug!("Next is frame[{}]", index);
                     Ok((index, frame))
                 }
                 None => Err(FrameNotFound {
@@ -100,7 +100,7 @@ impl SurfaceInner {
     }
 
     fn dimensions(&self) -> Extent2D {
-        let size: CGSize = match self.view {
+        let (size, scale): (CGSize, CGFloat) = match self.view {
             Some(view) if !cfg!(target_os = "macos") => unsafe {
                 let bounds: CGRect = msg_send![view.as_ptr(), bounds];
                 let window: Option<NonNull<Object>> = msg_send![view.as_ptr(), window];
@@ -112,21 +112,21 @@ impl SurfaceInner {
                         let screen_space: *mut Object = msg_send![screen.as_ptr(), coordinateSpace];
                         let rect: CGRect = msg_send![view.as_ptr(), convertRect:bounds toCoordinateSpace:screen_space];
                         let scale_factor: CGFloat = msg_send![screen.as_ptr(), nativeScale];
-                        CGSize {
-                            width: rect.size.width * scale_factor,
-                            height: rect.size.height * scale_factor,
-                        }
+                        (rect.size, scale_factor)
                     }
-                    None => bounds.size,
+                    None => (bounds.size, 1.0),
                 }
             },
             _ => unsafe {
-                msg_send![*self.render_layer.lock(), drawableSize]
+                let render_layer = *self.render_layer.lock();
+                let bounds: CGRect = msg_send![render_layer, bounds];
+                let contents_scale: CGFloat = msg_send![render_layer, contentsScale];
+                (bounds.size, contents_scale)
             },
         };
         Extent2D {
-            width: size.width as _,
-            height: size.height as _,
+            width: (size.width * scale) as u32,
+            height: (size.height * scale) as u32,
         }
     }
 }
@@ -204,10 +204,12 @@ impl Swapchain {
 
         match frame.drawable.take() {
             Some(drawable) => {
+                debug!("Making frame {} available again", index);
                 frame.available = true;
                 Ok(drawable)
             }
             None => {
+                warn!("Failed to get the drawable of frame {}", index);
                 frame.linked = false;
                 Err(())
             }
@@ -252,14 +254,14 @@ impl SwapchainImage {
         loop {
             match self.surface.next_frame(&self.frames) {
                 Ok((index, _)) if index == self.index as usize => {
-                    debug!("Swapchain image is ready after {} frames", count);
+                    debug!("Swapchain image {} is ready after {} frames", self.index, count);
                     break
                 }
                 Ok(_) => {
                     count += 1;
                 }
                 Err(_e) => {
-                    debug!("Swapchain drawables are changed");
+                    warn!("Swapchain drawables are changed, unable to wait for {}", self.index);
                     break
                 }
             }
@@ -362,6 +364,7 @@ impl Device {
             caps.has_version_at_least(11, 0)
         };
         let can_set_display_sync = is_mac && caps.has_version_at_least(10, 13);
+        let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
 
         let cmd_queue = self.shared.queue.lock();
 
@@ -374,7 +377,7 @@ impl Device {
             // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
             msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
 
-            msg_send![render_layer, setDrawableSize: CGSize::new(config.extent.width as f64, config.extent.height as f64)];
+            msg_send![render_layer, setDrawableSize: drawable_size];
             if can_set_next_drawable_timeout {
                 msg_send![render_layer, setAllowsNextDrawableTimeout:false];
             }
@@ -467,7 +470,7 @@ impl hal::Swapchain<Backend> for Swapchain {
             unimplemented!()
         }
 
-        let mut oldest_index = 0;
+        let mut oldest_index = self.frames.len();
         let mut oldest_frame = self.last_frame;
 
         for (index, frame_arc) in self.frames.iter().enumerate() {
@@ -476,6 +479,7 @@ impl hal::Swapchain<Backend> for Swapchain {
                 continue
             }
             if frame.drawable.is_some() {
+                debug!("Found drawable of frame {}, acquiring", index);
                 frame.available = false;
                 frame.last_frame = self.last_frame;
                 self.signal_sync(sync);
@@ -493,6 +497,17 @@ impl hal::Swapchain<Backend> for Swapchain {
                     .map_err(|_| hal::AcquireError::OutOfDate)?
             }
             AcquireMode::Oldest => {
+                let frame = match self.frames.get(oldest_index) {
+                    Some(frame) => frame.inner.lock(),
+                    None => {
+                        warn!("No frame is available");
+                        return Err(hal::AcquireError::OutOfDate);
+                    }
+                };
+                if !frame.linked {
+                    return Err(hal::AcquireError::OutOfDate);
+                }
+
                 self.image_ready_callbacks.retain(|ir| ir.lock().is_some());
                 match sync {
                     hal::FrameSync::Semaphore(semaphore) => {
@@ -513,14 +528,11 @@ impl hal::Swapchain<Backend> for Swapchain {
                     }
                 }
 
-                let frame = self.frames[oldest_index].inner.lock();
-                if !frame.linked {
-                    return Err(hal::AcquireError::OutOfDate);
-                }
                 (oldest_index, frame)
             }
         };
 
+        debug!("Acquiring frame {}", index);
         assert!(frame.available);
         frame.last_frame = self.last_frame;
         frame.available = false;
