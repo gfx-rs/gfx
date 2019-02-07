@@ -979,11 +979,12 @@ impl hal::Instance for Instance {
                     Features::GEOMETRY_SHADER |
                     Features::TESSELLATION_SHADER |
                     Features::NON_FILL_POLYGON_MODE |
+                    if depth_bounds_test_supported { Features::DEPTH_BOUNDS } else { Features::empty() } |
                     //logic_op: false, // Optional on feature level 11_0
                     Features::MULTI_DRAW_INDIRECT |
                     Features::FORMAT_BC |
                     Features::INSTANCE_RATE |
-                    if depth_bounds_test_supported { Features::DEPTH_BOUNDS } else { Features::empty() },
+                    Features::SAMPLER_MIP_LOD_BIAS,
                 limits: Limits { // TODO
                     max_texture_size: 0,
                     max_texel_elements: 0,
@@ -1017,6 +1018,7 @@ impl hal::Instance for Instance {
                     max_color_attachments: 1, // TODO
                     non_coherent_atom_size: 1, //TODO: confirm
                     max_sampler_anisotropy: 16.,
+                    min_vertex_input_binding_stride_alignment: 1,
                 },
                 format_properties: Arc::new(FormatProperties::new(device)),
                 private_caps: Capabilities {

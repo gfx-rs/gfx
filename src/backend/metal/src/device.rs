@@ -39,6 +39,7 @@ use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
+const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
 
 /// Emit error during shader module parsing.
 fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
@@ -366,6 +367,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             } else {
                 hal::Features::empty()
             }
+            | hal::Features::INSTANCE_RATE
     }
 
     fn limits(&self) -> hal::Limits {
@@ -404,6 +406,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             // and those need to operate on sizes being multiples of 4.
             non_coherent_atom_size: 4,
             max_sampler_anisotropy: 16.,
+            min_vertex_input_binding_stride_alignment: STRIDE_GRANULARITY as u64,
         }
     }
 }
@@ -1274,7 +1277,6 @@ impl hal::Device<Backend> for Device {
             mtl_attribute_desc.set_offset(cut_offset as _);
         }
 
-        const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
         for (i, (vb, _)) in vertex_buffers.iter().enumerate() {
             let mtl_buffer_desc = vertex_descriptor
                 .layouts()
