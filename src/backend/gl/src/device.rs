@@ -1381,7 +1381,9 @@ impl d::Device<B> for Device {
                         n::ImageView::Texture(tex, _) | n::ImageView::TextureLayer(tex, _, _) => {
                             bindings.push(n::DescSetBindings::Texture(binding, *tex))
                         }
-                        n::ImageView::Surface(_) => unimplemented!(),
+                        n::ImageView::Surface(_) => panic!(
+                            "Texture was created with only render target usage which is invalid."
+                        ),
                     },
                     pso::Descriptor::Sampler(sampler) => match sampler {
                         n::FatSampler::Sampler(sampler) => {
