@@ -106,7 +106,7 @@ impl SurfaceInner {
 
     fn dimensions(&self) -> Extent2D {
         let size: CGSize = match self.view {
-            Some(view) if !cfg!(not(target_os = "macos")) => unsafe {
+            Some(view) if !cfg!(target_os = "macos") => unsafe {
                 let bounds: CGRect = msg_send![view.as_ptr(), bounds];
                 let window: Option<NonNull<Object>> = msg_send![view.as_ptr(), window];
                 let screen = window.and_then(|window| -> Option<NonNull<Object>> {
