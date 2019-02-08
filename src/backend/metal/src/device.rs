@@ -229,6 +229,17 @@ impl PhysicalDevice {
             memory_types,
         }
     }
+
+    /// Return true if the specified format-swizzle pair is supported natively.
+    pub fn supports_swizzle(
+        &self,
+        format: format::Format,
+        swizzle: format::Swizzle,
+    ) -> bool {
+        self.shared.private_caps
+            .map_format_with_swizzle(format, swizzle)
+            .is_some()
+    }
 }
 
 impl hal::PhysicalDevice<Backend> for PhysicalDevice {
@@ -368,6 +379,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 hal::Features::empty()
             }
             | hal::Features::INSTANCE_RATE
+            | hal::Features::SEPARATE_STENCIL_REF_VALUES
     }
 
     fn limits(&self) -> hal::Limits {
