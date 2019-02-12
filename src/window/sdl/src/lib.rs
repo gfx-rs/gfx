@@ -157,7 +157,7 @@ pub fn init_raw(video_subsystem: &sdl2::VideoSubsystem, mut builder: WindowBuild
                     .ok_or(InitError::PixelFormatUnsupportedError)?,
         ..window.display_mode()?
     };
-    window.set_display_mode((Some(display_mode)))?;
+    window.set_display_mode(Some(display_mode))?;
 
     let context = window.gl_create_context()?;
 
