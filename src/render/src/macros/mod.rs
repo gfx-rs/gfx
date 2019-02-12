@@ -17,6 +17,7 @@
 mod pso;
 mod structure;
 
+/// Defines a shorthand for a format.
 #[macro_export]
 macro_rules! gfx_format {
     ($name:ident : $surface:ident = $container:ident<$channel:ident>) => {
@@ -44,7 +45,7 @@ macro_rules! gfx_format {
 ///         pos: [f32; 4] = "a_Pos",
 ///         tex_coord: [f32; 2] = "a_TexCoord",
 ///     }
-///     
+///
 ///     constant Locals {
 ///         transform: [[f32; 4]; 4] = "u_Transform",
 ///     }
@@ -57,7 +58,7 @@ macro_rules! gfx_format {
 ///         locals: gfx::ConstantBuffer<Locals> = "Locals",
 ///         color: gfx::TextureSampler<[f32; 4]> = "t_Color",
 ///         out_color: gfx::RenderTarget<gfx::format::Rgba8> = "Target0",
-///         out_depth: gfx::DepthTarget<gfx::format::DepthStencil> = 
+///         out_depth: gfx::DepthTarget<gfx::format::DepthStencil> =
 ///             gfx::preset::depth::LESS_EQUAL_WRITE,
 ///     }
 /// }
@@ -111,7 +112,7 @@ macro_rules! gfx_format {
 /// - Single or multiple [constant buffer](pso/buffer/struct.ConstantBuffer.html) components. (DX11 and OpenGL3)
 /// - Single or multiple [global buffer](pso/buffer/struct.Global.html) components.
 /// - Single or multiple [samplers](pso/resource/struct.Sampler.html).
-/// - [Render](pso/target/struct.RenderTarget.html), [blend](pso/target/struct.BlendTarget.html), 
+/// - [Render](pso/target/struct.RenderTarget.html), [blend](pso/target/struct.BlendTarget.html),
 ///   [depth](pso/target/struct.DepthTarget.html), [stencil](pso/target/struct.StencilTarget.html) targets.
 /// - A [shader resource view](pso/resource/struct.ShaderResource.html) (SRV, DX11)
 /// - An [unordered access view](pso/resource/struct.UnorderedAccess.html) (UAV, DX11, not yet implemented in the OpenGL backend)

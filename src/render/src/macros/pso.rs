@@ -14,6 +14,7 @@
 
 //! Macros for implementing PipelineInit and PipelineData.
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! gfx_pipeline_inner {
     {
@@ -222,6 +223,7 @@ macro_rules! gfx_pipeline_inner {
     }
 }
 
+/// Defines a set of pipeline-associated structures.
 #[macro_export]
 macro_rules! gfx_pipeline_base {
     ($module:ident {
@@ -240,6 +242,8 @@ macro_rules! gfx_pipeline_base {
     }
 }
 
+/// Defines a set of pipeline-associated structures, and also
+/// adds `new` constuctor for the `Init` structure.
 #[macro_export]
 macro_rules! gfx_pipeline {
     ($module:ident {

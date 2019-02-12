@@ -14,6 +14,7 @@
 
 //! Macro for implementing Structure for vertex and constant buffers.
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! gfx_impl_struct {
     ($runtime_format:ty : $compile_format:path = $root:ident {
@@ -24,7 +25,7 @@ macro_rules! gfx_impl_struct {
         }
     })
 }
-
+#[doc(hidden)]
 #[macro_export]
 macro_rules! gfx_impl_struct_meta {
     ($(#[$attr:meta])* impl_struct_meta $runtime_format:ty : $compile_format:path = $root:ident {
@@ -76,6 +77,7 @@ macro_rules! gfx_impl_struct_meta {
     }
 }
 
+/// Defines a structure that is used in a vertex buffer.
 #[macro_export]
 macro_rules! gfx_vertex_struct {
     ($root:ident {
@@ -87,6 +89,7 @@ macro_rules! gfx_vertex_struct {
     })
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! gfx_vertex_struct_meta {
     ($(#[$attr:meta])* vertex_struct_meta $root:ident {
@@ -100,6 +103,7 @@ macro_rules! gfx_vertex_struct_meta {
     })
 }
 
+/// Defines a structure that is used in a constant buffer.
 #[macro_export]
 macro_rules! gfx_constant_struct {
     ($root:ident {
@@ -111,6 +115,7 @@ macro_rules! gfx_constant_struct {
     })
 }
 
+#[doc(hidden)]
 #[macro_export]
 macro_rules! gfx_constant_struct_meta {
     ($(#[$attr:meta])* constant_struct_meta $root:ident {
