@@ -121,17 +121,17 @@ impl_clear! {
 }
 
 impl From<f32> for ClearColor {
-    fn from(v: f32) -> ClearColor {
+    fn from(v: f32) -> Self {
         ClearColor::Float([v, 0.0, 0.0, 0.0])
     }
 }
 impl From<i32> for ClearColor {
-    fn from(v: i32) -> ClearColor {
+    fn from(v: i32) -> Self {
         ClearColor::Int([v, 0, 0, 0])
     }
 }
 impl From<u32> for ClearColor {
-    fn from(v: u32) -> ClearColor {
+    fn from(v: u32) -> Self {
         ClearColor::Uint([v, 0, 0, 0])
     }
 }

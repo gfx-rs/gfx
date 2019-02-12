@@ -29,7 +29,7 @@ name = "gfx_device_metal"
 
 [dependencies]
 log = "0.4"
-gfx_core = { path = "../../core", version = "0.8" }
+gfx_core = { path = "../../core", version = "0.9" }
 cocoa = "0.9"
 libc = "0.2"
 objc = "0.2"

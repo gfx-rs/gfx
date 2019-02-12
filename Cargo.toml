@@ -1,6 +1,6 @@
 [package]
 name = "gfx_app"
-version = "0.6.0"
+version = "0.9.0"
 description = "GFX example application framework"
 homepage = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
@@ -27,11 +27,11 @@ log = "0.4"
 env_logger = "0.5"
 glutin = "0.19"
 winit = "0.18"
-gfx_core = { path = "src/core", version = "0.8" }
-gfx = { path = "src/render", version = "0.17" }
+gfx_core = { path = "src/core", version = "0.9" }
+gfx = { path = "src/render", version = "0.18" }
 gfx_macros = { path = "src/macros", version = "0.2" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.16" }
-gfx_window_glutin = { path = "src/window/glutin", version = "0.28" }
+gfx_window_glutin = { path = "src/window/glutin", version = "0.29" }
 gfx_window_glfw = { path = "src/window/glfw", version = "0.17", optional = true }
 gfx_window_sdl = { path = "src/window/sdl", version = "0.9", optional = true }
 
@@ -42,7 +42,7 @@ optional = true
 
 [dependencies.gfx_window_vulkan]
 path = "src/window/vulkan"
-version = "0.7"
+version = "0.9"
 optional = true
 
 [dependencies.gfx_device_metal]
@@ -52,12 +52,12 @@ optional = true
 
 [dependencies.gfx_window_metal]
 path = "src/window/metal"
-version = "0.7"
+version = "0.9"
 optional = true
 
 [target.'cfg(windows)'.dependencies]
-gfx_device_dx11 = { path = "src/backend/dx11", version = "0.7" }
-gfx_window_dxgi = { path = "src/window/dxgi", version = "0.16" }
+gfx_device_dx11 = { path = "src/backend/dx11", version = "0.8" }
+gfx_window_dxgi = { path = "src/window/dxgi", version = "0.18" }
 
 [[example]]
 name = "blend"

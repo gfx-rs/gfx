@@ -76,6 +76,16 @@ pub struct Slice<R: Resources> {
 }
 
 impl<R: Resources> Slice<R> {
+    /// Creates a new `Slice` with a given vertex count.
+    pub fn from_vertex_count(count: VertexCount) -> Self {
+        Slice {
+            start: 0,
+            end: count,
+            base_vertex: 0,
+            instances: None,
+            buffer: IndexBuffer::Auto,
+        }
+    }
     /// Creates a new `Slice` to match the supplied vertex buffer, from start to end, in order.
     pub fn new_match_vertex_buffer<V>(vbuf: &handle::Buffer<R, V>) -> Self
                                       where V: pso::buffer::Structure<Format> {

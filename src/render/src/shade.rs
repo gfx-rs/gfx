@@ -40,10 +40,14 @@ macro_rules! impl_uniforms {
 
 impl_uniforms! {
     i32 = I32,
+    u32 = U32,
     f32 = F32,
     [i32; 2] = I32Vector2,
     [i32; 3] = I32Vector3,
     [i32; 4] = I32Vector4,
+    [u32; 2] = U32Vector2,
+    [u32; 3] = U32Vector3,
+    [u32; 4] = U32Vector4,
     [f32; 2] = F32Vector2,
     [f32; 3] = F32Vector3,
     [f32; 4] = F32Vector4,

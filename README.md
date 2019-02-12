@@ -113,7 +113,7 @@ If you compile the example for the first time, it may take some while since all 
 If you want to build your own stand-alone gfx program, add the following to your new `Cargo.toml`:
 
 	[dependencies]
-	gfx = "0.17"
+	gfx = "0.18"
 
 
 For gfx to work, it needs access to the graphics system of the OS. This is typically provided through some window initialization API.

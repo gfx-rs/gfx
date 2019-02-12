@@ -532,11 +532,16 @@ pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: s::UniformValue
     use core::shade::UniformValue;
     match uniform {
         UniformValue::I32(val) => unsafe { gl.Uniform1i(loc, val) },
+        UniformValue::U32(val) => unsafe { gl.Uniform1ui(loc, val) },
         UniformValue::F32(val) => unsafe { gl.Uniform1f(loc, val) },
 
         UniformValue::I32Vector2(val) => unsafe { gl.Uniform2iv(loc, 1, val.as_ptr()) },
         UniformValue::I32Vector3(val) => unsafe { gl.Uniform3iv(loc, 1, val.as_ptr()) },
         UniformValue::I32Vector4(val) => unsafe { gl.Uniform4iv(loc, 1, val.as_ptr()) },
+
+        UniformValue::U32Vector2(val) => unsafe { gl.Uniform2uiv(loc, 1, val.as_ptr()) },
+        UniformValue::U32Vector3(val) => unsafe { gl.Uniform3uiv(loc, 1, val.as_ptr()) },
+        UniformValue::U32Vector4(val) => unsafe { gl.Uniform4uiv(loc, 1, val.as_ptr()) },
 
         UniformValue::F32Vector2(val) => unsafe { gl.Uniform2fv(loc, 1, val.as_ptr()) },
         UniformValue::F32Vector3(val) => unsafe { gl.Uniform3fv(loc, 1, val.as_ptr()) },
