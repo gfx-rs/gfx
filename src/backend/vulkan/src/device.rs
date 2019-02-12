@@ -7,6 +7,7 @@ use hal;
 use hal::error::HostExecutionError;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
+use hal::pso::VertexInputRate;
 use hal::range::RangeArg;
 use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
 use hal::{Backbuffer, Features, MemoryTypeId, SwapchainConfig};
@@ -477,10 +478,12 @@ impl d::Device<B> for Device {
                         vertex_bindings.push(vk::VertexInputBindingDescription {
                             binding: vbuf.binding,
                             stride: vbuf.stride as u32,
-                            input_rate: if vbuf.rate == 0 {
-                                vk::VertexInputRate::VERTEX
-                            } else {
-                                vk::VertexInputRate::INSTANCE
+                            input_rate: match vbuf.rate {
+                                VertexInputRate::Vertex => vk::VertexInputRate::VERTEX,
+                                VertexInputRate::Instance(divisor) => {
+                                    debug_assert_eq!(divisor, 1, "Custom vertex rate divisors not supported in Vulkan backend without extension");
+                                    vk::VertexInputRate::INSTANCE
+                                },
                             },
                         });
                     }

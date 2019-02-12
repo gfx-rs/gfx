@@ -13,6 +13,7 @@ use winapi::Interface;
 use hal::format::{Aspects, Format};
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
+use hal::pso::VertexInputRate;
 use hal::queue::{QueueFamilyId, RawCommandQueue};
 use hal::range::RangeArg;
 use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
@@ -1442,10 +1443,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    unsafe fn create_pipeline_cache(
-        &self,
-        _data: Option<&[u8]>
-    ) -> Result<(), d::OutOfMemory> {
+    unsafe fn create_pipeline_cache(&self, _data: Option<&[u8]>) -> Result<(), d::OutOfMemory> {
         Ok(())
     }
 
@@ -1547,9 +1545,9 @@ impl d::Device<B> for Device {
                     }
                 };
 
-                let slot_class = match buffer_desc.rate {
-                    0 => d3d12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA,
-                    _ => d3d12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA,
+                let (slot_class, step_rate) = match buffer_desc.rate {
+                    VertexInputRate::Vertex => (d3d12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0),
+                    VertexInputRate::Instance(divisor) => (d3d12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, divisor),
                 };
                 let format = attrib.element.format;
 
@@ -1587,7 +1585,7 @@ impl d::Device<B> for Device {
                     InputSlot: input_slot as _,
                     AlignedByteOffset: offset,
                     InputSlotClass: slot_class,
-                    InstanceDataStepRate: buffer_desc.rate as _,
+                    InstanceDataStepRate: step_rate as _,
                 }))
             })
             .collect::<Result<Vec<_>, _>>()?;

@@ -1,4 +1,5 @@
 use hal;
+use hal::pso::VertexInputRate;
 use hal::queue::QueueFamilyId;
 use hal::range::RangeArg;
 use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query};
@@ -184,9 +185,9 @@ impl Device {
                     }
                 };
 
-                let slot_class = match buffer_desc.rate {
-                    0 => d3d11::D3D11_INPUT_PER_VERTEX_DATA,
-                    _ => d3d11::D3D11_INPUT_PER_INSTANCE_DATA,
+                let (slot_class, step_rate) = match buffer_desc.rate {
+                    VertexInputRate::Vertex => (d3d11::D3D11_INPUT_PER_VERTEX_DATA, 0),
+                    VertexInputRate::Instance(divisor) => (d3d11::D3D11_INPUT_PER_INSTANCE_DATA, divisor)
                 };
                 let format = attrib.element.format;
 
@@ -204,7 +205,7 @@ impl Device {
                     InputSlot: attrib.binding as _,
                     AlignedByteOffset: attrib.element.offset,
                     InputSlotClass: slot_class,
-                    InstanceDataStepRate: buffer_desc.rate as _,
+                    InstanceDataStepRate: step_rate as _,
                 }))
             })
             .collect::<Result<Vec<_>, _>>()?;

@@ -25,7 +25,7 @@ extern crate winit;
 
 use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
 use hal::pass::Subpass;
-use hal::pso::{PipelineStage, ShaderStageFlags};
+use hal::pso::{PipelineStage, ShaderStageFlags, VertexInputRate};
 use hal::queue::Submission;
 use hal::{
     buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
@@ -364,8 +364,7 @@ fn main() {
             .expect("Can't wait for fence");
     }
 
-    let (caps, formats, _present_modes) =
-        surface.compatibility(&mut adapter.physical_device);
+    let (caps, formats, _present_modes) = surface.compatibility(&mut adapter.physical_device);
     println!("formats: {:?}", formats);
     let format = formats.map_or(f::Format::Rgba8Srgb, |formats| {
         formats
@@ -514,7 +513,7 @@ fn main() {
             pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
                 binding: 0,
                 stride: std::mem::size_of::<Vertex>() as u32,
-                rate: 0,
+                rate: VertexInputRate::Vertex,
             });
 
             pipeline_desc.attributes.push(pso::AttributeDesc {
