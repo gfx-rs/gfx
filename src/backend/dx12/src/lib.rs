@@ -30,7 +30,7 @@ use hal::queue::{QueueFamilyId, Queues};
 use hal::{error, format as f, image, memory, Features, Limits, QueueType, SwapImageIndex};
 
 use winapi::shared::minwindef::TRUE;
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, winerror};
+use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_6, winerror};
 use winapi::um::{d3d12, d3d12sdklayers, handleapi, synchapi, winbase};
 use winapi::Interface;
 
@@ -721,11 +721,40 @@ impl hal::Instance for Instance {
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
         use self::memory::Properties;
 
+        // Try to use high performance order by default (returns None on Windows < 1803)
+        let (use_f6, factory6) = unsafe {
+            let (f6, hr) = self.factory.cast::<dxgi1_6::IDXGIFactory6>();
+            if winerror::SUCCEEDED(hr) {
+                // It's okay to decrement the refcount here because we
+                // have another reference to the factory already owned by `self`.
+                unsafe { f6.destroy(); }
+                (true, f6)
+            } else {
+                (false, native::WeakPtr::null())
+            }
+        };
+
         // Enumerate adapters
         let mut cur_index = 0;
         let mut adapters = Vec::new();
         loop {
-            let adapter = {
+            let adapter = if use_f6 {
+                let mut adapter2 = native::WeakPtr::<dxgi1_2::IDXGIAdapter2>::null();
+                let hr = unsafe {
+                    factory6.EnumAdapterByGpuPreference(
+                        cur_index,
+                        2, // HIGH_PERFORMANCE
+                        &dxgi1_2::IDXGIAdapter2::uuidof(),
+                        adapter2.mut_void() as *mut *mut _,
+                    )
+                };
+
+                if hr == winerror::DXGI_ERROR_NOT_FOUND {
+                    break;
+                }
+
+                adapter2
+            } else {
                 let mut adapter1 = native::WeakPtr::<dxgi::IDXGIAdapter1>::null();
                 let hr1 = unsafe {
                     self.factory
