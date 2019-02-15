@@ -1101,7 +1101,7 @@ impl hal::Device<Backend> for Device {
         pipeline_desc: &pso::GraphicsPipelineDesc<'a, Backend>,
         cache: Option<&n::PipelineCache>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
-        debug!("create_graphics_pipeline {:?}", pipeline_desc);
+        debug!("create_graphics_pipeline {:#?}", pipeline_desc);
         let pipeline = metal::RenderPipelineDescriptor::new();
         let pipeline_layout = &pipeline_desc.layout;
         let (rp_attachments, subpass) = {
