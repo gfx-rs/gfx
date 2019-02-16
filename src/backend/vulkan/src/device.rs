@@ -562,13 +562,13 @@ impl d::Device<B> for Device {
                     line_width,
                 });
 
-                let is_tessellated = desc.shaders.hull.is_some() && desc.shaders.domain.is_some();
-                if is_tessellated {
+                use hal::Primitive::PatchList;
+                if let PatchList(patch_control_points) = desc.input_assembler.primitive {
                     info_tessellation_states.push(vk::PipelineTessellationStateCreateInfo {
                         s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
                         p_next: ptr::null(),
                         flags: vk::PipelineTessellationStateCreateFlags::empty(),
-                        patch_control_points: 1, // TODO: 0 < control_points <= VkPhysicalDeviceLimits::maxTessellationPatchSize
+                        patch_control_points: patch_control_points as u32,
                     });
                 }
 
@@ -780,10 +780,9 @@ impl d::Device<B> for Device {
                     p_vertex_input_state: info_vertex_input_states.last().unwrap(),
                     p_input_assembly_state: info_input_assembly_states.last().unwrap(),
                     p_rasterization_state: info_rasterization_states.last().unwrap(),
-                    p_tessellation_state: if is_tessellated {
-                        info_tessellation_states.last().unwrap()
-                    } else {
-                        ptr::null()
+                    p_tessellation_state: match desc.input_assembler.primitive {
+                        PatchList(_) => info_tessellation_states.last().unwrap(),
+                        _            => ptr::null(),
                     },
                     p_viewport_state: info_viewport_states.last().unwrap(),
                     p_multisample_state: info_multisample_states.last().unwrap(),
