@@ -155,9 +155,20 @@ impl<B: Backend, C, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
 
     /// Finish recording commands to the command buffers.
     ///
-    /// The command pool must be reset to able to re-record commands.
+    /// The command buffer must be reset to able to re-record commands.
     pub unsafe fn finish(&mut self) {
         self.raw.finish();
+    }
+
+    /// Empties the command buffer, optionally releasing all resources from the
+    /// commands that have been submitted. The command buffer is moved back to
+    /// the "initial" state.
+    ///
+    /// The command buffer must not be in the "pending" state. Additionally, the
+    /// command pool must have been created with the RESET_INDIVIDUAL flag to be
+    /// able to reset individual buffers.
+    pub unsafe fn reset(&mut self, release_resources: bool) {
+        self.raw.reset(release_resources);
     }
 
     /*
