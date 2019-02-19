@@ -31,7 +31,7 @@ use hal::{error, format as f, image, memory, Features, Limits, QueueType, SwapIm
 
 use winapi::shared::minwindef::TRUE;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_6, winerror};
-use winapi::um::{d3d12, d3d12sdklayers, handleapi, synchapi, winbase};
+use winapi::um::{d3d12, d3d12sdklayers, dxgidebug, handleapi, synchapi, winbase};
 use winapi::Interface;
 
 use std::borrow::Borrow;
@@ -694,12 +694,33 @@ impl Instance {
             }
         }
 
+        // The `DXGI_CREATE_FACTORY_DEBUG` flag is only allowed to be passed to
+        // `CreateDXGIFactory2` if the debug interface is actually available. So
+        // we check for whether it exists first.
+        let mut queue = native::WeakPtr::<dxgidebug::IDXGIInfoQueue>::null();
+        let hr = unsafe {
+            dxgi1_3::DXGIGetDebugInterface1(
+                0,
+                &dxgidebug::IDXGIInfoQueue::uuidof(),
+                queue.mut_void(),
+            )
+        };
+
+        let factory_flags = if winerror::SUCCEEDED(hr) {
+            unsafe {
+                queue.destroy();
+            }
+            dxgi1_3::DXGI_CREATE_FACTORY_DEBUG
+        } else {
+            0
+        };
+
         // Create DXGI factory
         let mut dxgi_factory = native::WeakPtr::<dxgi1_4::IDXGIFactory4>::null();
 
         let hr = unsafe {
             dxgi1_3::CreateDXGIFactory2(
-                dxgi1_3::DXGI_CREATE_FACTORY_DEBUG,
+                factory_flags,
                 &dxgi1_4::IDXGIFactory4::uuidof(),
                 dxgi_factory.mut_void(),
             )
