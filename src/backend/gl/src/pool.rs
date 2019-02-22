@@ -1,8 +1,8 @@
-use command::{self, Command, RawCommandBuffer};
-use hal::backend::FastHashMap;
-use hal::{self, pool};
-use native as n;
-use Backend;
+use crate::command::{self, Command, RawCommandBuffer};
+use crate::hal::backend::FastHashMap;
+use crate::hal::{self, pool};
+use crate::native as n;
+use crate::Backend;
 
 use std::sync::{Arc, Mutex};
 

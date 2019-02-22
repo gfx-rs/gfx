@@ -1,7 +1,7 @@
-use gl::{self, types as t};
-use hal::format::Format;
-use hal::{buffer, image as i, Primitive};
-use native::VertexAttribFunction;
+use crate::gl::{self, types as t};
+use crate::hal::format::Format;
+use crate::hal::{buffer, image as i, Primitive};
+use crate::native::VertexAttribFunction;
 
 /*
 pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
@@ -19,7 +19,7 @@ pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
 }*/
 
 pub fn filter_to_gl(mag: i::Filter, min: i::Filter, mip: i::Filter) -> (t::GLenum, t::GLenum) {
-    use hal::image::Filter::*;
+    use crate::hal::image::Filter::*;
 
     let mag_filter = match mag {
         Nearest => gl::NEAREST,
@@ -74,9 +74,9 @@ pub fn primitive_to_gl_primitive(primitive: Primitive) -> t::GLenum {
 pub fn format_to_gl_format(
     format: Format,
 ) -> Option<(gl::types::GLint, gl::types::GLenum, VertexAttribFunction)> {
-    use gl::*;
-    use hal::format::Format::*;
-    use native::VertexAttribFunction::*;
+    use crate::gl::*;
+    use crate::hal::format::Format::*;
+    use crate::native::VertexAttribFunction::*;
     let _ = Double; //mark as used
                     // TODO: Add more formats and error handling for `None`
     let format = match format {

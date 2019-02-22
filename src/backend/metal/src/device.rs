@@ -1,8 +1,10 @@
-use internal::{Channel, FastStorageMap};
-use native;
+use gfx_hal as hal;
+
+use crate::internal::{Channel, FastStorageMap};
+use crate::native;
 use range_alloc::RangeAllocator;
-use {command, conversions as conv, native as n};
-use {
+use crate::{command, conversions as conv, native as n};
+use crate::{
     validate_line_width, AsNative, Backend, OnlineRecording, QueueFamily, ResourceIndex, Shared,
     Surface, Swapchain, VisibilityShared,
 };
@@ -16,15 +18,15 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{cmp, iter, mem, ptr, slice, thread, time};
 
-use hal::device::{
+use self::hal::device::{
     AllocationError, BindError, DeviceLost, OomOrDeviceLost, OutOfMemory, ShaderError,
 };
-use hal::memory::Properties;
-use hal::pool::CommandPoolCreateFlags;
-use hal::pso::VertexInputRate;
-use hal::queue::{QueueFamilyId, Queues};
-use hal::range::RangeArg;
-use hal::{self, buffer, error, format, image, mapping, memory, pass, pso, query, window};
+use self::hal::memory::Properties;
+use self::hal::pool::CommandPoolCreateFlags;
+use self::hal::pso::VertexInputRate;
+use self::hal::queue::{QueueFamilyId, Queues};
+use self::hal::range::RangeArg;
+use self::hal::{buffer, error, format, image, mapping, memory, pass, pso, query, window};
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use foreign_types::ForeignType;
@@ -716,7 +718,7 @@ impl hal::Device<Backend> for Device {
     }
 
     unsafe fn destroy_command_pool(&self, mut pool: command::CommandPool) {
-        use hal::pool::RawCommandPool;
+        use self::hal::pool::RawCommandPool;
         pool.reset();
     }
 
@@ -1071,14 +1073,14 @@ impl hal::Device<Backend> for Device {
     {
         let mut dst = target.modules.whole_write();
         for source in sources {
-            let mut src = source.borrow().modules.whole_write();
+            let src = source.borrow().modules.whole_write();
             for (key, value) in src.iter() {
                 let storage = match dst.entry(key.clone()) {
                     Entry::Vacant(e) => e.insert(FastStorageMap::default()),
-                    Entry::Occupied(mut e) => e.into_mut(),
+                    Entry::Occupied(e) => e.into_mut(),
                 };
                 let mut dst_module = storage.whole_write();
-                let mut src_module = value.whole_write();
+                let src_module = value.whole_write();
                 for (key_module, value_module) in src_module.iter() {
                     match dst_module.entry(key_module.clone()) {
                         Entry::Vacant(em) => {

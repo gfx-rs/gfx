@@ -1,8 +1,8 @@
 //! Input Assembler (IA) stage description.
 //! The input assembler collects raw vertex and index data.
 
-use format;
-use Primitive;
+use crate::format;
+use crate::Primitive;
 
 /// Shader binding location.
 pub type Location = u32;

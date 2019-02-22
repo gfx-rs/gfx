@@ -5,22 +5,22 @@ use std::ops::Range;
 use std::sync::{Arc, Mutex, RwLock};
 use std::{mem, ptr, slice};
 
-use gl::types::{GLenum, GLfloat, GLint};
-use {gl, GlContainer};
+use crate::gl::types::{GLenum, GLfloat, GLint};
+use crate::{gl, GlContainer};
 
-use hal::backend::FastHashMap;
-use hal::format::{Format, Swizzle};
-use hal::pool::CommandPoolCreateFlags;
-use hal::queue::QueueFamilyId;
-use hal::range::RangeArg;
-use hal::{self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query};
+use crate::hal::backend::FastHashMap;
+use crate::hal::format::{Format, Swizzle};
+use crate::hal::pool::CommandPoolCreateFlags;
+use crate::hal::queue::QueueFamilyId;
+use crate::hal::range::RangeArg;
+use crate::hal::{self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query};
 
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
-use info::LegacyFeatures;
-use pool::{BufferMemory, OwnedBuffer, RawCommandPool};
-use {conv, native as n, state};
-use {Backend as B, Share, Starc, Surface, Swapchain};
+use crate::info::LegacyFeatures;
+use crate::pool::{BufferMemory, OwnedBuffer, RawCommandPool};
+use crate::{conv, native as n, state};
+use crate::{Backend as B, Share, Starc, Surface, Swapchain};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -624,7 +624,7 @@ impl d::Device<B> for Device {
                 // StorageTexel -> StorageTexel
 
                 assert!(!binding.immutable_samplers); //TODO: Implement immutable_samplers
-                use pso::DescriptorType::*;
+                use crate::pso::DescriptorType::*;
                 match binding.ty {
                     CombinedImageSampler => {
                         drd.insert_missing_binding_into_spare(
@@ -660,7 +660,7 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn get_pipeline_cache_data(&self, cache: &()) -> Result<Vec<u8>, d::OutOfMemory> {
+    unsafe fn get_pipeline_cache_data(&self, _cache: &()) -> Result<Vec<u8>, d::OutOfMemory> {
         //empty
         Ok(Vec::new())
     }

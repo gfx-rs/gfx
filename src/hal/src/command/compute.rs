@@ -3,9 +3,9 @@
 use std::borrow::Borrow;
 
 use super::{CommandBuffer, DescriptorSetOffset, Level, RawCommandBuffer, Shot};
-use buffer::Offset;
-use queue::capability::{Compute, Supports};
-use {Backend, WorkGroupCount};
+use crate::buffer::Offset;
+use crate::queue::capability::{Compute, Supports};
+use crate::{Backend, WorkGroupCount};
 
 impl<B: Backend, C: Supports<Compute>, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.

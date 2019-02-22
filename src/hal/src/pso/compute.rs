@@ -1,7 +1,7 @@
 //! Compute pipeline descriptor.
 
 use super::{BasePipeline, EntryPoint, PipelineCreationFlags};
-use Backend;
+use crate::Backend;
 
 /// A description of the data needed to construct a compute pipeline.
 #[derive(Debug)]

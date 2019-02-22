@@ -1,5 +1,5 @@
 //! Type system encoded queue capabilities.
-use queue::QueueType;
+use crate::queue::QueueType;
 
 /// General capability, supporting graphics, compute and transfer operations.
 pub enum General {}

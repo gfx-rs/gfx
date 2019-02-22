@@ -4,10 +4,10 @@
 
 use std::ops::Range;
 
-use buffer::Offset as RawOffset;
-use device;
-use format;
-use pso::{Comparison, Rect};
+use crate::buffer::Offset as RawOffset;
+use crate::device;
+use crate::format;
+use crate::pso::{Comparison, Rect};
 
 /// Dimension size.
 pub type Size = u32;

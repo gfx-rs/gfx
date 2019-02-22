@@ -1,11 +1,11 @@
 //! Command pools
 
-use command::{
+use crate::command::{
     CommandBuffer, IntoRawCommandBuffer, RawLevel, SecondaryCommandBuffer, Shot,
     SubpassCommandBuffer,
 };
-use queue::capability::{Graphics, Supports};
-use Backend;
+use crate::queue::capability::{Graphics, Supports};
+use crate::Backend;
 
 use std::any::Any;
 use std::marker::PhantomData;

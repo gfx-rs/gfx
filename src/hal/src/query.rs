@@ -3,8 +3,8 @@
 //! or other introspection, providing a mechanism for the command buffer to record data about its
 //! operation as it is running.
 
-use device::OutOfMemory;
-use Backend;
+use crate::device::OutOfMemory;
+use crate::Backend;
 
 /// A query identifier.
 pub type Id = u32;

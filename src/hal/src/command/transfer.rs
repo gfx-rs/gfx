@@ -3,12 +3,12 @@ use std::borrow::Borrow;
 use std::ops::Range;
 
 use super::{CommandBuffer, Level, RawCommandBuffer, Shot};
-use memory::{Barrier, Dependencies};
-use pso::PipelineStage;
-use queue::capability::{Supports, Transfer};
-use range::RangeArg;
-use Backend;
-use {buffer, image};
+use crate::memory::{Barrier, Dependencies};
+use crate::pso::PipelineStage;
+use crate::queue::capability::{Supports, Transfer};
+use crate::range::RangeArg;
+use crate::Backend;
+use crate::{buffer, image};
 /// Specifies a source region and a destination
 /// region in a buffer for copying.  All values
 /// are in units of bytes.

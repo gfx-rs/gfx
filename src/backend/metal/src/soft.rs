@@ -1,8 +1,8 @@
-use command::IndexBuffer;
-use native::RasterizerState;
-use {BufferPtr, ResourceIndex, SamplerPtr, TexturePtr};
+use crate::command::IndexBuffer;
+use crate::native::RasterizerState;
+use crate::{BufferPtr, ResourceIndex, SamplerPtr, TexturePtr};
 
-use hal;
+use crate::hal;
 use metal;
 
 use std::ops::Range;

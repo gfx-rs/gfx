@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 authors = ["The Gfx-rs Developers"]
 documentation = "https://docs.rs/gfx-hal"
 workspace = "../.."
+edition = "2018"
 
 [features]
 unstable = []

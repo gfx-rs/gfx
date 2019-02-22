@@ -2,8 +2,8 @@
 
 use std::mem;
 use std::ops::Range;
-use Backend;
-use {buffer, image, queue};
+use crate::Backend;
+use crate::{buffer, image, queue};
 
 /// A trait for plain-old-data types.
 ///

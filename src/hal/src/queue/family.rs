@@ -1,9 +1,9 @@
 //! Queue family and groups.
 
-use backend::RawQueueGroup;
-use queue::capability::{Capability, Compute, Graphics, Transfer};
-use queue::{CommandQueue, QueueType};
-use Backend;
+use crate::backend::RawQueueGroup;
+use crate::queue::capability::{Capability, Compute, Graphics, Transfer};
+use crate::queue::{CommandQueue, QueueType};
+use crate::Backend;
 
 use std::any::Any;
 use std::fmt::Debug;

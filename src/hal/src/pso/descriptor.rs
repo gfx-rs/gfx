@@ -20,10 +20,10 @@ use std::borrow::Borrow;
 use std::fmt;
 use std::ops::Range;
 
-use buffer::Offset;
-use image::Layout;
-use pso::ShaderStageFlags;
-use Backend;
+use crate::buffer::Offset;
+use crate::image::Layout;
+use crate::pso::ShaderStageFlags;
+use crate::Backend;
 
 ///
 pub type DescriptorSetIndex = u16;

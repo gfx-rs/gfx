@@ -1,16 +1,16 @@
 #![allow(dead_code)] //TODO: remove
 
-use hal::pso;
-use hal::ColorSlot;
+use crate::hal::pso;
+use crate::hal::ColorSlot;
 use smallvec::SmallVec;
-use {gl, GlContainer};
+use crate::{gl, GlContainer};
 
 pub(crate) fn bind_polygon_mode(
     gl: &GlContainer,
     mode: pso::PolygonMode,
     bias: Option<pso::State<pso::DepthBias>>,
 ) {
-    use hal::pso::PolygonMode::*;
+    use crate::hal::pso::PolygonMode::*;
 
     let (gl_draw, gl_offset) = match mode {
         Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
@@ -33,7 +33,7 @@ pub(crate) fn bind_polygon_mode(
 }
 
 pub(crate) fn bind_rasterizer(gl: &GlContainer, r: &pso::Rasterizer, is_embedded: bool) {
-    use hal::pso::FrontFace::*;
+    use crate::hal::pso::FrontFace::*;
 
     unsafe {
         gl.FrontFace(match r.front_face {
@@ -74,7 +74,7 @@ pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
 }
 
 pub fn map_comparison(cmp: pso::Comparison) -> gl::types::GLenum {
-    use hal::pso::Comparison::*;
+    use crate::hal::pso::Comparison::*;
     match cmp {
         Never => gl::NEVER,
         Less => gl::LESS,
@@ -101,7 +101,7 @@ pub(crate) fn bind_depth(gl: &GlContainer, depth: &pso::DepthTest) {
 }
 
 fn map_operation(op: pso::StencilOp) -> gl::types::GLenum {
-    use hal::pso::StencilOp::*;
+    use crate::hal::pso::StencilOp::*;
     match op {
         Keep => gl::KEEP,
         Zero => gl::ZERO,
@@ -167,7 +167,7 @@ pub(crate) fn bind_stencil(
 }
 
 fn map_factor(factor: pso::Factor) -> gl::types::GLenum {
-    use hal::pso::Factor::*;
+    use crate::hal::pso::Factor::*;
     match factor {
         Zero => gl::ZERO,
         One => gl::ONE,
@@ -206,7 +206,7 @@ fn map_blend_op(
 }
 
 pub(crate) fn bind_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
-    use hal::pso::ColorMask as Cm;
+    use crate::hal::pso::ColorMask as Cm;
 
     match desc.1 {
         pso::BlendState::On { color, alpha } => unsafe {
@@ -232,7 +232,7 @@ pub(crate) fn bind_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
 }
 
 pub(crate) fn bind_blend_slot(gl: &GlContainer, slot: ColorSlot, desc: &pso::ColorBlendDesc) {
-    use hal::pso::ColorMask as Cm;
+    use crate::hal::pso::ColorMask as Cm;
 
     match desc.1 {
         pso::BlendState::On { color, alpha } => unsafe {

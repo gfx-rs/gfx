@@ -6,9 +6,9 @@ use super::{
     ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw, CommandBuffer, DescriptorSetOffset, Level,
     Primary, RawCommandBuffer, RenderPassInlineEncoder, RenderPassSecondaryEncoder, Shot,
 };
-use queue::capability::{Graphics, GraphicsOrCompute, Supports};
-use Backend;
-use {buffer, image, pso, query};
+use crate::queue::capability::{Graphics, GraphicsOrCompute, Supports};
+use crate::Backend;
+use crate::{buffer, image, pso, query};
 
 /// A universal clear color supporting integer formats
 /// as well as the standard floating-point.

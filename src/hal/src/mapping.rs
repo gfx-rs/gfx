@@ -1,9 +1,9 @@
 #![deny(missing_docs, missing_copy_implementations)]
 
 //! Memory mapping
-use device;
+use crate::device;
 use std::ops::{self, Range};
-use Backend;
+use crate::Backend;
 
 // TODO
 /// Error accessing a mapping.
