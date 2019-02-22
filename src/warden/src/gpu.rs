@@ -8,10 +8,10 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::{iter, slice};
 
-use hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
-use hal::{DescriptorPool, Device, PhysicalDevice};
+use crate::hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
+use crate::hal::{DescriptorPool, Device, PhysicalDevice};
 
-use raw;
+use crate::raw;
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     aspects: f::Aspects::COLOR,
@@ -805,7 +805,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         // fill up command buffers
         let mut jobs = HashMap::new();
         for (name, job) in &raw.jobs {
-            use raw::TransferCommand as Tc;
+            use crate::raw::TransferCommand as Tc;
             let mut command_buf = command_pool.acquire_command_buffer::<c::MultiShot>();
             unsafe {
                 command_buf.begin(false);
@@ -1113,7 +1113,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             encoder = encoder.next_subpass_inline();
                         }
                         for command in &pass.1[subpass].commands {
-                            use raw::DrawCommand as Dc;
+                            use crate::raw::DrawCommand as Dc;
                             match *command {
                                 Dc::BindIndexBuffer {
                                     ref buffer,

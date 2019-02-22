@@ -1,6 +1,8 @@
-use internal::{BlitVertex, ClearKey, ClearVertex};
-use {conversions as conv, native, soft, window};
-use {
+use gfx_hal as hal;
+
+use crate::internal::{BlitVertex, ClearKey, ClearVertex};
+use crate::{conversions as conv, native, soft, window};
+use crate::{
     validate_line_width, AsNative, Backend, BufferPtr, OnlineRecording, PrivateDisabilities,
     ResourceIndex, SamplerPtr, Shared, TexturePtr,
 };
@@ -11,14 +13,14 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 use std::{cmp, iter, mem, slice, time};
 
-use hal::backend::FastHashMap;
-use hal::format::{Aspects, FormatDesc};
-use hal::image::{Extent, Filter, Layout, Level, SubresourceRange};
-use hal::pass::AttachmentLoadOp;
-use hal::queue::{RawCommandQueue, Submission};
-use hal::range::RangeArg;
-use hal::{buffer, command as com, error, memory, pool, pso, query};
-use hal::{
+use self::hal::backend::FastHashMap;
+use self::hal::format::{Aspects, FormatDesc};
+use self::hal::image::{Extent, Filter, Layout, Level, SubresourceRange};
+use self::hal::pass::AttachmentLoadOp;
+use self::hal::queue::{RawCommandQueue, Submission};
+use self::hal::range::RangeArg;
+use self::hal::{buffer, command as com, error, memory, pool, pso, query};
+use self::hal::{
     DrawCount, IndexCount, IndexType, InstanceCount, SwapImageIndex, VertexCount, VertexOffset,
     WorkGroupCount,
 };
@@ -667,7 +669,7 @@ unsafe impl Send for SharedCommandBuffer {}
 impl EncodePass {
     fn schedule(self, queue: &dispatch::Queue, cmd_buffer_arc: &Arc<Mutex<metal::CommandBuffer>>) {
         let cmd_buffer = SharedCommandBuffer(Arc::clone(cmd_buffer_arc));
-        queue.async(move || match self {
+        queue.r#async(move || match self {
             EncodePass::Render(list, desc) => {
                 let encoder = cmd_buffer
                     .0
@@ -1356,7 +1358,7 @@ where
     R::RenderPipeline: Borrow<metal::RenderPipelineStateRef>,
     C: Borrow<soft::RenderCommand<R>>,
 {
-    use soft::RenderCommand as Cmd;
+    use crate::soft::RenderCommand as Cmd;
     match *command.borrow() {
         Cmd::SetViewport(ref rect, ref depth) => {
             encoder.set_viewport(MTLViewport {
@@ -1417,7 +1419,7 @@ where
             index,
             ref buffers,
         } => {
-            use soft::AsSlice;
+            use crate::soft::AsSlice;
             let values: &[Option<BufferPtr>] = buffers.as_slice(resources);
             if !values.is_empty() {
                 let data = unsafe {
@@ -1457,7 +1459,7 @@ where
             index,
             ref textures,
         } => {
-            use soft::AsSlice;
+            use crate::soft::AsSlice;
             let values = textures.as_slice(resources);
             if !values.is_empty() {
                 let data = unsafe {
@@ -1476,7 +1478,7 @@ where
             index,
             ref samplers,
         } => {
-            use soft::AsSlice;
+            use crate::soft::AsSlice;
             let values = samplers.as_slice(resources);
             if !values.is_empty() {
                 let data = unsafe {
@@ -1600,7 +1602,7 @@ fn exec_blit<C>(encoder: &metal::BlitCommandEncoderRef, command: C)
 where
     C: Borrow<soft::BlitCommand>,
 {
-    use soft::BlitCommand as Cmd;
+    use crate::soft::BlitCommand as Cmd;
     match *command.borrow() {
         Cmd::FillBuffer {
             dst,
@@ -1725,7 +1727,7 @@ where
     R::ComputePipeline: Borrow<metal::ComputePipelineStateRef>,
     C: Borrow<soft::ComputeCommand<R>>,
 {
-    use soft::ComputeCommand as Cmd;
+    use crate::soft::ComputeCommand as Cmd;
     match *command.borrow() {
         Cmd::BindBuffer {
             index,
@@ -1736,7 +1738,7 @@ where
             encoder.set_buffer(index as _, native, offset);
         }
         Cmd::BindBuffers { index, ref buffers } => {
-            use soft::AsSlice;
+            use crate::soft::AsSlice;
             let values: &[Option<BufferPtr>] = buffers.as_slice(resources);
             if !values.is_empty() {
                 let data = unsafe {
@@ -1759,7 +1761,7 @@ where
             index,
             ref textures,
         } => {
-            use soft::AsSlice;
+            use crate::soft::AsSlice;
             let values = textures.as_slice(resources);
             if !values.is_empty() {
                 let data = unsafe {
@@ -1773,7 +1775,7 @@ where
             index,
             ref samplers,
         } => {
-            use soft::AsSlice;
+            use crate::soft::AsSlice;
             let values = samplers.as_slice(resources);
             if !values.is_empty() {
                 let data = unsafe {
@@ -2191,7 +2193,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
     where
         I: IntoIterator<Item = CommandBuffer>,
     {
-        use hal::command::RawCommandBuffer;
+        use self::hal::command::RawCommandBuffer;
         for mut cmd_buf in cmd_buffers {
             cmd_buf.reset(true);
             match self

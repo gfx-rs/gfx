@@ -1,13 +1,15 @@
-use PrivateCapabilities;
+use gfx_hal as hal;
 
-use hal::format::{Format, Properties, Swizzle};
-use hal::pso::{Comparison, StencilOp};
-use hal::{image, pass, pso, IndexType};
+use crate::PrivateCapabilities;
+
+use self::hal::format::{Format, Properties, Swizzle};
+use self::hal::pso::{Comparison, StencilOp};
+use self::hal::{image, pass, pso, IndexType};
 use metal::*;
 
 impl PrivateCapabilities {
     pub fn map_format(&self, format: Format) -> Option<MTLPixelFormat> {
-        use hal::format::Format as f;
+        use self::hal::format::Format as f;
         use metal::MTLPixelFormat::*;
         Some(match format {
             f::R5g6b5Unorm if self.format_b5 => B5G6R5Unorm,
@@ -146,7 +148,7 @@ impl PrivateCapabilities {
         format: Format,
         swizzle: Swizzle,
     ) -> Option<MTLPixelFormat> {
-        use hal::format::{Component::*, Format::*};
+        use self::hal::format::{Component::*, Format::*};
         use metal::MTLPixelFormat as Pf;
         match (format, swizzle) {
             (R8Unorm, Swizzle(Zero, Zero, Zero, R)) => Some(Pf::A8Unorm),
@@ -166,7 +168,7 @@ impl PrivateCapabilities {
     }
 
     pub fn map_format_properties(&self, format: MTLPixelFormat) -> Properties {
-        use hal::format::{BufferFeature as Bf, ImageFeature as If};
+        use self::hal::format::{BufferFeature as Bf, ImageFeature as If};
         use metal::MTLPixelFormat::*;
 
         let buffer_features = Bf::all();
@@ -941,7 +943,7 @@ pub fn map_write_mask(mask: pso::ColorMask) -> MTLColorWriteMask {
 }
 
 fn map_factor(factor: pso::Factor) -> MTLBlendFactor {
-    use hal::pso::Factor::*;
+    use self::hal::pso::Factor::*;
 
     match factor {
         Zero => MTLBlendFactor::Zero,
@@ -969,7 +971,7 @@ fn map_factor(factor: pso::Factor) -> MTLBlendFactor {
 pub fn map_blend_op(
     operation: &pso::BlendOp,
 ) -> (MTLBlendOperation, MTLBlendFactor, MTLBlendFactor) {
-    use hal::pso::BlendOp::*;
+    use self::hal::pso::BlendOp::*;
 
     match *operation {
         Add { src, dst } => (MTLBlendOperation::Add, map_factor(src), map_factor(dst)),
@@ -997,7 +999,7 @@ pub fn map_blend_op(
 }
 
 pub fn map_vertex_format(format: Format) -> Option<MTLVertexFormat> {
-    use hal::format::Format as f;
+    use self::hal::format::Format as f;
     use metal::MTLVertexFormat::*;
     Some(match format {
         f::R8Unorm => UCharNormalized,
@@ -1065,7 +1067,7 @@ pub fn resource_options_from_storage_and_cache(
 }
 
 pub fn map_texture_usage(usage: image::Usage, tiling: image::Tiling) -> MTLTextureUsage {
-    use hal::image::Usage as U;
+    use self::hal::image::Usage as U;
 
     let mut texture_usage = MTLTextureUsage::PixelFormatView;
     if usage.intersects(U::COLOR_ATTACHMENT | U::DEPTH_STENCIL_ATTACHMENT) {
@@ -1090,7 +1092,7 @@ pub fn map_texture_usage(usage: image::Usage, tiling: image::Tiling) -> MTLTextu
 }
 
 pub fn map_texture_type(view_kind: image::ViewKind) -> MTLTextureType {
-    use hal::image::ViewKind as Vk;
+    use self::hal::image::ViewKind as Vk;
     match view_kind {
         Vk::D1 => MTLTextureType::D1,
         Vk::D1Array => MTLTextureType::D1Array,

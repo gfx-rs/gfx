@@ -1,7 +1,7 @@
 //! Functionality only required for backend implementations.
 
-use queue::{QueueFamily, Queues};
-use Backend;
+use crate::queue::{QueueFamily, Queues};
+use crate::Backend;
 
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;

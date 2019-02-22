@@ -13,8 +13,8 @@
 
 // TODO: Document pipelines and subpasses better.
 
-use queue::capability::{Capability, Supports};
-use Backend;
+use crate::queue::capability::{Capability, Supports};
+use crate::Backend;
 
 use std::borrow::Borrow;
 use std::marker::PhantomData;

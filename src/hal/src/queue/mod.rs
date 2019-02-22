@@ -14,11 +14,11 @@ use std::borrow::Borrow;
 use std::iter;
 use std::marker::PhantomData;
 
-use command::{Primary, Submittable};
-use error::HostExecutionError;
-use pso;
-use window::SwapImageIndex;
-use Backend;
+use crate::command::{Primary, Submittable};
+use crate::error::HostExecutionError;
+use crate::pso;
+use crate::window::SwapImageIndex;
+use crate::Backend;
 
 pub use self::capability::{Capability, Compute, General, Graphics, Supports, Transfer};
 pub use self::family::{QueueFamily, QueueFamilyId, QueueGroup, Queues};

@@ -1,7 +1,7 @@
-use hal::{Features, Limits};
+use crate::hal::{Features, Limits};
 use std::collections::HashSet;
 use std::{ffi, fmt, mem, str};
-use {gl, Error, GlContainer};
+use crate::{gl, Error, GlContainer};
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Copy, Clone, Eq, Ord, PartialEq, PartialOrd)]

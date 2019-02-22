@@ -1,25 +1,18 @@
-extern crate gfx_hal as hal;
-extern crate metal;
-extern crate range_alloc;
+use gfx_hal as hal;
+use range_alloc;
 #[macro_use]
 extern crate bitflags;
-extern crate cocoa;
-extern crate foreign_types;
+use cocoa;
+use foreign_types;
 #[macro_use]
 extern crate objc;
-extern crate core_graphics;
 #[macro_use]
 extern crate log;
-extern crate block;
-extern crate parking_lot;
-extern crate smallvec;
-extern crate spirv_cross;
-extern crate storage_map;
 
 #[cfg(feature = "dispatch")]
-extern crate dispatch;
+use dispatch;
 #[cfg(feature = "winit")]
-extern crate winit;
+use winit;
 
 mod command;
 mod conversions;
@@ -29,9 +22,9 @@ mod native;
 mod soft;
 mod window;
 
-pub use command::CommandPool;
-pub use device::{Device, LanguageVersion, PhysicalDevice};
-pub use window::{AcquireMode, CAMetalLayer, Surface, Swapchain};
+pub use crate::command::CommandPool;
+pub use crate::device::{Device, LanguageVersion, PhysicalDevice};
+pub use crate::window::{AcquireMode, CAMetalLayer, Surface, Swapchain};
 
 pub type GraphicsCommandPool = CommandPool;
 
@@ -40,7 +33,7 @@ use std::os::raw::c_void;
 use std::ptr::NonNull;
 use std::sync::Arc;
 
-use hal::queue::QueueFamilyId;
+use self::hal::queue::QueueFamilyId;
 
 use cocoa::foundation::NSInteger;
 use core_graphics::base::CGFloat;

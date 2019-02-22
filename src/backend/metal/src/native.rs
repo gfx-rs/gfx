@@ -1,7 +1,9 @@
-use internal::{Channel, FastStorageMap};
+use gfx_hal as hal;
+
+use crate::internal::{Channel, FastStorageMap};
 use range_alloc::RangeAllocator;
-use window::SwapchainImage;
-use {AsNative, Backend, BufferPtr, ResourceIndex, SamplerPtr, TexturePtr};
+use crate::window::SwapchainImage;
+use crate::{AsNative, Backend, BufferPtr, ResourceIndex, SamplerPtr, TexturePtr};
 
 use std::cell::RefCell;
 use std::fmt;
@@ -9,12 +11,12 @@ use std::ops::Range;
 use std::os::raw::{c_long, c_void};
 use std::sync::Arc;
 
-use hal::backend::FastHashMap;
-use hal::format::FormatDesc;
-use hal::pass::{Attachment, AttachmentId};
-use hal::range::RangeArg;
-use hal::{buffer, image, pso};
-use hal::{DescriptorPool as HalDescriptorPool, MemoryTypeId};
+use self::hal::backend::FastHashMap;
+use self::hal::format::FormatDesc;
+use self::hal::pass::{Attachment, AttachmentId};
+use self::hal::range::RangeArg;
+use self::hal::{buffer, image, pso};
+use self::hal::{DescriptorPool as HalDescriptorPool, MemoryTypeId};
 
 use cocoa::foundation::{NSRange, NSUInteger};
 use metal;

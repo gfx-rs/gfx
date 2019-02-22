@@ -3,7 +3,7 @@
 use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
 use super::output_merger::{ColorBlendDesc, DepthStencilDesc, Face};
 use super::{BasePipeline, EntryPoint, PipelineCreationFlags, State};
-use {image, pass, Backend, Primitive};
+use crate::{image, pass, Backend, Primitive};
 
 use std::ops::Range;
 

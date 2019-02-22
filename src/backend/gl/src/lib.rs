@@ -20,8 +20,8 @@ use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 
-use hal::queue::{QueueFamilyId, Queues};
-use hal::{error, image, pso};
+use crate::hal::queue::{QueueFamilyId, Queues};
+use crate::hal::{error, image, pso};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -37,7 +37,7 @@ mod state;
 mod window;
 
 #[cfg(feature = "glutin")]
-pub use window::glutin::{config_context, Headless, Surface, Swapchain};
+pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
 
 pub(crate) struct GlContainer {
     context: gl::Gl,
@@ -426,7 +426,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
-        use hal::memory::Properties;
+        use crate::hal::memory::Properties;
 
         // COHERENT flags require that the backend does flushing and invalidation
         // by itself. If we move towards persistent mapping we need to re-evaluate it.

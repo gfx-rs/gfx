@@ -43,9 +43,9 @@
 //! }
 //! ```
 
-use hal::{self, format as f, image, CompositeAlpha};
+use crate::hal::{self, format as f, image, CompositeAlpha};
 
-use {Backend as B, Device, PhysicalDevice, QueueFamily, Starc};
+use crate::{Backend as B, Device, PhysicalDevice, QueueFamily, Starc};
 
 use glutin::{self, GlContext};
 

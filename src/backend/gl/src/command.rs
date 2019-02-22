@@ -1,13 +1,13 @@
 #![allow(missing_docs)]
 
-use gl;
+use crate::gl;
 
-use hal::format::ChannelType;
-use hal::range::RangeArg;
-use hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
+use crate::hal::format::ChannelType;
+use crate::hal::range::RangeArg;
+use crate::hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
 
-use pool::{self, BufferMemory};
-use {native as n, Backend};
+use crate::pool::{self, BufferMemory};
+use crate::{native as n, Backend};
 
 use std::borrow::Borrow;
 use std::ops::Range;

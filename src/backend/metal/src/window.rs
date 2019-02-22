@@ -1,15 +1,17 @@
-use device::{Device, PhysicalDevice};
-use internal::Channel;
-use native;
-use {Backend, QueueFamily};
+use gfx_hal as hal;
+
+use crate::device::{Device, PhysicalDevice};
+use crate::internal::Channel;
+use crate::native;
+use crate::{Backend, QueueFamily};
 
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::thread;
 
-use hal::window::Extent2D;
-use hal::{self, format, image};
-use hal::{Backbuffer, SwapchainConfig, CompositeAlpha};
+use self::hal::window::Extent2D;
+use self::hal::{format, image};
+use self::hal::{Backbuffer, SwapchainConfig, CompositeAlpha};
 
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::{CGRect, CGSize};

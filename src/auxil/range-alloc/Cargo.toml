@@ -10,6 +10,7 @@ authors = ["The Gfx-rs Developers"]
 documentation = "https://docs.rs/range-alloc"
 categories = ["memory-management"]
 workspace = "../../../"
+edition = "2018"
 
 [lib]
 name = "range_alloc"

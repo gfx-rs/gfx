@@ -8,9 +8,9 @@
 
 use std::any::Any;
 
-use error::DeviceCreationError;
-use queue::{Capability, QueueGroup};
-use {format, image, memory, Backend, Features, Gpu, Limits};
+use crate::error::DeviceCreationError;
+use crate::queue::{Capability, QueueGroup};
+use crate::{format, image, memory, Backend, Features, Gpu, Limits};
 
 /// Scheduling hint for devices about the priority of a queue.  Values range from `0.0` (low) to
 /// `1.0` (high).
@@ -182,7 +182,7 @@ impl<B: Backend> Adapter<B> {
         F: Fn(&B::QueueFamily) -> bool,
         C: Capability,
     {
-        use queue::QueueFamily;
+        use crate::queue::QueueFamily;
 
         let requested_family = self
             .queue_families

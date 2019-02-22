@@ -92,7 +92,7 @@ impl Harness {
     }
 
     fn run<I: hal::Instance>(&self, instance: I, _disabilities: Disabilities) -> usize {
-        use hal::PhysicalDevice;
+        use crate::hal::PhysicalDevice;
 
         let mut results = TestResults {
             pass: 0,

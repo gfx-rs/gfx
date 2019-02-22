@@ -5,8 +5,8 @@ extern crate gfx_hal as hal;
 #[cfg(feature = "winit")]
 extern crate winit;
 
-use hal::range::RangeArg;
-use hal::{
+use crate::hal::range::RangeArg;
+use crate::hal::{
     buffer, command, device, error, format, image, mapping, memory, pass, pool, pso, query, queue,
 };
 use std::borrow::Borrow;

@@ -1,15 +1,17 @@
-use conversions as conv;
-use PrivateCapabilities;
+use gfx_hal as hal;
+
+use crate::conversions as conv;
+use crate::PrivateCapabilities;
 
 use metal;
 use parking_lot::{Mutex, RawRwLock};
 use storage_map::{StorageMap, StorageMapGuard};
 
-use hal::backend::FastHashMap;
-use hal::command::ClearColorRaw;
-use hal::format::{Aspects, ChannelType};
-use hal::image::Filter;
-use hal::pso;
+use self::hal::backend::FastHashMap;
+use self::hal::command::ClearColorRaw;
+use self::hal::format::{Aspects, ChannelType};
+use self::hal::image::Filter;
+use self::hal::pso;
 
 use std::mem;
 

@@ -1,16 +1,16 @@
 use std::borrow::Borrow;
 use std::{mem, ptr, slice};
-use Starc;
+use crate::Starc;
 
-use hal;
-use hal::error;
+use crate::hal;
+use crate::hal::error;
 
-use gl;
+use crate::gl;
 use smallvec::SmallVec;
 
-use info::LegacyFeatures;
-use {command as com, device, native, state, window};
-use {Backend, Share};
+use crate::info::LegacyFeatures;
+use crate::{command as com, device, native, state, window};
+use crate::{Backend, Share};
 
 pub type ArrayBuffer = gl::types::GLuint;
 
@@ -530,7 +530,7 @@ impl CommandQueue {
                 state::bind_blend_slot(&self.share.context, slot, blend);
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
-                use native::VertexAttribFunction::*;
+                use crate::native::VertexAttribFunction::*;
 
                 let &native::AttributeDesc {
                     location,
@@ -797,7 +797,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         Iw: IntoIterator<Item = (&'a S, hal::pso::PipelineStage)>,
         Is: IntoIterator<Item = &'a S>,
     {
-        use pool::BufferMemory;
+        use crate::pool::BufferMemory;
         {
             for buf in submit_info.command_buffers {
                 let cb = buf.borrow();

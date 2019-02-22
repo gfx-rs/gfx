@@ -50,11 +50,11 @@
 //!
 //! DOC TODO
 
-use device;
-use format::Format;
-use image;
-use queue::{Capability, CommandQueue};
-use Backend;
+use crate::device;
+use crate::format::Format;
+use crate::image;
+use crate::queue::{Capability, CommandQueue};
+use crate::Backend;
 
 use std::any::Any;
 use std::borrow::Borrow;

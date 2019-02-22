@@ -1,12 +1,12 @@
 use std::cell::Cell;
 use std::sync::{Arc, Mutex, RwLock};
 
-use hal::backend::FastHashMap;
-use hal::memory::{Properties, Requirements};
-use hal::{format, image as i, pass, pso};
+use crate::hal::backend::FastHashMap;
+use crate::hal::memory::{Properties, Requirements};
+use crate::hal::{format, image as i, pass, pso};
 
-use gl;
-use Backend;
+use crate::gl;
+use crate::Backend;
 
 pub type RawBuffer = gl::types::GLuint;
 pub type Shader = gl::types::GLuint;

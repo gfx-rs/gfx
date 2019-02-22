@@ -4,7 +4,7 @@
 
 use std::fmt;
 use std::ops::Range;
-use {device, pass};
+use crate::{device, pass};
 
 mod compute;
 mod descriptor;
@@ -18,7 +18,7 @@ pub use self::graphics::*;
 pub use self::input_assembler::*;
 pub use self::output_merger::*;
 
-use Backend;
+use crate::Backend;
 
 /// Error types happening upon PSO creation on the device side.
 #[derive(Clone, Debug, PartialEq, Fail)]

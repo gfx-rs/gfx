@@ -7,11 +7,11 @@ use super::{
     AttachmentClear, BufferCopy, BufferImageCopy, ImageBlit, ImageCopy, ImageResolve,
     SubpassContents,
 };
-use image::{Filter, Layout, SubresourceRange};
-use memory::{Barrier, Dependencies};
-use range::RangeArg;
-use {buffer, pass, pso, query};
-use {Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use crate::image::{Filter, Layout, SubresourceRange};
+use crate::memory::{Barrier, Dependencies};
+use crate::range::RangeArg;
+use crate::{buffer, pass, pso, query};
+use crate::{Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 
 /// Unsafe variant of `ClearColor`.
 #[repr(C)]
