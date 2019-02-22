@@ -580,7 +580,7 @@ fn main() {
                 location: 0,
                 binding: 0,
                 element: pso::Element {
-                    format: f::Format::Rg32Float,
+                    format: f::Format::Rg32Sfloat,
                     offset: 0,
                 },
             });
@@ -588,7 +588,7 @@ fn main() {
                 location: 1,
                 binding: 0,
                 element: pso::Element {
-                    format: f::Format::Rg32Float,
+                    format: f::Format::Rg32Sfloat,
                     offset: 8,
                 },
             });

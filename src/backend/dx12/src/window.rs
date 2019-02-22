@@ -93,7 +93,7 @@ impl hal::Surface<Backend> for Surface {
             f::Format::Rgba8Srgb,
             f::Format::Rgba8Unorm,
             f::Format::A2b10g10r10Unorm,
-            f::Format::Rgba16Float,
+            f::Format::Rgba16Sfloat,
         ];
 
         let present_modes = vec![

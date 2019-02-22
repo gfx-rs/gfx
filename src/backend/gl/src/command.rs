@@ -446,18 +446,18 @@ impl RawCommandBuffer {
 
                             let cmd = match channel {
                                 ChannelType::Unorm
-                                | ChannelType::Inorm
+                                | ChannelType::Snorm
                                 | ChannelType::Ufloat
-                                | ChannelType::Float
+                                | ChannelType::Sfloat
                                 | ChannelType::Srgb
                                 | ChannelType::Uscaled
-                                | ChannelType::Iscaled => {
+                                | ChannelType::Sscaled => {
                                     Command::ClearBufferColorF(0, unsafe { cv.color.float32 })
                                 }
                                 ChannelType::Uint => {
                                     Command::ClearBufferColorU(0, unsafe { cv.color.uint32 })
                                 }
-                                ChannelType::Int => {
+                                ChannelType::Sint => {
                                     Command::ClearBufferColorI(0, unsafe { cv.color.int32 })
                                 }
                             };
@@ -677,16 +677,16 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
                 match image.channel {
                     ChannelType::Unorm
-                    | ChannelType::Inorm
+                    | ChannelType::Snorm
                     | ChannelType::Ufloat
-                    | ChannelType::Float
+                    | ChannelType::Sfloat
                     | ChannelType::Srgb
                     | ChannelType::Uscaled
-                    | ChannelType::Iscaled => {
+                    | ChannelType::Sscaled => {
                         self.push_cmd(Command::ClearBufferColorF(0, color.float32))
                     }
                     ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, color.uint32)),
-                    ChannelType::Int => self.push_cmd(Command::ClearBufferColorI(0, color.int32)),
+                    ChannelType::Sint => self.push_cmd(Command::ClearBufferColorI(0, color.int32)),
                 }
             }
             None => {

@@ -40,14 +40,14 @@ impl From<ChannelType> for Channel {
     fn from(channel_type: ChannelType) -> Self {
         match channel_type {
             ChannelType::Unorm
-            | ChannelType::Inorm
+            | ChannelType::Snorm
             | ChannelType::Ufloat
-            | ChannelType::Float
+            | ChannelType::Sfloat
             | ChannelType::Uscaled
-            | ChannelType::Iscaled
+            | ChannelType::Sscaled
             | ChannelType::Srgb => Channel::Float,
             ChannelType::Uint => Channel::Uint,
-            ChannelType::Int => Channel::Int,
+            ChannelType::Sint => Channel::Int,
         }
     }
 }

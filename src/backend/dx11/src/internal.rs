@@ -1077,7 +1077,7 @@ impl Internal {
         match src.format.base_format().1 {
             Uint => Some(self.ps_blit_2d_uint.as_raw()),
             Int => Some(self.ps_blit_2d_int.as_raw()),
-            Unorm | Inorm | Float | Srgb => Some(self.ps_blit_2d_float.as_raw()),
+            Unorm | Snorm | Sfloat | Srgb => Some(self.ps_blit_2d_float.as_raw()),
             _ => None,
         }
     }

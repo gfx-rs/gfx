@@ -1390,7 +1390,7 @@ impl<B: Backend> PipelineState<B> {
                     location: 0,
                     binding: 0,
                     element: pso::Element {
-                        format: f::Format::Rg32Float,
+                        format: f::Format::Rg32Sfloat,
                         offset: 0,
                     },
                 });
@@ -1398,7 +1398,7 @@ impl<B: Backend> PipelineState<B> {
                     location: 1,
                     binding: 0,
                     element: pso::Element {
-                        format: f::Format::Rg32Float,
+                        format: f::Format::Rg32Sfloat,
                         offset: 8,
                     },
                 });
