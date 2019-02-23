@@ -2340,7 +2340,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             None => base_range.end,
         };
 
-        if (data & 0xFF) * 0x1010101 == data {
+        if (data & 0xFF) * 0x0101_0101 == data {
             let command = soft::BlitCommand::FillBuffer {
                 dst: AsNative::from(raw),
                 range: start..end,

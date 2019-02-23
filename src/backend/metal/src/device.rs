@@ -1500,9 +1500,9 @@ impl hal::Device<Backend> for Device {
         }
         if [r, s, t].iter().any(|&am| am == image::WrapMode::Border) {
             descriptor.set_border_color(match info.border.0 {
-                0x00000000 => MTLSamplerBorderColor::TransparentBlack,
-                0x000000FF => MTLSamplerBorderColor::OpaqueBlack,
-                0xFFFFFFFF => MTLSamplerBorderColor::OpaqueWhite,
+                0x0000_0000 => MTLSamplerBorderColor::TransparentBlack,
+                0x0000_00FF => MTLSamplerBorderColor::OpaqueBlack,
+                0xFFFF_FFFF => MTLSamplerBorderColor::OpaqueWhite,
                 other => {
                     error!("Border color 0x{:X} is not supported", other);
                     MTLSamplerBorderColor::TransparentBlack
