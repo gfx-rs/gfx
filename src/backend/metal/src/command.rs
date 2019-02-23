@@ -241,11 +241,11 @@ impl State {
         }
     }
 
-    fn make_pso_commands<'a>(
-        &'a self,
+    fn make_pso_commands(
+        &self,
     ) -> (
-        Option<soft::RenderCommand<&'a soft::Ref>>,
-        Option<soft::RenderCommand<&'a soft::Ref>>,
+        Option<soft::RenderCommand<&soft::Ref>>,
+        Option<soft::RenderCommand<&soft::Ref>>,
     ) {
         if self.render_pso_is_compatible {
             (
@@ -262,10 +262,10 @@ impl State {
         }
     }
 
-    fn make_render_commands<'a>(
-        &'a self,
+    fn make_render_commands(
+        &self,
         aspects: Aspects,
-    ) -> impl Iterator<Item = soft::RenderCommand<&'a soft::Ref>> {
+    ) -> impl Iterator<Item = soft::RenderCommand<&soft::Ref>> {
         // Apply previously bound values for this command buffer
         let com_vp = self
             .viewport
@@ -342,9 +342,7 @@ impl State {
             .chain(com_resources)
     }
 
-    fn make_compute_commands<'a>(
-        &'a self,
-    ) -> impl Iterator<Item = soft::ComputeCommand<&'a soft::Ref>> {
+    fn make_compute_commands(&self) -> impl Iterator<Item = soft::ComputeCommand<&soft::Ref>> {
         let resources = &self.resources_cs;
         let com_pso = self
             .compute_pso
@@ -464,10 +462,10 @@ impl State {
         soft::RenderCommand::SetDepthBias(*depth_bias)
     }
 
-    fn push_vs_constants<'a>(
-        &'a mut self,
+    fn push_vs_constants(
+        &mut self,
         pc: native::PushConstantInfo,
-    ) -> soft::RenderCommand<&'a soft::Ref> {
+    ) -> soft::RenderCommand<&soft::Ref> {
         self.resources_vs.push_constants = Some(pc);
         soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Vertex,
@@ -476,10 +474,10 @@ impl State {
         }
     }
 
-    fn push_ps_constants<'a>(
-        &'a mut self,
+    fn push_ps_constants(
+        &mut self,
         pc: native::PushConstantInfo,
-    ) -> soft::RenderCommand<&'a soft::Ref> {
+    ) -> soft::RenderCommand<&soft::Ref> {
         self.resources_ps.push_constants = Some(pc);
         soft::RenderCommand::BindBufferData {
             stage: pso::Stage::Fragment,
@@ -488,10 +486,10 @@ impl State {
         }
     }
 
-    fn push_cs_constants<'a>(
-        &'a mut self,
+    fn push_cs_constants(
+        &mut self,
         pc: native::PushConstantInfo,
-    ) -> soft::ComputeCommand<&'a soft::Ref> {
+    ) -> soft::ComputeCommand<&soft::Ref> {
         self.resources_cs.push_constants = Some(pc);
         soft::ComputeCommand::BindBufferData {
             index: pc.buffer_index,
@@ -852,7 +850,7 @@ impl<'a> PreRender<'a> {
         }
     }
 
-    fn issue<'b>(&mut self, command: soft::RenderCommand<&'b soft::Ref>) {
+    fn issue(&mut self, command: soft::RenderCommand<&soft::Ref>) {
         match *self {
             PreRender::Immediate(encoder) => exec_render(encoder, command, &&soft::Ref),
             PreRender::Deferred(ref mut resources, ref mut list) => {
@@ -1045,7 +1043,7 @@ impl CommandSink {
 
     /// Issue provided blit commands. This function doesn't expect an active blit pass,
     /// it will automatically start one when needed.
-    fn blit_commands<'a, I>(&mut self, commands: I)
+    fn blit_commands<I>(&mut self, commands: I)
     where
         I: Iterator<Item = soft::BlitCommand>,
     {
@@ -3441,7 +3439,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn bind_graphics_descriptor_sets<'a, I, J>(
+    unsafe fn bind_graphics_descriptor_sets<I, J>(
         &mut self,
         pipe_layout: &native::PipelineLayout,
         first_set: usize,
@@ -3600,7 +3598,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             }
     }
 
-    unsafe fn bind_compute_descriptor_sets<'a, I, J>(
+    unsafe fn bind_compute_descriptor_sets<I, J>(
         &mut self,
         pipe_layout: &native::PipelineLayout,
         first_set: usize,
