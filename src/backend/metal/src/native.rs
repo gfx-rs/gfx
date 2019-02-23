@@ -498,10 +498,8 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 ref mut allocators,
             } => {
                 debug!("pool: allocate_set");
-                let (layouts, immutable_samplers) = match set_layout {
-                    &DescriptorSetLayout::Emulated(ref layouts, ref samplers) => {
-                        (layouts, samplers)
-                    }
+                let (layouts, immutable_samplers) = match *set_layout {
+                    DescriptorSetLayout::Emulated(ref layouts, ref samplers) => (layouts, samplers),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
 
@@ -607,8 +605,8 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 ref raw,
                 ref mut range_allocator,
             } => {
-                let (encoder, stage_flags) = match set_layout {
-                    &DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
+                let (encoder, stage_flags) = match *set_layout {
+                    DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
                 match range_allocator.allocate_range(encoder.encoded_length()) {

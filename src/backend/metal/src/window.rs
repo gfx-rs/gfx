@@ -121,7 +121,7 @@ impl SurfaceInner {
                         let scale_factor: CGFloat = msg_send![screen.as_ptr(), nativeScale];
                         (rect.size, scale_factor)
                     }
-                    None => (bounds.size, 1.0)
+                    None => (bounds.size, 1.0),
                 }
             },
             _ => unsafe {
