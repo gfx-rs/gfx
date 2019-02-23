@@ -703,6 +703,48 @@ impl Device {
 
         arg
     }
+
+    pub unsafe fn create_image_view_with_metal_texture(
+        &self,
+        texture: metal::Texture,
+        kind: image::ViewKind,
+        format: format::Format,
+        swizzle: format::Swizzle,
+        range: image::SubresourceRange,
+    ) -> Result<n::ImageView, image::ViewError> {
+        let mtl_format = match self
+            .shared
+            .private_caps
+            .map_format_with_swizzle(format, swizzle)
+            {
+                Some(f) => f,
+                None => {
+                    error!("failed to swizzle format {:?} with {:?}", format, swizzle);
+                    return Err(image::ViewError::BadFormat(format));
+                }
+            };
+        let like = native::ImageLike::Texture(texture);
+        let raw = like.as_texture();
+        let mtl_type = conv::map_texture_type(kind);
+
+         let view = raw.new_texture_view_from_slice(
+           mtl_format,
+           mtl_type,
+           NSRange {
+               location: range.levels.start as _,
+               length: (range.levels.end - range.levels.start) as _,
+           },
+           NSRange {
+               location: range.layers.start as _,
+               length: (range.layers.end - range.layers.start) as _,
+           },
+        );
+
+         Ok(n::ImageView {
+            raw: view,
+            mtl_format,
+        })
+    }
 }
 
 impl hal::Device<Backend> for Device {
