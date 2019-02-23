@@ -2384,6 +2384,7 @@ impl d::Device<B> for Device {
         &self,
         max_sets: usize,
         descriptor_pools: I,
+        _flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<r::DescriptorPool, d::OutOfMemory>
     where
         I: IntoIterator,

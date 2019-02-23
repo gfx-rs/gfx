@@ -602,8 +602,14 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 } => {
                     assert!(!ranges.is_empty());
                     assert!(capacity > 0);
-                    let pool = unsafe { device.create_descriptor_pool(capacity, ranges) }
-                        .expect("Descriptor pool creation failure!");
+                    let pool = unsafe {
+                        device.create_descriptor_pool(
+                            capacity,
+                            ranges,
+                            pso::DescriptorPoolCreateFlags::empty(),
+                        )
+                    }
+                    .expect("Descriptor pool creation failure!");
                     resources.desc_pools.insert(name.clone(), pool);
                 }
                 _ => {}

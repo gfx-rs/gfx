@@ -243,3 +243,12 @@ pub struct DescriptorSetCopy<'a, B: Backend> {
     pub dst_array_offset: DescriptorArrayIndex,
     pub count: usize,
 }
+
+bitflags! {
+    /// Descriptor pool creation flags.
+    pub struct DescriptorPoolCreateFlags: u32 {
+        /// Specifies that descriptor sets are allowed to be freed from the pool
+        /// individually.
+        const FREE_DESCRIPTOR_SET = 0x1;
+    }
+}

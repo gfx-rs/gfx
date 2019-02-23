@@ -22,6 +22,7 @@ use crate::{Backend, MemoryTypeId};
 use crate::error::HostExecutionError;
 use crate::memory::Requirements;
 use crate::pool::{CommandPool, CommandPoolCreateFlags};
+use crate::pso::DescriptorPoolCreateFlags;
 use crate::queue::{QueueFamilyId, QueueGroup};
 use crate::range::RangeArg;
 use crate::window::{self, Backbuffer, SwapchainConfig};
@@ -483,6 +484,7 @@ pub trait Device<B: Backend>: Any + Send + Sync {
         &self,
         max_sets: usize,
         descriptor_ranges: I,
+        flags: DescriptorPoolCreateFlags,
     ) -> Result<B::DescriptorPool, OutOfMemory>
     where
         I: IntoIterator,

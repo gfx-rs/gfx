@@ -571,3 +571,9 @@ pub fn map_composite_alpha(composite_alpha: CompositeAlpha) -> vk::CompositeAlph
 pub fn map_vk_composite_alpha(composite_alpha: vk::CompositeAlphaFlagsKHR) -> CompositeAlpha {
     CompositeAlpha::from_bits_truncate(composite_alpha.as_raw())
 }
+
+pub fn map_descriptor_pool_create_flags(
+    flags: pso::DescriptorPoolCreateFlags,
+) -> vk::DescriptorPoolCreateFlags {
+    vk::DescriptorPoolCreateFlags::from_raw(flags.bits())
+}

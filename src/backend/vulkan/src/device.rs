@@ -1363,6 +1363,7 @@ impl d::Device<B> for Device {
         &self,
         max_sets: usize,
         descriptor_pools: T,
+        flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<n::DescriptorPool, d::OutOfMemory>
     where
         T: IntoIterator,
@@ -1382,7 +1383,7 @@ impl d::Device<B> for Device {
         let info = vk::DescriptorPoolCreateInfo {
             s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
             p_next: ptr::null(),
-            flags: vk::DescriptorPoolCreateFlags::empty(), // disallow individual freeing
+            flags: conv::map_descriptor_pool_create_flags(flags),
             max_sets: max_sets as u32,
             pool_size_count: pools.len() as u32,
             p_pool_sizes: pools.as_ptr(),

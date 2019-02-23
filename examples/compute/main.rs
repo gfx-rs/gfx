@@ -96,6 +96,7 @@ fn main() {
                     ty: pso::DescriptorType::StorageBuffer,
                     count: 1,
                 }],
+                pso::DescriptorPoolCreateFlags::empty(),
             )
         }
         .expect("Can't create descriptor pool");

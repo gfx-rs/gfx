@@ -161,6 +161,7 @@ fn main() {
                     count: 1,
                 },
             ],
+            pso::DescriptorPoolCreateFlags::empty(),
         )
     }
     .expect("Can't create descriptor pool");
