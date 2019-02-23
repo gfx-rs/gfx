@@ -188,6 +188,7 @@ impl<B: Backend> RendererState<B> {
                         count: 1,
                     },
                 ],
+                pso::DescriptorPoolCreateFlags::empty(),
             )
             .ok();
 
@@ -200,6 +201,7 @@ impl<B: Backend> RendererState<B> {
                     ty: pso::DescriptorType::UniformBuffer,
                     count: 1,
                 }],
+                pso::DescriptorPoolCreateFlags::empty(),
             )
             .ok();
 

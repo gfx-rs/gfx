@@ -290,6 +290,7 @@ impl hal::Device<Backend> for Device {
         &self,
         _: usize,
         _: I,
+        _: pso::DescriptorPoolCreateFlags,
     ) -> Result<DescriptorPool, device::OutOfMemory>
     where
         I: IntoIterator,

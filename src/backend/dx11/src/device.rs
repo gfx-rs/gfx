@@ -1868,6 +1868,7 @@ impl hal::Device<Backend> for Device {
         &self,
         _max_sets: usize,
         ranges: I,
+        _flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<DescriptorPool, device::OutOfMemory>
     where
         I: IntoIterator,
