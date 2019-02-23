@@ -72,7 +72,7 @@
                 VertexBufferDesc(
                     binding: 0,
                     stride: 16,
-                    rate: 0,
+                    rate: Vertex,
                 ),
             ],
             attributes: [
@@ -119,7 +119,7 @@
                 VertexBufferDesc(
                     binding: 0,
                     stride: 16,
-                    rate: 0,
+                    rate: Vertex,
                 ),
             ],
             attributes: [
