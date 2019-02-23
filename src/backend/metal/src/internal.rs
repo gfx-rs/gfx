@@ -53,9 +53,9 @@ impl From<ChannelType> for Channel {
 }
 
 impl Channel {
-    pub fn interpret(&self, raw: ClearColorRaw) -> metal::MTLClearColor {
+    pub fn interpret(self, raw: ClearColorRaw) -> metal::MTLClearColor {
         unsafe {
-            match *self {
+            match self {
                 Channel::Float => metal::MTLClearColor::new(
                     raw.float32[0] as _,
                     raw.float32[1] as _,

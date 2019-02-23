@@ -969,11 +969,11 @@ fn map_factor(factor: pso::Factor) -> MTLBlendFactor {
 }
 
 pub fn map_blend_op(
-    operation: &pso::BlendOp,
+    operation: pso::BlendOp,
 ) -> (MTLBlendOperation, MTLBlendFactor, MTLBlendFactor) {
     use self::hal::pso::BlendOp::*;
 
-    match *operation {
+    match operation {
         Add { src, dst } => (MTLBlendOperation::Add, map_factor(src), map_factor(dst)),
         Sub { src, dst } => (
             MTLBlendOperation::Subtract,

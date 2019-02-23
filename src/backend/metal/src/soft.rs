@@ -372,15 +372,15 @@ impl Own {
     pub fn rebase_render(&self, com: &mut RenderCommand<Own>) {
         use self::RenderCommand::*;
         match *com {
-            SetViewport(..) |
-            SetScissor(..) |
-            SetBlendColor(..) |
-            SetDepthBias(..) |
-            SetDepthStencilState(..) |
-            SetStencilReferenceValues(..) |
-            SetRasterizerState(..) |
-            SetVisibilityResult(..) |
-            BindBuffer { .. } => {}
+            SetViewport(..)
+            | SetScissor(..)
+            | SetBlendColor(..)
+            | SetDepthBias(..)
+            | SetDepthStencilState(..)
+            | SetStencilReferenceValues(..)
+            | SetRasterizerState(..)
+            | SetVisibilityResult(..)
+            | BindBuffer { .. } => {}
             BindBuffers { ref mut buffers, .. } => {
                 buffers.start += self.buffers.len() as CacheResourceIndex;
                 buffers.end += self.buffers.len() as CacheResourceIndex;
@@ -394,11 +394,11 @@ impl Own {
                 samplers.start += self.samplers.len() as CacheResourceIndex;
                 samplers.end += self.samplers.len() as CacheResourceIndex;
             }
-            BindPipeline(..) |
-            Draw { .. } |
-            DrawIndexed { .. } |
-            DrawIndirect { .. } |
-            DrawIndexedIndirect { .. } => {}
+            BindPipeline(..)
+            | Draw { .. }
+            | DrawIndexed { .. }
+            | DrawIndirect { .. }
+            | DrawIndexedIndirect { .. } => {}
         }
     }
 

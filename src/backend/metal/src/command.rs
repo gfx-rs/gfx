@@ -421,7 +421,7 @@ impl State {
 
     fn build_depth_stencil(&self) -> Option<pso::DepthStencilDesc> {
         let mut desc = match self.render_pso {
-            Some(ref ps) => ps.ds_desc.clone(),
+            Some(ref ps) => ps.ds_desc,
             None => return None,
         };
 
@@ -502,7 +502,7 @@ impl State {
     fn set_viewport<'a>(
         &mut self,
         vp: &'a pso::Viewport,
-        disabilities: &PrivateDisabilities,
+        disabilities: PrivateDisabilities,
     ) -> soft::RenderCommand<&'a soft::Ref> {
         let depth = vp.depth.start..if disabilities.broken_viewport_near_depth {
             (vp.depth.end - vp.depth.start)
@@ -513,7 +513,7 @@ impl State {
         soft::RenderCommand::SetViewport(vp.rect, depth)
     }
 
-    fn set_scissor<'a>(&mut self, rect: &'a pso::Rect) -> soft::RenderCommand<&'a soft::Ref> {
+    fn set_scissor<'a>(&mut self, rect: pso::Rect) -> soft::RenderCommand<&'a soft::Ref> {
         let scissor = MTLScissorRect {
             x: rect.x as _,
             y: rect.y as _,
@@ -775,8 +775,9 @@ impl Journal {
                 (soft::Pass::Render(_), ref mut range) => {
                     range.end += other.render_commands.len();
                 }
-                (soft::Pass::Compute, _) |
-                (soft::Pass::Blit, _) => panic!("Only render passes can inherit"),
+                (soft::Pass::Compute, _) | (soft::Pass::Blit, _) => {
+                    panic!("Only render passes can inherit")
+                }
             }
         } else {
             for (ref pass, ref range) in &other.passes {
@@ -785,10 +786,8 @@ impl Journal {
                     soft::Pass::Compute => self.compute_commands.len(),
                     soft::Pass::Blit => self.blit_commands.len(),
                 };
-                self.passes.push((
-                    pass.clone(),
-                    range.start + offset .. range.end + offset,
-                ));
+                self.passes
+                    .push((pass.clone(), range.start + offset..range.end + offset));
             }
         }
 
@@ -1331,7 +1330,7 @@ fn div(a: u32, b: u32) -> u32 {
     (a + b - 1) / b
 }
 
-fn compute_pitches(region: &com::BufferImageCopy, fd: &FormatDesc, extent: &MTLSize) -> (u32, u32) {
+fn compute_pitches(region: &com::BufferImageCopy, fd: FormatDesc, extent: &MTLSize) -> (u32, u32) {
     let buffer_width = if region.buffer_width == 0 {
         extent.width as u32
     } else {
@@ -1666,7 +1665,7 @@ where
         } => {
             let extent = conv::map_extent(region.image_extent);
             let origin = conv::map_offset(region.image_offset);
-            let (row_pitch, slice_pitch) = compute_pitches(&region, &dst_desc, &extent);
+            let (row_pitch, slice_pitch) = compute_pitches(&region, dst_desc, &extent);
             let r = &region.image_layers;
 
             for layer in r.layers.clone() {
@@ -1694,7 +1693,7 @@ where
         } => {
             let extent = conv::map_extent(region.image_extent);
             let origin = conv::map_offset(region.image_offset);
-            let (row_pitch, slice_pitch) = compute_pitches(&region, &src_desc, &extent);
+            let (row_pitch, slice_pitch) = compute_pitches(&region, src_desc, &extent);
             let r = &region.image_layers;
 
             for layer in r.layers.clone() {
@@ -1998,7 +1997,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     Some((Arc::clone(&self.shared), queries))
                 };
 
-                let block = ConcreteBlock::new(move |_cb: *mut ()| -> () {
+                let block = ConcreteBlock::new(move |_cb: *mut ()| {
                     // signal the semaphores
                     for semaphore in &system_semaphores {
                         semaphore.signal();
@@ -2233,8 +2232,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.reset(false);
 
         let mut inner = self.inner.borrow_mut();
-        let can_immediate = inner.level == com::RawLevel::Primary &&
-            flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT);
+        let can_immediate = inner.level == com::RawLevel::Primary
+            && flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT);
         let sink = match self.pool_shared.borrow_mut().online_recording {
             OnlineRecording::Immediate if can_immediate => {
                 let (cmd_buffer, token) = self.shared.queue.lock().spawn();
@@ -2295,7 +2294,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     let pass_desc = metal::RenderPassDescriptor::new().to_owned();
                     journal.passes.push((soft::Pass::Render(pass_desc), 0..0));
                 }
-                _ => unreachable!()
+                _ => unreachable!(),
             }
         }
     }
@@ -2638,7 +2637,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         vertex_is_dirty = true;
                         aspects |= Aspects::DEPTH;
                     }
-                    if let Some(_) = stencil {
+                    if stencil.is_some() {
                         //TODO: soft::RenderCommand::SetStencilReference
                         aspects |= Aspects::STENCIL;
                     }
@@ -2843,7 +2842,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .zip(r.dst_subresource.layers.clone());
             let list = vertices
                 .entry((r.dst_subresource.aspects, r.dst_subresource.level))
-                .or_insert(Vec::new());
+                .or_insert_with(Vec::new);
 
             for (src_layer, dst_layer) in layers {
                 // this helper array defines unique data for quad vertices
@@ -3069,7 +3068,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             panic!("More than one viewport set; Metal supports only one viewport");
         }
 
-        let com = self.state.set_viewport(vp, &self.shared.disabilities);
+        let com = self.state.set_viewport(vp, self.shared.disabilities);
         self.inner.borrow_mut().sink().pre_render().issue(com);
     }
 
@@ -3091,7 +3090,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             panic!("More than one scissor set; Metal supports only one viewport");
         }
 
-        let com = self.state.set_scissor(rect);
+        let com = self.state.set_scissor(*rect);
         self.inner.borrow_mut().sink().pre_render().issue(com);
     }
 
@@ -3172,7 +3171,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .filter(|(_, rat)| rat.has_clears())
             .zip(clear_values)
         {
-            *out_val = Some(in_val.borrow().clone());
+            *out_val = Some(*in_val.borrow());
         }
 
         self.state.pending_subpasses.clear();
@@ -3345,14 +3344,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 ps.vertex_buffers
                     .extend(pipeline.vertex_buffers.iter().cloned().map(Some));
                 ps.attribute_buffer_index = pipeline.attribute_buffer_index;
-                ps.ds_desc = pipeline.depth_stencil_desc.clone();
+                ps.ds_desc = pipeline.depth_stencil_desc;
                 ps.formats.copy_from(&pipeline.attachment_formats);
                 true
             }
             None => {
                 self.state.render_pso = Some(RenderPipelineState {
                     raw: pipeline.raw.to_owned(),
-                    ds_desc: pipeline.depth_stencil_desc.clone(),
+                    ds_desc: pipeline.depth_stencil_desc,
                     vertex_buffers: pipeline.vertex_buffers.iter().cloned().map(Some).collect(),
                     attribute_buffer_index: pipeline.attribute_buffer_index,
                     formats: pipeline.attachment_formats.clone(),
@@ -3403,12 +3402,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
             }
             if let Some(pc) = pipeline.ps_pc_info {
-                if Some(pc) != self.state.resources_ps.push_constants {
-                    if pc.count as usize <= self.state.push_constants.len() {
+                if Some(pc) != self.state.resources_ps.push_constants
+                    && pc.count as usize <= self.state.push_constants.len()
+                {
                         pre.issue(self.state.push_ps_constants(pc));
                     }
                 }
-            }
         } else {
             debug_assert_eq!(self.state.rasterizer_state, pipeline.rasterizer_state);
             debug_assert_eq!(self.state.primitive_type, pipeline.primitive_type);
@@ -3432,9 +3431,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         if let Some(ref vp) = pipeline.baked_states.viewport {
-            pre.issue(self.state.set_viewport(vp, &self.shared.disabilities));
+            pre.issue(self.state.set_viewport(vp, self.shared.disabilities));
         }
-        if let Some(ref rect) = pipeline.baked_states.scissor {
+        if let Some(rect) = pipeline.baked_states.scissor {
             pre.issue(self.state.set_scissor(rect));
         }
         if let Some(ref color) = pipeline.baked_states.blend_color {
@@ -3593,12 +3592,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         pre.issue(soft::ComputeCommand::BindPipeline(&*pipeline.raw));
 
         if let Some(pc) = pipeline.pc_info {
-            if Some(pc) != self.state.resources_cs.push_constants {
-                if pc.count as usize <= self.state.push_constants.len() {
+            if Some(pc) != self.state.resources_cs.push_constants
+                && pc.count as usize <= self.state.push_constants.len()
+            {
                     pre.issue(self.state.push_cs_constants(pc));
                 }
             }
-        }
     }
 
     unsafe fn bind_compute_descriptor_sets<'a, I, J>(
@@ -4334,9 +4333,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let inner_borrowed = outer_borrowed.inner.borrow_mut();
 
             let (exec_journal, is_inheriting) = match inner_borrowed.sink {
-                Some(CommandSink::Deferred { ref journal, is_inheriting, .. }) => {
-                    (journal, is_inheriting)
-                }
+                Some(CommandSink::Deferred {
+                    ref journal,
+                    is_inheriting,
+                    ..
+                }) => (journal, is_inheriting),
                 _ => panic!("Unexpected secondary sink!"),
             };
 

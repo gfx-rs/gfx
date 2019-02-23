@@ -1205,11 +1205,7 @@ impl hal::Device<Backend> for Device {
             desc.set_pixel_format(mtl_format);
             desc.set_write_mask(conv::map_write_mask(mask));
 
-            if let pso::BlendState::On {
-                ref color,
-                ref alpha,
-            } = *blend
-            {
+            if let pso::BlendState::On { color, alpha } = *blend {
                 desc.set_blending_enabled(true);
                 let (color_op, color_src, color_dst) = conv::map_blend_op(color);
                 let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_op(alpha);
@@ -2142,7 +2138,7 @@ impl hal::Device<Backend> for Device {
             .shared
             .private_caps
             .map_format(format)
-            .ok_or(image::CreationError::Format(format))?;
+            .ok_or_else(|| image::CreationError::Format(format))?;
 
         let descriptor = metal::TextureDescriptor::new();
 
