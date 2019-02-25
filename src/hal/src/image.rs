@@ -461,9 +461,9 @@ impl From<[f32; 4]> for PackedColor {
 impl Into<[f32; 4]> for PackedColor {
     fn into(self) -> [f32; 4] {
         let mut out = [0.0; 4];
-        for i in 0..4 {
+        for (i, channel) in out.iter_mut().enumerate() {
             let byte = (self.0 >> (i << 3)) & 0xFF;
-            out[i] = byte as f32 / 255.0;
+            *channel = byte as f32 / 255.0;
         }
         out
     }
