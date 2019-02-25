@@ -103,7 +103,7 @@ impl<B: Backend, C> CommandPool<B, C> {
 
 impl<B: Backend, C: Supports<Graphics>> CommandPool<B, C> {
     /// Allocates a new subpass command buffer from the pool.
-    pub fn acquire_subpass_command_buffer<'a, S: Shot>(&mut self) -> SubpassCommandBuffer<B, S> {
+    pub fn acquire_subpass_command_buffer<S: Shot>(&mut self) -> SubpassCommandBuffer<B, S> {
         let buffer = self.raw.allocate_one(RawLevel::Secondary);
         unsafe { SubpassCommandBuffer::new(buffer) }
     }
