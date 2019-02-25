@@ -364,11 +364,11 @@ bitflags!(
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct ViewCapabilities: u32 {
         /// Support creation of views with different formats.
-        const MUTABLE_FORMAT = 0x00000008;
+        const MUTABLE_FORMAT = 0x0000_0008;
         /// Support creation of `Cube` and `CubeArray` kinds of views.
-        const KIND_CUBE      = 0x00000010;
+        const KIND_CUBE      = 0x0000_0010;
         /// Support creation of `D2Array` kind of view.
-        const KIND_2D_ARRAY  = 0x00000020;
+        const KIND_2D_ARRAY  = 0x0000_0020;
     }
 );
 
@@ -461,9 +461,9 @@ impl From<[f32; 4]> for PackedColor {
 impl Into<[f32; 4]> for PackedColor {
     fn into(self) -> [f32; 4] {
         let mut out = [0.0; 4];
-        for i in 0..4 {
+        for (i, channel) in out.iter_mut().enumerate() {
             let byte = (self.0 >> (i << 3)) & 0xFF;
-            out[i] = byte as f32 / 255.0;
+            *channel = byte as f32 / 255.0;
         }
         out
     }
