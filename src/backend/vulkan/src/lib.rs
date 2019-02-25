@@ -33,7 +33,7 @@ use hal::pso::PipelineStage;
 use hal::{format, image, memory, queue};
 use hal::{Features, Limits, PatchSize, QueueType, SwapImageIndex};
 
-use std::borrow::Borrow;
+use std::borrow::{Borrow, Cow};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 use std::{fmt, mem, ptr, slice};
@@ -206,10 +206,19 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         _ => log::Level::Warn,
     };
     let message_type = &format!("{}", message_type);
-
-    let message_id_name = CStr::from_ptr(callback_data.p_message_id_name).to_string_lossy();
     let message_id_number: i32 = callback_data.message_id_number as i32;
-    let message = CStr::from_ptr(callback_data.p_message).to_string_lossy();
+
+    let message_id_name = if callback_data.p_message_id_name.is_null() {
+        Cow::from("")
+    } else {
+        CStr::from_ptr(callback_data.p_message_id_name).to_string_lossy()
+    };
+
+    let message = if callback_data.p_message.is_null() {
+        Cow::from("")
+    } else {
+        CStr::from_ptr(callback_data.p_message).to_string_lossy()
+    };
 
     let additional_info: [(&str, Option<String>); 3] = [
         (
