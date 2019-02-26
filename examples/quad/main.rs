@@ -251,7 +251,7 @@ fn main() {
             i::ViewCapabilities::empty(),
         )
     }
-    .unwrap(); // TODO: usage
+    .unwrap();
     let image_req = unsafe { device.get_image_requirements(&image_logo) };
 
     let device_type = memory_types
@@ -768,7 +768,7 @@ fn main() {
             cmd_buffer.set_scissors(0, &[viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(&pipeline);
             cmd_buffer.bind_vertex_buffers(0, Some((&vertex_buffer, 0)));
-            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, Some(&desc_set), &[]); //TODO
+            cmd_buffer.bind_graphics_descriptor_sets(&pipeline_layout, 0, Some(&desc_set), &[]);
 
             {
                 let mut encoder = cmd_buffer.begin_render_pass_inline(
