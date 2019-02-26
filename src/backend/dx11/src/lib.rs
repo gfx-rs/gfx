@@ -710,7 +710,7 @@ impl hal::Surface<Backend> for Surface {
             format::Format::Rgba8Srgb,
             format::Format::Rgba8Unorm,
             format::Format::A2b10g10r10Unorm,
-            format::Format::Rgba16Float,
+            format::Format::Rgba16Sfloat,
         ];
 
         let present_modes = vec![
@@ -1460,16 +1460,16 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
             fn typed_clear_color(ty: ChannelType, raw_clear: ClearColorRaw) -> ClearColor {
                 match ty {
                     ChannelType::Unorm
-                    | ChannelType::Inorm
+                    | ChannelType::Snorm
                     | ChannelType::Ufloat
-                    | ChannelType::Float
+                    | ChannelType::Sfloat
                     | ChannelType::Uscaled
-                    | ChannelType::Iscaled
+                    | ChannelType::Sscaled
                     | ChannelType::Srgb => ClearColor::Float(unsafe { raw_clear.float32 }),
 
                     ChannelType::Uint => ClearColor::Uint(unsafe { raw_clear.uint32 }),
 
-                    ChannelType::Int => ClearColor::Int(unsafe { raw_clear.int32 }),
+                    ChannelType::Sint => ClearColor::Int(unsafe { raw_clear.int32 }),
                 }
             }
 

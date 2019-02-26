@@ -131,7 +131,7 @@ impl CommandQueue {
                 gl.VertexAttribPointer(slot as gl::types::GLuint,
                     count, gl_type, gl::TRUE, stride, offset);
             },
-            //C::Iscaled | C::Uscaled => unsafe {
+            //C::Sscaled | C::Uscaled => unsafe {
             //    gl.VertexAttribPointer(slot as gl::types::GLuint,
             //        count, gl_type, gl::FALSE, stride, offset);
             //},

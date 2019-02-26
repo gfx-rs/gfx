@@ -329,7 +329,7 @@ impl hal::Surface<Backend> for Surface {
         let formats = vec![
             format::Format::Bgra8Unorm,
             format::Format::Bgra8Srgb,
-            format::Format::Rgba16Float,
+            format::Format::Rgba16Sfloat,
         ];
 
         let can_set_display_sync =
