@@ -174,6 +174,12 @@ pub struct Device {
     max_resource_count: Option<usize>,
 }
 
+impl Drop for Device {
+    fn drop(&mut self) {
+        unsafe { (*self.context).Release(); }
+    }
+}
+
 static FEATURE_LEVELS: [d3dcommon::D3D_FEATURE_LEVEL; 3] = [
     d3dcommon::D3D_FEATURE_LEVEL_11_0,
     d3dcommon::D3D_FEATURE_LEVEL_10_1,
