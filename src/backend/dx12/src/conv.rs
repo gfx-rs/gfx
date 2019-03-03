@@ -14,6 +14,8 @@ use hal::pso::DescriptorSetLayoutBinding;
 use hal::{buffer, image, pso, Primitive};
 
 use native::descriptor::{Binding, DescriptorRange, DescriptorRangeType};
+
+
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::Format::*;
 
@@ -100,6 +102,37 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     };
 
     Some(format)
+}
+
+pub fn map_surface_type(st: SurfaceType) -> Option<DXGI_FORMAT> {
+    use hal::format::SurfaceType::*;
+
+    assert_eq!(1, unsafe {*(&1u32 as *const _ as *const u8)});
+    Some(match st {
+        R5_G6_B5 => DXGI_FORMAT_B5G6R5_UNORM,
+        A1_R5_G5_B5 => DXGI_FORMAT_B5G5R5A1_UNORM,
+        R8 => DXGI_FORMAT_R8_TYPELESS,
+        R8_G8 => DXGI_FORMAT_R8G8_TYPELESS,
+        R8_G8_B8_A8 => DXGI_FORMAT_R8G8B8A8_TYPELESS,
+        B8_G8_R8_A8 => DXGI_FORMAT_B8G8R8A8_TYPELESS,
+        A8_B8_G8_R8 => DXGI_FORMAT_R8G8B8A8_TYPELESS,
+        A2_B10_G10_R10 => DXGI_FORMAT_R10G10B10A2_TYPELESS,
+        R16 => DXGI_FORMAT_R16_TYPELESS,
+        R16_G16 => DXGI_FORMAT_R16G16_TYPELESS,
+        R16_G16_B16_A16 => DXGI_FORMAT_R16G16B16A16_TYPELESS,
+        R32 => DXGI_FORMAT_R32_TYPELESS,
+        R32_G32 => DXGI_FORMAT_R32G32_TYPELESS,
+        R32_G32_B32 => DXGI_FORMAT_R32G32B32_TYPELESS,
+        R32_G32_B32_A32 => DXGI_FORMAT_R32G32B32A32_TYPELESS,
+        B10_G11_R11 => DXGI_FORMAT_R11G11B10_FLOAT,
+        E5_B9_G9_R9 => DXGI_FORMAT_R9G9B9E5_SHAREDEXP,
+        D16 => DXGI_FORMAT_R16_TYPELESS,
+        X8D24 => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        D32 => DXGI_FORMAT_R32_TYPELESS,
+        D24_S8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
+        D32_S8 => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
+        _ => return None
+    })
 }
 
 pub fn map_format_dsv(surface: SurfaceType) -> Option<DXGI_FORMAT> {

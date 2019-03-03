@@ -2046,7 +2046,7 @@ impl d::Device<B> for Device {
                 kind.num_layers() as _
             },
             MipLevels: mip_levels as _,
-            Format: match conv::map_format(format) {
+            Format: match conv::map_surface_type(base_format.0) {
                 Some(format) => format,
                 None => return Err(image::CreationError::Format(format)),
             },
@@ -2074,7 +2074,8 @@ impl d::Device<B> for Device {
         };
 
         Ok(r::Image::Unbound(r::ImageUnbound {
-            dsv_format: conv::map_format_dsv(base_format.0).unwrap_or(desc.Format),
+            view_format: conv::map_format(format),
+            dsv_format: conv::map_format_dsv(base_format.0),
             desc,
             requirements: memory::Requirements {
                 size: alloc_info.SizeInBytes,
@@ -2219,9 +2220,11 @@ impl d::Device<B> for Device {
             bytes_per_block: image_unbound.bytes_per_block,
             block_dim: image_unbound.block_dim,
             clear_cv: if aspects.contains(Aspects::COLOR) && can_clear_color {
+                let format = image_unbound.view_format.unwrap();
                 (0..num_layers)
                     .map(|layer| {
                         self.view_image_as_render_target(ViewInfo {
+                            format,
                             range: image::SubresourceRange {
                                 aspects: Aspects::COLOR,
                                 levels: 0..1, //TODO?
@@ -2234,10 +2237,11 @@ impl d::Device<B> for Device {
                 Vec::new()
             },
             clear_dv: if aspects.contains(Aspects::DEPTH) && can_clear_depth {
+                let format = image_unbound.dsv_format.unwrap();
                 (0..num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(ViewInfo {
-                            format: image_unbound.dsv_format,
+                            format,
                             range: image::SubresourceRange {
                                 aspects: Aspects::DEPTH,
                                 levels: 0..1, //TODO?
@@ -2250,10 +2254,11 @@ impl d::Device<B> for Device {
                 Vec::new()
             },
             clear_sv: if aspects.contains(Aspects::STENCIL) && can_clear_depth {
+                let format = image_unbound.dsv_format.unwrap();
                 (0..num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(ViewInfo {
-                            format: image_unbound.dsv_format,
+                            format,
                             range: image::SubresourceRange {
                                 aspects: Aspects::STENCIL,
                                 levels: 0..1, //TODO?
