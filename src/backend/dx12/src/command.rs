@@ -1,7 +1,7 @@
 use hal::backend::FastHashMap;
 use hal::format::Aspects;
 use hal::range::RangeArg;
-use hal::{buffer, command as com, format, image, memory, pass, pso, query};
+use hal::{buffer, command as com, format, image, memory, pass, pool, pso, query};
 use hal::{
     DrawCount, IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount,
 };
@@ -323,6 +323,10 @@ pub struct CommandBuffer {
     temporary_gpu_heaps: Vec<native::DescriptorHeap>,
     // Resources that need to be alive till the end of the GPU execution.
     retained_resources: Vec<native::Resource>,
+    // Parenting command pool create flags.
+    //
+    // Required for reset behavior.
+    pool_create_flags: pool::CommandPoolCreateFlags,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -341,6 +345,7 @@ impl CommandBuffer {
         raw: native::GraphicsCommandList,
         allocator: native::CommandAllocator,
         shared: Arc<Shared>,
+        pool_create_flags: pool::CommandPoolCreateFlags,
     ) -> Self {
         CommandBuffer {
             raw,
@@ -363,6 +368,7 @@ impl CommandBuffer {
             rtv_pools: Vec::new(),
             temporary_gpu_heaps: Vec::new(),
             retained_resources: Vec::new(),
+            pool_create_flags,
         }
     }
 
@@ -1010,6 +1016,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         _info: com::CommandBufferInheritanceInfo<Backend>,
     ) {
         // TODO: Implement flags and secondary command buffers (bundles).
+        if self.pool_create_flags.contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL) {
+            // Command buffer has reset semantics now and doesn't require to be in `Initial` state.
+            self.allocator.Reset();
+        }
         self.reset();
     }
 
@@ -1017,10 +1027,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.raw.Close();
     }
 
-    unsafe fn reset(&mut self, release_resources: bool) {
-        if release_resources {
-            self.allocator.Reset();
-        }
+    unsafe fn reset(&mut self, _release_resources: bool) {
+        // Ensure that we have a bijective relation between list and allocator.
+        // This allows to modify the allocator here. Using `reset` requires this by specification.
+        assert!(self.pool_create_flags.contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL));
+
+        // TODO: `release_resources` should recreate the allocator to give back all memory.
+        self.allocator.Reset();
         self.reset();
     }
 

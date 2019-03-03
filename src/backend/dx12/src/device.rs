@@ -1084,6 +1084,7 @@ impl d::Device<B> for Device {
             device: self.raw,
             list_type,
             shared: self.shared.clone(),
+            create_flags,
         })
     }
 
