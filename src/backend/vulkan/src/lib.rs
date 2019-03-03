@@ -690,8 +690,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 #[doc(hidden)]
 pub struct RawDevice(pub ash::Device<V1_0>, Features);
 impl fmt::Debug for RawDevice {
-    fn fmt(&self, _formatter: &mut fmt::Formatter) -> fmt::Result {
-        unimplemented!()
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "RawDevice_V1_0") // TODO: Real Debug impl
     }
 }
 impl Drop for RawDevice {
