@@ -260,7 +260,8 @@ impl ImageBound {
 pub struct ImageUnbound {
     #[derivative(Debug = "ignore")]
     pub(crate) desc: d3d12::D3D12_RESOURCE_DESC,
-    pub(crate) dsv_format: DXGI_FORMAT,
+    pub(crate) view_format: Option<DXGI_FORMAT>,
+    pub(crate) dsv_format: Option<DXGI_FORMAT>,
     pub(crate) requirements: memory::Requirements,
     pub(crate) format: format::Format,
     pub(crate) kind: image::Kind,
