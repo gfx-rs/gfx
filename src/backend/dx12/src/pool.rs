@@ -17,6 +17,7 @@ pub struct RawCommandPool {
     pub(crate) device: native::Device,
     pub(crate) list_type: CmdListType,
     pub(crate) shared: Arc<Shared>,
+    pub(crate) create_flags: pool::CommandPoolCreateFlags,
 }
 
 impl RawCommandPool {
@@ -92,7 +93,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         // TODO: Implement secondary buffers
         assert_eq!(level, command::RawLevel::Primary);
         let (command_list, command_allocator) = self.create_command_list();
-        CommandBuffer::new(command_list, command_allocator, self.shared.clone())
+        CommandBuffer::new(command_list, command_allocator, self.shared.clone(), self.create_flags)
     }
 
     unsafe fn free<I>(&mut self, cbufs: I)
