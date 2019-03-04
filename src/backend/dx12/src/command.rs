@@ -983,28 +983,37 @@ impl CommandBuffer {
         let vbs = &self.vertex_buffer_views;
         let mut last_end_slot = 0;
         loop {
-            match vbs_remap[last_end_slot..]
+            let start_offset = match vbs_remap[last_end_slot..]
                 .iter()
                 .position(|remap| remap.is_some())
             {
-                Some(start_offset) => {
-                    let start_slot = last_end_slot + start_offset;
-                    let buffers = vbs_remap[start_slot..]
-                        .iter()
-                        .take_while(|x| x.is_some())
-                        .filter_map(|x| *x)
-                        .map(|mapping| {
-                            let view = vbs[mapping.mapped_binding];
+                Some(offset) => offset,
+                None => break,
+            };
 
-                            d3d12::D3D12_VERTEX_BUFFER_VIEW {
-                                BufferLocation: view.BufferLocation + mapping.offset as u64,
-                                SizeInBytes: view.SizeInBytes - mapping.offset,
-                                StrideInBytes: mapping.stride,
-                            }
+            let start_slot = last_end_slot + start_offset;
+            let buffers = vbs_remap[start_slot..]
+                .iter()
+                .take_while(|x| x.is_some())
+                .filter_map(|mapping| {
+                    let mapping = mapping.unwrap();
+                    let view = vbs[mapping.mapped_binding];
+                    // Skip bindings that don't make sense. Since this function is called eagerly,
+                    // we expect it to be called with all the valid inputs prior to drawing.
+                    view.SizeInBytes
+                        .checked_sub(mapping.offset)
+                        .map(|size| d3d12::D3D12_VERTEX_BUFFER_VIEW {
+                            BufferLocation: view.BufferLocation + mapping.offset as u64,
+                            SizeInBytes: size,
+                            StrideInBytes: mapping.stride,
                         })
-                        .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
-                    let num_views = buffers.len();
+                })
+                .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
 
+                if buffers.is_empty() {
+                    last_end_slot = start_slot + 1;
+                } else {
+                    let num_views = buffers.len();
                     unsafe {
                         cmd_buffer.IASetVertexBuffers(
                             start_slot as _,
@@ -1014,8 +1023,6 @@ impl CommandBuffer {
                     }
                     last_end_slot = start_slot + num_views;
                 }
-                None => break,
-            }
         }
     }
 }
@@ -1736,9 +1743,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
 
-        for ((buffer, offset), view) in buffers
-            .into_iter()
-            .zip(self.vertex_buffer_views[first_binding as _..].iter_mut())
+        for (view, (buffer, offset)) in self
+            .vertex_buffer_views[first_binding as _ ..]
+            .iter_mut()
+            .zip(buffers)
         {
             let b = buffer.borrow().expect_bound();
             let base = unsafe { (*b.resource).GetGPUVirtualAddress() };
