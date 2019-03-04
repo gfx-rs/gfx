@@ -859,7 +859,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 pub struct RawDevice(pub ash::Device, Features);
 impl fmt::Debug for RawDevice {
     fn fmt(&self, _formatter: &mut fmt::Formatter) -> fmt::Result {
-        unimplemented!()
+        write!(_formatter, "")
     }
 }
 impl Drop for RawDevice {
