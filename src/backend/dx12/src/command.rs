@@ -1501,7 +1501,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             kind: src.kind,
             caps: src.view_caps,
             view_kind: image::ViewKind::D2Array, // TODO
-            format: src.descriptor.Format,
+            format: src.default_view_format.unwrap(),
             range: image::SubresourceRange {
                 aspects: format::Aspects::COLOR, // TODO
                 levels: 0..src.descriptor.MipLevels as _,
@@ -1547,10 +1547,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             let key = match r.dst_subresource.aspects {
                 format::Aspects::COLOR => {
+                    let format = dst.default_view_format.unwrap();
                     // Create RTVs of the dst image for the miplevel of the current region
                     for i in 0..num_layers {
                         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
-                            Format: dst.descriptor.Format,
+                            Format: format,
                             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
                             u: mem::zeroed(),
                         };
@@ -1566,7 +1567,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         device.CreateRenderTargetView(dst.resource.as_mut_ptr(), &desc, view);
                     }
 
-                    (dst.descriptor.Format, filter)
+                    (format, filter)
                 }
                 _ => unimplemented!(),
             };
