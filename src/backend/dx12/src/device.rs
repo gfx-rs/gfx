@@ -526,7 +526,7 @@ impl Device {
     ) -> r::DescriptorHeap {
         assert_ne!(capacity, 0);
 
-        let (heap, hr) = device.create_descriptor_heap(
+        let (heap, _hr) = device.create_descriptor_heap(
             capacity as _,
             heap_type,
             if shader_visible {
