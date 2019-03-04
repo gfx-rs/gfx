@@ -1,6 +1,24 @@
-## Change Log
+# Change Log
 
-### v0.1 (TBD)
-  - `gfx_hal`: graphics hardware abstraction layer
-  - `gfx_backend_*`: Vulkan, D3D12, Metal
-  - `gfx_render`: safer wrapper at a higher level
+### backend-dx12-0.1.2 (04-03-2019)
+  - typeless formats for textures
+  - fixed vertex buffer binding
+  - fixed non-array views of array textures
+
+### backend-metal-0.1.1 (21-02-2019)
+  - secondary command buffers
+  - multiple iOS fixes
+  - fixed surface dimensions
+
+### backend-dx12-0.1.1 (04-02-2019)
+  - `get_fence_status`
+
+### backend-empty-0.1.0 (04-02-2019)
+  - dummy surface creation
+
+## hal-0.1.0 (27-12-2018)
+  - `gfx-hal`: graphics hardware abstraction layer
+  - `gfx-backend-*`: Vulkan, D3D12, D3D11, Metal, and GL
+  - `range-alloc`: helper struct to manage ranges
+  - unsafe qualifiers on all the API methods
+  - non-clonable command buffers and resources
