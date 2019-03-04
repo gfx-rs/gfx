@@ -76,31 +76,6 @@ pub(crate) enum CommandSignature {
     Dispatch,
 }
 
-#[derive(Debug)]
-pub struct UnboundBuffer {
-    requirements: memory::Requirements,
-    usage: buffer::Usage,
-}
-
-#[derive(Derivative)]
-#[derivative(Debug)]
-pub struct UnboundImage {
-    #[derivative(Debug = "ignore")]
-    desc: d3d12::D3D12_RESOURCE_DESC,
-    dsv_format: dxgiformat::DXGI_FORMAT,
-    requirements: memory::Requirements,
-    format: Format,
-    kind: image::Kind,
-    usage: image::Usage,
-    tiling: image::Tiling,
-    view_caps: image::ViewCapabilities,
-    //TODO: use hal::format::FormatDesc
-    bytes_per_block: u8,
-    // Dimension of a texel block (compressed formats).
-    block_dim: (u8, u8),
-    num_levels: image::Level,
-}
-
 /// Compile a single shader entry point from a HLSL text shader
 pub(crate) fn compile_shader(
     stage: pso::Stage,
@@ -526,7 +501,7 @@ impl Device {
     ) -> r::DescriptorHeap {
         assert_ne!(capacity, 0);
 
-        let (heap, hr) = device.create_descriptor_heap(
+        let (heap, _hr) = device.create_descriptor_heap(
             capacity as _,
             heap_type,
             if shader_visible {
@@ -2222,6 +2197,7 @@ impl d::Device<B> for Device {
             surface_type: image_unbound.format.base_format().0,
             kind: image_unbound.kind,
             usage: image_unbound.usage,
+            default_view_format: image_unbound.view_format,
             view_caps: image_unbound.view_caps,
             descriptor: image_unbound.desc,
             bytes_per_block: image_unbound.bytes_per_block,
@@ -3106,6 +3082,7 @@ impl d::Device<B> for Device {
                     surface_type,
                     kind,
                     usage: config.image_usage,
+                    default_view_format: Some(format),
                     view_caps: image::ViewCapabilities::empty(),
                     descriptor: d3d12::D3D12_RESOURCE_DESC {
                         Dimension: d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,

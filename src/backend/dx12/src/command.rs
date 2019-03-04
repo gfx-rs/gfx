@@ -972,28 +972,37 @@ impl CommandBuffer {
         let vbs = &self.vertex_buffer_views;
         let mut last_end_slot = 0;
         loop {
-            match vbs_remap[last_end_slot..]
+            let start_offset = match vbs_remap[last_end_slot..]
                 .iter()
                 .position(|remap| remap.is_some())
             {
-                Some(start_offset) => {
-                    let start_slot = last_end_slot + start_offset;
-                    let buffers = vbs_remap[start_slot..]
-                        .iter()
-                        .take_while(|x| x.is_some())
-                        .filter_map(|x| *x)
-                        .map(|mapping| {
-                            let view = vbs[mapping.mapped_binding];
+                Some(offset) => offset,
+                None => break,
+            };
 
-                            d3d12::D3D12_VERTEX_BUFFER_VIEW {
-                                BufferLocation: view.BufferLocation + mapping.offset as u64,
-                                SizeInBytes: view.SizeInBytes - mapping.offset,
-                                StrideInBytes: mapping.stride,
-                            }
+            let start_slot = last_end_slot + start_offset;
+            let buffers = vbs_remap[start_slot..]
+                .iter()
+                .take_while(|x| x.is_some())
+                .filter_map(|mapping| {
+                    let mapping = mapping.unwrap();
+                    let view = vbs[mapping.mapped_binding];
+                    // Skip bindings that don't make sense. Since this function is called eagerly,
+                    // we expect it to be called with all the valid inputs prior to drawing.
+                    view.SizeInBytes
+                        .checked_sub(mapping.offset)
+                        .map(|size| d3d12::D3D12_VERTEX_BUFFER_VIEW {
+                            BufferLocation: view.BufferLocation + mapping.offset as u64,
+                            SizeInBytes: size,
+                            StrideInBytes: mapping.stride,
                         })
-                        .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
-                    let num_views = buffers.len();
+                })
+                .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
 
+                if buffers.is_empty() {
+                    last_end_slot = start_slot + 1;
+                } else {
+                    let num_views = buffers.len();
                     unsafe {
                         cmd_buffer.IASetVertexBuffers(
                             start_slot as _,
@@ -1003,8 +1012,6 @@ impl CommandBuffer {
                     }
                     last_end_slot = start_slot + num_views;
                 }
-                None => break,
-            }
         }
     }
 }
@@ -1494,7 +1501,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             kind: src.kind,
             caps: src.view_caps,
             view_kind: image::ViewKind::D2Array, // TODO
-            format: src.descriptor.Format,
+            format: src.default_view_format.unwrap(),
             range: image::SubresourceRange {
                 aspects: format::Aspects::COLOR, // TODO
                 levels: 0..src.descriptor.MipLevels as _,
@@ -1540,10 +1547,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             let key = match r.dst_subresource.aspects {
                 format::Aspects::COLOR => {
+                    let format = dst.default_view_format.unwrap();
                     // Create RTVs of the dst image for the miplevel of the current region
                     for i in 0..num_layers {
                         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
-                            Format: dst.descriptor.Format,
+                            Format: format,
                             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
                             u: mem::zeroed(),
                         };
@@ -1559,7 +1567,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         device.CreateRenderTargetView(dst.resource.as_mut_ptr(), &desc, view);
                     }
 
-                    (dst.descriptor.Format, filter)
+                    (format, filter)
                 }
                 _ => unimplemented!(),
             };
@@ -1706,9 +1714,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
 
-        for ((buffer, offset), view) in buffers
-            .into_iter()
-            .zip(self.vertex_buffer_views[first_binding as _..].iter_mut())
+        for (view, (buffer, offset)) in self
+            .vertex_buffer_views[first_binding as _ ..]
+            .iter_mut()
+            .zip(buffers)
         {
             let b = buffer.borrow().expect_bound();
             let base = (*b.resource).GetGPUVirtualAddress();
