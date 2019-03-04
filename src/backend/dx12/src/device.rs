@@ -553,6 +553,7 @@ impl Device {
 
         match info.view_kind {
             image::ViewKind::D1 => {
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_RTV { MipSlice }
             }
@@ -565,12 +566,14 @@ impl Device {
                 }
             }
             image::ViewKind::D2 if is_msaa => {
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DMS;
                 *unsafe { desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_RTV {
                     UnusedField_NothingToDefine: 0,
                 }
             }
             image::ViewKind::D2 => {
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_RTV {
                     MipSlice,
@@ -594,6 +597,7 @@ impl Device {
                 }
             }
             image::ViewKind::D3 => {
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE3D;
                 *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_RTV {
                     MipSlice,
@@ -651,6 +655,7 @@ impl Device {
 
         match info.view_kind {
             image::ViewKind::D1 => {
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_DSV { MipSlice }
             }
@@ -663,12 +668,14 @@ impl Device {
                 }
             }
             image::ViewKind::D2 if is_msaa => {
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DMS;
                 *unsafe { desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_DSV {
                     UnusedField_NothingToDefine: 0,
                 }
             }
             image::ViewKind::D2 => {
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_DSV { MipSlice }
             }
@@ -730,6 +737,7 @@ impl Device {
 
         match info.view_kind {
             image::ViewKind::D1 => {
+                assert_eq!(info.range.layers, 0..1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_SRV {
                     MostDetailedMip,
@@ -748,12 +756,14 @@ impl Device {
                 }
             }
             image::ViewKind::D2 if is_msaa => {
+                assert_eq!(info.range.layers, 0..1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2DMS;
                 *unsafe { desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_SRV {
                     UnusedField_NothingToDefine: 0,
                 }
             }
             image::ViewKind::D2 => {
+                assert_eq!(info.range.layers, 0..1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_SRV {
                     MostDetailedMip,
@@ -781,6 +791,7 @@ impl Device {
                 }
             }
             image::ViewKind::D3 => {
+                assert_eq!(info.range.layers, 0..1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE3D;
                 *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_SRV {
                     MostDetailedMip,
@@ -867,6 +878,7 @@ impl Device {
 
         match info.view_kind {
             image::ViewKind::D1 => {
+                assert_eq!(info.range.layers, 0..1);
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_UAV { MipSlice }
             }
@@ -879,6 +891,7 @@ impl Device {
                 }
             }
             image::ViewKind::D2 => {
+                assert_eq!(info.range.layers, 0..1);
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_UAV {
                     MipSlice,
@@ -895,6 +908,7 @@ impl Device {
                 }
             }
             image::ViewKind::D3 => {
+                assert_eq!(info.range.layers, 0..1);
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE3D;
                 *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_UAV {
                     MipSlice,
@@ -2274,6 +2288,7 @@ impl d::Device<B> for Device {
         range: image::SubresourceRange,
     ) -> Result<r::ImageView, image::ViewError> {
         let image = image.expect_bound();
+        let is_array = image.kind.num_layers() > 1;
         let mip_levels = (range.levels.start, range.levels.end);
         let layers = (range.layers.start, range.layers.end);
 
@@ -2281,7 +2296,14 @@ impl d::Device<B> for Device {
             resource: image.resource,
             kind: image.kind,
             caps: image.view_caps,
-            view_kind,
+            // D3D12 doesn't allow looking at a single slice of an array as a non-array
+            view_kind: if is_array && view_kind == image::ViewKind::D2 {
+                image::ViewKind::D2Array
+            } else if is_array && view_kind == image::ViewKind::D1 {
+                image::ViewKind::D1Array
+            } else {
+                view_kind
+            },
             format: conv::map_format(format).ok_or(image::ViewError::BadFormat(format))?,
             range,
         };
