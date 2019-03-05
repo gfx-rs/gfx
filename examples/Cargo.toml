@@ -9,6 +9,7 @@ edition = "2018"
 default = []
 metal = ["gfx-backend-metal"]
 gl = ["gfx-backend-gl"]
+dx11 = ["gfx-backend-dx11"]
 dx12 = ["gfx-backend-dx12"]
 vulkan = ["gfx-backend-vulkan"]
 unstable = []
@@ -48,6 +49,11 @@ optional = true
 
 [target.'cfg(any(target_os = "macos", all(target_os = "ios", target_arch = "aarch64")))'.dependencies.gfx-backend-metal]
 path = "../src/backend/metal"
+version = "0.1"
+optional = true
+
+[target.'cfg(windows)'.dependencies.gfx-backend-dx11]
+path = "../src/backend/dx11"
 version = "0.1"
 optional = true
 
