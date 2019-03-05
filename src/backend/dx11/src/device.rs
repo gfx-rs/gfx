@@ -77,7 +77,7 @@ impl Device {
             memory_heap_flags: [
                 MemoryHeapFlags::DEVICE_LOCAL,
                 MemoryHeapFlags::HOST_COHERENT,
-                MemoryHeapFlags::HOST_NONCOHERENT,
+                MemoryHeapFlags::HOST_VISIBLE,
             ],
             internal: internal::Internal::new(&device),
         }
@@ -619,14 +619,32 @@ impl Device {
         &self,
         info: &ViewInfo,
     ) -> Result<ComPtr<d3d11::ID3D11DepthStencilView>, image::ViewError> {
+        #![allow(non_snake_case)]
+
+        let MipSlice = info.range.levels.start as _;
+        let FirstArraySlice = info.range.layers.start as _;
+        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        assert_eq!(info.range.levels.start + 1, info.range.levels.end);
+        assert!(info.range.layers.end <= info.kind.num_layers());
+
         let mut desc: d3d11::D3D11_DEPTH_STENCIL_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
 
         match info.view_kind {
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2D;
-                *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_DSV { MipSlice: 0 }
-            }
+                *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_DSV {
+                    MipSlice,
+                }
+            },
+            image::ViewKind::D2Array => {
+                desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+                *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_DSV {
+                    MipSlice,
+                    FirstArraySlice,
+                    ArraySize,
+                }
+            },
             _ => unimplemented!(),
         }
 
@@ -1175,25 +1193,23 @@ impl hal::Device<Backend> for Device {
                 };
 
                 let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
-                let hr = unsafe {
-                    self.raw.CreateBuffer(
-                        &desc,
-                        if let Some(data) = initial_data {
-                            &data
-                        } else {
-                            ptr::null_mut()
-                        },
-                        &mut buffer as *mut *mut _ as *mut *mut _,
-                    )
-                };
+                let hr = self.raw.CreateBuffer(
+                    &desc,
+                    if let Some(data) = initial_data {
+                        &data
+                    } else {
+                        ptr::null_mut()
+                    },
+                    &mut buffer as *mut *mut _ as *mut *mut _,
+                );
 
                 if !winerror::SUCCEEDED(hr) {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                unsafe { ComPtr::from_raw(buffer) }
-            }
-            MemoryHeapFlags::HOST_NONCOHERENT | MemoryHeapFlags::HOST_COHERENT => {
+                ComPtr::from_raw(buffer)
+            },
+            MemoryHeapFlags::HOST_VISIBLE | MemoryHeapFlags::HOST_COHERENT => {
                 let desc = d3d11::D3D11_BUFFER_DESC {
                     ByteWidth: buffer.requirements.size as _,
                     // TODO: dynamic?
@@ -1736,7 +1752,7 @@ impl hal::Device<Backend> for Device {
                         resource: resource,
                         kind: image.kind,
                         caps: image::ViewCapabilities::empty(),
-                        view_kind: image::ViewKind::D2,
+                        view_kind,
                         format: decomposed.dsv.unwrap(),
                         range: image::SubresourceRange {
                             aspects: format::Aspects::COLOR,
@@ -1776,22 +1792,28 @@ impl hal::Device<Backend> for Device {
         _swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<ImageView, image::ViewError> {
+        let is_array = image.kind.num_layers() > 1;
+
         let info = ViewInfo {
             resource: image.internal.raw,
             kind: image.kind,
             caps: image.view_caps,
-            view_kind,
-            format: conv::map_format(format).ok_or(image::ViewError::BadFormat(format))?,
-            range: range.clone(),
+            // D3D11 doesn't allow looking at a single slice of an array as a non-array
+            view_kind: if is_array && view_kind == image::ViewKind::D2 {
+                image::ViewKind::D2Array
+            } else if is_array && view_kind == image::ViewKind::D1 {
+                image::ViewKind::D1Array
+            } else {
+                view_kind
+            },
+            format: conv::map_format(format)
+                .ok_or(image::ViewError::BadFormat(format))?,
+            range,
         };
 
         let srv_info = ViewInfo {
-            resource: image.internal.raw,
-            kind: image.kind,
-            caps: image.view_caps,
-            view_kind,
             format: conv::viewable_format(info.format),
-            range,
+            .. info.clone()
         };
 
         Ok(ImageView {

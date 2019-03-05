@@ -1,5 +1,10 @@
 # Change Log
 
+### backend-dx11-0.1.1 (05-03-2019)
+  - fixed buffer bind flags
+  - synchronization of disjoint CB across copy operations
+  - depth texture views
+
 ### backend-dx12-0.1.2 (04-03-2019)
   - typeless formats for textures
   - fixed vertex buffer binding
