@@ -1,6 +1,7 @@
 #![cfg_attr(
     not(any(
         feature = "vulkan",
+        feature = "dx11",
         feature = "dx12",
         feature = "metal",
         feature = "gl"
@@ -9,6 +10,8 @@
 )]
 
 extern crate env_logger;
+#[cfg(feature = "dx11")]
+extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12 as back;
 #[cfg(feature = "gl")]
@@ -67,6 +70,7 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 
 #[cfg(any(
     feature = "vulkan",
+    feature = "dx11",
     feature = "dx12",
     feature = "metal",
     feature = "gl"
@@ -850,6 +854,7 @@ fn main() {
 
 #[cfg(not(any(
     feature = "vulkan",
+    feature = "dx11",
     feature = "dx12",
     feature = "metal",
     feature = "gl"

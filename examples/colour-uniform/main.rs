@@ -1,6 +1,7 @@
 #![cfg_attr(
     not(any(
         feature = "vulkan",
+        feature = "dx11",
         feature = "dx12",
         feature = "metal",
         feature = "gl"
@@ -8,10 +9,13 @@
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
 
+#[cfg(feature = "dx11")]
+extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12 as back;
 #[cfg(not(any(
     feature = "vulkan",
+    feature = "dx11",
     feature = "dx12",
     feature = "metal",
     feature = "gl"
@@ -645,12 +649,12 @@ impl WindowState {
 struct BackendState<B: Backend> {
     surface: B::Surface,
     adapter: AdapterState<B>,
-    #[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
+    #[cfg(any(feature = "vulkan", feature = "dx11", feature = "dx12", feature = "metal"))]
     #[allow(dead_code)]
     window: winit::Window,
 }
 
-#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
+#[cfg(any(feature = "vulkan", feature = "dx11", feature = "dx12", feature = "metal"))]
 fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend>, back::Instance) {
     let window = window_state
         .wb
@@ -1662,6 +1666,7 @@ impl<B: Backend> Drop for FramebufferState<B> {
 
 #[cfg(any(
     feature = "vulkan",
+    feature = "dx11",
     feature = "dx12",
     feature = "metal",
     feature = "gl"
@@ -1678,6 +1683,7 @@ fn main() {
 
 #[cfg(not(any(
     feature = "vulkan",
+    feature = "dx11",
     feature = "dx12",
     feature = "metal",
     feature = "gl"
