@@ -34,6 +34,7 @@ pub trait QueueFamily: Debug + Any + Send + Sync {
 
 /// Identifier for a queue family of a physical device.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct QueueFamilyId(pub usize);
 
 /// Strong-typed group of queues of the same queue family.
