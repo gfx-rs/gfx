@@ -758,4 +758,3 @@ pub fn map_filter(
     (reduction & D3D11_FILTER_REDUCTION_TYPE_MASK) << D3D11_FILTER_REDUCTION_TYPE_SHIFT |
     map_anisotropic(anisotropic)
 }
-

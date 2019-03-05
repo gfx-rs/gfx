@@ -89,7 +89,7 @@ mod internal;
 mod shader;
 
 #[derive(Derivative)]
-#[derivative(Debug)]
+#[derivative(Clone, Debug)]
 pub(crate) struct ViewInfo {
     #[derivative(Debug="ignore")]
     resource: *mut d3d11::ID3D11Resource,
@@ -1893,9 +1893,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn dispatch(&mut self, count: WorkGroupCount) {
-        unsafe {
-            self.context.Dispatch(count[0], count[1], count[2]);
-        }
+        self.context.Dispatch(count[0], count[1], count[2]);
     }
 
     unsafe fn dispatch_indirect(&mut self, _buffer: &Buffer, _offset: buffer::Offset) {
@@ -1924,24 +1922,36 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions.into_iter() {
             let info = region.borrow();
+            let dst_box = d3d11::D3D11_BOX {
+                left: info.src as _,
+                top: 0,
+                front: 0,
+                right: (info.src + info.size) as _,
+                bottom: 1,
+                back: 1,
+            };
 
-            unsafe {
+            self.context.CopySubresourceRegion(
+                dst.internal.raw as _,
+                0,
+                info.dst as _,
+                0,
+                0,
+                src.internal.raw as _,
+                0,
+                &dst_box,
+            );
+
+            if let Some(disjoint_cb) = dst.internal.disjoint_cb {
                 self.context.CopySubresourceRegion(
-                    dst.internal.raw as _,
+                    disjoint_cb as _,
                     0,
                     info.dst as _,
                     0,
                     0,
                     src.internal.raw as _,
                     0,
-                    &d3d11::D3D11_BOX {
-                        left: info.src as _,
-                        top: 0,
-                        front: 0,
-                        right: (info.src + info.size) as _,
-                        bottom: 1,
-                        back: 1,
-                    },
+                    &dst_box,
                 );
             }
         }
@@ -1999,14 +2009,12 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
-        unsafe {
-            self.context.DrawInstanced(
-                vertices.end - vertices.start,
-                instances.end - instances.start,
-                vertices.start,
-                instances.start,
-            );
-        }
+        self.context.DrawInstanced(
+            vertices.end - vertices.start,
+            instances.end - instances.start,
+            vertices.start,
+            instances.start,
+        );
     }
 
     unsafe fn draw_indexed(
@@ -2015,15 +2023,13 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     ) {
-        unsafe {
-            self.context.DrawIndexedInstanced(
-                indices.end - indices.start,
-                instances.end - instances.start,
-                indices.start,
-                base_vertex,
-                instances.start,
-            );
-        }
+        self.context.DrawIndexedInstanced(
+            indices.end - indices.start,
+            instances.end - instances.start,
+            indices.start,
+            base_vertex,
+            instances.start,
+        );
     }
 
     unsafe fn draw_indirect(
@@ -2105,8 +2111,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
 bitflags! {
     struct MemoryHeapFlags: u64 {
         const DEVICE_LOCAL = 0x1;
-        const HOST_NONCOHERENT = 0x4 | 0x8;
-        const HOST_COHERENT = 0x2 | 0x4 | 0x8;
+        const HOST_VISIBLE = 0x2 | 0x4;
+        const HOST_COHERENT = 0x2;
     }
 }
 

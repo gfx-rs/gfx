@@ -646,6 +646,8 @@ impl Internal {
 
         let srv = src.internal.copy_srv.clone().unwrap().as_raw();
         let uav = dst.internal.uav.unwrap();
+        let format_desc = src.format.base_format().0.desc();
+        let bytes_per_texel  = format_desc.bits as u32 / 8;
 
         unsafe {
             context.CSSetShader(shader, ptr::null_mut(), 0);
@@ -665,6 +667,29 @@ impl Internal {
                     ((copy.image_extent.height + (COPY_THREAD_GROUP_X - 1)) / COPY_THREAD_GROUP_Y / scale_y).max(1),
                     1
                 );
+
+                if let Some(disjoint_cb) = dst.internal.disjoint_cb {
+                    let total_size = copy.image_extent.depth * (copy.buffer_height * copy.buffer_width * bytes_per_texel);
+                    let copy_box = d3d11::D3D11_BOX {
+                        left: copy.buffer_offset as u32,
+                        top: 0,
+                        front: 0,
+                        right: copy.buffer_offset as u32 + total_size,
+                        bottom: 1,
+                        back: 1,
+                    };
+
+                    context.CopySubresourceRegion(
+                        disjoint_cb as _,
+                        0,
+                        copy.buffer_offset as _,
+                        0,
+                        0,
+                        dst.internal.raw as _,
+                        0,
+                        &copy_box,
+                    );
+                }
             }
 
             // unbind external resources
