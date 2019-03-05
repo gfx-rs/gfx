@@ -1,9 +1,11 @@
 #![cfg_attr(
-    not(any(feature = "vulkan", feature = "dx12", feature = "metal")),
+    not(any(feature = "vulkan", feature = "dx11", feature = "dx12", feature = "metal")),
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
 
 extern crate env_logger;
+#[cfg(feature = "dx11")]
+extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12 as back;
 #[cfg(feature = "metal")]
@@ -22,7 +24,7 @@ extern crate glsl_to_spirv;
 use std::fs;
 use std::io::Read;
 
-#[cfg(any(feature = "vulkan", feature = "dx12", feature = "metal"))]
+#[cfg(any(feature = "vulkan", feature = "dx11", feature = "dx12", feature = "metal"))]
 fn main() {
     env_logger::init();
 
@@ -261,7 +263,7 @@ unsafe fn create_buffer<B: Backend>(
     (memory, buffer, requirements.size)
 }
 
-#[cfg(not(any(feature = "vulkan", feature = "dx12", feature = "metal")))]
+#[cfg(not(any(feature = "vulkan", feature = "dx11", feature = "dx12", feature = "metal")))]
 fn main() {
     println!("You need to enable one of the next-gen API feature (vulkan, dx12, metal) to run this example.");
 }
