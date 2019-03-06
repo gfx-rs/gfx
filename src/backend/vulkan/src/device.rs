@@ -543,10 +543,9 @@ impl d::Device<B> for Device {
                     } else {
                         vk::FALSE
                     },
-                    rasterizer_discard_enable: if desc.shaders.fragment.is_none() {
-                        vk::TRUE
-                    } else {
-                        vk::FALSE
+                    rasterizer_discard_enable: match (&desc.shaders.fragment, &desc.depth_stencil.depth, &desc.depth_stencil.stencil) {
+                        (None, pso::DepthTest::Off, pso::StencilTest::Off) => vk::TRUE,
+                                                                         _ => vk::FALSE,
                     },
                     polygon_mode,
                     cull_mode: conv::map_cull_face(desc.rasterizer.cull_face),
