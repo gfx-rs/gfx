@@ -209,7 +209,18 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// will operate on.
     ///
     /// Each buffer passed corresponds to the vertex input binding with the same index,
-    /// starting from an offset index `first_binding`.
+    /// starting from an offset index `first_binding`. For example an iterator with
+    /// two items and `first_binding` of 1 would fill vertex buffer binding numbers
+    /// 1 and 2.
+    ///
+    /// This binding number refers only to binding points for vertex buffers and is
+    /// completely separate from the binding numbers of `Descriptor`s in `DescriptorSet`s.
+    /// It needs to match with the `VertexBufferDesc` and `AttributeDesc`s to which the
+    /// data from each bound vertex buffer should flow.
+    ///
+    /// The `buffers` iterator should yield the `Buffer` to bind, as well as an
+    /// offset, in bytes, into that buffer where the vertex data that should be bound
+    /// starts.
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
