@@ -703,6 +703,74 @@ impl Device {
 
         arg
     }
+
+    pub fn make_sampler_descriptor(
+        &self,
+        info: image::SamplerInfo,
+    ) -> Result<metal::SamplerDescriptor, AllocationError> {
+        let descriptor = metal::SamplerDescriptor::new();
+
+        descriptor.set_min_filter(conv::map_filter(info.min_filter));
+        descriptor.set_mag_filter(conv::map_filter(info.mag_filter));
+        descriptor.set_mip_filter(match info.mip_filter {
+            // Note: this shouldn't be required, but Metal appears to be confused when mipmaps
+            // are provided even with trivial LOD bias.
+            image::Filter::Nearest if info.lod_range.end < image::Lod::from(0.5) => {
+                MTLSamplerMipFilter::NotMipmapped
+            }
+            image::Filter::Nearest => MTLSamplerMipFilter::Nearest,
+            image::Filter::Linear => MTLSamplerMipFilter::Linear,
+        });
+
+        if let image::Anisotropic::On(aniso) = info.anisotropic {
+            descriptor.set_max_anisotropy(aniso as _);
+        }
+
+        let (s, t, r) = info.wrap_mode;
+        descriptor.set_address_mode_s(conv::map_wrap_mode(s));
+        descriptor.set_address_mode_t(conv::map_wrap_mode(t));
+        descriptor.set_address_mode_r(conv::map_wrap_mode(r));
+
+        unsafe {
+            descriptor.set_lod_bias(info.lod_bias.into());
+        }
+        descriptor.set_lod_min_clamp(info.lod_range.start.into());
+        descriptor.set_lod_max_clamp(info.lod_range.end.into());
+
+        let caps = &self.shared.private_caps;
+        // TODO: Clarify minimum macOS version with Apple (43707452)
+        if (caps.os_is_mac && caps.has_version_at_least(10, 13))
+            || (!caps.os_is_mac && caps.has_version_at_least(9, 0))
+        {
+            descriptor.set_lod_average(true); // optimization
+        }
+
+        if let Some(fun) = info.comparison {
+            descriptor.set_compare_function(conv::map_compare_function(fun));
+        }
+        if [r, s, t].iter().any(|&am| am == image::WrapMode::Border) {
+            descriptor.set_border_color(match info.border.0 {
+                0x0000_0000 => MTLSamplerBorderColor::TransparentBlack,
+                0x0000_00FF => MTLSamplerBorderColor::OpaqueBlack,
+                0xFFFF_FFFF => MTLSamplerBorderColor::OpaqueWhite,
+                other => {
+                    error!("Border color 0x{:X} is not supported", other);
+                    MTLSamplerBorderColor::TransparentBlack
+                }
+            });
+        }
+
+        Ok(descriptor)
+    }
+
+    pub fn create_sampler_from_descriptor(
+        &self,
+        descriptor: &metal::SamplerDescriptorRef,
+    ) -> n::Sampler {
+        n::Sampler(
+            self.shared.device.lock().new_sampler(descriptor),
+        )
+    }
 }
 
 impl hal::Device<Backend> for Device {
@@ -1456,59 +1524,8 @@ impl hal::Device<Backend> for Device {
         &self,
         info: image::SamplerInfo,
     ) -> Result<n::Sampler, AllocationError> {
-        let descriptor = metal::SamplerDescriptor::new();
-
-        descriptor.set_min_filter(conv::map_filter(info.min_filter));
-        descriptor.set_mag_filter(conv::map_filter(info.mag_filter));
-        descriptor.set_mip_filter(match info.mip_filter {
-            // Note: this shouldn't be required, but Metal appears to be confused when mipmaps
-            // are provided even with trivial LOD bias.
-            image::Filter::Nearest if info.lod_range.end < image::Lod::from(0.5) => {
-                MTLSamplerMipFilter::NotMipmapped
-            }
-            image::Filter::Nearest => MTLSamplerMipFilter::Nearest,
-            image::Filter::Linear => MTLSamplerMipFilter::Linear,
-        });
-
-        if let image::Anisotropic::On(aniso) = info.anisotropic {
-            descriptor.set_max_anisotropy(aniso as _);
-        }
-
-        let (s, t, r) = info.wrap_mode;
-        descriptor.set_address_mode_s(conv::map_wrap_mode(s));
-        descriptor.set_address_mode_t(conv::map_wrap_mode(t));
-        descriptor.set_address_mode_r(conv::map_wrap_mode(r));
-
-        descriptor.set_lod_bias(info.lod_bias.into());
-        descriptor.set_lod_min_clamp(info.lod_range.start.into());
-        descriptor.set_lod_max_clamp(info.lod_range.end.into());
-
-        let caps = &self.shared.private_caps;
-        // TODO: Clarify minimum macOS version with Apple (43707452)
-        if (caps.os_is_mac && caps.has_version_at_least(10, 13))
-            || (!caps.os_is_mac && caps.has_version_at_least(9, 0))
-        {
-            descriptor.set_lod_average(true); // optimization
-        }
-
-        if let Some(fun) = info.comparison {
-            descriptor.set_compare_function(conv::map_compare_function(fun));
-        }
-        if [r, s, t].iter().any(|&am| am == image::WrapMode::Border) {
-            descriptor.set_border_color(match info.border.0 {
-                0x0000_0000 => MTLSamplerBorderColor::TransparentBlack,
-                0x0000_00FF => MTLSamplerBorderColor::OpaqueBlack,
-                0xFFFF_FFFF => MTLSamplerBorderColor::OpaqueWhite,
-                other => {
-                    error!("Border color 0x{:X} is not supported", other);
-                    MTLSamplerBorderColor::TransparentBlack
-                }
-            });
-        }
-
-        Ok(n::Sampler(
-            self.shared.device.lock().new_sampler(&descriptor),
-        ))
+        let descriptor = self.make_sampler_descriptor(info)?;
+        Ok(self.create_sampler_from_descriptor(&descriptor))
     }
 
     unsafe fn destroy_sampler(&self, _sampler: n::Sampler) {}
