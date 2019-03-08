@@ -1176,6 +1176,22 @@ pub fn map_winding(face: pso::FrontFace) -> MTLWinding {
     }
 }
 
+pub fn map_polygon_mode(mode: pso::PolygonMode) -> MTLTriangleFillMode {
+    match mode {
+        pso::PolygonMode::Point => {
+            warn!("Unable to fill with points");
+            MTLTriangleFillMode::Lines
+        }
+        pso::PolygonMode::Line(width) => {
+            if width != 1.0 {
+                warn!("Unsupported line width: {:?}", width);
+            }
+            MTLTriangleFillMode::Lines
+        }
+        pso::PolygonMode::Fill => MTLTriangleFillMode::Fill,
+    }
+}
+
 pub fn map_cull_face(face: pso::Face) -> Option<MTLCullMode> {
     match face {
         pso::Face::NONE => Some(MTLCullMode::None),

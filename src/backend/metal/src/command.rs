@@ -3,7 +3,7 @@ use gfx_hal as hal;
 use crate::internal::{BlitVertex, ClearKey, ClearVertex};
 use crate::{conversions as conv, native, soft, window};
 use crate::{
-    validate_line_width, AsNative, Backend, BufferPtr, OnlineRecording, PrivateDisabilities,
+    AsNative, Backend, BufferPtr, OnlineRecording, PrivateDisabilities,
     ResourceIndex, SamplerPtr, Shared, TexturePtr,
 };
 
@@ -1389,6 +1389,7 @@ where
         Cmd::SetRasterizerState(ref rs) => {
             encoder.set_front_facing_winding(rs.front_winding);
             encoder.set_cull_mode(rs.cull_mode);
+            encoder.set_triangle_fill_mode(rs.fill_mode);
             if let Some(depth_clip) = rs.depth_clip {
                 encoder.set_depth_clip_mode(depth_clip);
             }
@@ -3102,7 +3103,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn set_line_width(&mut self, width: f32) {
-        validate_line_width(width);
+        // Note from the Vulkan spec:
+        // > If the wide lines feature is not enabled, lineWidth must be 1.0
+        // Simply assert and no-op because Metal never exposes `Features::LINE_WIDTH`
+        assert_eq!(width, 1.0);
     }
 
     unsafe fn set_depth_bias(&mut self, depth_bias: pso::DepthBias) {

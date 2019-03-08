@@ -5,7 +5,7 @@ use crate::native;
 use range_alloc::RangeAllocator;
 use crate::{command, conversions as conv, native as n};
 use crate::{
-    validate_line_width, AsNative, Backend, OnlineRecording, QueueFamily, ResourceIndex, Shared,
+    AsNative, Backend, OnlineRecording, QueueFamily, ResourceIndex, Shared,
     Surface, Swapchain, VisibilityShared,
 };
 
@@ -383,6 +383,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             }
             | hal::Features::INSTANCE_RATE
             | hal::Features::SEPARATE_STENCIL_REF_VALUES
+            | if self.shared.private_caps.expose_line_mode {
+                hal::Features::NON_FILL_POLYGON_MODE
+            } else {
+                hal::Features::empty()
+            }
     }
 
     fn limits(&self) -> hal::Limits {
@@ -1389,12 +1394,9 @@ impl hal::Device<Backend> for Device {
             pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
         }
 
-        if let pso::PolygonMode::Line(width) = pipeline_desc.rasterizer.polygon_mode {
-            validate_line_width(width);
-        }
-
         let rasterizer_state = Some(n::RasterizerState {
             front_winding: conv::map_winding(pipeline_desc.rasterizer.front_face),
+            fill_mode: conv::map_polygon_mode(pipeline_desc.rasterizer.polygon_mode),
             cull_mode: match conv::map_cull_face(pipeline_desc.rasterizer.cull_face) {
                 Some(mode) => mode,
                 None => {
@@ -2399,7 +2401,14 @@ impl hal::Device<Backend> for Device {
             levels: 0..raw.mipmap_level_count() as image::Level,
             layers: 0..image.kind.num_layers(),
         };
-        let mtl_type = conv::map_texture_type(kind);
+        let mtl_type = if image.mtl_type == MTLTextureType::D2Multisample {
+            if kind != image::ViewKind::D2 {
+                error!("Requested {:?} for MSAA texture", kind);
+            }
+            image.mtl_type
+        } else {
+            conv::map_texture_type(kind)
+        };
 
         let view = if mtl_format == image.mtl_format
             && mtl_type == image.mtl_type
