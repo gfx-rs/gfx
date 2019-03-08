@@ -159,6 +159,14 @@ pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format>
             Srgb  => vk::FORMAT_R8G8_SRGB,
             _ => return None,
         },
+        R8_G8_B8 => match chan {
+            Int   => vk::FORMAT_R8G8B8_SINT,
+            Uint  => vk::FORMAT_R8G8B8_UINT,
+            Inorm => vk::FORMAT_R8G8B8_SNORM,
+            Unorm => vk::FORMAT_R8G8B8_UNORM,
+            Srgb  => vk::FORMAT_R8G8B8_SRGB,
+            _ => return None,
+        },
         R8_G8_B8_A8 => match chan {
             Int   => vk::FORMAT_R8G8B8A8_SINT,
             Uint  => vk::FORMAT_R8G8B8A8_UINT,

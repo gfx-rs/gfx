@@ -64,7 +64,7 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
     match format.0 {
         S::R8 | S::R16 | S::R32=> r,
         S::R4_G4 | S::R8_G8 | S::R16_G16 | S::R32_G32 => rg,
-        S::R16_G16_B16 | S::R32_G32_B32 | S::R5_G6_B5 | S::R11_G11_B10 => rgb,
+        S::R16_G16_B16 | S::R32_G32_B32 | S::R5_G6_B5 | S::R11_G11_B10 | S::R8_G8_B8 => rgb,
         S::R8_G8_B8_A8 | S::R16_G16_B16_A16 | S::R32_G32_B32_A32 |
         S::R4_G4_B4_A4 | S::R5_G5_B5_A1 | S::R10_G10_B10_A2 => rgba,
         S::D24_S8 => gl::DEPTH_STENCIL,
@@ -89,7 +89,7 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
         S::R4_G4_B4_A4 => gl::UNSIGNED_SHORT_4_4_4_4,
         S::R5_G5_B5_A1 => gl::UNSIGNED_SHORT_5_5_5_1,
         S::R5_G6_B5 => gl::UNSIGNED_SHORT_5_6_5,
-        S::B8_G8_R8_A8 | S::R8 | S::R8_G8 | S::R8_G8_B8_A8 => fm8,
+        S::B8_G8_R8_A8 | S::R8 | S::R8_G8 | S::R8_G8_B8_A8 | S::R8_G8_B8 => fm8,
         S::R10_G10_B10_A2 => gl::UNSIGNED_INT_10_10_10_2,
         S::R11_G11_B10 => return Err(()),
         S::R16 | S::R16_G16 | S::R16_G16_B16 | S::R16_G16_B16_A16 => fm16,
@@ -135,7 +135,14 @@ pub fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
             C::Unorm => gl::RG8,
             _ => return Err(()),
         },
-        //S::R8_G8_B8 |
+        S::R8_G8_B8 => match cty {
+            C::Int => gl::RGB8I,
+            C::Inorm => gl::RGB8_SNORM,
+            C::Uint => gl::RGB8UI,
+            C::Unorm => gl::RGB8,
+            C::Srgb => gl::SRGB8,
+            _ => return Err(()),
+        },
         S::R8_G8_B8_A8 => match cty {
             C::Int => gl::RGBA8I,
             C::Inorm => gl::RGBA8_SNORM,

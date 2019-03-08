@@ -39,7 +39,7 @@ pub fn map_format(format: Format, is_target: bool) -> Option<DXGI_FORMAT> {
     use core::format::SurfaceType::*;
     use core::format::ChannelType::*;
     Some(match format.0 {
-        R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 => return None,
+        R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 | R8_G8_B8 => return None,
         R8 => match format.1 {
             Int   => DXGI_FORMAT_R8_SINT,
             Uint  => DXGI_FORMAT_R8_UINT,
@@ -151,7 +151,7 @@ pub fn map_format(format: Format, is_target: bool) -> Option<DXGI_FORMAT> {
 pub fn map_surface(surface: SurfaceType) -> Option<DXGI_FORMAT> {
     use core::format::SurfaceType::*;
     Some(match surface {
-        R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 => return None,
+        R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 | R8_G8_B8 => return None,
         R16_G16_B16 => return None,
         R8              => DXGI_FORMAT_R8_TYPELESS,
         R8_G8           => DXGI_FORMAT_R8G8_TYPELESS,

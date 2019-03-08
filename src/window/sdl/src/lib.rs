@@ -79,6 +79,7 @@ fn sdl2_pixel_format_from_gfx(format: Format) -> Option<PixelFormatEnum> {
         R4_G4_B4_A4 => Some(SdlFmt::RGBA4444),
         R5_G5_B5_A1 => Some(SdlFmt::RGBA5551),
         R5_G6_B5 => Some(SdlFmt::RGB565),
+        R8_G8_B8 => Some(SdlFmt::RGB888),
         R8_G8_B8_A8 => Some(SdlFmt::RGBA8888),
         B8_G8_R8_A8 => Some(SdlFmt::BGRA8888),
         R10_G10_B10_A2 => {

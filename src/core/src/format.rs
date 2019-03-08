@@ -123,6 +123,8 @@ impl_formats! {
         [BufferSurface, TextureSurface, RenderSurface],
     R8_G8           : Vec2<Int, Uint, Inorm, Unorm> = [u8; 2] {0}
         [BufferSurface, TextureSurface, RenderSurface],
+    R8_G8_B8        : Vec3<Int, Uint, Inorm, Unorm, Srgb> = [u8; 3] {0}
+        [BufferSurface, TextureSurface, RenderSurface],
     R8_G8_B8_A8     : Vec4<Int, Uint, Inorm, Unorm, Srgb> = [u8; 4] {8}
         [BufferSurface, TextureSurface, RenderSurface],
     R10_G10_B10_A2  : Vec4<Uint, Unorm> = u32 {2}
