@@ -57,11 +57,7 @@
 //!     }
 //! }
 //! 
-//! fn main() {
-//!     use gfx_app::Application;
-//! 
-//!     App::launch_simple("Window title");
-//! }
+//! // Then just call `App::launch_simple("Window title");` from `main`.
 //! ```
 //! 
 //! Note: only `new` and `render` are required to be implemented, but implementing `on` (and `on_resize` or `on_resize_ext`) allows an app to handle events.
