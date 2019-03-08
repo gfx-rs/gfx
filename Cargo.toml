@@ -1,7 +1,7 @@
 [package]
 name = "gfx_app"
 version = "0.9.0"
-description = "GFX example application framework"
+description = "Cross platform GFX example application framework"
 homepage = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"

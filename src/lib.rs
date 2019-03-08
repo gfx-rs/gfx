@@ -12,6 +12,60 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Cross platform GFX example application framework.
+//! 
+//! Supports OpenGL 3.2, OpenGL ES 2.0, WebGL 2, DirectX 11, Vulkan, and Metal. Handles windowing via `winit`.
+//! 
+//! Note: The documentation will be available only for the backends corresponding to the platform you're compiling to.
+//! 
+//! `gfx_app` exposes the following helpers:
+//!  - `gfx_app::Application` - trait that creates a window and backend for the given compile target and feature set (DirectX on Windows, OpenGL elsewhere. The feature `vulkan` enables Vulkan and `metal` enables Metal on macOS).
+//!  - `gfx_app::ColorFormat`/`gfx_app::DepthFormat` - the pixel formats for the window's color and depth buffers.
+//!  - `gfx_app::DefaultResources` - type that picks the correct `gfx::Resources` for the current backend.
+//!  - `gfx_app::shade::Source` - container for shaders for multiple backends.
+//! 
+//! ## Sample usage
+//! 
+//! ```
+//! struct App<R: gfx::Resources> {
+//!     window_targets: gfx_app::WindowTargets<R>,
+//! }
+//! 
+//! impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
+//!     fn new<F: gfx::Factory<R>>(
+//!         _factory: &mut F,
+//!         _backend: gfx_app::shade::Backend,
+//!         window_targets: gfx_app::WindowTargets<R>,
+//!     ) -> Self {
+//!         App {
+//!             window_targets
+//!         }
+//!     }
+//! 
+//!     fn render<C: gfx::CommandBuffer<R>>(&mut self, encoder: &mut gfx::Encoder<R, C>) {
+//!         encoder.clear(&self.window_targets.color, [1.0, 0.0, 1.0, 1.0]);
+//!     }
+//! 
+//!     fn on_resize(&mut self, window_targets: gfx_app::WindowTargets<R>) {
+//!         self.window_targets = window_targets;
+//!     }
+//! 
+//!     fn on(&mut self, event: winit::WindowEvent) {
+//!         match event {
+//!             _ => (),
+//!         }
+//!     }
+//! }
+//! 
+//! fn main() {
+//!     use gfx_app::Application;
+//! 
+//!     App::launch_simple("Window title");
+//! }
+//! ```
+//! 
+//! Note: only `new` and `render` are required to be implemented, but implementing `on` (and `on_resize` or `on_resize_ext`) allows an app to handle events.
+
 #[allow(unused_imports)]
 #[macro_use]
 extern crate log;
@@ -40,30 +94,38 @@ extern crate gfx_window_vulkan;
 
 pub mod shade;
 
+/// The canonical color format for the current backend.
 #[cfg(not(any(feature = "vulkan", feature = "metal")))]
 pub type ColorFormat = gfx::format::Rgba8;
+/// The canonical color format for the current backend.
 #[cfg(feature = "vulkan")]
 pub type ColorFormat = gfx::format::Bgra8;
+/// The canonical color format for the current backend.
 #[cfg(feature = "metal")]
 pub type ColorFormat = (gfx::format::B8_G8_R8_A8, gfx::format::Srgb);
 
+/// The canonical depth format for the current backend.
 #[cfg(feature = "metal")]
 pub type DepthFormat = gfx::format::Depth32F;
+/// The canonical depth format for the current backend.
 #[cfg(not(feature = "metal"))]
 pub type DepthFormat = gfx::format::DepthStencil;
 
+/// Aggregator of the render and depth targets (plus additional information about them) for a window.
 pub struct WindowTargets<R: gfx::Resources> {
+    /// Color target for the window
     pub color: gfx::handle::RenderTargetView<R, ColorFormat>,
+
+    /// Depth target for the window
     pub depth: gfx::handle::DepthStencilView<R, DepthFormat>,
+
+    /// For use in projection matrices. Calculated as `width/height`.
     pub aspect_ratio: f32,
 }
 
-pub enum Backend {
-    OpenGL2,
-    Direct3D11 { pix_mode: bool },
-    Metal,
-}
-
+/// Helper to calculate frame statistics.
+/// 
+/// Prints results on `drop`.
 struct Harness {
     start: std::time::Instant,
     num_frames: f64,
@@ -76,6 +138,10 @@ impl Harness {
             num_frames: 0.0,
         }
     }
+
+    /// Increment internal counters.
+    /// 
+    /// Call once per frame.
     fn bump(&mut self) {
         self.num_frames += 1.0;
     }
@@ -90,16 +156,22 @@ impl Drop for Harness {
     }
 }
 
+/// Trait to allow `Application` to create a backend-specific resources.
 pub trait Factory<R: gfx::Resources>: gfx::Factory<R> {
     type CommandBuffer: gfx::CommandBuffer<R>;
     fn create_encoder(&mut self) -> gfx::Encoder<R, Self::CommandBuffer>;
 }
 
+/// Represents an application container. Consider using `Application`, as it is simpler to use.
 pub trait ApplicationBase<R: gfx::Resources, C: gfx::CommandBuffer<R>> {
     fn new<F>(&mut F, shade::Backend, WindowTargets<R>) -> Self where F: Factory<R, CommandBuffer = C>;
+
     fn render<D>(&mut self, &mut D) where D: gfx::Device<Resources = R, CommandBuffer = C>;
+
     fn get_exit_key() -> Option<winit::VirtualKeyCode>;
+
     fn on(&mut self, winit::WindowEvent);
+
     fn on_resize<F>(&mut self, &mut F, WindowTargets<R>) where F: Factory<R, CommandBuffer = C>;
 }
 
@@ -111,6 +183,9 @@ impl Factory<gfx_device_gl::Resources> for gfx_device_gl::Factory {
     }
 }
 
+/// Creates a window and starts the main loop for OpenGL
+/// 
+/// Can target WebGL if the `target_os` is `emscripten`. Otherwise, tries OpenGL 3.2, then OpenGL ES 2.0.
 pub fn launch_gl3<A>(window: winit::WindowBuilder) where
 A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffer>
 {
@@ -206,6 +281,7 @@ impl Factory<gfx_device_dx11::Resources> for gfx_device_dx11::Factory {
     }
 }
 
+/// Creates a window and starts the main loop for DirectX 11
 #[cfg(target_os = "windows")]
 pub fn launch_d3d11<A>(wb: winit::WindowBuilder) where
 A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
@@ -242,7 +318,7 @@ A: Sized + ApplicationBase<gfx_device_dx11::Resources, D3D11CommandBuffer>
                             ..
                         },
                         ..
-                    } if key == A::get_exit_key() => return,
+                    } if key == A::get_exit_key() => running = false,
                     winit::WindowEvent::Resized(size) => {
                         let physical = size.to_physical(window.inner.get_hidpi_factor());
                         let (width, height): (u32, u32) = physical.into();
@@ -287,6 +363,7 @@ impl Factory<gfx_device_metal::Resources> for gfx_device_metal::Factory {
     }
 }
 
+/// Creates a window and starts the main loop for Metal
 #[cfg(feature = "metal")]
 pub fn launch_metal<A>(wb: winit::WindowBuilder) where
 A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::CommandBuffer>
@@ -322,7 +399,7 @@ A: Sized + ApplicationBase<gfx_device_metal::Resources, gfx_device_metal::Comman
                             ..
                         },
                         ..
-                    } if key == A::get_exit_key() => return,
+                    } if key == A::get_exit_key() => running = false,
                     winit::WindowEvent::Resized(_size) => {
                         warn!("TODO: resize on Metal");
                     },
@@ -346,6 +423,7 @@ impl Factory<gfx_device_vulkan::Resources> for gfx_device_vulkan::Factory {
     }
 }
 
+/// Creates a window and starts the main loop for Vulkan
 #[cfg(feature = "vulkan")]
 pub fn launch_vulkan<A>(wb: winit::WindowBuilder) where
 A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::CommandBuffer>
@@ -380,7 +458,7 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
                             ..
                         },
                         ..
-                    } if key == A::get_exit_key() => return,
+                    } if key == A::get_exit_key() => running = false,
                     winit::WindowEvent::Resized(_size) => {
                         warn!("TODO: resize on Vulkan");
                     },
@@ -395,51 +473,75 @@ A: Sized + ApplicationBase<gfx_device_vulkan::Resources, gfx_device_vulkan::Comm
     }
 }
 
-
+/// The implementation of `gfx::Resources` for the current backend.
 #[cfg(all(not(target_os = "windows"), not(feature = "vulkan"), not(feature = "metal")))]
 pub type DefaultResources = gfx_device_gl::Resources;
+/// The implementation of `gfx::Resources` for the current backend.
 #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
 pub type DefaultResources = gfx_device_dx11::Resources;
+/// The implementation of `gfx::Resources` for the current backend.
 #[cfg(feature = "metal")]
 pub type DefaultResources = gfx_device_metal::Resources;
+/// The implementation of `gfx::Resources` for the current backend.
 #[cfg(feature = "vulkan")]
 pub type DefaultResources = gfx_device_vulkan::Resources;
 
+/// Represents a cross-platform application container.
 pub trait Application<R: gfx::Resources>: Sized {
+    /// Called once to initialize the app.
     fn new<F: gfx::Factory<R>>(&mut F, shade::Backend, WindowTargets<R>) -> Self;
+
+    /// Render the application. Called once per frame.
     fn render<C: gfx::CommandBuffer<R>>(&mut self, &mut gfx::Encoder<R, C>);
 
+    /// The application will exit when this key is pressed.
+    /// 
+    /// Note: Implement this and return `None` to disable hotkey exit.
     fn get_exit_key() -> Option<winit::VirtualKeyCode> {
         Some(winit::VirtualKeyCode::Escape)
     }
+
+    /// See `on_resize_ext`.
     fn on_resize(&mut self, WindowTargets<R>) {}
+    
+    /// User-specified handler for `winit::WindowEvent::Resized`.
+    /// 
+    /// Note: implement this method if you have resources that need to be recreated when the window size changes (e.g. G-buffers), otherwise just implement `on_resize`.
     fn on_resize_ext<F: gfx::Factory<R>>(&mut self, _factory: &mut F, targets: WindowTargets<R>) {
         self.on_resize(targets);
     }
+
+    /// User-specified handler for `winit::WindowEvent`s.
+    /// 
+    /// Note: will not be called for the following events:
+    ///  - `winit::WindowEvent::CloseRequested`
+    ///  - `winit::WindowEvent::Resized`
+    ///  - `winit::WindowEvent::KeyboardInput` when the `winit::VirtualKeyCode` is equal to `get_exit_key()`
     fn on(&mut self, _event: winit::WindowEvent) {}
 
+    /// Launch the app with the default `winit::WindowBuilder` parameters and run the main loop.
     fn launch_simple(name: &str) where Self: Application<DefaultResources> {
         let wb = winit::WindowBuilder::new().with_title(name);
         <Self as Application<DefaultResources>>::launch_default(wb)
     }
-    #[cfg(all(not(target_os = "windows"), not(feature = "vulkan"), not(feature = "metal")))]
+
+    /// Launch the app with a specified `winit::WindowBuilder` and run the main loop.
     fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultResources> {
+        #[cfg(all(not(target_os = "windows"), not(feature = "vulkan"), not(feature = "metal")))]
         launch_gl3::<Wrap<_, _, Self>>(wb);
-    }
-    #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultResources> {
+
+        #[cfg(all(target_os = "windows", not(feature = "vulkan")))]
         launch_d3d11::<Wrap<_, _, Self>>(wb);
-    }
-    #[cfg(feature = "metal")]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultResources> {
+
+        #[cfg(feature = "metal")]
         launch_metal::<Wrap<_, _, Self>>(wb);
-    }
-    #[cfg(feature = "vulkan")]
-    fn launch_default(wb: winit::WindowBuilder) where Self: Application<DefaultResources> {
+
+        #[cfg(feature = "vulkan")]
         launch_vulkan::<Wrap<_, _, Self>>(wb);
     }
 }
 
+/// Wraps a `gfx::Encoder` and `Application` to simplify usage of `ApplicationBase`.
 pub struct Wrap<R: gfx::Resources, C, A> {
     encoder: gfx::Encoder<R, C>,
     app: A,
