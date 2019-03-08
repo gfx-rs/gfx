@@ -14,7 +14,7 @@
 
 //! Cross platform GFX example application framework.
 //! 
-//! Supports OpenGL 3.2, OpenGL ES 2.0, WebGL 2, DirectX 11, Vulkan, and Metal. Handles windowing via `winit`.
+//! Supports OpenGL 3.2, OpenGL ES 2.0, WebGL 2, and DirectX 11. Handles windowing via `winit`.
 //! 
 //! Note: The documentation will be available only for the backends corresponding to the platform you're compiling to.
 //! 
