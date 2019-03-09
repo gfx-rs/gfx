@@ -222,6 +222,7 @@ impl fmt::Debug for PipelineCache {
 pub struct RasterizerState {
     //TODO: more states
     pub front_winding: metal::MTLWinding,
+    pub fill_mode: metal::MTLTriangleFillMode,
     pub cull_mode: metal::MTLCullMode,
     pub depth_clip: Option<metal::MTLDepthClipMode>,
 }
@@ -230,6 +231,7 @@ impl Default for RasterizerState {
     fn default() -> Self {
         RasterizerState {
             front_winding: metal::MTLWinding::Clockwise,
+            fill_mode: metal::MTLTriangleFillMode::Fill,
             cull_mode: metal::MTLCullMode::None,
             depth_clip: None,
         }

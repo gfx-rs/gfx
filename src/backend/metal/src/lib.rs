@@ -503,6 +503,8 @@ struct PrivateCapabilities {
     os_version: (u32, u32),
     msl_version: metal::MTLLanguageVersion,
     exposed_queues: usize,
+    // if TRUE, we'll report `NON_FILL_POLYGON_MODE` feature without the points support
+    expose_line_mode: bool,
     resource_heaps: bool,
     argument_buffers: bool,
     shared_textures: bool,
@@ -624,6 +626,7 @@ impl PrivateCapabilities {
                 MTLLanguageVersion::V1_0
             },
             exposed_queues: 1,
+            expose_line_mode: true,
             resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
             argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
             shared_textures: !os_is_mac,
@@ -806,13 +809,6 @@ impl PrivateCapabilities {
 #[derive(Clone, Copy, Debug)]
 struct PrivateDisabilities {
     broken_viewport_near_depth: bool,
-}
-
-fn validate_line_width(width: f32) {
-    // Note from the Vulkan spec:
-    // > If the wide lines feature is not enabled, lineWidth must be 1.0
-    // Simply assert and no-op because Metal never exposes `Features::LINE_WIDTH`
-    assert_eq!(width, 1.0);
 }
 
 trait AsNative {
