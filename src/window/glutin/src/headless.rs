@@ -46,7 +46,7 @@ use core::texture::Dimensions;
 /// let events_loop = EventsLoop::new();
 /// let context_builder = ContextBuilder::new()
 ///     .with_hardware_acceleration(Some(false));
-/// let context = Context::new(&events_loop, context_builder, false)
+/// let context = Context::new_headless(&events_loop, context_builder, (256, 256).into())
 ///     .expect("Failed to build headless context");
 ///
 /// let (mut device, _, _, _) = init_headless::<Rgba8, DepthStencil>(&context, dim);
@@ -101,7 +101,7 @@ mod tests {
         let events_loop = EventsLoop::new();
         let context_builder = ContextBuilder::new()
             .with_hardware_acceleration(Some(false));
-        let context = Context::new(&events_loop, context_builder, false)
+        let context = Context::new_headless(&events_loop, context_builder, (256, 256).into())
             .expect("Failed to build headless context");
 
         let (mut device, _, _, _) = init_headless::<Rgba8, DepthStencil>(&context, dim);
