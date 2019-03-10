@@ -15,7 +15,7 @@
 use std::os::raw::c_void;
 
 use device_gl::{Device, Factory, Resources as Res, create as gl_create, create_main_targets_raw};
-use glutin::{GlContext, Context};
+use glutin::{ContextTrait, Context};
 
 use core::format::{Format, DepthFormat, RenderFormat};
 use core::handle::{DepthStencilView, RawDepthStencilView, RawRenderTargetView, RenderTargetView};

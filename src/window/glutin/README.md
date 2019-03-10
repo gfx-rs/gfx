@@ -7,10 +7,10 @@ Glutin window backend for gfx-rs
 Make sure you have the following in your `Cargo.toml`:
 
 ```toml
-gfx_core = "0.8"
-gfx_device_gl = "0.15"
-gfx_window_glutin = "0.28.0"
-glutin = "0.19"
+gfx_core = "0.9"
+gfx_device_gl = "0.16"
+gfx_window_glutin = "0.30.0"
+glutin = "0.20"
 ```
 
 Then, initialize `gfx` as follows:

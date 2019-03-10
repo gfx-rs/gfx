@@ -24,7 +24,7 @@ pub use headless::{init_headless, init_headless_raw};
 use core::{format, handle, texture};
 use core::memory::Typed;
 use device_gl::Resources as R;
-use glutin::{CreationError, GlContext};
+use glutin::{CreationError, ContextTrait};
 
 #[cfg(feature = "headless")]
 mod headless;
@@ -59,7 +59,7 @@ pub mod emscripten;
 pub fn init<Cf, Df>(window: glutin::WindowBuilder,
                     context: glutin::ContextBuilder,
                     events_loop: &glutin::EventsLoop) ->
-            Result<(glutin::GlWindow, device_gl::Device, device_gl::Factory,
+            Result<(glutin::WindowedContext, device_gl::Device, device_gl::Factory,
             handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>), CreationError>
 where
     Cf: format::RenderFormat,
@@ -95,7 +95,7 @@ where
 ///
 /// let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 /// ```
-pub fn init_existing<Cf, Df>(window: &glutin::GlWindow) ->
+pub fn init_existing<Cf, Df>(window: &glutin::WindowedContext) ->
             (device_gl::Device, device_gl::Factory,
             handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>)
 where
@@ -106,7 +106,7 @@ where
     (device, factory, Typed::new(color_view), Typed::new(ds_view))
 }
 
-fn get_window_dimensions(window: &glutin::GlWindow) -> texture::Dimensions {
+fn get_window_dimensions(window: &glutin::WindowedContext) -> texture::Dimensions {
     // https://github.com/tomaka/winit/pull/370
     #[cfg(target_os = "emscripten")]
     let (width, height) = emscripten::get_canvas_size();
@@ -128,7 +128,7 @@ pub fn init_raw(window: glutin::WindowBuilder,
                 events_loop: &glutin::EventsLoop,
                 color_format: format::Format,
                 ds_format: format::Format) ->
-                Result<(glutin::GlWindow, device_gl::Device, device_gl::Factory,
+                Result<(glutin::WindowedContext, device_gl::Device, device_gl::Factory,
                 handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>), CreationError>
 {
     let window = {
@@ -143,7 +143,7 @@ pub fn init_raw(window: glutin::WindowBuilder,
             .with_pixel_format(color_total_bits - alpha_bits, alpha_bits)
             .with_srgb(color_format.1 == format::ChannelType::Srgb);
 
-        glutin::GlWindow::new(window, context, &events_loop)?
+        glutin::WindowedContext::new_windowed(window, context, &events_loop)?
     };
 
     let (device, factory, color_view, ds_view) = init_existing_raw(&window, color_format, ds_format);
@@ -153,7 +153,7 @@ pub fn init_raw(window: glutin::WindowBuilder,
 
 /// Initialize with an existing Glutin window. Raw version.
 pub fn init_existing_raw(
-    window: &glutin::GlWindow,
+    window: &glutin::WindowedContext,
     color_format: format::Format, ds_format: format::Format,
 ) -> (device_gl::Device, device_gl::Factory,
       handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)
@@ -171,7 +171,7 @@ pub fn init_existing_raw(
 }
 
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
-pub fn update_views<Cf, Df>(window: &glutin::GlWindow, color_view: &mut handle::RenderTargetView<R, Cf>,
+pub fn update_views<Cf, Df>(window: &glutin::WindowedContext, color_view: &mut handle::RenderTargetView<R, Cf>,
                     ds_view: &mut handle::DepthStencilView<R, Df>)
 where
     Cf: format::RenderFormat,
@@ -186,7 +186,7 @@ where
 }
 
 /// Return new main target views if the window resolution has changed from the old dimensions.
-pub fn update_views_raw(window: &glutin::GlWindow, old_dimensions: texture::Dimensions,
+pub fn update_views_raw(window: &glutin::WindowedContext, old_dimensions: texture::Dimensions,
                         color_format: format::Format, ds_format: format::Format)
                         -> Option<(handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)>
 {
@@ -200,7 +200,7 @@ pub fn update_views_raw(window: &glutin::GlWindow, old_dimensions: texture::Dime
 
 /// Create new main target views based on the current size of the window.
 /// Best called just after a WindowResize event.
-pub fn new_views<Cf, Df>(window: &glutin::GlWindow)
+pub fn new_views<Cf, Df>(window: &glutin::WindowedContext)
         -> (handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>) where
     Cf: format::RenderFormat,
     Df: format::DepthFormat,
