@@ -2339,7 +2339,7 @@ impl d::Device<B> for Device {
             } else {
                 None
             },
-            dxgi_format: image.descriptor.Format,
+            dxgi_format: image.default_view_format.unwrap(),
             num_levels: image.descriptor.MipLevels as image::Level,
             mip_levels,
             layers,
