@@ -33,7 +33,7 @@ use std::ffi::CString;
 use std::time::{Duration, Instant};
 use gfx_device_gl::{Resources as R, CommandBuffer as CB};
 use gfx_core::Device;
-use glutin::GlContext;
+use glutin::ContextTrait;
 
 gfx_defines!{
     vertex Vertex {
@@ -94,7 +94,7 @@ trait Renderer: Drop {
 
 struct GFX {
     dimension: i16,
-    window: glutin::GlWindow,
+    window: glutin::WindowedContext,
     device:gfx_device_gl::Device,
     encoder: gfx::Encoder<R,CB>,
     data: pipe::Data<R>,
@@ -104,7 +104,7 @@ struct GFX {
 
 struct GL {
     dimension: i16,
-    window: glutin::GlWindow,
+    window: glutin::WindowedContext,
     gl:Gl,
     trans_uniform:GLint,
     vs:GLuint,
@@ -221,7 +221,7 @@ impl GL {
             }
         };
 
-        let window = glutin::GlWindow::new(builder, context, &events_loop).unwrap();
+        let window = glutin::WindowedContext::new_windowed(builder, context, &events_loop).unwrap();
         unsafe { window.make_current().unwrap() };
         let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
 

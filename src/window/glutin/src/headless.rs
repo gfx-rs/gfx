@@ -15,7 +15,7 @@
 use std::os::raw::c_void;
 
 use device_gl::{Device, Factory, Resources as Res, create as gl_create, create_main_targets_raw};
-use glutin::{GlContext, Context};
+use glutin::{ContextTrait, Context};
 
 use core::format::{Format, DepthFormat, RenderFormat};
 use core::handle::{DepthStencilView, RawDepthStencilView, RawRenderTargetView, RenderTargetView};
@@ -46,7 +46,7 @@ use core::texture::Dimensions;
 /// let events_loop = EventsLoop::new();
 /// let context_builder = ContextBuilder::new()
 ///     .with_hardware_acceleration(Some(false));
-/// let context = Context::new(&events_loop, context_builder, false)
+/// let context = Context::new_headless(&events_loop, context_builder, (256, 256).into())
 ///     .expect("Failed to build headless context");
 ///
 /// let (mut device, _, _, _) = init_headless::<Rgba8, DepthStencil>(&context, dim);
@@ -101,7 +101,7 @@ mod tests {
         let events_loop = EventsLoop::new();
         let context_builder = ContextBuilder::new()
             .with_hardware_acceleration(Some(false));
-        let context = Context::new(&events_loop, context_builder, false)
+        let context = Context::new_headless(&events_loop, context_builder, (256, 256).into())
             .expect("Failed to build headless context");
 
         let (mut device, _, _, _) = init_headless::<Rgba8, DepthStencil>(&context, dim);
