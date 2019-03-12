@@ -552,7 +552,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn set_blend_constants(&mut self, color: pso::ColorValue) {
-        self.device.0.cmd_set_blend_constants(self.raw, color);
+        self.device.0.cmd_set_blend_constants(self.raw, &color);
     }
 
     unsafe fn set_depth_bounds(&mut self, bounds: Range<f32>) {
