@@ -224,21 +224,21 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         (
             "queue info",
             display_debug_utils_label_ext(
-                callback_data.p_queue_labels,
+                callback_data.p_queue_labels as *mut _,
                 callback_data.queue_label_count as usize,
             ),
         ),
         (
             "cmd buf info",
             display_debug_utils_label_ext(
-                callback_data.p_cmd_buf_labels,
+                callback_data.p_cmd_buf_labels as *mut _,
                 callback_data.cmd_buf_label_count as usize,
             ),
         ),
         (
             "object info",
             display_debug_utils_object_name_info_ext(
-                callback_data.p_objects,
+                callback_data.p_objects as *mut _,
                 callback_data.object_count as usize,
             ),
         ),
