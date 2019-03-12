@@ -27,6 +27,14 @@ gfx-rs is a low-level, cross-platform graphics abstraction library in Rust. It c
   * [OpenGL 2.1+/ES2+](src/backend/gl)
 * `gfx-warden` which is a data-driven reference test framework, used to verify consistency across all graphics backends.
 
+## The `gfx` crate
+
+This repository was originally home to the [`gfx`](https://crates.io/crates/gfx) crate, which is now deprecated. You can find the latest versions of the code for that crate in the [`pre-ll`](https://github.com/gfx-rs/gfx/tree/pre-ll) branch of this repository.
+
+The master branch of this repository is now focused on developing [`gfx-hal`](https://crates.io/crates/gfx-hal) and its associated backend and helper libraries, as described above. `gfx-hal` is a complete rewrite of `gfx`, but it is not necessarily the direct successor to `gfx`. Instead, it serves a different purpose than the original `gfx` crate, by being "lower level" than the original. Hence, the name of `gfx-hal` was originally `ll`, which stands for "lower level", and the original `gfx` is now referred to as `pre-ll`.
+
+The spiritual successor to the original `gfx` is actually [`wgpu`](https://github.com/gfx-rs/wgpu), which stands on a similar level of abstraction to the old `gfx` crate, but with a modernized API that is more fit for being used over Vulkan/DX12/Metal. If you want something similar to the old `gfx` crate that is being actively developed, `wgpu` is probably what you're looking for, rather than `gfx-hal`.
+
 ## Example
 
 To run an example, simply `cd` to the `examples` directory, then use `cargo run` with `--features {backend}` to specify the backend (where `{backend}` is either `vulkan`, `dx12`, `dx11`, `metal`, or `gl`). For example:
