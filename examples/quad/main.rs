@@ -487,12 +487,15 @@ fn main() {
         }
     }
 
-    for i in 0..frames_in_flight {
+    for _ in 0..frame_images.len() {
         image_acquire_semaphores.push(
             device
                 .create_semaphore()
                 .expect("Could not create semaphore"),
         );
+    }
+
+    for i in 0..frames_in_flight {
         submission_complete_semaphores.push(
             device
                 .create_semaphore()
