@@ -41,6 +41,8 @@ const MEM_TYPE_BUFFER_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::BufferOnly as u
 const MEM_TYPE_IMAGE_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::ImageOnly as u64;
 const MEM_TYPE_TARGET_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::TargetOnly as u64;
 
+pub const IDENTITY_MAPPING: UINT = 0x1688; // D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
+
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
 fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
@@ -67,6 +69,7 @@ pub(crate) struct ViewInfo {
     pub(crate) caps: image::ViewCapabilities,
     pub(crate) view_kind: image::ViewKind,
     pub(crate) format: dxgiformat::DXGI_FORMAT,
+    pub(crate) component_mapping: UINT,
     pub(crate) range: image::SubresourceRange,
 }
 
@@ -722,7 +725,7 @@ impl Device {
         let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
             Format: info.format,
             ViewDimension: 0,
-            Shader4ComponentMapping: 0x1688, // TODO: map swizzle
+            Shader4ComponentMapping: info.component_mapping,
             u: unsafe { mem::zeroed() },
         };
 
@@ -1942,7 +1945,7 @@ impl d::Device<B> for Device {
             let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
                 Format: format,
                 ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
-                Shader4ComponentMapping: 0x1688, // TODO: verify
+                Shader4ComponentMapping: IDENTITY_MAPPING,
                 u: mem::zeroed(),
             };
 
@@ -2177,6 +2180,7 @@ impl d::Device<B> for Device {
                 image::Kind::D3(..) => image::ViewKind::D3,
             },
             format: image_unbound.desc.Format,
+            component_mapping: IDENTITY_MAPPING,
             range: image::SubresourceRange {
                 aspects: Aspects::empty(),
                 levels: 0..0,
@@ -2284,7 +2288,7 @@ impl d::Device<B> for Device {
         image: &r::Image,
         view_kind: image::ViewKind,
         format: format::Format,
-        _swizzle: format::Swizzle,
+        swizzle: format::Swizzle,
         range: image::SubresourceRange,
     ) -> Result<r::ImageView, image::ViewError> {
         let image = image.expect_bound();
@@ -2305,6 +2309,7 @@ impl d::Device<B> for Device {
                 view_kind
             },
             format: conv::map_format(format).ok_or(image::ViewError::BadFormat(format))?,
+            component_mapping: conv::map_swizzle(swizzle),
             range,
         };
 
@@ -3158,4 +3163,10 @@ impl d::Device<B> for Device {
         }
         Ok(())
     }
+}
+
+
+#[test]
+fn test_identity_mapping() {
+    assert_eq!(conv::map_swizzle(format::Swizzle::NO), IDENTITY_MAPPING);
 }

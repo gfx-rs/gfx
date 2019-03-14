@@ -18,7 +18,7 @@ use winapi::Interface;
 
 use native::{self, descriptor};
 
-use device::ViewInfo;
+use device::{ViewInfo, IDENTITY_MAPPING};
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 use {
@@ -1344,6 +1344,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             caps: image::ViewCapabilities::empty(),
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
+                            component_mapping: IDENTITY_MAPPING,
                             range: image::SubresourceRange {
                                 aspects: Aspects::COLOR,
                                 levels: attachment.mip_levels.0..attachment.mip_levels.1,
@@ -1380,6 +1381,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             caps: image::ViewCapabilities::empty(),
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
+                            component_mapping: IDENTITY_MAPPING,
                             range: image::SubresourceRange {
                                 aspects: if depth.is_some() {
                                     Aspects::DEPTH
@@ -1506,6 +1508,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             caps: src.view_caps,
             view_kind: image::ViewKind::D2Array, // TODO
             format: src.default_view_format.unwrap(),
+            component_mapping: IDENTITY_MAPPING,
             range: image::SubresourceRange {
                 aspects: format::Aspects::COLOR, // TODO
                 levels: 0..src.descriptor.MipLevels as _,
