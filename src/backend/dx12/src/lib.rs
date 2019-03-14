@@ -180,8 +180,8 @@ static QUEUE_FAMILIES: [QueueFamily; 4] = [
 
 pub struct PhysicalDevice {
     adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
-    features: hal::Features,
-    limits: hal::Limits,
+    features: Features,
+    limits: Limits,
     format_properties: Arc<FormatProperties>,
     private_caps: Capabilities,
     heap_properties: &'static [HeapProperties; NUM_HEAP_PROPERTIES],
@@ -198,7 +198,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[hal::QueuePriority])],
-        requested_features: hal::Features,
+        requested_features: Features,
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
         let lock = self.is_open.try_lock();
         let mut open_guard = match lock {
@@ -1036,16 +1036,20 @@ impl hal::Instance for Instance {
                     Features::INSTANCE_RATE |
                     Features::SAMPLER_MIP_LOD_BIAS,
                 limits: Limits { // TODO
-                    max_texture_size: 0,
+                    max_image_1d_size: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION as _,
+                    max_image_2d_size: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
+                    max_image_3d_size: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION as _,
+                    max_image_cube_size: d3d12::D3D12_REQ_TEXTURECUBE_DIMENSION as _,
+                    max_image_array_layers: d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
                     max_texel_elements: 0,
                     max_patch_size: 0,
                     max_viewports: 0,
-                    max_compute_group_count: [
+                    max_compute_work_group_count: [
                         d3d12::D3D12_CS_THREAD_GROUP_MAX_X,
                         d3d12::D3D12_CS_THREAD_GROUP_MAX_Y,
                         d3d12::D3D12_CS_THREAD_GROUP_MAX_Z,
                     ],
-                    max_compute_group_size: [
+                    max_compute_work_group_size: [
                         d3d12::D3D12_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
                         1, //TODO
                         1, //TODO
@@ -1055,8 +1059,8 @@ impl hal::Instance for Instance {
                     max_vertex_input_attribute_offset: 255, // TODO
                     max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
                     max_vertex_output_components: 16, // TODO
-                    min_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
-                    min_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
+                    optimal_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
+                    optimal_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
                     min_texel_buffer_offset_alignment: 1, // TODO
                     min_uniform_buffer_offset_alignment: 256, // Required alignment for CBVs
                     min_storage_buffer_offset_alignment: 1, // TODO
@@ -1069,6 +1073,7 @@ impl hal::Instance for Instance {
                     non_coherent_atom_size: 1, //TODO: confirm
                     max_sampler_anisotropy: 16.,
                     min_vertex_input_binding_stride_alignment: 1,
+                    .. Limits::default() //TODO
                 },
                 format_properties: Arc::new(FormatProperties::new(device)),
                 private_caps: Capabilities {

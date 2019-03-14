@@ -221,7 +221,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// The `buffers` iterator should yield the `Buffer` to bind, as well as an
     /// offset, in bytes, into that buffer where the vertex data that should be bound
     /// starts.
-    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<B::Buffer>;
@@ -381,7 +381,7 @@ pub trait RawCommandBuffer<B: Backend>: Any + Send + Sync {
     /// - A compute pipeline must be bound using `bind_compute_pipeline`.
     /// - Only queues with compute capability support this function.
     /// - This function must be called outside of a render pass.
-    /// - `count` must be less than or equal to `Limits::max_compute_group_count`
+    /// - `count` must be less than or equal to `Limits::max_compute_work_group_count`
     ///
     /// TODO:
     unsafe fn dispatch(&mut self, count: WorkGroupCount);

@@ -774,16 +774,19 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let max_group_size = limits.max_compute_work_group_size;
 
         Limits {
-            max_texture_size: limits.max_image_dimension3_d as _,
+            max_image_1d_size: limits.max_image_dimension1_d as _,
+            max_image_2d_size: limits.max_image_dimension2_d as _,
+            max_image_3d_size: limits.max_image_dimension3_d as _,
+            max_image_cube_size: limits.max_image_dimension_cube as _,
             max_texel_elements: limits.max_texel_buffer_elements as _,
             max_patch_size: limits.max_tessellation_patch_size as PatchSize,
             max_viewports: limits.max_viewports as _,
-            max_compute_group_count: [
+            max_compute_work_group_count: [
                 max_group_count[0] as _,
                 max_group_count[1] as _,
                 max_group_count[2] as _,
             ],
-            max_compute_group_size: [
+            max_compute_work_group_size: [
                 max_group_size[0] as _,
                 max_group_size[1] as _,
                 max_group_size[2] as _,
@@ -793,8 +796,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_vertex_input_attribute_offset: limits.max_vertex_input_attribute_offset as _,
             max_vertex_input_binding_stride: limits.max_vertex_input_binding_stride as _,
             max_vertex_output_components: limits.max_vertex_output_components as _,
-            min_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as _,
-            min_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment as _,
+            optimal_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as _,
+            optimal_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment as _,
             min_texel_buffer_offset_alignment: limits.min_texel_buffer_offset_alignment as _,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as _,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as _,
@@ -806,6 +809,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             non_coherent_atom_size: limits.non_coherent_atom_size as _,
             max_sampler_anisotropy: limits.max_sampler_anisotropy,
             min_vertex_input_binding_stride_alignment: 1,
+            .. Limits::default() //TODO: please halp
         }
     }
 

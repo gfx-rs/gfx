@@ -338,24 +338,28 @@ impl hal::Instance for Instance {
             };
 
             let limits = hal::Limits {
-                max_texture_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
+                max_image_1d_size: d3d11::D3D11_REQ_TEXTURE1D_U_DIMENSION as _,
+                max_image_2d_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
+                max_image_3d_size: d3d11::D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION as _,
+                max_image_cube_size: d3d11::D3D11_REQ_TEXTURECUBE_DIMENSION as _,
+                max_image_array_layers: d3d11::D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
                 max_texel_elements: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _, //TODO
                 max_patch_size: 0,                                                    // TODO
                 max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
-                max_compute_group_count: [
+                max_compute_work_group_count: [
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_Z,
                 ],
-                max_compute_group_size: [d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP, 1, 1], // TODO
+                max_compute_work_group_size: [d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP, 1, 1], // TODO
                 max_vertex_input_attribute_offset: 255, // TODO
                 max_vertex_input_attributes: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
                 max_vertex_input_binding_stride:
                     d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
                 max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _, // TODO: verify same as attributes
                 max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _, // TODO
-                min_buffer_copy_offset_alignment: 1,                                      // TODO
-                min_buffer_copy_pitch_alignment: 1,                                       // TODO
+                optimal_buffer_copy_offset_alignment: 1,                                      // TODO
+                optimal_buffer_copy_pitch_alignment: 1,                                       // TODO
                 min_texel_buffer_offset_alignment: 1,                                     // TODO
                 min_uniform_buffer_offset_alignment: 16, // TODO: verify
                 min_storage_buffer_offset_alignment: 1,  // TODO
@@ -366,6 +370,7 @@ impl hal::Instance for Instance {
                 non_coherent_atom_size: 1,               // TODO
                 max_sampler_anisotropy: 16.,
                 min_vertex_input_binding_stride_alignment: 1,
+                .. hal::Limits::default() //TODO
             };
 
             let features = get_features(device.clone(), feature_level);
@@ -1711,7 +1716,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<Buffer>,

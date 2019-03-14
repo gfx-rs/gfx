@@ -794,7 +794,7 @@ impl Journal {
         // Each upper level points to the lower one with index
         // sub-ranges. In order to merge two journals, we need
         // to fix those indices of the one that goes on top.
-        // This is referred here as "rebasing". 
+        // This is referred here as "rebasing".
         for mut com in other.render_commands.iter().cloned() {
             self.resources.rebase_render(&mut com);
             self.render_commands.push(com);
@@ -3019,7 +3019,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         });
     }
 
-    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: u32, buffers: I)
+    unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
     where
         I: IntoIterator<Item = (T, buffer::Offset)>,
         T: Borrow<native::Buffer>,

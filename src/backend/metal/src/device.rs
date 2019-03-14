@@ -391,25 +391,28 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn limits(&self) -> hal::Limits {
+        let pc = &self.shared.private_caps;
         hal::Limits {
-            max_texture_size: self.shared.private_caps.max_texture_size as usize,
-            max_texel_elements: (self.shared.private_caps.max_texture_size
-                * self.shared.private_caps.max_texture_size)
-                as usize,
+            max_image_1d_size: pc.max_texture_size as _,
+            max_image_2d_size: pc.max_texture_size as _,
+            max_image_3d_size: pc.max_texture_3d_size as _,
+            max_image_cube_size: pc.max_texture_size as _,
+            max_image_array_layers: pc.max_texture_layers as _,
+            max_texel_elements: (pc.max_texture_size * pc.max_texture_size) as usize,
             max_patch_size: 0, // No tessellation
 
             // Note: The maximum number of supported viewports and scissor rectangles varies by device.
             // TODO: read from Metal Feature Sets.
             max_viewports: 1,
 
-            min_buffer_copy_offset_alignment: self.shared.private_caps.buffer_alignment,
-            min_buffer_copy_pitch_alignment: 4,
-            min_texel_buffer_offset_alignment: self.shared.private_caps.buffer_alignment,
-            min_uniform_buffer_offset_alignment: self.shared.private_caps.buffer_alignment,
-            min_storage_buffer_offset_alignment: self.shared.private_caps.buffer_alignment,
+            optimal_buffer_copy_offset_alignment: pc.buffer_alignment,
+            optimal_buffer_copy_pitch_alignment: 4,
+            min_texel_buffer_offset_alignment: pc.buffer_alignment,
+            min_uniform_buffer_offset_alignment: pc.buffer_alignment,
+            min_storage_buffer_offset_alignment: pc.buffer_alignment,
 
-            max_compute_group_count: [16; 3], // TODO
-            max_compute_group_size: [64; 3],  // TODO
+            max_compute_work_group_count: [16; 3], // TODO
+            max_compute_work_group_size: [64; 3],  // TODO
 
             max_vertex_input_attributes: 31,
             max_vertex_input_bindings: 31,
@@ -427,6 +430,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             non_coherent_atom_size: 4,
             max_sampler_anisotropy: 16.,
             min_vertex_input_binding_stride_alignment: STRIDE_GRANULARITY as u64,
+            .. hal::Limits::default() //TODO
         }
     }
 }

@@ -567,6 +567,8 @@ struct PrivateCapabilities {
     buffer_alignment: u64,
     max_buffer_size: u64,
     max_texture_size: u64,
+    max_texture_3d_size: u64,
+    max_texture_layers: u64,
 }
 
 impl PrivateCapabilities {
@@ -753,50 +755,37 @@ impl PrivateCapabilities {
                 ],
             ) && !os_is_mac,
             format_rgba32float_all: os_is_mac,
-            format_depth16unorm: Self::supports_any(
-                &device,
-                &[
-                    MTLFeatureSet::macOS_GPUFamily1_v2,
-                    MTLFeatureSet::macOS_GPUFamily1_v3,
-                ],
-            ),
-            format_depth32float_filter: Self::supports_any(
-                &device,
-                &[
-                    MTLFeatureSet::macOS_GPUFamily1_v1,
-                    MTLFeatureSet::macOS_GPUFamily1_v2,
-                    MTLFeatureSet::macOS_GPUFamily1_v3,
-                ],
-            ),
-            format_depth32float_none: !Self::supports_any(
-                &device,
-                &[
-                    MTLFeatureSet::macOS_GPUFamily1_v1,
-                    MTLFeatureSet::macOS_GPUFamily1_v2,
-                    MTLFeatureSet::macOS_GPUFamily1_v3,
-                ],
-            ),
+            format_depth16unorm: device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v2),
+            format_depth32float_filter: device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1),
+            format_depth32float_none: !device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1),
             format_bgr10a2_all: Self::supports_any(&device, BGR10A2_ALL),
-            format_bgr10a2_no_write: !Self::supports_any(
-                &device,
-                &[MTLFeatureSet::macOS_GPUFamily1_v3],
-            ),
+            format_bgr10a2_no_write: !device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v3),
             max_buffers_per_stage: 31,
             max_textures_per_stage: if os_is_mac { 128 } else { 31 },
             max_samplers_per_stage: 16,
             buffer_alignment: if os_is_mac { 256 } else { 64 },
-            max_buffer_size: if Self::supports_any(
-                &device,
-                &[
-                    MTLFeatureSet::macOS_GPUFamily1_v2,
-                    MTLFeatureSet::macOS_GPUFamily1_v3,
-                ],
-            ) {
+            max_buffer_size: if device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v2) {
                 1 << 30 // 1GB on macOS 1.2 and up
             } else {
                 1 << 28 // 256MB otherwise
             },
-            max_texture_size: 4096, //TODO
+            max_texture_size: if Self::supports_any(&device, &[
+                MTLFeatureSet::iOS_GPUFamily3_v1,
+                MTLFeatureSet::tvOS_GPUFamily2_v1,
+                MTLFeatureSet::macOS_GPUFamily1_v1,
+            ]) {
+                16384
+            } else if Self::supports_any(&device, &[
+                MTLFeatureSet::iOS_GPUFamily1_v2,
+                MTLFeatureSet::iOS_GPUFamily2_v1,
+                MTLFeatureSet::tvOS_GPUFamily1_v1,
+            ]) {
+                8192
+            } else {
+                4096
+            },
+            max_texture_3d_size: 2048,
+            max_texture_layers: 2048,
         }
     }
 

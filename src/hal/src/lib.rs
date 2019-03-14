@@ -228,18 +228,62 @@ bitflags! {
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Limits {
-    /// Maximum supported texture size.
-    pub max_texture_size: usize,
+    /// Maximum supported image 1D size.
+    pub max_image_1d_size: image::Size,
+    /// Maximum supported image 2D size.
+    pub max_image_2d_size: image::Size,
+    /// Maximum supported image 3D size.
+    pub max_image_3d_size: image::Size,
+    /// Maximum supported image cube size.
+    pub max_image_cube_size: image::Size,
+    /// Maximum supporter image array size.
+    pub max_image_array_layers: image::Layer,
     /// Maximum number of elements for the BufferView to see.
     pub max_texel_elements: usize,
-    /// Maximum number of vertices for each patch.
-    pub max_patch_size: PatchSize,
-    /// Maximum number of viewports.
-    pub max_viewports: usize,
     ///
-    pub max_compute_group_count: WorkGroupCount,
+    pub max_uniform_buffer_range: buffer::Offset,
     ///
-    pub max_compute_group_size: [u32; 3],
+    pub max_storage_buffer_range: buffer::Offset,
+    ///
+    pub max_push_constants_size: usize,
+    ///
+    pub max_memory_allocation_count: usize,
+    ///
+    pub max_sampler_allocation_count: usize,
+    ///
+    pub max_bound_descriptor_sets: pso::DescriptorSetIndex,
+
+    ///
+    pub max_per_stage_descriptor_samplers: usize,
+    ///
+    pub max_per_stage_descriptor_uniform_buffers: usize,
+    ///
+    pub max_per_stage_descriptor_storage_buffers: usize,
+    ///
+    pub max_per_stage_descriptor_sampled_images: usize,
+    ///
+    pub max_per_stage_descriptor_storage_images: usize,
+    ///
+    pub max_per_stage_descriptor_input_attachments: usize,
+    ///
+    pub max_per_stage_resources: usize,
+
+    ///
+    pub max_descriptor_set_samplers: usize,
+    ///
+    pub max_descriptor_set_uniform_buffers: usize,
+    ///
+    pub max_descriptor_set_uniform_buffers_dynamic: usize,
+    ///
+    pub max_descriptor_set_storage_buffers: usize,
+    ///
+    pub max_descriptor_set_storage_buffers_dynamic: usize,
+    ///
+    pub max_descriptor_set_sampled_images: usize,
+    ///
+    pub max_descriptor_set_storage_images: usize,
+    ///
+    pub max_descriptor_set_input_attachments: usize,
 
     /// Maximum number of vertex input attributes that can be specified for a graphics pipeline.
     pub max_vertex_input_attributes: usize,
@@ -252,11 +296,55 @@ pub struct Limits {
     /// Maximum number of components of output variables which can be output by a vertex shader.
     pub max_vertex_output_components: usize,
 
-    /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
-    pub min_buffer_copy_offset_alignment: buffer::Offset,
-    /// The alignment of the row pitch of the texture data stored in a buffer that is
-    /// used in a GPU copy operation, in bytes, non-zero.
-    pub min_buffer_copy_pitch_alignment: buffer::Offset,
+    /// Maximum number of vertices for each patch.
+    pub max_patch_size: PatchSize,
+    ///
+    pub max_geometry_shader_invocations: usize,
+    ///
+    pub max_geometry_input_components: usize,
+    ///
+    pub max_geometry_output_components: usize,
+    ///
+    pub max_geometry_output_vertices: usize,
+    ///
+    pub max_geometry_total_output_components: usize,
+    ///
+    pub max_fragment_input_components: usize,
+    ///
+    pub max_fragment_output_attachments: usize,
+    ///
+    pub max_fragment_dual_source_attachments: usize,
+    ///
+    pub max_fragment_combined_output_resources: usize,
+
+    ///
+    pub max_compute_shared_memory_size: usize,
+    ///
+    pub max_compute_work_group_count: WorkGroupCount,
+    ///
+    pub max_compute_work_group_invocations: usize,
+    ///
+    pub max_compute_work_group_size: [u32; 3],
+
+    ///
+    pub max_draw_indexed_index_value: IndexCount,
+    ///
+    pub max_draw_indirect_count: InstanceCount,
+
+    ///
+    pub max_sampler_lod_bias: f32,
+    /// Maximum degree of sampler anisotropy.
+    pub max_sampler_anisotropy: f32,
+
+    /// Maximum number of viewports.
+    pub max_viewports: usize,
+    ///
+    pub max_viewport_dimensions: [image::Size; 2],
+    ///
+    pub max_framebuffer_extent: image::Extent,
+
+    ///
+    pub min_memory_map_alignment: usize,
     /// The alignment of the start of buffer used as a texel buffer, in bytes, non-zero.
     pub min_texel_buffer_offset_alignment: buffer::Offset,
     /// The alignment of the start of buffer used for uniform buffer updates, in bytes, non-zero.
@@ -271,10 +359,15 @@ pub struct Limits {
     pub framebuffer_stencil_samples_count: image::NumSamples,
     /// Maximum number of color attachments that can be used by a subpass in a render pass.
     pub max_color_attachments: usize,
+    ///
+    pub standard_sample_locations: bool,
+    /// The alignment of the start of the buffer used as a GPU copy source, in bytes, non-zero.
+    pub optimal_buffer_copy_offset_alignment: buffer::Offset,
+    /// The alignment of the row pitch of the texture data stored in a buffer that is
+    /// used in a GPU copy operation, in bytes, non-zero.
+    pub optimal_buffer_copy_pitch_alignment: buffer::Offset,
     /// Size and alignment in bytes that bounds concurrent access to host-mapped device memory.
     pub non_coherent_atom_size: usize,
-    /// Maximum degree of sampler anisotropy.
-    pub max_sampler_anisotropy: f32,
 
     /// The alignment of the vertex buffer stride.
     pub min_vertex_input_binding_stride_alignment: buffer::Offset,
