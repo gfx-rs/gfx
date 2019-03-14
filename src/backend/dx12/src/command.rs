@@ -18,7 +18,7 @@ use winapi::Interface;
 
 use native::{self, descriptor};
 
-use device::ViewInfo;
+use device::{ViewInfo, IDENTITY_MAPPING};
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 use {
@@ -1313,7 +1313,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
         let sub_pass = &pass_cache.render_pass.subpasses[self.cur_subpass];
 
-        let clear_rects: SmallVec<[pso::ClearRect; 16]> = rects
+        let clear_rects: SmallVec<[pso::ClearRect; 4]> = rects
             .into_iter()
             .map(|rect| rect.borrow().clone())
             .collect();
@@ -1335,6 +1335,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     );
 
                     for clear_rect in &clear_rects {
+                        assert!(attachment.layers.0 + clear_rect.layers.end <= attachment.layers.1);
                         let rect = [get_rect(&clear_rect.rect)];
 
                         let view_info = device::ViewInfo {
@@ -1343,10 +1344,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             caps: image::ViewCapabilities::empty(),
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
+                            component_mapping: IDENTITY_MAPPING,
                             range: image::SubresourceRange {
                                 aspects: Aspects::COLOR,
                                 levels: attachment.mip_levels.0..attachment.mip_levels.1,
-                                layers: clear_rect.layers.clone(),
+                                layers: attachment.layers.0 + clear_rect.layers.start ..
+                                    attachment.layers.0 + clear_rect.layers.end,
                             },
                         };
                         let rtv = rtv_pool.alloc_handle();
@@ -1369,6 +1372,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     );
 
                     for clear_rect in &clear_rects {
+                        assert!(attachment.layers.0 + clear_rect.layers.end <= attachment.layers.1);
                         let rect = [get_rect(&clear_rect.rect)];
 
                         let view_info = device::ViewInfo {
@@ -1377,6 +1381,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             caps: image::ViewCapabilities::empty(),
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
+                            component_mapping: IDENTITY_MAPPING,
                             range: image::SubresourceRange {
                                 aspects: if depth.is_some() {
                                     Aspects::DEPTH
@@ -1388,7 +1393,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                     Aspects::empty()
                                 },
                                 levels: attachment.mip_levels.0..attachment.mip_levels.1,
-                                layers: clear_rect.layers.clone(),
+                                layers: attachment.layers.0 + clear_rect.layers.start ..
+                                    attachment.layers.0 + clear_rect.layers.end,
                             },
                         };
                         let dsv = dsv_pool.alloc_handle();
@@ -1502,6 +1508,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             caps: src.view_caps,
             view_kind: image::ViewKind::D2Array, // TODO
             format: src.default_view_format.unwrap(),
+            component_mapping: IDENTITY_MAPPING,
             range: image::SubresourceRange {
                 aspects: format::Aspects::COLOR, // TODO
                 levels: 0..src.descriptor.MipLevels as _,
