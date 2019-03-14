@@ -190,8 +190,8 @@ impl Instance {
         window::SurfaceInner::new(None, layer)
     }
 
-    pub fn create_surface_from_layer(&self, layer: CAMetalLayer) -> Surface {
-        unsafe { self.create_from_layer(layer) }.into_surface()
+    pub fn create_surface_from_layer(&self, layer: CAMetalLayer, enable_signposts: bool) -> Surface {
+        unsafe { self.create_from_layer(layer) }.into_surface(enable_signposts)
     }
 }
 
@@ -238,14 +238,16 @@ impl Instance {
         window::SurfaceInner::new(NonNull::new(view), render_layer)
     }
 
-    pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
-        unsafe { self.create_from_nsview(nsview) }.into_surface()
+    pub fn create_surface_from_nsview(
+        &self, nsview: *mut c_void, enable_signposts: bool
+    ) -> Surface {
+        unsafe { self.create_from_nsview(nsview) }.into_surface(enable_signposts)
     }
 
     #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
         use winit::os::macos::WindowExt;
-        self.create_surface_from_nsview(window.get_nsview())
+        self.create_surface_from_nsview(window.get_nsview(), false)
     }
 }
 
@@ -293,14 +295,16 @@ impl Instance {
         window::SurfaceInner::new(NonNull::new(view), render_layer)
     }
 
-    pub fn create_surface_from_uiview(&self, uiview: *mut c_void) -> Surface {
-        unsafe { self.create_from_uiview(uiview) }.into_surface()
+    pub fn create_surface_from_uiview(
+        &self, uiview: *mut c_void, enable_signposts: bool
+    ) -> Surface {
+        unsafe { self.create_from_uiview(uiview) }.into_surface(enable_signposts)
     }
 
     #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
         use winit::os::ios::WindowExt;
-        self.create_surface_from_uiview(window.get_uiview())
+        self.create_surface_from_uiview(window.get_uiview(), false)
     }
 }
 

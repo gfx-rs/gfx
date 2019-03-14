@@ -850,12 +850,13 @@ unsafe impl Sync for Fence {}
 
 extern "C" {
     fn dispatch_semaphore_wait(semaphore: *mut c_void, timeout: u64) -> c_long;
-
     fn dispatch_semaphore_signal(semaphore: *mut c_void) -> c_long;
-
     fn dispatch_semaphore_create(value: c_long) -> *mut c_void;
-
     fn dispatch_release(object: *mut c_void);
+
+    fn kdebug_signpost(code: u32, arg1: usize, arg2: usize, arg3: usize, arg4: usize);
+    fn kdebug_signpost_start(code: u32, arg1: usize, arg2: usize, arg3: usize, arg4: usize);
+    fn kdebug_signpost_end(code: u32, arg1: usize, arg2: usize, arg3: usize, arg4: usize);
 }
 
 #[derive(Clone, Debug)]
@@ -880,6 +881,34 @@ impl SystemSemaphore {
     pub(crate) fn wait(&self, timeout: u64) {
         unsafe {
             dispatch_semaphore_wait(self.0, timeout);
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Signpost {
+    code: u32,
+    args: [usize; 4],
+}
+
+impl Drop for Signpost {
+    fn drop(&mut self) {
+        unsafe {
+            kdebug_signpost_end(self.code, self.args[0], self.args[1], self.args[2], self.args[3]);
+        }
+    }
+}
+
+impl Signpost {
+    pub(crate) fn new(code: u32, args: [usize; 4]) -> Self {
+        unsafe {
+            kdebug_signpost_start(code, args[0], args[1], args[2], args[3]);
+        }
+        Signpost { code, args }
+    }
+    pub(crate) fn place(code: u32, args: [usize; 4]) {
+        unsafe {
+            kdebug_signpost(code, args[0], args[1], args[2], args[3]);
         }
     }
 }
