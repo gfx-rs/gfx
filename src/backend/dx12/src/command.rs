@@ -1313,7 +1313,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         };
         let sub_pass = &pass_cache.render_pass.subpasses[self.cur_subpass];
 
-        let clear_rects: SmallVec<[pso::ClearRect; 16]> = rects
+        let clear_rects: SmallVec<[pso::ClearRect; 4]> = rects
             .into_iter()
             .map(|rect| rect.borrow().clone())
             .collect();
@@ -1335,6 +1335,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     );
 
                     for clear_rect in &clear_rects {
+                        assert!(attachment.layers.0 + clear_rect.layers.end <= attachment.layers.1);
                         let rect = [get_rect(&clear_rect.rect)];
 
                         let view_info = device::ViewInfo {
@@ -1346,7 +1347,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             range: image::SubresourceRange {
                                 aspects: Aspects::COLOR,
                                 levels: attachment.mip_levels.0..attachment.mip_levels.1,
-                                layers: clear_rect.layers.clone(),
+                                layers: attachment.layers.0 + clear_rect.layers.start ..
+                                    attachment.layers.0 + clear_rect.layers.end,
                             },
                         };
                         let rtv = rtv_pool.alloc_handle();
@@ -1369,6 +1371,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     );
 
                     for clear_rect in &clear_rects {
+                        assert!(attachment.layers.0 + clear_rect.layers.end <= attachment.layers.1);
                         let rect = [get_rect(&clear_rect.rect)];
 
                         let view_info = device::ViewInfo {
@@ -1388,7 +1391,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                     Aspects::empty()
                                 },
                                 levels: attachment.mip_levels.0..attachment.mip_levels.1,
-                                layers: clear_rect.layers.clone(),
+                                layers: attachment.layers.0 + clear_rect.layers.start ..
+                                    attachment.layers.0 + clear_rect.layers.end,
                             },
                         };
                         let dsv = dsv_pool.alloc_handle();
