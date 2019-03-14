@@ -5,11 +5,11 @@ use std::mem;
 
 use winapi::shared::basetsd::UINT8;
 use winapi::shared::dxgiformat::*;
-use winapi::shared::minwindef::{FALSE, INT, TRUE};
+use winapi::shared::minwindef::{FALSE, INT, UINT, TRUE};
 use winapi::um::d3d12::*;
 use winapi::um::d3dcommon::*;
 
-use hal::format::{Format, ImageFeature, SurfaceType};
+use hal::format::{Format, ImageFeature, SurfaceType, Swizzle};
 use hal::pso::DescriptorSetLayoutBinding;
 use hal::{buffer, image, pso, Primitive};
 
@@ -102,6 +102,25 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     };
 
     Some(format)
+}
+
+pub fn map_swizzle(swizzle: Swizzle) -> UINT {
+    use hal::format::Component::*;
+
+    [swizzle.0, swizzle.1, swizzle.2, swizzle.3]
+        .iter()
+        .enumerate()
+        .fold(D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES, |mapping, (i, &component)| {
+            let value = match component {
+                R => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_0,
+                G => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1,
+                B => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2,
+                A => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_3,
+                Zero => D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
+                One => D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1,
+            };
+            mapping | (value << D3D12_SHADER_COMPONENT_MAPPING_SHIFT as usize * i)
+        })
 }
 
 pub fn map_surface_type(st: SurfaceType) -> Option<DXGI_FORMAT> {
