@@ -532,9 +532,6 @@ impl Device {
     ) -> Result<(), image::ViewError> {
         #![allow(non_snake_case)]
 
-        if info.component_mapping != IDENTITY_MAPPING {
-            warn!("Unsupported component_mapping for RTV: {:?}", info.component_mapping);
-        }
         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
             Format: info.format,
             ViewDimension: 0,
@@ -635,10 +632,6 @@ impl Device {
         info: ViewInfo,
     ) -> Result<(), image::ViewError> {
         #![allow(non_snake_case)]
-
-        if info.component_mapping != IDENTITY_MAPPING {
-            warn!("Unsupported component_mapping for DSV: {:?}", info.component_mapping);
-        }
 
         let mut desc = d3d12::D3D12_DEPTH_STENCIL_VIEW_DESC {
             Format: info.format,
@@ -861,9 +854,6 @@ impl Device {
         #![allow(non_snake_case)]
         assert_eq!(info.range.levels.start + 1, info.range.levels.end);
 
-        if info.component_mapping != IDENTITY_MAPPING {
-            warn!("Unsupported component_mapping for UAV: {:?}", info.component_mapping);
-        }
         let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
             Format: info.format,
             ViewDimension: 0,
