@@ -217,7 +217,7 @@ fn main() {
         .to_rgba();
     let (width, height) = img.dimensions();
     let kind = i::Kind::D2(width as i::Size, height as i::Size, 1, 1);
-    let row_alignment_mask = limits.min_buffer_copy_pitch_alignment as u32 - 1;
+    let row_alignment_mask = limits.optimal_buffer_copy_pitch_alignment as u32 - 1;
     let image_stride = 4usize;
     let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
     let upload_size = (height * row_pitch) as u64;

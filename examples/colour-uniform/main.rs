@@ -908,7 +908,7 @@ impl<B: Backend> BufferState<B> {
     ) -> (Self, Dimensions<u32>, u32, usize) {
         let (width, height) = img.dimensions();
 
-        let row_alignment_mask = adapter.limits.min_buffer_copy_pitch_alignment as u32 - 1;
+        let row_alignment_mask = adapter.limits.optimal_buffer_copy_pitch_alignment as u32 - 1;
         let stride = 4usize;
 
         let row_pitch = (width * stride as u32 + row_alignment_mask) & !row_alignment_mask;

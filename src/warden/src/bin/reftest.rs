@@ -136,19 +136,19 @@ impl Harness {
                     );
                     results.skip += 1;
                 }
-                let mut max_compute_groups = [0; 3];
+                let mut max_compute_work_groups = [0; 3];
                 for job_name in &test.jobs {
                     if let warden::raw::Job::Compute { dispatch, .. } = tg.scene.jobs[job_name] {
-                        for (max, count) in max_compute_groups.iter_mut().zip(dispatch.iter()) {
+                        for (max, count) in max_compute_work_groups.iter_mut().zip(dispatch.iter()) {
                             *max = (*max).max(*count);
                         }
                     }
                 }
-                if max_compute_groups[0] > limits.max_compute_group_size[0]
-                    || max_compute_groups[1] > limits.max_compute_group_size[1]
-                    || max_compute_groups[2] > limits.max_compute_group_size[2]
+                if max_compute_work_groups[0] > limits.max_compute_work_group_size[0]
+                    || max_compute_work_groups[1] > limits.max_compute_work_group_size[1]
+                    || max_compute_work_groups[2] > limits.max_compute_work_group_size[2]
                 {
-                    println!("\tskipped (compute {:?})", max_compute_groups);
+                    println!("\tskipped (compute {:?})", max_compute_work_groups);
                     results.skip += 1;
                     continue;
                 }

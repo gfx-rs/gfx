@@ -244,7 +244,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         access
                     } else {
                         // calculate required sizes
-                        let upload_size = align(size as _, limits.min_buffer_copy_pitch_alignment);
+                        let upload_size = align(size as _, limits.optimal_buffer_copy_pitch_alignment);
                         // create upload buffer
                         let mut upload_buffer =
                             unsafe { device.create_buffer(upload_size, b::Usage::TRANSFER_SRC) }
@@ -400,7 +400,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         let d = extent.depth;
 
                         let width_bytes = (format_desc.bits as u64 * w) / (8 * block_width as u64);
-                        let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
+                        let row_pitch = align(width_bytes, limits.optimal_buffer_copy_pitch_alignment);
                         let upload_size =
                             (row_pitch as u64 * h as u64 * d as u64) / block_height as u64;
                         // create upload buffer
@@ -1280,7 +1280,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             .expect(&format!("Unable to find buffer to fetch: {}", name));
         let limits = &self.limits;
 
-        let down_size = align(buffer.size as u64, limits.min_buffer_copy_pitch_alignment);
+        let down_size = align(buffer.size as u64, limits.optimal_buffer_copy_pitch_alignment);
 
         let mut down_buffer =
             unsafe { self.device.create_buffer(down_size, b::Usage::TRANSFER_DST) }.unwrap();
@@ -1386,7 +1386,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let height = align(height as _, block_height as _);
 
         let width_bytes = (format_desc.bits as u64 * width as u64) / (8 * block_width as u64);
-        let row_pitch = align(width_bytes, limits.min_buffer_copy_pitch_alignment);
+        let row_pitch = align(width_bytes, limits.optimal_buffer_copy_pitch_alignment);
         let down_size = (row_pitch * height * depth as u64) / block_height as u64;
 
         let mut down_buffer =

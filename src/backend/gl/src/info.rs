@@ -305,13 +305,18 @@ impl Info {
 pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Limits, PrivateCaps) {
     use self::Requirement::*;
     let info = Info::get(gl);
+    let max_texture_size = get_usize(gl, gl::MAX_TEXTURE_SIZE).unwrap_or(64) as u32;
 
     let mut limits = Limits {
-        max_texture_size: get_usize(gl, gl::MAX_TEXTURE_SIZE).unwrap_or(64),
+        max_image_1d_size: max_texture_size,
+        max_image_2d_size: max_texture_size,
+        max_image_3d_size: max_texture_size,
+        max_image_cube_size: max_texture_size,
+        max_image_array_layers: get_usize(gl, gl::MAX_ARRAY_TEXTURE_LAYERS).unwrap_or(1) as u16,
         max_texel_elements: get_usize(gl, gl::MAX_TEXTURE_BUFFER_SIZE).unwrap_or(0),
         max_viewports: 1,
-        min_buffer_copy_offset_alignment: 1,
-        min_buffer_copy_pitch_alignment: 1,
+        optimal_buffer_copy_offset_alignment: 1,
+        optimal_buffer_copy_pitch_alignment: 1,
         min_texel_buffer_offset_alignment: 1,   // TODO
         min_uniform_buffer_offset_alignment: 1, // TODO
         min_storage_buffer_offset_alignment: 1, // TODO
@@ -335,9 +340,9 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     {
         let mut values = [0 as gl::types::GLint; 2];
         for (i, (count, size)) in limits
-            .max_compute_group_count
+            .max_compute_work_group_count
             .iter_mut()
-            .zip(limits.max_compute_group_size.iter_mut())
+            .zip(limits.max_compute_work_group_size.iter_mut())
             .enumerate()
         {
             unsafe {

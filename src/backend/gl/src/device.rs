@@ -123,7 +123,7 @@ impl Device {
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let gl = &self.share.context;
 
-        let can_compute = self.share.limits.max_compute_group_count[0] != 0;
+        let can_compute = self.share.limits.max_compute_work_group_count[0] != 0;
         let can_tessellate = self.share.limits.max_patch_size != 0;
         let target = match stage {
             pso::Stage::Vertex => gl::VERTEX_SHADER,
