@@ -346,6 +346,12 @@ impl hal::Instance for Instance {
                 max_texel_elements: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _, //TODO
                 max_patch_size: 0,                                                    // TODO
                 max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
+                max_viewport_dimensions: [d3d11::D3D11_VIEWPORT_BOUNDS_MAX; 2],
+                max_framebuffer_extent: hal::image::Extent { //TODO
+                    width: 4096,
+                    height: 4096,
+                    depth: 1,
+                },
                 max_compute_work_group_count: [
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_X,
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
@@ -358,17 +364,18 @@ impl hal::Instance for Instance {
                     d3d11::D3D11_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
                 max_vertex_input_bindings: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _, // TODO: verify same as attributes
                 max_vertex_output_components: d3d11::D3D11_VS_OUTPUT_REGISTER_COUNT as _, // TODO
-                optimal_buffer_copy_offset_alignment: 1,                                      // TODO
-                optimal_buffer_copy_pitch_alignment: 1,                                       // TODO
                 min_texel_buffer_offset_alignment: 1,                                     // TODO
                 min_uniform_buffer_offset_alignment: 16, // TODO: verify
                 min_storage_buffer_offset_alignment: 1,  // TODO
                 framebuffer_color_samples_count: 1,      // TODO
                 framebuffer_depth_samples_count: 1,      // TODO
                 framebuffer_stencil_samples_count: 1,    // TODO
-                max_color_attachments: 1,                // TODO
+                max_color_attachments: d3d11::D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
+                buffer_image_granularity: 1,
                 non_coherent_atom_size: 1,               // TODO
                 max_sampler_anisotropy: 16.,
+                optimal_buffer_copy_offset_alignment: 1,                                      // TODO
+                optimal_buffer_copy_pitch_alignment: 1,                                       // TODO
                 min_vertex_input_binding_stride_alignment: 1,
                 .. hal::Limits::default() //TODO
             };

@@ -404,6 +404,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             // Note: The maximum number of supported viewports and scissor rectangles varies by device.
             // TODO: read from Metal Feature Sets.
             max_viewports: 1,
+            max_viewport_dimensions: [pc.max_texture_size as _; 2],
+            max_framebuffer_extent: hal::image::Extent { //TODO
+                width: pc.max_texture_size as _,
+                height: pc.max_texture_size as _,
+                depth: pc.max_texture_layers as _,
+            },
 
             optimal_buffer_copy_offset_alignment: pc.buffer_alignment,
             optimal_buffer_copy_pitch_alignment: 4,
@@ -425,6 +431,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             framebuffer_stencil_samples_count: 0b101, // TODO
             max_color_attachments: 1,                 // TODO
 
+            buffer_image_granularity: 1,
             // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
             // and those need to operate on sizes being multiples of 4.
             non_coherent_atom_size: 4,

@@ -345,6 +345,8 @@ pub struct Limits {
 
     ///
     pub min_memory_map_alignment: usize,
+    ///
+    pub buffer_image_granularity: buffer::Offset,
     /// The alignment of the start of buffer used as a texel buffer, in bytes, non-zero.
     pub min_texel_buffer_offset_alignment: buffer::Offset,
     /// The alignment of the start of buffer used for uniform buffer updates, in bytes, non-zero.

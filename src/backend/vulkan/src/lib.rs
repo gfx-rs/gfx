@@ -774,13 +774,19 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let max_group_size = limits.max_compute_work_group_size;
 
         Limits {
-            max_image_1d_size: limits.max_image_dimension1_d as _,
-            max_image_2d_size: limits.max_image_dimension2_d as _,
-            max_image_3d_size: limits.max_image_dimension3_d as _,
-            max_image_cube_size: limits.max_image_dimension_cube as _,
+            max_image_1d_size: limits.max_image_dimension1_d,
+            max_image_2d_size: limits.max_image_dimension2_d,
+            max_image_3d_size: limits.max_image_dimension3_d,
+            max_image_cube_size: limits.max_image_dimension_cube,
             max_texel_elements: limits.max_texel_buffer_elements as _,
             max_patch_size: limits.max_tessellation_patch_size as PatchSize,
             max_viewports: limits.max_viewports as _,
+            max_viewport_dimensions: limits.max_viewport_dimensions,
+            max_framebuffer_extent: image::Extent {
+                width: limits.max_framebuffer_width,
+                height: limits.max_framebuffer_height,
+                depth: limits.max_framebuffer_layers,
+            },
             max_compute_work_group_count: [
                 max_group_count[0] as _,
                 max_group_count[1] as _,
@@ -806,6 +812,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             framebuffer_stencil_samples_count: limits.framebuffer_stencil_sample_counts.as_raw()
                 as _,
             max_color_attachments: limits.max_color_attachments as _,
+            buffer_image_granularity: limits.buffer_image_granularity,
             non_coherent_atom_size: limits.non_coherent_atom_size as _,
             max_sampler_anisotropy: limits.max_sampler_anisotropy,
             min_vertex_input_binding_stride_alignment: 1,

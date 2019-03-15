@@ -1043,7 +1043,13 @@ impl hal::Instance for Instance {
                     max_image_array_layers: d3d12::D3D12_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
                     max_texel_elements: 0,
                     max_patch_size: 0,
-                    max_viewports: 0,
+                    max_viewports: d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
+                    max_viewport_dimensions: [d3d12::D3D12_VIEWPORT_BOUNDS_MAX as _; 2],
+                    max_framebuffer_extent: hal::image::Extent { //TODO
+                        width: 4096,
+                        height: 4096,
+                        depth: 1,
+                    },
                     max_compute_work_group_count: [
                         d3d12::D3D12_CS_THREAD_GROUP_MAX_X,
                         d3d12::D3D12_CS_THREAD_GROUP_MAX_Y,
@@ -1059,8 +1065,6 @@ impl hal::Instance for Instance {
                     max_vertex_input_attribute_offset: 255, // TODO
                     max_vertex_input_binding_stride: d3d12::D3D12_REQ_MULTI_ELEMENT_STRUCTURE_SIZE_IN_BYTES as _,
                     max_vertex_output_components: 16, // TODO
-                    optimal_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
-                    optimal_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
                     min_texel_buffer_offset_alignment: 1, // TODO
                     min_uniform_buffer_offset_alignment: 256, // Required alignment for CBVs
                     min_storage_buffer_offset_alignment: 1, // TODO
@@ -1069,9 +1073,12 @@ impl hal::Instance for Instance {
                     framebuffer_color_samples_count: 0b101,
                     framebuffer_depth_samples_count: 0b101,
                     framebuffer_stencil_samples_count: 0b101,
-                    max_color_attachments: 1, // TODO
+                    max_color_attachments: d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
+                    buffer_image_granularity: 1,
                     non_coherent_atom_size: 1, //TODO: confirm
                     max_sampler_anisotropy: 16.,
+                    optimal_buffer_copy_offset_alignment: d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as _,
+                    optimal_buffer_copy_pitch_alignment: d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT as _,
                     min_vertex_input_binding_stride_alignment: 1,
                     .. Limits::default() //TODO
                 },
