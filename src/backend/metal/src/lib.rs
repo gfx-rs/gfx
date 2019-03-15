@@ -204,12 +204,13 @@ impl Instance {
             panic!("window does not have a valid contentView");
         }
 
-        // temporary, hopefully!
+        // Deprecated! Clients should use `create_surface_from_layer` instead.
         let is_actually_layer: BOOL = msg_send![view, isKindOfClass: class];
         if is_actually_layer == YES {
             return self.create_from_layer(view);
         }
 
+        msg_send![view, retain];
         let existing: CAMetalLayer = msg_send![view, layer];
         let use_current = if existing.is_null() {
             false
@@ -223,7 +224,6 @@ impl Instance {
         } else {
             let layer: CAMetalLayer = msg_send![class, new];
             msg_send![view, setLayer: layer];
-            msg_send![view, retain];
             let bounds: CGRect = msg_send![view, bounds];
             msg_send![layer, setBounds: bounds];
 
