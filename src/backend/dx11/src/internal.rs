@@ -1097,13 +1097,13 @@ impl Internal {
     }
 
     fn find_blit_shader(&self, src: &Image) -> Option<*mut d3d11::ID3D11PixelShader> {
-        use format::ChannelType::*;
+        use format::ChannelType as Ct;
 
         match src.format.base_format().1 {
-            Uint => Some(self.ps_blit_2d_uint.as_raw()),
-            Int => Some(self.ps_blit_2d_int.as_raw()),
-            Unorm | Snorm | Sfloat | Srgb => Some(self.ps_blit_2d_float.as_raw()),
-            _ => None,
+            Ct::Uint => Some(self.ps_blit_2d_uint.as_raw()),
+            Ct::Sint => Some(self.ps_blit_2d_int.as_raw()),
+            Ct::Unorm | Ct::Snorm | Ct::Sfloat | Ct::Srgb => Some(self.ps_blit_2d_float.as_raw()),
+            Ct::Ufloat | Ct::Uscaled | Ct::Sscaled => None,
         }
     }
 
