@@ -1,10 +1,12 @@
-use gfx_hal as hal;
+use hal;
 
 use crate::PrivateCapabilities;
 
-use self::hal::format::{Format, Properties, Swizzle};
-use self::hal::pso::{Comparison, StencilOp};
-use self::hal::{image, pass, pso, IndexType};
+use hal::{
+    image, pass, pso, IndexType,
+    format::{Format, Properties, Swizzle},
+    pso::{Comparison, StencilOp},
+};
 use metal::*;
 
 impl PrivateCapabilities {

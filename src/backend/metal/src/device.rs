@@ -1,13 +1,36 @@
-use gfx_hal as hal;
-
-use crate::internal::{Channel, FastStorageMap};
-use crate::native;
-use range_alloc::RangeAllocator;
-use crate::{command, conversions as conv, native as n};
 use crate::{
+    command, conversions as conv, native as n,
+    internal::{Channel, FastStorageMap},
     AsNative, Backend, OnlineRecording, QueueFamily, ResourceIndex, Shared,
     Surface, Swapchain, VisibilityShared,
+    MAX_COLOR_ATTACHMENTS,
 };
+
+use hal::{
+    buffer, error, format, image, mapping, memory, pass, pso, query, window,
+    device::{
+        AllocationError, BindError, DeviceLost, OomOrDeviceLost, OutOfMemory, ShaderError,
+    },
+    memory::Properties,
+    pool::CommandPoolCreateFlags,
+    pso::VertexInputRate,
+    queue::{QueueFamilyId, Queues},
+    range::RangeArg,
+};
+use range_alloc::RangeAllocator;
+
+use cocoa::foundation::{NSRange, NSUInteger};
+use foreign_types::ForeignType;
+use metal::{
+    self,
+    CaptureManager, MTLArgumentAccess, MTLCPUCacheMode, MTLDataType, MTLLanguageVersion,
+    MTLPrimitiveTopologyClass, MTLPrimitiveType, MTLResourceOptions, MTLSamplerBorderColor,
+    MTLSamplerMipFilter, MTLStorageMode, MTLTextureType, MTLVertexStepFunction,
+};
+use objc::rc::autoreleasepool;
+use objc::runtime::{Object, BOOL, NO};
+use parking_lot::Mutex;
+use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -18,27 +41,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{cmp, iter, mem, ptr, slice, thread, time};
 
-use self::hal::device::{
-    AllocationError, BindError, DeviceLost, OomOrDeviceLost, OutOfMemory, ShaderError,
-};
-use self::hal::memory::Properties;
-use self::hal::pool::CommandPoolCreateFlags;
-use self::hal::pso::VertexInputRate;
-use self::hal::queue::{QueueFamilyId, Queues};
-use self::hal::range::RangeArg;
-use self::hal::{buffer, error, format, image, mapping, memory, pass, pso, query, window};
-
-use cocoa::foundation::{NSRange, NSUInteger};
-use foreign_types::ForeignType;
-use metal::{
-    self, CaptureManager, MTLArgumentAccess, MTLCPUCacheMode, MTLDataType, MTLLanguageVersion,
-    MTLPrimitiveTopologyClass, MTLPrimitiveType, MTLResourceOptions, MTLSamplerBorderColor,
-    MTLSamplerMipFilter, MTLStorageMode, MTLTextureType, MTLVertexStepFunction,
-};
-use objc::rc::autoreleasepool;
-use objc::runtime::{Object, BOOL, NO};
-use parking_lot::Mutex;
-use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
@@ -429,7 +431,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             framebuffer_color_samples_count: 0b101,   // TODO
             framebuffer_depth_samples_count: 0b101,   // TODO
             framebuffer_stencil_samples_count: 0b101, // TODO
-            max_color_attachments: 1,                 // TODO
+            max_color_attachments: MAX_COLOR_ATTACHMENTS,
 
             buffer_image_granularity: 1,
             // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
@@ -802,7 +804,7 @@ impl hal::Device<Backend> for Device {
     }
 
     unsafe fn destroy_command_pool(&self, mut pool: command::CommandPool) {
-        use self::hal::pool::RawCommandPool;
+        use hal::pool::RawCommandPool;
         pool.reset();
     }
 
@@ -1741,9 +1743,9 @@ impl hal::Device<Backend> for Device {
 
             for set_layout_binding in binding_iter {
                 let slb = set_layout_binding.borrow();
-                let mut content = native::DescriptorContent::from(slb.ty);
+                let mut content = n::DescriptorContent::from(slb.ty);
                 if slb.immutable_samplers {
-                    content |= native::DescriptorContent::IMMUTABLE_SAMPLER;
+                    content |= n::DescriptorContent::IMMUTABLE_SAMPLER;
                     tmp_samplers.extend(
                         immutable_sampler_iter
                             .by_ref()
@@ -1756,7 +1758,7 @@ impl hal::Device<Backend> for Device {
                             }),
                     );
                 }
-                desc_layouts.extend((0..slb.count).map(|array_index| native::DescriptorLayout {
+                desc_layouts.extend((0..slb.count).map(|array_index| n::DescriptorLayout {
                     content,
                     stages: slb.stage_flags,
                     binding: slb.binding,
@@ -2471,8 +2473,8 @@ impl hal::Device<Backend> for Device {
         debug!("wait_for_fence {:?} for {} ms", fence, timeout_ns);
         let inner = fence.0.borrow();
         let cmd_buf = match *inner {
-            native::FenceInner::Idle { signaled } => return Ok(signaled),
-            native::FenceInner::Pending(ref cmd_buf) => cmd_buf,
+            n::FenceInner::Idle { signaled } => return Ok(signaled),
+            n::FenceInner::Pending(ref cmd_buf) => cmd_buf,
         };
         if timeout_ns == !0 {
             cmd_buf.wait_until_completed();
@@ -2492,8 +2494,8 @@ impl hal::Device<Backend> for Device {
     }
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, DeviceLost> {
         Ok(match *fence.0.borrow() {
-            native::FenceInner::Idle { signaled } => signaled,
-            native::FenceInner::Pending(ref cmd_buf) => match cmd_buf.status() {
+            n::FenceInner::Idle { signaled } => signaled,
+            n::FenceInner::Pending(ref cmd_buf) => match cmd_buf.status() {
                 metal::MTLCommandBufferStatus::Completed => true,
                 _ => false,
             },
@@ -2544,7 +2546,7 @@ impl hal::Device<Backend> for Device {
         flags: query::ResultFlags,
     ) -> Result<bool, OomOrDeviceLost> {
         let is_ready = match *pool {
-            native::QueryPool::Occlusion(ref pool_range) => {
+            n::QueryPool::Occlusion(ref pool_range) => {
                 let visibility = &self.shared.visibility;
                 let is_ready = if flags.contains(query::ResultFlags::WAIT) {
                     let mut guard = visibility.allocator.lock();

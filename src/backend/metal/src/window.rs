@@ -1,17 +1,15 @@
-use gfx_hal as hal;
+use crate::{
+    native,
+    Backend, QueueFamily,
+    device::{Device, PhysicalDevice},
+    internal::Channel,
+};
 
-use crate::device::{Device, PhysicalDevice};
-use crate::internal::Channel;
-use crate::native;
-use crate::{Backend, QueueFamily};
-
-use std::ptr::NonNull;
-use std::sync::Arc;
-use std::thread;
-
-use self::hal::window::Extent2D;
-use self::hal::{format, image};
-use self::hal::{Backbuffer, SwapchainConfig, CompositeAlpha};
+use hal::{
+    format, image,
+    Backbuffer, SwapchainConfig, CompositeAlpha,
+    window::Extent2D,
+};
 
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::{CGRect, CGSize};
@@ -20,6 +18,11 @@ use metal;
 use objc::rc::autoreleasepool;
 use objc::runtime::Object;
 use parking_lot::{Mutex, MutexGuard};
+
+use std::ptr::NonNull;
+use std::sync::Arc;
+use std::thread;
+
 
 //TODO: make it a weak pointer, so that we know which
 // frames can be replaced if we receive an unknown

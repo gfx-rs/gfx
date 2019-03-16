@@ -1,18 +1,32 @@
-use gfx_hal as hal;
-use range_alloc;
 #[macro_use]
 extern crate bitflags;
-use cocoa;
-use foreign_types;
 #[macro_use]
 extern crate objc;
 #[macro_use]
 extern crate log;
 
+use hal;
+use hal::queue::QueueFamilyId;
+use range_alloc::RangeAllocator;
+
+use cocoa;
+use cocoa::foundation::NSInteger;
+use core_graphics::base::CGFloat;
+use core_graphics::geometry::CGRect;
+use foreign_types::ForeignTypeRef;
+use metal::MTLFeatureSet;
+use metal::MTLLanguageVersion;
+use objc::runtime::{Object, BOOL, YES};
+use parking_lot::{Condvar, Mutex};
 #[cfg(feature = "dispatch")]
 use dispatch;
 #[cfg(feature = "winit")]
 use winit;
+
+use std::mem;
+use std::os::raw::c_void;
+use std::ptr::NonNull;
+use std::sync::Arc;
 
 mod command;
 mod conversions;
@@ -28,21 +42,6 @@ pub use crate::window::{AcquireMode, CAMetalLayer, Surface, Swapchain};
 
 pub type GraphicsCommandPool = CommandPool;
 
-use std::mem;
-use std::os::raw::c_void;
-use std::ptr::NonNull;
-use std::sync::Arc;
-
-use self::hal::queue::QueueFamilyId;
-
-use cocoa::foundation::NSInteger;
-use core_graphics::base::CGFloat;
-use core_graphics::geometry::CGRect;
-use foreign_types::ForeignTypeRef;
-use metal::MTLFeatureSet;
-use metal::MTLLanguageVersion;
-use objc::runtime::{Object, BOOL, YES};
-use parking_lot::{Condvar, Mutex};
 
 //TODO: investigate why exactly using `u8` here is slower (~5% total).
 /// A type representing Metal binding's resource index.
@@ -68,6 +67,7 @@ impl Default for OnlineRecording {
 
 const MAX_ACTIVE_COMMAND_BUFFERS: usize = 1 << 14;
 const MAX_VISIBILITY_QUERIES: usize = 1 << 14;
+const MAX_COLOR_ATTACHMENTS: usize = 4;
 
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily {}
@@ -88,7 +88,7 @@ struct VisibilityShared {
     /// Availability buffer is in shared memory, it has N double words for
     /// query results followed by N words for the availability.
     buffer: metal::Buffer,
-    allocator: Mutex<range_alloc::RangeAllocator<hal::query::Id>>,
+    allocator: Mutex<RangeAllocator<hal::query::Id>>,
     availability_offset: hal::buffer::Offset,
     condvar: Condvar,
 }
@@ -115,7 +115,7 @@ impl Shared {
                     * (mem::size_of::<u64>() + mem::size_of::<u32>()) as u64,
                 metal::MTLResourceOptions::StorageModeShared,
             ),
-            allocator: Mutex::new(range_alloc::RangeAllocator::new(
+            allocator: Mutex::new(RangeAllocator::new(
                 0..MAX_VISIBILITY_QUERIES as hal::query::Id,
             )),
             availability_offset: (MAX_VISIBILITY_QUERIES * mem::size_of::<u64>())

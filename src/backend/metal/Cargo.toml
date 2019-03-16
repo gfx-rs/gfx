@@ -20,8 +20,9 @@ auto-capture = []
 name = "gfx_backend_metal"
 
 [dependencies]
-gfx-hal = { path = "../../hal", version = "0.1" }
+hal = { path = "../../hal", version = "0.1", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
+arrayvec = "0.4"
 bitflags = "1.0"
 log = { version = "0.4" }
 winit = { version = "0.18", optional = true }

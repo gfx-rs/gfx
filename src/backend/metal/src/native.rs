@@ -1,9 +1,25 @@
-use gfx_hal as hal;
+use crate::{
+    AsNative, Backend, BufferPtr, ResourceIndex, SamplerPtr, TexturePtr,
+    MAX_COLOR_ATTACHMENTS,
+    internal::{Channel, FastStorageMap},
+    window::SwapchainImage,
+};
 
-use crate::internal::{Channel, FastStorageMap};
+use hal::{
+    buffer, image, pso,
+    DescriptorPool as HalDescriptorPool, MemoryTypeId,
+    backend::FastHashMap,
+    format::FormatDesc,
+    pass::{Attachment, AttachmentId},
+    range::RangeArg,
+};
 use range_alloc::RangeAllocator;
-use crate::window::SwapchainImage;
-use crate::{AsNative, Backend, BufferPtr, ResourceIndex, SamplerPtr, TexturePtr};
+
+use arrayvec::ArrayVec;
+use cocoa::foundation::{NSRange, NSUInteger};
+use metal;
+use parking_lot::{Mutex, RwLock};
+use spirv_cross::{msl, spirv};
 
 use std::cell::RefCell;
 use std::fmt;
@@ -11,18 +27,6 @@ use std::ops::Range;
 use std::os::raw::{c_long, c_void};
 use std::sync::Arc;
 
-use self::hal::backend::FastHashMap;
-use self::hal::format::FormatDesc;
-use self::hal::pass::{Attachment, AttachmentId};
-use self::hal::range::RangeArg;
-use self::hal::{buffer, image, pso};
-use self::hal::{DescriptorPool as HalDescriptorPool, MemoryTypeId};
-
-use cocoa::foundation::{NSRange, NSUInteger};
-use metal;
-use parking_lot::{Mutex, RwLock};
-use smallvec::SmallVec;
-use spirv_cross::{msl, spirv};
 
 pub type EntryPointMap = FastHashMap<String, spirv::EntryPoint>;
 /// An index of a resource within descriptor pool.
@@ -59,14 +63,14 @@ bitflags! {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SubpassFormats {
-    pub colors: SmallVec<[(metal::MTLPixelFormat, Channel); 4]>,
+    pub colors: ArrayVec<[(metal::MTLPixelFormat, Channel); MAX_COLOR_ATTACHMENTS]>,
     pub depth_stencil: Option<metal::MTLPixelFormat>,
 }
 
 impl SubpassFormats {
     pub fn copy_from(&mut self, other: &Self) {
         self.colors.clear();
-        self.colors.extend_from_slice(&other.colors);
+        self.colors.clone_from_slice(&other.colors);
         self.depth_stencil = other.depth_stencil;
     }
 }

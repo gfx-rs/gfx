@@ -1,11 +1,34 @@
-use gfx_hal as hal;
-
-use crate::internal::{BlitVertex, ClearKey, ClearVertex};
-use crate::{conversions as conv, native, soft, window};
 use crate::{
+    conversions as conv, native, soft, window,
+    internal::{BlitVertex, ClearKey, ClearVertex},
     AsNative, Backend, BufferPtr, OnlineRecording, PrivateDisabilities,
     ResourceIndex, SamplerPtr, Shared, TexturePtr,
 };
+
+use hal::{
+    self,
+    buffer, command as com, error, memory, pool, pso, query,
+    backend::FastHashMap,
+    format::{Aspects, FormatDesc},
+    image::{Extent, Filter, Layout, Level, SubresourceRange},
+    pass::AttachmentLoadOp,
+    queue::{RawCommandQueue, Submission},
+    range::RangeArg,
+    DrawCount, IndexCount, IndexType, InstanceCount, SwapImageIndex, VertexCount, VertexOffset,
+    WorkGroupCount
+};
+
+use block::ConcreteBlock;
+use cocoa::foundation::{NSRange, NSUInteger};
+use foreign_types::ForeignType;
+use metal::{
+    self,
+    MTLIndexType, MTLPrimitiveType, MTLScissorRect, MTLSize, MTLViewport,
+};
+use objc::rc::autoreleasepool;
+use parking_lot::Mutex;
+#[cfg(feature = "dispatch")]
+use dispatch;
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
@@ -13,28 +36,6 @@ use std::ops::{Deref, Range};
 use std::sync::Arc;
 use std::{cmp, iter, mem, slice, time};
 
-use self::hal::backend::FastHashMap;
-use self::hal::format::{Aspects, FormatDesc};
-use self::hal::image::{Extent, Filter, Layout, Level, SubresourceRange};
-use self::hal::pass::AttachmentLoadOp;
-use self::hal::queue::{RawCommandQueue, Submission};
-use self::hal::range::RangeArg;
-use self::hal::{buffer, command as com, error, memory, pool, pso, query};
-use self::hal::{
-    DrawCount, IndexCount, IndexType, InstanceCount, SwapImageIndex, VertexCount, VertexOffset,
-    WorkGroupCount,
-};
-
-use block::ConcreteBlock;
-use cocoa::foundation::{NSRange, NSUInteger};
-use foreign_types::ForeignType;
-use metal::{self, MTLIndexType, MTLPrimitiveType, MTLScissorRect, MTLSize, MTLViewport};
-use objc::rc::autoreleasepool;
-use parking_lot::Mutex;
-use smallvec::SmallVec;
-
-#[cfg(feature = "dispatch")]
-use dispatch;
 
 const WORD_SIZE: usize = 4;
 const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
@@ -1875,7 +1876,11 @@ impl CommandQueue {
 impl RawCommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        submit: Submission<Ic, Iw, Is>,
+        Submission {
+            command_buffers,
+            wait_semaphores,
+            signal_semaphores,
+        }: Submission<Ic, Iw, Is>,
         fence: Option<&native::Fence>,
     ) where
         T: 'a + Borrow<CommandBuffer>,
@@ -1884,12 +1889,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
         Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
         Is: IntoIterator<Item = &'a S>,
     {
+        use smallvec::SmallVec;
+
         debug!("submitting with fence {:?}", fence);
-        let Submission {
-            command_buffers,
-            wait_semaphores,
-            signal_semaphores,
-        } = submit;
         self.wait(wait_semaphores.into_iter().map(|(s, _)| s));
 
         const BLOCK_BUCKET: usize = 4;
@@ -1978,6 +1980,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             }
 
             if do_signal || !self.active_visibility_queries.is_empty() {
+                //Note: there is quite a bit copying here
                 let free_buffers = self
                     .retained_buffers
                     .drain(..)
