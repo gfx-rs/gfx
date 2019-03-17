@@ -1,11 +1,14 @@
-use crate::command::IndexBuffer;
-use crate::native::RasterizerState;
-use crate::{BufferPtr, ResourceIndex, SamplerPtr, TexturePtr};
+use crate::{
+    BufferPtr, ResourceIndex, SamplerPtr, TexturePtr,
+    command::IndexBuffer,
+    native::RasterizerState,
+};
 
-use crate::hal;
+use hal;
 use metal;
 
 use std::ops::Range;
+
 
 pub type CacheResourceIndex = u32;
 

@@ -1,9 +1,25 @@
-use gfx_hal as hal;
+use crate::{
+    AsNative, Backend, BufferPtr, ResourceIndex, SamplerPtr, TexturePtr,
+    MAX_COLOR_ATTACHMENTS,
+    internal::{Channel, FastStorageMap},
+    window::SwapchainImage,
+};
 
-use crate::internal::{Channel, FastStorageMap};
+use hal::{
+    buffer, image, pso,
+    DescriptorPool as HalDescriptorPool, MemoryTypeId,
+    backend::FastHashMap,
+    format::FormatDesc,
+    pass::{Attachment, AttachmentId},
+    range::RangeArg,
+};
 use range_alloc::RangeAllocator;
-use crate::window::SwapchainImage;
-use crate::{AsNative, Backend, BufferPtr, ResourceIndex, SamplerPtr, TexturePtr};
+
+use arrayvec::ArrayVec;
+use cocoa::foundation::{NSRange, NSUInteger};
+use metal;
+use parking_lot::{Mutex, RwLock};
+use spirv_cross::{msl, spirv};
 
 use std::cell::RefCell;
 use std::fmt;
@@ -11,18 +27,6 @@ use std::ops::Range;
 use std::os::raw::{c_long, c_void};
 use std::sync::Arc;
 
-use self::hal::backend::FastHashMap;
-use self::hal::format::FormatDesc;
-use self::hal::pass::{Attachment, AttachmentId};
-use self::hal::range::RangeArg;
-use self::hal::{buffer, image, pso};
-use self::hal::{DescriptorPool as HalDescriptorPool, MemoryTypeId};
-
-use cocoa::foundation::{NSRange, NSUInteger};
-use metal;
-use parking_lot::{Mutex, RwLock};
-use smallvec::SmallVec;
-use spirv_cross::{msl, spirv};
 
 pub type EntryPointMap = FastHashMap<String, spirv::EntryPoint>;
 /// An index of a resource within descriptor pool.
@@ -59,14 +63,14 @@ bitflags! {
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct SubpassFormats {
-    pub colors: SmallVec<[(metal::MTLPixelFormat, Channel); 4]>,
+    pub colors: ArrayVec<[(metal::MTLPixelFormat, Channel); MAX_COLOR_ATTACHMENTS]>,
     pub depth_stencil: Option<metal::MTLPixelFormat>,
 }
 
 impl SubpassFormats {
     pub fn copy_from(&mut self, other: &Self) {
         self.colors.clear();
-        self.colors.extend_from_slice(&other.colors);
+        self.colors.clone_from_slice(&other.colors);
         self.depth_stencil = other.depth_stencil;
     }
 }
@@ -850,12 +854,13 @@ unsafe impl Sync for Fence {}
 
 extern "C" {
     fn dispatch_semaphore_wait(semaphore: *mut c_void, timeout: u64) -> c_long;
-
     fn dispatch_semaphore_signal(semaphore: *mut c_void) -> c_long;
-
     fn dispatch_semaphore_create(value: c_long) -> *mut c_void;
-
     fn dispatch_release(object: *mut c_void);
+
+    fn kdebug_signpost(code: u32, arg1: usize, arg2: usize, arg3: usize, arg4: usize);
+    fn kdebug_signpost_start(code: u32, arg1: usize, arg2: usize, arg3: usize, arg4: usize);
+    fn kdebug_signpost_end(code: u32, arg1: usize, arg2: usize, arg3: usize, arg4: usize);
 }
 
 #[derive(Clone, Debug)]
@@ -880,6 +885,34 @@ impl SystemSemaphore {
     pub(crate) fn wait(&self, timeout: u64) {
         unsafe {
             dispatch_semaphore_wait(self.0, timeout);
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Signpost {
+    code: u32,
+    args: [usize; 4],
+}
+
+impl Drop for Signpost {
+    fn drop(&mut self) {
+        unsafe {
+            kdebug_signpost_end(self.code, self.args[0], self.args[1], self.args[2], self.args[3]);
+        }
+    }
+}
+
+impl Signpost {
+    pub(crate) fn new(code: u32, args: [usize; 4]) -> Self {
+        unsafe {
+            kdebug_signpost_start(code, args[0], args[1], args[2], args[3]);
+        }
+        Signpost { code, args }
+    }
+    pub(crate) fn place(code: u32, args: [usize; 4]) {
+        unsafe {
+            kdebug_signpost(code, args[0], args[1], args[2], args[3]);
         }
     }
 }

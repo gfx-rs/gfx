@@ -1,19 +1,22 @@
-use gfx_hal as hal;
+use crate::{
+    conversions as conv,
+    PrivateCapabilities,
+};
 
-use crate::conversions as conv;
-use crate::PrivateCapabilities;
+use hal::{
+    pso,
+    backend::FastHashMap,
+    command::ClearColorRaw,
+    format::{Aspects, ChannelType},
+    image::Filter,
+};
 
 use metal;
 use parking_lot::{Mutex, RawRwLock};
 use storage_map::{StorageMap, StorageMapGuard};
 
-use self::hal::backend::FastHashMap;
-use self::hal::command::ClearColorRaw;
-use self::hal::format::{Aspects, ChannelType};
-use self::hal::image::Filter;
-use self::hal::pso;
-
 use std::mem;
+
 
 pub type FastStorageMap<K, V> = StorageMap<RawRwLock, FastHashMap<K, V>>;
 pub type FastStorageGuard<'a, V> = StorageMapGuard<'a, RawRwLock, V>;

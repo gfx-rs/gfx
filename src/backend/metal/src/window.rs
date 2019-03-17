@@ -1,17 +1,15 @@
-use gfx_hal as hal;
+use crate::{
+    native,
+    Backend, QueueFamily,
+    device::{Device, PhysicalDevice},
+    internal::Channel,
+};
 
-use crate::device::{Device, PhysicalDevice};
-use crate::internal::Channel;
-use crate::native;
-use crate::{Backend, QueueFamily};
-
-use std::ptr::NonNull;
-use std::sync::Arc;
-use std::thread;
-
-use self::hal::window::Extent2D;
-use self::hal::{format, image};
-use self::hal::{Backbuffer, SwapchainConfig, CompositeAlpha};
+use hal::{
+    format, image,
+    Backbuffer, SwapchainConfig, CompositeAlpha,
+    window::Extent2D,
+};
 
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::{CGRect, CGSize};
@@ -21,10 +19,18 @@ use objc::rc::autoreleasepool;
 use objc::runtime::Object;
 use parking_lot::{Mutex, MutexGuard};
 
+use std::ptr::NonNull;
+use std::sync::Arc;
+use std::thread;
+
+
 //TODO: make it a weak pointer, so that we know which
 // frames can be replaced if we receive an unknown
 // texture pointer by an acquired drawable.
 pub type CAMetalLayer = *mut Object;
+
+/// This is a random ID to be used for signposts associated with swapchain events.
+const SIGNPOST_ID: u32 = 0x100;
 
 pub struct Surface {
     inner: Arc<SurfaceInner>,
@@ -32,9 +38,11 @@ pub struct Surface {
 }
 
 #[derive(Debug)]
-pub struct SurfaceInner {
+pub(crate) struct SurfaceInner {
     view: Option<NonNull<Object>>,
     render_layer: Mutex<CAMetalLayer>,
+    /// Place start/end signposts for the duration of frames held
+    enable_signposts: bool,
 }
 
 unsafe impl Send for SurfaceInner {}
@@ -63,10 +71,12 @@ impl SurfaceInner {
         SurfaceInner {
             view,
             render_layer: Mutex::new(layer),
+            enable_signposts: false,
         }
     }
 
-    pub fn into_surface(self) -> Surface {
+    pub fn into_surface(mut self, enable_signposts: bool) -> Surface {
+        self.enable_signposts = enable_signposts;
         Surface {
             inner: Arc::new(self),
             main_thread_id: thread::current().id(),
@@ -80,6 +90,11 @@ impl SurfaceInner {
         let layer_ref = self.render_layer.lock();
         autoreleasepool(|| {
             // for the drawable
+            let _signpost = if self.enable_signposts {
+                Some(native::Signpost::new(SIGNPOST_ID, [0, 0, 0, 0]))
+            } else {
+                None
+            };
             let (drawable, texture_temp): (&metal::DrawableRef, &metal::TextureRef) = unsafe {
                 let drawable = msg_send![*layer_ref, nextDrawable];
                 (drawable, msg_send![drawable, texture])
@@ -93,7 +108,12 @@ impl SurfaceInner {
                 Some(index) => {
                     let mut frame = frames[index].inner.lock();
                     assert!(frame.drawable.is_none());
+                    frame.iteration += 1;
                     frame.drawable = Some(drawable.to_owned());
+                    if self.enable_signposts && false {
+                        //Note: could encode the `iteration` here if we need it
+                        frame.signpost = Some(native::Signpost::new(SIGNPOST_ID, [1, index as usize, 0, 0]));
+                    }
 
                     debug!("Next is frame[{}]", index);
                     Ok((index, frame))
@@ -141,6 +161,7 @@ impl SurfaceInner {
 #[derive(Debug)]
 struct FrameInner {
     drawable: Option<metal::Drawable>,
+    signpost: Option<native::Signpost>,
     /// If there is a `drawable`, availability indicates if it's free for grabs.
     /// If there is `None`, `available == false` means that the frame has already
     /// been acquired and the `drawable` will appear at some point.
@@ -148,6 +169,7 @@ struct FrameInner {
     /// Stays true for as long as the drawable is circulating through the
     /// CAMetalLayer's frame queue.
     linked: bool,
+    iteration: usize,
     last_frame: usize,
 }
 
@@ -195,7 +217,9 @@ impl Drop for Swapchain {
 impl Swapchain {
     fn clear_drawables(&self) {
         for frame in self.frames.iter() {
-            frame.inner.lock().drawable = None;
+            let mut inner = frame.inner.lock();
+            inner.drawable = None;
+            inner.signpost = None;
         }
     }
 
@@ -204,6 +228,7 @@ impl Swapchain {
     pub(crate) fn take_drawable(&self, index: hal::SwapImageIndex) -> Result<metal::Drawable, ()> {
         let mut frame = self.frames[index as usize].inner.lock();
         assert!(!frame.available && frame.linked);
+        frame.signpost = None;
 
         match frame.drawable.take() {
             Some(drawable) => {
@@ -220,6 +245,9 @@ impl Swapchain {
     }
 
     fn signal_sync(&self, sync: hal::FrameSync<Backend>) {
+        if false { // mark the method as used
+            native::Signpost::place(SIGNPOST_ID, [0, 0, 0, 0]);
+        }
         match sync {
             hal::FrameSync::Semaphore(semaphore) => {
                 if let Some(ref system) = semaphore.system {
@@ -442,8 +470,14 @@ impl Device {
                     Frame {
                         inner: Mutex::new(FrameInner {
                             drawable,
+                            signpost: if index != 0 && surface.inner.enable_signposts {
+                                Some(native::Signpost::new(SIGNPOST_ID, [1, index as usize, 0, 0]))
+                            } else {
+                                None
+                            },
                             available: true,
                             linked: true,
+                            iteration: 0,
                             last_frame: 0,
                         }),
                         texture: texture.to_owned(),
@@ -502,6 +536,10 @@ impl hal::Swapchain<Backend> for Swapchain {
                 debug!("Found drawable of frame {}, acquiring", index);
                 frame.available = false;
                 frame.last_frame = self.last_frame;
+                if self.surface.enable_signposts {
+                    //Note: could encode the `iteration` here if we need it
+                    frame.signpost = Some(native::Signpost::new(SIGNPOST_ID, [1, index, 0, 0]));
+                }
                 self.signal_sync(sync);
                 return Ok(index as _);
             }
@@ -557,6 +595,10 @@ impl hal::Swapchain<Backend> for Swapchain {
         assert!(frame.available);
         frame.last_frame = self.last_frame;
         frame.available = false;
+        if self.surface.enable_signposts {
+            //Note: could encode the `iteration` here if we need it
+            frame.signpost = Some(native::Signpost::new(SIGNPOST_ID, [1, index, 0, 0]));
+        }
 
         Ok(index as _)
     }
