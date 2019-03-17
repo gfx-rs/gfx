@@ -58,8 +58,8 @@ impl Deref for GlContainer {
     }
 }
 
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Backend {}
+#[derive(Default, Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Backend;
 impl hal::Backend for Backend {
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;

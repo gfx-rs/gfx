@@ -14,8 +14,8 @@ use hal::{
 use hal::range::RangeArg;
 
 /// Dummy backend.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Backend { }
+#[derive(Default, Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub struct Backend;
 impl hal::Backend for Backend {
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;

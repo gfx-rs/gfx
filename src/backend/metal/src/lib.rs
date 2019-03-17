@@ -313,9 +313,8 @@ impl Instance {
     }
 }
 
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Backend {}
+#[derive(Default, Copy, Clone, Debug, Eq, Hash, PartialEq)]
+pub struct Backend;
 impl hal::Backend for Backend {
     type PhysicalDevice = device::PhysicalDevice;
     type Device = device::Device;

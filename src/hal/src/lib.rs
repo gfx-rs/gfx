@@ -367,7 +367,7 @@ pub trait Instance: Any + Send + Sync {
 /// for a graphics backend. Each backend module, such as OpenGL
 /// or Metal, will implement this trait with its own concrete types.
 #[allow(missing_docs)]
-pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send + Sync {
+pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Default + Any + Send + Sync {
     //type Instance:          Instance<Self>;
     type PhysicalDevice:      PhysicalDevice<Self>;
     type Device:              Device<Self>;
