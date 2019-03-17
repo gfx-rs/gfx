@@ -20,6 +20,7 @@ use hal::{
 
 use block::ConcreteBlock;
 use cocoa::foundation::{NSRange, NSUInteger};
+use copyless::VecHelper;
 use foreign_types::ForeignType;
 use metal::{
     self,
@@ -785,8 +786,10 @@ impl Journal {
                     soft::Pass::Compute => self.compute_commands.len(),
                     soft::Pass::Blit => self.blit_commands.len(),
                 };
-                self.passes
-                    .push((pass.clone(), range.start + offset..range.end + offset));
+                self.passes.alloc().init((
+                    pass.clone(),
+                    range.start + offset..range.end + offset,
+                ));
             }
         }
 
@@ -855,7 +858,7 @@ impl<'a> PreRender<'a> {
         match *self {
             PreRender::Immediate(encoder) => exec_render(encoder, command, &&soft::Ref),
             PreRender::Deferred(ref mut resources, ref mut list) => {
-                list.push(resources.own_render(command))
+                list.alloc().init(resources.own_render(command));
             }
             PreRender::Void => (),
         }
@@ -895,7 +898,7 @@ impl<'a> PreCompute<'a> {
         match *self {
             PreCompute::Immediate(encoder) => exec_compute(encoder, command, &&soft::Ref),
             PreCompute::Deferred(ref mut resources, ref mut list) => {
-                list.push(resources.own_compute(command))
+                list.alloc().init(resources.own_compute(command));
             }
             PreCompute::Void => (),
         }
@@ -1003,9 +1006,10 @@ impl CommandSink {
             } => {
                 assert!(!is_inheriting);
                 *is_encoding = true;
-                let pass = soft::Pass::Render(descriptor);
-                journal.passes
-                    .push((pass, journal.render_commands.len()..0));
+                journal.passes.alloc().init((
+                    soft::Pass::Render(descriptor),
+                    journal.render_commands.len() .. 0,
+                ));
                 PreRender::Deferred(&mut journal.resources, &mut journal.render_commands)
             }
             #[cfg(feature = "dispatch")]
@@ -1080,9 +1084,10 @@ impl CommandSink {
                 if let Some(&(soft::Pass::Blit, _)) = journal.passes.last() {
                 } else {
                     journal.stop();
-                    journal
-                        .passes
-                        .push((soft::Pass::Blit, journal.blit_commands.len()..0));
+                    journal.passes.alloc().init((
+                        soft::Pass::Blit,
+                        journal.blit_commands.len() .. 0,
+                    ));
                 }
                 PreBlit::Deferred(&mut journal.blit_commands)
             }
@@ -1182,9 +1187,10 @@ impl CommandSink {
                     false
                 } else {
                     journal.stop();
-                    journal
-                        .passes
-                        .push((soft::Pass::Compute, journal.compute_commands.len()..0));
+                    journal.passes.alloc().init((
+                        soft::Pass::Compute,
+                        journal.compute_commands.len() .. 0,
+                    ));
                     true
                 };
                 (
@@ -2294,7 +2300,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 Some(CommandSink::Deferred { ref mut is_encoding, ref mut journal, .. }) => {
                     *is_encoding = true;
                     let pass_desc = metal::RenderPassDescriptor::new().to_owned();
-                    journal.passes.push((soft::Pass::Render(pass_desc), 0..0));
+                    journal.passes.alloc().init((soft::Pass::Render(pass_desc), 0..0));
                 }
                 _ => unreachable!(),
             }
@@ -2571,7 +2577,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                 for &index in &[0usize, 1, 2, 2, 3, 0] {
                     let d = data[index];
-                    vertices.push(ClearVertex {
+                    vertices.alloc().init(ClearVertex {
                         pos: [
                             d[0] as f32 / de.width as f32,
                             d[1] as f32 / de.height as f32,
@@ -2881,7 +2887,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
                 for &index in &[0usize, 1, 2, 2, 3, 0] {
                     let d = data[index];
-                    list.push(BlitVertex {
+                    list.alloc().init(BlitVertex {
                         uv: [
                             d[0] as f32 / se.width as f32,
                             d[1] as f32 / se.height as f32,
@@ -3037,13 +3043,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             let (raw, range) = b.as_bound();
             let buffer_ptr = AsNative::from(raw);
             let index = first_binding as usize + i;
-            let value = Some((buffer_ptr, range.start + offset));
-            if index >= self.state.vertex_buffers.len() {
-                debug_assert_eq!(index, self.state.vertex_buffers.len());
-                self.state.vertex_buffers.push(value);
-            } else {
-                self.state.vertex_buffers[index] = value;
-            }
+            self.state.vertex_buffers
+                .entry(index)
+                .set(Some((buffer_ptr, range.start + offset)));
         }
 
         if let Some(command) = self.state.set_vertex_buffers() {
@@ -3251,7 +3253,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
             }
 
-            self.state.pending_subpasses.push(SubpassInfo {
+            self.state.pending_subpasses.alloc().init(SubpassInfo {
                 descriptor,
                 combined_aspects,
                 formats: subpass.target_formats.clone(),
@@ -3764,7 +3766,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 && r.src % WORD_SIZE as u64 == 0
                 && r.dst % WORD_SIZE as u64 == 0
             {
-                blit_commands.push(soft::BlitCommand::CopyBuffer {
+                blit_commands.alloc().init(soft::BlitCommand::CopyBuffer {
                     src: AsNative::from(src_raw),
                     dst: AsNative::from(dst_raw),
                     region: com::BufferCopy {
@@ -3788,23 +3790,23 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     depth: 1,
                 };
 
-                compute_commands.push(soft::ComputeCommand::BindBuffer {
+                compute_commands.alloc().init(soft::ComputeCommand::BindBuffer {
                     index: 0,
                     buffer: AsNative::from(dst_raw),
                     offset: dst_aligned + dst_range.start,
                 });
-                compute_commands.push(soft::ComputeCommand::BindBuffer {
+                compute_commands.alloc().init(soft::ComputeCommand::BindBuffer {
                     index: 1,
                     buffer: AsNative::from(src_raw),
                     offset: src_aligned + src_range.start,
                 });
-                compute_commands.push(soft::ComputeCommand::BindBufferData {
+                compute_commands.alloc().init(soft::ComputeCommand::BindBufferData {
                     index: 2,
                     // Rust doesn't see that compute_datas will not lose this
                     // item and the boxed contents can't be moved otherwise.
                     words: mem::transmute(&compute_datas.last().unwrap()[..]),
                 });
-                compute_commands.push(soft::ComputeCommand::Dispatch { wg_size, wg_count });
+                compute_commands.alloc().init(soft::ComputeCommand::Dispatch { wg_size, wg_count });
             }
         }
 
