@@ -59,6 +59,19 @@ impl Version {
     /// and will try to recover at least the first two version numbers without
     /// resulting in an `Err`.
     pub fn parse(mut src: String) -> Result<Version, String> {
+        // TODO: Parse version and optional vendor
+        let webgl_sig = "WebGL ";
+        let is_webgl = src.contains(webgl_sig);
+        if is_webgl {
+            return Ok(Version {
+                is_embedded: true,
+                major: 2,
+                minor: 0,
+                revision: None,
+                vendor_info: "".to_string(),
+            });
+        }
+
         let es_sig = " ES ";
         let is_es = match src.rfind(es_sig) {
             Some(pos) => {
