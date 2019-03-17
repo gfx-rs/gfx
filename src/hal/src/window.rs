@@ -396,7 +396,7 @@ pub enum Backbuffer<B: Backend> {
 }
 
 /// Error on acquiring the next image from a swapchain.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum AcquireError {
     /// No image was ready after the specified timeout expired.
     NotReady,
