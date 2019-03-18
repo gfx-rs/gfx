@@ -70,7 +70,7 @@ pub struct SubpassFormats {
 impl SubpassFormats {
     pub fn copy_from(&mut self, other: &Self) {
         self.colors.clear();
-        self.colors.clone_from_slice(&other.colors);
+        self.colors.extend(other.colors.iter().cloned());
         self.depth_stencil = other.depth_stencil;
     }
 }
