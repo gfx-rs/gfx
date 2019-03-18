@@ -441,7 +441,7 @@ fn main() {
         unsafe { device.create_render_pass(&[attachment], &[subpass], &[dependency]) }
             .expect("Can't create render pass")
     };
-    let (mut frame_images, mut framebuffers) = match backbuffer {
+    let (mut frame_images, mut framebuffers, num_frame_images) = match backbuffer {
         Backbuffer::Images(images) => {
             let pairs = images
                 .into_iter()
@@ -466,9 +466,10 @@ fn main() {
                         .unwrap()
                 })
                 .collect();
-            (pairs, fbos)
+            let num_pairs = pairs.len();
+            (pairs, fbos, num_pairs)
         }
-        Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
+        Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo], 1),
     };
 
     // Define maximum number of frames we want to be able to be "in flight" (being computed
@@ -478,7 +479,7 @@ fn main() {
     // Number of image acquisition semaphores is based on the number of swapchain images, not frames in flight,
     // plus one extra which we can guarantee is unused at any given time by swapping it out with the ones
     // in the rest of the queue.
-    let mut image_acquire_semaphores = Vec::with_capacity(frame_images.len());
+    let mut image_acquire_semaphores = Vec::with_capacity(num_frame_images);
     let mut free_acquire_semaphore = device
         .create_semaphore()
         .expect("Could not create semaphore");
@@ -509,7 +510,7 @@ fn main() {
         }
     }
 
-    for _ in 0..frame_images.len() {
+    for _ in 0..num_frame_images {
         image_acquire_semaphores.push(
             device
                 .create_semaphore()
