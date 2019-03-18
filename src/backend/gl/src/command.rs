@@ -1,6 +1,6 @@
 #![allow(missing_docs)]
 
-use crate::{gl, GlContext};
+use crate::GlContext;
 
 use crate::hal::format::ChannelType;
 use crate::hal::range::RangeArg;
@@ -394,7 +394,7 @@ impl RawCommandBuffer {
                             attribute.clone(),
                             handle.unwrap(),
                             desc.stride as _,
-                            desc.rate as u32,
+                            desc.rate.as_uint() as u32,
                         ),
                     );
                 }

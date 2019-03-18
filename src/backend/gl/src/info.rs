@@ -321,8 +321,8 @@ impl Info {
 pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Limits, PrivateCaps) {
     use self::Requirement::*;
     let info = Info::get(gl);
-    let max_texture_size = get_usize(gl, gl::MAX_TEXTURE_SIZE).unwrap_or(64) as u32;
-    let max_color_attachments = get_usize(gl, gl::MAX_COLOR_ATTACHMENTS).unwrap_or(8) as u8;
+    let max_texture_size = get_usize(gl, glow::MAX_TEXTURE_SIZE).unwrap_or(64) as u32;
+    let max_color_attachments = get_usize(gl, glow::MAX_COLOR_ATTACHMENTS).unwrap_or(8) as u8;
 
     let mut limits = Limits {
         max_image_1d_size: max_texture_size,
