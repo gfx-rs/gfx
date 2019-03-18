@@ -20,6 +20,7 @@ use hal::{
 use range_alloc::RangeAllocator;
 
 use cocoa::foundation::{NSRange, NSUInteger};
+use copyless::VecHelper;
 use foreign_types::ForeignType;
 use metal::{
     self,
@@ -945,7 +946,7 @@ impl hal::Device<Backend> for Device {
                             .content
                             .contains(n::DescriptorContent::DYNAMIC_BUFFER)
                         {
-                            dynamic_buffers.push(n::MultiStageData {
+                            dynamic_buffers.alloc().init(n::MultiStageData {
                                 vs: if layout.stages.contains(pso::ShaderStageFlags::VERTEX) {
                                     stage_infos[0].2.buffers
                                 } else {
@@ -1028,7 +1029,7 @@ impl hal::Device<Backend> for Device {
                 }
             }
 
-            infos.push(n::DescriptorSetInfo {
+            infos.alloc().init(n::DescriptorSetInfo {
                 offsets,
                 dynamic_buffers,
             });
@@ -1351,7 +1352,7 @@ impl hal::Device<Backend> for Device {
                 .iter()
                 .position(|(ref vb, offset)| vb.binding == binding && base_offset == *offset)
                 .unwrap_or_else(|| {
-                    vertex_buffers.push((original.clone(), base_offset));
+                    vertex_buffers.alloc().init((original.clone(), base_offset));
                     vertex_buffers.len() - 1
                 });
             let mtl_buffer_index = attribute_buffer_index as usize + relative_index;
