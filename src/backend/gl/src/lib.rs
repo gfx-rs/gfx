@@ -288,9 +288,9 @@ impl PhysicalDevice {
         for extension in info.extensions.iter() {
             debug!("- {}", *extension);
         }
-        let name = info.platform_name.renderer.into();
-        let vendor: std::string::String = info.platform_name.vendor.into();
-        let renderer: std::string::String = info.platform_name.renderer.into();
+        let name = info.platform_name.renderer.clone();
+        let vendor: std::string::String = info.platform_name.vendor.clone();
+        let renderer: std::string::String = info.platform_name.renderer.clone();
 
         // create the shared context
         let share = Share {
