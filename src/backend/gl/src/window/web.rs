@@ -1,6 +1,5 @@
-use hal::{self, format as f, image};
-
-use {Backend as B, Device, PhysicalDevice, QueueFamily};
+use crate::hal::{self, format as f, image, CompositeAlpha};
+use crate::{Backend as B, Device, PhysicalDevice, QueueFamily};
 
 fn get_window_extent(window: &Window) -> image::Extent {
     image::Extent {
@@ -100,7 +99,6 @@ impl hal::Surface<B> for Surface {
         hal::SurfaceCapabilities,
         Option<Vec<f::Format>>,
         Vec<hal::PresentMode>,
-        Vec<hal::CompositeAlpha>,
     ) {
         let ex = get_window_extent(&self.window);
         let extent = hal::window::Extent2D::from(ex);
@@ -118,20 +116,13 @@ impl hal::Surface<B> for Surface {
             },
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
+            composite_alpha: CompositeAlpha::OPAQUE, //TODO
         };
         let present_modes = vec![
             hal::PresentMode::Fifo, //TODO
         ];
-        let composite_alphas = vec![
-            hal::CompositeAlpha::Inherit, //TODO
-        ];
 
-        (
-            caps,
-            Some(self.swapchain_formats()),
-            present_modes,
-            composite_alphas,
-        )
+        (caps, Some(self.swapchain_formats()), present_modes)
     }
 
     fn supports_queue_family(&self, _: &QueueFamily) -> bool {

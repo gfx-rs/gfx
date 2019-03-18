@@ -5,8 +5,7 @@ use crate::hal::backend::FastHashMap;
 use crate::hal::memory::{Properties, Requirements};
 use crate::hal::{format, image as i, pass, pso};
 
-use crate::Backend;
-use GlContext;
+use crate::{Backend, GlContext};
 
 pub type VertexArray = <GlContext as glow::Context>::VertexArray;
 pub type RawBuffer = <GlContext as glow::Context>::Buffer;
