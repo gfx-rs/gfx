@@ -253,10 +253,13 @@ impl Info {
         let version =
             Version::parse(get_string(gl, glow::VERSION).unwrap_or_else(|_| String::from("")))
                 .unwrap();
+        #[cfg(not(target_arch = "wasm32"))]
         let shading_language = Version::parse(
             get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_else(|_| String::from("")),
         )
         .unwrap();
+        #[cfg(target_arch = "wasm32")]
+        let shading_language = Version::new_embedded(3, 0, String::from(""));
         // TODO: Use separate path for WebGL extensions in `glow` somehow
         // Perhaps automatic fallback for NUM_EXTENSIONS to EXTENSIONS on native
         #[cfg(target_arch = "wasm32")]
