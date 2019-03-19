@@ -24,10 +24,10 @@ log = { version = "0.4" }
 gfx-hal = { path = "../../hal", version = "0.1" }
 smallvec = "0.6"
 glow = { version = "0.1", path = "../../../../glow" }
+spirv_cross = { version = "0.12.1", path = "../../../../spirv_cross/spirv_cross", features = ["glsl"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 glutin = { version = "0.19", optional = true }
-spirv_cross = "0.12.1"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3.6"
