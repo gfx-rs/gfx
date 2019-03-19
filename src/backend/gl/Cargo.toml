@@ -23,8 +23,8 @@ bitflags = "1"
 log = { version = "0.4" }
 gfx-hal = { path = "../../hal", version = "0.2" }
 smallvec = "0.6"
-spirv_cross = "0.12.1"
 glow = { version = "0.1", path = "../../../../glow" }
+spirv_cross = { version = "0.12.1", path = "../../../../spirv_cross/spirv_cross", features = ["glsl"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 glutin = { version = "0.20", optional = true }
