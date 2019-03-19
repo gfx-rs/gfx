@@ -12,7 +12,6 @@ extern crate glow;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub extern crate glutin;
 extern crate smallvec;
-#[cfg(not(target_arch = "wasm32"))]
 extern crate spirv_cross;
 #[cfg(target_arch = "wasm32")]
 extern crate wasm_bindgen;

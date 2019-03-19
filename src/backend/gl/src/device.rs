@@ -26,7 +26,6 @@ use crate::{Backend as B, Share, Starc, Surface, Swapchain};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
-#[cfg(not(target_arch = "wasm32"))]
 fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
     let msg = match err {
         SpirvErrorCode::CompilationError(msg) => msg,
@@ -157,7 +156,6 @@ impl Device {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn parse_spirv(&self, raw_data: &[u8]) -> Result<spirv::Ast<glsl::Target>, d::ShaderError> {
         // spec requires "codeSize must be a multiple of 4"
         assert_eq!(raw_data.len() & 3, 0);
@@ -178,7 +176,6 @@ impl Device {
         })
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn specialize_ast(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
@@ -223,21 +220,25 @@ impl Device {
     ) -> Result<String, d::ShaderError> {
         let mut compile_options = glsl::CompilerOptions::default();
         // see version table at https://en.wikipedia.org/wiki/OpenGL_Shading_Language
+        let is_embedded = self.share.info.shading_language.is_embedded;
         compile_options.version = match self.share.info.shading_language.tuple() {
-            (4, 60) => glsl::Version::V4_60,
-            (4, 50) => glsl::Version::V4_50,
-            (4, 40) => glsl::Version::V4_40,
-            (4, 30) => glsl::Version::V4_30,
-            (4, 20) => glsl::Version::V4_20,
-            (4, 10) => glsl::Version::V4_10,
-            (4, 00) => glsl::Version::V4_00,
-            (3, 30) => glsl::Version::V3_30,
-            (1, 50) => glsl::Version::V1_50,
-            (1, 40) => glsl::Version::V1_40,
-            (1, 30) => glsl::Version::V1_30,
-            (1, 20) => glsl::Version::V1_20,
-            (1, 10) => glsl::Version::V1_10,
-            other if other > (4, 60) => glsl::Version::V4_60,
+            (4, 60) if !is_embedded => glsl::Version::V4_60,
+            (4, 50) if !is_embedded => glsl::Version::V4_50,
+            (4, 40) if !is_embedded => glsl::Version::V4_40,
+            (4, 30) if !is_embedded => glsl::Version::V4_30,
+            (4, 20) if !is_embedded => glsl::Version::V4_20,
+            (4, 10) if !is_embedded => glsl::Version::V4_10,
+            (4, 00) if !is_embedded => glsl::Version::V4_00,
+            (3, 30) if !is_embedded => glsl::Version::V3_30,
+            (1, 50) if !is_embedded => glsl::Version::V1_50,
+            (1, 40) if !is_embedded => glsl::Version::V1_40,
+            (1, 30) if !is_embedded => glsl::Version::V1_30,
+            (1, 20) if !is_embedded => glsl::Version::V1_20,
+            (1, 10) if !is_embedded => glsl::Version::V1_10,
+            other if other > (4, 60) && !is_embedded => glsl::Version::V4_60,
+            (3, 00) if is_embedded => glsl::Version::V3_00Es,
+            (1, 00) if is_embedded => glsl::Version::V1_00Es,
+            other if other > (3, 00) && is_embedded => glsl::Version::V3_00Es,
             other => panic!("GLSL version is not recognized: {:?}", other),
         };
         compile_options.vertex.invert_y = true;
@@ -254,7 +255,6 @@ impl Device {
         })
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn remap_bindings(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
@@ -278,7 +278,6 @@ impl Device {
         );
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn remap_binding(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
@@ -317,7 +316,6 @@ impl Device {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn combine_separate_images_and_samplers(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
@@ -362,7 +360,6 @@ impl Device {
         }
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn populate_id_map(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
@@ -393,50 +390,6 @@ impl Device {
                 debug!("Can't remap bindings for raw shaders. Assuming they are already rebound.");
                 raw
             }
-            #[cfg(target_arch = "wasm32")]
-            n::ShaderModule::Spirv(ref spirv) => {
-                let shader_source = match stage {
-                    pso::Stage::Vertex => {
-                        r"#version 300 es
-                            const float scale = 1.2f;
- 
-                            layout(location = 0) in vec2 a_pos;
-                            layout(location = 1) in vec2 a_uv;
-                            out vec2 v_uv;
- 
-                            void main() {
-                                v_uv = a_uv;
-                                gl_Position = vec4(a_pos, 0.0, 1.0);
-                                gl_Position.y = -gl_Position.y;
-                            }
-                            "
-                    }
-                    pso::Stage::Fragment => {
-                        r"#version 300 es
-                            precision mediump float;
- 
-                            in vec2 v_uv;
-                            layout(location = 0) out vec4 target0;
- 
-                            uniform sampler2D u_texture;
- 
-                            void main() {
-                                target0 = texture(u_texture, v_uv);
-                            }
-                            "
-                    }
-                    _ => "",
-                }
-                .as_bytes();
-                let compiled = self.create_shader_module_from_source(shader_source, stage);
-                let shader = match compiled.unwrap() {
-                    n::ShaderModule::Raw(raw) => raw,
-                    _ => panic!("Unhandled"),
-                };
-
-                shader
-            }
-            #[cfg(not(target_arch = "wasm32"))]
             n::ShaderModule::Spirv(ref spirv) => {
                 let mut ast = self.parse_spirv(spirv).unwrap();
 
