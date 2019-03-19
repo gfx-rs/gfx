@@ -538,6 +538,8 @@ fn main() {
     .expect("Can't create pipeline layout");
     let pipeline = {
         let vs_module = {
+            #[cfg(target_arch = "wasm32")]
+            let spirv = include_bytes!("./data/quad.vert.spv").to_vec();
             #[cfg(not(target_arch = "wasm32"))]
             let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
             #[cfg(not(target_arch = "wasm32"))]
@@ -547,11 +549,11 @@ fn main() {
                 .map(|b| b.unwrap())
                 .collect();
 
-            #[cfg(target_arch = "wasm32")]
-            let spirv = Vec::new(); // TODO
             unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
         let fs_module = {
+            #[cfg(target_arch = "wasm32")]
+            let spirv = include_bytes!("./data/quad.frag.spv").to_vec();
             #[cfg(not(target_arch = "wasm32"))]
             let glsl = fs::read_to_string("quad/data/quad.frag").unwrap();
             #[cfg(not(target_arch = "wasm32"))]
@@ -560,8 +562,7 @@ fn main() {
                 .bytes()
                 .map(|b| b.unwrap())
                 .collect();
-            #[cfg(target_arch = "wasm32")]
-            let spirv = Vec::new(); // TODO
+
             unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
 
