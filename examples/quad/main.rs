@@ -9,7 +9,6 @@
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
 
-extern crate env_logger;
 #[cfg(feature = "dx11")]
 extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "dx12")]
@@ -22,19 +21,11 @@ extern crate gfx_backend_metal as back;
 extern crate gfx_backend_vulkan as back;
 extern crate gfx_hal as hal;
 
-#[cfg(not(target_arch = "wasm32"))]
-extern crate glsl_to_spirv;
-extern crate image;
-#[cfg(not(target_arch = "wasm32"))]
-extern crate winit;
-
-#[cfg(target_arch = "wasm32")]
-extern crate console_error_panic_hook;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 #[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(start)]
 pub fn wasm_main() {
     std::panic::set_hook(Box::new(console_error_panic_hook::hook));
     main();
