@@ -257,6 +257,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         // TODO: Query supported features by feature set rather than hard coding in the supported
         // features. https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
         if !self.features().contains(requested_features) {
+            warn!("Features missing: {:?}", requested_features - self.features());
             return Err(error::DeviceCreationError::MissingFeature);
         }
 
@@ -2474,7 +2475,12 @@ impl hal::Device<Backend> for Device {
         debug!("wait_for_fence {:?} for {} ms", fence, timeout_ns);
         let inner = fence.0.borrow();
         let cmd_buf = match *inner {
-            n::FenceInner::Idle { signaled } => return Ok(signaled),
+            n::FenceInner::Idle { signaled } => {
+                if !signaled {
+                    warn!("Fence is not pending, waiting not possible");
+                }
+                return Ok(signaled)
+            }
             n::FenceInner::Pending(ref cmd_buf) => cmd_buf,
         };
         if timeout_ns == !0 {
