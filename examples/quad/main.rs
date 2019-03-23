@@ -33,7 +33,7 @@ use hal::queue::Submission;
 use hal::{
     buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
 };
-use hal::{Backbuffer, DescriptorPool, FrameSync, Primitive, SwapchainConfig};
+use hal::{Backbuffer, DescriptorPool, Primitive, SwapchainConfig};
 use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 
 use std::fs;
@@ -731,7 +731,7 @@ fn main() {
         // Use guaranteed unused acquire semaphore to get the index of the next frame we will render to
         // by using acquire_image
         let swap_image = unsafe {
-            match swap_chain.acquire_image(!0, FrameSync::Semaphore(&free_acquire_semaphore)) {
+            match swap_chain.acquire_image(!0, Some(&free_acquire_semaphore), None) {
                 Ok(i) => i as usize,
                 Err(_) => {
                     recreate_swapchain = true;

@@ -744,7 +744,8 @@ impl hal::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
-        _sync: hal::FrameSync<Backend>,
+        _semaphore: Option<&Semaphore>,
+        _fence: Option<&Fence>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         // TODO: non-`_DISCARD` swap effects have more than one buffer, `FLIP`
         //       effects are dxgi 1.3 (w10+?) in which case there is

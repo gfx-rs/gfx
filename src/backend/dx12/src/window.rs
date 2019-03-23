@@ -119,7 +119,8 @@ impl hal::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timout_ns: u64,
-        _sync: hal::FrameSync<Backend>,
+        _semaphore: Option<&r::Semaphore>,
+        _fence: Option<&r::Fence>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         // TODO: sync
 

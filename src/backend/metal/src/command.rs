@@ -2039,7 +2039,8 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 cmd_buffer.commit();
 
                 if let Some(fence) = fence {
-                    *fence.0.borrow_mut() = native::FenceInner::Pending(cmd_buffer.to_owned());
+                    debug!("\tmarking fence ptr {:?} as pending", fence.0.as_ptr());
+                    fence.0.replace(native::FenceInner::PendingSubmission(cmd_buffer.to_owned()));
                 }
             } else if let Some(cmd_buffer) = deferred_cmd_buffer {
                 cmd_buffer.commit();

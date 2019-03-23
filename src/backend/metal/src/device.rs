@@ -2457,10 +2457,13 @@ impl hal::Device<Backend> for Device {
     unsafe fn destroy_image_view(&self, _view: n::ImageView) {}
 
     fn create_fence(&self, signaled: bool) -> Result<n::Fence, OutOfMemory> {
-        Ok(n::Fence(RefCell::new(n::FenceInner::Idle { signaled })))
+        let cell = RefCell::new(n::FenceInner::Idle { signaled });
+        debug!("Creating fence ptr {:?} with signal={}", cell.as_ptr(), signaled);
+        Ok(n::Fence(cell))
     }
     unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), OutOfMemory> {
-        *fence.0.borrow_mut() = n::FenceInner::Idle { signaled: false };
+        debug!("Resetting fence ptr {:?}", fence.0.as_ptr());
+        fence.0.replace(n::FenceInner::Idle { signaled: false });
         Ok(())
     }
     unsafe fn wait_for_fence(
@@ -2473,39 +2476,51 @@ impl hal::Device<Backend> for Device {
         }
 
         debug!("wait_for_fence {:?} for {} ms", fence, timeout_ns);
-        let inner = fence.0.borrow();
-        let cmd_buf = match *inner {
+        match *fence.0.borrow() {
             n::FenceInner::Idle { signaled } => {
                 if !signaled {
-                    warn!("Fence is not pending, waiting not possible");
+                    warn!("Fence ptr {:?} is not pending, waiting not possible", fence.0.as_ptr());
                 }
-                return Ok(signaled)
+                Ok(signaled)
             }
-            n::FenceInner::Pending(ref cmd_buf) => cmd_buf,
-        };
-        if timeout_ns == !0 {
-            cmd_buf.wait_until_completed();
-            return Ok(true);
-        }
-
-        let start = time::Instant::now();
-        loop {
-            if let metal::MTLCommandBufferStatus::Completed = cmd_buf.status() {
-                return Ok(true);
+            n::FenceInner::PendingSubmission(ref cmd_buf) => {
+                if timeout_ns == !0 {
+                    cmd_buf.wait_until_completed();
+                    return Ok(true);
+                }
+                let start = time::Instant::now();
+                loop {
+                    if let metal::MTLCommandBufferStatus::Completed = cmd_buf.status() {
+                        return Ok(true);
+                    }
+                    if to_ns(start.elapsed()) >= timeout_ns {
+                        return Ok(false);
+                    }
+                    thread::sleep(time::Duration::from_millis(1));
+                }
             }
-            if to_ns(start.elapsed()) >= timeout_ns {
-                return Ok(false);
+            n::FenceInner::AcquireFrame { ref swapchain_image, iteration } => {
+                if swapchain_image.iteration() > iteration {
+                    Ok(true)
+                } else if timeout_ns == 0 {
+                    Ok(false)
+                } else {
+                    swapchain_image.wait_until_ready();
+                    Ok(true)
+                }
             }
-            thread::sleep(time::Duration::from_millis(1));
         }
     }
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, DeviceLost> {
         Ok(match *fence.0.borrow() {
             n::FenceInner::Idle { signaled } => signaled,
-            n::FenceInner::Pending(ref cmd_buf) => match cmd_buf.status() {
+            n::FenceInner::PendingSubmission(ref cmd_buf) => match cmd_buf.status() {
                 metal::MTLCommandBufferStatus::Completed => true,
                 _ => false,
             },
+            n::FenceInner::AcquireFrame { ref swapchain_image, iteration } => {
+                swapchain_image.iteration() > iteration
+            }
         })
     }
     unsafe fn destroy_fence(&self, _fence: n::Fence) {}
