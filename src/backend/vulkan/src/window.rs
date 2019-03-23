@@ -416,7 +416,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         fence: Option<&native::Fence>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         let semaphore = semaphore.map_or(vk::Semaphore::null(), |s| s.0);
-        let fence = fence.map_or(vk::Fence::null()), |f| f.0);
+        let fence = fence.map_or(vk::Fence::null(), |f| f.0);
 
         // will block if no image is available
         let index = self

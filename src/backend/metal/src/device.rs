@@ -403,6 +403,22 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_image_cube_size: pc.max_texture_size as _,
             max_image_array_layers: pc.max_texture_layers as _,
             max_texel_elements: (pc.max_texture_size * pc.max_texture_size) as usize,
+            max_uniform_buffer_range: pc.max_buffer_size,
+            max_storage_buffer_range: pc.max_buffer_size,
+            // "Maximum length of an inlined constant data buffer, per graphics or compute function"
+            max_push_constants_size: 0x1000,
+            max_memory_allocation_count: !0,
+            max_sampler_allocation_count: !0,
+            max_bound_descriptor_sets: 0x100, // arbitrary
+
+            max_per_stage_descriptor_samplers: pc.max_samplers_per_stage as usize,
+            max_per_stage_descriptor_uniform_buffers: pc.max_buffers_per_stage as usize,
+            max_per_stage_descriptor_storage_buffers: pc.max_buffers_per_stage as usize,
+            max_per_stage_descriptor_sampled_images: pc.max_textures_per_stage as usize,
+            max_per_stage_descriptor_storage_images: pc.max_textures_per_stage as usize,
+            max_per_stage_descriptor_input_attachments: pc.max_textures_per_stage as usize, //TODO
+            max_per_stage_resources: 0x100, //TODO
+
             max_patch_size: 0, // No tessellation
 
             // Note: The maximum number of supported viewports and scissor rectangles varies by device.
@@ -441,7 +457,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             non_coherent_atom_size: 4,
             max_sampler_anisotropy: 16.,
             min_vertex_input_binding_stride_alignment: STRIDE_GRANULARITY as u64,
-            .. hal::Limits::default() //TODO
+
+            .. hal::Limits::default() // TODO!
         }
     }
 }
