@@ -49,7 +49,7 @@ use std::{fs, iter};
 
 use hal::{
     buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
-    Adapter, Backbuffer, Backend, DescriptorPool, Device, FrameSync, Instance, Limits, MemoryType,
+    Adapter, Backbuffer, Backend, DescriptorPool, Device, Instance, Limits, MemoryType,
     PhysicalDevice, Primitive, QueueGroup, Surface, Swapchain, SwapchainConfig,
 };
 
@@ -514,7 +514,7 @@ impl<B: Backend> RendererState<B> {
                     .swapchain
                     .as_mut()
                     .unwrap()
-                    .acquire_image(!0, FrameSync::Semaphore(acquire_semaphore))
+                    .acquire_image(!0, Some(acquire_semaphore), None)
                 {
                     Ok(i) => i,
                     Err(_) => {

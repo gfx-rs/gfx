@@ -43,9 +43,16 @@
 //! }
 //! ```
 
-use crate::hal::{self, format as f, image, CompositeAlpha};
+use hal::{
+    self,
+    format as f, image,
+    CompositeAlpha,
+};
 
-use crate::{Backend as B, Device, PhysicalDevice, QueueFamily, Starc};
+use crate::{
+    native,
+    Backend as B, Device, PhysicalDevice, QueueFamily, Starc
+};
 
 use glutin::{self, GlContext};
 
@@ -70,7 +77,8 @@ impl hal::Swapchain<B> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
-        _sync: hal::FrameSync<B>,
+        _semaphore: Option<&native::Semaphore>,
+        _fence: Option<&native::Fence>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         // TODO: sync
         Ok(0)

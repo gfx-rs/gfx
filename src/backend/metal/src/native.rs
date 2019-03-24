@@ -843,7 +843,11 @@ pub enum QueryPool {
 #[derive(Debug)]
 pub enum FenceInner {
     Idle { signaled: bool },
-    Pending(metal::CommandBuffer),
+    PendingSubmission(metal::CommandBuffer),
+    AcquireFrame {
+        swapchain_image: SwapchainImage,
+        iteration: usize,
+    },
 }
 
 #[derive(Debug)]

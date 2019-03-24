@@ -188,6 +188,7 @@ impl Drop for Frame {
     }
 }
 
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AcquireMode {
     Wait,
@@ -199,18 +200,12 @@ pub struct Swapchain {
     surface: Arc<SurfaceInner>,
     extent: Extent2D,
     last_frame: usize,
-    image_ready_callbacks: Vec<Arc<Mutex<Option<SwapchainImage>>>>,
     pub acquire_mode: AcquireMode,
 }
 
 impl Drop for Swapchain {
     fn drop(&mut self) {
         info!("dropping Swapchain");
-        for ir in self.image_ready_callbacks.drain(..) {
-            if ir.lock().take().is_some() {
-                debug!("\twith a callback");
-            }
-        }
     }
 }
 
@@ -243,22 +238,6 @@ impl Swapchain {
             }
         }
     }
-
-    fn signal_sync(&self, sync: hal::FrameSync<Backend>) {
-        if false { // mark the method as used
-            native::Signpost::place(SIGNPOST_ID, [0, 0, 0, 0]);
-        }
-        match sync {
-            hal::FrameSync::Semaphore(semaphore) => {
-                if let Some(ref system) = semaphore.system {
-                    system.signal();
-                }
-            }
-            hal::FrameSync::Fence(fence) => {
-                *fence.0.borrow_mut() = native::FenceInner::Idle { signaled: true };
-            }
-        }
-    }
 }
 
 #[derive(Debug)]
@@ -269,6 +248,11 @@ pub struct SwapchainImage {
 }
 
 impl SwapchainImage {
+    /// Returns the associated frame iteration.
+    pub fn iteration(&self) -> usize {
+        self.frames[self.index as usize].inner.lock().iteration
+    }
+
     /// Waits until the specified swapchain index is available for rendering.
     /// Returns the number of frames it had to wait.
     pub fn wait_until_ready(&self) -> usize {
@@ -503,7 +487,6 @@ impl Device {
             surface: surface.inner.clone(),
             extent: config.extent,
             last_frame: 0,
-            image_ready_callbacks: Vec::new(),
             acquire_mode: AcquireMode::Oldest,
         };
 
@@ -515,12 +498,15 @@ impl hal::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
-        sync: hal::FrameSync<Backend>,
+        semaphore: Option<&native::Semaphore>,
+        fence: Option<&native::Fence>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         self.last_frame += 1;
 
         //TODO: figure out a proper story of HiDPI
         if false && self.surface.dimensions() != self.extent {
+            // mark the method as used
+            native::Signpost::place(SIGNPOST_ID, [0, 0, 0, 0]);
             unimplemented!()
         }
 
@@ -540,7 +526,14 @@ impl hal::Swapchain<Backend> for Swapchain {
                     //Note: could encode the `iteration` here if we need it
                     frame.signpost = Some(native::Signpost::new(SIGNPOST_ID, [1, index, 0, 0]));
                 }
-                self.signal_sync(sync);
+                if let Some(semaphore) = semaphore {
+                    if let Some(ref system) = semaphore.system {
+                        system.signal();
+                    }
+                }
+                if let Some(fence) = fence {
+                    fence.0.replace(native::FenceInner::Idle { signaled: true });
+                }
                 return Ok(index as _);
             }
             if frame.last_frame < oldest_frame {
@@ -550,10 +543,17 @@ impl hal::Swapchain<Backend> for Swapchain {
         }
 
         let (index, mut frame) = match self.acquire_mode {
-            AcquireMode::Wait => self
-                .surface
-                .next_frame(&self.frames)
-                .map_err(|_| hal::AcquireError::OutOfDate)?,
+            AcquireMode::Wait => {
+                let pair = self
+                    .surface
+                    .next_frame(&self.frames)
+                    .map_err(|_| hal::AcquireError::OutOfDate)?;
+
+                if let Some(fence) = fence {
+                    fence.0.replace(native::FenceInner::Idle { signaled: true });
+                }
+                pair
+            },
             AcquireMode::Oldest => {
                 let frame = match self.frames.get(oldest_index) {
                     Some(frame) => frame.inner.lock(),
@@ -566,25 +566,26 @@ impl hal::Swapchain<Backend> for Swapchain {
                     return Err(hal::AcquireError::OutOfDate);
                 }
 
-                self.image_ready_callbacks.retain(|ir| ir.lock().is_some());
-                match sync {
-                    hal::FrameSync::Semaphore(semaphore) => {
-                        self.image_ready_callbacks
-                            .push(Arc::clone(&semaphore.image_ready));
-                        let mut sw_image = semaphore.image_ready.lock();
-                        if let Some(ref swi) = *sw_image {
-                            warn!("frame {} hasn't been waited upon", swi.index);
-                        }
-                        *sw_image = Some(SwapchainImage {
-                            frames: self.frames.clone(),
-                            surface: self.surface.clone(),
+                if let Some(semaphore) = semaphore {
+                    let mut sw_image = semaphore.image_ready.lock();
+                    if let Some(ref swi) = *sw_image {
+                        warn!("frame {} hasn't been waited upon", swi.index);
+                    }
+                    *sw_image = Some(SwapchainImage {
+                        frames: Arc::clone(&self.frames),
+                        surface: Arc::clone(&self.surface),
+                        index: oldest_index as _,
+                    });
+                }
+                if let Some(fence) = fence {
+                    fence.0.replace(native::FenceInner::AcquireFrame {
+                        swapchain_image: SwapchainImage {
+                            frames: Arc::clone(&self.frames),
+                            surface: Arc::clone(&self.surface),
                             index: oldest_index as _,
-                        });
-                    }
-                    hal::FrameSync::Fence(_fence) => {
-                        //TODO: need presentation handlers always created and setting a bool
-                        unimplemented!()
-                    }
+                        },
+                        iteration: frame.iteration,
+                    });
                 }
 
                 (oldest_index, frame)

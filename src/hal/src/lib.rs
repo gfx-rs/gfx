@@ -33,7 +33,7 @@ pub use self::queue::{
     Submission, Supports, Transfer,
 };
 pub use self::window::{
-    AcquireError, Backbuffer, CompositeAlpha, FrameSync, PresentMode, Surface, SurfaceCapabilities,
+    AcquireError, Backbuffer, CompositeAlpha, PresentMode, Surface, SurfaceCapabilities,
     SwapImageIndex, Swapchain, SwapchainConfig,
 };
 

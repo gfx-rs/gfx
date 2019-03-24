@@ -257,6 +257,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         // TODO: Query supported features by feature set rather than hard coding in the supported
         // features. https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
         if !self.features().contains(requested_features) {
+            warn!("Features missing: {:?}", requested_features - self.features());
             return Err(error::DeviceCreationError::MissingFeature);
         }
 
@@ -402,6 +403,22 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_image_cube_size: pc.max_texture_size as _,
             max_image_array_layers: pc.max_texture_layers as _,
             max_texel_elements: (pc.max_texture_size * pc.max_texture_size) as usize,
+            max_uniform_buffer_range: pc.max_buffer_size,
+            max_storage_buffer_range: pc.max_buffer_size,
+            // "Maximum length of an inlined constant data buffer, per graphics or compute function"
+            max_push_constants_size: 0x1000,
+            max_memory_allocation_count: !0,
+            max_sampler_allocation_count: !0,
+            max_bound_descriptor_sets: 0x100, // arbitrary
+
+            max_per_stage_descriptor_samplers: pc.max_samplers_per_stage as usize,
+            max_per_stage_descriptor_uniform_buffers: pc.max_buffers_per_stage as usize,
+            max_per_stage_descriptor_storage_buffers: pc.max_buffers_per_stage as usize,
+            max_per_stage_descriptor_sampled_images: pc.max_textures_per_stage as usize,
+            max_per_stage_descriptor_storage_images: pc.max_textures_per_stage as usize,
+            max_per_stage_descriptor_input_attachments: pc.max_textures_per_stage as usize, //TODO
+            max_per_stage_resources: 0x100, //TODO
+
             max_patch_size: 0, // No tessellation
 
             // Note: The maximum number of supported viewports and scissor rectangles varies by device.
@@ -440,7 +457,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             non_coherent_atom_size: 4,
             max_sampler_anisotropy: 16.,
             min_vertex_input_binding_stride_alignment: STRIDE_GRANULARITY as u64,
-            .. hal::Limits::default() //TODO
+
+            .. hal::Limits::default() // TODO!
         }
     }
 }
@@ -2456,10 +2474,13 @@ impl hal::Device<Backend> for Device {
     unsafe fn destroy_image_view(&self, _view: n::ImageView) {}
 
     fn create_fence(&self, signaled: bool) -> Result<n::Fence, OutOfMemory> {
-        Ok(n::Fence(RefCell::new(n::FenceInner::Idle { signaled })))
+        let cell = RefCell::new(n::FenceInner::Idle { signaled });
+        debug!("Creating fence ptr {:?} with signal={}", cell.as_ptr(), signaled);
+        Ok(n::Fence(cell))
     }
     unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), OutOfMemory> {
-        *fence.0.borrow_mut() = n::FenceInner::Idle { signaled: false };
+        debug!("Resetting fence ptr {:?}", fence.0.as_ptr());
+        fence.0.replace(n::FenceInner::Idle { signaled: false });
         Ok(())
     }
     unsafe fn wait_for_fence(
@@ -2472,34 +2493,51 @@ impl hal::Device<Backend> for Device {
         }
 
         debug!("wait_for_fence {:?} for {} ms", fence, timeout_ns);
-        let inner = fence.0.borrow();
-        let cmd_buf = match *inner {
-            n::FenceInner::Idle { signaled } => return Ok(signaled),
-            n::FenceInner::Pending(ref cmd_buf) => cmd_buf,
-        };
-        if timeout_ns == !0 {
-            cmd_buf.wait_until_completed();
-            return Ok(true);
-        }
-
-        let start = time::Instant::now();
-        loop {
-            if let metal::MTLCommandBufferStatus::Completed = cmd_buf.status() {
-                return Ok(true);
+        match *fence.0.borrow() {
+            n::FenceInner::Idle { signaled } => {
+                if !signaled {
+                    warn!("Fence ptr {:?} is not pending, waiting not possible", fence.0.as_ptr());
+                }
+                Ok(signaled)
             }
-            if to_ns(start.elapsed()) >= timeout_ns {
-                return Ok(false);
+            n::FenceInner::PendingSubmission(ref cmd_buf) => {
+                if timeout_ns == !0 {
+                    cmd_buf.wait_until_completed();
+                    return Ok(true);
+                }
+                let start = time::Instant::now();
+                loop {
+                    if let metal::MTLCommandBufferStatus::Completed = cmd_buf.status() {
+                        return Ok(true);
+                    }
+                    if to_ns(start.elapsed()) >= timeout_ns {
+                        return Ok(false);
+                    }
+                    thread::sleep(time::Duration::from_millis(1));
+                }
             }
-            thread::sleep(time::Duration::from_millis(1));
+            n::FenceInner::AcquireFrame { ref swapchain_image, iteration } => {
+                if swapchain_image.iteration() > iteration {
+                    Ok(true)
+                } else if timeout_ns == 0 {
+                    Ok(false)
+                } else {
+                    swapchain_image.wait_until_ready();
+                    Ok(true)
+                }
+            }
         }
     }
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, DeviceLost> {
         Ok(match *fence.0.borrow() {
             n::FenceInner::Idle { signaled } => signaled,
-            n::FenceInner::Pending(ref cmd_buf) => match cmd_buf.status() {
+            n::FenceInner::PendingSubmission(ref cmd_buf) => match cmd_buf.status() {
                 metal::MTLCommandBufferStatus::Completed => true,
                 _ => false,
             },
+            n::FenceInner::AcquireFrame { ref swapchain_image, iteration } => {
+                swapchain_image.iteration() > iteration
+            }
         })
     }
     unsafe fn destroy_fence(&self, _fence: n::Fence) {}

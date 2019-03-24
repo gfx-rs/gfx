@@ -25,7 +25,7 @@
 //! # extern crate gfx_backend_empty as empty;
 //! # extern crate gfx_hal;
 //! # fn main() {
-//! use gfx_hal::{Device, FrameSync};
+//! use gfx_hal::Device;
 //! # use gfx_hal::{CommandQueue, Graphics, Swapchain};
 //!
 //! # let mut swapchain: empty::Swapchain = return;
@@ -35,7 +35,7 @@
 //! let acquisition_semaphore = device.create_semaphore().unwrap();
 //! let render_semaphore = device.create_semaphore().unwrap();
 //!
-//! let frame = swapchain.acquire_image(!0, FrameSync::Semaphore(&acquisition_semaphore));
+//! let frame = swapchain.acquire_image(!0, Some(&acquisition_semaphore), None);
 //! // render the scene..
 //! // `render_semaphore` will be signalled once rendering has been finished
 //! swapchain.present(&mut present_queue, 0, &[render_semaphore]);
@@ -204,21 +204,6 @@ pub trait Surface<B: Backend>: Any + Send + Sync {
 /// the GPU (aka double-buffering). A `SwapImageIndex` refers
 /// to a particular image in the swapchain.
 pub type SwapImageIndex = u32;
-
-/// Synchronization primitives which will be signalled once a frame got retrieved.
-///
-/// The semaphore or fence _must_ be unsignalled.
-pub enum FrameSync<'a, B: Backend> {
-    /// Semaphore used for synchronization.
-    ///
-    /// Will be signaled once the frame backbuffer is available.
-    Semaphore(&'a B::Semaphore),
-
-    /// Fence used for synchronization.
-    ///
-    /// Will be signaled once the frame backbuffer is available.
-    Fence(&'a B::Fence),
-}
 
 /// Specifies the mode regulating how a swapchain presents frames.
 #[repr(C)]
@@ -416,9 +401,8 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     /// # Synchronization
     ///
     /// The acquired image will not be immediately available when the function returns.
-    /// Once available the underlying primitive of `sync` will be signaled.
-    /// This can either be a [`Semaphore`](../trait.Resources.html#associatedtype.Semaphore)
-    /// or a [`Fence`](../trait.Resources.html#associatedtype.Fence).
+    /// Once available the provided [`Semaphore`](../trait.Resources.html#associatedtype.Semaphore)
+    /// and [`Fence`](../trait.Resources.html#associatedtype.Fence) will be signaled.
     ///
     /// # Examples
     ///
@@ -428,7 +412,8 @@ pub trait Swapchain<B: Backend>: Any + Send + Sync {
     unsafe fn acquire_image(
         &mut self,
         timeout_ns: u64,
-        sync: FrameSync<B>,
+        semaphore: Option<&B::Semaphore>,
+        fence: Option<&B::Fence>,
     ) -> Result<SwapImageIndex, AcquireError>;
 
     /// Present one acquired image.

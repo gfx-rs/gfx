@@ -12,7 +12,7 @@ use hal::image::{NumSamples, Size};
 #[cfg(feature = "winit")]
 use winit;
 
-use conv;
+use {conv, native};
 use {Backend, Instance, PhysicalDevice, QueueFamily, RawInstance, VK_ENTRY};
 
 pub struct Surface {
@@ -412,12 +412,11 @@ impl hal::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         timeout_ns: u64,
-        sync: hal::FrameSync<Backend>,
+        semaphore: Option<&native::Semaphore>,
+        fence: Option<&native::Fence>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
-        let (semaphore, fence) = match sync {
-            hal::FrameSync::Semaphore(semaphore) => (semaphore.0, vk::Fence::null()),
-            hal::FrameSync::Fence(fence) => (vk::Semaphore::null(), fence.0),
-        };
+        let semaphore = semaphore.map_or(vk::Semaphore::null(), |s| s.0);
+        let fence = fence.map_or(vk::Fence::null(), |f| f.0);
 
         // will block if no image is available
         let index = self
