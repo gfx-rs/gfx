@@ -190,13 +190,23 @@ struct SubpassInfo {
 /// The current state of a command buffer, used for two distinct purposes:
 ///   1. inherit resource bindings between passes
 ///   2. avoid redundant state settings
+///
+/// ## Spaces
 /// Note that these two usages are distinct and operate in technically different
 /// spaces (1 - Vulkan, 2 - Metal), so be careful not to confuse them.
+/// For example, Vulkan spaces are `pending_subpasses`, `rasterizer_state`, `target_*`.
+/// While Metal spaces are `resources_*`.
+///
+/// ## Vertex buffers
+/// You may notice that vertex buffers are stored in two separate places: per pipeline, and
+/// here in the state. These can't be merged together easily because at binding time we
+/// want one input vertex buffer to potentially be bound to multiple entry points....
 struct State {
     // Note: this could be `MTLViewport` but we have to patch the depth separately.
     viewport: Option<(pso::Rect, Range<f32>)>,
     scissors: Option<MTLScissorRect>,
     blend_color: Option<pso::ColorValue>,
+    //TODO: move some of that state out, to avoid redundant allocations
     render_pso: Option<RenderPipelineState>,
     /// A flag to handle edge cases of Vulkan binding inheritance:
     /// we don't want to consider the current PSO bound for a new pass if it's not compatible.
@@ -204,6 +214,7 @@ struct State {
     compute_pso: Option<metal::ComputePipelineState>,
     work_group_size: MTLSize,
     primitive_type: MTLPrimitiveType,
+    //TODO: move Metal-side state into a separate struct
     resources_vs: StageResources,
     resources_ps: StageResources,
     resources_cs: StageResources,
@@ -213,6 +224,7 @@ struct State {
     stencil: native::StencilState<pso::StencilValue>,
     push_constants: Vec<u32>,
     vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
+    ///TODO: add a structure to store render target state
     target_aspects: Aspects,
     target_extent: Extent,
     target_formats: native::SubpassFormats,
@@ -221,6 +233,7 @@ struct State {
 }
 
 impl State {
+    /// Resets the current Metal side of the state tracking.
     fn reset_resources(&mut self) {
         self.resources_vs.clear();
         self.resources_ps.clear();
@@ -3338,13 +3351,18 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
-
-        self.state.render_pso_is_compatible = true; //assume good intent :)
         let mut old_attribute_buffer_index = 0;
+
+        if set_stencil_references {
+            pre.issue(soft::RenderCommand::SetStencilReferenceValues(
+                self.state.stencil.front_reference,
+                self.state.stencil.back_reference,
+            ));
+        }
+
+        self.state.render_pso_is_compatible = pipeline.attachment_formats == self.state.target_formats;
         let set_pipeline = match self.state.render_pso {
-            Some(ref ps) if ps.raw.as_ptr() == pipeline.raw.as_ptr() => {
-                false // chill out
-            }
+            Some(ref ps) if ps.raw.as_ptr() == pipeline.raw.as_ptr() => false,
             Some(ref mut ps) => {
                 old_attribute_buffer_index = ps.attribute_buffer_index;
                 ps.raw = pipeline.raw.to_owned();
@@ -3367,72 +3385,74 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 true
             }
         };
-        if set_pipeline {
+
+        if self.state.render_pso_is_compatible {
+            if set_pipeline {
+                self.state.rasterizer_state = pipeline.rasterizer_state.clone();
+                self.state.primitive_type = pipeline.primitive_type;
+
+                pre.issue(soft::RenderCommand::BindPipeline(&*pipeline.raw));
+                if let Some(ref rs) = pipeline.rasterizer_state {
+                    pre.issue(soft::RenderCommand::SetRasterizerState(rs.clone()))
+                }
+                // re-bind vertex buffers
+                if let Some(command) = self.state.set_vertex_buffers() {
+                    pre.issue(command);
+                }
+                // Note: all VS resources past the `old_attribute_buffer_index` have to be re-bound
+                // but ones after `pipeline.attribute_buffer_index` are already covered by `set_vertex_buffers()`.
+                // re-bind damaged VS buffers
+                let vs_end = cmp::min(
+                    self.state.resources_vs.buffers.len(),
+                    pipeline.attribute_buffer_index as usize,
+                );
+                if vs_end > old_attribute_buffer_index as usize {
+                    pre.issue(soft::RenderCommand::BindBuffers {
+                        stage: pso::Stage::Vertex,
+                        index: old_attribute_buffer_index,
+                        buffers: (
+                            &self.state.resources_vs.buffers
+                                [old_attribute_buffer_index as usize..vs_end],
+                            &self.state.resources_vs.buffer_offsets
+                                [old_attribute_buffer_index as usize..vs_end],
+                        ),
+                    });
+                }
+                // re-bind push constants
+                if let Some(pc) = pipeline.vs_pc_info {
+                    if Some(pc) != self.state.resources_vs.push_constants
+                        || pc.buffer_index >= old_attribute_buffer_index
+                    {
+                        // if we don't have enough constants, then binding will follow
+                        if pc.count as usize <= self.state.push_constants.len() {
+                            pre.issue(self.state.push_vs_constants(pc));
+                        }
+                    }
+                }
+                if let Some(pc) = pipeline.ps_pc_info {
+                    if Some(pc) != self.state.resources_ps.push_constants
+                        && pc.count as usize <= self.state.push_constants.len()
+                    {
+                            pre.issue(self.state.push_ps_constants(pc));
+                        }
+                    }
+            } else {
+                debug_assert_eq!(self.state.rasterizer_state, pipeline.rasterizer_state);
+                debug_assert_eq!(self.state.primitive_type, pipeline.primitive_type);
+            }
+
+            if let Some(desc) = self.state.build_depth_stencil() {
+                let ds_store = &self.shared.service_pipes.depth_stencil_states;
+                let state = &**ds_store.get(desc, &self.shared.device);
+                pre.issue(soft::RenderCommand::SetDepthStencilState(state));
+            }
+        } else {
+            // This may be tricky: we expect either another pipeline to be bound
+            // (this overwriting these), or a new render pass started (thus using these).
             self.state.rasterizer_state = pipeline.rasterizer_state.clone();
             self.state.primitive_type = pipeline.primitive_type;
-
-            pre.issue(soft::RenderCommand::BindPipeline(&*pipeline.raw));
-            if let Some(ref rs) = pipeline.rasterizer_state {
-                pre.issue(soft::RenderCommand::SetRasterizerState(rs.clone()))
-            }
-            // re-bind vertex buffers
-            if let Some(command) = self.state.set_vertex_buffers() {
-                pre.issue(command);
-            }
-            // Note: all VS resources past the `old_attribute_buffer_index` have to be re-bound
-            // but ones after `pipeline.attribute_buffer_index` are already covered by `set_vertex_buffers()`.
-            // re-bind damaged VS buffers
-            let vs_end = cmp::min(
-                self.state.resources_vs.buffers.len(),
-                pipeline.attribute_buffer_index as usize,
-            );
-            if vs_end > old_attribute_buffer_index as usize {
-                pre.issue(soft::RenderCommand::BindBuffers {
-                    stage: pso::Stage::Vertex,
-                    index: old_attribute_buffer_index,
-                    buffers: (
-                        &self.state.resources_vs.buffers
-                            [old_attribute_buffer_index as usize..vs_end],
-                        &self.state.resources_vs.buffer_offsets
-                            [old_attribute_buffer_index as usize..vs_end],
-                    ),
-                });
-            }
-            // re-bind push constants
-            if let Some(pc) = pipeline.vs_pc_info {
-                if Some(pc) != self.state.resources_vs.push_constants
-                    || pc.buffer_index >= old_attribute_buffer_index
-                {
-                    // if we don't have enough constants, then binding will follow
-                    if pc.count as usize <= self.state.push_constants.len() {
-                        pre.issue(self.state.push_vs_constants(pc));
-                    }
-                }
-            }
-            if let Some(pc) = pipeline.ps_pc_info {
-                if Some(pc) != self.state.resources_ps.push_constants
-                    && pc.count as usize <= self.state.push_constants.len()
-                {
-                        pre.issue(self.state.push_ps_constants(pc));
-                    }
-                }
-        } else {
-            debug_assert_eq!(self.state.rasterizer_state, pipeline.rasterizer_state);
-            debug_assert_eq!(self.state.primitive_type, pipeline.primitive_type);
         }
 
-        if let Some(desc) = self.state.build_depth_stencil() {
-            let ds_store = &self.shared.service_pipes.depth_stencil_states;
-            let state = &**ds_store.get(desc, &self.shared.device);
-            pre.issue(soft::RenderCommand::SetDepthStencilState(state));
-        }
-
-        if set_stencil_references {
-            pre.issue(soft::RenderCommand::SetStencilReferenceValues(
-                self.state.stencil.front_reference,
-                self.state.stencil.back_reference,
-            ));
-        }
         if let pso::State::Static(value) = pipeline.depth_bias {
             self.state.depth_bias = value;
             pre.issue(soft::RenderCommand::SetDepthBias(value));
@@ -4025,6 +4045,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
+        debug_assert!(self.state.render_pso_is_compatible);
         if instances.start == instances.end {
             return;
         }
@@ -4043,6 +4064,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         base_vertex: VertexOffset,
         instances: Range<InstanceCount>,
     ) {
+        debug_assert!(self.state.render_pso_is_compatible);
         if instances.start == instances.end {
             return;
         }
@@ -4070,6 +4092,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         assert_eq!(offset % WORD_ALIGNMENT, 0);
         assert_eq!(stride % WORD_ALIGNMENT as u32, 0);
+        debug_assert!(self.state.render_pso_is_compatible);
         let (raw, range) = buffer.as_bound();
 
         let commands = (0..count).map(|i| soft::RenderCommand::DrawIndirect {
@@ -4094,6 +4117,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) {
         assert_eq!(offset % WORD_ALIGNMENT, 0);
         assert_eq!(stride % WORD_ALIGNMENT as u32, 0);
+        debug_assert!(self.state.render_pso_is_compatible);
         let (raw, range) = buffer.as_bound();
 
         let commands = (0..count).map(|i| soft::RenderCommand::DrawIndexedIndirect {
