@@ -11,19 +11,24 @@
   <a href="https://gitter.im/gfx-rs/gfx">
     <img src="https://img.shields.io/badge/gitter-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
   </a>
+  <a href="https://gfx.zulipchat.com">
+    <img src="https://img.shields.io/badge/zulip-join_chat-brightgreen.svg" alt="Zulip Chat">
+  </a>
   <br>
   <strong><a href="info/getting_started.md">Getting Started</a> | <a href="http://docs.rs/gfx-hal">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
 </p>
 
 # gfx-rs
 
-gfx-rs is a low-level, cross-platform graphics abstraction library in Rust. It consists of the following layers/components:
+**PLEASE BE AWARE: this is home to the gfx-hal crate/API. The Old gfx Crate Is Now Deprecated.**
+
+gfx-rs is a low-level, cross-platform graphics abstraction library in Rust. It consists of the following components:
 
 * `gfx-hal` which is gfx's hardware abstraction layer: a Vulkan-ic mostly unsafe API which translates to native graphics backends.
 * `gfx-backend-*` which contains graphics backends for various platforms:
-  * [Vulkan](src/backend/vulkan)
+  * [Vulkan](src/backend/vulkan) (confirmed to run on Linux and Windows)
   * [DirectX 12](src/backend/dx12) and [11](src/backend/dx11)
-  * [Metal](src/backend/metal)
+  * [Metal](src/backend/metal) (confirmed to run on macOS and iOS)
   * [OpenGL 2.1+/ES2+](src/backend/gl)
 * `gfx-warden` which is a data-driven reference test framework, used to verify consistency across all graphics backends.
 
