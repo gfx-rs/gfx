@@ -79,9 +79,9 @@ impl hal::Swapchain<B> for Swapchain {
         _timeout_ns: u64,
         _semaphore: Option<&native::Semaphore>,
         _fence: Option<&native::Fence>,
-    ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
+    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
         // TODO: sync
-        Ok(0)
+        Ok((0, None))
     }
 }
 

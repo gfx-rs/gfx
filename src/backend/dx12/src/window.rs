@@ -121,7 +121,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         _timout_ns: u64,
         _semaphore: Option<&r::Semaphore>,
         _fence: Option<&r::Fence>,
-    ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
+    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
         // TODO: sync
 
         if false {
@@ -134,7 +134,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         }
 
         // TODO:
-        Ok(self.inner.GetCurrentBackBufferIndex())
+        Ok((self.inner.GetCurrentBackBufferIndex(), None))
     }
 }
 

@@ -17,7 +17,7 @@ use std::marker::PhantomData;
 use crate::command::{Primary, Submittable};
 use crate::error::HostExecutionError;
 use crate::pso;
-use crate::window::{SwapImageIndex, PresentError};
+use crate::window::{PresentError, Suboptimal, SwapImageIndex};
 use crate::Backend;
 
 pub use self::capability::{Capability, Compute, General, Graphics, Supports, Transfer};
@@ -56,7 +56,7 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
     ///
     /// Unsafe because it's not checked that the queue can process the submitted command buffers.
     /// Trying to submit compute commands to a graphics queue will result in undefined behavior.
-    /// Each queue implements safe wrappers according to their supported functionalities!
+    /// Each queue implements safer wrappers according to their supported functionalities!
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         submission: Submission<Ic, Iw, Is>,
@@ -77,7 +77,7 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
         &mut self,
         swapchains: Is,
         wait_semaphores: Iw,
-    ) -> Result<(), PresentError>
+    ) -> Result<Option<Suboptimal>, PresentError>
     where
         Self: Sized,
         W: 'a + Borrow<B::Swapchain>,
@@ -159,7 +159,7 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
         &mut self,
         swapchains: Is,
         wait_semaphores: Iw,
-    ) -> Result<(), PresentError>
+    ) -> Result<Option<Suboptimal>, PresentError>
     where
         W: 'a + Borrow<B::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,

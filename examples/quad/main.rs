@@ -732,7 +732,7 @@ fn main() {
         // by using acquire_image
         let swap_image = unsafe {
             match swap_chain.acquire_image(!0, Some(&free_acquire_semaphore), None) {
-                Ok(i) => i as usize,
+                Ok((i, _)) => i as usize,
                 Err(_) => {
                     recreate_swapchain = true;
                     continue;

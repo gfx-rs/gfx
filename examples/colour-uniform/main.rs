@@ -516,7 +516,7 @@ impl<B: Backend> RendererState<B> {
                     .unwrap()
                     .acquire_image(!0, Some(acquire_semaphore), None)
                 {
-                    Ok(i) => i,
+                    Ok((i, _)) => i,
                     Err(_) => {
                         recreate_swapchain = true;
                         continue;

@@ -8,7 +8,7 @@ use crate::{
 use hal::{
     format, image,
     Backbuffer, SwapchainConfig, CompositeAlpha,
-    window::{Extent2D, PresentError},
+    window::{Extent2D, PresentError, Suboptimal},
 };
 
 use core_graphics::base::CGFloat;
@@ -500,7 +500,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         _timeout_ns: u64,
         semaphore: Option<&native::Semaphore>,
         fence: Option<&native::Fence>,
-    ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
+    ) -> Result<(hal::SwapImageIndex, Option<Suboptimal>), hal::AcquireError> {
         self.last_frame += 1;
 
         //TODO: figure out a proper story of HiDPI
@@ -534,7 +534,7 @@ impl hal::Swapchain<Backend> for Swapchain {
                 if let Some(fence) = fence {
                     fence.0.replace(native::FenceInner::Idle { signaled: true });
                 }
-                return Ok(index as _);
+                return Ok((index as _, None));
             }
             if frame.last_frame < oldest_frame {
                 oldest_frame = frame.last_frame;
@@ -601,6 +601,6 @@ impl hal::Swapchain<Backend> for Swapchain {
             frame.signpost = Some(native::Signpost::new(SIGNPOST_ID, [1, index, 0, 0]));
         }
 
-        Ok(index as _)
+        Ok((index as _, None))
     }
 }

@@ -15,7 +15,7 @@ use hal::{
     queue::{RawCommandQueue, Submission},
     range::RangeArg,
     DrawCount, IndexCount, IndexType, InstanceCount, SwapImageIndex, VertexCount, VertexOffset,
-    WorkGroupCount, window::PresentError,
+    WorkGroupCount, window::{PresentError, Suboptimal},
 };
 
 use block::ConcreteBlock;
@@ -2078,7 +2078,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         &mut self,
         swapchains: Is,
         wait_semaphores: Iw,
-    ) -> Result<(), PresentError>
+    ) -> Result<Option<Suboptimal>, PresentError>
     where
         W: 'a + Borrow<window::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
@@ -2131,7 +2131,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
             }
         }
 
-        Ok(())
+        Ok(None)
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
