@@ -190,13 +190,23 @@ struct SubpassInfo {
 /// The current state of a command buffer, used for two distinct purposes:
 ///   1. inherit resource bindings between passes
 ///   2. avoid redundant state settings
+///
+/// ## Spaces
 /// Note that these two usages are distinct and operate in technically different
 /// spaces (1 - Vulkan, 2 - Metal), so be careful not to confuse them.
+/// For example, Vulkan spaces are `pending_subpasses`, `rasterizer_state`, `target_*`.
+/// While Metal spaces are `resources_*`.
+///
+/// ## Vertex buffers
+/// You may notice that vertex buffers are stored in two separate places: per pipeline, and
+/// here in the state. These can't be merged together easily because at binding time we
+/// want one input vertex buffer to potentially be bound to multiple entry points....
 struct State {
     // Note: this could be `MTLViewport` but we have to patch the depth separately.
     viewport: Option<(pso::Rect, Range<f32>)>,
     scissors: Option<MTLScissorRect>,
     blend_color: Option<pso::ColorValue>,
+    //TODO: move some of that state out, to avoid redundant allocations
     render_pso: Option<RenderPipelineState>,
     /// A flag to handle edge cases of Vulkan binding inheritance:
     /// we don't want to consider the current PSO bound for a new pass if it's not compatible.
@@ -204,6 +214,7 @@ struct State {
     compute_pso: Option<metal::ComputePipelineState>,
     work_group_size: MTLSize,
     primitive_type: MTLPrimitiveType,
+    //TODO: move Metal-side state into a separate struct
     resources_vs: StageResources,
     resources_ps: StageResources,
     resources_cs: StageResources,
@@ -213,6 +224,7 @@ struct State {
     stencil: native::StencilState<pso::StencilValue>,
     push_constants: Vec<u32>,
     vertex_buffers: Vec<Option<(BufferPtr, u64)>>,
+    ///TODO: add a structure to store render target state
     target_aspects: Aspects,
     target_extent: Extent,
     target_formats: native::SubpassFormats,
@@ -221,6 +233,7 @@ struct State {
 }
 
 impl State {
+    /// Resets the current Metal side of the state tracking.
     fn reset_resources(&mut self) {
         self.resources_vs.clear();
         self.resources_ps.clear();
