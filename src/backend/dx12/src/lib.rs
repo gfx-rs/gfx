@@ -975,6 +975,9 @@ impl hal::Instance for Instance {
                         // a corresponding buffer for mapping.
                         if i == MemoryGroup::ImageOnly as _ || i == MemoryGroup::TargetOnly as _ {
                             ty.properties.remove(Properties::CPU_VISIBLE);
+                            // Coherent and cached can only be on memory types that are cpu visible
+                            ty.properties.remove(Properties::COHERENT);
+                            ty.properties.remove(Properties::CPU_CACHED);
                         }
                         ty
                     }));
