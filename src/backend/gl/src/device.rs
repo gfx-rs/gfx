@@ -254,6 +254,27 @@ impl Device {
         Ok(())
     }
 
+    fn set_push_const_layout(
+        &self,
+        ast: &mut spirv::Ast<glsl::Target>,
+    ) -> Result<(), d::ShaderError>  {
+        let resources = ast.get_shader_resources()
+            .map_err(gen_unexpected_error)?;
+        
+        match self.share.info.shading_language.tuple() {
+            // Explicit uniform locations are only valid on OpenGL 4.3+
+            (major, minor) if major >= 4 && minor >= 3 => {
+                for (index, pushconst) in resources.push_constant_buffers.iter().enumerate() {
+                    let _ = ast.set_decoration(pushconst.id, spirv::Decoration::Location, index as _)
+                        .map_err(gen_unexpected_error);
+                }
+            },
+            _ => () 
+        };
+
+        Ok(())
+    }
+
     fn translate_spirv(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
@@ -436,9 +457,10 @@ impl Device {
                     desc_remap_data,
                     name_binding_map,
                 );
+                self.set_push_const_layout(&mut ast).unwrap();
 
                 let glsl = self.translate_spirv(&mut ast).unwrap();
-                info!("Generated:\n{:?}", glsl);
+                debug!("SPIRV-Cross generated shader:\n{}", glsl);
                 let shader = match self
                     .create_shader_module_from_source(glsl.as_bytes(), stage)
                     .unwrap()
@@ -579,14 +601,20 @@ impl d::Device<B> for Device {
         let subpasses = subpasses
             .into_iter()
             .map(|subpass| {
+                let subpass = subpass.borrow();
                 let color_attachments = subpass
-                    .borrow()
                     .colors
                     .iter()
                     .map(|&(index, _)| index)
                     .collect();
+                
+                let depth_stencil = if subpass.depth_stencil.is_some() {
+                    Some(subpass.depth_stencil.unwrap().0)
+                } else {
+                    None
+                };
 
-                n::SubpassDesc { color_attachments }
+                n::SubpassDesc { color_attachments, depth_stencil }
             })
             .collect();
 
@@ -788,6 +816,36 @@ impl d::Device<B> for Device {
             vertex_buffers[vb.binding as usize] = Some(*vb);
         }
 
+        let mut uniforms = Vec::new();
+        {
+            let gl = &self.share.context;
+            let mut count = 0;
+            let mut uniform_max_size = 0;
+
+            gl.GetProgramiv(program, gl::ACTIVE_UNIFORMS, &mut count);
+            gl.GetProgramiv(program, gl::ACTIVE_UNIFORM_MAX_LENGTH, &mut uniform_max_size);
+            for uniform in 0..count {
+                let mut length = 0;
+                let mut size = 0;
+                let mut utype = 0;
+                let mut name = Vec::with_capacity(uniform_max_size as usize);
+                name.set_len(uniform_max_size as usize - 1); 
+                gl.GetActiveUniform(program, uniform as _, uniform_max_size - 1 as i32, &mut length, &mut size, &mut utype, name.as_mut_ptr() as *mut _);
+                
+                let location = gl.GetUniformLocation(program, name.as_ptr() as _);
+                
+                // Sampler2D won't show up in UniformLocation and the only other uniforms
+                // should be push constants
+                if location >= 0 {
+                    uniforms.push(n::UniformDesc {
+                        location: location as _,
+                        size,
+                        utype,
+                    });
+                }                
+            }
+        }
+
         Ok(n::GraphicsPipeline {
             program,
             primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
@@ -810,6 +868,7 @@ impl d::Device<B> for Device {
                     }
                 })
                 .collect(),
+            uniforms,
         })
     }
 

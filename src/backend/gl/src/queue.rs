@@ -490,16 +490,15 @@ impl CommandQueue {
                     .ClearBufferiv(gl::COLOR, draw_buffer, cv.as_ptr());
             },
             com::Command::ClearBufferDepthStencil(depth, stencil) => unsafe {
-                let (target, depth, stencil) = match (depth, stencil) {
-                    (Some(depth), Some(stencil)) => (gl::DEPTH_STENCIL, depth, stencil),
-                    (Some(depth), None) => (gl::DEPTH, depth, 0),
-                    (None, Some(stencil)) => (gl::STENCIL, 0.0, stencil),
+                let (depth, stencil) = match (depth, stencil) {
+                    (Some(depth), Some(stencil)) => (depth, stencil),
+                    (Some(depth), None) => (depth, 0),
+                    (None, Some(stencil)) => (0.0, stencil),
                     _ => unreachable!(),
                 };
-
                 self.share
                     .context
-                    .ClearBufferfi(target, 0, depth, stencil as _);
+                    .ClearBufferfi(gl::DEPTH_STENCIL, 0, depth, stencil as _);
             },
             com::Command::ClearTexture(_color) => unimplemented!(),
             com::Command::DrawBuffers(draw_buffers) => unsafe {
@@ -710,11 +709,68 @@ impl CommandQueue {
                },
                com::Command::UnbindAttribute(slot) => unsafe {
                    self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
-               },
-               com::Command::BindUniform(loc, uniform) => {
-                   let gl = &self.share.context;
-                   shade::bind_uniform(gl, loc as gl::types::GLint, uniform);
-               },
+               },*/
+               com::Command::BindUniform { uniform, buffer } => {
+                    let gl = &self.share.context;
+
+                    unsafe {
+                        match uniform.utype {
+                            gl::FLOAT => {
+                                let data = Self::get::<f32>(data_buf, buffer);
+                                gl.Uniform1fv(uniform.location as _, 1, data.as_ptr() as _);
+  
+                            },
+                            gl::FLOAT_VEC2 => {
+                                let data = Self::get::<[f32; 2]>(data_buf, buffer);
+                                gl.Uniform2fv(uniform.location as _, 1, data[0].as_ptr() as _);
+  
+                            },
+                            gl::FLOAT_VEC3 => {
+                                let data = Self::get::<[f32; 3]>(data_buf, buffer);
+                                gl.Uniform3fv(uniform.location as _, 1, data[0].as_ptr() as _);
+  
+                            },
+                            gl::FLOAT_VEC4 => {
+                                let data = Self::get::<[f32; 4]>(data_buf, buffer);
+                                gl.Uniform4fv(uniform.location as _, 1, data[0].as_ptr() as _);
+  
+                            },
+                            gl::INT => {
+                                let data = Self::get::<i32>(data_buf, buffer);
+                                gl.Uniform1iv(uniform.location as _, 1, data.as_ptr() as _);
+  
+                            },
+                            gl::INT_VEC2 => {
+                                let data = Self::get::<[i32; 2]>(data_buf, buffer);
+                                gl.Uniform2iv(uniform.location as _, 1, data[0].as_ptr() as _);
+  
+                            },
+                            gl::INT_VEC3 => {
+                                let data = Self::get::<[i32; 3]>(data_buf, buffer);
+                                gl.Uniform3iv(uniform.location as _, 1, data[0].as_ptr() as _);
+  
+                            },
+                            gl::INT_VEC4 => {
+                                let data = Self::get::<[i32; 4]>(data_buf, buffer);
+                                gl.Uniform4iv(uniform.location as _, 1, data[0].as_ptr() as _);
+  
+                            },
+                            gl::FLOAT_MAT2 => {
+                                let data = Self::get::<[f32; 4]>(data_buf, buffer);
+                                gl.UniformMatrix2fv(uniform.location as _, 1, gl::FALSE, data[0].as_ptr());
+                            },
+                            gl::FLOAT_MAT3 => {
+                                let data = Self::get::<[f32; 9]>(data_buf, buffer);
+                                gl.UniformMatrix3fv(uniform.location as _, 1, gl::FALSE, data[0].as_ptr());
+                            },
+                            gl::FLOAT_MAT4 => {
+                                let data = Self::get::<[f32; 16]>(data_buf, buffer);
+                                gl.UniformMatrix4fv(uniform.location as _, 1, gl::FALSE, data[0].as_ptr());
+                            },
+                            _ => panic!("Unsupported uniform datatype!"),
+                        }
+                    }
+               },/*
                com::Command::SetRasterizer(rast) => {
                    state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
                },
