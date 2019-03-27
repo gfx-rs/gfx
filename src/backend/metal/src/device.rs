@@ -392,6 +392,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             } else {
                 hal::Features::empty()
             }
+            | hal::Features::SHADER_CLIP_DISTANCE
     }
 
     fn limits(&self) -> hal::Limits {
