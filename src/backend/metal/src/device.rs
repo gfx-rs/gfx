@@ -2664,7 +2664,7 @@ impl hal::Device<Backend> for Device {
         surface: &mut Surface,
         config: hal::SwapchainConfig,
         old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, hal::Backbuffer<Backend>), window::CreationError> {
+    ) -> Result<(Swapchain, Vec<B::Image>), window::CreationError> {
         Ok(self.build_swapchain(surface, config, old_swapchain))
     }
 

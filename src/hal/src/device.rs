@@ -25,7 +25,7 @@ use crate::pool::{CommandPool, CommandPoolCreateFlags};
 use crate::pso::DescriptorPoolCreateFlags;
 use crate::queue::{QueueFamilyId, QueueGroup};
 use crate::range::RangeArg;
-use crate::window::{self, Backbuffer, SwapchainConfig};
+use crate::window::{self, SwapchainConfig};
 
 /// Error occurred caused device to be lost.
 #[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
@@ -778,7 +778,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         surface: &mut B::Surface,
         config: SwapchainConfig,
         old_swapchain: Option<B::Swapchain>,
-    ) -> Result<(B::Swapchain, Backbuffer<B>), window::CreationError>;
+    ) -> Result<(B::Swapchain, Vec<B::Image>), window::CreationError>;
 
     ///
     unsafe fn destroy_swapchain(&self, swapchain: B::Swapchain);

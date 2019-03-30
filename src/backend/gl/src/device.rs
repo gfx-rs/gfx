@@ -101,7 +101,7 @@ fn create_fbo_internal(share: &Starc<Share>) -> Option<gl::types::GLuint> {
 /// GL device.
 #[derive(Debug)]
 pub struct Device {
-    share: Starc<Share>,
+    pub (crate) share: Starc<Share>,
 }
 
 impl Drop for Device {
@@ -846,6 +846,9 @@ impl d::Device<B> for Device {
             }
         }
 
+        state::bind_rasterizer(gl, &desc.rasterizer, false);
+        state::bind_depth(gl, &desc.depth_stencil.depth);
+
         Ok(n::GraphicsPipeline {
             program,
             primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
@@ -1212,6 +1215,7 @@ impl d::Device<B> for Device {
         let (int_format, iformat, itype) = match format {
             Format::Rgba8Unorm => (gl::RGBA8, gl::RGBA, gl::UNSIGNED_BYTE),
             Format::Rgba8Srgb => (gl::SRGB8_ALPHA8, gl::RGBA, gl::UNSIGNED_BYTE),
+            Format::D32Sfloat => (gl::DEPTH32F_STENCIL8, gl::DEPTH_STENCIL, gl::FLOAT_32_UNSIGNED_INT_24_8_REV),
             _ => unimplemented!(),
         };
 
@@ -1631,7 +1635,7 @@ impl d::Device<B> for Device {
         surface: &mut Surface,
         config: c::SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, c::Backbuffer<B>), c::window::CreationError> {
+    ) -> Result<(Swapchain, Vec<n::Image>), c::window::CreationError> {
         Ok(self.create_swapchain_impl(surface, config))
     }
 
