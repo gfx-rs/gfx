@@ -33,6 +33,8 @@ struct State {
     num_viewports: usize,
     // Currently set scissor rects.
     num_scissors: usize,
+    // Currently bound fbo
+    fbo: gl::types::GLuint,
 }
 
 impl State {
@@ -44,6 +46,7 @@ impl State {
             index_buffer: None,
             num_viewports: 0,
             num_scissors: 0,
+            fbo: 0,
         }
     }
 
@@ -511,6 +514,7 @@ impl CommandQueue {
                 if self.share.private_caps.framebuffer {
                     let gl = &self.share.context;
                     unsafe { gl.BindFramebuffer(point, frame_buffer) };
+                    self.state.fbo = frame_buffer;
                 } else if frame_buffer != 0 {
                     error!("Tried to bind FBO {} without FBO support!", frame_buffer);
                 }
@@ -893,7 +897,26 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         S: 'a + Borrow<native::Semaphore>,
         Iw: IntoIterator<Item = &'a S>,
     {
+        let gl = &self.share.context;
+
         for swapchain in swapchains {
+            let extent = swapchain.0.borrow().extent;
+
+            gl.BlitNamedFramebuffer(
+                self.state.fbo,              // Default framebuffer 
+                0, // Currently bound framebuffer
+                0,
+                0,
+                extent.width as _,
+                extent.height as _,
+                0,
+                0,
+                extent.width as _,
+                extent.height as _,
+                gl::COLOR_BUFFER_BIT,
+                gl::LINEAR,
+            );
+
             swapchain.0.borrow().window.swap_buffers().unwrap();
         }
 

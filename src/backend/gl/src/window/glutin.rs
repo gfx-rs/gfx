@@ -71,7 +71,9 @@ fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
 #[derive(Debug)]
 pub struct Swapchain {
     // Underlying window, required for presentation
-    pub(crate) window: Starc<glutin::WindowedContext>,
+    pub(crate) window: Starc<glutin::GlWindow>,
+    // Extent because the window lies
+    pub(crate) extent: Extent2D,
 }
 
 impl hal::Swapchain<B> for Swapchain {
@@ -176,6 +178,7 @@ impl Device {
         config: hal::SwapchainConfig,
     ) -> (Swapchain, Vec<native::Image>) {
         let swapchain = Swapchain {
+            extent: config.extent,
             window: surface.window.clone(),
         };
 
