@@ -1292,8 +1292,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         let buffer = self.add(constants);
 
         let uniforms = &self.cache.uniforms;
-        if uniforms.len() == 0 {
-            panic!("No uniforms bound when trying to bind push constant!");
+        if uniforms.is_empty() {
+            unimplemented!()
         }
 
         let uniform = if offset == 0 {

@@ -603,11 +603,7 @@ impl d::Device<B> for Device {
                 let subpass = subpass.borrow();
                 let color_attachments = subpass.colors.iter().map(|&(index, _)| index).collect();
 
-                let depth_stencil = if subpass.depth_stencil.is_some() {
-                    Some(subpass.depth_stencil.unwrap().0)
-                } else {
-                    None
-                };
+                let depth_stencil = subpass.depth_stencil.map(|ds| ds.0);
 
                 n::SubpassDesc {
                     color_attachments,

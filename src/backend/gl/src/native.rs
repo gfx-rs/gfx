@@ -273,7 +273,7 @@ impl SubpassDesc {
     /// Check if an attachment is used by this sub-pass.
     pub(crate) fn is_using(&self, at_id: pass::AttachmentId) -> bool {
         self.color_attachments.iter().any(|id| *id == at_id)
-            || (self.depth_stencil.is_some() && self.depth_stencil.unwrap() == at_id)
+        || (self.depth_stencil.is_some() && self.depth_stencil.unwrap() == at_id)
     }
 }
 
