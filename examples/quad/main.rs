@@ -33,7 +33,7 @@ use hal::queue::Submission;
 use hal::{
     buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
 };
-use hal::{DescriptorPool, FrameSync, Primitive, SwapchainConfig};
+use hal::{DescriptorPool, Primitive, SwapchainConfig};
 use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 
 use std::fs;

@@ -65,7 +65,7 @@ fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
 #[derive(Debug)]
 pub struct Swapchain {
     // Underlying window, required for presentation
-    pub(crate) window: Starc<glutin::GlWindow>,
+    pub(crate) window: Starc<glutin::WindowedContext>,
     // Extent because the window lies
     pub(crate) extent: Extent2D,
 }

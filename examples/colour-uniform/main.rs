@@ -49,7 +49,7 @@ use std::{fs, iter};
 
 use hal::{
     buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
-    Adapter, Backend, DescriptorPool, Device, FrameSync, Instance, Limits, MemoryType,
+    Adapter, Backend, DescriptorPool, Device, Instance, Limits, MemoryType,
     PhysicalDevice, Primitive, QueueGroup, Surface, Swapchain, SwapchainConfig,
 };
 

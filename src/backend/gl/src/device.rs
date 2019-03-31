@@ -822,16 +822,18 @@ impl d::Device<B> for Device {
                 gl::ACTIVE_UNIFORM_MAX_LENGTH,
                 &mut uniform_max_size,
             );
+
+            let mut name = Vec::with_capacity(uniform_max_size as usize);
+            name.set_len(uniform_max_size as usize);
+
             for uniform in 0..count {
                 let mut length = 0;
                 let mut size = 0;
                 let mut utype = 0;
-                let mut name = Vec::with_capacity(uniform_max_size as usize);
-                name.set_len(uniform_max_size as usize - 1);
                 gl.GetActiveUniform(
                     program,
                     uniform as _,
-                    uniform_max_size - 1 as i32,
+                    uniform_max_size as i32,
                     &mut length,
                     &mut size,
                     &mut utype,
