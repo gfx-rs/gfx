@@ -493,15 +493,24 @@ impl CommandQueue {
                     .ClearBufferiv(gl::COLOR, draw_buffer, cv.as_ptr());
             },
             com::Command::ClearBufferDepthStencil(depth, stencil) => unsafe {
-                let (depth, stencil) = match (depth, stencil) {
-                    (Some(depth), Some(stencil)) => (depth, stencil),
-                    (Some(depth), None) => (depth, 0),
-                    (None, Some(stencil)) => (0.0, stencil),
+                match (depth, stencil) {
+                    (Some(depth), Some(stencil)) => {
+                        self.share
+                            .context
+                            .ClearBufferfi(gl::DEPTH_STENCIL, 0, depth, stencil as _);
+                    },
+                    (Some(depth), None) => {
+                        self.share
+                            .context
+                            .ClearBufferfv(gl::DEPTH, 0, &depth);
+                    },
+                    (None, Some(stencil)) => {
+                        self.share
+                            .context
+                            .ClearBufferiv(gl::STENCIL, 0, &(stencil as i32));
+                    }
                     _ => unreachable!(),
                 };
-                self.share
-                    .context
-                    .ClearBufferfi(gl::DEPTH_STENCIL, 0, depth, stencil as _);
             },
             com::Command::ClearTexture(_color) => unimplemented!(),
             com::Command::DrawBuffers(draw_buffers) => unsafe {
@@ -994,9 +1003,10 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         for swapchain in swapchains {
             let extent = swapchain.0.borrow().extent;
 
-            gl.BlitNamedFramebuffer(
-                self.state.fbo, // Default framebuffer
-                0,              // Currently bound framebuffer
+            gl.BindFramebuffer(gl::READ_FRAMEBUFFER, self.state.fbo);
+            gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
+            gl.BlitFramebuffer(
+
                 0,
                 0,
                 extent.width as _,
