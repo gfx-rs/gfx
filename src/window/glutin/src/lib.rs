@@ -28,9 +28,6 @@ use glutin::{CreationError, ContextTrait};
 
 #[cfg(feature = "headless")]
 mod headless;
-// this module just covers the holes of `winit`... hopefully, temporary
-#[cfg(target_os = "emscripten")]
-pub mod emscripten;
 
 /// Initialize with a window builder.
 /// Generically parametrized version over the main framebuffer format.
@@ -107,10 +104,6 @@ where
 }
 
 fn get_window_dimensions(window: &glutin::WindowedContext) -> texture::Dimensions {
-    // https://github.com/tomaka/winit/pull/370
-    #[cfg(target_os = "emscripten")]
-    let (width, height) = emscripten::get_canvas_size();
-    #[cfg(not(target_os = "emscripten"))]
     let (width, height) = {
         let size = window.get_inner_size().unwrap().to_physical(window.get_hidpi_factor());
         (size.width as _, size.height as _)
