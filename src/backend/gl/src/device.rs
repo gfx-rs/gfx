@@ -850,10 +850,7 @@ impl d::Device<B> for Device {
                     });
                 }
             }
-        }
-
-        state::bind_rasterizer(gl, &desc.rasterizer, false);
-        state::bind_depth(gl, &desc.depth_stencil.depth);
+        }        
 
         Ok(n::GraphicsPipeline {
             program,
@@ -878,6 +875,8 @@ impl d::Device<B> for Device {
                 })
                 .collect(),
             uniforms,
+            rasterizer: desc.rasterizer,
+            depth: desc.depth_stencil.depth,
         })
     }
 

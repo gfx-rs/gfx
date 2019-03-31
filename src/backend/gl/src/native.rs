@@ -136,6 +136,8 @@ pub struct GraphicsPipeline {
     pub(crate) attributes: Vec<AttributeDesc>,
     pub(crate) vertex_buffers: Vec<Option<pso::VertexBufferDesc>>,
     pub(crate) uniforms: Vec<UniformDesc>,
+    pub(crate) rasterizer: pso::Rasterizer,
+    pub(crate) depth: pso::DepthTest,
 }
 
 #[derive(Clone, Debug)]

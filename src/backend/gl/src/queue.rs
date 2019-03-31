@@ -781,7 +781,92 @@ impl CommandQueue {
                         _ => panic!("Unsupported uniform datatype!"),
                     }
                 }
-            } /*
+            } 
+            com::Command::BindRasterizer { rasterizer, is_embedded } => { 
+                use crate::hal::pso::FrontFace::*;
+                
+                let gl = &self.share.context;
+                
+                unsafe {
+                    gl.FrontFace(match rasterizer.front_face {
+                        Clockwise => gl::CW,
+                        CounterClockwise => gl::CCW,
+                    })
+                };
+
+                if !rasterizer.cull_face.is_empty() {
+                    unsafe {
+                        gl.Enable(gl::CULL_FACE);
+                        gl.CullFace(match rasterizer.cull_face {
+                            hal::pso::Face::FRONT => gl::FRONT,
+                            hal::pso::Face::BACK => gl::BACK,
+                            _ => gl::FRONT_AND_BACK,
+                        });
+                    }
+                } else {
+                    unsafe {
+                        gl.Disable(gl::CULL_FACE);
+                    }
+                }
+
+                if !is_embedded {
+                    use crate::hal::pso::PolygonMode::*;
+
+                    let (gl_draw, gl_offset) = match rasterizer.polygon_mode {
+                        Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
+                        Line(width) => {
+                            unsafe { gl.LineWidth(width) };
+                            (gl::LINE, gl::POLYGON_OFFSET_LINE)
+                        }
+                        Fill => (gl::FILL, gl::POLYGON_OFFSET_FILL),
+                    };
+
+                    unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
+
+                    match rasterizer.depth_bias {
+                        Some(hal::pso::State::Static(bias)) => unsafe {
+                            gl.Enable(gl_offset);
+                            gl.PolygonOffset(bias.slope_factor as _, bias.const_factor as _);
+                        },
+                        _ => unsafe { gl.Disable(gl_offset) },
+                    }
+
+                    match false {
+                        //TODO
+                        true => unsafe { gl.Enable(gl::MULTISAMPLE) },
+                        false => unsafe { gl.Disable(gl::MULTISAMPLE) },
+                    }
+                }
+            }
+            com::Command::BindDepth { depth } => {
+                use crate::hal::pso::Comparison::*;
+                
+                let gl = &self.share.context;
+                
+                match depth {
+                    hal::pso::DepthTest::On { fun, write } => unsafe {
+                        gl.Enable(gl::DEPTH_TEST);
+
+                        let cmp = match fun {
+                            Never => gl::NEVER,
+                            Less => gl::LESS,
+                            LessEqual => gl::LEQUAL,
+                            Equal => gl::EQUAL,
+                            GreaterEqual => gl::GEQUAL,
+                            Greater => gl::GREATER,
+                            NotEqual => gl::NOTEQUAL,
+                            Always => gl::ALWAYS,
+                        };
+
+                        gl.DepthFunc(cmp);
+                        gl.DepthMask(write as _);
+                    },
+                    hal::pso::DepthTest::Off => unsafe {
+                        gl.Disable(gl::DEPTH_TEST);
+                    },
+                }
+            }
+            /*
               com::Command::SetRasterizer(rast) => {
                   state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
               },

@@ -5,68 +5,6 @@ use crate::hal::ColorSlot;
 use crate::{gl, GlContainer};
 use smallvec::SmallVec;
 
-pub(crate) fn bind_polygon_mode(
-    gl: &GlContainer,
-    mode: pso::PolygonMode,
-    bias: Option<pso::State<pso::DepthBias>>,
-) {
-    use crate::hal::pso::PolygonMode::*;
-
-    let (gl_draw, gl_offset) = match mode {
-        Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
-        Line(width) => {
-            unsafe { gl.LineWidth(width) };
-            (gl::LINE, gl::POLYGON_OFFSET_LINE)
-        }
-        Fill => (gl::FILL, gl::POLYGON_OFFSET_FILL),
-    };
-
-    unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
-
-    match bias {
-        Some(pso::State::Static(bias)) => unsafe {
-            gl.Enable(gl_offset);
-            gl.PolygonOffset(bias.slope_factor as _, bias.const_factor as _);
-        },
-        _ => unsafe { gl.Disable(gl_offset) },
-    }
-}
-
-pub(crate) fn bind_rasterizer(gl: &GlContainer, r: &pso::Rasterizer, is_embedded: bool) {
-    use crate::hal::pso::FrontFace::*;
-
-    unsafe {
-        gl.FrontFace(match r.front_face {
-            Clockwise => gl::CW,
-            CounterClockwise => gl::CCW,
-        })
-    };
-
-    if !r.cull_face.is_empty() {
-        unsafe {
-            gl.Enable(gl::CULL_FACE);
-            gl.CullFace(match r.cull_face {
-                pso::Face::FRONT => gl::FRONT,
-                pso::Face::BACK => gl::BACK,
-                _ => gl::FRONT_AND_BACK,
-            });
-        }
-    } else {
-        unsafe {
-            gl.Disable(gl::CULL_FACE);
-        }
-    }
-
-    if !is_embedded {
-        bind_polygon_mode(gl, r.polygon_mode, r.depth_bias);
-        match false {
-            //TODO
-            true => unsafe { gl.Enable(gl::MULTISAMPLE) },
-            false => unsafe { gl.Disable(gl::MULTISAMPLE) },
-        }
-    }
-}
-
 pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
     let attachments: SmallVec<[gl::types::GLenum; 16]> =
         (0..num).map(|x| gl::COLOR_ATTACHMENT0 + x as u32).collect();
@@ -84,19 +22,6 @@ pub fn map_comparison(cmp: pso::Comparison) -> gl::types::GLenum {
         Greater => gl::GREATER,
         NotEqual => gl::NOTEQUAL,
         Always => gl::ALWAYS,
-    }
-}
-
-pub(crate) fn bind_depth(gl: &GlContainer, depth: &pso::DepthTest) {
-    match *depth {
-        pso::DepthTest::On { fun, write } => unsafe {
-            gl.Enable(gl::DEPTH_TEST);
-            gl.DepthFunc(map_comparison(fun));
-            gl.DepthMask(write as _);
-        },
-        pso::DepthTest::Off => unsafe {
-            gl.Disable(gl::DEPTH_TEST);
-        },
     }
 }
 

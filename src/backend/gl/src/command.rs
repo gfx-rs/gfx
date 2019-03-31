@@ -73,6 +73,13 @@ pub enum Command {
         uniform: n::UniformDesc,
         buffer: BufferSlice,
     },
+    BindRasterizer {
+        rasterizer: pso::Rasterizer,
+        is_embedded: bool,
+    },
+    BindDepth {
+        depth: pso::DepthTest,
+    },
     SetViewports {
         first_viewport: u32,
         viewport_ptr: BufferSlice,
@@ -919,6 +926,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             ref attributes,
             ref vertex_buffers,
             ref uniforms,
+            rasterizer,
+            depth,
         } = *pipeline;
 
         if self.cache.primitive != Some(primitive) {
@@ -944,6 +953,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         self.cache.uniforms = uniforms.clone();
 
         self.update_blend_targets(blend_targets);
+
+        self.push_cmd(Command::BindRasterizer { 
+            rasterizer, 
+            is_embedded: false 
+        });
+        self.push_cmd(Command::BindDepth { 
+            depth,
+        });
     }
 
     unsafe fn bind_graphics_descriptor_sets<I, J>(
