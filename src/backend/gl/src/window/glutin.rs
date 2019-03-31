@@ -43,16 +43,10 @@
 //! }
 //! ```
 
-use hal::{
-    self,
-    format as f, image, memory
-    CompositeAlpha,
-};
+use crate::hal::window::Extent2D;
+use crate::hal::{self, format as f, image, memory, CompositeAlpha};
 
-use crate::{
-    native,
-    Backend as B, Device, PhysicalDevice, QueueFamily, Starc
-};
+use crate::{native, Backend as B, Device, PhysicalDevice, QueueFamily, Starc};
 
 use glutin::{self, ContextTrait};
 
@@ -201,7 +195,10 @@ impl Device {
                     let mut name = 0;
                     gl.GenTextures(1, &mut name);
                     match config.extent {
-                        Extent2D { width: w, height: h } => {
+                        Extent2D {
+                            width: w,
+                            height: h,
+                        } => {
                             gl.BindTexture(gl::TEXTURE_2D, name);
                             if self.share.private_caps.image_storage {
                                 gl.TexStorage2D(
@@ -242,7 +239,10 @@ impl Device {
                     let mut name = 0;
                     gl.GenRenderbuffers(1, &mut name);
                     match config.extent {
-                        Extent2D { width: w, height: h }  => {
+                        Extent2D {
+                            width: w,
+                            height: h,
+                        } => {
                             gl.BindRenderbuffer(gl::RENDERBUFFER, name);
                             gl.RenderbufferStorage(gl::RENDERBUFFER, int_format, w as _, h as _);
                         }

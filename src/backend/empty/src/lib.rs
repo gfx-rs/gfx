@@ -455,7 +455,7 @@ impl hal::Device<Backend> for Device {
         _: &mut Surface,
         _: hal::SwapchainConfig,
         _: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<B::Image>), hal::window::CreationError> {
+    ) -> Result<(Swapchain, Vec<()>), hal::window::CreationError> {
         unimplemented!()
     }
 

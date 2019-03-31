@@ -1876,7 +1876,7 @@ impl d::Device<B> for Device {
         surface: &mut w::Surface,
         config: SwapchainConfig,
         provided_old_swapchain: Option<w::Swapchain>,
-    ) -> Result<(w::Swapchain, Vec<B::Image>), hal::window::CreationError> {
+    ) -> Result<(w::Swapchain, Vec<n::Image>), hal::window::CreationError> {
         let functor = khr::Swapchain::new(&surface.raw.instance.0, &self.raw.0);
 
         let old_swapchain = match provided_old_swapchain {

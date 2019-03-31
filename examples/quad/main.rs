@@ -33,7 +33,7 @@ use hal::queue::Submission;
 use hal::{
     buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
 };
-use hal::{Backbuffer, DescriptorPool, Primitive, SwapchainConfig};
+use hal::{DescriptorPool, FrameSync, Primitive, SwapchainConfig};
 use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 
 use std::fs;
@@ -419,34 +419,32 @@ fn main() {
         unsafe { device.create_render_pass(&[attachment], &[subpass], &[dependency]) }
             .expect("Can't create render pass")
     };
-    let (mut frame_images, mut framebuffers) = match backbuffer {
-        Backbuffer::Images(images) => {
-            let pairs = images
-                .into_iter()
-                .map(|image| unsafe {
-                    let rtv = device
-                        .create_image_view(
-                            &image,
-                            i::ViewKind::D2,
-                            format,
-                            Swizzle::NO,
-                            COLOR_RANGE.clone(),
-                        )
-                        .unwrap();
-                    (image, rtv)
-                })
-                .collect::<Vec<_>>();
-            let fbos = pairs
-                .iter()
-                .map(|&(_, ref rtv)| unsafe {
-                    device
-                        .create_framebuffer(&render_pass, Some(rtv), extent)
-                        .unwrap()
-                })
-                .collect();
-            (pairs, fbos)
-        }
-        Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
+
+    let (mut frame_images, mut framebuffers) =  {
+        let pairs = backbuffer
+            .into_iter()
+            .map(|image| unsafe {
+                let rtv = device
+                    .create_image_view(
+                        &image,
+                        i::ViewKind::D2,
+                        format,
+                        Swizzle::NO,
+                        COLOR_RANGE.clone(),
+                    )
+                    .unwrap();
+                (image, rtv)
+            })
+            .collect::<Vec<_>>();
+        let fbos = pairs
+            .iter()
+            .map(|&(_, ref rtv)| unsafe {
+                device
+                    .create_framebuffer(&render_pass, Some(rtv), extent)
+                    .unwrap()
+            })
+            .collect::<Vec<_>>();
+        (pairs, fbos)
     };
 
     // Define maximum number of frames we want to be able to be "in flight" (being computed
@@ -688,34 +686,31 @@ fn main() {
             backbuffer = new_backbuffer;
             swap_chain = new_swap_chain;
 
-            let (new_frame_images, new_framebuffers) = match backbuffer {
-                Backbuffer::Images(images) => {
-                    let pairs = images
-                        .into_iter()
-                        .map(|image| unsafe {
-                            let rtv = device
-                                .create_image_view(
-                                    &image,
-                                    i::ViewKind::D2,
-                                    format,
-                                    Swizzle::NO,
-                                    COLOR_RANGE.clone(),
-                                )
-                                .unwrap();
-                            (image, rtv)
-                        })
-                        .collect::<Vec<_>>();
-                    let fbos = pairs
-                        .iter()
-                        .map(|&(_, ref rtv)| unsafe {
-                            device
-                                .create_framebuffer(&render_pass, Some(rtv), extent)
-                                .unwrap()
-                        })
-                        .collect();
-                    (pairs, fbos)
-                }
-                Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
+            let (new_frame_images, new_framebuffers) = {
+                let pairs = backbuffer
+                    .into_iter()
+                    .map(|image| unsafe {
+                        let rtv = device
+                            .create_image_view(
+                                &image,
+                                i::ViewKind::D2,
+                                format,
+                                Swizzle::NO,
+                                COLOR_RANGE.clone(),
+                            )
+                            .unwrap();
+                        (image, rtv)
+                    })
+                    .collect::<Vec<_>>();
+                let fbos = pairs
+                    .iter()
+                    .map(|&(_, ref rtv)| unsafe {
+                        device
+                            .create_framebuffer(&render_pass, Some(rtv), extent)
+                            .unwrap()
+                    })
+                    .collect();
+                (pairs, fbos)
             };
 
             framebuffers = new_framebuffers;

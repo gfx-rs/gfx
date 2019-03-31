@@ -7,7 +7,7 @@ use crate::{
 };
 
 use hal::{
-    buffer, error, format, image, mapping, memory, pass, pso, query, window,
+    buffer, error, format, image, mapping, memory, native, pass, pso, query, window,
     device::{
         AllocationError, BindError, DeviceLost, OomOrDeviceLost, OutOfMemory, ShaderError,
     },
@@ -2664,7 +2664,7 @@ impl hal::Device<Backend> for Device {
         surface: &mut Surface,
         config: hal::SwapchainConfig,
         old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<B::Image>), window::CreationError> {
+    ) -> Result<(Swapchain, Vec<native::Image>), window::CreationError> {
         Ok(self.build_swapchain(surface, config, old_swapchain))
     }
 

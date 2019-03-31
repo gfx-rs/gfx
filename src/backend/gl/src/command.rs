@@ -70,8 +70,8 @@ pub enum Command {
     BindIndexBuffer(gl::types::GLuint),
     //BindVertexBuffers(BufferSlice),
     BindUniform {
-        uniform: n::UniformDesc, 
-        buffer: BufferSlice
+        uniform: n::UniformDesc,
+        buffer: BufferSlice,
     },
     SetViewports {
         first_viewport: u32,
@@ -473,7 +473,7 @@ impl RawCommandBuffer {
 
                             return Some(cmd);
                         }
-                    } 
+                    }
 
                     // Clear depth-stencil target
                     let depth = if view_format.is_depth() {
@@ -1297,7 +1297,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
 
         let uniform = if offset == 0 {
-            // If offset is zero, we can just return the first item 
+            // If offset is zero, we can just return the first item
             // in our uniform list
             uniforms.get(0).unwrap()
         } else {
@@ -1318,12 +1318,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             }
 
             needle.unwrap()
-        }.clone();
+        }
+        .clone();
 
-        self.push_cmd(Command::BindUniform {
-            uniform,
-            buffer,
-        });
+        self.push_cmd(Command::BindUniform { uniform, buffer });
     }
 
     unsafe fn push_compute_constants(

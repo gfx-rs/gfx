@@ -2,8 +2,8 @@
 
 use crate::hal::pso;
 use crate::hal::ColorSlot;
-use smallvec::SmallVec;
 use crate::{gl, GlContainer};
+use smallvec::SmallVec;
 
 pub(crate) fn bind_polygon_mode(
     gl: &GlContainer,

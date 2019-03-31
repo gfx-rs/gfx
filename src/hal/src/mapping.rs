@@ -2,8 +2,8 @@
 
 //! Memory mapping
 use crate::device;
-use std::ops::{self, Range};
 use crate::Backend;
+use std::ops::{self, Range};
 
 // TODO
 /// Error accessing a mapping.

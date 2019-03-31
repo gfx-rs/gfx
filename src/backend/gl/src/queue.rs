@@ -1,6 +1,6 @@
+use crate::Starc;
 use std::borrow::Borrow;
 use std::{mem, ptr, slice};
-use crate::Starc;
 
 use crate::hal;
 use crate::hal::error;
@@ -669,164 +669,171 @@ impl CommandQueue {
                     |a, b| gl.TexParameteri(gl::TEXTURE_2D, a, b),
                 );
             }, /*
-               com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
-                   self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
-               },
-               com::Command::BindResourceView(pso::ResourceViewParam(view, _, slot)) => unsafe {
-                   self.share.context.ActiveTexture(gl::TEXTURE0 + slot as gl::types::GLenum);
-                   self.share.context.BindTexture(view.bind, view.object);
-               },
-               com::Command::BindUnorderedView(_uav) => unimplemented!(),
-               com::Command::BindSampler(pso::SamplerParam(sampler, _, slot), bind_opt) => {
-                   let gl = &self.share.context;
-                   if self.share.private_caps.sampler_objects {
-                       unsafe { gl.BindSampler(slot as gl::types::GLuint, sampler.object) };
-                   } else {
-                       assert!(hal::MAX_SAMPLERS <= hal::MAX_RESOURCE_VIEWS);
-                       debug_assert_eq!(sampler.object, 0);
-                       if let Some(bind) = bind_opt {
-                           tex::bind_sampler(gl, bind, &sampler.info, &self.share.private_caps);
-                       }else {
-                           error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
-                       }
-                   }
-               },
-               com::Command::BindPixelTargets(pts) => {
-                   let point = gl::DRAW_FRAMEBUFFER;
-                   for i in 0 .. hal::MAX_COLOR_TARGETS {
-                       let att = gl::COLOR_ATTACHMENT0 + i as gl::types::GLuint;
-                       if let Some(ref target) = pts.colors[i] {
-                           self.bind_target(point, att, target);
-                       } else {
-                           self.unbind_target(point, att);
-                       }
-                   }
-                   if let Some(ref depth) = pts.depth {
-                       self.bind_target(point, gl::DEPTH_ATTACHMENT, depth);
-                   }
-                   if let Some(ref stencil) = pts.stencil {
-                       self.bind_target(point, gl::STENCIL_ATTACHMENT, stencil);
-                   }
-               },
-               com::Command::BindAttribute(slot, buffer,  bel) => {
-                   self.bind_attribute(slot, buffer, bel);
-               },
-               com::Command::UnbindAttribute(slot) => unsafe {
-                   self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
-               },*/
-               com::Command::BindUniform { uniform, buffer } => {
-                    let gl = &self.share.context;
+            com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
+            self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
+            },
+            com::Command::BindResourceView(pso::ResourceViewParam(view, _, slot)) => unsafe {
+            self.share.context.ActiveTexture(gl::TEXTURE0 + slot as gl::types::GLenum);
+            self.share.context.BindTexture(view.bind, view.object);
+            },
+            com::Command::BindUnorderedView(_uav) => unimplemented!(),
+            com::Command::BindSampler(pso::SamplerParam(sampler, _, slot), bind_opt) => {
+            let gl = &self.share.context;
+            if self.share.private_caps.sampler_objects {
+            unsafe { gl.BindSampler(slot as gl::types::GLuint, sampler.object) };
+            } else {
+            assert!(hal::MAX_SAMPLERS <= hal::MAX_RESOURCE_VIEWS);
+            debug_assert_eq!(sampler.object, 0);
+            if let Some(bind) = bind_opt {
+            tex::bind_sampler(gl, bind, &sampler.info, &self.share.private_caps);
+            }else {
+            error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
+            }
+            }
+            },
+            com::Command::BindPixelTargets(pts) => {
+            let point = gl::DRAW_FRAMEBUFFER;
+            for i in 0 .. hal::MAX_COLOR_TARGETS {
+            let att = gl::COLOR_ATTACHMENT0 + i as gl::types::GLuint;
+            if let Some(ref target) = pts.colors[i] {
+            self.bind_target(point, att, target);
+            } else {
+            self.unbind_target(point, att);
+            }
+            }
+            if let Some(ref depth) = pts.depth {
+            self.bind_target(point, gl::DEPTH_ATTACHMENT, depth);
+            }
+            if let Some(ref stencil) = pts.stencil {
+            self.bind_target(point, gl::STENCIL_ATTACHMENT, stencil);
+            }
+            },
+            com::Command::BindAttribute(slot, buffer,  bel) => {
+            self.bind_attribute(slot, buffer, bel);
+            },
+            com::Command::UnbindAttribute(slot) => unsafe {
+            self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
+            },*/
+            com::Command::BindUniform { uniform, buffer } => {
+                let gl = &self.share.context;
 
-                    unsafe {
-                        match uniform.utype {
-                            gl::FLOAT => {
-                                let data = Self::get::<f32>(data_buf, buffer);
-                                gl.Uniform1fv(uniform.location as _, 1, data.as_ptr() as _);
-  
-                            },
-                            gl::FLOAT_VEC2 => {
-                                let data = Self::get::<[f32; 2]>(data_buf, buffer);
-                                gl.Uniform2fv(uniform.location as _, 1, data[0].as_ptr() as _);
-  
-                            },
-                            gl::FLOAT_VEC3 => {
-                                let data = Self::get::<[f32; 3]>(data_buf, buffer);
-                                gl.Uniform3fv(uniform.location as _, 1, data[0].as_ptr() as _);
-  
-                            },
-                            gl::FLOAT_VEC4 => {
-                                let data = Self::get::<[f32; 4]>(data_buf, buffer);
-                                gl.Uniform4fv(uniform.location as _, 1, data[0].as_ptr() as _);
-  
-                            },
-                            gl::INT => {
-                                let data = Self::get::<i32>(data_buf, buffer);
-                                gl.Uniform1iv(uniform.location as _, 1, data.as_ptr() as _);
-  
-                            },
-                            gl::INT_VEC2 => {
-                                let data = Self::get::<[i32; 2]>(data_buf, buffer);
-                                gl.Uniform2iv(uniform.location as _, 1, data[0].as_ptr() as _);
-  
-                            },
-                            gl::INT_VEC3 => {
-                                let data = Self::get::<[i32; 3]>(data_buf, buffer);
-                                gl.Uniform3iv(uniform.location as _, 1, data[0].as_ptr() as _);
-  
-                            },
-                            gl::INT_VEC4 => {
-                                let data = Self::get::<[i32; 4]>(data_buf, buffer);
-                                gl.Uniform4iv(uniform.location as _, 1, data[0].as_ptr() as _);
-  
-                            },
-                            gl::FLOAT_MAT2 => {
-                                let data = Self::get::<[f32; 4]>(data_buf, buffer);
-                                gl.UniformMatrix2fv(uniform.location as _, 1, gl::FALSE, data[0].as_ptr());
-                            },
-                            gl::FLOAT_MAT3 => {
-                                let data = Self::get::<[f32; 9]>(data_buf, buffer);
-                                gl.UniformMatrix3fv(uniform.location as _, 1, gl::FALSE, data[0].as_ptr());
-                            },
-                            gl::FLOAT_MAT4 => {
-                                let data = Self::get::<[f32; 16]>(data_buf, buffer);
-                                gl.UniformMatrix4fv(uniform.location as _, 1, gl::FALSE, data[0].as_ptr());
-                            },
-                            _ => panic!("Unsupported uniform datatype!"),
+                unsafe {
+                    match uniform.utype {
+                        gl::FLOAT => {
+                            let data = Self::get::<f32>(data_buf, buffer);
+                            gl.Uniform1fv(uniform.location as _, 1, data.as_ptr() as _);
                         }
+                        gl::FLOAT_VEC2 => {
+                            let data = Self::get::<[f32; 2]>(data_buf, buffer);
+                            gl.Uniform2fv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::FLOAT_VEC3 => {
+                            let data = Self::get::<[f32; 3]>(data_buf, buffer);
+                            gl.Uniform3fv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::FLOAT_VEC4 => {
+                            let data = Self::get::<[f32; 4]>(data_buf, buffer);
+                            gl.Uniform4fv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::INT => {
+                            let data = Self::get::<i32>(data_buf, buffer);
+                            gl.Uniform1iv(uniform.location as _, 1, data.as_ptr() as _);
+                        }
+                        gl::INT_VEC2 => {
+                            let data = Self::get::<[i32; 2]>(data_buf, buffer);
+                            gl.Uniform2iv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::INT_VEC3 => {
+                            let data = Self::get::<[i32; 3]>(data_buf, buffer);
+                            gl.Uniform3iv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::INT_VEC4 => {
+                            let data = Self::get::<[i32; 4]>(data_buf, buffer);
+                            gl.Uniform4iv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::FLOAT_MAT2 => {
+                            let data = Self::get::<[f32; 4]>(data_buf, buffer);
+                            gl.UniformMatrix2fv(
+                                uniform.location as _,
+                                1,
+                                gl::FALSE,
+                                data[0].as_ptr(),
+                            );
+                        }
+                        gl::FLOAT_MAT3 => {
+                            let data = Self::get::<[f32; 9]>(data_buf, buffer);
+                            gl.UniformMatrix3fv(
+                                uniform.location as _,
+                                1,
+                                gl::FALSE,
+                                data[0].as_ptr(),
+                            );
+                        }
+                        gl::FLOAT_MAT4 => {
+                            let data = Self::get::<[f32; 16]>(data_buf, buffer);
+                            gl.UniformMatrix4fv(
+                                uniform.location as _,
+                                1,
+                                gl::FALSE,
+                                data[0].as_ptr(),
+                            );
+                        }
+                        _ => panic!("Unsupported uniform datatype!"),
                     }
-               },/*
-               com::Command::SetRasterizer(rast) => {
-                   state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
-               },
-               com::Command::SetDepthState(depth) => {
-                   state::bind_depth(&self.share.context, &depth);
-               },
-               com::Command::SetStencilState(stencil, refs, cull) => {
-                   state::bind_stencil(&self.share.context, &stencil, refs, cull);
-               },
-               com::Command::SetBlendState(slot, color) => {
-                   if self.share.capabilities.separate_blending_slots {
-                       state::bind_blend_slot(&self.share.context, slot, color);
-                   }else if slot == 0 {
-                       //self.temp.color = color; //TODO
-                       state::bind_blend(&self.share.context, color);
-                   }else if false {
-                       error!("Separate blending slots are not supported");
-                   }
-               },
-               com::Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
-                   let gl = &self.share.context;
+                }
+            } /*
+              com::Command::SetRasterizer(rast) => {
+                  state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
+              },
+              com::Command::SetDepthState(depth) => {
+                  state::bind_depth(&self.share.context, &depth);
+              },
+              com::Command::SetStencilState(stencil, refs, cull) => {
+                  state::bind_stencil(&self.share.context, &stencil, refs, cull);
+              },
+              com::Command::SetBlendState(slot, color) => {
+                  if self.share.capabilities.separate_blending_slots {
+                      state::bind_blend_slot(&self.share.context, slot, color);
+                  }else if slot == 0 {
+                      //self.temp.color = color; //TODO
+                      state::bind_blend(&self.share.context, color);
+                  }else if false {
+                      error!("Separate blending slots are not supported");
+                  }
+              },
+              com::Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
+                  let gl = &self.share.context;
 
-                   if self.share.capabilities.copy_buffer {
-                       unsafe {
-                           gl.BindBuffer(gl::COPY_READ_BUFFER, src);
-                           gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
-                           gl.CopyBufferSubData(gl::COPY_READ_BUFFER,
-                                               gl::COPY_WRITE_BUFFER,
-                                               src_offset,
-                                               dst_offset,
-                                               size);
-                       }
-                   } else {
-                       debug_assert!(self.share.private_caps.buffer_storage == false);
+                  if self.share.capabilities.copy_buffer {
+                      unsafe {
+                          gl.BindBuffer(gl::COPY_READ_BUFFER, src);
+                          gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
+                          gl.CopyBufferSubData(gl::COPY_READ_BUFFER,
+                                              gl::COPY_WRITE_BUFFER,
+                                              src_offset,
+                                              dst_offset,
+                                              size);
+                      }
+                  } else {
+                      debug_assert!(self.share.private_caps.buffer_storage == false);
 
-                       unsafe {
-                           let mut src_ptr = 0 as *mut ::std::os::raw::c_void;
-                           device::temporary_ensure_mapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, memory::READ, gl);
-                           src_ptr.offset(src_offset);
+                      unsafe {
+                          let mut src_ptr = 0 as *mut ::std::os::raw::c_void;
+                          device::temporary_ensure_mapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, memory::READ, gl);
+                          src_ptr.offset(src_offset);
 
-                           let mut dst_ptr = 0 as *mut ::std::os::raw::c_void;
-                           device::temporary_ensure_mapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, memory::WRITE, gl);
-                           dst_ptr.offset(dst_offset);
+                          let mut dst_ptr = 0 as *mut ::std::os::raw::c_void;
+                          device::temporary_ensure_mapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, memory::WRITE, gl);
+                          dst_ptr.offset(dst_offset);
 
-                           ::std::ptr::copy(src_ptr, dst_ptr, size as usize);
+                          ::std::ptr::copy(src_ptr, dst_ptr, size as usize);
 
-                           device::temporary_ensure_unmapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, gl);
-                           device::temporary_ensure_unmapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, gl);
-                       }
-                   }
-               },
-               */
+                          device::temporary_ensure_unmapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, gl);
+                          device::temporary_ensure_unmapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, gl);
+                      }
+                  }
+              },
+              */
         }
         if let Err(err) = self.share.check() {
             panic!("Error {:?} executing command: {:?}", err, cmd)
@@ -903,8 +910,8 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             let extent = swapchain.0.borrow().extent;
 
             gl.BlitNamedFramebuffer(
-                self.state.fbo,              // Default framebuffer 
-                0, // Currently bound framebuffer
+                self.state.fbo, // Default framebuffer
+                0,              // Currently bound framebuffer
                 0,
                 0,
                 extent.width as _,

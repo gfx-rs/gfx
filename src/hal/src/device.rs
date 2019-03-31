@@ -266,10 +266,16 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn destroy_pipeline_layout(&self, layout: B::PipelineLayout);
 
     /// Create a pipeline cache object.
-    unsafe fn create_pipeline_cache(&self, data: Option<&[u8]>) -> Result<B::PipelineCache, OutOfMemory>;
+    unsafe fn create_pipeline_cache(
+        &self,
+        data: Option<&[u8]>,
+    ) -> Result<B::PipelineCache, OutOfMemory>;
 
     /// Retrieve data from pipeline cache object.
-    unsafe fn get_pipeline_cache_data(&self, cache: &B::PipelineCache) -> Result<Vec<u8>, OutOfMemory>;
+    unsafe fn get_pipeline_cache_data(
+        &self,
+        cache: &B::PipelineCache,
+    ) -> Result<Vec<u8>, OutOfMemory>;
 
     /// Merge a number of source pipeline caches into the target one.
     unsafe fn merge_pipeline_caches<I>(

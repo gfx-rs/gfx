@@ -49,7 +49,7 @@ use std::{fs, iter};
 
 use hal::{
     buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
-    Adapter, Backbuffer, Backend, DescriptorPool, Device, Instance, Limits, MemoryType,
+    Adapter, Backend, DescriptorPool, Device, FrameSync, Instance, Limits, MemoryType,
     PhysicalDevice, Primitive, QueueGroup, Surface, Swapchain, SwapchainConfig,
 };
 
@@ -1433,7 +1433,7 @@ impl<B: Backend> Drop for PipelineState<B> {
 
 struct SwapchainState<B: Backend> {
     swapchain: Option<B::Swapchain>,
-    backbuffer: Option<Backbuffer<B>>,
+    backbuffer: Option<Vec<B::Image>>,
     device: Rc<RefCell<DeviceState<B>>>,
     extent: i::Extent,
     format: f::Format,
@@ -1501,47 +1501,44 @@ impl<B: Backend> FramebufferState<B> {
         render_pass: &RenderPassState<B>,
         swapchain: &mut SwapchainState<B>,
     ) -> Self {
-        let (frame_images, framebuffers) = match swapchain.backbuffer.take().unwrap() {
-            Backbuffer::Images(images) => {
-                let extent = i::Extent {
-                    width: swapchain.extent.width as _,
-                    height: swapchain.extent.height as _,
-                    depth: 1,
-                };
-                let pairs = images
-                    .into_iter()
-                    .map(|image| {
-                        let rtv = device
-                            .borrow()
-                            .device
-                            .create_image_view(
-                                &image,
-                                i::ViewKind::D2,
-                                swapchain.format,
-                                Swizzle::NO,
-                                COLOR_RANGE.clone(),
-                            )
-                            .unwrap();
-                        (image, rtv)
-                    })
-                    .collect::<Vec<_>>();
-                let fbos = pairs
-                    .iter()
-                    .map(|&(_, ref rtv)| {
-                        device
-                            .borrow()
-                            .device
-                            .create_framebuffer(
-                                render_pass.render_pass.as_ref().unwrap(),
-                                Some(rtv),
-                                extent,
-                            )
-                            .unwrap()
-                    })
-                    .collect();
-                (pairs, fbos)
-            }
-            Backbuffer::Framebuffer(fbo) => (Vec::new(), vec![fbo]),
+        let (frame_images, framebuffers) = {
+            let extent = i::Extent {
+                width: swapchain.extent.width as _,
+                height: swapchain.extent.height as _,
+                depth: 1,
+            };
+            let pairs = swapchain.backbuffer.take().unwrap()
+                .into_iter()
+                .map(|image| {
+                    let rtv = device
+                        .borrow()
+                        .device
+                        .create_image_view(
+                            &image,
+                            i::ViewKind::D2,
+                            swapchain.format,
+                            Swizzle::NO,
+                            COLOR_RANGE.clone(),
+                        )
+                        .unwrap();
+                    (image, rtv)
+                })
+                .collect::<Vec<_>>();
+            let fbos = pairs
+                .iter()
+                .map(|&(_, ref rtv)| {
+                    device
+                        .borrow()
+                        .device
+                        .create_framebuffer(
+                            render_pass.render_pass.as_ref().unwrap(),
+                            Some(rtv),
+                            extent,
+                        )
+                        .unwrap()
+                })
+                .collect();
+            (pairs, fbos)
         };
 
         let iter_count = if frame_images.len() != 0 {
