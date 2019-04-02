@@ -1,5 +1,5 @@
 use crate::hal::{self, format as f, image, CompositeAlpha};
-use crate::{Backend as B, Device, PhysicalDevice, QueueFamily};
+use crate::{Backend as B, Device, PhysicalDevice, QueueFamily, native};
 
 fn get_window_extent(window: &Window) -> image::Extent {
     image::Extent {
@@ -46,7 +46,8 @@ impl hal::Swapchain<B> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
-        _sync: hal::FrameSync<B>,
+        _semaphore: Option<&native::Semaphore>,
+        _fence: Option<&native::Fence>,
     ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
         // TODO: sync
         Ok(0)

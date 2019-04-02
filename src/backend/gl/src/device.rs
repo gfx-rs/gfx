@@ -65,7 +65,7 @@ impl Device {
 
     pub fn create_shader_module_from_source(
         &self,
-        data: &[u8],
+        shader: &str,
         stage: pso::Stage,
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let gl = &self.share.context;
@@ -84,10 +84,7 @@ impl Device {
 
         let name = unsafe { gl.create_shader(target) }.unwrap();
         unsafe {
-            gl.shader_source(
-                name,
-                std::str::from_utf8(data).expect("Invalid shader source"),
-            );
+            gl.shader_source(name, shader);
             gl.compile_shader(name);
         }
         info!("\tCompiled shader {:?}", name);
@@ -405,7 +402,7 @@ impl Device {
                 let glsl = self.translate_spirv(&mut ast).unwrap();
                 debug!("SPIRV-Cross generated shader:\n{}", glsl);
                 let shader = match self
-                    .create_shader_module_from_source(glsl.as_bytes(), stage)
+                    .create_shader_module_from_source(&glsl, stage)
                     .unwrap()
                 {
                     n::ShaderModule::Raw(raw) => raw,
