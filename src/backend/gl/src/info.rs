@@ -186,6 +186,10 @@ pub struct PrivateCaps {
     pub emulate_map: bool,
     /// Indicates if we only have support via the EXT.
     pub sampler_anisotropy_ext: bool,
+    /// Whether f64 precision is supported for depth ranges
+    pub depth_range_f64_precision: bool,
+    /// Whether draw buffers are supported
+    pub draw_buffers: bool,
 }
 
 /// OpenGL implementation information
@@ -478,6 +482,8 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
             .is_supported(&[Core(4, 6), Ext("GL_ARB_texture_filter_anisotropic")])
             && info.is_supported(&[Ext("GL_EXT_texture_filter_anisotropic")]),
         emulate_map, // TODO
+        depth_range_f64_precision: !info.version.is_embedded, // TODO
+        draw_buffers: !info.version.is_embedded, // TODO
     };
 
     (info, features, legacy, limits, private)

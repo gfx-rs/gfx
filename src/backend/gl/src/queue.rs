@@ -425,8 +425,12 @@ impl CommandQueue {
                             view[2] as i32,
                             view[3] as i32,
                         );
-                        #[cfg(not(target_arch = "wasm32"))] // TODO
-                        gl.depth_range_f64(depth_range[0], depth_range[1]);
+                        if self.share.private_caps.depth_range_f64_precision {
+                            gl.depth_range_f64(depth_range[0], depth_range[1]);
+                        } else {
+                            warn!("Depth ranges with f64 precision are not supported");
+                            // TODO: fallback to f32?
+                        }
                     };
                 } else if num_viewports > 1 {
                     // Support for these functions is coupled with the support
@@ -491,17 +495,18 @@ impl CommandQueue {
                         let mut stencils = [stencil];
                         self.share
                             .context
-                            .clear_buffer_i32_slice(glow::STENCIL, 0, &mut stencils));
+                            .clear_buffer_i32_slice(glow::STENCIL, 0, &mut stencils);
                     }
                     _ => unreachable!(),
                 };
             },
             com::Command::ClearTexture(_color) => unimplemented!(),
             com::Command::DrawBuffers(draw_buffers) => unsafe {
-                #[cfg(not(target_arch = "wasm32"))] // TODO
-                {
+                if self.share.private_caps.draw_buffers {
                     let draw_buffers = Self::get::<u32>(data_buf, draw_buffers);
                     self.share.context.draw_buffers(draw_buffers);
+                } else {
+                    warn!("Draw buffers are not supported");
                 }
             },
             com::Command::BindFrameBuffer(point, frame_buffer) => {
@@ -528,7 +533,7 @@ impl CommandQueue {
                 self.share.context.use_program(Some(program));
             },
             com::Command::BindBlendSlot(slot, ref blend) => {
-                state::bind_blend_slot(&self.share.context, slot, blend);
+                state::bind_blend_slot(&self.share.context, slot, blend, self.share.private_caps.draw_buffers);
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
                 use crate::native::VertexAttribFunction::*;
@@ -722,63 +727,66 @@ impl CommandQueue {
                 unsafe {
                     match uniform.utype {
                         gl::FLOAT => {
-                            let data = Self::get::<f32>(data_buf, buffer);
-                            gl.Uniform1fv(uniform.location as _, 1, data.as_ptr() as _);
+                            let data = Self::get::<f32>(data_buf, buffer)[0];
+                            gl.uniform_1_f32(Some(uniform.location), data);
                         }
                         gl::FLOAT_VEC2 => {
                             let data = Self::get::<[f32; 2]>(data_buf, buffer);
-                            gl.Uniform2fv(uniform.location as _, 1, data[0].as_ptr() as _);
+                            // TODO: remove transmute
+                            let data: &mut [f32; 2] = unsafe { mem::transmute(data) };
+                            gl.uniform_2_f32_slice(Some(uniform.location), data);
                         }
                         gl::FLOAT_VEC3 => {
                             let data = Self::get::<[f32; 3]>(data_buf, buffer);
-                            gl.Uniform3fv(uniform.location as _, 1, data[0].as_ptr() as _);
+                            // TODO: remove transmute
+                            let data: &mut [f32; 3] = unsafe { mem::transmute(data) };
+                            gl.uniform_3_f32_slice(Some(uniform.location), data);
                         }
                         gl::FLOAT_VEC4 => {
                             let data = Self::get::<[f32; 4]>(data_buf, buffer);
-                            gl.Uniform4fv(uniform.location as _, 1, data[0].as_ptr() as _);
+                            // TODO: remove transmute
+                            let data: &mut [f32; 4] = unsafe { mem::transmute(data) };
+                            gl.uniform_4_f32_slice(Some(uniform.location), data);
                         }
                         gl::INT => {
-                            let data = Self::get::<i32>(data_buf, buffer);
-                            gl.Uniform1iv(uniform.location as _, 1, data.as_ptr() as _);
+                            let data = Self::get::<i32>(data_buf, buffer)[0];
+                            gl.uniform_1_i32(Some(uniform.location), data);
                         }
                         gl::INT_VEC2 => {
                             let data = Self::get::<[i32; 2]>(data_buf, buffer);
-                            gl.Uniform2iv(uniform.location as _, 1, data[0].as_ptr() as _);
+                            // TODO: remove transmute
+                            let data: &mut [i32; 2] = unsafe { mem::transmute(data) };
+                            gl.uniform_2_i32_slice(Some(uniform.location), data);
                         }
                         gl::INT_VEC3 => {
                             let data = Self::get::<[i32; 3]>(data_buf, buffer);
-                            gl.Uniform3iv(uniform.location as _, 1, data[0].as_ptr() as _);
+                            // TODO: remove transmute
+                            let data: &mut [i32; 3] = unsafe { mem::transmute(data) };
+                            gl.uniform_3_i32_slice(Some(uniform.location), data);
                         }
                         gl::INT_VEC4 => {
                             let data = Self::get::<[i32; 4]>(data_buf, buffer);
-                            gl.Uniform4iv(uniform.location as _, 1, data[0].as_ptr() as _);
+                            // TODO: remove transmute
+                            let data: &mut [i32; 4] = unsafe { mem::transmute(data) };
+                            gl.uniform_4_i32_slice(Some(uniform.location), data);
                         }
                         gl::FLOAT_MAT2 => {
                             let data = Self::get::<[f32; 4]>(data_buf, buffer);
-                            gl.UniformMatrix2fv(
-                                uniform.location as _,
-                                1,
-                                gl::FALSE,
-                                data[0].as_ptr(),
-                            );
+                            // TODO: remove transmute
+                            let data: &mut [f32; 4] = unsafe { mem::transmute(data) };
+                            gl.uniform_matrix_2_f32_slice(Some(uniform.location), false, data);
                         }
                         gl::FLOAT_MAT3 => {
                             let data = Self::get::<[f32; 9]>(data_buf, buffer);
-                            gl.UniformMatrix3fv(
-                                uniform.location as _,
-                                1,
-                                gl::FALSE,
-                                data[0].as_ptr(),
-                            );
+                            // TODO: remove transmute
+                            let data: &mut [f32; 9] = unsafe { mem::transmute(data) };
+                            gl.uniform_matrix_3_f32_slice(Some(uniform.location), false, data);
                         }
                         gl::FLOAT_MAT4 => {
                             let data = Self::get::<[f32; 16]>(data_buf, buffer);
-                            gl.UniformMatrix4fv(
-                                uniform.location as _,
-                                1,
-                                gl::FALSE,
-                                data[0].as_ptr(),
-                            );
+                            // TODO: remove transmute
+                            let data: &mut [f32; 16] = unsafe { mem::transmute(data) };
+                            gl.uniform_matrix_4_f32_slice(Some(uniform.location), false, data);
                         }
                         _ => panic!("Unsupported uniform datatype!"),
                     }
@@ -791,7 +799,7 @@ impl CommandQueue {
                 let gl = &self.share.context;
                 
                 unsafe {
-                    gl.FrontFace(match rasterizer.front_face {
+                    gl.front_face(match rasterizer.front_face {
                         Clockwise => gl::CW,
                         CounterClockwise => gl::CCW,
                     })
@@ -799,8 +807,8 @@ impl CommandQueue {
 
                 if !rasterizer.cull_face.is_empty() {
                     unsafe {
-                        gl.Enable(gl::CULL_FACE);
-                        gl.CullFace(match rasterizer.cull_face {
+                        gl.enable(gl::CULL_FACE);
+                        gl.cull_face(match rasterizer.cull_face {
                             hal::pso::Face::FRONT => gl::FRONT,
                             hal::pso::Face::BACK => gl::BACK,
                             _ => gl::FRONT_AND_BACK,
@@ -808,33 +816,33 @@ impl CommandQueue {
                     }
                 } else {
                     unsafe {
-                        gl.Disable(gl::CULL_FACE);
+                        gl.disable(gl::CULL_FACE);
                     }
                 }
 
                 let (gl_draw, gl_offset) = match rasterizer.polygon_mode {
                     Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
                     Line(width) => {
-                        unsafe { gl.LineWidth(width) };
+                        unsafe { gl.line_width(width) };
                         (gl::LINE, gl::POLYGON_OFFSET_LINE)
                     }
                     Fill => (gl::FILL, gl::POLYGON_OFFSET_FILL),
                 };
 
-                unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
+                unsafe { gl.polygon_mode(gl::FRONT_AND_BACK, gl_draw) };
 
                 match rasterizer.depth_bias {
                     Some(hal::pso::State::Static(bias)) => unsafe {
-                        gl.Enable(gl_offset);
-                        gl.PolygonOffset(bias.slope_factor as _, bias.const_factor as _);
+                        gl.enable(gl_offset);
+                        gl.polygon_offset(bias.slope_factor as _, bias.const_factor as _);
                     },
-                    _ => unsafe { gl.Disable(gl_offset) },
+                    _ => unsafe { gl.disable(gl_offset) },
                 }
 
                 match false {
                     //TODO
-                    true => unsafe { gl.Enable(gl::MULTISAMPLE) },
-                    false => unsafe { gl.Disable(gl::MULTISAMPLE) },
+                    true => unsafe { gl.enable(gl::MULTISAMPLE) },
+                    false => unsafe { gl.disable(gl::MULTISAMPLE) },
                 }
             }
             com::Command::BindDepth { depth } => {
@@ -844,7 +852,7 @@ impl CommandQueue {
                 
                 match depth {
                     hal::pso::DepthTest::On { fun, write } => unsafe {
-                        gl.Enable(gl::DEPTH_TEST);
+                        gl.enable(gl::DEPTH_TEST);
 
                         let cmp = match fun {
                             Never => gl::NEVER,
@@ -857,11 +865,11 @@ impl CommandQueue {
                             Always => gl::ALWAYS,
                         };
 
-                        gl.DepthFunc(cmp);
-                        gl.DepthMask(write as _);
+                        gl.depth_func(cmp);
+                        gl.depth_mask(write as _);
                     },
                     hal::pso::DepthTest::Off => unsafe {
-                        gl.Disable(gl::DEPTH_TEST);
+                        gl.disable(gl::DEPTH_TEST);
                     },
                 }
             }
