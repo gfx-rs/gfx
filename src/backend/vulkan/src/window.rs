@@ -271,7 +271,7 @@ impl Instance {
         }
     }
 
-    fn create_surface_from_vk_surface_khr(
+    pub fn create_surface_from_vk_surface_khr(
         &self,
         surface: vk::SurfaceKHR,
         width: Size,
