@@ -419,8 +419,12 @@ impl CommandQueue {
                             view[2] as i32,
                             view[3] as i32,
                         );
-                        #[cfg(not(target_arch = "wasm32"))] // TODO
-                        gl.depth_range_f64(depth_range[0], depth_range[1]);
+                        if self.share.private_caps.depth_range_f64_precision {
+                            gl.depth_range_f64(depth_range[0], depth_range[1]);
+                        } else {
+                            warn!("Depth ranges with f64 precision are not supported");
+                            // TODO: fallback to f32?
+                        }
                     };
                 } else if num_viewports > 1 {
                     // Support for these functions is coupled with the support
@@ -482,10 +486,11 @@ impl CommandQueue {
             },
             com::Command::ClearTexture(_color) => unimplemented!(),
             com::Command::DrawBuffers(draw_buffers) => unsafe {
-                #[cfg(not(target_arch = "wasm32"))] // TODO
-                {
+                if self.share.private_caps.draw_buffers {
                     let draw_buffers = Self::get::<u32>(data_buf, draw_buffers);
                     self.share.context.draw_buffers(draw_buffers);
+                } else {
+                    warn!("Draw buffers are not supported");
                 }
             },
             com::Command::BindFrameBuffer(point, frame_buffer) => {
@@ -511,7 +516,7 @@ impl CommandQueue {
                 self.share.context.use_program(Some(program));
             },
             com::Command::BindBlendSlot(slot, ref blend) => {
-                state::bind_blend_slot(&self.share.context, slot, blend);
+                state::bind_blend_slot(&self.share.context, slot, blend, self.share.private_caps.draw_buffers);
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
                 use crate::native::VertexAttribFunction::*;
@@ -714,7 +719,7 @@ impl CommandQueue {
                },
                com::Command::SetBlendState(slot, color) => {
                    if self.share.capabilities.separate_blending_slots {
-                       state::bind_blend_slot(&self.share.context, slot, color);
+                       state::bind_blend_slot(&self.share.context, slot, color, self.share.private_caps.draw_buffers);
                    }else if slot == 0 {
                        //self.temp.color = color; //TODO
                        state::bind_blend(&self.share.context, color);
