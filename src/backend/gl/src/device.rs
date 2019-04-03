@@ -218,25 +218,32 @@ impl Device {
         let mut compile_options = glsl::CompilerOptions::default();
         // see version table at https://en.wikipedia.org/wiki/OpenGL_Shading_Language
         let is_embedded = self.share.info.shading_language.is_embedded;
-        compile_options.version = match self.share.info.shading_language.tuple() {
-            (4, 60) if !is_embedded => glsl::Version::V4_60,
-            (4, 50) if !is_embedded => glsl::Version::V4_50,
-            (4, 40) if !is_embedded => glsl::Version::V4_40,
-            (4, 30) if !is_embedded => glsl::Version::V4_30,
-            (4, 20) if !is_embedded => glsl::Version::V4_20,
-            (4, 10) if !is_embedded => glsl::Version::V4_10,
-            (4, 00) if !is_embedded => glsl::Version::V4_00,
-            (3, 30) if !is_embedded => glsl::Version::V3_30,
-            (1, 50) if !is_embedded => glsl::Version::V1_50,
-            (1, 40) if !is_embedded => glsl::Version::V1_40,
-            (1, 30) if !is_embedded => glsl::Version::V1_30,
-            (1, 20) if !is_embedded => glsl::Version::V1_20,
-            (1, 10) if !is_embedded => glsl::Version::V1_10,
-            other if other > (4, 60) && !is_embedded => glsl::Version::V4_60,
-            (3, 00) if is_embedded => glsl::Version::V3_00Es,
-            (1, 00) if is_embedded => glsl::Version::V1_00Es,
-            other if other > (3, 00) && is_embedded => glsl::Version::V3_00Es,
-            other => panic!("GLSL version is not recognized: {:?}", other),
+        let version = self.share.info.shading_language.tuple();
+        compile_options.version = if is_embedded {
+            match version {
+                (3, 00) => glsl::Version::V3_00Es,
+                (1, 00) => glsl::Version::V1_00Es,
+                other if other > (3, 00) => glsl::Version::V3_00Es,
+                other => panic!("GLSL version is not recognized: {:?}", other),
+            }
+        } else {
+            match version {
+                (4, 60) => glsl::Version::V4_60,
+                (4, 50) => glsl::Version::V4_50,
+                (4, 40) => glsl::Version::V4_40,
+                (4, 30) => glsl::Version::V4_30,
+                (4, 20) => glsl::Version::V4_20,
+                (4, 10) => glsl::Version::V4_10,
+                (4, 00) => glsl::Version::V4_00,
+                (3, 30) => glsl::Version::V3_30,
+                (1, 50) => glsl::Version::V1_50,
+                (1, 40) => glsl::Version::V1_40,
+                (1, 30) => glsl::Version::V1_30,
+                (1, 20) => glsl::Version::V1_20,
+                (1, 10) => glsl::Version::V1_10,
+                other if other > (4, 60) => glsl::Version::V4_60,
+                other => panic!("GLSL version is not recognized: {:?}", other),
+            }
         };
         compile_options.vertex.invert_y = true;
         debug!("SPIR-V options {:?}", compile_options);
