@@ -495,43 +495,43 @@ mod tests {
 
     #[test]
     fn test_version_parse() {
-        assert_eq!(Version::parse("1"), Err("1"));
-        assert_eq!(Version::parse("1."), Err("1."));
-        assert_eq!(Version::parse("1 h3l1o. W0rld"), Err("1 h3l1o. W0rld"));
-        assert_eq!(Version::parse("1. h3l1o. W0rld"), Err("1. h3l1o. W0rld"));
-        assert_eq!(Version::parse("1.2.3"), Ok(Version::new(1, 2, Some(3), "")));
-        assert_eq!(Version::parse("1.2"), Ok(Version::new(1, 2, None, "")));
+        assert_eq!(Version::parse("1".to_string()), Err("1".to_string()));
+        assert_eq!(Version::parse("1.".to_string()), Err("1.".to_string()));
+        assert_eq!(Version::parse("1 h3l1o. W0rld".to_string()), Err("1 h3l1o. W0rld".to_string()));
+        assert_eq!(Version::parse("1. h3l1o. W0rld".to_string()), Err("1. h3l1o. W0rld".to_string()));
+        assert_eq!(Version::parse("1.2.3".to_string()), Ok(Version::new(1, 2, Some(3), "".to_string())));
+        assert_eq!(Version::parse("1.2".to_string()), Ok(Version::new(1, 2, None, "".to_string())));
         assert_eq!(
-            Version::parse("1.2 h3l1o. W0rld"),
-            Ok(Version::new(1, 2, None, "h3l1o. W0rld"))
+            Version::parse("1.2 h3l1o. W0rld".to_string()),
+            Ok(Version::new(1, 2, None, "h3l1o. W0rld".to_string()))
         );
         assert_eq!(
-            Version::parse("1.2.h3l1o. W0rld"),
-            Ok(Version::new(1, 2, None, "W0rld"))
+            Version::parse("1.2.h3l1o. W0rld".to_string()),
+            Ok(Version::new(1, 2, None, "W0rld".to_string()))
         );
         assert_eq!(
-            Version::parse("1.2. h3l1o. W0rld"),
-            Ok(Version::new(1, 2, None, "h3l1o. W0rld"))
+            Version::parse("1.2. h3l1o. W0rld".to_string()),
+            Ok(Version::new(1, 2, None, "h3l1o. W0rld".to_string()))
         );
         assert_eq!(
-            Version::parse("1.2.3.h3l1o. W0rld"),
-            Ok(Version::new(1, 2, Some(3), "W0rld"))
+            Version::parse("1.2.3.h3l1o. W0rld".to_string()),
+            Ok(Version::new(1, 2, Some(3), "W0rld".to_string()))
         );
         assert_eq!(
-            Version::parse("1.2.3 h3l1o. W0rld"),
-            Ok(Version::new(1, 2, Some(3), "h3l1o. W0rld"))
+            Version::parse("1.2.3 h3l1o. W0rld".to_string()),
+            Ok(Version::new(1, 2, Some(3), "h3l1o. W0rld".to_string()))
         );
         assert_eq!(
-            Version::parse("OpenGL ES 3.1"),
-            Ok(Version::new_embedded(3, 1, ""))
+            Version::parse("OpenGL ES 3.1".to_string()),
+            Ok(Version::new_embedded(3, 1, "".to_string()))
         );
         assert_eq!(
-            Version::parse("OpenGL ES 2.0 Google Nexus"),
-            Ok(Version::new_embedded(2, 0, "Google Nexus"))
+            Version::parse("OpenGL ES 2.0 Google Nexus".to_string()),
+            Ok(Version::new_embedded(2, 0, "Google Nexus".to_string()))
         );
         assert_eq!(
-            Version::parse("GLSL ES 1.1"),
-            Ok(Version::new_embedded(1, 1, ""))
+            Version::parse("GLSL ES 1.1".to_string()),
+            Ok(Version::new_embedded(1, 1, "".to_string()))
         );
     }
 }
