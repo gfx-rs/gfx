@@ -24,7 +24,7 @@ bitflags = "1"
 derivative = "1"
 log = { version = "0.4" }
 smallvec = "0.6"
-spirv_cross = "0.12.1"
+spirv_cross = { git = "https://github.com/grovesNL/spirv_cross", features = ["hlsl"] }
 parking_lot = "0.7"
 winapi = { version = "0.3", features = ["basetsd","d3d11", "d3d11sdklayers", "d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4", "dxgi1_5", "dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
 winit = { version = "0.19", optional = true }
