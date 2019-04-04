@@ -42,22 +42,22 @@ bitflags!(
         /// Device local memory on the GPU.
         const DEVICE_LOCAL   = 0x1;
 
-        /// CPU-GPU coherent.
-        ///
-        /// Non-coherent memory requires explicit flushing.
-        const COHERENT     = 0x2;
-
         /// Host visible memory can be accessed by the CPU.
         ///
         /// Backends must provide at least one cpu visible memory.
-        const CPU_VISIBLE   = 0x4;
+        const CPU_VISIBLE   = 0x2;
+
+        /// CPU-GPU coherent.
+        ///
+        /// Non-coherent memory requires explicit flushing.
+        const COHERENT     = 0x4;
 
         /// Cached memory by the CPU
         const CPU_CACHED = 0x8;
 
         /// Memory that may be lazily allocated as needed on the GPU
         /// and *must not* be visible to the CPU.
-        const LAZILY_ALLOCATED = 0x20;
+        const LAZILY_ALLOCATED = 0x10;
     }
 );
 
