@@ -634,6 +634,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     type_flags |= Properties::DEVICE_LOCAL;
                 }
                 if mem
+                  .property_flags
+                  .intersects(vk::MemoryPropertyFlags::HOST_VISIBLE)
+                {
+                    type_flags |= Properties::CPU_VISIBLE;
+                }
+                if mem
                     .property_flags
                     .intersects(vk::MemoryPropertyFlags::HOST_COHERENT)
                 {
@@ -644,12 +650,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     .intersects(vk::MemoryPropertyFlags::HOST_CACHED)
                 {
                     type_flags |= Properties::CPU_CACHED;
-                }
-                if mem
-                    .property_flags
-                    .intersects(vk::MemoryPropertyFlags::HOST_VISIBLE)
-                {
-                    type_flags |= Properties::CPU_VISIBLE;
                 }
                 if mem
                     .property_flags
