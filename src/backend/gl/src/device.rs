@@ -1116,7 +1116,7 @@ impl d::Device<B> for Device {
         let size = *range.end().unwrap_or(&memory.size) - offset;
 
         let ptr = if caps.emulate_map {
-            let raw = Box::into_raw(vec![0; size as usize].into_boxed_slice()) as *mut u8;
+            let raw = Box::into_raw(vec![0u8; size as usize].into_boxed_slice()) as *mut u8;
             *memory.emulate_map_allocation.borrow_mut() = raw;
             raw
         } else {
@@ -1488,10 +1488,9 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         for fence in fences {
             let fence = fence.borrow();
-            let sync = fence.0.get();
-            if let Some(s) = sync {
-                if self.share.private_caps.sync && gl.is_sync(Some(s)) {
-                    gl.delete_sync(s);
+            if let Some(sync) = fence.0.get() {
+                if self.share.private_caps.sync && gl.is_sync(sync) {
+                    gl.delete_sync(sync);
                 }
             }
             fence.0.set(None);
@@ -1614,10 +1613,9 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_fence(&self, fence: n::Fence) {
         let gl = &self.share.context;
-        let sync = fence.0.get();
-        if self.share.private_caps.sync && gl.is_sync(sync) {
-            if let Some(s) = sync {
-                gl.delete_sync(s);
+        if let Some(sync) = fence.0.get() {
+            if self.share.private_caps.sync && gl.is_sync(sync) {
+                gl.delete_sync(sync);
             }
         }
     }
