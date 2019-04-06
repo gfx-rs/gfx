@@ -19,7 +19,7 @@ use std::str::FromStr;
 use hal::{buffer, command, memory, pool, pso};
 use hal::{Backend, Compute, DescriptorPool, Device, Instance, PhysicalDevice, QueueFamily};
 
-extern crate glsl_to_spirv;
+extern crate shaderc;
 
 use std::fs;
 use std::io::Read;
@@ -53,12 +53,20 @@ fn main() {
     let memory_properties = adapter.physical_device.memory_properties();
     let (device, mut queue_group) = adapter.open_with::<_, Compute>(1, |_family| true).unwrap();
 
+    let mut shader_compiler = shaderc::Compiler::new().unwrap();
+
     let glsl = fs::read_to_string("compute/shader/collatz.comp").unwrap();
-    let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Compute)
+    let spirv: Vec<u8> = shader_compiler
+        .compile_into_spirv(
+            &glsl,
+            shaderc::ShaderKind::Compute,
+            "collatz.comp",
+            "main",
+            None,
+        )
         .unwrap()
-        .bytes()
-        .map(|b| b.unwrap())
-        .collect();
+        .as_binary_u8()
+        .to_vec();
     let shader = unsafe { device.create_shader_module(&spirv) }.unwrap();
 
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {

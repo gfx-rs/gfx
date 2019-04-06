@@ -22,8 +22,8 @@ extern crate gfx_backend_metal as back;
 extern crate gfx_backend_vulkan as back;
 extern crate gfx_hal as hal;
 
-extern crate glsl_to_spirv;
 extern crate image;
+extern crate shaderc;
 extern crate winit;
 
 use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
@@ -509,6 +509,8 @@ fn main() {
         cmd_buffers.push(cmd_pools[i].acquire_command_buffer::<command::MultiShot>());
     }
 
+    let mut shader_compiler = shaderc::Compiler::new().unwrap();
+
     let pipeline_layout = unsafe {
         device.create_pipeline_layout(
             std::iter::once(&set_layout),
@@ -519,20 +521,32 @@ fn main() {
     let pipeline = {
         let vs_module = {
             let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
-            let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
+            let spirv: Vec<u8> = shader_compiler
+                .compile_into_spirv(
+                    &glsl,
+                    shaderc::ShaderKind::Vertex,
+                    "quad.vert",
+                    "main",
+                    None,
+                )
                 .unwrap()
-                .bytes()
-                .map(|b| b.unwrap())
-                .collect();
+                .as_binary_u8()
+                .to_vec();
             unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
         let fs_module = {
             let glsl = fs::read_to_string("quad/data/quad.frag").unwrap();
-            let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
+            let spirv: Vec<u8> = shader_compiler
+                .compile_into_spirv(
+                    &glsl,
+                    shaderc::ShaderKind::Fragment,
+                    "quad.frag",
+                    "main",
+                    None,
+                )
                 .unwrap()
-                .bytes()
-                .map(|b| b.unwrap())
-                .collect();
+                .as_binary_u8()
+                .to_vec();
             unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
 
