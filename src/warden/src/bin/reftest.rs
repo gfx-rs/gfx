@@ -107,7 +107,7 @@ impl Harness {
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
 
-            #[cfg(not(feature = "glsl-to-spirv"))]
+            #[cfg(not(feature = "shaderc"))]
             {
                 let all_spirv = tg.scene.resources.values().all(|res| match *res {
                     warden::raw::Resource::Shader(ref name) => name.ends_with(".spirv"),

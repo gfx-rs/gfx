@@ -1,11 +1,12 @@
 use failure::Error;
-#[cfg(feature = "glsl-to-spirv")]
-use glsl_to_spirv;
+#[cfg(feature = "shaderc")]
+use shaderc;
 
 use std::collections::HashMap;
+use std::fs;
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::{iter, slice};
 
 use crate::hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
@@ -196,6 +197,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         unsafe {
             init_cmd.begin(false);
         }
+        #[cfg(feature = "shaderc")]
+        let mut shader_compiler = shaderc::Compiler::new().unwrap();
         // Pass[1]: images, buffers, passes, descriptor set layouts/pools
         for (name, resource) in &raw.resources {
             match *resource {
@@ -559,26 +562,46 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     resources.render_passes.insert(name.clone(), rp);
                 }
                 raw::Resource::Shader(ref local_path) => {
-                    #[cfg(feature = "glsl-to-spirv")]
-                    fn transpile(mut file: File, ty: glsl_to_spirv::ShaderType) -> File {
-                        let mut code = String::new();
-                        file.read_to_string(&mut code).unwrap();
-                        glsl_to_spirv::compile(&code, ty).unwrap()
-                    }
                     let full_path = data_path.join(local_path);
-                    let base_file = File::open(&full_path).unwrap();
-                    let mut file = match &*full_path.extension().unwrap().to_string_lossy() {
-                        "spirv" => base_file,
-                        #[cfg(feature = "glsl-to-spirv")]
-                        "vert" => transpile(base_file, glsl_to_spirv::ShaderType::Vertex),
-                        #[cfg(feature = "glsl-to-spirv")]
-                        "frag" => transpile(base_file, glsl_to_spirv::ShaderType::Fragment),
-                        #[cfg(feature = "glsl-to-spirv")]
-                        "comp" => transpile(base_file, glsl_to_spirv::ShaderType::Compute),
+                    #[cfg(feature = "shaderc")]
+                    fn transpile<P: AsRef<Path>>(
+                        compiler: &mut shaderc::Compiler,
+                        full_path: P,
+                        local_path: &str,
+                        ty: shaderc::ShaderKind,
+                    ) -> Vec<u8> {
+                        let code = fs::read_to_string(full_path).unwrap();
+                        compiler
+                            .compile_into_spirv(&code, ty, local_path, "main", None)
+                            .unwrap()
+                            .as_binary_u8()
+                            .to_vec()
+                    }
+                    let spirv: Vec<u8> = match &*full_path.extension().unwrap().to_string_lossy() {
+                        "spirv" => fs::read(&full_path).unwrap(),
+                        #[cfg(feature = "shaderc")]
+                        "vert" => transpile(
+                            &mut shader_compiler,
+                            &full_path,
+                            &local_path,
+                            shaderc::ShaderKind::Vertex,
+                        ),
+                        #[cfg(feature = "shaderc")]
+                        "frag" => transpile(
+                            &mut shader_compiler,
+                            &full_path,
+                            &local_path,
+                            shaderc::ShaderKind::Fragment,
+                        ),
+                        #[cfg(feature = "shaderc")]
+                        "comp" => transpile(
+                            &mut shader_compiler,
+                            &full_path,
+                            &local_path,
+                            shaderc::ShaderKind::Compute,
+                        ),
                         other => panic!("Unknown shader extension: {}", other),
                     };
-                    let mut spirv = Vec::new();
-                    file.read_to_end(&mut spirv).unwrap();
                     let module = unsafe { device.create_shader_module(&spirv) }.unwrap();
                     resources.shaders.insert(name.clone(), module);
                 }

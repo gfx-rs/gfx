@@ -7,8 +7,8 @@ extern crate log;
 #[macro_use]
 extern crate serde;
 extern crate failure;
-#[cfg(feature = "glsl-to-spirv")]
-extern crate glsl_to_spirv;
+#[cfg(feature = "shaderc")]
+extern crate shaderc;
 
 pub mod gpu;
 pub mod raw;
