@@ -783,6 +783,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_image_2d_size: limits.max_image_dimension2_d,
             max_image_3d_size: limits.max_image_dimension3_d,
             max_image_cube_size: limits.max_image_dimension_cube,
+            max_image_array_layers: limits.max_image_array_layers as _,
             max_texel_elements: limits.max_texel_buffer_elements as _,
             max_patch_size: limits.max_tessellation_patch_size as PatchSize,
             max_viewports: limits.max_viewports as _,
