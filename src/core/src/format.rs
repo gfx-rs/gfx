@@ -152,6 +152,12 @@ impl_formats! {
     D24_S8          : Vec1<Unorm, Uint> = u32 {8} [TextureSurface, DepthSurface, StencilSurface],
     D32             : Vec1<Float> = f32 {0} [TextureSurface, DepthSurface],
     //D32_S8          : Vec1<Unorm, Float, Uint> = (f32, u32) {32} [TextureSurface, DepthSurface, StencilSurface],
+
+    // S3TC https://en.wikipedia.org/wiki/S3_Texture_Compression
+    // DXT1/BC1
+    BC1_R8_G8_B8   : Vec4<Int, Uint, Inorm, Unorm, Srgb> = [u8; 3] {0} [TextureSurface],
+    // DXT5/BC3
+    BC3_R8_G8_B8_A8 : Vec4<Int, Uint, Inorm, Unorm, Srgb> = [u8; 4] {8} [TextureSurface],
 }
 
 
