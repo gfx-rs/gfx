@@ -115,7 +115,9 @@ impl d::Device<B> for Device {
                     format: attachment
                         .format
                         .map_or(vk::Format::UNDEFINED, conv::map_format),
-                    samples: vk::SampleCountFlags::TYPE_1, // TODO: multisampling
+                    samples: vk::SampleCountFlags::from_raw(
+                        (attachment.samples as u32) & vk::SampleCountFlags::all().as_raw(),
+                    ),
                     load_op: conv::map_attachment_load_op(attachment.ops.load),
                     store_op: conv::map_attachment_store_op(attachment.ops.store),
                     stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
