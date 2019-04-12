@@ -781,7 +781,7 @@ impl PrivateCapabilities {
                 16384
             } else if Self::supports_any(&device, &[
                 MTLFeatureSet::iOS_GPUFamily1_v2,
-                MTLFeatureSet::iOS_GPUFamily2_v1,
+                MTLFeatureSet::iOS_GPUFamily2_v2,
                 MTLFeatureSet::tvOS_GPUFamily1_v1,
             ]) {
                 8192
