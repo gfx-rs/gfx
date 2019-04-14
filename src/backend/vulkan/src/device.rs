@@ -115,7 +115,9 @@ impl d::Device<B> for Device {
                     format: attachment
                         .format
                         .map_or(vk::Format::UNDEFINED, conv::map_format),
-                    samples: vk::SampleCountFlags::TYPE_1, // TODO: multisampling
+                    samples: vk::SampleCountFlags::from_raw(
+                        (attachment.samples as u32) & vk::SampleCountFlags::all().as_raw(),
+                    ),
                     load_op: conv::map_attachment_load_op(attachment.ops.load),
                     store_op: conv::map_attachment_store_op(attachment.ops.store),
                     stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
@@ -140,55 +142,49 @@ impl d::Device<B> for Device {
             })
             .sum();
 
-        let mut attachment_refs = Vec::new();
-
-        let subpasses = subpasses
+        let attachment_refs = subpasses
             .into_iter()
             .map(|subpass| {
                 let subpass = subpass.borrow();
-                {
-                    fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
-                        vk::AttachmentReference {
-                            attachment: id as _,
-                            layout: conv::map_image_layout(layout),
-                        }
+                fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
+                    vk::AttachmentReference {
+                        attachment: id as _,
+                        layout: conv::map_image_layout(layout),
                     }
-                    let colors = subpass.colors.iter().map(make_ref).collect::<Vec<_>>();
-                    let depth_stencil = subpass.depth_stencil.map(make_ref);
-                    let inputs = subpass.inputs.iter().map(make_ref).collect::<Vec<_>>();
-                    let preserves = subpass
-                        .preserves
-                        .iter()
-                        .map(|&id| id as u32)
-                        .collect::<Vec<_>>();
-
-                    attachment_refs.push((colors, depth_stencil, inputs, preserves));
                 }
+                let colors = subpass.colors.iter().map(make_ref).collect::<Box<[_]>>();
+                let depth_stencil = subpass.depth_stencil.map(make_ref);
+                let inputs = subpass.inputs.iter().map(make_ref).collect::<Box<[_]>>();
+                let preserves = subpass
+                    .preserves
+                    .iter()
+                    .map(|&id| id as u32)
+                    .collect::<Box<[_]>>();
 
-                let &(
-                    ref color_attachments,
-                    ref depth_stencil,
-                    ref input_attachments,
-                    ref preserve_attachments,
-                ) = attachment_refs.last().unwrap();
+                (colors, depth_stencil, inputs, preserves)
+            })
+            .collect::<Box<[_]>>();
 
+        let subpasses = attachment_refs
+            .iter()
+            .map(|(colors, depth_stencil, inputs, preserves)| {
                 vk::SubpassDescription {
                     flags: vk::SubpassDescriptionFlags::empty(),
                     pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
-                    input_attachment_count: input_attachments.len() as u32,
-                    p_input_attachments: input_attachments.as_ptr(),
-                    color_attachment_count: color_attachments.len() as u32,
-                    p_color_attachments: color_attachments.as_ptr(),
+                    input_attachment_count: inputs.len() as u32,
+                    p_input_attachments: inputs.as_ptr(),
+                    color_attachment_count: colors.len() as u32,
+                    p_color_attachments: colors.as_ptr(),
                     p_resolve_attachments: ptr::null(), // TODO
-                    p_depth_stencil_attachment: match *depth_stencil {
+                    p_depth_stencil_attachment: match depth_stencil {
                         Some(ref aref) => aref as *const _,
                         None => ptr::null(),
                     },
-                    preserve_attachment_count: preserve_attachments.len() as u32,
-                    p_preserve_attachments: preserve_attachments.as_ptr(),
+                    preserve_attachment_count: preserves.len() as u32,
+                    p_preserve_attachments: preserves.as_ptr(),
                 }
             })
-            .collect::<Vec<_>>();
+            .collect::<Box<[_]>>();
 
         let dependencies = dependencies
             .into_iter()
