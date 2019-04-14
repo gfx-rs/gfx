@@ -136,7 +136,7 @@ impl Extent2D {
 }
 
 /// Describes information about what a `Surface`'s properties are.
-/// Fetch this with `surface.capabilities_and_formats(device)`.
+/// Fetch this with `surface.compatibility(device)`.
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SurfaceCapabilities {
