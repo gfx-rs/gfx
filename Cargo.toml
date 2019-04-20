@@ -25,7 +25,7 @@ name = "gfx_app"
 [dependencies]
 log = "0.4"
 env_logger = "0.6"
-glutin = "0.20"
+glutin = "0.21"
 winit = "0.19"
 gfx_core = { path = "src/core", version = "0.9" }
 gfx = { path = "src/render", version = "0.18" }

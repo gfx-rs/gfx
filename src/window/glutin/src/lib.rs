@@ -24,7 +24,7 @@ pub use headless::{init_headless, init_headless_raw};
 use core::{format, handle, texture};
 use core::memory::Typed;
 use device_gl::Resources as R;
-use glutin::{CreationError, ContextTrait};
+use glutin::{NotCurrent, PossiblyCurrent, CreationError};
 
 #[cfg(feature = "headless")]
 mod headless;
@@ -54,9 +54,9 @@ mod headless;
 /// }
 /// ```
 pub fn init<Cf, Df>(window: glutin::WindowBuilder,
-                    context: glutin::ContextBuilder,
+                    context: glutin::ContextBuilder<NotCurrent>,
                     events_loop: &glutin::EventsLoop) ->
-            Result<(glutin::WindowedContext, device_gl::Device, device_gl::Factory,
+            Result<(glutin::WindowedContext<PossiblyCurrent>, device_gl::Device, device_gl::Factory,
             handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>), CreationError>
 where
     Cf: format::RenderFormat,
@@ -92,23 +92,24 @@ where
 ///
 /// let mut encoder: gfx::Encoder<_, _> = factory.create_command_buffer().into();
 /// ```
-pub fn init_existing<Cf, Df>(window: &glutin::WindowedContext) ->
-            (device_gl::Device, device_gl::Factory,
+pub fn init_existing<Cf, Df>(window: glutin::WindowedContext<NotCurrent>) ->
+            (glutin::WindowedContext<PossiblyCurrent>, device_gl::Device, device_gl::Factory,
             handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>)
 where
     Cf: format::RenderFormat,
     Df: format::DepthFormat,
 {
-    let (device, factory, color_view, ds_view) = init_existing_raw(window, Cf::get_format(), Df::get_format());
-    (device, factory, Typed::new(color_view), Typed::new(ds_view))
+    let (window, device, factory, color_view, ds_view) = init_existing_raw(window, Cf::get_format(), Df::get_format());
+    (window, device, factory, Typed::new(color_view), Typed::new(ds_view))
 }
 
-fn get_window_dimensions(window: &glutin::WindowedContext) -> texture::Dimensions {
+fn get_window_dimensions(ctx: &glutin::WindowedContext<PossiblyCurrent>) -> texture::Dimensions {
+    let window = ctx.window();
     let (width, height) = {
         let size = window.get_inner_size().unwrap().to_physical(window.get_hidpi_factor());
         (size.width as _, size.height as _)
     };
-    let aa = window
+    let aa = ctx
         .get_pixel_format().multisampling
         .unwrap_or(0) as texture::NumSamples;
 
@@ -117,11 +118,11 @@ fn get_window_dimensions(window: &glutin::WindowedContext) -> texture::Dimension
 
 /// Initialize with a window builder. Raw version.
 pub fn init_raw(window: glutin::WindowBuilder,
-                mut context: glutin::ContextBuilder,
+                context: glutin::ContextBuilder<NotCurrent>,
                 events_loop: &glutin::EventsLoop,
                 color_format: format::Format,
                 ds_format: format::Format) ->
-                Result<(glutin::WindowedContext, device_gl::Device, device_gl::Factory,
+                Result<(glutin::WindowedContext<PossiblyCurrent>, device_gl::Device, device_gl::Factory,
                 handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>), CreationError>
 {
     let window = {
@@ -130,41 +131,46 @@ pub fn init_raw(window: glutin::WindowBuilder,
         let depth_total_bits = ds_format.0.get_total_bits();
         let stencil_bits = ds_format.0.get_alpha_stencil_bits();
 
-        context = context
+        context
             .with_depth_buffer(depth_total_bits - stencil_bits)
             .with_stencil_buffer(stencil_bits)
             .with_pixel_format(color_total_bits - alpha_bits, alpha_bits)
-            .with_srgb(color_format.1 == format::ChannelType::Srgb);
-
-        glutin::WindowedContext::new_windowed(window, context, &events_loop)?
+            .with_srgb(color_format.1 == format::ChannelType::Srgb)
+            .build_windowed(window, events_loop)?
     };
 
-    let (device, factory, color_view, ds_view) = init_existing_raw(&window, color_format, ds_format);
+    let (window, device, factory, color_view, ds_view) =
+        init_existing_raw(window, color_format, ds_format);
 
     Ok((window, device, factory, color_view, ds_view))
 }
 
 /// Initialize with an existing Glutin window. Raw version.
 pub fn init_existing_raw(
-    window: &glutin::WindowedContext,
+    window: glutin::WindowedContext<NotCurrent>,
     color_format: format::Format, ds_format: format::Format,
-) -> (device_gl::Device, device_gl::Factory,
-      handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)
+) -> (
+    glutin::WindowedContext<PossiblyCurrent>,
+    device_gl::Device,
+    device_gl::Factory,
+    handle::RawRenderTargetView<R>,
+    handle::RawDepthStencilView<R>,
+)
 {
-    unsafe { window.make_current().unwrap() };
+    let window = unsafe { window.make_current().unwrap() };
     let (device, factory) = device_gl::create(|s|
         window.get_proc_address(s) as *const std::os::raw::c_void);
 
     // create the main color/depth targets
-    let dim = get_window_dimensions(window);
+    let dim = get_window_dimensions(&window);
     let (color_view, ds_view) = device_gl::create_main_targets_raw(dim, color_format.0, ds_format.0);
 
     // done
-    (device, factory, color_view, ds_view)
+    (window, device, factory, color_view, ds_view)
 }
 
 /// Update the internal dimensions of the main framebuffer targets. Generic version over the format.
-pub fn update_views<Cf, Df>(window: &glutin::WindowedContext, color_view: &mut handle::RenderTargetView<R, Cf>,
+pub fn update_views<Cf, Df>(window: &glutin::WindowedContext<PossiblyCurrent>, color_view: &mut handle::RenderTargetView<R, Cf>,
                     ds_view: &mut handle::DepthStencilView<R, Df>)
 where
     Cf: format::RenderFormat,
@@ -179,7 +185,7 @@ where
 }
 
 /// Return new main target views if the window resolution has changed from the old dimensions.
-pub fn update_views_raw(window: &glutin::WindowedContext, old_dimensions: texture::Dimensions,
+pub fn update_views_raw(window: &glutin::WindowedContext<PossiblyCurrent>, old_dimensions: texture::Dimensions,
                         color_format: format::Format, ds_format: format::Format)
                         -> Option<(handle::RawRenderTargetView<R>, handle::RawDepthStencilView<R>)>
 {
@@ -193,7 +199,7 @@ pub fn update_views_raw(window: &glutin::WindowedContext, old_dimensions: textur
 
 /// Create new main target views based on the current size of the window.
 /// Best called just after a WindowResize event.
-pub fn new_views<Cf, Df>(window: &glutin::WindowedContext)
+pub fn new_views<Cf, Df>(window: &glutin::WindowedContext<PossiblyCurrent>)
         -> (handle::RenderTargetView<R, Cf>, handle::DepthStencilView<R, Df>) where
     Cf: format::RenderFormat,
     Df: format::DepthFormat,
