@@ -1075,7 +1075,7 @@ pub fn map_texture_usage(usage: image::Usage, tiling: image::Tiling) -> MTLTextu
     if usage.intersects(U::COLOR_ATTACHMENT | U::DEPTH_STENCIL_ATTACHMENT) {
         texture_usage |= MTLTextureUsage::RenderTarget;
     }
-    if usage.intersects(U::SAMPLED) {
+    if usage.intersects(U::SAMPLED | U::INPUT_ATTACHMENT) {
         texture_usage |= MTLTextureUsage::ShaderRead;
     }
     if usage.intersects(U::STORAGE) {
