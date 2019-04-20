@@ -1462,6 +1462,14 @@ impl hal::Device<Backend> for Device {
             .depth_stencil_states
             .prepare(&pipeline_desc.depth_stencil, &*device);
 
+        if let Some(multisampling) = &pipeline_desc.multisampling {
+            pipeline.set_sample_count(multisampling.rasterization_samples as u64);
+            pipeline.set_alpha_to_coverage_enabled(multisampling.alpha_coverage);
+            pipeline.set_alpha_to_one_enabled(multisampling.alpha_to_one);
+            // TODO: sample_mask
+            // TODO: sample_shading
+        }
+
         device
             .new_render_pipeline_state(&pipeline)
             .map(|raw| n::GraphicsPipeline {
