@@ -1037,7 +1037,8 @@ impl hal::Instance for Instance {
                     Features::MULTI_DRAW_INDIRECT |
                     Features::FORMAT_BC |
                     Features::INSTANCE_RATE |
-                    Features::SAMPLER_MIP_LOD_BIAS,
+                    Features::SAMPLER_MIP_LOD_BIAS |
+                    Features::SAMPLER_ANISOTROPY,
                 limits: Limits { // TODO
                     max_image_1d_size: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION as _,
                     max_image_2d_size: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
