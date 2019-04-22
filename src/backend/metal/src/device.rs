@@ -336,8 +336,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             // Can't create 2D/2DArray views of 3D textures
             return None;
         }
-        //TODO: actually query this data
-        let max_dimension = 4096u32;
+        let max_dimension = if dimensions == 3 {
+            self.shared.private_caps.max_texture_3d_size as _
+        } else {
+            self.shared.private_caps.max_texture_size as _
+        };
+
         let max_extent = image::Extent {
             width: max_dimension,
             height: if dimensions >= 2 { max_dimension } else { 1 },
@@ -351,7 +355,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 max_extent,
                 max_levels: if dimensions == 1 { 1 } else { 12 },
                 // 3D images enforce a single layer
-                max_layers: if dimensions == 3 { 1 } else { 2048 },
+                max_layers: if dimensions == 3 {
+                    1
+                } else {
+                    self.shared.private_caps.max_texture_layers as _
+                },
                 sample_count_mask: 0x1,
                 //TODO: buffers and textures have separate limits
                 // Max buffer size is determined by feature set
