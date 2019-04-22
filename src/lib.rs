@@ -204,10 +204,10 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
     let (window, mut device, mut factory, main_color, main_depth) =
         gfx_window_glutin::init::<ColorFormat, DepthFormat>(window, context, &events_loop)
 	    .expect("Failed to create window");
-    let mut current_size = window
+    let mut current_size = window.window()
         .get_inner_size()
         .unwrap()
-        .to_physical(window.get_hidpi_factor());
+        .to_physical(window.window().get_hidpi_factor());
     let shade_lang = device.get_info().shading_language;
 
     let backend = if shade_lang.is_embedded {
@@ -237,7 +237,7 @@ A: Sized + ApplicationBase<gfx_device_gl::Resources, gfx_device_gl::CommandBuffe
                         ..
                     } if key == A::get_exit_key() => running = false,
                     winit::WindowEvent::Resized(size) => {
-                        let physical = size.to_physical(window.get_hidpi_factor());
+                        let physical = size.to_physical(window.window().get_hidpi_factor());
                         if physical != current_size {
                             window.resize(physical);
                             current_size = physical;

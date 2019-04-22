@@ -106,7 +106,7 @@ pub fn main() {
                         ..
                     } => running = false,
                     WindowEvent::Resized(size) => {
-                        window.resize(size.to_physical(window.get_hidpi_factor()));
+                        window.resize(size.to_physical(window.window().get_hidpi_factor()));
                         gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
                         download = factory
                             .create_download_buffer(
