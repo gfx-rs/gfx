@@ -61,7 +61,7 @@ impl_channel_type! {
 }
 
 macro_rules! impl_formats {
-    { $($name:ident : $container:ident < $($channel:ident),* > = $data_type:ty {$alpha_bits:expr} [ $($imp_trait:ident),* ] ,)* } => {
+    { $($name:ident : $container:ident < $($channel:ident),* > = $data_type:ty {$alpha_bits:expr} [ $($imp_trait:ident),* ], doc = $doc:expr ,)* } => {
         /// Type of the allocated texture surface. It is supposed to only
         /// carry information about the number of bits per each channel.
         /// The actual types are up to the views to decide and interpret.
@@ -71,7 +71,7 @@ macro_rules! impl_formats {
         #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
         #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
         pub enum SurfaceType {
-            $( $name, )*
+            $( #[doc = $doc] $name, )*
         }
         impl SurfaceType {
             /// Return the total number of bits for this format.
@@ -92,6 +92,7 @@ macro_rules! impl_formats {
             #[allow(missing_docs, non_camel_case_types)]
             #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
             #[cfg_attr(feature="serialize", derive(Serialize, Deserialize))]
+            #[doc = $doc]
             pub enum $name {}
             impl SurfaceTyped for $name {
                 type DataType = $data_type;
@@ -115,43 +116,52 @@ macro_rules! impl_formats {
 
 
 impl_formats! {
-    R4_G4           : Vec2<Unorm> = u8 {0}  [TextureSurface, RenderSurface],
-    R4_G4_B4_A4     : Vec4<Unorm> = u16 {4} [TextureSurface, RenderSurface],
-    R5_G5_B5_A1     : Vec4<Unorm> = u16 {1} [TextureSurface, RenderSurface],
-    R5_G6_B5        : Vec3<Unorm> = u16 {0} [TextureSurface, RenderSurface],
+    R4_G4           : Vec2<Unorm> = u8 {0}  [TextureSurface, RenderSurface], doc = "",
+    R4_G4_B4_A4     : Vec4<Unorm> = u16 {4} [TextureSurface, RenderSurface], doc = "",
+    R5_G5_B5_A1     : Vec4<Unorm> = u16 {1} [TextureSurface, RenderSurface], doc = "",
+    R5_G6_B5        : Vec3<Unorm> = u16 {0} [TextureSurface, RenderSurface], doc = "",
     R8              : Vec1<Int, Uint, Inorm, Unorm> = u8 {0}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R8_G8           : Vec2<Int, Uint, Inorm, Unorm> = [u8; 2] {0}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R8_G8_B8_A8     : Vec4<Int, Uint, Inorm, Unorm, Srgb> = [u8; 4] {8}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R10_G10_B10_A2  : Vec4<Uint, Unorm> = u32 {2}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R11_G11_B10     : Vec4<Unorm, Float> = u32 {0}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R16             : Vec1<Int, Uint, Inorm, Unorm, Float> = u16 {0}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R16_G16         : Vec2<Int, Uint, Inorm, Unorm, Float> = [u16; 2] {0}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R16_G16_B16     : Vec3<Int, Uint, Inorm, Unorm, Float> = [u16; 3] {0}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R16_G16_B16_A16 : Vec4<Int, Uint, Inorm, Unorm, Float> = [u16; 4] {16}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R32             : Vec1<Int, Uint, Float> = u32 {0}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R32_G32         : Vec2<Int, Uint, Float> = [u32; 2] {0}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R32_G32_B32     : Vec3<Int, Uint, Float> = [u32; 3] {0}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     R32_G32_B32_A32 : Vec4<Int, Uint, Float> = [u32; 4] {32}
-        [BufferSurface, TextureSurface, RenderSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
     B8_G8_R8_A8     : Vec4<Unorm, Srgb> = [u8; 4] {32}
-        [BufferSurface, TextureSurface, RenderSurface],
-    D16             : Vec1<Unorm> = F16 {0} [TextureSurface, DepthSurface],
-    D24             : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface], //hacky stencil bits
-    D24_S8          : Vec1<Unorm, Uint> = u32 {8} [TextureSurface, DepthSurface, StencilSurface],
-    D32             : Vec1<Float> = f32 {0} [TextureSurface, DepthSurface],
+        [BufferSurface, TextureSurface, RenderSurface], doc = "",
+    D16             : Vec1<Unorm> = F16 {0} [TextureSurface, DepthSurface], doc = "",
+    D24             : Vec1<Unorm> = f32 {8} [TextureSurface, DepthSurface], doc = "", //hacky stencil bits
+    D24_S8          : Vec1<Unorm, Uint> = u32 {8} [TextureSurface, DepthSurface, StencilSurface], doc = "",
+    D32             : Vec1<Float> = f32 {0} [TextureSurface, DepthSurface], doc = "",
     //D32_S8          : Vec1<Unorm, Float, Uint> = (f32, u32) {32} [TextureSurface, DepthSurface, StencilSurface],
+
+    BC1_R8_G8_B8   : Vec4<Int, Uint, Inorm, Unorm, Srgb> = [u8; 3] {0} [TextureSurface],
+        doc = "Block Compression 1 also known as DXT1, S3TC. See \
+               [S3TC wiki](https://wikipedia.org/wiki/S3_Texture_Compression).\
+               \n\nCurrently supported in the gfx_device_gl backend only.",
+    BC3_R8_G8_B8_A8 : Vec4<Int, Uint, Inorm, Unorm, Srgb> = [u8; 4] {8} [TextureSurface],
+        doc = "Block Compression 3 also known as DXT5, S3TC. See \
+               [S3TC wiki](https://wikipedia.org/wiki/S3_Texture_Compression).\
+               \n\nCurrently supported in the gfx_device_gl backend only.",
 }
 
 

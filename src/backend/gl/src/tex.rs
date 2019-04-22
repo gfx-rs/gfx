@@ -64,9 +64,18 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
     match format.0 {
         S::R8 | S::R16 | S::R32=> r,
         S::R4_G4 | S::R8_G8 | S::R16_G16 | S::R32_G32 => rg,
-        S::R16_G16_B16 | S::R32_G32_B32 | S::R5_G6_B5 | S::R11_G11_B10 => rgb,
-        S::R8_G8_B8_A8 | S::R16_G16_B16_A16 | S::R32_G32_B32_A32 |
-        S::R4_G4_B4_A4 | S::R5_G5_B5_A1 | S::R10_G10_B10_A2 => rgba,
+        S::R16_G16_B16
+        | S::R32_G32_B32
+        | S::R5_G6_B5
+        | S::R11_G11_B10
+        | S::BC1_R8_G8_B8 => rgb,
+        S::R8_G8_B8_A8
+        | S::R16_G16_B16_A16
+        | S::R32_G32_B32_A32
+        | S::R4_G4_B4_A4
+        | S::R5_G5_B5_A1
+        | S::R10_G10_B10_A2
+        | S::BC3_R8_G8_B8_A8 => rgba,
         S::D24_S8 => gl::DEPTH_STENCIL,
         S::D16 | S::D24 | S::D32 => gl::DEPTH_COMPONENT,
         S::B8_G8_R8_A8 => bgra,
@@ -89,7 +98,12 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
         S::R4_G4_B4_A4 => gl::UNSIGNED_SHORT_4_4_4_4,
         S::R5_G5_B5_A1 => gl::UNSIGNED_SHORT_5_5_5_1,
         S::R5_G6_B5 => gl::UNSIGNED_SHORT_5_6_5,
-        S::B8_G8_R8_A8 | S::R8 | S::R8_G8 | S::R8_G8_B8_A8 => fm8,
+        S::B8_G8_R8_A8
+        | S::R8
+        | S::R8_G8
+        | S::R8_G8_B8_A8
+        | S::BC1_R8_G8_B8
+        | S::BC3_R8_G8_B8_A8 => fm8,
         S::R10_G10_B10_A2 => gl::UNSIGNED_INT_10_10_10_2,
         S::R11_G11_B10 => return Err(()),
         S::R16 | S::R16_G16 | S::R16_G16_B16 | S::R16_G16_B16_A16 => fm16,
@@ -142,6 +156,16 @@ pub fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
             C::Uint => gl::RGBA8UI,
             C::Unorm => gl::RGBA8,
             C::Srgb => gl::SRGB8_ALPHA8,
+            _ => return Err(()),
+        },
+        S::BC1_R8_G8_B8 => match cty {
+            C::Unorm => gl::COMPRESSED_RGB_S3TC_DXT1_EXT,
+            C::Srgb => gl::COMPRESSED_SRGB_S3TC_DXT1_EXT,
+            _ => return Err(()),
+        },
+        S::BC3_R8_G8_B8_A8 => match cty {
+            C::Unorm => gl::COMPRESSED_RGBA_S3TC_DXT5_EXT,
+            C::Srgb => gl::COMPRESSED_SRGB_ALPHA_S3TC_DXT5_EXT,
             _ => return Err(()),
         },
         // 10+ bits
@@ -597,6 +621,75 @@ pub fn bind_sampler(gl: &gl::Gl, target: GLenum, info: &t::SamplerInfo, private_
     }
 }}
 
+fn compressed_tex_sub_image<F>(
+    gl: &gl::Gl,
+    kind: t::Kind,
+    target: GLenum,
+    format: GLenum,
+    img: &t::ImageInfoCommon<F>,
+    data: &[u8],
+) -> Result<(), t::CreationError> {
+    let data_ptr = data.as_ptr() as *const GLvoid;
+
+    Ok(match kind {
+        t::Kind::D1(_) => unsafe {
+            gl.CompressedTexSubImage1D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.width as GLint,
+                format,
+                data.len() as _,
+                data_ptr,
+            );
+        },
+        t::Kind::D1Array(..) | t::Kind::D2(.., t::AaMode::Single) => unsafe {
+            gl.CompressedTexSubImage2D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.yoffset as GLint,
+                img.width as GLint,
+                img.height as GLint,
+                format,
+                data.len() as _,
+                data_ptr,
+            );
+        },
+        t::Kind::D2Array(.., t::AaMode::Single) | t::Kind::D3(..) => unsafe {
+            gl.CompressedTexSubImage3D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.yoffset as GLint,
+                img.zoffset as GLint,
+                img.width as GLint,
+                img.height as GLint,
+                img.depth as GLint,
+                format,
+                data.len() as _,
+                data_ptr,
+            );
+        },
+        t::Kind::Cube(_) => unsafe {
+            gl.CompressedTexSubImage2D(
+                target,
+                img.mipmap as GLint,
+                img.xoffset as GLint,
+                img.yoffset as GLint,
+                img.width as GLint,
+                img.height as GLint,
+                format,
+                data.len() as _,
+                data_ptr,
+            );
+        },
+        t::Kind::CubeArray(..) => return Err(t::CreationError::Kind),
+        t::Kind::D2(.., aa) => return Err(t::CreationError::Samples(aa)),
+        t::Kind::D2Array(.., aa) => return Err(t::CreationError::Samples(aa)),
+    })
+}
+
 fn tex_sub_image<F>(gl: &gl::Gl, kind: t::Kind, target: GLenum, pix: GLenum,
                        typ: GLenum, img: &t::ImageInfoCommon<F>, data: *const GLvoid)
                        -> Result<(), t::CreationError> {
@@ -831,6 +924,19 @@ pub fn update_texture(gl: &gl::Gl, dst: &t::TextureCopyRegion<Texture>, slice: &
     tex_sub_image(gl, dst.kind, target, pixel_format, data_type, &dst.info, data)
 }
 
+fn update_compressed_texture(gl: &gl::Gl, dst: &t::TextureCopyRegion<Texture>, slice: &[u8])
+                      -> Result<(), t::CreationError> {
+    let format = dst.info.format;
+    let gl_format = format_to_glfull(format)
+        .map_err(|_| t::CreationError::Format(format.0, Some(format.1)))?;
+
+    let target = kind_to_gl(dst.kind);
+    unsafe { gl.BindTexture(target, dst.texture) };
+
+    let target = kind_face_to_gl(dst.kind, dst.cube_face);
+    compressed_tex_sub_image(gl, dst.kind, target, gl_format, &dst.info, slice)
+}
+
 pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Info, channel: ChannelType,
                          data: (&[&[u8]], t::Mipmap)) -> Result<(), t::CreationError> {
     let opt_slices = desc.kind.get_num_slices();
@@ -869,7 +975,11 @@ pub fn init_texture_data(gl: &gl::Gl, name: Texture, desc: t::Info, channel: Cha
                     cube_face,
                     info,
                 };
-                try!(update_texture(gl, &dst, sub));
+                if desc.format.is_compressed() {
+                    update_compressed_texture(gl, &dst, sub)?
+                } else {
+                    update_texture(gl, &dst, sub)?
+                }
             }
         }
     }
@@ -1085,3 +1195,38 @@ pub fn generate_mipmap(gl: &gl::Gl, name: Texture, target: gl::types::GLenum) { 
     gl.BindTexture(target, name);
     gl.GenerateMipmap(target);
 }}
+
+trait CompressionAware {
+    fn is_compressed(&self) -> bool;
+}
+
+impl CompressionAware for core::format::SurfaceType {
+    fn is_compressed(&self) -> bool {
+        use core::format::SurfaceType as S;
+        match *self {
+            S::BC3_R8_G8_B8_A8 | S::BC1_R8_G8_B8 => true,
+            S::R4_G4
+            | S::R4_G4_B4_A4
+            | S::R5_G5_B5_A1
+            | S::R5_G6_B5
+            | S::B8_G8_R8_A8
+            | S::R8
+            | S::R8_G8
+            | S::R8_G8_B8_A8
+            | S::R10_G10_B10_A2
+            | S::R11_G11_B10
+            | S::R16
+            | S::R16_G16
+            | S::R16_G16_B16
+            | S::R16_G16_B16_A16
+            | S::R32
+            | S::R32_G32
+            | S::R32_G32_B32
+            | S::R32_G32_B32_A32
+            | S::D16
+            | S::D24
+            | S::D24_S8
+            | S::D32 => false,
+        }
+    }
+}

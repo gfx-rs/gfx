@@ -88,7 +88,7 @@ fn sdl2_pixel_format_from_gfx(format: Format) -> Option<PixelFormatEnum> {
         }
         R4_G4 | R8 | R8_G8 | R11_G11_B10 | R16 | R16_G16 | R16_G16_B16 |
         R16_G16_B16_A16 | R32 | R32_G32 | R32_G32_B32 | R32_G32_B32_A32 | D16 | D24 |
-        D24_S8 | D32 => None,
+        D24_S8 | D32 | BC1_R8_G8_B8 | BC3_R8_G8_B8_A8 => None,
     }
 }
 

@@ -217,7 +217,7 @@ pub fn map_format(format: Format, is_target: bool) -> Option<MTLPixelFormat> {
     use metal::MTLPixelFormat::*;
 
     Some(match format.0 {
-        R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 => return None,
+        R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 | BC1_R8_G8_B8| BC3_R8_G8_B8_A8 => return None,
         R8 => match format.1 {
             Int   => R8Sint,
             Uint  => R8Uint,
@@ -339,7 +339,8 @@ pub fn map_channel_hint(hint: SurfaceType) -> Option<ChannelType> {
     use core::format::ChannelType::*;
 
     Some(match hint {
-        R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 | R16_G16_B16 | R32_G32_B32 | D16 => {
+        R4_G4 | R4_G4_B4_A4 | R5_G5_B5_A1 | R5_G6_B5 | R16_G16_B16 | R32_G32_B32 | D16
+        | BC1_R8_G8_B8 | BC3_R8_G8_B8_A8 => {
             return None
         }
         R8 | R8_G8 | R8_G8_B8_A8 | R10_G10_B10_A2 | R16 | R16_G16 | R16_G16_B16_A16 | R32 |
