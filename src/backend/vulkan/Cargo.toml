@@ -26,7 +26,7 @@ shared_library = { version = "0.1.9", optional = true }
 ash = "0.28.0"
 gfx-hal = { path = "../../hal", version = "0.1" }
 smallvec = "0.6"
-winit = { version = "0.18", optional = true }
+winit = { version = "0.19", optional = true }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }

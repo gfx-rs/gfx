@@ -27,4 +27,4 @@ log = { version = "0.4" }
 smallvec = "0.6"
 spirv_cross = "0.12.1"
 winapi = { version = "0.3", features = ["basetsd","d3d12","d3d12sdklayers","d3d12shader","d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4","dxgi1_6","dxgidebug","dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
-winit = { version = "0.18", optional = true }
+winit = { version = "0.19", optional = true }

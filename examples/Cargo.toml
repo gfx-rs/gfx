@@ -30,7 +30,7 @@ path = "compute/main.rs"
 env_logger = "0.5"
 image = "0.19"
 log = "0.4"
-winit = "0.18"
+winit = "0.19"
 glsl-to-spirv = "0.1.4"
 gfx-hal = { path = "../src/hal", version = "0.1" }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.1" }
