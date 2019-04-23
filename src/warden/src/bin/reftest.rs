@@ -224,7 +224,7 @@ fn main() {
         use gfx_backend_gl::glutin;
         println!("Warding GL:");
         let events_loop = glutin::EventsLoop::new();
-        let window = glutin::GlWindow::new(
+        let window = glutin::WindowedContext::new_windowed(
             glutin::WindowBuilder::new(),
             glutin::ContextBuilder::new().with_gl_profile(glutin::GlProfile::Core),
             &events_loop,
@@ -239,7 +239,7 @@ fn main() {
         println!("Warding GL headless:");
         let events_loop = glutin::EventsLoop::new();
         let context =
-            glutin::Context::new(&events_loop, glutin::ContextBuilder::new(), false).unwrap();
+            glutin::Context::new_headless(&events_loop, glutin::ContextBuilder::new(), glutin::dpi::PhysicalSize::new(0.0, 0.0)).unwrap();
         let instance = gfx_backend_gl::Headless(context);
         num_failures += harness.run(instance, Disabilities::default());
     }
