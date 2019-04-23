@@ -36,7 +36,9 @@ matrix:
     # Windows 64bit
     - os: windows
       rust: stable
-
+      # caching on windows is slow, can cause failures:
+      # "No output has been received in the last 10m0s..."
+      cache: false
 
 branches:
   except:

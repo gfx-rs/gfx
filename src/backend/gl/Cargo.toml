@@ -29,5 +29,5 @@ name = "gfx_device_gl"
 
 [dependencies]
 log = "0.4"
-gfx_gl = "0.5"
+gfx_gl = "0.6"
 gfx_core = { path = "../../core", version = "0.9" }
