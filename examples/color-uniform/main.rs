@@ -359,7 +359,7 @@ impl<B: Backend> RendererState<B> {
         println!("\nInstructions:");
         println!("\tChoose whether to change the (R)ed, (G)reen or (B)lue color by pressing the appropriate key.");
         println!("\tType in the value you want to change it to, where 0 is nothing, 255 is normal and 510 is double, ect.");
-        println!("\tThen press C to change the (C)lear colour or (Enter) for the image color.");
+        println!("\tThen press C to change the (C)lear color or (Enter) for the image color.");
         println!(
             "\tSet {:?} color to: {} (press enter/C to confirm)",
             cur_color, cur_value
@@ -462,7 +462,7 @@ impl<B: Backend> RendererState<B> {
                                                 .update_data(0, &[r, g, b, a]);
                                             cur_value = 0;
 
-                                            println!("Colour updated!");
+                                            println!("Color updated!");
                                         }
                                         winit::VirtualKeyCode::C => {
                                             match cur_color {
@@ -1323,7 +1323,7 @@ impl<B: Backend> PipelineState<B> {
 
         let pipeline = {
             let vs_module = {
-                let glsl = fs::read_to_string("colour-uniform/data/quad.vert").unwrap();
+                let glsl = fs::read_to_string("color-uniform/data/quad.vert").unwrap();
                 let spirv: Vec<u8> =
                     glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
                         .unwrap()
@@ -1333,7 +1333,7 @@ impl<B: Backend> PipelineState<B> {
                 device.create_shader_module(&spirv).unwrap()
             };
             let fs_module = {
-                let glsl = fs::read_to_string("colour-uniform/data/quad.frag").unwrap();
+                let glsl = fs::read_to_string("color-uniform/data/quad.frag").unwrap();
                 let spirv: Vec<u8> =
                     glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
                         .unwrap()

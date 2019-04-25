@@ -15,8 +15,8 @@ vulkan = ["gfx-backend-vulkan"]
 unstable = []
 
 [[bin]]
-name = "colour-uniform"
-path = "colour-uniform/main.rs"
+name = "color-uniform"
+path = "color-uniform/main.rs"
 
 [[bin]]
 name = "quad"
