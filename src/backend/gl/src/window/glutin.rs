@@ -10,13 +10,13 @@
 //!
 //! fn main() {
 //!     use gfx_backend_gl::Surface;
-//!     use glutin::{EventsLoop, WindowBuilder, ContextBuilder, GlWindow};
+//!     use glutin::{EventsLoop, WindowBuilder, ContextBuilder, WindowedContext};
 //!
 //!     // First create a window using glutin.
 //!     let mut events_loop = EventsLoop::new();
 //!     let wb = WindowBuilder::new();
 //!     let cb = ContextBuilder::new().with_vsync(true);
-//!     let glutin_window = GlWindow::new(wb, cb, &events_loop).unwrap();
+//!     let glutin_window = WindowedContext::new_windowed(wb, cb, &events_loop).unwrap();
 //!
 //!     // Then use the glutin window to create a gfx surface.
 //!     let surface = Surface::from_window(glutin_window);
@@ -36,7 +36,7 @@
 //!
 //! fn main() {
 //!     let events_loop = EventsLoop::new();
-//!     let context = Context::new(&events_loop, ContextBuilder::new(), false)
+//!     let context = Context::new_headless(&events_loop, ContextBuilder::new(), glutin::dpi::PhysicalSize::new(0.0, 0.0))
 //!         .expect("Failed to build headless context");
 //!     let headless = Headless(context);
 //!     let _adapters = headless.enumerate_adapters();
@@ -54,9 +54,9 @@ use crate::{
     Backend as B, Device, PhysicalDevice, QueueFamily, Starc
 };
 
-use glutin::{self, GlContext};
+use glutin::{self, ContextTrait};
 
-fn get_window_extent(window: &glutin::GlWindow) -> image::Extent {
+fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
     let px = window
         .get_inner_size()
         .unwrap()
@@ -70,7 +70,7 @@ fn get_window_extent(window: &glutin::GlWindow) -> image::Extent {
 
 pub struct Swapchain {
     // Underlying window, required for presentation
-    pub(crate) window: Starc<glutin::GlWindow>,
+    pub(crate) window: Starc<glutin::WindowedContext>,
 }
 
 impl hal::Swapchain<B> for Swapchain {
@@ -85,25 +85,25 @@ impl hal::Swapchain<B> for Swapchain {
     }
 }
 
-//TODO: if we make `Surface` a `WindowBuilder` instead of `GlWindow`,
+//TODO: if we make `Surface` a `WindowBuilder` instead of `WindowedContext`,
 // we could spawn window + GL context when a swapchain is requested
 // and actually respect the swapchain configuration provided by the user.
 pub struct Surface {
-    window: Starc<glutin::GlWindow>,
+    window: Starc<glutin::WindowedContext>,
 }
 
 impl Surface {
-    pub fn from_window(window: glutin::GlWindow) -> Self {
+    pub fn from_window(window: glutin::WindowedContext) -> Self {
         Surface {
             window: Starc::new(window),
         }
     }
 
-    pub fn get_window(&self) -> &glutin::GlWindow {
+    pub fn get_window(&self) -> &glutin::WindowedContext {
         &*self.window
     }
 
-    pub fn window(&self) -> &glutin::GlWindow {
+    pub fn window(&self) -> &glutin::WindowedContext {
         &self.window
     }
 

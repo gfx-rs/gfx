@@ -26,7 +26,7 @@ arrayvec = "0.4"
 bitflags = "1.0"
 copyless = "0.1"
 log = { version = "0.4" }
-winit = { version = "0.18", optional = true }
+winit = { version = "0.19", optional = true }
 dispatch = { version = "0.1", optional = true }
 metal = { version = "0.14.0", features = ["private"] }
 foreign-types = "0.3"

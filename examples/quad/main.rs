@@ -101,7 +101,7 @@ fn main() {
             let builder =
                 back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
                     .with_vsync(true);
-            back::glutin::GlWindow::new(wb, builder, &events_loop).unwrap()
+            back::glutin::WindowedContext::new_windowed(wb, builder, &events_loop).unwrap()
         };
 
         let surface = back::Surface::from_window(window);

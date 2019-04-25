@@ -105,12 +105,12 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 
 trait SurfaceTrait {
     #[cfg(feature = "gl")]
-    fn get_window_t(&self) -> &back::glutin::GlWindow;
+    fn get_window_t(&self) -> &back::glutin::WindowedContext;
 }
 
 impl SurfaceTrait for <back::Backend as hal::Backend>::Surface {
     #[cfg(feature = "gl")]
-    fn get_window_t(&self) -> &back::glutin::GlWindow {
+    fn get_window_t(&self) -> &back::glutin::WindowedContext {
         self.get_window()
     }
 }
@@ -681,7 +681,7 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
         let builder =
             back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
                 .with_vsync(true);
-        back::glutin::GlWindow::new(
+        back::glutin::WindowedContext::new_windowed(
             window_state.wb.take().unwrap(),
             builder,
             &window_state.events_loop,
