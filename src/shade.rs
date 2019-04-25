@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Helpers for picking the correct shaders for the current backend.
 
 use std::error::Error;
 use std::fmt;
@@ -34,6 +35,7 @@ pub enum Backend {
     Vulkan,
 }
 
+/// Represents that a shader does not exist for a given backend.
 pub const EMPTY: &'static [u8] = &[];
 
 /// A type storing shader source for different graphics APIs and versions.

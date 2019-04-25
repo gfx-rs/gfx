@@ -392,6 +392,13 @@ impl f::Factory<R> for Factory {
         let mut inputs = [None; d::MAX_VERTEX_ATTRIBUTES];
         for i in 0 .. d::MAX_VERTEX_ATTRIBUTES {
             inputs[i] = desc.attributes[i].map(|at| BufferElement {
+                // Note: this `Option::unwrap` call fails the emscripten (sdk-1.38.16-64bit) build. Inlining the call seems to work around the issue. (See #2721)
+                #[cfg(target_os = "emscripten")]
+                desc: match desc.vertex_buffers[at.0 as usize] {
+                    Some(val) => val,
+                    None => panic!("called `Option::unwrap()` on a `None` value"),
+                },
+                #[cfg(not(target_os = "emscripten"))]
                 desc: desc.vertex_buffers[at.0 as usize].unwrap(),
                 elem: at.1,
             });

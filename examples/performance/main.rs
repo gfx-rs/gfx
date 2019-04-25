@@ -33,7 +33,6 @@ use std::ffi::CString;
 use std::time::{Duration, Instant};
 use gfx_device_gl::{Resources as R, CommandBuffer as CB};
 use gfx_core::Device;
-use glutin::ContextTrait;
 
 gfx_defines!{
     vertex Vertex {
@@ -90,11 +89,9 @@ trait Renderer: Drop {
     fn window(&mut self) -> &glutin::Window;
 }
 
-
-
 struct GFX {
     dimension: i16,
-    window: glutin::WindowedContext,
+    window: glutin::WindowedContext<glutin::PossiblyCurrent>,
     device:gfx_device_gl::Device,
     encoder: gfx::Encoder<R,CB>,
     data: pipe::Data<R>,
@@ -104,7 +101,7 @@ struct GFX {
 
 struct GL {
     dimension: i16,
-    window: glutin::WindowedContext,
+    window: glutin::WindowedContext<glutin::PossiblyCurrent>,
     gl:Gl,
     trans_uniform:GLint,
     vs:GLuint,
@@ -117,7 +114,7 @@ struct GL {
 
 impl GFX {
     fn new(window: glutin::WindowBuilder,
-           context: glutin::ContextBuilder,
+           context: glutin::ContextBuilder<glutin::NotCurrent>,
            events_loop: &glutin::EventsLoop,
            dimension: i16) -> Self {
         use gfx::traits::FactoryExt;
@@ -179,7 +176,7 @@ impl Renderer for GFX {
         println!("\tsubmit:\t\t{0:4.2}ms", duration_to_ms(post_submit - pre_submit));
         println!("\tgpu wait:\t{0:4.2}ms", duration_to_ms(swap - post_submit));
     }
-    fn window(&mut self) -> &glutin::Window { &self.window }
+    fn window(&mut self) -> &glutin::Window { &self.window.window() }
 }
 
 impl Drop for GFX {
@@ -191,7 +188,7 @@ impl Drop for GFX {
 
 impl GL {
     fn new(builder: glutin::WindowBuilder,
-           context: glutin::ContextBuilder,
+           context: glutin::ContextBuilder<glutin::NotCurrent>,
            events_loop: &glutin::EventsLoop,
            dimension: i16) -> Self {
         fn compile_shader (gl:&Gl, src: &[u8], ty: GLenum) -> GLuint {
@@ -221,8 +218,8 @@ impl GL {
             }
         };
 
-        let window = glutin::WindowedContext::new_windowed(builder, context, &events_loop).unwrap();
-        unsafe { window.make_current().unwrap() };
+        let window = context.build_windowed(builder, &events_loop).unwrap();
+        let window = unsafe { window.make_current().unwrap() };
         let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
 
         // Create GLSL shaders
@@ -341,7 +338,7 @@ impl Renderer for GL {
         println!("\tsubmit:\t\t{0:4.2}ms", duration_to_ms(submit));
         println!("\tgpu wait:\t{0:4.2}ms", duration_to_ms(swap - submit));
     }
-    fn window(&mut self) -> &glutin::Window { &self.window }
+    fn window(&mut self) -> &glutin::Window { &self.window.window() }
 }
 
 impl Drop for GL {

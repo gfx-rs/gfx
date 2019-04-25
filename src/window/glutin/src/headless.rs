@@ -15,7 +15,7 @@
 use std::os::raw::c_void;
 
 use device_gl::{Device, Factory, Resources as Res, create as gl_create, create_main_targets_raw};
-use glutin::{ContextTrait, Context};
+use glutin::{NotCurrent, PossiblyCurrent, Context};
 
 use core::format::{Format, DepthFormat, RenderFormat};
 use core::handle::{DepthStencilView, RawDepthStencilView, RawRenderTargetView, RenderTargetView};
@@ -30,7 +30,7 @@ use core::texture::Dimensions;
 ///
 /// # Example
 ///
-/// ```rust
+/// ```
 /// extern crate gfx_core;
 /// extern crate gfx_window_glutin;
 /// extern crate glutin;
@@ -44,44 +44,43 @@ use core::texture::Dimensions;
 /// let dim = (256, 256, 8, AaMode::Multi(4));
 ///
 /// let events_loop = EventsLoop::new();
-/// let context_builder = ContextBuilder::new()
-///     .with_hardware_acceleration(Some(false));
-/// let context = Context::new_headless(&events_loop, context_builder, (256, 256).into())
+/// let context = ContextBuilder::new()
+///     .with_hardware_acceleration(Some(false))
+///     .build_headless(&events_loop, (256, 256).into())
 ///     .expect("Failed to build headless context");
 ///
-/// let (mut device, _, _, _) = init_headless::<Rgba8, DepthStencil>(&context, dim);
+/// let (context, device, factory, color, depth) = init_headless::<Rgba8, DepthStencil>(context, dim);
 /// # }
 /// ```
-pub fn init_headless<Cf, Df>(context: &Context, dim: Dimensions)
-                             -> (Device, Factory,
+pub fn init_headless<Cf, Df>(context: Context<NotCurrent>, dim: Dimensions)
+                             -> (Context<PossiblyCurrent>, Device, Factory,
                                  RenderTargetView<Res, Cf>, DepthStencilView<Res, Df>)
     where
         Cf: RenderFormat,
         Df: DepthFormat,
 {
-    let (device, factory, color_view, ds_view) = init_headless_raw(context, dim,
+    let (ctx, device, factory, color_view, ds_view) = init_headless_raw(context, dim,
                                                                    Cf::get_format(),
                                                                    Df::get_format());
-    (device, factory, Typed::new(color_view), Typed::new(ds_view))
+    (ctx, device, factory, Typed::new(color_view), Typed::new(ds_view))
 }
 
 /// Raw version of [`init_headless`].
 ///
 /// [`init_headless`]: fn.init_headless.html
-pub fn init_headless_raw(context: &Context, dim: Dimensions, color: Format, depth: Format)
-                         -> (Device, Factory,
+pub fn init_headless_raw(context: Context<NotCurrent>, dim: Dimensions, color: Format, depth: Format)
+                         -> (Context<PossiblyCurrent>, Device, Factory,
                              RawRenderTargetView<Res>, RawDepthStencilView<Res>)
 {
-    unsafe { context.make_current().unwrap() };
+    let context = unsafe { context.make_current().unwrap() };
 
-    let (device, factory) = gl_create(|s|
-        context.get_proc_address(s) as *const c_void);
+    let (device, factory) = gl_create(|s| context.get_proc_address(s) as *const c_void);
 
     // create the main color/depth targets
     let (color_view, ds_view) = create_main_targets_raw(dim, color.0, depth.0);
 
     // done
-    (device, factory, color_view, ds_view)
+    (context, device, factory, color_view, ds_view)
 }
 
 #[cfg(test)]
@@ -99,12 +98,12 @@ mod tests {
         let dim = (256, 256, 8, AaMode::Multi(4));
 
         let events_loop = EventsLoop::new();
-        let context_builder = ContextBuilder::new()
-            .with_hardware_acceleration(Some(false));
-        let context = Context::new_headless(&events_loop, context_builder, (256, 256).into())
+        let context = ContextBuilder::new()
+            .with_hardware_acceleration(Some(false))
+            .build_headless(&events_loop, (dim.0 as u32, dim.1 as u32).into())
             .expect("Failed to build headless context");
 
-        let (mut device, _, _, _) = init_headless::<Rgba8, DepthStencil>(&context, dim);
+        let (_, mut device, _, _, _) = init_headless::<Rgba8, DepthStencil>(context, dim);
 
         device.cleanup();
     }

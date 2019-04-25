@@ -19,24 +19,26 @@ matrix:
     - env: MACOSX_DEPLOYMENT_TARGET=10.9
       os: osx
       rust: stable
-      osx_image: xcode9
+      osx_image: xcode9.4
       compiler: clang
     - env: MACOSX_DEPLOYMENT_TARGET=10.9
       os: osx
       rust: nightly
-      osx_image: xcode9
+      osx_image: xcode9.4
       compiler: clang
 
     # iPhoneOS 64bit
     - env: TARGET=aarch64-apple-ios
       os: osx
-      osx_image: xcode9
+      osx_image: xcode9.4
       rust: nightly
 
     # Windows 64bit
     - os: windows
       rust: stable
-
+      # caching on windows is slow, can cause failures:
+      # "No output has been received in the last 10m0s..."
+      cache: false
 
 branches:
   except:

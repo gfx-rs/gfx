@@ -1,7 +1,7 @@
 [package]
 name = "gfx_app"
 version = "0.9.0"
-description = "GFX example application framework"
+description = "Cross platform GFX example application framework"
 homepage = "https://github.com/gfx-rs/gfx"
 keywords = ["graphics", "gamedev"]
 license = "Apache-2.0"
@@ -25,13 +25,13 @@ name = "gfx_app"
 [dependencies]
 log = "0.4"
 env_logger = "0.6"
-glutin = "0.20"
+glutin = "0.21"
 winit = "0.19"
-gfx_core = { path = "src/core", version = "0.9" }
+gfx_core = { path = "src/core", version = "0.9.1" }
 gfx = { path = "src/render", version = "0.18" }
 gfx_macros = { path = "src/macros", version = "0.2" }
-gfx_device_gl = { path = "src/backend/gl", version = "0.16" }
-gfx_window_glutin = { path = "src/window/glutin", version = "0.30" }
+gfx_device_gl = { path = "src/backend/gl", version = "0.16.1" }
+gfx_window_glutin = { path = "src/window/glutin", version = "0.31" }
 gfx_window_glfw = { path = "src/window/glfw", version = "0.17", optional = true }
 gfx_window_sdl = { path = "src/window/sdl", version = "0.9", optional = true }
 
@@ -125,7 +125,7 @@ path = "examples/render_target/main.rs"
 
 [dev-dependencies]
 cgmath = "0.17"
-gfx_gl = "0.5"
+gfx_gl = "0.6"
 rand = "0.5"
 genmesh = "0.5"
 noise = "0.2" #TODO: update
