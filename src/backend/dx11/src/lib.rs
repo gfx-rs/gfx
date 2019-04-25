@@ -26,6 +26,7 @@ pub use self::command::CommandBuffer;
 pub use self::data::map_format;
 pub use self::factory::Factory;
 
+mod debug;
 mod command;
 mod data;
 mod execute;
@@ -172,6 +173,7 @@ pub struct Device {
     share: Arc<Share>,
     frame_handles: h::Manager<Resources>,
     max_resource_count: Option<usize>,
+    infoqueue: Option<debug::InfoQueue>,
 }
 
 impl Drop for Device {
@@ -189,7 +191,7 @@ static FEATURE_LEVELS: [d3dcommon::D3D_FEATURE_LEVEL; 3] = [
 pub fn create(driver_type: d3dcommon::D3D_DRIVER_TYPE, desc: &dxgi::DXGI_SWAP_CHAIN_DESC)
               -> Result<(Device, Factory, *mut dxgi::IDXGISwapChain), winerror::HRESULT> {
     let mut swap_chain = ptr::null_mut();
-    let create_flags = 0; //D3D11_CREATE_DEVICE_DEBUG;
+    let create_flags = debug::add_debug_flag_if_needed(0);
     let mut device = ptr::null_mut();
     let mut context = ptr::null_mut();
     let mut feature_level = d3dcommon::D3D_FEATURE_LEVEL_10_0;
@@ -243,6 +245,7 @@ pub fn create_from_existing(device: *mut winapi::um::d3d11::ID3D11Device, contex
         share: Arc::new(share),
         frame_handles: h::Manager::new(),
         max_resource_count: None,
+        infoqueue: debug::InfoQueue::try_create(device),
     };
     let factory = Factory::new(device, dev.share.clone());
 
@@ -425,6 +428,10 @@ impl core::Device for Device {
             |_, v| unsafe { (*v.0).Release(); }, //sampler
             |_, _fence| {},
         );
+
+        if let Some(ref infoqueue) = self.infoqueue {
+            infoqueue.flush_messages();
+        }
     }
 }
 
