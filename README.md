@@ -22,12 +22,12 @@
 
 **PLEASE BE AWARE: this is home to the gfx-hal crate/API. The Old gfx Crate Is Now Deprecated.**
 
-gfx-rs is a low-level, cross-platform graphics abstraction library in Rust. It consists of the following components:
+gfx-rs is a low-level, cross-platform graphics and compute abstraction library in Rust. It consists of the following components:
 
 * `gfx-hal` which is gfx's hardware abstraction layer: a Vulkan-ic mostly unsafe API which translates to native graphics backends.
 * `gfx-backend-*` which contains graphics backends for various platforms:
   * [Vulkan](src/backend/vulkan) (confirmed to run on Linux and Windows)
-  * [DirectX 12](src/backend/dx12) and [11](src/backend/dx11)
+  * [DirectX 12](src/backend/dx12) and [DirectX 11](src/backend/dx11)
   * [Metal](src/backend/metal) (confirmed to run on macOS and iOS)
   * [OpenGL 2.1+/ES2+](src/backend/gl)
 * `gfx-warden` which is a data-driven reference test framework, used to verify consistency across all graphics backends.
@@ -63,7 +63,7 @@ These examples assume that necessary dependencies for the graphics backend are a
 
 ## Hardware Abstraction Layer
 
-The Hardware Abstraction Layer (HAL), is a thin, low-level graphics layer which translates API calls to various graphics backends, which allows for cross-platform support. The API of this layer is based on the Vulkan API, adapted to be more Rust-friendly.
+The Hardware Abstraction Layer (HAL), is a thin, low-level graphics and compute layer which translates API calls to various backends, which allows for cross-platform support. The API of this layer is based on the Vulkan API, adapted to be more Rust-friendly.
 
 <p align="center"><img src="info/hal.svg" alt="Hardware Abstraction Layer (HAL)" /></p>
 
