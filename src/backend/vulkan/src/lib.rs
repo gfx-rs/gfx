@@ -5,6 +5,8 @@ extern crate log;
 #[macro_use]
 extern crate ash;
 extern crate byteorder;
+#[macro_use]
+extern crate derivative;
 extern crate gfx_hal as hal;
 #[macro_use]
 extern crate lazy_static;
@@ -96,6 +98,7 @@ pub struct RawInstance(
     pub ash::Instance,
     Option<(ext::DebugUtils, vk::DebugUtilsMessengerEXT)>,
 );
+
 impl Drop for RawInstance {
     fn drop(&mut self) {
         unsafe {
@@ -111,7 +114,10 @@ impl Drop for RawInstance {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Instance {
+    #[derivative(Debug = "ignore")]
     pub raw: Arc<RawInstance>,
 
     /// Supported extensions of this instance.
@@ -178,13 +184,13 @@ unsafe fn display_debug_utils_object_name_info_ext(
 
                 match object_name {
                     Some(name) => format!(
-                        "(type: {}, hndl: {}, name: {})",
+                        "(type: {:?}, hndl: {}, name: {})",
                         obj_info.object_type,
                         &obj_info.object_handle.to_string(),
                         name
                     ),
                     None => format!(
-                        "(type: {}, hndl: {})",
+                        "(type: {:?}, hndl: {})",
                         obj_info.object_type,
                         &obj_info.object_handle.to_string()
                     ),
@@ -210,7 +216,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Trace,
         _ => log::Level::Warn,
     };
-    let message_type = &format!("{}", message_type);
+    let message_type = &format!("{:?}", message_type);
     let message_id_number: i32 = callback_data.message_id_number as i32;
 
     let message_id_name = if callback_data.p_message_id_name.is_null() {
@@ -462,7 +468,10 @@ impl hal::queue::QueueFamily for QueueFamily {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct PhysicalDevice {
+    #[derivative(Debug = "ignore")]
     instance: Arc<RawInstance>,
     handle: vk::PhysicalDevice,
     properties: vk::PhysicalDeviceProperties,
@@ -890,9 +899,12 @@ impl Drop for RawDevice {
 // Need to explicitly synchronize on submission and present.
 pub type RawCommandQueue = Arc<vk::Queue>;
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct CommandQueue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
+    #[derivative(Debug = "ignore")]
     swapchain_fn: vk::KhrSwapchainFn,
 }
 
@@ -1002,6 +1014,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 }
 
+#[derive(Debug)]
 pub struct Device {
     raw: Arc<RawDevice>,
 }

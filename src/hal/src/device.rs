@@ -14,7 +14,7 @@
 use std::any::Any;
 use std::borrow::Borrow;
 use std::ops::Range;
-use std::{iter, mem, slice};
+use std::{fmt, iter, mem, slice};
 
 use crate::{buffer, format, image, mapping, pass, pso, query};
 use crate::{Backend, MemoryTypeId};
@@ -172,7 +172,7 @@ impl From<OutOfMemory> for ShaderError {
 /// are not enforced at the HAL level due to OpenGL constraint (to be revised). Users can still
 /// benefit from the backends that support synchronization of the `Device`.
 ///
-pub trait Device<B: Backend>: Any + Send + Sync {
+pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Allocates a memory segment of a specified type.
     ///
     /// There is only a limited amount of allocations allowed depending on the implementation!

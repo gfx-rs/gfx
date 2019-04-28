@@ -138,7 +138,7 @@ impl VisibilityShared {
     }
 }
 
-//#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
     memory_types: Vec<hal::MemoryType>,
@@ -182,6 +182,7 @@ impl MemoryTypes {
     }
 }
 
+#[derive(Debug)]
 pub struct PhysicalDevice {
     pub(crate) shared: Arc<Shared>,
     memory_types: Vec<hal::MemoryType>,

@@ -76,7 +76,7 @@ const COPY_THREAD_GROUP_Y: u32 = 8;
 // TODO: make struct fields more modular and group them up in structs depending on if it is a
 //       fallback version or not (eg. Option<PartialClear>), should make struct definition and
 //       `new` function smaller
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Internal {
     // partial clearing
     vs_partial_clear: ComPtr<d3d11::ID3D11VertexShader>,

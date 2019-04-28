@@ -42,6 +42,7 @@ use std::{mem, ptr};
 
 use native::descriptor;
 
+#[derive(Debug)]
 pub(crate) struct HeapProperties {
     pub page_property: d3d12::D3D12_CPU_PAGE_PROPERTY,
     pub memory_pool: d3d12::D3D12_MEMORY_POOL,
@@ -178,10 +179,14 @@ static QUEUE_FAMILIES: [QueueFamily; 4] = [
     QueueFamily::Normal(QueueType::Transfer),
 ];
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct PhysicalDevice {
+    #[derivative(Debug = "ignore")]
     adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
     features: Features,
     limits: Limits,
+    #[derivative(Debug = "ignore")]
     format_properties: Arc<FormatProperties>,
     private_caps: Capabilities,
     heap_properties: &'static [HeapProperties; NUM_HEAP_PROPERTIES],
@@ -402,10 +407,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Derivative)]
+#[derivative(Debug)]
 pub struct CommandQueue {
     pub(crate) raw: native::CommandQueue,
     idle_fence: native::Fence,
+    #[derivative(Debug = "ignore")]
     idle_event: native::sync::Event,
 }
 
@@ -498,7 +505,7 @@ pub struct Capabilities {
     memory_architecture: MemoryArchitecture,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct CmdSignatures {
     draw: native::CommandSignature,
     draw_indexed: native::CommandSignature,
@@ -514,6 +521,7 @@ impl CmdSignatures {
 }
 
 // Shared objects between command buffers, owned by the device.
+#[derive(Debug)]
 struct Shared {
     pub signatures: CmdSignatures,
     pub service_pipes: internal::ServicePipes,
@@ -526,6 +534,8 @@ impl Shared {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Device {
     raw: native::Device,
     private_caps: Capabilities,
@@ -540,7 +550,9 @@ pub struct Device {
     // CPU/GPU descriptor heaps
     heap_srv_cbv_uav: Mutex<resource::DescriptorHeap>,
     heap_sampler: Mutex<resource::DescriptorHeap>,
+    #[derivative(Debug = "ignore")]
     events: Mutex<Vec<native::Event>>,
+    #[derivative(Debug = "ignore")]
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
     // Required for swapchain creation. Only a single queue supports presentation.
@@ -1157,6 +1169,7 @@ fn validate_line_width(width: f32) {
     assert_eq!(width, 1.0);
 }
 
+#[derive(Debug)]
 pub struct FormatProperties(
     Box<[Mutex<Option<f::Properties>>]>,
     native::Device,

@@ -53,16 +53,19 @@ fn up_align(x: u32, alignment: u32) -> u32 {
     (x + alignment - 1) & !(alignment - 1)
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct AttachmentClear {
     subpass_id: Option<pass::SubpassId>,
     value: Option<com::ClearValueRaw>,
     stencil_value: Option<u32>,
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct RenderPassCache {
     render_pass: r::RenderPass,
     framebuffer: r::Framebuffer,
+    #[derivative(Debug = "ignore")]
     target_rect: d3d12::D3D12_RECT,
     attachment_clears: Vec<AttachmentClear>,
 }
@@ -92,6 +95,15 @@ enum RootElement {
 struct UserData {
     data: [RootElement; ROOT_SIGNATURE_SIZE],
     dirty_mask: u64,
+}
+
+impl std::fmt::Debug for UserData {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        fmt.debug_struct("UserData")
+            .field("data", &&self.data[..])
+            .field("dirty_mask", &self.dirty_mask)
+            .finish()
+    }
 }
 
 impl UserData {
@@ -139,6 +151,7 @@ impl UserData {
     }
 }
 
+#[derive(Debug)]
 struct PipelineCache {
     // Bound pipeline and root signature.
     // Changed on bind pipeline calls.
@@ -254,7 +267,7 @@ enum BindPoint {
     },
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Copy {
     footprint_offset: u64,
     footprint: image::Extent,
@@ -265,6 +278,8 @@ struct Copy {
     copy_extent: image::Extent,
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct CommandBuffer {
     raw: native::GraphicsCommandList,
     allocator: native::CommandAllocator,
@@ -301,6 +316,8 @@ pub struct CommandBuffer {
     // `Stride` values are not known at `bind_vertex_buffers` time because they are only stored
     // inside the pipeline state.
     vertex_bindings_remap: [Option<r::VertexBinding>; MAX_VERTEX_BUFFERS],
+    
+    #[derivative(Debug = "ignore")]
     vertex_buffer_views: [d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
 
     // Re-using allocation for the image-buffer copies.
@@ -308,10 +325,12 @@ pub struct CommandBuffer {
 
     // D3D12 only allows setting all viewports or all scissors at once, not partial updates.
     // So we must cache the implied state for these partial updates.
+    #[derivative(Debug = "ignore")]
     viewport_cache: SmallVec<
         [d3d12::D3D12_VIEWPORT;
             d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize],
     >,
+    #[derivative(Debug = "ignore")]
     scissor_cache: SmallVec<
         [d3d12::D3D12_RECT;
             d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize],

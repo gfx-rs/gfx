@@ -84,6 +84,7 @@ impl hal::QueueFamily for QueueFamily {
     }
 }
 
+#[derive(Debug)]
 struct VisibilityShared {
     /// Availability buffer is in shared memory, it has N double words for
     /// query results followed by N words for the availability.
@@ -93,6 +94,7 @@ struct VisibilityShared {
     condvar: Condvar,
 }
 
+#[derive(Debug)]
 struct Shared {
     device: Mutex<metal::Device>,
     queue: Mutex<command::QueueInner>,

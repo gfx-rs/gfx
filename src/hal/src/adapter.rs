@@ -7,6 +7,7 @@
 //! that has the properties specified.
 
 use std::any::Any;
+use std::fmt;
 
 use crate::error::DeviceCreationError;
 use crate::queue::{Capability, QueueGroup};
@@ -50,7 +51,7 @@ pub struct MemoryProperties {
 }
 
 /// Represents a physical device (such as a GPU) capable of supporting the given backend.
-pub trait PhysicalDevice<B: Backend>: Any + Send + Sync {
+pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Create a new logical device with the requested features. If `requested_features` is
     /// empty (e.g. through `Features::empty()`) then only the core features are supported.
     ///

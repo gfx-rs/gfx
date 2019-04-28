@@ -21,6 +21,7 @@ pub type ArrayBuffer = gl::types::GLuint;
 //
 // This allows us to minimize additional driver calls to
 // ensure that command buffers are handled isolated of each other.
+#[derive(Debug)]
 struct State {
     // Indicate if the vertex array object is bound.
     // If VAOs are not supported, this will be also set to true.
@@ -57,6 +58,7 @@ impl State {
     }
 }
 
+#[derive(Debug)]
 pub struct CommandQueue {
     pub(crate) share: Starc<Share>,
     vao: ArrayBuffer,

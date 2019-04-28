@@ -27,8 +27,8 @@ name = "compute"
 path = "compute/main.rs"
 
 [dependencies]
-env_logger = "0.5"
-image = "0.19"
+env_logger = "0.6"
+image = "0.21"
 log = "0.4"
 winit = "0.19"
 glsl-to-spirv = "0.1.4"

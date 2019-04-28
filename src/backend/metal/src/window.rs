@@ -32,6 +32,7 @@ pub type CAMetalLayer = *mut Object;
 /// This is a random ID to be used for signposts associated with swapchain events.
 const SIGNPOST_ID: u32 = 0x100;
 
+#[derive(Debug)]
 pub struct Surface {
     inner: Arc<SurfaceInner>,
     main_thread_id: thread::ThreadId,
@@ -195,6 +196,7 @@ pub enum AcquireMode {
     Oldest,
 }
 
+#[derive(Debug)]
 pub struct Swapchain {
     frames: Arc<Vec<Frame>>,
     surface: Arc<SurfaceInner>,

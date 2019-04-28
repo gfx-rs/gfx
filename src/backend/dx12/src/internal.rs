@@ -11,7 +11,7 @@ use winapi::Interface;
 
 use native::{self, descriptor, pso};
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BlitPipe {
     pub pipeline: native::PipelineState,
     pub signature: native::RootSignature,
@@ -26,6 +26,7 @@ impl BlitPipe {
 
 // Information to pass to the shader
 #[repr(C)]
+#[derive(Debug)]
 pub struct BlitData {
     pub src_offset: [f32; 2],
     pub src_extent: [f32; 2],
@@ -36,6 +37,7 @@ pub struct BlitData {
 pub type BlitKey = (dxgiformat::DXGI_FORMAT, d3d12::D3D12_FILTER);
 type BlitMap = FastHashMap<BlitKey, BlitPipe>;
 
+#[derive(Debug)]
 pub(crate) struct ServicePipes {
     pub(crate) device: native::Device,
     blits_2d_color: Mutex<BlitMap>,
