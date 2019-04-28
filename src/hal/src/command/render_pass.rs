@@ -265,11 +265,13 @@ impl<'a, B: Backend> RenderPassInlineEncoder<'a, B> {
     }
 
     /// Begins recording a new subpass with secondary buffers.
-    pub fn next_subpass_secondary(self) -> RenderPassSecondaryEncoder<'a, B> {
+    pub fn next_subpass_secondary(mut self) -> RenderPassSecondaryEncoder<'a, B> {
         unsafe {
             self.0.cmb.next_subpass(SubpassContents::SecondaryBuffers);
+            let cmb = std::ptr::read(&mut self.0.cmb);
+            std::mem::forget(self); // Prevent `end_render_pass`
+            RenderPassSecondaryEncoder(cmb)
         }
-        RenderPassSecondaryEncoder(self.0.cmb)
     }
 }
 
@@ -341,10 +343,12 @@ impl<'a, B: Backend> RenderPassSecondaryEncoder<'a, B> {
     }
 
     /// Starts a new subpass with inline commands.
-    pub fn next_subpass_inline(self) -> RenderPassInlineEncoder<'a, B> {
+    pub fn next_subpass_inline(mut self) -> RenderPassInlineEncoder<'a, B> {
         unsafe {
             self.0.next_subpass(SubpassContents::Inline);
-            RenderPassInlineEncoder(RenderSubpassCommon::new(self.0))
+            let cmb = std::ptr::read(&mut self.0);
+            std::mem::forget(self); // Prevent `end_render_pass`
+            RenderPassInlineEncoder(RenderSubpassCommon::new(cmb))
         }
     }
 
