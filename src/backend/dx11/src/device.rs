@@ -39,8 +39,12 @@ struct InputLayout {
     vertex_strides: Vec<u32>,
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Device {
+    #[derivative(Debug = "ignore")]
     raw: ComPtr<d3d11::ID3D11Device>,
+    #[derivative(Debug = "ignore")]
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     memory_properties: hal::MemoryProperties,
     memory_heap_flags: [MemoryHeapFlags; 3],

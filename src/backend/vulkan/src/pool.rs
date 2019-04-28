@@ -9,6 +9,7 @@ use conv;
 use hal::{command, pool};
 use {Backend, RawDevice};
 
+#[derive(Debug)]
 pub struct RawCommandPool {
     pub(crate) raw: vk::CommandPool,
     pub(crate) device: Arc<RawDevice>,

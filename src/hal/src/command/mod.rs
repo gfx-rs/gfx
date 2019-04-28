@@ -71,6 +71,7 @@ pub type SecondaryCommandBuffer<B, C, S = OneShot> = CommandBuffer<B, C, S, Seco
 
 /// A strongly-typed command buffer that will only implement methods that are valid for the operations
 /// it supports.
+#[derive(Debug)]
 pub struct CommandBuffer<B: Backend, C, S = OneShot, L = Primary, R = <B as Backend>::CommandBuffer>
 {
     pub(crate) raw: R,

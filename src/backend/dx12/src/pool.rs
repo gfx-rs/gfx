@@ -7,14 +7,19 @@ use hal::{command, pool};
 use native::command_list::CmdListType;
 use {native, Backend, Shared};
 
+#[derive(Debug)]
 pub enum CommandPoolAllocator {
     Shared(native::CommandAllocator),
     Individual(Vec<native::CommandAllocator>),
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct RawCommandPool {
     pub(crate) allocator: CommandPoolAllocator,
     pub(crate) device: native::Device,
+
+    #[derivative(Debug = "ignore")]
     pub(crate) list_type: CmdListType,
     pub(crate) shared: Arc<Shared>,
     pub(crate) create_flags: pool::CommandPoolCreateFlags,

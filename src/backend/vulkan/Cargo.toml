@@ -20,6 +20,7 @@ name = "gfx_backend_vulkan"
 
 [dependencies]
 byteorder = "1"
+derivative = "1.0"
 log = { version = "0.4" }
 lazy_static = "1"
 shared_library = { version = "0.1.9", optional = true }

@@ -6,6 +6,7 @@ use crate::Backend;
 
 use std::sync::{Arc, Mutex};
 
+#[derive(Debug)]
 pub struct OwnedBuffer {
     pub(crate) commands: Vec<Command>,
     pub(crate) data: Vec<u8>,
@@ -27,6 +28,7 @@ impl OwnedBuffer {
 
 // Storage of command buffer memory.
 // Depends on the reset model chosen when creating the command pool.
+#[derive(Debug)]
 pub enum BufferMemory {
     // Storing all recorded commands and data in the pool in a linear
     // piece of memory shared by all associated command buffers.
@@ -51,6 +53,7 @@ pub enum BufferMemory {
     },
 }
 
+#[derive(Debug)]
 pub struct RawCommandPool {
     pub(crate) fbo: Option<n::FrameBuffer>,
     pub(crate) limits: command::Limits,

@@ -68,6 +68,7 @@ fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
     }
 }
 
+#[derive(Debug)]
 pub struct Swapchain {
     // Underlying window, required for presentation
     pub(crate) window: Starc<glutin::WindowedContext>,
@@ -88,6 +89,7 @@ impl hal::Swapchain<B> for Swapchain {
 //TODO: if we make `Surface` a `WindowBuilder` instead of `WindowedContext`,
 // we could spawn window + GL context when a swapchain is requested
 // and actually respect the swapchain configuration provided by the user.
+#[derive(Debug)]
 pub struct Surface {
     window: Starc<glutin::WindowedContext>,
 }

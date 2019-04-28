@@ -82,6 +82,7 @@ impl Channel {
     }
 }
 
+#[derive(Debug)]
 pub struct SamplerStates {
     nearest: metal::SamplerState,
     linear: metal::SamplerState,
@@ -109,6 +110,7 @@ impl SamplerStates {
     }
 }
 
+#[derive(Debug)]
 pub struct DepthStencilStates {
     map: FastStorageMap<pso::DepthStencilDesc, metal::DepthStencilState>,
     write_none: pso::DepthStencilDesc,
@@ -265,6 +267,7 @@ pub struct ClearKey {
     pub target_index: Option<(u8, Channel)>,
 }
 
+#[derive(Debug)]
 pub struct ImageClearPipes {
     map: FastStorageMap<ClearKey, metal::RenderPipelineState>,
 }
@@ -350,6 +353,7 @@ pub type BlitKey = (
     Channel,
 );
 
+#[derive(Debug)]
 pub struct ImageBlitPipes {
     map: FastStorageMap<BlitKey, metal::RenderPipelineState>,
 }
@@ -438,6 +442,7 @@ impl ImageBlitPipes {
     }
 }
 
+#[derive(Debug)]
 pub struct ServicePipes {
     pub library: Mutex<metal::Library>,
     pub sampler_states: SamplerStates,

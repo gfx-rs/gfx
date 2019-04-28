@@ -47,6 +47,7 @@ const CLEAR_IMAGE_ARRAY: bool = false && cfg!(target_os = "macos");
 /// Number of frames to average when reporting the performance counters.
 const COUNTERS_REPORT_WINDOW: usize = 0;
 
+#[derive(Debug)]
 pub struct QueueInner {
     raw: metal::CommandQueue,
     reserve: Range<usize>,
@@ -116,6 +117,7 @@ impl QueueInner {
     }
 }
 
+#[derive(Debug)]
 struct PoolShared {
     online_recording: OnlineRecording,
     #[cfg(feature = "dispatch")]
@@ -125,6 +127,7 @@ struct PoolShared {
 type CommandBufferInnerPtr = Arc<RefCell<CommandBufferInner>>;
 type PoolSharedPtr = Arc<RefCell<PoolShared>>;
 
+#[derive(Debug)]
 pub struct CommandPool {
     shared: Arc<Shared>,
     allocated: Vec<CommandBufferInnerPtr>,
@@ -154,6 +157,7 @@ impl CommandPool {
     }
 }
 
+#[derive(Debug)]
 pub struct CommandBuffer {
     shared: Arc<Shared>,
     pool_shared: PoolSharedPtr,
@@ -165,6 +169,7 @@ pub struct CommandBuffer {
 unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 
+#[derive(Debug)]
 struct Temp {
     clear_vertices: Vec<ClearVertex>,
     blit_vertices: FastHashMap<(Aspects, Level), Vec<BlitVertex>>,
@@ -173,6 +178,7 @@ struct Temp {
 
 type VertexBufferMaybeVec = Vec<Option<(pso::VertexBufferDesc, pso::ElemOffset)>>;
 
+#[derive(Debug)]
 struct RenderPipelineState {
     raw: metal::RenderPipelineState,
     ds_desc: pso::DepthStencilDesc,
@@ -181,6 +187,7 @@ struct RenderPipelineState {
     formats: native::SubpassFormats,
 }
 
+#[derive(Debug)]
 struct SubpassInfo {
     descriptor: metal::RenderPassDescriptor,
     combined_aspects: Aspects,
@@ -201,6 +208,7 @@ struct SubpassInfo {
 /// You may notice that vertex buffers are stored in two separate places: per pipeline, and
 /// here in the state. These can't be merged together easily because at binding time we
 /// want one input vertex buffer to potentially be bound to multiple entry points....
+#[derive(Debug)]
 struct State {
     // Note: this could be `MTLViewport` but we have to patch the depth separately.
     viewport: Option<(pso::Rect, Range<f32>)>,
@@ -826,6 +834,7 @@ impl Journal {
     }
 }
 
+#[derive(Debug)]
 enum CommandSink {
     Immediate {
         cmd_buffer: metal::CommandBuffer,
@@ -1262,6 +1271,7 @@ pub struct IndexBuffer<B> {
     stride: u32,
 }
 
+#[derive(Debug)]
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
     level: com::RawLevel,
@@ -1819,7 +1829,8 @@ where
     }
 }
 
-#[derive(Default)]
+
+#[derive(Default, Debug)]
 struct PerformanceCounters {
     immediate_command_buffers: usize,
     deferred_command_buffers: usize,
@@ -1830,6 +1841,7 @@ struct PerformanceCounters {
     frame: usize,
 }
 
+#[derive(Debug)]
 pub struct CommandQueue {
     shared: Arc<Shared>,
     retained_buffers: Vec<metal::Buffer>,

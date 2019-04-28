@@ -5,6 +5,8 @@ extern crate log;
 #[macro_use]
 extern crate ash;
 extern crate byteorder;
+#[macro_use]
+extern crate derivative;
 extern crate gfx_hal as hal;
 #[macro_use]
 extern crate lazy_static;
@@ -96,6 +98,7 @@ pub struct RawInstance(
     pub ash::Instance,
     Option<(ext::DebugUtils, vk::DebugUtilsMessengerEXT)>,
 );
+
 impl Drop for RawInstance {
     fn drop(&mut self) {
         unsafe {
@@ -111,7 +114,10 @@ impl Drop for RawInstance {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Instance {
+    #[derivative(Debug = "ignore")]
     pub raw: Arc<RawInstance>,
 
     /// Supported extensions of this instance.
@@ -462,7 +468,10 @@ impl hal::queue::QueueFamily for QueueFamily {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct PhysicalDevice {
+    #[derivative(Debug = "ignore")]
     instance: Arc<RawInstance>,
     handle: vk::PhysicalDevice,
     properties: vk::PhysicalDeviceProperties,
@@ -890,9 +899,12 @@ impl Drop for RawDevice {
 // Need to explicitly synchronize on submission and present.
 pub type RawCommandQueue = Arc<vk::Queue>;
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct CommandQueue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
+    #[derivative(Debug = "ignore")]
     swapchain_fn: vk::KhrSwapchainFn,
 }
 
@@ -1002,6 +1014,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
 }
 
+#[derive(Debug)]
 pub struct Device {
     raw: Arc<RawDevice>,
 }

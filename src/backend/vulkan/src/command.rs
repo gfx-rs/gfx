@@ -14,6 +14,7 @@ use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkG
 use {conv, native as n};
 use {Backend, RawDevice};
 
+#[derive(Debug)]
 pub struct CommandBuffer {
     pub raw: vk::CommandBuffer,
     pub device: Arc<RawDevice>,

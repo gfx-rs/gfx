@@ -667,7 +667,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Surface {
+    #[derivative(Debug = "ignore")]
     pub(crate) factory: ComPtr<IDXGIFactory>,
     wnd_handle: HWND,
     width: u32,
@@ -733,7 +736,10 @@ impl hal::Surface<Backend> for Surface {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Swapchain {
+    #[derivative(Debug = "ignore")]
     dxgi_swapchain: ComPtr<IDXGISwapChain>,
 }
 
@@ -2462,6 +2468,7 @@ impl Memory {
     }
 }
 
+#[derive(Debug)]
 pub struct CommandPool {
     device: ComPtr<d3d11::ID3D11Device>,
     internal: internal::Internal,

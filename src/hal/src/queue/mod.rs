@@ -13,6 +13,7 @@ use std::any::Any;
 use std::borrow::Borrow;
 use std::iter;
 use std::marker::PhantomData;
+use std::fmt;
 
 use crate::command::{Primary, Submittable};
 use crate::error::HostExecutionError;
@@ -49,7 +50,7 @@ pub struct Submission<Ic, Iw, Is> {
 
 /// `RawCommandQueue` are abstractions to the internal GPU execution engines.
 /// Commands are executed on the the device by submitting command buffers to queues.
-pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
+pub trait RawCommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Submit command buffers to queue for execution.
     /// `fence` must be in unsignalled state, and will be signalled after all command buffers in the submission have
     /// finished execution.
@@ -90,6 +91,7 @@ pub trait RawCommandQueue<B: Backend>: Any + Send + Sync {
 }
 
 /// Stronger-typed and safer `CommandQueue` wraps around `RawCommandQueue`.
+#[derive(Debug)]
 pub struct CommandQueue<B: Backend, C>(B::CommandQueue, PhantomData<C>);
 
 impl<B: Backend, C: Capability> CommandQueue<B, C> {

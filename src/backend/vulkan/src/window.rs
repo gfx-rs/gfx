@@ -15,9 +15,12 @@ use winit;
 use {conv, native};
 use {Backend, Instance, PhysicalDevice, QueueFamily, RawInstance, VK_ENTRY};
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Surface {
     // Vk (EXT) specs [29.2.7 Platform-Independent Information]
     // For vkDestroySurfaceKHR: Host access to surface must be externally synchronized
+    #[derivative(Debug = "ignore")]
     pub(crate) raw: Arc<RawSurface>,
     pub(crate) width: Size,
     pub(crate) height: Size,
@@ -403,8 +406,11 @@ impl hal::Surface<Backend> for Surface {
     }
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct Swapchain {
     pub(crate) raw: vk::SwapchainKHR,
+    #[derivative(Debug = "ignore")]
     pub(crate) functor: khr::Swapchain,
 }
 

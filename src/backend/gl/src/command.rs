@@ -129,21 +129,22 @@ pub type FrameBufferTarget = gl::types::GLenum;
 pub type AttachmentPoint = gl::types::GLenum;
 pub type DrawBuffer = gl::types::GLint;
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct AttachmentClear {
     subpass_id: Option<pass::SubpassId>,
     value: Option<command::ClearValueRaw>,
     stencil_value: Option<pso::StencilValue>,
 }
 
-#[derive(Clone)]
-struct RenderPassCache {
+#[derive(Debug)]
+pub struct RenderPassCache {
     render_pass: n::RenderPass,
     framebuffer: n::FrameBuffer,
     attachment_clears: Vec<AttachmentClear>,
 }
 
 // Cache current states of the command buffer
+#[derive(Debug)]
 struct Cache {
     // Active primitive topology, set by the current pipeline.
     primitive: Option<gl::types::GLenum>,
@@ -210,6 +211,7 @@ impl From<hal::Limits> for Limits {
 ///
 /// If you want to display your rendered results to a framebuffer created externally, see the
 /// `display_fb` field.
+#[derive(Debug)]
 pub struct RawCommandBuffer {
     pub(crate) memory: Arc<Mutex<BufferMemory>>,
     pub(crate) buf: BufferSlice,
