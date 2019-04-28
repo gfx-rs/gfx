@@ -178,13 +178,13 @@ unsafe fn display_debug_utils_object_name_info_ext(
 
                 match object_name {
                     Some(name) => format!(
-                        "(type: {}, hndl: {}, name: {})",
+                        "(type: {:?}, hndl: {}, name: {})",
                         obj_info.object_type,
                         &obj_info.object_handle.to_string(),
                         name
                     ),
                     None => format!(
-                        "(type: {}, hndl: {})",
+                        "(type: {:?}, hndl: {})",
                         obj_info.object_type,
                         &obj_info.object_handle.to_string()
                     ),
@@ -210,7 +210,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
         vk::DebugUtilsMessageSeverityFlagsEXT::VERBOSE => log::Level::Trace,
         _ => log::Level::Warn,
     };
-    let message_type = &format!("{}", message_type);
+    let message_type = &format!("{:?}", message_type);
     let message_id_number: i32 = callback_data.message_id_number as i32;
 
     let message_id_name = if callback_data.p_message_id_name.is_null() {
