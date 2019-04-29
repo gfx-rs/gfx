@@ -752,11 +752,11 @@ impl hal::Swapchain<Backend> for Swapchain {
         _timeout_ns: u64,
         _semaphore: Option<&Semaphore>,
         _fence: Option<&Fence>,
-    ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
+    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
         // TODO: non-`_DISCARD` swap effects have more than one buffer, `FLIP`
         //       effects are dxgi 1.3 (w10+?) in which case there is
         //       `GetCurrentBackBufferIndex()` on the swapchain
-        Ok(0)
+        Ok((0, None))
     }
 }
 
@@ -834,7 +834,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         &mut self,
         swapchains: Is,
         _wait_semaphores: Iw,
-    ) -> Result<(), ()>
+    ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError>
     where
         W: 'a + Borrow<Swapchain>,
         Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
@@ -847,7 +847,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             }
         }
 
-        Ok(())
+        Ok(None)
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {

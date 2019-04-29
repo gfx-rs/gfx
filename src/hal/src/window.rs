@@ -35,7 +35,7 @@
 //! let acquisition_semaphore = device.create_semaphore().unwrap();
 //! let render_semaphore = device.create_semaphore().unwrap();
 //!
-//! let frame = swapchain.acquire_image(!0, Some(&acquisition_semaphore), None);
+//! let (frame, suboptimal) = swapchain.acquire_image(!0, Some(&acquisition_semaphore), None).unwrap();
 //! // render the scene..
 //! // `render_semaphore` will be signalled once rendering has been finished
 //! swapchain.present(&mut present_queue, 0, &[render_semaphore]);
@@ -381,15 +381,45 @@ pub enum Backbuffer<B: Backend> {
     Framebuffer(B::Framebuffer),
 }
 
+/// Marker value returned if the swapchain no longer matches the surface properties exactly,
+/// but can still be used to present to the surface successfully.
+pub struct Suboptimal;
+
 /// Error on acquiring the next image from a swapchain.
-#[derive(Debug, Clone)]
+#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
 pub enum AcquireError {
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
     /// No image was ready after the specified timeout expired.
+    #[fail(display = "No images ready")]
     NotReady,
     /// The swapchain is no longer in sync with the surface, needs to be re-created.
+    #[fail(display = "Swapchain is out of date")]
     OutOfDate,
     /// The surface was lost, and the swapchain is no longer usable.
+    #[fail(display = "{}", _0)]
     SurfaceLost(device::SurfaceLost),
+    /// Device is lost
+    #[fail(display = "{}", _0)]
+    DeviceLost(device::DeviceLost),
+}
+
+/// Error on acquiring the next image from a swapchain.
+#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+pub enum PresentError {
+    /// Out of either host or device memory.
+    #[fail(display = "{}", _0)]
+    OutOfMemory(device::OutOfMemory),
+    /// The swapchain is no longer in sync with the surface, needs to be re-created.
+    #[fail(display = "Swapchain is out of date")]
+    OutOfDate,
+    /// The surface was lost, and the swapchain is no longer usable.
+    #[fail(display = "{}", _0)]
+    SurfaceLost(device::SurfaceLost),
+    /// Device is lost
+    #[fail(display = "{}", _0)]
+    DeviceLost(device::DeviceLost),
 }
 
 /// The `Swapchain` is the backend representation of the surface.
@@ -415,7 +445,7 @@ pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
         timeout_ns: u64,
         semaphore: Option<&B::Semaphore>,
         fence: Option<&B::Fence>,
-    ) -> Result<SwapImageIndex, AcquireError>;
+    ) -> Result<(SwapImageIndex, Option<Suboptimal>), AcquireError>;
 
     /// Present one acquired image.
     ///
@@ -434,7 +464,7 @@ pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
         present_queue: &mut CommandQueue<B, C>,
         image_index: SwapImageIndex,
         wait_semaphores: Iw,
-    ) -> Result<(), ()>
+    ) -> Result<Option<Suboptimal>, PresentError>
     where
         Self: 'a + Sized + Borrow<B::Swapchain>,
         C: Capability,
@@ -449,7 +479,7 @@ pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
         &'a self,
         present_queue: &mut CommandQueue<B, C>,
         image_index: SwapImageIndex,
-    ) -> Result<(), ()>
+    ) -> Result<Option<Suboptimal>, PresentError>
     where
         Self: 'a + Sized + Borrow<B::Swapchain>,
         C: Capability,

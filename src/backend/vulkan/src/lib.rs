@@ -31,8 +31,9 @@ use ash::{Entry, LoadingError};
 
 use hal::adapter::DeviceType;
 use hal::error::{DeviceCreationError, HostExecutionError};
+use hal::device::{DeviceLost, OutOfMemory, SurfaceLost};
 use hal::pso::PipelineStage;
-use hal::{format, image, memory, queue};
+use hal::{format, image, memory, queue, window::{PresentError, Suboptimal}};
 use hal::{Features, Limits, PatchSize, QueueType, SwapImageIndex};
 
 use std::borrow::{Borrow, Cow};
@@ -966,7 +967,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         &mut self,
         swapchains: Is,
         wait_semaphores: Iw,
-    ) -> Result<(), ()>
+    ) -> Result<Option<Suboptimal>, PresentError>
     where
         W: 'a + Borrow<window::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
@@ -997,8 +998,13 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         };
 
         match self.swapchain_fn.queue_present_khr(*self.raw, &info) {
-            vk::Result::SUCCESS => Ok(()),
-            vk::Result::SUBOPTIMAL_KHR | vk::Result::ERROR_OUT_OF_DATE_KHR => Err(()),
+            vk::Result::SUCCESS => Ok(None),
+            vk::Result::SUBOPTIMAL_KHR => Ok(Some(Suboptimal)),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(PresentError::OutOfMemory(OutOfMemory::OutOfHostMemory)),
+            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(PresentError::OutOfMemory(OutOfMemory::OutOfDeviceMemory)),
+            vk::Result::ERROR_DEVICE_LOST => Err(PresentError::DeviceLost(DeviceLost)),
+            vk::Result::ERROR_OUT_OF_DATE_KHR => Err(PresentError::OutOfDate),
+            vk::Result::ERROR_SURFACE_LOST_KHR => Err(PresentError::SurfaceLost(SurfaceLost)),
             _ => panic!("Failed to present frame"),
         }
     }

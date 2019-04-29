@@ -420,7 +420,7 @@ impl hal::Swapchain<Backend> for Swapchain {
         timeout_ns: u64,
         semaphore: Option<&native::Semaphore>,
         fence: Option<&native::Fence>,
-    ) -> Result<hal::SwapImageIndex, hal::AcquireError> {
+    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
         let semaphore = semaphore.map_or(vk::Semaphore::null(), |s| s.0);
         let fence = fence.map_or(vk::Fence::null(), |f| f.0);
 
@@ -432,18 +432,26 @@ impl hal::Swapchain<Backend> for Swapchain {
         match index {
             Ok((i, suboptimal)) => {
                 if suboptimal {
-                    // The index is still valid in this case but the swapchain no longer matches
-                    Err(hal::AcquireError::OutOfDate)
+                    Ok((i, Some(hal::window::Suboptimal)))
                 } else {
-                    Ok(i)
+                    Ok((i, None))
                 }
             }
             Err(vk::Result::NOT_READY) => Err(hal::AcquireError::NotReady),
-            Err(vk::Result::SUBOPTIMAL_KHR) | Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                 Err(hal::AcquireError::OutOfDate)
             }
             Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
                 Err(hal::AcquireError::SurfaceLost(hal::device::SurfaceLost))
+            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(hal::AcquireError::OutOfMemory(hal::device::OutOfMemory::OutOfHostMemory))
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(hal::AcquireError::OutOfMemory(hal::device::OutOfMemory::OutOfDeviceMemory))
+            }
+            Err(vk::Result::ERROR_DEVICE_LOST) => {
+                Err(hal::AcquireError::DeviceLost(hal::device::DeviceLost))
             }
             _ => panic!("Failed to acquire image."),
         }
