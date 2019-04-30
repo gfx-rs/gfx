@@ -61,11 +61,21 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         _: &[(&QueueFamily, &[hal::QueuePriority])],
         _: hal::Features,
     ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
-        unimplemented!()
+        Ok(hal::Gpu {
+            device: Device,
+            queues: queue::Queues::new(vec![hal::backend::RawQueueGroup {
+                family: QueueFamily,
+                queues: vec![RawCommandQueue],
+            }]),
+        })
     }
 
     fn format_properties(&self, _: Option<format::Format>) -> format::Properties {
-        unimplemented!()
+        format::Properties {
+            linear_tiling: format::ImageFeature::all(),
+            optimal_tiling: format::ImageFeature::all(),
+            buffer_features: format::BufferFeature::all(),
+        }
     }
 
     fn image_format_properties(
@@ -76,19 +86,123 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         _: image::Usage,
         _: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
-        unimplemented!()
+        Some(image::FormatProperties {
+            max_extent: image::Extent {
+                width: !0,
+                height: !0,
+                depth: !0,
+            },
+            max_levels: 32,
+            max_layers: !0,
+            sample_count_mask: 0x7f,
+            max_resource_size: !0,
+        })
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
-        unimplemented!()
+        hal::MemoryProperties {
+            memory_types: vec![
+                hal::MemoryType {
+                    properties: memory::Properties::DEVICE_LOCAL,
+                    heap_index: 0,
+                },
+                hal::MemoryType {
+                    properties: memory::Properties::CPU_VISIBLE|memory::Properties::CPU_CACHED|memory::Properties::COHERENT,
+                    heap_index: 1,
+                },
+            ],
+            memory_heaps: vec![!0, !0],
+        }
     }
 
     fn features(&self) -> hal::Features {
-        unimplemented!()
+        hal::Features::all()
     }
 
     fn limits(&self) -> hal::Limits {
-        unimplemented!()
+        hal::Limits {
+            max_image_1d_size: !0,
+            max_image_2d_size: !0,
+            max_image_3d_size: !0,
+            max_image_cube_size: !0,
+            max_image_array_layers: !0,
+            max_texel_elements: !0,
+            max_uniform_buffer_range: !0,
+            max_storage_buffer_range: !0,
+            max_push_constants_size: !0,
+            max_memory_allocation_count: !0,
+            max_sampler_allocation_count: !0,
+            max_bound_descriptor_sets: !0,
+
+            max_per_stage_descriptor_samplers: !0,
+            max_per_stage_descriptor_uniform_buffers: !0,
+            max_per_stage_descriptor_storage_buffers: !0,
+            max_per_stage_descriptor_sampled_images: !0,
+            max_per_stage_descriptor_storage_images: !0,
+            max_per_stage_descriptor_input_attachments: !0,
+            max_per_stage_resources: !0,
+
+            max_descriptor_set_samplers: !0,
+            max_descriptor_set_uniform_buffers: !0,
+            max_descriptor_set_uniform_buffers_dynamic: !0,
+            max_descriptor_set_storage_buffers: !0,
+            max_descriptor_set_storage_buffers_dynamic: !0,
+            max_descriptor_set_sampled_images: !0,
+            max_descriptor_set_storage_images: !0,
+            max_descriptor_set_input_attachments: !0,
+
+            max_vertex_input_attributes: !0,
+            max_vertex_input_bindings: !0,
+            max_vertex_input_attribute_offset: !0,
+            max_vertex_input_binding_stride: !0,
+            max_vertex_output_components: !0,
+
+            max_patch_size: !0,
+            max_geometry_shader_invocations: !0,
+            max_geometry_input_components: !0,
+            max_geometry_output_components: !0,
+            max_geometry_output_vertices: !0,
+            max_geometry_total_output_components: !0,
+            max_fragment_input_components: !0,
+            max_fragment_output_attachments: !0,
+            max_fragment_dual_source_attachments: !0,
+            max_fragment_combined_output_resources: !0,
+
+            max_compute_shared_memory_size: !0,
+            max_compute_work_group_count: [!0; 3],
+            max_compute_work_group_invocations: !0,
+            max_compute_work_group_size: [!0; 3],
+
+            max_draw_indexed_index_value: !0,
+            max_draw_indirect_count: !0,
+
+            max_sampler_lod_bias: std::f32::MAX,
+            max_sampler_anisotropy: std::f32::MAX,
+
+            max_viewports: !0,
+            max_viewport_dimensions: [!0; 2],
+            max_framebuffer_extent: image::Extent {
+                width: !0,
+                height: !0,
+                depth: !0,
+            },
+
+            min_memory_map_alignment: 1,
+            buffer_image_granularity: 1,
+            min_texel_buffer_offset_alignment: 1,
+            min_uniform_buffer_offset_alignment: 1,
+            min_storage_buffer_offset_alignment: 1,
+            framebuffer_color_samples_count: 0x7f,
+            framebuffer_depth_samples_count: 0x7f,
+            framebuffer_stencil_samples_count: 0x7f,
+            max_color_attachments: !0,
+            standard_sample_locations: true,
+            optimal_buffer_copy_offset_alignment: 1,
+            optimal_buffer_copy_pitch_alignment: 1,
+            non_coherent_atom_size: 1,
+
+            min_vertex_input_binding_stride_alignment: 1,
+        }
     }
 }
 
@@ -98,7 +212,7 @@ pub struct RawCommandQueue;
 impl queue::RawCommandQueue<Backend> for RawCommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        _: queue::Submission<Ic, Iw, Is>,
+        submission: queue::Submission<Ic, Iw, Is>,
         _: Option<&()>,
     ) where
         T: 'a + Borrow<RawCommandBuffer>,
@@ -107,21 +221,25 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
         Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
         Is: IntoIterator<Item = &'a S>,
     {
-        unimplemented!()
+        submission.wait_semaphores.into_iter().count();
+        submission.command_buffers.into_iter().count();
+        submission.signal_semaphores.into_iter().count();
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(&mut self, _: Is, _: Iw) -> Result<Option<window::Suboptimal>, window::PresentError>
+    unsafe fn present<'a, W, Is, S, Iw>(&mut self, indices: Is, wait_semaphores: Iw) -> Result<Option<window::Suboptimal>, window::PresentError>
     where
         W: 'a + Borrow<Swapchain>,
         Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
         S: 'a + Borrow<()>,
         Iw: IntoIterator<Item = &'a S>,
     {
-        unimplemented!()
+        indices.into_iter().count();
+        wait_semaphores.into_iter().count();
+        Ok(None)
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
-        unimplemented!()
+        Ok(())
     }
 }
 
