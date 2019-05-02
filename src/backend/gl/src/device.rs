@@ -258,22 +258,8 @@ impl Device {
 
     fn set_push_const_layout(
         &self,
-        ast: &mut spirv::Ast<glsl::Target>,
+        _ast: &mut spirv::Ast<glsl::Target>,
     ) -> Result<(), d::ShaderError> {
-        let resources = ast.get_shader_resources().map_err(gen_unexpected_error)?;
-
-        match self.share.info.shading_language.tuple() {
-            // Explicit uniform locations are only valid on OpenGL 4.3+
-            (major, minor) if major >= 4 && minor >= 3 => {
-                for (index, pushconst) in resources.push_constant_buffers.iter().enumerate() {
-                    let _ = ast
-                        .set_decoration(pushconst.id, spirv::Decoration::Location, index as _)
-                        .map_err(gen_unexpected_error);
-                }
-            }
-            _ => (),
-        };
-
         Ok(())
     }
 
@@ -825,6 +811,9 @@ impl d::Device<B> for Device {
 
             let mut name = Vec::with_capacity(uniform_max_size as usize);
             name.set_len(uniform_max_size as usize);
+            name[uniform_max_size as usize - 1usize] = '\0';
+
+            let mut offset = 0;
 
             for uniform in 0..count {
                 let mut length = 0;
@@ -833,7 +822,7 @@ impl d::Device<B> for Device {
                 gl.GetActiveUniform(
                     program,
                     uniform as _,
-                    uniform_max_size as i32,
+                    uniform_max_size as i32 - 1,
                     &mut length,
                     &mut size,
                     &mut utype,
@@ -847,9 +836,11 @@ impl d::Device<B> for Device {
                 if location >= 0 {
                     uniforms.push(n::UniformDesc {
                         location: location as _,
-                        size,
+                        offset,
                         utype,
                     });
+
+                    offset = size as _;
                 }
             }
         }        
@@ -960,53 +951,19 @@ impl d::Device<B> for Device {
         gl.GenFramebuffers(1, &mut name);
         gl.BindFramebuffer(target, name);
 
-        let mut max_color_attachments = 0;
-        gl.GetIntegerv(gl::MAX_COLOR_ATTACHMENTS, &mut max_color_attachments);
-
         let mut render_attachments = Vec::with_capacity(pass.attachments.len());
         let mut color_attachment_index = 0;
         for attachment in &pass.attachments {
-            if color_attachment_index > max_color_attachments as _ {
+            if color_attachment_index > self.share.limits.framebuffer_color_samples_count as _ {
                 panic!(
                     "Invalid number of color attachments: {} color_attachment of {}",
-                    color_attachment_index, max_color_attachments
+                    color_attachment_index, self.share.limits.framebuffer_color_samples_count
                 );
             }
 
-            let color_attachment = match color_attachment_index {
-                0 => gl::COLOR_ATTACHMENT0,
-                1 => gl::COLOR_ATTACHMENT1,
-                2 => gl::COLOR_ATTACHMENT2,
-                3 => gl::COLOR_ATTACHMENT3,
-                4 => gl::COLOR_ATTACHMENT4,
-                5 => gl::COLOR_ATTACHMENT5,
-                6 => gl::COLOR_ATTACHMENT6,
-                7 => gl::COLOR_ATTACHMENT7,
-                8 => gl::COLOR_ATTACHMENT8,
-                9 => gl::COLOR_ATTACHMENT9,
-                10 => gl::COLOR_ATTACHMENT10,
-                11 => gl::COLOR_ATTACHMENT11,
-                12 => gl::COLOR_ATTACHMENT12,
-                13 => gl::COLOR_ATTACHMENT13,
-                14 => gl::COLOR_ATTACHMENT14,
-                15 => gl::COLOR_ATTACHMENT15,
-                16 => gl::COLOR_ATTACHMENT16,
-                17 => gl::COLOR_ATTACHMENT17,
-                18 => gl::COLOR_ATTACHMENT18,
-                19 => gl::COLOR_ATTACHMENT19,
-                20 => gl::COLOR_ATTACHMENT20,
-                21 => gl::COLOR_ATTACHMENT21,
-                22 => gl::COLOR_ATTACHMENT22,
-                23 => gl::COLOR_ATTACHMENT23,
-                24 => gl::COLOR_ATTACHMENT24,
-                25 => gl::COLOR_ATTACHMENT25,
-                26 => gl::COLOR_ATTACHMENT26,
-                27 => gl::COLOR_ATTACHMENT27,
-                28 => gl::COLOR_ATTACHMENT28,
-                29 => gl::COLOR_ATTACHMENT29,
-                30 => gl::COLOR_ATTACHMENT30,
-                31 => gl::COLOR_ATTACHMENT31,
-                _ => panic!("Invalid attachment -- this shouldn't happen!"),
+            let color_attachment = color_attachment_index + gl::COLOR_ATTACHMENT0;
+            if color_attachment > gl::COLOR_ATTACHMENT31 {
+                panic!("Invalid attachment -- this shouldn't happen!");
             };
 
             match attachment.format {

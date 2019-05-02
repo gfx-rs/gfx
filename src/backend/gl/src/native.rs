@@ -305,7 +305,7 @@ pub struct AttributeDesc {
 #[derive(Clone, Copy, Debug)]
 pub struct UniformDesc {
     pub(crate) location: gl::types::GLuint,
-    pub(crate) size: gl::types::GLint,
+    pub(crate) offset: u32,
     pub(crate) utype: gl::types::GLenum,
 }
 

@@ -791,8 +791,9 @@ impl CommandQueue {
                     }
                 }
             } 
-            com::Command::BindRasterizer { rasterizer, is_embedded } => { 
+            com::Command::BindRasterizer { rasterizer } => { 
                 use crate::hal::pso::FrontFace::*;
+                use crate::hal::pso::PolygonMode::*;
                 
                 let gl = &self.share.context;
                 
@@ -818,33 +819,29 @@ impl CommandQueue {
                     }
                 }
 
-                if !is_embedded {
-                    use crate::hal::pso::PolygonMode::*;
-
-                    let (gl_draw, gl_offset) = match rasterizer.polygon_mode {
-                        Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
-                        Line(width) => {
-                            unsafe { gl.LineWidth(width) };
-                            (gl::LINE, gl::POLYGON_OFFSET_LINE)
-                        }
-                        Fill => (gl::FILL, gl::POLYGON_OFFSET_FILL),
-                    };
-
-                    unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
-
-                    match rasterizer.depth_bias {
-                        Some(hal::pso::State::Static(bias)) => unsafe {
-                            gl.Enable(gl_offset);
-                            gl.PolygonOffset(bias.slope_factor as _, bias.const_factor as _);
-                        },
-                        _ => unsafe { gl.Disable(gl_offset) },
+                let (gl_draw, gl_offset) = match rasterizer.polygon_mode {
+                    Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
+                    Line(width) => {
+                        unsafe { gl.LineWidth(width) };
+                        (gl::LINE, gl::POLYGON_OFFSET_LINE)
                     }
+                    Fill => (gl::FILL, gl::POLYGON_OFFSET_FILL),
+                };
 
-                    match false {
-                        //TODO
-                        true => unsafe { gl.Enable(gl::MULTISAMPLE) },
-                        false => unsafe { gl.Disable(gl::MULTISAMPLE) },
-                    }
+                unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
+
+                match rasterizer.depth_bias {
+                    Some(hal::pso::State::Static(bias)) => unsafe {
+                        gl.Enable(gl_offset);
+                        gl.PolygonOffset(bias.slope_factor as _, bias.const_factor as _);
+                    },
+                    _ => unsafe { gl.Disable(gl_offset) },
+                }
+
+                match false {
+                    //TODO
+                    true => unsafe { gl.Enable(gl::MULTISAMPLE) },
+                    false => unsafe { gl.Disable(gl::MULTISAMPLE) },
                 }
             }
             com::Command::BindDepth { depth } => {

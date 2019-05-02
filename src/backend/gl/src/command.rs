@@ -75,7 +75,6 @@ pub enum Command {
     },
     BindRasterizer {
         rasterizer: pso::Rasterizer,
-        is_embedded: bool,
     },
     BindDepth {
         depth: pso::DepthTest,
@@ -956,7 +955,6 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         self.push_cmd(Command::BindRasterizer { 
             rasterizer, 
-            is_embedded: false 
         });
         self.push_cmd(Command::BindDepth { 
             depth,
@@ -1318,23 +1316,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             // in our uniform list
             uniforms.get(0).unwrap()
         } else {
-            // If offset is non-zero, we need to iterate through our uniform list
-            // and find what uniform is expected
-            let mut needle = None;
-            let mut acc: u32 = 0;
-            for uniform in uniforms {
-                acc += uniform.size as u32;
-                if acc == offset {
-                    needle = Some(uniform);
-                    break;
-                }
+            match uniforms.binary_search_by(|uniform| uniform.offset.cmp(&offset as _)) {
+                Ok(index) => uniforms.get(index).unwrap(),
+                Err(_) => panic!("No uniform found at offset: {}", offset),
             }
-
-            if needle.is_none() {
-                panic!("No uniform found at offset: {}", offset);
-            }
-
-            needle.unwrap()
         }
         .clone();
 
