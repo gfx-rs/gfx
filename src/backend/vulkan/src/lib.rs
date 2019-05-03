@@ -739,6 +739,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         if features.depth_bias_clamp != 0 {
             bits |= Features::DEPTH_BIAS_CLAMP;
         }
+        if features.fill_mode_non_solid != 0 {
+            bits |= Features::NON_FILL_POLYGON_MODE;
+        }
         if features.depth_bounds != 0 {
             bits |= Features::DEPTH_BOUNDS;
         }
