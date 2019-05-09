@@ -1703,7 +1703,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
         // post barriers
         for bar in &mut barriers {
-            let mut transition = *bar.u.Transition_mut();
+            let mut transition = bar.u.Transition_mut();
             mem::swap(&mut transition.StateBefore, &mut transition.StateAfter);
         }
         self.raw
