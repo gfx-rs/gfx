@@ -1348,10 +1348,7 @@ impl<B: Backend> PipelineState<B> {
                     pso::EntryPoint::<B> {
                         entry: ENTRY_NAME,
                         module: &vs_module,
-                        specialization: pso::Specialization {
-                            constants: &[pso::SpecializationConstant { id: 0, range: 0..4 }],
-                            data: std::mem::transmute::<&f32, &[u8; 4]>(&0.8f32),
-                        },
+                        specialization: hal::spec_const_list![0.8f32],
                     },
                     pso::EntryPoint::<B> {
                         entry: ENTRY_NAME,

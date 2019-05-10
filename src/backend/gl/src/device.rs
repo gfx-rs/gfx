@@ -227,7 +227,7 @@ impl Device {
     fn specialize_ast(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
-        specialization: pso::Specialization,
+        specialization: &pso::Specialization,
     ) -> Result<(), d::ShaderError> {
         let spec_constants = ast
             .get_specialization_constants()
@@ -429,7 +429,7 @@ impl Device {
             n::ShaderModule::Spirv(ref spirv) => {
                 let mut ast = self.parse_spirv(spirv).unwrap();
 
-                self.specialize_ast(&mut ast, point.specialization).unwrap();
+                self.specialize_ast(&mut ast, &point.specialization).unwrap();
                 self.remap_bindings(&mut ast, desc_remap_data, name_binding_map);
                 self.combine_separate_images_and_samplers(
                     &mut ast,

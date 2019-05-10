@@ -541,10 +541,7 @@ fn main() {
                 pso::EntryPoint {
                     entry: ENTRY_NAME,
                     module: &vs_module,
-                    specialization: pso::Specialization {
-                        constants: &[pso::SpecializationConstant { id: 0, range: 0..4 }],
-                        data: unsafe { std::mem::transmute::<&f32, &[u8; 4]>(&0.8f32) },
-                    },
+                    specialization: hal::spec_const_list![0.8f32],
                 },
                 pso::EntryPoint {
                     entry: ENTRY_NAME,
