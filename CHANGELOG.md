@@ -1,5 +1,16 @@
 # Change Log
 
+## hal-0.2.0 (10-05-2019)
+  - pipeline cache support
+  - rich presentation errors
+  - nicer specialization constants
+  - `Debug` implementations
+  - consistent format names
+  - more limits
+  - surface alpha composition properties
+  - descriptor pool create flags
+  - removal of `FrameSync`
+
 ### backend-dx11-0.1.1 (05-03-2019)
   - fixed buffer bind flags
   - synchronization of disjoint CB across copy operations

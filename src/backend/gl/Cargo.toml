@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-gl"
-version = "0.1.0"
+version = "0.2.0"
 description = "OpenGL backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -22,7 +22,7 @@ default = ["glutin"]
 bitflags = "1"
 log = { version = "0.4" }
 gfx_gl = "0.5"
-gfx-hal = { path = "../../hal", version = "0.1" }
+gfx-hal = { path = "../../hal", version = "0.2" }
 smallvec = "0.6"
 glutin = { version = "0.20", optional = true }
 spirv_cross = "0.12.1"
