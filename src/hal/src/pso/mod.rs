@@ -2,9 +2,8 @@
 //!
 //! This module contains items used to create and manage Pipelines.
 
-use std::fmt;
-use std::ops::Range;
-use crate::{device, pass};
+use crate::{device, pass, Backend};
+use std::{borrow::Cow, fmt, ops::Range};
 
 mod compute;
 mod descriptor;
@@ -12,13 +11,7 @@ mod graphics;
 mod input_assembler;
 mod output_merger;
 
-pub use self::compute::*;
-pub use self::descriptor::*;
-pub use self::graphics::*;
-pub use self::input_assembler::*;
-pub use self::output_merger::*;
-
-use crate::Backend;
+pub use self::{compute::*, descriptor::*, graphics::*, input_assembler::*, output_merger::*};
 
 /// Error types happening upon PSO creation on the device side.
 #[derive(Clone, Debug, PartialEq, Fail)]
@@ -151,7 +144,7 @@ impl fmt::Display for Stage {
 }
 
 /// Shader entry point.
-#[derive(Debug, Copy)]
+#[derive(Debug)]
 pub struct EntryPoint<'a, B: Backend> {
     /// Entry point name.
     pub entry: &'a str,
@@ -166,7 +159,7 @@ impl<'a, B: Backend> Clone for EntryPoint<'a, B> {
         EntryPoint {
             entry: self.entry,
             module: self.module,
-            specialization: self.specialization,
+            specialization: self.specialization.clone(),
         }
     }
 }
@@ -221,29 +214,85 @@ pub struct SpecializationConstant {
 }
 
 /// Specialization information structure.
-#[derive(Debug, Copy)]
+#[derive(Debug, Clone)]
 pub struct Specialization<'a> {
     /// Constant array.
-    pub constants: &'a [SpecializationConstant],
+    pub constants: Cow<'a, [SpecializationConstant]>,
     /// Raw data.
-    pub data: &'a [u8],
+    pub data: Cow<'a, [u8]>,
 }
 
-impl<'a> Default for Specialization<'a> {
+impl Specialization<'_> {
+    /// Empty specialization instance.
+    pub const EMPTY: Self = Specialization {
+        constants: Cow::Borrowed(&[]),
+        data: Cow::Borrowed(&[]),
+    };
+}
+
+impl Default for Specialization<'_> {
     fn default() -> Self {
+        Specialization::EMPTY
+    }
+}
+
+#[doc(hidden)]
+#[derive(Default)]
+pub struct SpecializationStorage {
+    constants: Vec<SpecializationConstant>,
+    data: Vec<u8>,
+}
+
+/// List of specialization constants.
+#[doc(hidden)]
+pub trait SpecConstList: Sized {
+    fn fold(self, storage: &mut SpecializationStorage);
+}
+
+impl<T> From<T> for Specialization<'_>
+where
+    T: SpecConstList,
+{
+    fn from(list: T) -> Self {
+        let mut storage = SpecializationStorage::default();
+        list.fold(&mut storage);
         Specialization {
-            constants: &[],
-            data: &[],
+            data: Cow::Owned(storage.data),
+            constants: Cow::Owned(storage.constants),
         }
     }
 }
 
-impl<'a> Clone for Specialization<'a> {
-    fn clone(&self) -> Self {
-        Specialization {
-            constants: self.constants,
-            data: self.data,
-        }
+#[doc(hidden)]
+pub struct SpecConstListNil;
+
+#[doc(hidden)]
+pub struct SpecConstListCons<H, T> {
+    pub head: (u32, H),
+    pub tail: T,
+}
+
+impl SpecConstList for SpecConstListNil {
+    fn fold(self, _storage: &mut SpecializationStorage) {}
+}
+
+impl<H, T> SpecConstList for SpecConstListCons<H, T>
+where
+    T: SpecConstList,
+{
+    fn fold(self, storage: &mut SpecializationStorage) {
+        let size = std::mem::size_of::<H>();
+        assert!(storage.data.len() + size <= u16::max_value() as usize);
+        let offset = storage.data.len() as u16;
+        storage.data.extend_from_slice(unsafe {
+            // Inspecting bytes is always safe.
+            std::slice::from_raw_parts(&self.head.1 as *const H as *const u8, size)
+        });
+        storage.constants.push(SpecializationConstant {
+            id: self.head.0,
+            range: offset..offset + size as u16,
+        });
+        self.tail.fold(storage)
     }
 }
 
@@ -278,4 +327,30 @@ impl<T> State<T> {
     pub fn is_dynamic(self) -> bool {
         !self.is_static()
     }
+}
+
+/// Macro for specifying list of specialization constatns for `EntryPoint`.
+#[macro_export]
+macro_rules! spec_const_list {
+    (@ $(,)?) => {
+        $crate::pso::SpecConstListNil
+    };
+
+    (@ $head_id:expr => $head_constant:expr $(,$tail_id:expr => $tail_constant:expr)* $(,)?) => {
+        $crate::pso::SpecConstListCons {
+            head: ($head_id, $head_constant),
+            tail: $crate::spec_const_list!(@ $($tail_id:expr => $tail_constant:expr),*),
+        }
+    };
+
+    ($($id:expr => $constant:expr),* $(,)?) => {
+        $crate::spec_const_list!(@ $($id => $constant),*).into()
+    };
+
+    ($($constant:expr),* $(,)?) => {
+        {
+            let mut counter = 0;
+            $crate::spec_const_list!(@ $({ counter += 1; counter - 1 } => $constant),*).into()
+        }
+    };
 }

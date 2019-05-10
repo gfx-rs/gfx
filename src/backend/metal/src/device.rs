@@ -66,7 +66,7 @@ enum FunctionError {
 fn get_final_function(
     library: &metal::LibraryRef,
     entry: &str,
-    specialization: pso::Specialization,
+    specialization: &pso::Specialization,
     function_specialization: bool,
 ) -> Result<metal::Function, FunctionError> {
     type MTLFunctionConstant = Object;
@@ -705,7 +705,7 @@ impl Device {
         let mtl_function = get_final_function(
             &lib,
             name,
-            ep.specialization,
+            &ep.specialization,
             self.shared.private_caps.function_specialization,
         )
         .map_err(|e| {
