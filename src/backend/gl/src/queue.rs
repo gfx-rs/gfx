@@ -1,6 +1,6 @@
+use crate::Starc;
 use std::borrow::Borrow;
 use std::{mem, ptr, slice};
-use crate::Starc;
 
 use crate::hal;
 use crate::hal::error;
@@ -33,6 +33,8 @@ struct State {
     num_viewports: usize,
     // Currently set scissor rects.
     num_scissors: usize,
+    // Currently bound fbo
+    fbo: gl::types::GLuint,
 }
 
 impl State {
@@ -44,6 +46,7 @@ impl State {
             index_buffer: None,
             num_viewports: 0,
             num_scissors: 0,
+            fbo: 0,
         }
     }
 
@@ -490,16 +493,24 @@ impl CommandQueue {
                     .ClearBufferiv(gl::COLOR, draw_buffer, cv.as_ptr());
             },
             com::Command::ClearBufferDepthStencil(depth, stencil) => unsafe {
-                let (target, depth, stencil) = match (depth, stencil) {
-                    (Some(depth), Some(stencil)) => (gl::DEPTH_STENCIL, depth, stencil),
-                    (Some(depth), None) => (gl::DEPTH, depth, 0),
-                    (None, Some(stencil)) => (gl::STENCIL, 0.0, stencil),
+                match (depth, stencil) {
+                    (Some(depth), Some(stencil)) => {
+                        self.share
+                            .context
+                            .ClearBufferfi(gl::DEPTH_STENCIL, 0, depth, stencil as _);
+                    },
+                    (Some(depth), None) => {
+                        self.share
+                            .context
+                            .ClearBufferfv(gl::DEPTH, 0, &depth);
+                    },
+                    (None, Some(stencil)) => {
+                        self.share
+                            .context
+                            .ClearBufferiv(gl::STENCIL, 0, &(stencil as i32));
+                    }
                     _ => unreachable!(),
                 };
-
-                self.share
-                    .context
-                    .ClearBufferfi(target, 0, depth, stencil as _);
             },
             com::Command::ClearTexture(_color) => unimplemented!(),
             com::Command::DrawBuffers(draw_buffers) => unsafe {
@@ -512,6 +523,7 @@ impl CommandQueue {
                 if self.share.private_caps.framebuffer {
                     let gl = &self.share.context;
                     unsafe { gl.BindFramebuffer(point, frame_buffer) };
+                    self.state.fbo = frame_buffer;
                 } else if frame_buffer != 0 {
                     error!("Tried to bind FBO {} without FBO support!", frame_buffer);
                 }
@@ -666,107 +678,253 @@ impl CommandQueue {
                     |a, b| gl.TexParameteri(gl::TEXTURE_2D, a, b),
                 );
             }, /*
-               com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
-                   self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
-               },
-               com::Command::BindResourceView(pso::ResourceViewParam(view, _, slot)) => unsafe {
-                   self.share.context.ActiveTexture(gl::TEXTURE0 + slot as gl::types::GLenum);
-                   self.share.context.BindTexture(view.bind, view.object);
-               },
-               com::Command::BindUnorderedView(_uav) => unimplemented!(),
-               com::Command::BindSampler(pso::SamplerParam(sampler, _, slot), bind_opt) => {
-                   let gl = &self.share.context;
-                   if self.share.private_caps.sampler_objects {
-                       unsafe { gl.BindSampler(slot as gl::types::GLuint, sampler.object) };
-                   } else {
-                       assert!(hal::MAX_SAMPLERS <= hal::MAX_RESOURCE_VIEWS);
-                       debug_assert_eq!(sampler.object, 0);
-                       if let Some(bind) = bind_opt {
-                           tex::bind_sampler(gl, bind, &sampler.info, &self.share.private_caps);
-                       }else {
-                           error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
-                       }
-                   }
-               },
-               com::Command::BindPixelTargets(pts) => {
-                   let point = gl::DRAW_FRAMEBUFFER;
-                   for i in 0 .. hal::MAX_COLOR_TARGETS {
-                       let att = gl::COLOR_ATTACHMENT0 + i as gl::types::GLuint;
-                       if let Some(ref target) = pts.colors[i] {
-                           self.bind_target(point, att, target);
-                       } else {
-                           self.unbind_target(point, att);
-                       }
-                   }
-                   if let Some(ref depth) = pts.depth {
-                       self.bind_target(point, gl::DEPTH_ATTACHMENT, depth);
-                   }
-                   if let Some(ref stencil) = pts.stencil {
-                       self.bind_target(point, gl::STENCIL_ATTACHMENT, stencil);
-                   }
-               },
-               com::Command::BindAttribute(slot, buffer,  bel) => {
-                   self.bind_attribute(slot, buffer, bel);
-               },
-               com::Command::UnbindAttribute(slot) => unsafe {
-                   self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
-               },
-               com::Command::BindUniform(loc, uniform) => {
-                   let gl = &self.share.context;
-                   shade::bind_uniform(gl, loc as gl::types::GLint, uniform);
-               },
-               com::Command::SetRasterizer(rast) => {
-                   state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
-               },
-               com::Command::SetDepthState(depth) => {
-                   state::bind_depth(&self.share.context, &depth);
-               },
-               com::Command::SetStencilState(stencil, refs, cull) => {
-                   state::bind_stencil(&self.share.context, &stencil, refs, cull);
-               },
-               com::Command::SetBlendState(slot, color) => {
-                   if self.share.capabilities.separate_blending_slots {
-                       state::bind_blend_slot(&self.share.context, slot, color);
-                   }else if slot == 0 {
-                       //self.temp.color = color; //TODO
-                       state::bind_blend(&self.share.context, color);
-                   }else if false {
-                       error!("Separate blending slots are not supported");
-                   }
-               },
-               com::Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
-                   let gl = &self.share.context;
+            com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {
+            self.share.context.BindBufferBase(gl::UNIFORM_BUFFER, slot as gl::types::GLuint, buffer);
+            },
+            com::Command::BindResourceView(pso::ResourceViewParam(view, _, slot)) => unsafe {
+            self.share.context.ActiveTexture(gl::TEXTURE0 + slot as gl::types::GLenum);
+            self.share.context.BindTexture(view.bind, view.object);
+            },
+            com::Command::BindUnorderedView(_uav) => unimplemented!(),
+            com::Command::BindSampler(pso::SamplerParam(sampler, _, slot), bind_opt) => {
+            let gl = &self.share.context;
+            if self.share.private_caps.sampler_objects {
+            unsafe { gl.BindSampler(slot as gl::types::GLuint, sampler.object) };
+            } else {
+            assert!(hal::MAX_SAMPLERS <= hal::MAX_RESOURCE_VIEWS);
+            debug_assert_eq!(sampler.object, 0);
+            if let Some(bind) = bind_opt {
+            tex::bind_sampler(gl, bind, &sampler.info, &self.share.private_caps);
+            }else {
+            error!("Trying to bind a sampler to slot {}, when sampler objects are not supported, and no texture is bound there", slot);
+            }
+            }
+            },
+            com::Command::BindPixelTargets(pts) => {
+            let point = gl::DRAW_FRAMEBUFFER;
+            for i in 0 .. hal::MAX_COLOR_TARGETS {
+            let att = gl::COLOR_ATTACHMENT0 + i as gl::types::GLuint;
+            if let Some(ref target) = pts.colors[i] {
+            self.bind_target(point, att, target);
+            } else {
+            self.unbind_target(point, att);
+            }
+            }
+            if let Some(ref depth) = pts.depth {
+            self.bind_target(point, gl::DEPTH_ATTACHMENT, depth);
+            }
+            if let Some(ref stencil) = pts.stencil {
+            self.bind_target(point, gl::STENCIL_ATTACHMENT, stencil);
+            }
+            },
+            com::Command::BindAttribute(slot, buffer,  bel) => {
+            self.bind_attribute(slot, buffer, bel);
+            },
+            com::Command::UnbindAttribute(slot) => unsafe {
+            self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
+            },*/
+            com::Command::BindUniform { uniform, buffer } => {
+                let gl = &self.share.context;
 
-                   if self.share.capabilities.copy_buffer {
-                       unsafe {
-                           gl.BindBuffer(gl::COPY_READ_BUFFER, src);
-                           gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
-                           gl.CopyBufferSubData(gl::COPY_READ_BUFFER,
-                                               gl::COPY_WRITE_BUFFER,
-                                               src_offset,
-                                               dst_offset,
-                                               size);
-                       }
-                   } else {
-                       debug_assert!(self.share.private_caps.buffer_storage == false);
+                unsafe {
+                    match uniform.utype {
+                        gl::FLOAT => {
+                            let data = Self::get::<f32>(data_buf, buffer);
+                            gl.Uniform1fv(uniform.location as _, 1, data.as_ptr() as _);
+                        }
+                        gl::FLOAT_VEC2 => {
+                            let data = Self::get::<[f32; 2]>(data_buf, buffer);
+                            gl.Uniform2fv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::FLOAT_VEC3 => {
+                            let data = Self::get::<[f32; 3]>(data_buf, buffer);
+                            gl.Uniform3fv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::FLOAT_VEC4 => {
+                            let data = Self::get::<[f32; 4]>(data_buf, buffer);
+                            gl.Uniform4fv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::INT => {
+                            let data = Self::get::<i32>(data_buf, buffer);
+                            gl.Uniform1iv(uniform.location as _, 1, data.as_ptr() as _);
+                        }
+                        gl::INT_VEC2 => {
+                            let data = Self::get::<[i32; 2]>(data_buf, buffer);
+                            gl.Uniform2iv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::INT_VEC3 => {
+                            let data = Self::get::<[i32; 3]>(data_buf, buffer);
+                            gl.Uniform3iv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::INT_VEC4 => {
+                            let data = Self::get::<[i32; 4]>(data_buf, buffer);
+                            gl.Uniform4iv(uniform.location as _, 1, data[0].as_ptr() as _);
+                        }
+                        gl::FLOAT_MAT2 => {
+                            let data = Self::get::<[f32; 4]>(data_buf, buffer);
+                            gl.UniformMatrix2fv(
+                                uniform.location as _,
+                                1,
+                                gl::FALSE,
+                                data[0].as_ptr(),
+                            );
+                        }
+                        gl::FLOAT_MAT3 => {
+                            let data = Self::get::<[f32; 9]>(data_buf, buffer);
+                            gl.UniformMatrix3fv(
+                                uniform.location as _,
+                                1,
+                                gl::FALSE,
+                                data[0].as_ptr(),
+                            );
+                        }
+                        gl::FLOAT_MAT4 => {
+                            let data = Self::get::<[f32; 16]>(data_buf, buffer);
+                            gl.UniformMatrix4fv(
+                                uniform.location as _,
+                                1,
+                                gl::FALSE,
+                                data[0].as_ptr(),
+                            );
+                        }
+                        _ => panic!("Unsupported uniform datatype!"),
+                    }
+                }
+            } 
+            com::Command::BindRasterizer { rasterizer } => { 
+                use crate::hal::pso::FrontFace::*;
+                use crate::hal::pso::PolygonMode::*;
+                
+                let gl = &self.share.context;
+                
+                unsafe {
+                    gl.FrontFace(match rasterizer.front_face {
+                        Clockwise => gl::CW,
+                        CounterClockwise => gl::CCW,
+                    })
+                };
 
-                       unsafe {
-                           let mut src_ptr = 0 as *mut ::std::os::raw::c_void;
-                           device::temporary_ensure_mapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, memory::READ, gl);
-                           src_ptr.offset(src_offset);
+                if !rasterizer.cull_face.is_empty() {
+                    unsafe {
+                        gl.Enable(gl::CULL_FACE);
+                        gl.CullFace(match rasterizer.cull_face {
+                            hal::pso::Face::FRONT => gl::FRONT,
+                            hal::pso::Face::BACK => gl::BACK,
+                            _ => gl::FRONT_AND_BACK,
+                        });
+                    }
+                } else {
+                    unsafe {
+                        gl.Disable(gl::CULL_FACE);
+                    }
+                }
 
-                           let mut dst_ptr = 0 as *mut ::std::os::raw::c_void;
-                           device::temporary_ensure_mapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, memory::WRITE, gl);
-                           dst_ptr.offset(dst_offset);
+                let (gl_draw, gl_offset) = match rasterizer.polygon_mode {
+                    Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
+                    Line(width) => {
+                        unsafe { gl.LineWidth(width) };
+                        (gl::LINE, gl::POLYGON_OFFSET_LINE)
+                    }
+                    Fill => (gl::FILL, gl::POLYGON_OFFSET_FILL),
+                };
 
-                           ::std::ptr::copy(src_ptr, dst_ptr, size as usize);
+                unsafe { gl.PolygonMode(gl::FRONT_AND_BACK, gl_draw) };
 
-                           device::temporary_ensure_unmapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, gl);
-                           device::temporary_ensure_unmapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, gl);
-                       }
-                   }
-               },
-               */
+                match rasterizer.depth_bias {
+                    Some(hal::pso::State::Static(bias)) => unsafe {
+                        gl.Enable(gl_offset);
+                        gl.PolygonOffset(bias.slope_factor as _, bias.const_factor as _);
+                    },
+                    _ => unsafe { gl.Disable(gl_offset) },
+                }
+
+                match false {
+                    //TODO
+                    true => unsafe { gl.Enable(gl::MULTISAMPLE) },
+                    false => unsafe { gl.Disable(gl::MULTISAMPLE) },
+                }
+            }
+            com::Command::BindDepth { depth } => {
+                use crate::hal::pso::Comparison::*;
+                
+                let gl = &self.share.context;
+                
+                match depth {
+                    hal::pso::DepthTest::On { fun, write } => unsafe {
+                        gl.Enable(gl::DEPTH_TEST);
+
+                        let cmp = match fun {
+                            Never => gl::NEVER,
+                            Less => gl::LESS,
+                            LessEqual => gl::LEQUAL,
+                            Equal => gl::EQUAL,
+                            GreaterEqual => gl::GEQUAL,
+                            Greater => gl::GREATER,
+                            NotEqual => gl::NOTEQUAL,
+                            Always => gl::ALWAYS,
+                        };
+
+                        gl.DepthFunc(cmp);
+                        gl.DepthMask(write as _);
+                    },
+                    hal::pso::DepthTest::Off => unsafe {
+                        gl.Disable(gl::DEPTH_TEST);
+                    },
+                }
+            }
+            /*
+              com::Command::SetRasterizer(rast) => {
+                  state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
+              },
+              com::Command::SetDepthState(depth) => {
+                  state::bind_depth(&self.share.context, &depth);
+              },
+              com::Command::SetStencilState(stencil, refs, cull) => {
+                  state::bind_stencil(&self.share.context, &stencil, refs, cull);
+              },
+              com::Command::SetBlendState(slot, color) => {
+                  if self.share.capabilities.separate_blending_slots {
+                      state::bind_blend_slot(&self.share.context, slot, color);
+                  }else if slot == 0 {
+                      //self.temp.color = color; //TODO
+                      state::bind_blend(&self.share.context, color);
+                  }else if false {
+                      error!("Separate blending slots are not supported");
+                  }
+              },
+              com::Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
+                  let gl = &self.share.context;
+
+                  if self.share.capabilities.copy_buffer {
+                      unsafe {
+                          gl.BindBuffer(gl::COPY_READ_BUFFER, src);
+                          gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
+                          gl.CopyBufferSubData(gl::COPY_READ_BUFFER,
+                                              gl::COPY_WRITE_BUFFER,
+                                              src_offset,
+                                              dst_offset,
+                                              size);
+                      }
+                  } else {
+                      debug_assert!(self.share.private_caps.buffer_storage == false);
+
+                      unsafe {
+                          let mut src_ptr = 0 as *mut ::std::os::raw::c_void;
+                          device::temporary_ensure_mapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, memory::READ, gl);
+                          src_ptr.offset(src_offset);
+
+                          let mut dst_ptr = 0 as *mut ::std::os::raw::c_void;
+                          device::temporary_ensure_mapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, memory::WRITE, gl);
+                          dst_ptr.offset(dst_offset);
+
+                          ::std::ptr::copy(src_ptr, dst_ptr, size as usize);
+
+                          device::temporary_ensure_unmapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, gl);
+                          device::temporary_ensure_unmapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, gl);
+                      }
+                  }
+              },
+              */
         }
         if let Err(err) = self.share.check() {
             panic!("Error {:?} executing command: {:?}", err, cmd)
@@ -837,7 +995,27 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         S: 'a + Borrow<native::Semaphore>,
         Iw: IntoIterator<Item = &'a S>,
     {
+        let gl = &self.share.context;
+
         for swapchain in swapchains {
+            let extent = swapchain.0.borrow().extent;
+
+            gl.BindFramebuffer(gl::READ_FRAMEBUFFER, self.state.fbo);
+            gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
+            gl.BlitFramebuffer(
+
+                0,
+                0,
+                extent.width as _,
+                extent.height as _,
+                0,
+                0,
+                extent.width as _,
+                extent.height as _,
+                gl::COLOR_BUFFER_BIT,
+                gl::LINEAR,
+            );
+
             swapchain.0.borrow().window.swap_buffers().unwrap();
         }
 

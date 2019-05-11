@@ -10,7 +10,7 @@ use hal::pool::CommandPoolCreateFlags;
 use hal::pso::VertexInputRate;
 use hal::range::RangeArg;
 use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
-use hal::{Backbuffer, Features, MemoryTypeId, SwapchainConfig};
+use hal::{Features, MemoryTypeId, SwapchainConfig};
 
 use std::borrow::Borrow;
 use std::ffi::CString;
@@ -1876,7 +1876,7 @@ impl d::Device<B> for Device {
         surface: &mut w::Surface,
         config: SwapchainConfig,
         provided_old_swapchain: Option<w::Swapchain>,
-    ) -> Result<(w::Swapchain, Backbuffer<B>), hal::window::CreationError> {
+    ) -> Result<(w::Swapchain, Vec<n::Image>), hal::window::CreationError> {
         let functor = khr::Swapchain::new(&surface.raw.instance.0, &self.raw.0);
 
         let old_swapchain = match provided_old_swapchain {
@@ -1963,7 +1963,7 @@ impl d::Device<B> for Device {
             })
             .collect();
 
-        Ok((swapchain, Backbuffer::Images(images)))
+        Ok((swapchain, images))
     }
 
     unsafe fn destroy_swapchain(&self, swapchain: w::Swapchain) {

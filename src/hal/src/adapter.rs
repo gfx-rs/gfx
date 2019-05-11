@@ -104,7 +104,9 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     fn limits(&self) -> Limits;
 
     /// Check cache compatibility with the `Device`.
-    fn is_valid_cache(&self, _cache: &[u8]) -> bool { false }
+    fn is_valid_cache(&self, _cache: &[u8]) -> bool {
+        false
+    }
 }
 
 /// Supported physical device types
@@ -185,14 +187,9 @@ impl<B: Backend> Adapter<B> {
     {
         use crate::queue::QueueFamily;
 
-        let requested_family = self
-            .queue_families
-            .iter()
-            .find(|family| {
-                C::supported_by(family.queue_type())
-                    && selector(family)
-                    && count <= family.max_queues()
-            });
+        let requested_family = self.queue_families.iter().find(|family| {
+            C::supported_by(family.queue_type()) && selector(family) && count <= family.max_queues()
+        });
 
         let priorities = vec![1.0; count];
         let (id, families) = match requested_family {

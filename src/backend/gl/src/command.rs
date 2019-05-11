@@ -69,6 +69,16 @@ pub enum Command {
     },
     BindIndexBuffer(gl::types::GLuint),
     //BindVertexBuffers(BufferSlice),
+    BindUniform {
+        uniform: n::UniformDesc,
+        buffer: BufferSlice,
+    },
+    BindRasterizer {
+        rasterizer: pso::Rasterizer,
+    },
+    BindDepth {
+        depth: pso::DepthTest,
+    },
     SetViewports {
         first_viewport: u32,
         viewport_ptr: BufferSlice,
@@ -171,6 +181,8 @@ struct Cache {
     vertex_buffer_descs: Vec<Option<pso::VertexBufferDesc>>,
     // Active attributes.
     attributes: Vec<n::AttributeDesc>,
+    // Active uniforms
+    uniforms: Vec<n::UniformDesc>,
 }
 
 impl Cache {
@@ -188,6 +200,7 @@ impl Cache {
             vertex_buffers: Vec::new(),
             vertex_buffer_descs: Vec::new(),
             attributes: Vec::new(),
+            uniforms: Vec::new(),
         }
     }
 }
@@ -466,23 +479,23 @@ impl RawCommandBuffer {
 
                             return Some(cmd);
                         }
+                    }
+
+                    // Clear depth-stencil target
+                    let depth = if view_format.is_depth() {
+                        clear.value.map(|cv| unsafe { cv.depth_stencil.depth })
                     } else {
-                        // Clear depth-stencil target
-                        let depth = if view_format.is_depth() {
-                            clear.value.map(|cv| unsafe { cv.depth_stencil.depth })
-                        } else {
-                            None
-                        };
+                        None
+                    };
 
-                        let stencil = if view_format.is_stencil() {
-                            clear.stencil_value
-                        } else {
-                            None
-                        };
+                    let stencil = if view_format.is_stencil() {
+                        clear.stencil_value
+                    } else {
+                        None
+                    };
 
-                        if depth.is_some() || stencil.is_some() {
-                            return Some(Command::ClearBufferDepthStencil(depth, stencil));
-                        }
+                    if depth.is_some() || stencil.is_some() {
+                        return Some(Command::ClearBufferDepthStencil(depth, stencil));
                     }
 
                     None
@@ -911,6 +924,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             ref blend_targets,
             ref attributes,
             ref vertex_buffers,
+            ref uniforms,
+            rasterizer,
+            depth,
         } = *pipeline;
 
         if self.cache.primitive != Some(primitive) {
@@ -933,7 +949,16 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         self.cache.vertex_buffer_descs = vertex_buffers.clone();
 
+        self.cache.uniforms = uniforms.clone();
+
         self.update_blend_targets(blend_targets);
+
+        self.push_cmd(Command::BindRasterizer { 
+            rasterizer, 
+        });
+        self.push_cmd(Command::BindDepth { 
+            depth,
+        });
     }
 
     unsafe fn bind_graphics_descriptor_sets<I, J>(
@@ -1276,10 +1301,29 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         _layout: &n::PipelineLayout,
         _stages: pso::ShaderStageFlags,
-        _offset: u32,
-        _constants: &[u32],
+        offset: u32,
+        constants: &[u32],
     ) {
-        unimplemented!()
+        let buffer = self.add(constants);
+
+        let uniforms = &self.cache.uniforms;
+        if uniforms.is_empty() {
+            unimplemented!()
+        }
+
+        let uniform = if offset == 0 {
+            // If offset is zero, we can just return the first item
+            // in our uniform list
+            uniforms.get(0).unwrap()
+        } else {
+            match uniforms.binary_search_by(|uniform| uniform.offset.cmp(&offset as _)) {
+                Ok(index) => uniforms.get(index).unwrap(),
+                Err(_) => panic!("No uniform found at offset: {}", offset),
+            }
+        }
+        .clone();
+
+        self.push_cmd(Command::BindUniform { uniform, buffer });
     }
 
     unsafe fn push_compute_constants(

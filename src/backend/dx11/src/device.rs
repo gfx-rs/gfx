@@ -2426,7 +2426,7 @@ impl hal::Device<Backend> for Device {
         surface: &mut Surface,
         config: hal::SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, hal::Backbuffer<Backend>), hal::window::CreationError> {
+    ) -> Result<(Swapchain, Vec<Image>), hal::window::CreationError> {
         // TODO: use IDXGIFactory2 for >=11.1
         // TODO: this function should be able to fail (Result)?
 
@@ -2567,7 +2567,7 @@ impl hal::Device<Backend> for Device {
             Swapchain {
                 dxgi_swapchain: swapchain,
             },
-            hal::Backbuffer::Images(images),
+            images,
         ))
     }
 

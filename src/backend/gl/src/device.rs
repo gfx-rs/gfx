@@ -13,7 +13,9 @@ use crate::hal::format::{Format, Swizzle};
 use crate::hal::pool::CommandPoolCreateFlags;
 use crate::hal::queue::QueueFamilyId;
 use crate::hal::range::RangeArg;
-use crate::hal::{self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query};
+use crate::hal::{
+    self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query,
+};
 
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
@@ -101,7 +103,7 @@ fn create_fbo_internal(share: &Starc<Share>) -> Option<gl::types::GLuint> {
 /// GL device.
 #[derive(Debug)]
 pub struct Device {
-    share: Starc<Share>,
+    pub(crate) share: Starc<Share>,
 }
 
 impl Drop for Device {
@@ -251,6 +253,13 @@ impl Device {
             }
         }
 
+        Ok(())
+    }
+
+    fn set_push_const_layout(
+        &self,
+        _ast: &mut spirv::Ast<glsl::Target>,
+    ) -> Result<(), d::ShaderError> {
         Ok(())
     }
 
@@ -436,9 +445,10 @@ impl Device {
                     desc_remap_data,
                     name_binding_map,
                 );
+                self.set_push_const_layout(&mut ast).unwrap();
 
                 let glsl = self.translate_spirv(&mut ast).unwrap();
-                info!("Generated:\n{:?}", glsl);
+                debug!("SPIRV-Cross generated shader:\n{}", glsl);
                 let shader = match self
                     .create_shader_module_from_source(glsl.as_bytes(), stage)
                     .unwrap()
@@ -484,10 +494,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     set_param_int(gl::TEXTURE_WRAP_T, conv::wrap_to_gl(t) as GLint);
     set_param_int(gl::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as GLint);
 
-    if share
-        .features
-        .contains(hal::Features::SAMPLER_MIP_LOD_BIAS)
-    {
+    if share.features.contains(hal::Features::SAMPLER_MIP_LOD_BIAS) {
         set_param_float(gl::TEXTURE_LOD_BIAS, info.lod_bias.into());
     }
     if share
@@ -579,14 +586,15 @@ impl d::Device<B> for Device {
         let subpasses = subpasses
             .into_iter()
             .map(|subpass| {
-                let color_attachments = subpass
-                    .borrow()
-                    .colors
-                    .iter()
-                    .map(|&(index, _)| index)
-                    .collect();
+                let subpass = subpass.borrow();
+                let color_attachments = subpass.colors.iter().map(|&(index, _)| index).collect();
 
-                n::SubpassDesc { color_attachments }
+                let depth_stencil = subpass.depth_stencil.map(|ds| ds.0);
+
+                n::SubpassDesc {
+                    color_attachments,
+                    depth_stencil,
+                }
             })
             .collect();
 
@@ -788,6 +796,55 @@ impl d::Device<B> for Device {
             vertex_buffers[vb.binding as usize] = Some(*vb);
         }
 
+        let mut uniforms = Vec::new();
+        {
+            let gl = &self.share.context;
+            let mut count = 0;
+            let mut uniform_max_size = 0;
+
+            gl.GetProgramiv(program, gl::ACTIVE_UNIFORMS, &mut count);
+            gl.GetProgramiv(
+                program,
+                gl::ACTIVE_UNIFORM_MAX_LENGTH,
+                &mut uniform_max_size,
+            );
+
+            let mut name = Vec::with_capacity(uniform_max_size as usize);
+            name.set_len(uniform_max_size as usize);
+            name[uniform_max_size as usize - 1usize] = '\0';
+
+            let mut offset = 0;
+
+            for uniform in 0..count {
+                let mut length = 0;
+                let mut size = 0;
+                let mut utype = 0;
+                gl.GetActiveUniform(
+                    program,
+                    uniform as _,
+                    uniform_max_size as i32 - 1,
+                    &mut length,
+                    &mut size,
+                    &mut utype,
+                    name.as_mut_ptr() as *mut _,
+                );
+
+                let location = gl.GetUniformLocation(program, name.as_ptr() as _);
+
+                // Sampler2D won't show up in UniformLocation and the only other uniforms
+                // should be push constants
+                if location >= 0 {
+                    uniforms.push(n::UniformDesc {
+                        location: location as _,
+                        offset,
+                        utype,
+                    });
+
+                    offset = size as _;
+                }
+            }
+        }        
+
         Ok(n::GraphicsPipeline {
             program,
             primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
@@ -810,6 +867,9 @@ impl d::Device<B> for Device {
                     }
                 })
                 .collect(),
+            uniforms,
+            rasterizer: desc.rasterizer,
+            depth: desc.depth_stencil.depth,
         })
     }
 
@@ -891,28 +951,47 @@ impl d::Device<B> for Device {
         gl.GenFramebuffers(1, &mut name);
         gl.BindFramebuffer(target, name);
 
-        let att_points = [
-            gl::COLOR_ATTACHMENT0,
-            gl::COLOR_ATTACHMENT1,
-            gl::COLOR_ATTACHMENT2,
-            gl::COLOR_ATTACHMENT3,
-        ];
+        let mut render_attachments = Vec::with_capacity(pass.attachments.len());
+        let mut color_attachment_index = 0;
+        for attachment in &pass.attachments {
+            if color_attachment_index > self.share.limits.framebuffer_color_samples_count as _ {
+                panic!(
+                    "Invalid number of color attachments: {} color_attachment of {}",
+                    color_attachment_index, self.share.limits.framebuffer_color_samples_count
+                );
+            }
 
-        let mut attachments_len = 0;
-        //TODO: exclude depth/stencil attachments from here
-        for (&att_point, view) in att_points.iter().zip(attachments.into_iter()) {
-            attachments_len += 1;
-            if self.share.private_caps.framebuffer_texture {
-                Self::bind_target(gl, target, att_point, view.borrow());
-            } else {
-                Self::bind_target_compat(gl, target, att_point, view.borrow());
+            let color_attachment = color_attachment_index + gl::COLOR_ATTACHMENT0;
+            if color_attachment > gl::COLOR_ATTACHMENT31 {
+                panic!("Invalid attachment -- this shouldn't happen!");
+            };
+
+            match attachment.format {
+                Some(Format::Rgba8Unorm) => {
+                    render_attachments.push(color_attachment);
+                    color_attachment_index += 1;
+                }
+                Some(Format::Rgba8Srgb) => {
+                    render_attachments.push(color_attachment);
+                    color_attachment_index += 1;
+                }
+                Some(Format::D32Sfloat) => render_attachments.push(gl::DEPTH_STENCIL_ATTACHMENT),
+                _ => unimplemented!(),
             }
         }
-        assert_eq!(attachments_len, pass.attachments.len());
-        // attachments_len actually equals min(attachments.len(), att_points.len()) until the next assert
 
-        assert!(pass.attachments.len() <= att_points.len());
-        gl.DrawBuffers(attachments_len as _, att_points.as_ptr());
+        let mut attachments_len = 0;
+        for (&render_attachment, view) in render_attachments.iter().zip(attachments.into_iter()) {
+            attachments_len += 1;
+            if self.share.private_caps.framebuffer_texture {
+                Self::bind_target(gl, target, render_attachment, view.borrow());
+            } else {
+                Self::bind_target_compat(gl, target, render_attachment, view.borrow());
+            }
+        }
+
+        assert!(pass.attachments.len() <= attachments_len);
+
         let _status = gl.CheckFramebufferStatus(target); //TODO: check status
         gl.BindFramebuffer(target, 0);
 
@@ -1153,6 +1232,11 @@ impl d::Device<B> for Device {
         let (int_format, iformat, itype) = match format {
             Format::Rgba8Unorm => (gl::RGBA8, gl::RGBA, gl::UNSIGNED_BYTE),
             Format::Rgba8Srgb => (gl::SRGB8_ALPHA8, gl::RGBA, gl::UNSIGNED_BYTE),
+            Format::D32Sfloat => (
+                gl::DEPTH32F_STENCIL8,
+                gl::DEPTH_STENCIL,
+                gl::FLOAT_32_UNSIGNED_INT_24_8_REV,
+            ),
             _ => unimplemented!(),
         };
 
@@ -1572,7 +1656,7 @@ impl d::Device<B> for Device {
         surface: &mut Surface,
         config: c::SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, c::Backbuffer<B>), c::window::CreationError> {
+    ) -> Result<(Swapchain, Vec<n::Image>), c::window::CreationError> {
         Ok(self.create_swapchain_impl(surface, config))
     }
 

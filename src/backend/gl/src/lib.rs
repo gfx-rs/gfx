@@ -378,10 +378,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
 
-        if !self.0.info.version.is_embedded {
-            gl.Enable(gl::PROGRAM_POINT_SIZE);
-        }
-
         // create main VAO and bind it
         let mut vao = 0;
         if self.0.private_caps.vertex_array {

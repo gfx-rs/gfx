@@ -3008,7 +3008,7 @@ impl d::Device<B> for Device {
         surface: &mut w::Surface,
         config: hal::SwapchainConfig,
         old_swapchain: Option<w::Swapchain>,
-    ) -> Result<(w::Swapchain, hal::Backbuffer<B>), hal::window::CreationError> {
+    ) -> Result<(w::Swapchain, Vec<r::Image>), hal::window::CreationError> {
         if let Some(old_swapchain) = old_swapchain {
             self.destroy_swapchain(old_swapchain);
         }
@@ -3146,7 +3146,7 @@ impl d::Device<B> for Device {
             resources,
         };
 
-        Ok((swapchain, hal::Backbuffer::Images(images)))
+        Ok((swapchain, images))
     }
 
     unsafe fn destroy_swapchain(&self, swapchain: w::Swapchain) {

@@ -198,7 +198,7 @@ pub struct DepthBias {
 }
 
 /// Rasterization state.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Rasterizer {
     /// How to rasterize this primitive.

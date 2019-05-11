@@ -7,8 +7,8 @@ use crate::{
 
 use hal::{
     format, image,
-    Backbuffer, SwapchainConfig, CompositeAlpha,
-    window::{Extent2D, PresentError, Suboptimal},
+    SwapchainConfig, CompositeAlpha,
+    window::{Extent2D, Suboptimal},
 };
 
 use core_graphics::base::CGFloat;
@@ -370,7 +370,7 @@ impl Device {
         surface: &mut Surface,
         config: SwapchainConfig,
         old_swapchain: Option<Swapchain>,
-    ) -> (Swapchain, Backbuffer<Backend>) {
+    ) -> (Swapchain, Vec<native::Image>) {
         info!("build_swapchain {:?}", config);
         if let Some(ref sc) = old_swapchain {
             sc.clear_drawables();
@@ -492,7 +492,7 @@ impl Device {
             acquire_mode: AcquireMode::Oldest,
         };
 
-        (swapchain, Backbuffer::Images(images))
+        (swapchain, images)
     }
 }
 

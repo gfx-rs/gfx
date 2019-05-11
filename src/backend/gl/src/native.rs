@@ -135,6 +135,9 @@ pub struct GraphicsPipeline {
     pub(crate) blend_targets: Vec<pso::ColorBlendDesc>,
     pub(crate) attributes: Vec<AttributeDesc>,
     pub(crate) vertex_buffers: Vec<Option<pso::VertexBufferDesc>>,
+    pub(crate) uniforms: Vec<UniformDesc>,
+    pub(crate) rasterizer: pso::Rasterizer,
+    pub(crate) depth: pso::DepthTest,
 }
 
 #[derive(Clone, Debug)]
@@ -265,12 +268,18 @@ pub struct RenderPass {
 #[derive(Clone, Debug)]
 pub struct SubpassDesc {
     pub(crate) color_attachments: Vec<usize>,
+    pub(crate) depth_stencil: Option<usize>,
 }
 
 impl SubpassDesc {
     /// Check if an attachment is used by this sub-pass.
     pub(crate) fn is_using(&self, at_id: pass::AttachmentId) -> bool {
-        self.color_attachments.iter().any(|id| *id == at_id)
+        let uses_ds = match self.depth_stencil {
+            Some(ds) => ds == at_id,
+            None => false,
+        };
+        let uses_color = self.color_attachments.iter().any(|id| *id == at_id);
+        uses_color || uses_ds
     }
 }
 
@@ -291,6 +300,13 @@ pub struct AttributeDesc {
     pub(crate) size: gl::types::GLint,
     pub(crate) format: gl::types::GLenum,
     pub(crate) vertex_attrib_fn: VertexAttribFunction,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct UniformDesc {
+    pub(crate) location: gl::types::GLuint,
+    pub(crate) offset: u32,
+    pub(crate) utype: gl::types::GLenum,
 }
 
 #[derive(Debug, Clone, Copy)]
