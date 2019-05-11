@@ -8,7 +8,7 @@ use crate::{
 use hal::{
     format, image,
     SwapchainConfig, CompositeAlpha,
-    window::Extent2D,
+    window::{Extent2D, Suboptimal},
 };
 
 use core_graphics::base::CGFloat;
@@ -370,7 +370,7 @@ impl Device {
         surface: &mut Surface,
         config: SwapchainConfig,
         old_swapchain: Option<Swapchain>,
-    ) -> (Swapchain, Vec<B::Image>) {
+    ) -> (Swapchain, Vec<native::Image>) {
         info!("build_swapchain {:?}", config);
         if let Some(ref sc) = old_swapchain {
             sc.clear_drawables();
