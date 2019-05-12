@@ -16,7 +16,6 @@ use crate::hal::{
     self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query,
 };
 
-#[cfg(not(target_arch = "wasm32"))]
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
 use crate::info::LegacyFeatures;
@@ -210,7 +209,6 @@ impl Device {
         Ok(())
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     fn translate_spirv(
         &self,
         ast: &mut spirv::Ast<glsl::Target>,

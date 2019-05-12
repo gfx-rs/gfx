@@ -45,7 +45,6 @@
 
 use crate::hal::window::Extent2D;
 use crate::hal::{self, format as f, image, memory, CompositeAlpha};
-
 use crate::{native, Backend as B, Device, PhysicalDevice, QueueFamily, Starc};
 
 use glow::Context;

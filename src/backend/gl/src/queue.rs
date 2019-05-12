@@ -32,7 +32,7 @@ struct State {
     // Currently set scissor rects.
     num_scissors: usize,
     // Currently bound fbo
-    fbo: Option<u32>,
+    fbo: Option<native::FrameBuffer>,
 }
 
 impl State {
@@ -826,10 +826,13 @@ impl CommandQueue {
                     _ => unsafe { gl.disable(gl_offset) },
                 }
 
-                match false {
-                    //TODO
-                    true => unsafe { gl.enable(glow::MULTISAMPLE) },
-                    false => unsafe { gl.disable(glow::MULTISAMPLE) },
+                // `MULTISAMPLE` may not be available for OpenGL ES or WebGL
+                if !self.share.info.version.is_embedded {
+                    match false {
+                        //TODO
+                        true => unsafe { gl.enable(glow::MULTISAMPLE) },
+                        false => unsafe { gl.disable(glow::MULTISAMPLE) },
+                    }
                 }
             }
             com::Command::BindDepth { depth } => {
@@ -1009,20 +1012,41 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
+    // TODO: Share most of this implementation with `glutin`
     #[cfg(target_arch = "wasm32")]
     unsafe fn present<'a, W, Is, S, Iw>(
         &mut self,
         swapchains: Is,
         _wait_semaphores: Iw,
-    ) -> Result<(), ()>
+    ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError>
     where
         W: 'a + Borrow<window::web::Swapchain>,
         Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
         S: 'a + Borrow<native::Semaphore>,
         Iw: IntoIterator<Item = &'a S>,
     {
-        // Presenting and swapping window buffers is automatic
-        Ok(())
+        let gl = &self.share.context;
+
+        for swapchain in swapchains {
+            let extent = swapchain.0.borrow().extent;
+
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, self.state.fbo);
+            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+            gl.blit_framebuffer(
+                0,
+                0,
+                extent.width as _,
+                extent.height as _,
+                0,
+                0,
+                extent.width as _,
+                extent.height as _,
+                glow::COLOR_BUFFER_BIT,
+                glow::LINEAR,
+            );
+        }
+
+        Ok(None)
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {

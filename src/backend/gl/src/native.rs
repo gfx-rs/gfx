@@ -15,6 +15,7 @@ pub type FrameBuffer = <GlContext as glow::Context>::Framebuffer;
 pub type Surface = <GlContext as glow::Context>::Renderbuffer;
 pub type Texture = <GlContext as glow::Context>::Texture;
 pub type Sampler = <GlContext as glow::Context>::Sampler;
+pub type UniformLocation = <GlContext as glow::Context>::UniformLocation;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
 
 #[derive(Debug)]
@@ -302,7 +303,7 @@ pub struct AttributeDesc {
 
 #[derive(Clone, Copy, Debug)]
 pub struct UniformDesc {
-    pub(crate) location: u32,
+    pub(crate) location: UniformLocation,
     pub(crate) offset: u32,
     pub(crate) utype: u32,
 }
