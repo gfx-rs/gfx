@@ -1,8 +1,7 @@
 use crate::hal::{Features, Limits};
-use crate::{gl, Error, GlContainer};
+use crate::{Error, GlContainer};
 use std::collections::HashSet;
 use std::{fmt, str};
-use crate::{GlContainer, Error};
 
 use glow::Context;
 

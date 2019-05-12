@@ -467,7 +467,7 @@ fn main() {
     // Number of image acquisition semaphores is based on the number of swapchain images, not frames in flight,
     // plus one extra which we can guarantee is unused at any given time by swapping it out with the ones
     // in the rest of the queue.
-    let mut image_acquire_semaphores = Vec::with_capacity(num_frame_images);
+    let mut image_acquire_semaphores = Vec::with_capacity(frame_images.len());
     let mut free_acquire_semaphore = device
         .create_semaphore()
         .expect("Could not create semaphore");
@@ -498,7 +498,7 @@ fn main() {
         }
     }
 
-    for _ in 0..num_frame_images {
+    for _ in 0..frame_images.len() {
         image_acquire_semaphores.push(
             device
                 .create_semaphore()
@@ -553,7 +553,6 @@ fn main() {
                 .bytes()
                 .map(|b| b.unwrap())
                 .collect();
-
             unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
 

@@ -48,6 +48,8 @@ use crate::hal::{self, format as f, image, memory, CompositeAlpha};
 
 use crate::{native, Backend as B, Device, PhysicalDevice, QueueFamily, Starc};
 
+use glow::Context;
+
 use glutin::{self, ContextTrait};
 
 fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
@@ -179,8 +181,8 @@ impl Device {
         let gl = &self.share.context;
 
         let (int_format, iformat, itype) = match config.format {
-            f::Format::Rgba8Unorm => (gl::RGBA8, gl::RGBA, gl::UNSIGNED_BYTE),
-            f::Format::Rgba8Srgb => (gl::SRGB8_ALPHA8, gl::RGBA, gl::UNSIGNED_BYTE),
+            f::Format::Rgba8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
+            f::Format::Rgba8Srgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
             _ => unimplemented!(),
         };
 
@@ -192,33 +194,32 @@ impl Device {
                     || config.image_usage.contains(image::Usage::STORAGE)
                     || config.image_usage.contains(image::Usage::SAMPLED)
                 {
-                    let mut name = 0;
-                    gl.GenTextures(1, &mut name);
+                    let name = gl.create_texture().unwrap();
                     match config.extent {
                         Extent2D {
                             width: w,
                             height: h,
                         } => {
-                            gl.BindTexture(gl::TEXTURE_2D, name);
+                            gl.bind_texture(glow::TEXTURE_2D, Some(name));
                             if self.share.private_caps.image_storage {
-                                gl.TexStorage2D(
-                                    gl::TEXTURE_2D,
+                                gl.tex_storage_2d(
+                                    glow::TEXTURE_2D,
                                     config.image_layers as _,
                                     int_format,
                                     w as _,
                                     h as _,
                                 );
                             } else {
-                                gl.TexParameteri(
-                                    gl::TEXTURE_2D,
-                                    gl::TEXTURE_MAX_LEVEL,
+                                gl.tex_parameter_i32(
+                                    glow::TEXTURE_2D,
+                                    glow::TEXTURE_MAX_LEVEL,
                                     (config.image_layers - 1) as _,
                                 );
                                 let mut w = w;
                                 let mut h = h;
                                 for i in 0..config.image_layers {
-                                    gl.TexImage2D(
-                                        gl::TEXTURE_2D,
+                                    gl.tex_image_2d(
+                                        glow::TEXTURE_2D,
                                         i as _,
                                         int_format as _,
                                         w as _,
@@ -226,7 +227,7 @@ impl Device {
                                         0,
                                         iformat,
                                         itype,
-                                        std::ptr::null(),
+                                        None,
                                     );
                                     w = std::cmp::max(w / 2, 1);
                                     h = std::cmp::max(h / 2, 1);
@@ -236,15 +237,14 @@ impl Device {
                     };
                     native::ImageKind::Texture(name)
                 } else {
-                    let mut name = 0;
-                    gl.GenRenderbuffers(1, &mut name);
+                    let name = gl.create_renderbuffer().unwrap();
                     match config.extent {
                         Extent2D {
                             width: w,
                             height: h,
                         } => {
-                            gl.BindRenderbuffer(gl::RENDERBUFFER, name);
-                            gl.RenderbufferStorage(gl::RENDERBUFFER, int_format, w as _, h as _);
+                            gl.bind_renderbuffer(glow::RENDERBUFFER, Some(name));
+                            gl.renderbuffer_storage(glow::RENDERBUFFER, int_format, w as _, h as _);
                         }
                     };
                     native::ImageKind::Surface(name)

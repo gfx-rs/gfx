@@ -1,7 +1,6 @@
 use crate::Starc;
 use std::borrow::Borrow;
 use std::{mem, slice};
-use crate::Starc;
 
 use crate::hal;
 use crate::hal::error;
@@ -33,7 +32,7 @@ struct State {
     // Currently set scissor rects.
     num_scissors: usize,
     // Currently bound fbo
-    fbo: gl::types::GLuint,
+    fbo: Option<u32>,
 }
 
 impl State {
@@ -45,7 +44,7 @@ impl State {
             index_buffer: None,
             num_viewports: 0,
             num_scissors: 0,
-            fbo: 0,
+            fbo: None,
         }
     }
 
@@ -492,10 +491,10 @@ impl CommandQueue {
                             .clear_buffer_f32_slice(glow::DEPTH, 0, &mut depths);
                     },
                     (None, Some(stencil)) => {
-                        let mut stencils = [stencil];
+                        let mut stencils = [stencil as i32];
                         self.share
                             .context
-                            .clear_buffer_i32_slice(glow::STENCIL, 0, &mut stencils);
+                            .clear_buffer_i32_slice(glow::STENCIL, 0, &mut stencils[..]);
                     }
                     _ => unreachable!(),
                 };
@@ -726,67 +725,55 @@ impl CommandQueue {
 
                 unsafe {
                     match uniform.utype {
-                        gl::FLOAT => {
+                        glow::FLOAT => {
                             let data = Self::get::<f32>(data_buf, buffer)[0];
                             gl.uniform_1_f32(Some(uniform.location), data);
                         }
-                        gl::FLOAT_VEC2 => {
-                            let data = Self::get::<[f32; 2]>(data_buf, buffer);
-                            // TODO: remove transmute
-                            let data: &mut [f32; 2] = unsafe { mem::transmute(data) };
-                            gl.uniform_2_f32_slice(Some(uniform.location), data);
+                        glow::FLOAT_VEC2 => {
+                            // TODO: Remove`mut`
+                            let mut data = Self::get::<[f32; 2]>(data_buf, buffer)[0];
+                            gl.uniform_2_f32_slice(Some(uniform.location), &mut data);
                         }
-                        gl::FLOAT_VEC3 => {
-                            let data = Self::get::<[f32; 3]>(data_buf, buffer);
-                            // TODO: remove transmute
-                            let data: &mut [f32; 3] = unsafe { mem::transmute(data) };
-                            gl.uniform_3_f32_slice(Some(uniform.location), data);
+                        glow::FLOAT_VEC3 => {
+                            // TODO: Remove`mut`
+                            let mut data = Self::get::<[f32; 3]>(data_buf, buffer)[0];
+                            gl.uniform_3_f32_slice(Some(uniform.location), &mut data);
                         }
-                        gl::FLOAT_VEC4 => {
-                            let data = Self::get::<[f32; 4]>(data_buf, buffer);
-                            // TODO: remove transmute
-                            let data: &mut [f32; 4] = unsafe { mem::transmute(data) };
-                            gl.uniform_4_f32_slice(Some(uniform.location), data);
+                        glow::FLOAT_VEC4 => {
+                            // TODO: Remove`mut`
+                            let mut data = Self::get::<[f32; 4]>(data_buf, buffer)[0];
+                            gl.uniform_4_f32_slice(Some(uniform.location), &mut data);
                         }
-                        gl::INT => {
+                        glow::INT => {
                             let data = Self::get::<i32>(data_buf, buffer)[0];
                             gl.uniform_1_i32(Some(uniform.location), data);
                         }
-                        gl::INT_VEC2 => {
-                            let data = Self::get::<[i32; 2]>(data_buf, buffer);
-                            // TODO: remove transmute
-                            let data: &mut [i32; 2] = unsafe { mem::transmute(data) };
-                            gl.uniform_2_i32_slice(Some(uniform.location), data);
+                        glow::INT_VEC2 => {
+                            // TODO: Remove`mut`
+                            let mut data = Self::get::<[i32; 2]>(data_buf, buffer)[0];
+                            gl.uniform_2_i32_slice(Some(uniform.location), &mut data);
                         }
-                        gl::INT_VEC3 => {
-                            let data = Self::get::<[i32; 3]>(data_buf, buffer);
-                            // TODO: remove transmute
-                            let data: &mut [i32; 3] = unsafe { mem::transmute(data) };
-                            gl.uniform_3_i32_slice(Some(uniform.location), data);
+                        glow::INT_VEC3 => {
+                            // TODO: Remove`mut`
+                            let mut data = Self::get::<[i32; 3]>(data_buf, buffer)[0];
+                            gl.uniform_3_i32_slice(Some(uniform.location), &mut data);
                         }
-                        gl::INT_VEC4 => {
-                            let data = Self::get::<[i32; 4]>(data_buf, buffer);
-                            // TODO: remove transmute
-                            let data: &mut [i32; 4] = unsafe { mem::transmute(data) };
-                            gl.uniform_4_i32_slice(Some(uniform.location), data);
+                        glow::INT_VEC4 => {
+                            // TODO: Remove`mut`
+                            let mut data = Self::get::<[i32; 4]>(data_buf, buffer)[0];
+                            gl.uniform_4_i32_slice(Some(uniform.location), &mut data);
                         }
-                        gl::FLOAT_MAT2 => {
-                            let data = Self::get::<[f32; 4]>(data_buf, buffer);
-                            // TODO: remove transmute
-                            let data: &mut [f32; 4] = unsafe { mem::transmute(data) };
-                            gl.uniform_matrix_2_f32_slice(Some(uniform.location), false, data);
+                        glow::FLOAT_MAT2 => {
+                            let data = Self::get::<[f32; 4]>(data_buf, buffer)[0];
+                            gl.uniform_matrix_2_f32_slice(Some(uniform.location), false, &data);
                         }
-                        gl::FLOAT_MAT3 => {
-                            let data = Self::get::<[f32; 9]>(data_buf, buffer);
-                            // TODO: remove transmute
-                            let data: &mut [f32; 9] = unsafe { mem::transmute(data) };
-                            gl.uniform_matrix_3_f32_slice(Some(uniform.location), false, data);
+                        glow::FLOAT_MAT3 => {
+                            let data = Self::get::<[f32; 9]>(data_buf, buffer)[0];
+                            gl.uniform_matrix_3_f32_slice(Some(uniform.location), false, &data);
                         }
-                        gl::FLOAT_MAT4 => {
-                            let data = Self::get::<[f32; 16]>(data_buf, buffer);
-                            // TODO: remove transmute
-                            let data: &mut [f32; 16] = unsafe { mem::transmute(data) };
-                            gl.uniform_matrix_4_f32_slice(Some(uniform.location), false, data);
+                        glow::FLOAT_MAT4 => {
+                            let data = Self::get::<[f32; 16]>(data_buf, buffer)[0];
+                            gl.uniform_matrix_4_f32_slice(Some(uniform.location), false, &data);
                         }
                         _ => panic!("Unsupported uniform datatype!"),
                     }
@@ -800,36 +787,36 @@ impl CommandQueue {
                 
                 unsafe {
                     gl.front_face(match rasterizer.front_face {
-                        Clockwise => gl::CW,
-                        CounterClockwise => gl::CCW,
+                        Clockwise => glow::CW,
+                        CounterClockwise => glow::CCW,
                     })
                 };
 
                 if !rasterizer.cull_face.is_empty() {
                     unsafe {
-                        gl.enable(gl::CULL_FACE);
+                        gl.enable(glow::CULL_FACE);
                         gl.cull_face(match rasterizer.cull_face {
-                            hal::pso::Face::FRONT => gl::FRONT,
-                            hal::pso::Face::BACK => gl::BACK,
-                            _ => gl::FRONT_AND_BACK,
+                            hal::pso::Face::FRONT => glow::FRONT,
+                            hal::pso::Face::BACK => glow::BACK,
+                            _ => glow::FRONT_AND_BACK,
                         });
                     }
                 } else {
                     unsafe {
-                        gl.disable(gl::CULL_FACE);
+                        gl.disable(glow::CULL_FACE);
                     }
                 }
 
                 let (gl_draw, gl_offset) = match rasterizer.polygon_mode {
-                    Point => (gl::POINT, gl::POLYGON_OFFSET_POINT),
+                    Point => (glow::POINT, glow::POLYGON_OFFSET_POINT),
                     Line(width) => {
                         unsafe { gl.line_width(width) };
-                        (gl::LINE, gl::POLYGON_OFFSET_LINE)
+                        (glow::LINE, glow::POLYGON_OFFSET_LINE)
                     }
-                    Fill => (gl::FILL, gl::POLYGON_OFFSET_FILL),
+                    Fill => (glow::FILL, glow::POLYGON_OFFSET_FILL),
                 };
 
-                unsafe { gl.polygon_mode(gl::FRONT_AND_BACK, gl_draw) };
+                unsafe { gl.polygon_mode(glow::FRONT_AND_BACK, gl_draw) };
 
                 match rasterizer.depth_bias {
                     Some(hal::pso::State::Static(bias)) => unsafe {
@@ -841,8 +828,8 @@ impl CommandQueue {
 
                 match false {
                     //TODO
-                    true => unsafe { gl.enable(gl::MULTISAMPLE) },
-                    false => unsafe { gl.disable(gl::MULTISAMPLE) },
+                    true => unsafe { gl.enable(glow::MULTISAMPLE) },
+                    false => unsafe { gl.disable(glow::MULTISAMPLE) },
                 }
             }
             com::Command::BindDepth { depth } => {
@@ -852,24 +839,24 @@ impl CommandQueue {
                 
                 match depth {
                     hal::pso::DepthTest::On { fun, write } => unsafe {
-                        gl.enable(gl::DEPTH_TEST);
+                        gl.enable(glow::DEPTH_TEST);
 
                         let cmp = match fun {
-                            Never => gl::NEVER,
-                            Less => gl::LESS,
-                            LessEqual => gl::LEQUAL,
-                            Equal => gl::EQUAL,
-                            GreaterEqual => gl::GEQUAL,
-                            Greater => gl::GREATER,
-                            NotEqual => gl::NOTEQUAL,
-                            Always => gl::ALWAYS,
+                            Never => glow::NEVER,
+                            Less => glow::LESS,
+                            LessEqual => glow::LEQUAL,
+                            Equal => glow::EQUAL,
+                            GreaterEqual => glow::GEQUAL,
+                            Greater => glow::GREATER,
+                            NotEqual => glow::NOTEQUAL,
+                            Always => glow::ALWAYS,
                         };
 
                         gl.depth_func(cmp);
                         gl.depth_mask(write as _);
                     },
                     hal::pso::DepthTest::Off => unsafe {
-                        gl.disable(gl::DEPTH_TEST);
+                        gl.disable(glow::DEPTH_TEST);
                     },
                 }
             }
@@ -1001,10 +988,9 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         for swapchain in swapchains {
             let extent = swapchain.0.borrow().extent;
 
-            gl.BindFramebuffer(gl::READ_FRAMEBUFFER, self.state.fbo);
-            gl.BindFramebuffer(gl::DRAW_FRAMEBUFFER, 0);
-            gl.BlitFramebuffer(
-
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, self.state.fbo);
+            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+            gl.blit_framebuffer(
                 0,
                 0,
                 extent.width as _,
@@ -1013,8 +999,8 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
                 0,
                 extent.width as _,
                 extent.height as _,
-                gl::COLOR_BUFFER_BIT,
-                gl::LINEAR,
+                glow::COLOR_BUFFER_BIT,
+                glow::LINEAR,
             );
 
             swapchain.0.borrow().window.swap_buffers().unwrap();

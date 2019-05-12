@@ -406,9 +406,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             // TODO: Find way to emulate this on older Opengl versions.
             gl.enable(glow::FRAMEBUFFER_SRGB);
         }
-        unsafe {
-            gl.pixel_store_i32(glow::PixelStoreI32Parameter::UnpackAlignment, 1);
-        }
+
+        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
 
         // create main VAO and bind it
         let mut vao = None;

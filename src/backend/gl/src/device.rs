@@ -756,49 +756,28 @@ impl d::Device<B> for Device {
         let mut uniforms = Vec::new();
         {
             let gl = &self.share.context;
-            let mut count = 0;
-            let mut uniform_max_size = 0;
-
-            gl.GetProgramiv(program, gl::ACTIVE_UNIFORMS, &mut count);
-            gl.GetProgramiv(
-                program,
-                gl::ACTIVE_UNIFORM_MAX_LENGTH,
-                &mut uniform_max_size,
-            );
-
-            let mut name = Vec::with_capacity(uniform_max_size as usize);
-            name.set_len(uniform_max_size as usize);
-            name[uniform_max_size as usize - 1usize] = '\0';
+            let count = gl.get_active_uniforms(program);
 
             let mut offset = 0;
 
             for uniform in 0..count {
-                let mut length = 0;
-                let mut size = 0;
-                let mut utype = 0;
-                gl.GetActiveUniform(
-                    program,
-                    uniform as _,
-                    uniform_max_size as i32 - 1,
-                    &mut length,
-                    &mut size,
-                    &mut utype,
-                    name.as_mut_ptr() as *mut _,
-                );
+                let glow::ActiveUniform {
+                    size,
+                    utype,
+                    name,
+                } = gl.get_active_uniform(program, uniform).unwrap();
 
-                let location = gl.GetUniformLocation(program, name.as_ptr() as _);
+                let location = gl.get_uniform_location(program, &name).unwrap();
 
                 // Sampler2D won't show up in UniformLocation and the only other uniforms
                 // should be push constants
-                if location >= 0 {
-                    uniforms.push(n::UniformDesc {
-                        location: location as _,
-                        offset,
-                        utype,
-                    });
+                uniforms.push(n::UniformDesc {
+                    location: location as _,
+                    offset,
+                    utype,
+                });
 
-                    offset = size as _;
-                }
+                offset = size as _;
             }
         }        
 
@@ -917,8 +896,8 @@ impl d::Device<B> for Device {
                 );
             }
 
-            let color_attachment = color_attachment_index + gl::COLOR_ATTACHMENT0;
-            if color_attachment > gl::COLOR_ATTACHMENT31 {
+            let color_attachment = color_attachment_index + glow::COLOR_ATTACHMENT0;
+            if color_attachment > glow::COLOR_ATTACHMENT31 {
                 panic!("Invalid attachment -- this shouldn't happen!");
             };
 
@@ -931,7 +910,7 @@ impl d::Device<B> for Device {
                     render_attachments.push(color_attachment);
                     color_attachment_index += 1;
                 }
-                Some(Format::D32Sfloat) => render_attachments.push(gl::DEPTH_STENCIL_ATTACHMENT),
+                Some(Format::D32Sfloat) => render_attachments.push(glow::DEPTH_STENCIL_ATTACHMENT),
                 _ => unimplemented!(),
             }
         }
@@ -946,12 +925,10 @@ impl d::Device<B> for Device {
             }
         }
 
-        unsafe {
-            assert!(pass.attachments.len() <= attachments_len);
+        assert!(pass.attachments.len() <= attachments_len);
 
-            let _status = gl.check_framebuffer_status(target); //TODO: check status
-            gl.bind_framebuffer(target, 0);
-        }
+        let _status = gl.check_framebuffer_status(target); //TODO: check status
+        gl.bind_framebuffer(target, None);
 
         if let Err(err) = self.share.check() {
             //TODO: attachments have been consumed

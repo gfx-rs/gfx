@@ -26,7 +26,7 @@ pub fn map_comparison(cmp: pso::Comparison) -> u32 {
     }
 }
 
-fn map_operation(op: pso::StencilOp) -> glow::StencilOp {
+fn map_operation(op: pso::StencilOp) -> u32 {
     use crate::hal::pso::StencilOp::*;
     match op {
         Keep => glow::KEEP,
