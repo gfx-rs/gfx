@@ -1,8 +1,7 @@
 use crate::hal::{Features, Limits};
-use crate::{gl, Error, GlContainer};
+use crate::{Error, GlContainer};
 use std::collections::HashSet;
 use std::{fmt, str};
-use crate::{GlContainer, Error};
 
 use glow::Context;
 
@@ -463,7 +462,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         legacy |= LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING;
     }
 
-    let emulate_map = true; //info.version.is_embedded;
+    let emulate_map = info.version.is_embedded;
 
     let private = PrivateCaps {
         vertex_array: info.is_supported(&[Core(3, 0), Es(3, 0), Ext("GL_ARB_vertex_array_object")]),
