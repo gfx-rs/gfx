@@ -19,6 +19,8 @@ pub type Layer = u16;
 pub type Level = u8;
 /// Maximum accessible mipmap level of an image.
 pub const MAX_LEVEL: Level = 15;
+/// A texel coordinate in an image.
+pub type TexelCoordinate = i32;
 
 /// Describes the size of an image, which may be up to three dimensional.
 #[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
@@ -56,16 +58,21 @@ impl Extent {
     }
 }
 
-///
+/// An offset into an `Image` used for image-to-image
+/// copy operations.  All offsets are in texels, and
+/// specifying offsets other than 0 for dimensions
+/// that do not exist is undefined behavior -- for
+/// example, specifying a `z` offset of `1` in a
+/// two-dimensional image.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Offset {
-    ///
-    pub x: i32,
-    ///
-    pub y: i32,
-    ///
-    pub z: i32,
+    /// X offset.
+    pub x: TexelCoordinate,
+    /// Y offset.
+    pub y: TexelCoordinate,
+    /// Z offset.
+    pub z: TexelCoordinate,
 }
 
 impl Offset {
@@ -242,7 +249,9 @@ pub const CUBE_FACES: [CubeFace; 6] = [
     CubeFace::NegZ,
 ];
 
-/// Specifies the kind of an image to be allocated.
+/// Specifies the dimensionality of an image to be allocated,
+/// along with the number of mipmap layers and MSAA samples
+/// if applicable.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum Kind {
@@ -336,7 +345,7 @@ impl Kind {
     }
 }
 
-/// Specifies the kind of an image view.
+/// Specifies the kind/dimensionality of an image view.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ViewKind {
@@ -469,7 +478,10 @@ impl Into<[f32; 4]> for PackedColor {
     }
 }
 
-/// Specifies how to sample from an image.
+/// Specifies how to sample from an image.  These are all the parameters
+/// available that alter how the GPU goes from a coordinate in an image
+/// to producing an actual value from the texture, including filtering/
+/// scaling, wrap mode, etc.
 // TODO: document the details of sampling.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
