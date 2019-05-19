@@ -131,7 +131,7 @@ pub enum Command {
         gl::types::GLsizeiptr,
     ),
     BindTexture(gl::types::GLenum, n::Texture),
-    BindSampler(gl::types::GLuint, n::Texture),
+    BindSampler(gl::types::GLuint, n::Sampler),
     SetTextureSamplerSettings(gl::types::GLuint, n::Texture, image::SamplerInfo),
 }
 

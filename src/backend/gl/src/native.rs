@@ -13,7 +13,7 @@ pub type Shader = gl::types::GLuint;
 pub type Program = gl::types::GLuint;
 pub type FrameBuffer = gl::types::GLuint;
 pub type Surface = gl::types::GLuint;
-pub type Texture = gl::types::GLuint;
+pub type Texture = (gl::types::GLenum, gl::types::GLuint);
 pub type Sampler = gl::types::GLuint;
 
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;

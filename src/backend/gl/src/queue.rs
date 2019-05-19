@@ -167,10 +167,10 @@ impl CommandQueue {
             &native::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
             },
-            &native::ImageView::Texture(texture, level) => unsafe {
+            &native::ImageView::Texture((_, texture), level) => unsafe {
                 gl.FramebufferTexture(point, attachment, texture, level as gl::types::GLint);
             },
-            &native::ImageView::TextureLayer(texture, level, layer) => unsafe {
+            &native::ImageView::TextureLayer((_, texture), level, layer) => unsafe {
                 gl.FramebufferTextureLayer(
                     point,
                     attachment,
@@ -600,13 +600,13 @@ impl CommandQueue {
                 gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0);
                 gl.BindBuffer(gl::PIXEL_PACK_BUFFER, 0);
             },
-            com::Command::CopyBufferToTexture(buffer, texture, ref r) => unsafe {
+            com::Command::CopyBufferToTexture(buffer, (textype, texture), ref r) => unsafe {
                 // TODO: Fix format and active texture
                 assert_eq!(r.image_offset.z, 0);
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0);
                 gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, buffer);
-                gl.BindTexture(gl::TEXTURE_2D, texture);
+                gl.BindTexture(textype, texture);
                 gl.TexSubImage2D(
                     gl::TEXTURE_2D,
                     r.image_layers.level as _,
@@ -623,14 +623,14 @@ impl CommandQueue {
             com::Command::CopyBufferToSurface(..) => {
                 unimplemented!() //TODO: use FBO
             }
-            com::Command::CopyTextureToBuffer(texture, buffer, ref r) => unsafe {
+            com::Command::CopyTextureToBuffer((textype, texture), buffer, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 // TODO: handle partial copies gracefully
                 assert_eq!(r.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0);
                 gl.BindBuffer(gl::PIXEL_PACK_BUFFER, buffer);
-                gl.BindTexture(gl::TEXTURE_2D, texture);
+                gl.BindTexture(textype, texture);
                 gl.GetTexImage(
                     gl::TEXTURE_2D,
                     r.image_layers.level as _,
@@ -655,19 +655,19 @@ impl CommandQueue {
                 let gl = &self.share.context;
                 gl.BindBufferRange(target, index, buffer, offset, size);
             },
-            com::Command::BindTexture(index, texture) => unsafe {
+            com::Command::BindTexture(index, (textype, texture)) => unsafe {
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0 + index);
-                gl.BindTexture(gl::TEXTURE_2D, texture);
+                gl.BindTexture(textype, texture);
             },
             com::Command::BindSampler(index, sampler) => unsafe {
                 let gl = &self.share.context;
                 gl.BindSampler(index, sampler);
             },
-            com::Command::SetTextureSamplerSettings(index, texture, ref sinfo) => unsafe {
+            com::Command::SetTextureSamplerSettings(index, (textype, texture), ref sinfo) => unsafe {
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0 + index);
-                gl.BindTexture(gl::TEXTURE_2D, texture);
+                gl.BindTexture(textype, texture);
 
                 // TODO: Optimization: only change texture properties that have changed.
                 device::set_sampler_info(
