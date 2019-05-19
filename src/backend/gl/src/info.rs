@@ -322,6 +322,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         min_uniform_buffer_offset_alignment: 1, // TODO
         min_storage_buffer_offset_alignment: 1, // TODO
         framebuffer_color_samples_count: max_color_attachments,
+        non_coherent_atom_size: 1,
         ..Limits::default()
     };
 
