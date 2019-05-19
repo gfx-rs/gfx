@@ -1596,7 +1596,7 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn get_fence_status(&self, _: &n::Fence) -> Result<bool, d::DeviceLost> {
-        unimplemented!()
+        Ok(true)
     }
 
     unsafe fn free_memory(&self, _memory: n::Memory) {
