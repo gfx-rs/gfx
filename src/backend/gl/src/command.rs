@@ -1100,7 +1100,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
     {
-        let old_offset = self.buf.offset;
+        let old_size = self.buf.size;
 
         for region in regions {
             let r = region.borrow().clone();
@@ -1108,7 +1108,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             self.push_cmd(cmd);
         }
 
-        if self.buf.offset == old_offset {
+        if self.buf.size == old_size {
             error!("At least one region must be specified");
         }
     }
@@ -1124,7 +1124,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ImageCopy>,
     {
-        let old_offset = self.buf.offset;
+        let old_size = self.buf.size;
 
         for region in regions {
             let r = region.borrow().clone();
@@ -1135,7 +1135,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             self.push_cmd(cmd);
         }
 
-        if self.buf.offset == old_offset {
+        if self.buf.size == old_size {
             error!("At least one region must be specified");
         }
     }
