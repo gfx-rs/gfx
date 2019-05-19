@@ -180,6 +180,7 @@ impl Device {
 
         let (int_format, iformat, itype) = match config.format {
             f::Format::Rgba8Unorm => (gl::RGBA8, gl::RGBA, gl::UNSIGNED_BYTE),
+            f::Format::Bgra8Unorm => (gl::RGBA8, gl::BGRA, gl::UNSIGNED_BYTE),
             f::Format::Rgba8Srgb => (gl::SRGB8_ALPHA8, gl::RGBA, gl::UNSIGNED_BYTE),
             _ => unimplemented!(),
         };

@@ -971,6 +971,10 @@ impl d::Device<B> for Device {
                     render_attachments.push(color_attachment);
                     color_attachment_index += 1;
                 }
+                Some(Format::Bgra8Unorm) => {
+                    render_attachments.push(color_attachment);
+                    color_attachment_index += 1;
+                }
                 Some(Format::Rgba8Srgb) => {
                     render_attachments.push(color_attachment);
                     color_attachment_index += 1;
@@ -1231,6 +1235,7 @@ impl d::Device<B> for Device {
 
         let (int_format, iformat, itype) = match format {
             Format::Rgba8Unorm => (gl::RGBA8, gl::RGBA, gl::UNSIGNED_BYTE),
+            Format::Bgra8Unorm => (gl::RGBA8, gl::BGRA, gl::UNSIGNED_BYTE),
             Format::Rgba8Srgb => (gl::SRGB8_ALPHA8, gl::RGBA, gl::UNSIGNED_BYTE),
             Format::D32Sfloat => (
                 gl::DEPTH32F_STENCIL8,
