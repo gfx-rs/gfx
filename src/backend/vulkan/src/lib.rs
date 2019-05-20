@@ -369,18 +369,25 @@ impl Instance {
 
         #[cfg(debug_assertions)]
         let debug_messenger = {
-            let ext = ext::DebugUtils::new(entry, &instance);
-            let info = vk::DebugUtilsMessengerCreateInfoEXT {
-                s_type: vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
-                p_next: ptr::null(),
-                flags: vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
-                message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::all(),
-                message_type: vk::DebugUtilsMessageTypeFlagsEXT::all(),
-                pfn_user_callback: Some(debug_utils_messenger_callback),
-                p_user_data: ptr::null_mut(),
-            };
-            let handle = unsafe { ext.create_debug_utils_messenger(&info, None) }.unwrap();
-            Some((ext, handle))
+            // make sure VK_EXT_debug_utils is available
+            if instance_extensions.iter().any(|props| unsafe {
+                CStr::from_ptr(props.extension_name.as_ptr()) == ext::DebugUtils::name()
+            }) {
+                let ext = ext::DebugUtils::new(entry, &instance);
+                let info = vk::DebugUtilsMessengerCreateInfoEXT {
+                    s_type: vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
+                    p_next: ptr::null(),
+                    flags: vk::DebugUtilsMessengerCreateFlagsEXT::empty(),
+                    message_severity: vk::DebugUtilsMessageSeverityFlagsEXT::all(),
+                    message_type: vk::DebugUtilsMessageTypeFlagsEXT::all(),
+                    pfn_user_callback: Some(debug_utils_messenger_callback),
+                    p_user_data: ptr::null_mut(),
+                };
+                let handle = unsafe { ext.create_debug_utils_messenger(&info, None) }.unwrap();
+                Some((ext, handle))
+            } else {
+                None
+            }
         };
         #[cfg(not(debug_assertions))]
         let debug_messenger = None;
