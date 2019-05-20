@@ -603,10 +603,11 @@ impl CommandQueue {
             com::Command::CopyBufferToTexture(buffer, (textype, texture), ref r) => unsafe {
                 // TODO: Fix format and active texture
                 assert_eq!(r.image_offset.z, 0);
+                assert_eq!(textype, gl::TEXTURE_2D);
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0);
                 gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, buffer);
-                gl.BindTexture(textype, texture);
+                gl.BindTexture(gl::TEXTURE_2D, texture);
                 gl.TexSubImage2D(
                     gl::TEXTURE_2D,
                     r.image_layers.level as _,
@@ -627,10 +628,11 @@ impl CommandQueue {
                 // TODO: Fix format and active texture
                 // TODO: handle partial copies gracefully
                 assert_eq!(r.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
+                assert_eq!(textype, gl::TEXTURE_2D);
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0);
                 gl.BindBuffer(gl::PIXEL_PACK_BUFFER, buffer);
-                gl.BindTexture(textype, texture);
+                gl.BindTexture(gl::TEXTURE_2D, texture);
                 gl.GetTexImage(
                     gl::TEXTURE_2D,
                     r.image_layers.level as _,
@@ -673,9 +675,9 @@ impl CommandQueue {
                 device::set_sampler_info(
                     &self.share,
                     &sinfo,
-                    |a, b| gl.TexParameterf(gl::TEXTURE_2D, a, b),
-                    |a, b| gl.TexParameterfv(gl::TEXTURE_2D, a, &b[0]),
-                    |a, b| gl.TexParameteri(gl::TEXTURE_2D, a, b),
+                    |a, b| gl.TexParameterf(textype, a, b),
+                    |a, b| gl.TexParameterfv(textype, a, &b[0]),
+                    |a, b| gl.TexParameteri(textype, a, b),
                 );
             }, /*
             com::Command::BindConstantBuffer(pso::ConstantBufferParam(buffer, _, slot)) => unsafe {

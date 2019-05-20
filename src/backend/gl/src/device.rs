@@ -176,14 +176,14 @@ impl Device {
             },
             n::ImageView::Texture((textype, texture), level) => unsafe {
                 gl.BindTexture(textype, texture);
-                gl.FramebufferTexture2D(point, attachment, gl::TEXTURE_2D, texture, level as _);
+                gl.FramebufferTexture2D(point, attachment, textype, texture, level as _);
             },
             n::ImageView::TextureLayer((textype, texture), level, layer) => unsafe {
                 gl.BindTexture(textype, texture);
                 gl.FramebufferTexture3D(
                     point,
                     attachment,
-                    gl::TEXTURE_2D,
+                    textype,
                     texture,
                     level as _,
                     layer as _,
