@@ -1595,8 +1595,23 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn get_fence_status(&self, _: &n::Fence) -> Result<bool, d::DeviceLost> {
-        Ok(true)
+    unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, d::DeviceLost> {
+        let gl = &self.share.context;
+
+        let mut len = 0;
+        let mut values = [0];
+        gl.GetSynciv(fence.0.get(), gl::SYNC_STATUS, values.len() as i32, &mut len, values.as_mut_ptr());
+
+        if len == 0 {
+            if let Err(err) = self.share.check() {
+                error!("Error getting fence status: {:?}", err);
+            } else {
+                error!("Error getting fence status: no status was returned");
+            }
+            Ok(false)
+        } else {
+            Ok(values[0] as gl::types::GLenum == gl::SIGNALED)
+        }
     }
 
     unsafe fn free_memory(&self, _memory: n::Memory) {
