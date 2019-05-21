@@ -354,7 +354,10 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// which references the compute pipeline, has finished execution.
     unsafe fn destroy_compute_pipeline(&self, pipeline: B::ComputePipeline);
 
-    /// Create a new framebuffer object
+    /// Create a new framebuffer object.
+    ///
+    /// # Safety
+    /// - `extent.width`, `extent.height` and `extent.depth` **must** be greater than `0`.
     unsafe fn create_framebuffer<I>(
         &self,
         pass: &B::RenderPass,

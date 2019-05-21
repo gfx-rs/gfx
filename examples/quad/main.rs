@@ -81,6 +81,10 @@ fn main() {
     let mut events_loop = winit::EventsLoop::new();
 
     let wb = winit::WindowBuilder::new()
+        .with_min_dimensions(winit::dpi::LogicalSize::new(
+            1.0,
+            1.0,
+        ))
         .with_dimensions(winit::dpi::LogicalSize::new(
             DIMS.width as _,
             DIMS.height as _,
