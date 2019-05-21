@@ -174,11 +174,11 @@ impl Device {
             n::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
             },
-            n::ImageView::Texture((textype, texture), level) => unsafe {
+            n::ImageView::Texture(texture, textype, level) => unsafe {
                 gl.BindTexture(textype, texture);
                 gl.FramebufferTexture2D(point, attachment, textype, texture, level as _);
             },
-            n::ImageView::TextureLayer((textype, texture), level, layer) => unsafe {
+            n::ImageView::TextureLayer(texture, textype, level, layer) => unsafe {
                 gl.BindTexture(textype, texture);
                 gl.FramebufferTexture3D(
                     point,
@@ -197,10 +197,10 @@ impl Device {
             n::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
             },
-            n::ImageView::Texture((_, texture), level) => unsafe {
+            n::ImageView::Texture(texture, _, level) => unsafe {
                 gl.FramebufferTexture(point, attachment, texture, level as _);
             },
-            n::ImageView::TextureLayer((_, texture), level, layer) => unsafe {
+            n::ImageView::TextureLayer(texture, _, level, layer) => unsafe {
                 gl.FramebufferTextureLayer(point, attachment, texture, level as _, layer as _);
             },
         }
@@ -1291,7 +1291,7 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
-                    n::ImageKind::Texture((gl::TEXTURE_2D, name))
+                    n::ImageKind::Texture(name, gl::TEXTURE_2D)
                 }
                 i::Kind::D2(w, h, l, 1) => {
                     gl.BindTexture(gl::TEXTURE_2D_ARRAY, name);
@@ -1329,7 +1329,7 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
-                    n::ImageKind::Texture((gl::TEXTURE_2D_ARRAY, name))
+                    n::ImageKind::Texture(name, gl::TEXTURE_2D_ARRAY)
                 }
                 _ => unimplemented!(),
             }
@@ -1416,13 +1416,14 @@ impl d::Device<B> for Device {
                     )))
                 }
             }
-            n::ImageKind::Texture(texture) => {
+            n::ImageKind::Texture(texture, textype) => {
                 //TODO: check that `level` exists
                 if range.layers.start == 0 {
-                    Ok(n::ImageView::Texture(texture, level))
+                    Ok(n::ImageView::Texture(texture, textype, level))
                 } else if range.layers.start + 1 == range.layers.end {
                     Ok(n::ImageView::TextureLayer(
                         texture,
+                        textype,
                         level,
                         range.layers.start,
                     ))
@@ -1494,9 +1495,9 @@ impl d::Device<B> for Device {
                     }
                     pso::Descriptor::CombinedImageSampler(view, _layout, sampler) => {
                         match view {
-                            n::ImageView::Texture(tex, _)
-                            | n::ImageView::TextureLayer(tex, _, _) => {
-                                bindings.push(n::DescSetBindings::Texture(binding, *tex))
+                            n::ImageView::Texture(tex, textype, _)
+                            | n::ImageView::TextureLayer(tex, textype, _, _) => {
+                                bindings.push(n::DescSetBindings::Texture(binding, *tex, *textype))
                             }
                             n::ImageView::Surface(_) => unimplemented!(),
                         }
@@ -1509,8 +1510,8 @@ impl d::Device<B> for Device {
                         }
                     }
                     pso::Descriptor::Image(view, _layout) => match view {
-                        n::ImageView::Texture(tex, _) | n::ImageView::TextureLayer(tex, _, _) => {
-                            bindings.push(n::DescSetBindings::Texture(binding, *tex))
+                        n::ImageView::Texture(tex, textype, _) | n::ImageView::TextureLayer(tex, textype, _, _) => {
+                            bindings.push(n::DescSetBindings::Texture(binding, *tex, *textype))
                         }
                         n::ImageView::Surface(_) => panic!(
                             "Texture was created with only render target usage which is invalid."
@@ -1672,7 +1673,7 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         match image.kind {
             n::ImageKind::Surface(rb) => gl.DeleteRenderbuffers(1, &rb),
-            n::ImageKind::Texture((_, t)) => gl.DeleteTextures(1, &t),
+            n::ImageKind::Texture(t, _) => gl.DeleteTextures(1, &t),
         }
     }
 

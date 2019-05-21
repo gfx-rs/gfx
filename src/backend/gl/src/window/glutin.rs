@@ -235,7 +235,7 @@ impl Device {
                             }
                         }
                     };
-                    native::ImageKind::Texture((gl::TEXTURE_2D, name))
+                    native::ImageKind::Texture(name, gl::TEXTURE_2D)
                 } else {
                     let mut name = 0;
                     gl.GenRenderbuffers(1, &mut name);

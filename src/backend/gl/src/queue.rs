@@ -167,10 +167,10 @@ impl CommandQueue {
             &native::ImageView::Surface(surface) => unsafe {
                 gl.FramebufferRenderbuffer(point, attachment, gl::RENDERBUFFER, surface);
             },
-            &native::ImageView::Texture((_, texture), level) => unsafe {
+            &native::ImageView::Texture(texture, _, level) => unsafe {
                 gl.FramebufferTexture(point, attachment, texture, level as gl::types::GLint);
             },
-            &native::ImageView::TextureLayer((_, texture), level, layer) => unsafe {
+            &native::ImageView::TextureLayer(texture, _, level, layer) => unsafe {
                 gl.FramebufferTextureLayer(
                     point,
                     attachment,
@@ -600,7 +600,7 @@ impl CommandQueue {
                 gl.BindBuffer(gl::PIXEL_UNPACK_BUFFER, 0);
                 gl.BindBuffer(gl::PIXEL_PACK_BUFFER, 0);
             },
-            com::Command::CopyBufferToTexture(buffer, (textype, texture), ref r) => unsafe {
+            com::Command::CopyBufferToTexture(buffer, texture, textype, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 assert_eq!(r.image_offset.z, 0);
                 assert_eq!(textype, gl::TEXTURE_2D);
@@ -624,7 +624,7 @@ impl CommandQueue {
             com::Command::CopyBufferToSurface(..) => {
                 unimplemented!() //TODO: use FBO
             }
-            com::Command::CopyTextureToBuffer((textype, texture), buffer, ref r) => unsafe {
+            com::Command::CopyTextureToBuffer(texture, textype, buffer, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 // TODO: handle partial copies gracefully
                 assert_eq!(r.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
@@ -657,7 +657,7 @@ impl CommandQueue {
                 let gl = &self.share.context;
                 gl.BindBufferRange(target, index, buffer, offset, size);
             },
-            com::Command::BindTexture(index, (textype, texture)) => unsafe {
+            com::Command::BindTexture(index, texture, textype) => unsafe {
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0 + index);
                 gl.BindTexture(textype, texture);
@@ -666,7 +666,7 @@ impl CommandQueue {
                 let gl = &self.share.context;
                 gl.BindSampler(index, sampler);
             },
-            com::Command::SetTextureSamplerSettings(index, (textype, texture), ref sinfo) => unsafe {
+            com::Command::SetTextureSamplerSettings(index, texture, textype, ref sinfo) => unsafe {
                 let gl = &self.share.context;
                 gl.ActiveTexture(gl::TEXTURE0 + index);
                 gl.BindTexture(textype, texture);
