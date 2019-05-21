@@ -813,8 +813,6 @@ impl d::Device<B> for Device {
                 assert!(uniform_max_size > 0);
 
                 let mut name = vec!['\0'; uniform_max_size as usize];
-                name[uniform_max_size as usize - 1usize] = '\0';
-
                 let mut offset = 0;
 
                 for uniform in 0..count {
