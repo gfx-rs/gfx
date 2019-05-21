@@ -812,8 +812,7 @@ impl d::Device<B> for Device {
                 );
                 assert!(uniform_max_size > 0);
 
-                let mut name = Vec::with_capacity(uniform_max_size as usize);
-                name.set_len(uniform_max_size as usize);
+                let mut name = vec!['\0'; uniform_max_size as usize];
                 name[uniform_max_size as usize - 1usize] = '\0';
 
                 let mut offset = 0;
@@ -843,7 +842,7 @@ impl d::Device<B> for Device {
                             utype,
                         });
 
-                        offset = size as _;
+                        offset += size as u32;
                     }
                 }
             }
@@ -1603,11 +1602,7 @@ impl d::Device<B> for Device {
         gl.GetSynciv(fence.0.get(), gl::SYNC_STATUS, values.len() as i32, &mut len, values.as_mut_ptr());
 
         if len == 0 {
-            if let Err(err) = self.share.check() {
-                error!("Error getting fence status: {:?}", err);
-            } else {
-                error!("Error getting fence status: no status was returned");
-            }
+            error!("Error getting fence status: {:?}", self.share.check());
             Ok(false)
         } else {
             Ok(values[0] as gl::types::GLenum == gl::SIGNALED)
