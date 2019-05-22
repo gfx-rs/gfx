@@ -9,6 +9,7 @@
 # Compiled
 /doc
 target/
+examples/generated-wasm
 
 # Service
 Cargo.lock
