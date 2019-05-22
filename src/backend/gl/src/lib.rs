@@ -57,6 +57,48 @@ impl GlContainer {
     fn make_current(&self) {
         // Unimplemented
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn from_fn_proc<F>(fn_proc: F) -> GlContainer
+    where F: FnMut(&str) -> *const std::os::raw::c_void {
+        let context = glow::native::Context::from_loader_function(fn_proc);
+        GlContainer { context }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn from_new_canvas() -> GlContainer {
+        let context = {
+            use wasm_bindgen::JsCast;
+            let document = web_sys::window()
+                .and_then(|win| win.document())
+                .expect("Cannot get document");
+            let canvas = document
+                .create_element("canvas")
+                .expect("Cannot create canvas")
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .expect("Cannot get canvas element");
+            // TODO: Remove hardcoded width/height
+            canvas.set_attribute("width", "640").expect("Cannot set width");
+            canvas.set_attribute("height", "480").expect("Cannot set height");
+            let context_options = js_sys::Object::new();
+            js_sys::Reflect::set(
+                &context_options,
+                &"antialias".into(),
+                &wasm_bindgen::JsValue::FALSE
+            ).expect("Cannot create context options");
+            let webgl2_context = canvas
+                .get_context_with_context_options("webgl2", &context_options)
+                .expect("Cannot create WebGL2 context")
+                .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
+                .expect("Cannot convert into WebGL2 context");
+            document.body()
+                .expect("Cannot get document body")
+                .append_child(&canvas)
+                .expect("Cannot insert canvas into document body");
+            glow::web::Context::from_webgl2_context(webgl2_context)
+        };
+        GlContainer { context }
+    }
 }
 
 impl Deref for GlContainer {
@@ -247,35 +289,7 @@ pub struct PhysicalDevice(Starc<Share>);
 
 impl PhysicalDevice {
     #[allow(unused)]
-    fn new_adapter<F>(fn_proc: F, webgl_context_id: Option<&str>) -> hal::Adapter<Backend>
-    where
-        F: FnMut(&str) -> *const std::os::raw::c_void,
-    {
-        #[cfg(target_arch = "wasm32")]
-        let context = {
-            use wasm_bindgen::JsCast;
-            let canvas = web_sys::window()
-                .unwrap()
-                .document()
-                .unwrap()
-                .get_element_by_id(webgl_context_id.unwrap())
-                .unwrap()
-                .dyn_into::<web_sys::HtmlCanvasElement>()
-                .unwrap();
-            let webgl2_context = canvas
-                .get_context("webgl2")
-                .unwrap()
-                .unwrap()
-                .dyn_into::<web_sys::WebGl2RenderingContext>()
-                .unwrap();
-            glow::web::Context::from_webgl2_context(webgl2_context)
-        };
-
-        #[cfg(not(target_arch = "wasm32"))]
-        let context = glow::native::Context::from_loader_function(fn_proc);
-
-        let gl = GlContainer { context };
-
+    fn new_adapter(gl: GlContainer) -> hal::Adapter<Backend> {
         // query information
         let (info, features, legacy_features, limits, private_caps) = info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
