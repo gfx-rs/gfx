@@ -1,6 +1,6 @@
 [package]
 name = "gfx-hal"
-version = "0.2.1"
+version = "0.2.0"
 description = "gfx-rs hardware abstraction layer"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
