@@ -116,11 +116,11 @@ pub enum Command {
     ),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
-    CopyBufferToTexture(n::RawBuffer, n::Texture, command::BufferImageCopy),
+    CopyBufferToTexture(n::RawBuffer, n::Texture, n::TextureType, command::BufferImageCopy),
     CopyBufferToSurface(n::RawBuffer, n::Surface, command::BufferImageCopy),
-    CopyTextureToBuffer(n::Texture, n::RawBuffer, command::BufferImageCopy),
+    CopyTextureToBuffer(n::Texture, n::TextureType, n::RawBuffer, command::BufferImageCopy),
     CopySurfaceToBuffer(n::Surface, n::RawBuffer, command::BufferImageCopy),
-    CopyImageToTexture(n::ImageKind, n::Texture, command::ImageCopy),
+    CopyImageToTexture(n::ImageKind, n::Texture, n::TextureType, command::ImageCopy),
     CopyImageToSurface(n::ImageKind, n::Surface, command::ImageCopy),
 
     BindBufferRange(
@@ -130,9 +130,9 @@ pub enum Command {
         gl::types::GLintptr,
         gl::types::GLsizeiptr,
     ),
-    BindTexture(gl::types::GLenum, n::Texture),
-    BindSampler(gl::types::GLuint, n::Texture),
-    SetTextureSamplerSettings(gl::types::GLuint, n::Texture, image::SamplerInfo),
+    BindTexture(gl::types::GLenum, n::Texture, n::TextureType),
+    BindSampler(gl::types::GLuint, n::Sampler),
+    SetTextureSamplerSettings(gl::types::GLuint, n::Texture, n::TextureType, image::SamplerInfo),
 }
 
 pub type FrameBufferTarget = gl::types::GLenum;
@@ -680,7 +680,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 // 2. ClearBuffer
                 let view = match image.kind {
                     n::ImageKind::Surface(id) => n::ImageView::Surface(id),
-                    n::ImageKind::Texture(id) => n::ImageView::Texture(id, 0), //TODO
+                    n::ImageKind::Texture(id, textype) => n::ImageView::Texture(id, textype, 0), //TODO
                 };
                 self.push_cmd(Command::BindFrameBuffer(gl::DRAW_FRAMEBUFFER, fbo));
                 self.push_cmd(Command::BindTargetView(
@@ -706,12 +706,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             }
             None => {
                 // 1. glClear
-                let text = match image.kind {
-                    n::ImageKind::Texture(id) => id, //TODO
+                let (tex, textype) = match image.kind {
+                    n::ImageKind::Texture(id, textype) => (id, textype), //TODO
                     n::ImageKind::Surface(_id) => unimplemented!(),
                 };
 
-                self.push_cmd(Command::BindTexture(0, text));
+                self.push_cmd(Command::BindTexture(0, tex, textype));
                 self.push_cmd(Command::ClearTexture(color.float32));
             }
         }
@@ -1003,12 +1003,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                             ))
                         }
                     }
-                    n::DescSetBindings::Texture(binding, texture) => {
+                    n::DescSetBindings::Texture(binding, texture, textype) => {
                         for binding in drd
                             .get_binding(n::BindingTypes::Images, set, *binding)
                             .unwrap()
                         {
-                            self.push_cmd(Command::BindTexture(*binding, *texture))
+                            self.push_cmd(Command::BindTexture(*binding, *texture, *textype))
                         }
                     }
                     n::DescSetBindings::Sampler(binding, sampler) => {
@@ -1026,11 +1026,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                             .into_iter()
                             .flat_map(|binding| {
                                 bindings.iter().filter_map(move |b| {
-                                    if let n::DescSetBindings::Texture(b, t) = b {
+                                    if let n::DescSetBindings::Texture(b, t, ttype) = b {
                                         let nbs =
                                             drd.get_binding(n::BindingTypes::Images, set, *b)?;
                                         if nbs.contains(binding) {
-                                            Some((*binding, *t))
+                                            Some((*binding, *t, *ttype))
                                         } else {
                                             None
                                         }
@@ -1049,10 +1049,11 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         all_txts.sort_unstable_by(|a, b| a.1.cmp(&b.1));
                         all_txts.dedup_by(|a, b| a.1 == b.1);
 
-                        for (binding, txt) in all_txts {
+                        for (binding, txt, txttype) in all_txts {
                             self.push_cmd(Command::SetTextureSamplerSettings(
                                 binding,
                                 txt,
+                                txttype,
                                 sinfo.clone(),
                             ))
                         }
@@ -1100,7 +1101,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
     {
-        let old_offset = self.buf.offset;
+        let old_size = self.buf.size;
 
         for region in regions {
             let r = region.borrow().clone();
@@ -1108,7 +1109,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             self.push_cmd(cmd);
         }
 
-        if self.buf.offset == old_offset {
+        if self.buf.size == old_size {
             error!("At least one region must be specified");
         }
     }
@@ -1124,18 +1125,18 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ImageCopy>,
     {
-        let old_offset = self.buf.offset;
+        let old_size = self.buf.size;
 
         for region in regions {
             let r = region.borrow().clone();
             let cmd = match dst.kind {
                 n::ImageKind::Surface(s) => Command::CopyImageToSurface(src.kind, s, r),
-                n::ImageKind::Texture(t) => Command::CopyImageToTexture(src.kind, t, r),
+                n::ImageKind::Texture(t, tt) => Command::CopyImageToTexture(src.kind, t, tt, r),
             };
             self.push_cmd(cmd);
         }
 
-        if self.buf.offset == old_offset {
+        if self.buf.size == old_size {
             error!("At least one region must be specified");
         }
     }
@@ -1156,7 +1157,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             let r = region.borrow().clone();
             let cmd = match dst.kind {
                 n::ImageKind::Surface(s) => Command::CopyBufferToSurface(src.raw, s, r),
-                n::ImageKind::Texture(t) => Command::CopyBufferToTexture(src.raw, t, r),
+                n::ImageKind::Texture(t, tt) => Command::CopyBufferToTexture(src.raw, t, tt, r),
             };
             self.push_cmd(cmd);
         }
@@ -1182,7 +1183,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             let r = region.borrow().clone();
             let cmd = match src.kind {
                 n::ImageKind::Surface(s) => Command::CopySurfaceToBuffer(s, dst.raw, r),
-                n::ImageKind::Texture(t) => Command::CopyTextureToBuffer(t, dst.raw, r),
+                n::ImageKind::Texture(t, tt) => Command::CopyTextureToBuffer(t, tt, dst.raw, r),
             };
             self.push_cmd(cmd);
         }
