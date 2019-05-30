@@ -33,8 +33,8 @@ pub use self::queue::{
     Submission, Supports, Transfer,
 };
 pub use self::window::{
-    AcquireError, CompositeAlpha, PresentMode, Surface, SurfaceCapabilities,
-    SwapImageIndex, Swapchain, SwapchainConfig,
+    AcquireError, CompositeAlpha, PresentMode, Surface, SurfaceCapabilities, SwapImageIndex,
+    Swapchain, SwapchainConfig,
 };
 
 pub mod adapter;
