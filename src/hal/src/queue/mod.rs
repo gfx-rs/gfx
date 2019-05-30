@@ -11,9 +11,9 @@ pub mod family;
 
 use std::any::Any;
 use std::borrow::Borrow;
+use std::fmt;
 use std::iter;
 use std::marker::PhantomData;
-use std::fmt;
 
 use crate::command::{Primary, Submittable};
 use crate::error::HostExecutionError;

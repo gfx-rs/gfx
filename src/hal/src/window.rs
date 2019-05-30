@@ -59,8 +59,8 @@ use crate::Backend;
 use std::any::Any;
 use std::borrow::Borrow;
 use std::cmp::{max, min};
-use std::iter;
 use std::fmt;
+use std::iter;
 use std::ops::Range;
 
 /// Error occurred during swapchain creation.

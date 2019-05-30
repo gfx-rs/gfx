@@ -145,6 +145,7 @@ pub struct AdapterInfo {
 /// `physical_device` field. However, if only a single queue family is needed or if no
 /// additional device features are required, then the `Adapter::open_with` convenience method
 /// can be used instead.
+#[derive(Debug)]
 pub struct Adapter<B: Backend> {
     /// General information about this adapter.
     pub info: AdapterInfo,
