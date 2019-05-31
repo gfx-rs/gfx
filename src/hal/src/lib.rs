@@ -1,4 +1,4 @@
-#![deny(missing_docs, unused)]
+#![deny(missing_debug_implementations, missing_docs, unused)]
 
 //! Low-level graphics abstraction for Rust. Mostly operates on data, not types.
 //! Designed for use by libraries and higher-level abstractions only.
@@ -527,6 +527,7 @@ pub type SubmissionResult<T> = Result<T, SubmissionError>;
 /// hardware queues it provides.
 ///
 /// This structure is typically created using an `Adapter`.
+#[derive(Debug)]
 pub struct Gpu<B: Backend> {
     /// Logical device for a given backend.
     pub device: B::Device,

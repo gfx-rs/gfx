@@ -374,6 +374,7 @@ impl SwapchainConfig {
 
 /// Marker value returned if the swapchain no longer matches the surface properties exactly,
 /// but can still be used to present to the surface successfully.
+#[derive(Debug)]
 pub struct Suboptimal;
 
 /// Error on acquiring the next image from a swapchain.

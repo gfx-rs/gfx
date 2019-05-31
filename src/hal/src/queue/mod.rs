@@ -39,6 +39,7 @@ pub enum QueueType {
 }
 
 /// Submission information for a command queue.
+#[derive(Debug)]
 pub struct Submission<Ic, Iw, Is> {
     /// Command buffers to submit.
     pub command_buffers: Ic,
