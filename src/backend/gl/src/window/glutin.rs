@@ -73,7 +73,11 @@ pub struct Swapchain {
 }
 impl fmt::Debug for Swapchain {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-        write!(formatter, "Swapchain {{ window: {:p}, extent: {:?} }}", self.window, self.extent)
+        write!(
+            formatter,
+            "Swapchain {{ window: {:p}, extent: {:?} }}",
+            self.window, self.extent
+        )
     }
 }
 
@@ -109,9 +113,7 @@ impl Surface {
         }
     }
     pub fn from_arc_window(window: Arc<glutin::WindowedContext>) -> Self {
-        Surface {
-            window,
-        }
+        Surface { window }
     }
 
     pub fn get_window(&self) -> &glutin::WindowedContext {
