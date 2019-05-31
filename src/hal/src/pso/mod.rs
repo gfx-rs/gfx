@@ -237,7 +237,7 @@ impl Default for Specialization<'_> {
 }
 
 #[doc(hidden)]
-#[derive(Default)]
+#[derive(Debug, Default)]
 pub struct SpecializationStorage {
     constants: Vec<SpecializationConstant>,
     data: Vec<u8>,
@@ -264,9 +264,11 @@ where
 }
 
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct SpecConstListNil;
 
 #[doc(hidden)]
+#[derive(Debug)]
 pub struct SpecConstListCons<H, T> {
     pub head: (u32, H),
     pub tail: T,

@@ -30,6 +30,7 @@ impl From<device::OutOfMemory> for Error {
 }
 
 /// Mapping reader
+#[derive(Debug)]
 pub struct Reader<'a, B: Backend, T: 'a> {
     pub(crate) slice: &'a [T],
     pub(crate) memory: &'a B::Memory,
@@ -52,6 +53,7 @@ impl<'a, B: Backend, T: 'a> ops::Deref for Reader<'a, B, T> {
 /// Mapping writer.
 /// Currently is not possible to make write-only slice so while it is technically possible
 /// to read from Writer, it will lead to an undefined behavior. Please do not read from it.
+#[derive(Debug)]
 pub struct Writer<'a, B: Backend, T: 'a> {
     pub(crate) slice: &'a mut [T],
     pub(crate) memory: &'a B::Memory,
