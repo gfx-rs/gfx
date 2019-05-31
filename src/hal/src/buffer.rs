@@ -131,6 +131,7 @@ bitflags!(
 ///
 /// Defines a buffer slice used for acquiring the indices on draw commands.
 /// Indices are used to lookup vertex indices in the vertex buffers.
+#[derive(Debug)]
 pub struct IndexBufferView<'a, B: Backend> {
     /// The buffer to bind.
     pub buffer: &'a B::Buffer,

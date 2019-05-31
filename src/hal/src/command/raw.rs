@@ -28,6 +28,12 @@ pub union ClearColorRaw {
     _align: [u32; 4],
 }
 
+impl std::fmt::Debug for ClearColorRaw {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        writeln![f, "ClearColorRaw"]
+    }
+}
+
 /// A variant of `ClearDepthStencil` that has a `#[repr(C)]` layout
 /// and so is used when a known layout is needed.
 #[repr(C)]

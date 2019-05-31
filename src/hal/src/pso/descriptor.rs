@@ -200,6 +200,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 /// Writes the actual descriptors to be bound into a descriptor set. Should be provided
 /// to the `write_descriptor_sets` method of a `Device`.
 #[allow(missing_docs)]
+#[derive(Debug)]
 pub struct DescriptorSetWrite<'a, B: Backend, WI>
 where
     WI: IntoIterator,
@@ -220,7 +221,7 @@ where
 ///
 /// [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
 #[allow(missing_docs)]
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Descriptor<'a, B: Backend> {
     Sampler(&'a B::Sampler),
     Image(&'a B::ImageView, Layout),
@@ -233,7 +234,7 @@ pub enum Descriptor<'a, B: Backend> {
 /// Copies a range of descriptors to be bound from one descriptor set to another Should be
 /// provided to the `copy_descriptor_sets` method of a `Device`.
 #[allow(missing_docs)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct DescriptorSetCopy<'a, B: Backend> {
     pub src_set: &'a B::DescriptorSet,
     pub src_binding: DescriptorBinding,
