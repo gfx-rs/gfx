@@ -2650,7 +2650,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     let channel = self.state.target_formats.colors[index].1;
                     //Note: technically we should be able to derive the Channel from the
                     // `value` variant, but this is blocked by the portability that is
-                    // always passing the attachment clears as `ClearColor::Float` atm.
+                    // always passing the attachment clears as `ClearColor::Sfloat` atm.
                     raw_value = com::ClearColorRaw::from(value);
                     let com = soft::RenderCommand::BindBufferData {
                         stage: pso::Stage::Fragment,

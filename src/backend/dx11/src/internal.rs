@@ -675,7 +675,7 @@ impl Internal {
         clear: command::ClearColor,
     ) {
         match clear {
-            command::ClearColor::Float(value) => {
+            command::ClearColor::Sfloat(value) => {
                 unsafe {
                     ptr::copy(
                         &PartialClearInfo {
@@ -697,7 +697,7 @@ impl Internal {
                     )
                 };
             }
-            command::ClearColor::Int(value) => {
+            command::ClearColor::Sint(value) => {
                 unsafe {
                     ptr::copy(
                         &PartialClearInfo {
@@ -1234,7 +1234,7 @@ impl Internal {
                     }
 
                     match value {
-                        command::ClearColor::Float(_) => unsafe {
+                        command::ClearColor::Sfloat(_) => unsafe {
                             context.PSSetShader(
                                 self.ps_partial_clear_float.as_raw(),
                                 ptr::null_mut(),
@@ -1248,7 +1248,7 @@ impl Internal {
                                 0,
                             );
                         },
-                        command::ClearColor::Int(_) => unsafe {
+                        command::ClearColor::Sint(_) => unsafe {
                             context.PSSetShader(
                                 self.ps_partial_clear_int.as_raw(),
                                 ptr::null_mut(),

@@ -567,7 +567,7 @@ impl<B: Backend> RendererState<B> {
                         self.render_pass.render_pass.as_ref().unwrap(),
                         framebuffer,
                         self.viewport.rect,
-                        &[command::ClearValue::Color(command::ClearColor::Float([
+                        &[command::ClearValue::Color(command::ClearColor::Sfloat([
                             cr, cg, cb, 1.0,
                         ]))],
                     );

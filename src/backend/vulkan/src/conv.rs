@@ -75,8 +75,8 @@ pub fn map_image_aspects(aspects: format::Aspects) -> vk::ImageAspectFlags {
 
 pub fn map_clear_color(value: command::ClearColor) -> vk::ClearColorValue {
     match value {
-        command::ClearColor::Float(v) => vk::ClearColorValue { float32: v },
-        command::ClearColor::Int(v) => vk::ClearColorValue { int32: v },
+        command::ClearColor::Sfloat(v) => vk::ClearColorValue { float32: v },
+        command::ClearColor::Sint(v) => vk::ClearColorValue { int32: v },
         command::ClearColor::Uint(v) => vk::ClearColorValue { uint32: v },
     }
 }

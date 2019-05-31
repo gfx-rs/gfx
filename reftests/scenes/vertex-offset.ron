@@ -154,7 +154,7 @@
         "offset-aligned": Graphics(
             framebuffer: "fbo",
             clear_values: [
-                Color(Float((0.0, 0.0, 0.0, 0.0))),
+                Color(Sfloat((0.0, 0.0, 0.0, 0.0))),
             ],
             pass: ("pass", {
                 "main": (commands: [
@@ -169,7 +169,7 @@
         "offset-overlap": Graphics(
             framebuffer: "fbo",
             clear_values: [
-                Color(Float((0.0, 0.0, 0.0, 0.0))),
+                Color(Sfloat((0.0, 0.0, 0.0, 0.0))),
             ],
             pass: ("pass", {
                 "main": (commands: [
