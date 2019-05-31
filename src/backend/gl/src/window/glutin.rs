@@ -43,10 +43,13 @@
 //! }
 //! ```
 
+use std::fmt;
+use std::sync::Arc;
+
 use crate::hal::window::Extent2D;
 use crate::hal::{self, format as f, image, memory, CompositeAlpha};
 
-use crate::{native, Backend as B, Device, PhysicalDevice, QueueFamily, Starc};
+use crate::{native, Backend as B, Device, PhysicalDevice, QueueFamily};
 
 use glutin::{self, ContextTrait};
 
@@ -62,12 +65,16 @@ fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
     }
 }
 
-#[derive(Debug)]
 pub struct Swapchain {
     // Underlying window, required for presentation
-    pub(crate) window: Starc<glutin::WindowedContext>,
+    pub(crate) window: Arc<glutin::WindowedContext>,
     // Extent because the window lies
     pub(crate) extent: Extent2D,
+}
+impl fmt::Debug for Swapchain {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "Swapchain {{ window: {:p}, extent: {:?} }}", self.window, self.extent)
+    }
 }
 
 impl hal::Swapchain<B> for Swapchain {
@@ -85,15 +92,25 @@ impl hal::Swapchain<B> for Swapchain {
 //TODO: if we make `Surface` a `WindowBuilder` instead of `WindowedContext`,
 // we could spawn window + GL context when a swapchain is requested
 // and actually respect the swapchain configuration provided by the user.
-#[derive(Debug)]
 pub struct Surface {
-    window: Starc<glutin::WindowedContext>,
+    window: Arc<glutin::WindowedContext>,
+}
+
+impl fmt::Debug for Surface {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "Surface {{ window: {:p} }}", self.window)
+    }
 }
 
 impl Surface {
     pub fn from_window(window: glutin::WindowedContext) -> Self {
         Surface {
-            window: Starc::new(window),
+            window: Arc::new(window),
+        }
+    }
+    pub fn from_arc_window(window: Arc<glutin::WindowedContext>) -> Self {
+        Surface {
+            window,
         }
     }
 
