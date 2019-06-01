@@ -13,8 +13,9 @@ use crate::hal::pool::CommandPoolCreateFlags;
 use crate::hal::queue::QueueFamilyId;
 use crate::hal::range::RangeArg;
 use crate::hal::{
-    self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query,
+    self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query
 };
+use crate::hal::window::Extent2D;
 
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
@@ -1801,7 +1802,146 @@ impl d::Device<B> for Device {
         config: c::SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
     ) -> Result<(Swapchain, Vec<n::Image>), c::window::CreationError> {
-        Ok(self.create_swapchain_impl(surface, config))
+        let gl = &self.share.context;
+
+        let (int_format, iformat, itype) = match config.format {
+            Format::Rgba8Unorm => (gl::RGBA8, gl::RGBA, gl::UNSIGNED_BYTE),
+            Format::Bgra8Unorm => (gl::RGBA8, gl::BGRA, gl::UNSIGNED_BYTE),
+            Format::Rgba8Srgb => (gl::SRGB8_ALPHA8, gl::RGBA, gl::UNSIGNED_BYTE),
+            _ => unimplemented!(),
+        };
+
+        let channel = config.format.base_format().1;
+
+        #[cfg(feature = "wgl")]
+        let context = {
+            use crate::window::wgl::PresentContext;
+
+            let context = PresentContext::new(surface, &self.share.instance_ctxt);
+            context.make_current();
+            context
+        };
+
+        let mut fbos = Vec::new();
+        let mut images = Vec::new();
+
+        for _ in 0..config.image_count {
+            unsafe {
+                let mut fbo = 0;
+                gl.GenFramebuffers(1, &mut fbo);
+                gl.BindFramebuffer(gl::FRAMEBUFFER, fbo);
+                fbos.push(fbo);
+
+                let image = if config.image_layers > 1
+                    || config.image_usage.contains(i::Usage::STORAGE)
+                    || config.image_usage.contains(i::Usage::SAMPLED)
+                {
+                    let mut name = 0;
+                    gl.GenTextures(1, &mut name);
+                    match config.extent {
+                        Extent2D {
+                            width: w,
+                            height: h,
+                        } => {
+                            gl.BindTexture(gl::TEXTURE_2D, name);
+                            if self.share.private_caps.image_storage {
+                                gl.TexStorage2D(
+                                    gl::TEXTURE_2D,
+                                    config.image_layers as _,
+                                    int_format,
+                                    w as _,
+                                    h as _,
+                                );
+                            } else {
+                                gl.TexParameteri(
+                                    gl::TEXTURE_2D,
+                                    gl::TEXTURE_MAX_LEVEL,
+                                    (config.image_layers - 1) as _,
+                                );
+                                let mut w = w;
+                                let mut h = h;
+                                for i in 0..config.image_layers {
+                                    gl.TexImage2D(
+                                        gl::TEXTURE_2D,
+                                        i as _,
+                                        int_format as _,
+                                        w as _,
+                                        h as _,
+                                        0,
+                                        iformat,
+                                        itype,
+                                        std::ptr::null(),
+                                    );
+                                    w = std::cmp::max(w / 2, 1);
+                                    h = std::cmp::max(h / 2, 1);
+                                }
+                            }
+
+                            gl.FramebufferTexture(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, name, 0);
+
+                            dbg!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER));
+                            dbg!(self.share.check());
+                        }
+                    };
+                    n::ImageKind::Texture(name, gl::TEXTURE_2D)
+                } else {
+                    let mut name = 0;
+                    gl.GenRenderbuffers(1, &mut name);
+                    match config.extent {
+                        Extent2D {
+                            width: w,
+                            height: h,
+                        } => {
+                            gl.BindRenderbuffer(gl::RENDERBUFFER, name);
+                            gl.RenderbufferStorage(gl::RENDERBUFFER, int_format, w as _, h as _);
+                        }
+                    };
+
+                    gl.FramebufferRenderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, name);
+
+                    dbg!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER));
+                    dbg!(self.share.check());
+
+                    n::ImageKind::Surface(name)
+                };
+
+                let surface_desc = config.format.base_format().0.desc();
+                let bytes_per_texel = surface_desc.bits / 8;
+                let ext = config.extent;
+                let size = (ext.width * ext.height) as u64 * bytes_per_texel as u64;
+
+                if let Err(err) = self.share.check() {
+                    panic!(
+                        "Error creating swapchain image: {:?} with {:?} format",
+                        err, config.format
+                    );
+                }
+
+                images.push(n::Image {
+                    kind: image,
+                    channel,
+                    requirements: memory::Requirements {
+                        size,
+                        alignment: 1,
+                        type_mask: 0x7,
+                    },
+                });
+            }
+        }
+
+        #[cfg(feature = "wgl")]
+        let swapchain = {
+            self.share.instance_ctxt.make_current();
+            Swapchain { fbos, context, extent: config.extent }
+        };
+        #[cfg(feature = "glutin")]
+        let swapchain = Swapchain {
+            fbos,
+            extent: config.extent,
+            window: surface.window.clone(),
+        };
+
+        Ok((swapchain, images))
     }
 
     unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {

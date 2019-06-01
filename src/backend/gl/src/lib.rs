@@ -10,6 +10,8 @@ extern crate log;
 extern crate gfx_hal as hal;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub extern crate glutin;
+#[macro_use]
+extern crate lazy_static;
 
 use std::cell::Cell;
 use std::fmt;
@@ -43,6 +45,11 @@ pub use glow::native::Context as GlContext;
 #[cfg(target_arch = "wasm32")]
 pub use glow::web::Context as GlContext;
 use glow::Context;
+
+#[cfg(feature = "wgl")]
+use window::wgl::{DeviceContext, Surface, Swapchain};
+#[cfg(feature = "wgl")]
+pub use window::wgl::{Instance};
 
 pub(crate) struct GlContainer {
     context: GlContext,
@@ -225,6 +232,12 @@ enum MemoryUsage {
 /// Internal struct of shared data between the physical and logical device.
 struct Share {
     context: GlContainer,
+    /// Context associated with an instance.
+    ///
+    /// Parenting context for all device contexts shared with it.
+    /// Used for querying basic information and spawning shared contexts.
+    instance_ctxt: DeviceContext,
+
     info: Info,
     features: hal::Features,
     legacy_features: info::LegacyFeatures,
@@ -367,6 +380,9 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 #[derive(Debug)]
 pub struct PhysicalDevice(Starc<Share>);
 
+#[cfg(feature = "glutin")]
+type DeviceContext = ();
+
 impl PhysicalDevice {
     #[allow(unused)]
     fn new_adapter(gl: GlContainer) -> hal::Adapter<Backend> {
@@ -449,6 +465,7 @@ impl PhysicalDevice {
         // create the shared context
         let share = Share {
             context: gl,
+            instance_ctxt,
             info,
             features,
             legacy_features,

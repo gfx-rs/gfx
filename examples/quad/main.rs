@@ -4,7 +4,8 @@
         feature = "dx11",
         feature = "dx12",
         feature = "metal",
-        feature = "gl"
+        feature = "gl",
+        feature = "wgl"
     )),
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
@@ -13,7 +14,7 @@
 extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12 as back;
-#[cfg(feature = "gl")]
+#[cfg(any(feature = "gl", feature = "wgl"))]
 extern crate gfx_backend_gl as back;
 #[cfg(feature = "metal")]
 extern crate gfx_backend_metal as back;
@@ -77,7 +78,8 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     feature = "dx11",
     feature = "dx12",
     feature = "metal",
-    feature = "gl"
+    feature = "gl",
+    feature = "wgl"
 ))]
 fn main() {
     #[cfg(target_arch = "wasm32")]
@@ -862,8 +864,9 @@ fn main() {
     feature = "dx11",
     feature = "dx12",
     feature = "metal",
-    feature = "gl"
+    feature = "gl",
+    feature = "wgl"
 )))]
 fn main() {
-    println!("You need to enable the native API feature (vulkan/metal) in order to test the LL");
+    println!("You need to enable the native API feature (vulkan/metal/dx11/dx12/gl/wgl) in order to test the LL");
 }

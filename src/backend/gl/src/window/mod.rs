@@ -2,3 +2,6 @@
 pub mod glutin;
 #[cfg(target_arch = "wasm32")]
 pub mod web;
+
+#[cfg(feature = "wgl")]
+pub mod wgl;
