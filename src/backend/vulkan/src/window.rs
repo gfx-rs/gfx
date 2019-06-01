@@ -438,6 +438,7 @@ impl hal::Swapchain<Backend> for Swapchain {
                 }
             }
             Err(vk::Result::NOT_READY) => Err(hal::AcquireError::NotReady),
+            Err(vk::Result::TIMEOUT) => Err(hal::AcquireError::Timeout),
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
                 Err(hal::AcquireError::OutOfDate)
             }
