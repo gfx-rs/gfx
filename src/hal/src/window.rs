@@ -383,9 +383,12 @@ pub enum AcquireError {
     /// Out of either host or device memory.
     #[fail(display = "{}", _0)]
     OutOfMemory(device::OutOfMemory),
-    /// No image was ready after the specified timeout expired.
+    /// No image was ready and no timeout was specified.
     #[fail(display = "No images ready")]
     NotReady,
+    /// No image was ready after the specified timeout expired.
+    #[fail(display = "No images ready after the specified timeout expired")]
+    Timeout,
     /// The swapchain is no longer in sync with the surface, needs to be re-created.
     #[fail(display = "Swapchain is out of date")]
     OutOfDate,
