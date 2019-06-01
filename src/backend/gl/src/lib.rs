@@ -299,6 +299,9 @@ impl PhysicalDevice {
             "mali",
             "intel",
         ];
+        let strings_that_imply_cpu = [
+            "mesa offscreen"
+        ];
         // todo: Intel will release a discrete gpu soon, and we will need to update this logic when they do
         let inferred_device_type = if vendor_lower.contains("qualcomm")
             || vendor_lower.contains("intel")
@@ -307,6 +310,11 @@ impl PhysicalDevice {
                 .any(|&s| renderer_lower.contains(s))
         {
             hal::adapter::DeviceType::IntegratedGpu
+        } else if strings_that_imply_cpu
+            .into_iter()
+            .any(|&s| renderer_lower.contains(s))
+        {
+            hal::adapter::DeviceType::Cpu
         } else {
             hal::adapter::DeviceType::DiscreteGpu
         };
@@ -407,7 +415,15 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, _: Option<hal::format::Format>) -> hal::format::Properties {
-        unimplemented!()
+        use hal::format::ImageFeature;
+        use hal::format::BufferFeature;
+
+        // TODO: These are for show
+        hal::format::Properties {
+            linear_tiling: ImageFeature::SAMPLED,
+            optimal_tiling: ImageFeature::SAMPLED,
+            buffer_features: BufferFeature::VERTEX,
+        }
     }
 
     fn image_format_properties(
@@ -479,5 +495,42 @@ impl hal::QueueFamily for QueueFamily {
     }
     fn id(&self) -> QueueFamilyId {
         QueueFamilyId(0)
+    }
+}
+
+#[cfg(feature = "glutin")]
+pub enum Instance {
+    Headless(Headless),
+    Surface(Surface)
+}
+
+#[cfg(feature = "glutin")]
+impl hal::Instance for Instance {
+    type Backend = Backend;
+    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+        match self {
+            Instance::Headless(instance) => instance.enumerate_adapters(),
+            Instance::Surface(instance) => instance.enumerate_adapters(),
+        }
+    }
+}
+
+#[cfg(feature = "glutin")]
+impl Instance {
+    /// TODO: Update portability to make this more flexible
+    pub fn create(_: &str, _: u32) -> Instance {
+        use glutin::os::unix::OsMesaContextExt;
+        use glutin::ContextTrait;
+        let size = glutin::dpi::PhysicalSize::from((800, 600));
+        let builder = glutin::ContextBuilder::new()
+            .with_hardware_acceleration(Some(false));
+        let context: glutin::Context = OsMesaContextExt::new_osmesa(builder, size)
+            .expect("failed to create osmesa context");
+        unsafe {
+            context.make_current()
+                .expect("failed to make context current");
+        }
+        let headless = Headless(context);
+        Instance::Headless(headless)
     }
 }
