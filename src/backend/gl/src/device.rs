@@ -1832,100 +1832,31 @@ impl d::Device<B> for Device {
                 gl.BindFramebuffer(gl::FRAMEBUFFER, fbo);
                 fbos.push(fbo);
 
-                let image = if config.image_layers > 1
-                    || config.image_usage.contains(i::Usage::STORAGE)
-                    || config.image_usage.contains(i::Usage::SAMPLED)
-                {
-                    let mut name = 0;
-                    gl.GenTextures(1, &mut name);
-                    match config.extent {
-                        Extent2D {
-                            width: w,
-                            height: h,
-                        } => {
-                            gl.BindTexture(gl::TEXTURE_2D, name);
-                            if self.share.private_caps.image_storage {
-                                gl.TexStorage2D(
-                                    gl::TEXTURE_2D,
-                                    config.image_layers as _,
-                                    int_format,
-                                    w as _,
-                                    h as _,
-                                );
-                            } else {
-                                gl.TexParameteri(
-                                    gl::TEXTURE_2D,
-                                    gl::TEXTURE_MAX_LEVEL,
-                                    (config.image_layers - 1) as _,
-                                );
-                                let mut w = w;
-                                let mut h = h;
-                                for i in 0..config.image_layers {
-                                    gl.TexImage2D(
-                                        gl::TEXTURE_2D,
-                                        i as _,
-                                        int_format as _,
-                                        w as _,
-                                        h as _,
-                                        0,
-                                        iformat,
-                                        itype,
-                                        std::ptr::null(),
-                                    );
-                                    w = std::cmp::max(w / 2, 1);
-                                    h = std::cmp::max(h / 2, 1);
-                                }
-                            }
+                let Extent2D { width, height } = config.extent;
+                let image = self.create_image(
+                    i::Kind::D2(width, height, config.image_layers, 1),
+                    1,
+                    config.format,
+                    i::Tiling::Optimal,
+                    config.image_usage,
+                    i::ViewCapabilities::empty(),
+                ).unwrap();
 
-                            gl.FramebufferTexture(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, name, 0);
-
-                            dbg!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER));
-                            dbg!(self.share.check());
+                match image.kind {
+                    n::ImageKind::Surface(surface) => {
+                        gl.FramebufferRenderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, surface);
+                    }
+                    n::ImageKind::Texture(texture, textype) => {
+                        if self.share.private_caps.framebuffer_texture {
+                            gl.FramebufferTexture(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, texture, 0);
+                        } else {
+                            gl.BindTexture(textype, texture);
+                            gl.FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, textype, texture, 0);
                         }
-                    };
-                    n::ImageKind::Texture(name, gl::TEXTURE_2D)
-                } else {
-                    let mut name = 0;
-                    gl.GenRenderbuffers(1, &mut name);
-                    match config.extent {
-                        Extent2D {
-                            width: w,
-                            height: h,
-                        } => {
-                            gl.BindRenderbuffer(gl::RENDERBUFFER, name);
-                            gl.RenderbufferStorage(gl::RENDERBUFFER, int_format, w as _, h as _);
-                        }
-                    };
-
-                    gl.FramebufferRenderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, name);
-
-                    dbg!(gl.CheckFramebufferStatus(gl::FRAMEBUFFER));
-                    dbg!(self.share.check());
-
-                    n::ImageKind::Surface(name)
-                };
-
-                let surface_desc = config.format.base_format().0.desc();
-                let bytes_per_texel = surface_desc.bits / 8;
-                let ext = config.extent;
-                let size = (ext.width * ext.height) as u64 * bytes_per_texel as u64;
-
-                if let Err(err) = self.share.check() {
-                    panic!(
-                        "Error creating swapchain image: {:?} with {:?} format",
-                        err, config.format
-                    );
+                    }
                 }
 
-                images.push(n::Image {
-                    kind: image,
-                    channel,
-                    requirements: memory::Requirements {
-                        size,
-                        alignment: 1,
-                        type_mask: 0x7,
-                    },
-                });
+                images.push(image);
             }
         }
 

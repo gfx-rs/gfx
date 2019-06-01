@@ -103,7 +103,7 @@ impl Entry {
             dwDamageMask: 0,
         };
 
-        let format_id = unsafe { ChoosePixelFormat(hdc, &desc) };
+        let format_id = ChoosePixelFormat(hdc, &desc);
         SetPixelFormat(hdc, format_id, &desc);
 
         let hglrc = wglCreateContext(hdc);
