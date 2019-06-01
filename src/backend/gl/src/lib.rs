@@ -518,6 +518,7 @@ impl hal::Instance for Instance {
 #[cfg(feature = "glutin")]
 impl Instance {
     /// TODO: Update portability to make this more flexible
+    #[cfg(target_os = "linux")]
     pub fn create(_: &str, _: u32) -> Instance {
         use glutin::os::unix::OsMesaContextExt;
         use glutin::ContextTrait;
