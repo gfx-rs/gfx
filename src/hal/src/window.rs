@@ -145,7 +145,7 @@ pub struct SurfaceCapabilities {
     /// created from this surface.
     ///
     /// - `image_count.start` must be at least 1.
-    /// - `image_count.end` must be larger of equal to `image_count.start`.
+    /// - `image_count.end` must be larger or equal to `image_count.start`.
     pub image_count: Range<SwapImageIndex>,
 
     /// Current extent of the surface.
