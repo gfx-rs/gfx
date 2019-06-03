@@ -30,4 +30,4 @@ name = "gfx_device_dx11"
 [dependencies]
 log = "0.4"
 gfx_core = { path = "../../core", version = "0.9" }
-winapi = { version = "0.3", features = ["d3d11", "d3dcommon", "d3dcompiler", "winerror"] }
+winapi = { version = "0.3", features = ["d3d11", "d3d11sdklayers", "d3dcommon", "d3dcompiler", "winerror"] }
