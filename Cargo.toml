@@ -31,7 +31,7 @@ gfx_core = { path = "src/core", version = "0.9" }
 gfx = { path = "src/render", version = "0.18" }
 gfx_macros = { path = "src/macros", version = "0.2" }
 gfx_device_gl = { path = "src/backend/gl", version = "0.16" }
-gfx_window_glutin = { path = "src/window/glutin", version = "0.30" }
+gfx_window_glutin = { path = "src/window/glutin", version = "0.31" }
 gfx_window_glfw = { path = "src/window/glfw", version = "0.17", optional = true }
 gfx_window_sdl = { path = "src/window/sdl", version = "0.9", optional = true }
 

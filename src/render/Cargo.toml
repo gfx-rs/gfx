@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx"
-version = "0.18.0"
+version = "0.18.1"
 description = "A high-performance, bindless graphics API"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"

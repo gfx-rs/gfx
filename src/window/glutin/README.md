@@ -9,7 +9,7 @@ Make sure you have the following in your `Cargo.toml`:
 ```toml
 gfx_core = "0.9"
 gfx_device_gl = "0.16"
-gfx_window_glutin = "0.30.0"
+gfx_window_glutin = "0.31.0"
 glutin = "0.20"
 ```
 

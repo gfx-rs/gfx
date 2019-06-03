@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_device_dx11"
-version = "0.8.1"
+version = "0.8.2"
 description = "DirectX-11 backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"

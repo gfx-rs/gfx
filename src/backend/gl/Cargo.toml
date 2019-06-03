@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_device_gl"
-version = "0.16.0"
+version = "0.16.1"
 description = "OpenGL backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
