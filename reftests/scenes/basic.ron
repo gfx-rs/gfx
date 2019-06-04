@@ -85,7 +85,7 @@
 		"empty": Graphics(
 			framebuffer: "fbo",
 			clear_values: [
-				Color(Float((0.8, 0.8, 0.8, 1.0))),
+				Color(Sfloat((0.8, 0.8, 0.8, 1.0))),
 			],
 			pass: ("pass", {
 				"main": (commands: [
@@ -95,7 +95,7 @@
 		"pass-through": Graphics(
 			framebuffer: "fbo",
 			clear_values: [
-				Color(Float((0.8, 0.8, 0.8, 1.0))),
+				Color(Sfloat((0.8, 0.8, 0.8, 1.0))),
 			],
 			pass: ("pass", {
 				"main": (commands: [

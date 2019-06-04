@@ -778,7 +778,7 @@ fn main() {
                     &render_pass,
                     &framebuffers[swap_image],
                     viewport.rect,
-                    &[command::ClearValue::Color(command::ClearColor::Float([
+                    &[command::ClearValue::Color(command::ClearColor::Sfloat([
                         0.8, 0.8, 0.8, 1.0,
                     ]))],
                 );

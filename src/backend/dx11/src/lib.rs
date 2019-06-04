@@ -1484,11 +1484,11 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                     | ChannelType::Sfloat
                     | ChannelType::Uscaled
                     | ChannelType::Sscaled
-                    | ChannelType::Srgb => ClearColor::Float(unsafe { raw_clear.float32 }),
+                    | ChannelType::Srgb => ClearColor::Sfloat(unsafe { raw_clear.float32 }),
 
                     ChannelType::Uint => ClearColor::Uint(unsafe { raw_clear.uint32 }),
 
-                    ChannelType::Sint => ClearColor::Int(unsafe { raw_clear.int32 }),
+                    ChannelType::Sint => ClearColor::Sint(unsafe { raw_clear.int32 }),
                 }
             }
 
