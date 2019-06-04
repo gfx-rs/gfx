@@ -139,7 +139,7 @@ impl<B: Backend, C: Capability> CommandQueue<B, C> {
     }
 
     /// Submit command buffers without any semaphore waits or signals.
-    pub unsafe fn submit_nosemaphores<'a, T, I>(
+    pub unsafe fn submit_without_semaphores<'a, T, I>(
         &mut self,
         command_buffers: I,
         fence: Option<&B::Fence>,
