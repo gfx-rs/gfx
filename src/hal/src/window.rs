@@ -190,7 +190,7 @@ pub trait Surface<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Use this function for configuring swapchain creation.
     ///
     /// Returns a tuple of surface capabilities and formats.
-    /// If formats is `None` than the surface has no preferred format and the
+    /// If formats are `None` then the surface has no preferred format and the
     /// application may use any desired format.
     fn compatibility(
         &self,
