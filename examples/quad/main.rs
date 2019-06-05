@@ -364,7 +364,7 @@ fn main() {
 
         cmd_buffer.finish();
 
-        queue_group.queues[0].submit_nosemaphores(Some(&cmd_buffer), Some(&mut copy_fence));
+        queue_group.queues[0].submit_without_semaphores(Some(&cmd_buffer), Some(&mut copy_fence));
 
         device
             .wait_for_fence(&copy_fence, !0)

@@ -1268,7 +1268,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 
         let command_buffers = iter::once(&self.init_submit).chain(submits);
         unsafe {
-            self.queue_group.queues[0].submit_nosemaphores(command_buffers, None);
+            self.queue_group.queues[0].submit_without_semaphores(command_buffers, None);
         }
     }
 
@@ -1343,7 +1343,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             .expect("Can't create copy-fence");
         unsafe {
             self.queue_group.queues[0]
-                .submit_nosemaphores(iter::once(&cmd_buffer), Some(&copy_fence));
+                .submit_without_semaphores(iter::once(&cmd_buffer), Some(&copy_fence));
             self.device.wait_for_fence(&copy_fence, !0).unwrap();
             self.device.destroy_fence(copy_fence);
             self.device.destroy_command_pool(command_pool.into_raw());
@@ -1471,7 +1471,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             .expect("Can't create copy-fence");
         unsafe {
             self.queue_group.queues[0]
-                .submit_nosemaphores(iter::once(&cmd_buffer), Some(&copy_fence));
+                .submit_without_semaphores(iter::once(&cmd_buffer), Some(&copy_fence));
             self.device.wait_for_fence(&copy_fence, !0).unwrap();
             self.device.destroy_fence(copy_fence);
             self.device.destroy_command_pool(command_pool.into_raw());

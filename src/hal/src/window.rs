@@ -470,7 +470,7 @@ pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
     }
 
     /// Present one acquired image without any semaphore synchronization.
-    unsafe fn present_nosemaphores<'a, C>(
+    unsafe fn present_without_semaphores<'a, C>(
         &'a self,
         present_queue: &mut CommandQueue<B, C>,
         image_index: SwapImageIndex,

@@ -1257,7 +1257,7 @@ impl<B: Backend> ImageState<B> {
             cmd_buffer.finish();
 
             device_state.queues.queues[0]
-                .submit_nosemaphores(iter::once(&cmd_buffer), Some(&mut transfered_image_fence));
+                .submit_without_semaphores(iter::once(&cmd_buffer), Some(&mut transfered_image_fence));
         }
 
         ImageState {

@@ -202,7 +202,7 @@ fn main() {
         );
         command_buffer.finish();
 
-        queue_group.queues[0].submit_nosemaphores(Some(&command_buffer), Some(&fence));
+        queue_group.queues[0].submit_without_semaphores(Some(&command_buffer), Some(&fence));
 
         device.wait_for_fence(&fence, !0).unwrap();
         command_pool.free(Some(command_buffer));
