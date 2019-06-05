@@ -184,77 +184,21 @@ impl Instance {
         Instance
     }
 
-    unsafe fn create_from_layer(&self, layer: CAMetalLayer) -> window::SurfaceInner {
-        let class = class!(CAMetalLayer);
-        let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
-        assert_eq!(proper_kind, YES);
-        msg_send![layer, retain];
-        window::SurfaceInner::new(None, layer)
-    }
-
-    pub fn create_surface_from_layer(&self, layer: CAMetalLayer, enable_signposts: bool) -> Surface {
-        unsafe { self.create_from_layer(layer) }.into_surface(enable_signposts)
-    }
-}
-
-#[cfg(target_os = "macos")]
-impl Instance {
-    unsafe fn create_from_nsview(&self, nsview: *mut c_void) -> window::SurfaceInner {
-        let class = class!(CAMetalLayer);
-        let view: cocoa::base::id = mem::transmute(nsview);
-        if view.is_null() {
-            panic!("window does not have a valid contentView");
-        }
-
-        // Deprecated! Clients should use `create_surface_from_layer` instead.
-        let is_actually_layer: BOOL = msg_send![view, isKindOfClass: class];
-        if is_actually_layer == YES {
-            return self.create_from_layer(view);
-        }
-
-        msg_send![view, retain];
-        let existing: CAMetalLayer = msg_send![view, layer];
-        let use_current = if existing.is_null() {
-            false
-        } else {
-            let result: BOOL = msg_send![existing, isKindOfClass: class];
-            result == YES
-        };
-
-        let render_layer: CAMetalLayer = if use_current {
-            existing
-        } else {
-            let layer: CAMetalLayer = msg_send![class, new];
-            msg_send![view, setLayer: layer];
-            let bounds: CGRect = msg_send![view, bounds];
-            msg_send![layer, setBounds: bounds];
-
-            let window: cocoa::base::id = msg_send![view, window];
-            if !window.is_null() {
-                let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
-                msg_send![layer, setContentsScale: scale_factor];
-            }
-            layer
-        };
-
-        window::SurfaceInner::new(NonNull::new(view), render_layer)
-    }
-
-    pub fn create_surface_from_nsview(
-        &self, nsview: *mut c_void, enable_signposts: bool
-    ) -> Surface {
-        unsafe { self.create_from_nsview(nsview) }.into_surface(enable_signposts)
-    }
-
     #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
-        use winit::os::macos::WindowExt;
-        self.create_surface_from_nsview(window.get_nsview(), false)
+        #[cfg(target_os = "ios")]
+        {
+            use winit::os::ios::WindowExt;
+            unsafe { self.create_from_uiview(window.get_uiview()) }.into_surface(false)
+        }
+        #[cfg(target_os = "macos")]
+        {
+            use winit::os::macos::WindowExt;
+            unsafe { self.create_from_nsview(window.get_nsview()) }.into_surface(false)
+        }
     }
-}
 
-#[cfg(target_os = "ios")]
-impl Instance {
+    #[cfg(target_os = "ios")]
     unsafe fn create_from_uiview(&self, uiview: *mut c_void) -> window::SurfaceInner {
         let view: cocoa::base::id = mem::transmute(uiview);
         if view.is_null() {
@@ -297,16 +241,58 @@ impl Instance {
         window::SurfaceInner::new(NonNull::new(view), render_layer)
     }
 
-    pub fn create_surface_from_uiview(
-        &self, uiview: *mut c_void, enable_signposts: bool
-    ) -> Surface {
-        unsafe { self.create_from_uiview(uiview) }.into_surface(enable_signposts)
+    #[cfg(target_os = "macos")]
+    unsafe fn create_from_nsview(&self, nsview: *mut c_void) -> window::SurfaceInner {
+        let view: cocoa::base::id = mem::transmute(nsview);
+        if view.is_null() {
+            panic!("window does not have a valid contentView");
+        }
+
+        let existing: CAMetalLayer = msg_send![view, layer];
+        let class = class!(CAMetalLayer);
+        // Deprecated! Clients should use `create_surface_from_layer` instead.
+        let is_actually_layer: BOOL = msg_send![view, isKindOfClass: class];
+        if is_actually_layer == YES {
+            return self.create_from_layer(view);
+        }
+
+        let use_current = if existing.is_null() {
+            false
+        } else {
+            let result: BOOL = msg_send![existing, isKindOfClass: class];
+            result == YES
+        };
+
+        let render_layer: CAMetalLayer = if use_current {
+            existing
+        } else {
+            let layer: CAMetalLayer = msg_send![class, new];
+            msg_send![view, setLayer: layer];
+            let bounds: CGRect = msg_send![view, bounds];
+            msg_send![layer, setBounds: bounds];
+
+            let window: cocoa::base::id = msg_send![view, window];
+            if !window.is_null() {
+                let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
+                msg_send![layer, setContentsScale: scale_factor];
+            }
+            layer
+        };
+
+        msg_send![view, retain];
+        window::SurfaceInner::new(NonNull::new(view), render_layer)
     }
 
-    #[cfg(feature = "winit")]
-    pub fn create_surface(&self, window: &winit::Window) -> Surface {
-        use winit::os::ios::WindowExt;
-        self.create_surface_from_uiview(window.get_uiview(), false)
+    unsafe fn create_from_layer(&self, layer: CAMetalLayer) -> window::SurfaceInner {
+        let class = class!(CAMetalLayer);
+        let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
+        assert_eq!(proper_kind, YES);
+        msg_send![layer, retain];
+        window::SurfaceInner::new(None, layer)
+    }
+
+    pub fn create_surface_from_layer(&self, layer: CAMetalLayer, enable_signposts: bool) -> Surface {
+        unsafe { self.create_from_layer(layer) }.into_surface(enable_signposts)
     }
 }
 
