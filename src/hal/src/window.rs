@@ -470,13 +470,13 @@ pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
     }
 
     /// Present one acquired image without any semaphore synchronization.
-    unsafe fn present_without_semaphores<'a, C>(
-        &'a self,
+    unsafe fn present_without_semaphores<C>(
+        &self,
         present_queue: &mut CommandQueue<B, C>,
         image_index: SwapImageIndex,
     ) -> Result<Option<Suboptimal>, PresentError>
     where
-        Self: 'a + Sized + Borrow<B::Swapchain>,
+        Self: Sized + Borrow<B::Swapchain>,
         C: Capability,
     {
         self.present::<_, B::Semaphore, _>(present_queue, image_index, iter::empty())
