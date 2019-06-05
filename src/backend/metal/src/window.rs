@@ -293,6 +293,11 @@ impl hal::Surface<Backend> for Surface {
         image::Kind::D2(ex.width, ex.height, 1, 1)
     }
 
+    fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
+        // we only expose one family atm, so it's compatible
+        true
+    }
+
     fn compatibility(
         &self,
         device: &PhysicalDevice,
@@ -356,11 +361,6 @@ impl hal::Surface<Backend> for Surface {
         };
 
         (caps, Some(formats), present_modes)
-    }
-
-    fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
-        // we only expose one family atm, so it's compatible
-        true
     }
 }
 
