@@ -49,6 +49,97 @@ where
         .collect()
 }
 
+struct BarrierSet {
+    global: SmallVec<[vk::MemoryBarrier; 4]>,
+    buffer: SmallVec<[vk::BufferMemoryBarrier; 4]>,
+    image: SmallVec<[vk::ImageMemoryBarrier; 4]>,
+}
+
+fn destructure_barriers<'a, T>(barriers: T) -> BarrierSet
+where
+    T: IntoIterator,
+    T::Item: Borrow<memory::Barrier<'a, Backend>>,
+{
+    let mut global: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
+    let mut buffer: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
+    let mut image: SmallVec<[vk::ImageMemoryBarrier; 4]> = SmallVec::new();
+
+    for barrier in barriers {
+        match *barrier.borrow() {
+            memory::Barrier::AllBuffers(ref access) => {
+                global.push(vk::MemoryBarrier {
+                    s_type: vk::StructureType::MEMORY_BARRIER,
+                    p_next: ptr::null(),
+                    src_access_mask: conv::map_buffer_access(access.start),
+                    dst_access_mask: conv::map_buffer_access(access.end),
+                });
+            }
+            memory::Barrier::AllImages(ref access) => {
+                global.push(vk::MemoryBarrier {
+                    s_type: vk::StructureType::MEMORY_BARRIER,
+                    p_next: ptr::null(),
+                    src_access_mask: conv::map_image_access(access.start),
+                    dst_access_mask: conv::map_image_access(access.end),
+                });
+            }
+            memory::Barrier::Buffer {
+                ref states,
+                target,
+                ref range,
+                ref families,
+            } => {
+                let families = match families {
+                    Some(f) => f.start.0 as u32..f.end.0 as u32,
+                    None => vk::QUEUE_FAMILY_IGNORED..vk::QUEUE_FAMILY_IGNORED,
+                };
+                buffer.push(vk::BufferMemoryBarrier {
+                    s_type: vk::StructureType::BUFFER_MEMORY_BARRIER,
+                    p_next: ptr::null(),
+                    src_access_mask: conv::map_buffer_access(states.start),
+                    dst_access_mask: conv::map_buffer_access(states.end),
+                    src_queue_family_index: families.start,
+                    dst_queue_family_index: families.end,
+                    buffer: target.raw,
+                    offset: range.start.unwrap_or(0),
+                    size: range
+                        .end
+                        .map_or(vk::WHOLE_SIZE, |end| end - range.start.unwrap_or(0)),
+                });
+            }
+            memory::Barrier::Image {
+                ref states,
+                target,
+                ref range,
+                ref families,
+            } => {
+                let subresource_range = conv::map_subresource_range(range);
+                let families = match families {
+                    Some(f) => f.start.0 as u32..f.end.0 as u32,
+                    None => vk::QUEUE_FAMILY_IGNORED..vk::QUEUE_FAMILY_IGNORED,
+                };
+                image.push(vk::ImageMemoryBarrier {
+                    s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
+                    p_next: ptr::null(),
+                    src_access_mask: conv::map_image_access(states.start.0),
+                    dst_access_mask: conv::map_image_access(states.end.0),
+                    old_layout: conv::map_image_layout(states.start.1),
+                    new_layout: conv::map_image_layout(states.end.1),
+                    src_queue_family_index: families.start,
+                    dst_queue_family_index: families.end,
+                    image: target.raw,
+                    subresource_range,
+                });
+            }
+        }
+    }
+
+    BarrierSet {
+        global,
+        buffer,
+        image,
+    }
+}
+
 impl CommandBuffer {
     fn bind_descriptor_sets<I, J>(
         &mut self,
@@ -192,87 +283,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        let mut global_bars: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
-        let mut buffer_bars: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
-        let mut image_bars: SmallVec<[vk::ImageMemoryBarrier; 4]> = SmallVec::new();
-
-        for barrier in barriers {
-            match *barrier.borrow() {
-                memory::Barrier::AllBuffers(ref access) => {
-                    global_bars.push(vk::MemoryBarrier {
-                        s_type: vk::StructureType::MEMORY_BARRIER,
-                        p_next: ptr::null(),
-                        src_access_mask: conv::map_buffer_access(access.start),
-                        dst_access_mask: conv::map_buffer_access(access.end),
-                    });
-                }
-                memory::Barrier::AllImages(ref access) => {
-                    global_bars.push(vk::MemoryBarrier {
-                        s_type: vk::StructureType::MEMORY_BARRIER,
-                        p_next: ptr::null(),
-                        src_access_mask: conv::map_image_access(access.start),
-                        dst_access_mask: conv::map_image_access(access.end),
-                    });
-                }
-                memory::Barrier::Buffer {
-                    ref states,
-                    target,
-                    ref range,
-                    ref families,
-                } => {
-                    let families = match families {
-                        Some(f) => f.start.0 as u32..f.end.0 as u32,
-                        None => vk::QUEUE_FAMILY_IGNORED..vk::QUEUE_FAMILY_IGNORED,
-                    };
-                    buffer_bars.push(vk::BufferMemoryBarrier {
-                        s_type: vk::StructureType::BUFFER_MEMORY_BARRIER,
-                        p_next: ptr::null(),
-                        src_access_mask: conv::map_buffer_access(states.start),
-                        dst_access_mask: conv::map_buffer_access(states.end),
-                        src_queue_family_index: families.start,
-                        dst_queue_family_index: families.end,
-                        buffer: target.raw,
-                        offset: range.start.unwrap_or(0),
-                        size: range
-                            .end
-                            .map_or(vk::WHOLE_SIZE, |end| end - range.start.unwrap_or(0)),
-                    });
-                }
-                memory::Barrier::Image {
-                    ref states,
-                    target,
-                    ref range,
-                    ref families,
-                } => {
-                    let subresource_range = conv::map_subresource_range(range);
-                    let families = match families {
-                        Some(f) => f.start.0 as u32..f.end.0 as u32,
-                        None => vk::QUEUE_FAMILY_IGNORED..vk::QUEUE_FAMILY_IGNORED,
-                    };
-                    image_bars.push(vk::ImageMemoryBarrier {
-                        s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
-                        p_next: ptr::null(),
-                        src_access_mask: conv::map_image_access(states.start.0),
-                        dst_access_mask: conv::map_image_access(states.end.0),
-                        old_layout: conv::map_image_layout(states.start.1),
-                        new_layout: conv::map_image_layout(states.end.1),
-                        src_queue_family_index: families.start,
-                        dst_queue_family_index: families.end,
-                        image: target.raw,
-                        subresource_range,
-                    });
-                }
-            }
-        }
+        let BarrierSet { global, buffer, image } = destructure_barriers(barriers);
 
         self.device.0.cmd_pipeline_barrier(
             self.raw, // commandBuffer
             conv::map_pipeline_stage(stages.start),
             conv::map_pipeline_stage(stages.end),
             mem::transmute(dependencies),
-            &global_bars,
-            &buffer_bars,
-            &image_bars,
+            &global,
+            &buffer,
+            &image,
         );
     }
 
@@ -809,8 +829,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     unsafe fn wait_events<'a, I, J>(
         &mut self,
         events: I,
-        src_stages: pso::PipelineStage,
-        dst_stages: pso::PipelineStage,
+        stages: Range<pso::PipelineStage>,
         barriers: J,
     ) where
         I: IntoIterator,
@@ -823,87 +842,16 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .map(|e| e.borrow().0)
             .collect::<Vec<_>>();
 
-        let mut global_bars: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
-        let mut buffer_bars: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
-        let mut image_bars: SmallVec<[vk::ImageMemoryBarrier; 4]> = SmallVec::new();
-
-        for barrier in barriers {
-            match *barrier.borrow() {
-                memory::Barrier::AllBuffers(ref access) => {
-                    global_bars.push(vk::MemoryBarrier {
-                        s_type: vk::StructureType::MEMORY_BARRIER,
-                        p_next: ptr::null(),
-                        src_access_mask: conv::map_buffer_access(access.start),
-                        dst_access_mask: conv::map_buffer_access(access.end),
-                    });
-                }
-                memory::Barrier::AllImages(ref access) => {
-                    global_bars.push(vk::MemoryBarrier {
-                        s_type: vk::StructureType::MEMORY_BARRIER,
-                        p_next: ptr::null(),
-                        src_access_mask: conv::map_image_access(access.start),
-                        dst_access_mask: conv::map_image_access(access.end),
-                    });
-                }
-                memory::Barrier::Buffer {
-                    ref states,
-                    target,
-                    ref range,
-                    ref families,
-                } => {
-                    let families = match families {
-                        Some(f) => f.start.0 as u32..f.end.0 as u32,
-                        None => vk::QUEUE_FAMILY_IGNORED..vk::QUEUE_FAMILY_IGNORED,
-                    };
-                    buffer_bars.push(vk::BufferMemoryBarrier {
-                        s_type: vk::StructureType::BUFFER_MEMORY_BARRIER,
-                        p_next: ptr::null(),
-                        src_access_mask: conv::map_buffer_access(states.start),
-                        dst_access_mask: conv::map_buffer_access(states.end),
-                        src_queue_family_index: families.start,
-                        dst_queue_family_index: families.end,
-                        buffer: target.raw,
-                        offset: range.start.unwrap_or(0),
-                        size: range
-                            .end
-                            .map_or(vk::WHOLE_SIZE, |end| end - range.start.unwrap_or(0)),
-                    });
-                }
-                memory::Barrier::Image {
-                    ref states,
-                    target,
-                    ref range,
-                    ref families,
-                } => {
-                    let subresource_range = conv::map_subresource_range(range);
-                    let families = match families {
-                        Some(f) => f.start.0 as u32..f.end.0 as u32,
-                        None => vk::QUEUE_FAMILY_IGNORED..vk::QUEUE_FAMILY_IGNORED,
-                    };
-                    image_bars.push(vk::ImageMemoryBarrier {
-                        s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
-                        p_next: ptr::null(),
-                        src_access_mask: conv::map_image_access(states.start.0),
-                        dst_access_mask: conv::map_image_access(states.end.0),
-                        old_layout: conv::map_image_layout(states.start.1),
-                        new_layout: conv::map_image_layout(states.end.1),
-                        src_queue_family_index: families.start,
-                        dst_queue_family_index: families.end,
-                        image: target.raw,
-                        subresource_range,
-                    });
-                }
-            }
-        }
+        let BarrierSet { global, buffer, image } = destructure_barriers(barriers);
 
         self.device.0.cmd_wait_events(
             self.raw,
             &events,
-            vk::PipelineStageFlags::from_raw(src_stages.bits()),
-            vk::PipelineStageFlags::from_raw(dst_stages.bits()),
-            &global_bars,
-            &buffer_bars,
-            &image_bars,
+            vk::PipelineStageFlags::from_raw(stages.start.bits()),
+            vk::PipelineStageFlags::from_raw(stages.end.bits()),
+            &global,
+            &buffer,
+            &image,
         )
     }
 

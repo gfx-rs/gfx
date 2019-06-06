@@ -2144,8 +2144,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
     unsafe fn wait_events<'a, I, J>(
         &mut self,
         _: I,
-        _: pso::PipelineStage,
-        _: pso::PipelineStage,
+        _: Range<pso::PipelineStage>,
         _: J
     ) where
         I: IntoIterator,

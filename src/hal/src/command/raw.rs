@@ -508,8 +508,7 @@ pub trait RawCommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn wait_events<'a, I, J>(
         &mut self,
         events: I,
-        src_stages: pso::PipelineStage,
-        dst_stages: pso::PipelineStage,
+        stages: Range<pso::PipelineStage>,
         barriers: J,
     ) where
         I: IntoIterator,
