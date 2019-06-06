@@ -500,6 +500,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
 
     type Fence: fmt::Debug + Any + Send + Sync;
     type Semaphore: fmt::Debug + Any + Send + Sync;
+    type Event: fmt::Debug + Any + Send + Sync;
     type QueryPool: fmt::Debug + Any + Send + Sync;
 }
 

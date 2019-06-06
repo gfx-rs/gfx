@@ -729,6 +729,23 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Destroy a fence object
     unsafe fn destroy_fence(&self, fence: B::Fence);
 
+    /// Create an event object.
+    fn create_event(&self) -> Result<B::Event, OutOfMemory>;
+
+    /// Destroy an event object.
+    unsafe fn destroy_event(&self, event: B::Event);
+
+    /// Query the status of an event.
+    ///
+    /// Returns `true` if the event is set, or `false` if it is reset.
+    unsafe fn get_event_status(&self, event: &B::Event) -> Result<bool, OomOrDeviceLost>;
+
+    /// Sets an event.
+    unsafe fn set_event(&self, event: &B::Event) -> Result<(), OutOfMemory>;
+
+    /// Resets an event.
+    unsafe fn reset_event(&self, event: &B::Event) -> Result<(), OutOfMemory>;
+
     /// Create a new query pool object
     ///
     /// Queries are managed using query pool objects. Each query pool is a collection of a specific

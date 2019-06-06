@@ -1795,6 +1795,69 @@ impl d::Device<B> for Device {
         }
     }
 
+    fn create_event(&self) -> Result<n::Event, d::OutOfMemory> {
+        let info = vk::EventCreateInfo {
+            s_type: vk::StructureType::EVENT_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::EventCreateFlags::empty(),
+        };
+
+        let result = unsafe { self.raw.0.create_event(&info, None) };
+        match result {
+            Ok(e) => Ok(n::Event(e)),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    unsafe fn get_event_status(&self, event: &n::Event) -> Result<bool, d::OomOrDeviceLost> {
+        let result = self.raw.0.get_event_status(event.0);
+        match result {
+            Ok(b) => Ok(b),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
+            Err(vk::Result::ERROR_DEVICE_LOST) => Err(d::DeviceLost.into()),
+            _ => unreachable!(),
+        }
+    }
+
+    unsafe fn set_event(&self, event: &n::Event) -> Result<(), d::OutOfMemory> {
+        let result = self.raw.0.set_event(event.0);
+        match result {
+            Ok(()) => Ok(()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
+            _ => unreachable!(),
+        }
+    }
+
+    unsafe fn reset_event(&self, event: &n::Event) -> Result<(), d::OutOfMemory> {
+        let result = self.raw.0.reset_event(event.0);
+        match result {
+            Ok(()) => Ok(()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(d::OutOfMemory::OutOfHostMemory.into())
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                Err(d::OutOfMemory::OutOfDeviceMemory.into())
+            }
+            _ => unreachable!(),
+        }
+    }
+
     unsafe fn free_memory(&self, memory: n::Memory) {
         self.raw.0.free_memory(memory.raw, None);
     }
@@ -2032,6 +2095,10 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_semaphore(&self, semaphore: n::Semaphore) {
         self.raw.0.destroy_semaphore(semaphore.0, None);
+    }
+
+    unsafe fn destroy_event(&self, event: n::Event) {
+        self.raw.0.destroy_event(event.0, None);
     }
 
     fn wait_idle(&self) -> Result<(), HostExecutionError> {

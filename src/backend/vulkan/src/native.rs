@@ -13,6 +13,9 @@ pub struct Semaphore(pub vk::Semaphore);
 pub struct Fence(pub vk::Fence);
 
 #[derive(Debug, Hash)]
+pub struct Event(pub vk::Event);
+
+#[derive(Debug, Hash)]
 pub struct GraphicsPipeline(pub vk::Pipeline);
 
 #[derive(Debug, Hash)]

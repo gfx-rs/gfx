@@ -2557,6 +2557,26 @@ impl hal::Device<Backend> for Device {
     }
     unsafe fn destroy_fence(&self, _fence: n::Fence) {}
 
+    fn create_event(&self) -> Result<(), OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn get_event_status(&self, event: &()) -> Result<bool, OomOrDeviceLost> {
+        unimplemented!()
+    }
+
+    unsafe fn set_event(&self, event: &()) -> Result<(), OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn reset_event(&self, event: &()) -> Result<(), OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn destroy_event(&self, event: ()) {
+        unimplemented!()
+    }
+
     unsafe fn create_query_pool(
         &self,
         ty: query::Type,

@@ -493,6 +493,30 @@ pub trait RawCommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         stride: u32,
     );
 
+    /// Signals an event once all specified stages of the shader pipeline have completed.
+    unsafe fn set_event(&mut self, event: &B::Event, stages: pso::PipelineStage);
+
+    /// Resets an event once all specified stages of the shader pipeline have completed.
+    unsafe fn reset_event(&mut self, event: &B::Event, stages: pso::PipelineStage);
+
+    /// Waits at some shader stage(s) until all events have been signalled.
+    ///
+    /// - `src_stages` specifies the shader pipeline stages in which the events were signalled.
+    /// - `dst_stages` specifies the shader pipeline stages at which execution should wait.
+    /// - `barriers` specifies a series of memory barriers to be executed before pipeline execution
+    ///   resumes.
+    unsafe fn wait_events<'a, I, J>(
+        &mut self,
+        events: I,
+        src_stages: pso::PipelineStage,
+        dst_stages: pso::PipelineStage,
+        barriers: J,
+    ) where
+        I: IntoIterator,
+        I::Item: Borrow<B::Event>,
+        J: IntoIterator,
+        J::Item: Borrow<Barrier<'a, B>>;
+
     /// Begins a query operation.  Queries count operations or record timestamps
     /// resulting from commands that occur between the beginning and end of the query,
     /// and save the results to the query pool.

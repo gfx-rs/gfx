@@ -2133,6 +2133,29 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
+    unsafe fn set_event(&mut self, _: &(), _: pso::PipelineStage) {
+        unimplemented!()
+    }
+
+    unsafe fn reset_event(&mut self, _: &(), _: pso::PipelineStage) {
+        unimplemented!()
+    }
+
+    unsafe fn wait_events<'a, I, J>(
+        &mut self,
+        _: I,
+        _: pso::PipelineStage,
+        _: pso::PipelineStage,
+        _: J
+    ) where
+        I: IntoIterator,
+        I::Item: Borrow<()>,
+        J: IntoIterator,
+        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+    {
+        unimplemented!()
+    }
+
     unsafe fn begin_query(&mut self, _query: query::Query<Backend>, _flags: query::ControlFlags) {
         unimplemented!()
     }
@@ -3054,6 +3077,7 @@ impl hal::Backend for Backend {
 
     type Fence = Fence;
     type Semaphore = Semaphore;
+    type Event = ();
     type QueryPool = QueryPool;
 }
 

@@ -2338,6 +2338,22 @@ impl hal::Device<Backend> for Device {
         Ok(*fence.mutex.lock())
     }
 
+    fn create_event(&self) -> Result<(), device::OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn get_event_status(&self, event: &()) -> Result<bool, device::OomOrDeviceLost> {
+        unimplemented!()
+    }
+
+    unsafe fn set_event(&self, event: &()) -> Result<(), device::OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn reset_event(&self, event: &()) -> Result<(), device::OutOfMemory> {
+        unimplemented!()
+    }
+
     unsafe fn free_memory(&self, memory: Memory) {
         for (_range, internal) in memory.local_buffers.borrow_mut().iter() {
             unsafe {
@@ -2418,6 +2434,10 @@ impl hal::Device<Backend> for Device {
     }
 
     unsafe fn destroy_semaphore(&self, _semaphore: Semaphore) {
+        //unimplemented!()
+    }
+
+    unsafe fn destroy_event(&self, _event: ()) {
         //unimplemented!()
     }
 
