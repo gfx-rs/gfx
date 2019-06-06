@@ -623,7 +623,7 @@ impl CommandQueue {
                 // TODO: Fix format and active texture
                 // TODO: handle partial copies gracefully
                 assert_eq!(r.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
-                assert_eq!(textype, gl::TEXTURE_2D);
+                assert_eq!(textype, glow::TEXTURE_2D);
                 let gl = &self.share.context;
                 gl.active_texture(glow::TEXTURE0);
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer));

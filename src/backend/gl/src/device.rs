@@ -127,7 +127,7 @@ impl Device {
             n::ImageView::Texture(texture, _, level) => unsafe {
                 gl.framebuffer_texture(point, attachment, Some(texture), level as _);
             },
-            n::ImageView::TextureLayer(texture, level, layer) => unsafe {
+            n::ImageView::TextureLayer(texture, _, level, layer) => unsafe {
                 gl.framebuffer_texture_layer(point, attachment, Some(texture), level as _, layer as _);
             },
         }
@@ -750,15 +750,13 @@ impl d::Device<B> for Device {
 
                 // Sampler2D won't show up in UniformLocation and the only other uniforms
                 // should be push constants
-                if location >= 0 {
-                    uniforms.push(n::UniformDesc {
-                        location: location as _,
-                        offset,
-                        utype,
-                    });
+                uniforms.push(n::UniformDesc {
+                    location: location as _,
+                    offset,
+                    utype,
+                });
 
-                    offset += size as u32;
-                }
+                offset += size as u32;
             }
         }
 
@@ -1218,13 +1216,13 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
-                    n::ImageKind::Texture(name, gl::TEXTURE_2D)
+                    n::ImageKind::Texture(name, glow::TEXTURE_2D)
                 }
                 i::Kind::D2(w, h, l, 1) => {
-                    gl.BindTexture(gl::TEXTURE_2D_ARRAY, name);
+                    gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(name));
                     if self.share.private_caps.image_storage {
-                        gl.TexStorage3D(
-                            gl::TEXTURE_2D_ARRAY,
+                        gl.tex_storage_3d(
+                            glow::TEXTURE_2D_ARRAY,
                             num_levels as _,
                             int_format,
                             w as _,
@@ -1232,16 +1230,16 @@ impl d::Device<B> for Device {
                             l as _,
                         );
                     } else {
-                        gl.TexParameteri(
-                            gl::TEXTURE_2D_ARRAY,
-                            gl::TEXTURE_MAX_LEVEL,
+                        gl.tex_parameter_i32(
+                            glow::TEXTURE_2D_ARRAY,
+                            glow::TEXTURE_MAX_LEVEL,
                             (num_levels - 1) as _,
                         );
                         let mut w = w;
                         let mut h = h;
                         for i in 0..num_levels {
-                            gl.TexImage3D(
-                                gl::TEXTURE_2D_ARRAY,
+                            gl.tex_image_3d(
+                                glow::TEXTURE_2D_ARRAY,
                                 i as _,
                                 int_format as _,
                                 w as _,
@@ -1250,13 +1248,13 @@ impl d::Device<B> for Device {
                                 0,
                                 iformat,
                                 itype,
-                                std::ptr::null(),
+                                None,
                             );
                             w = std::cmp::max(w / 2, 1);
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
-                    n::ImageKind::Texture(name, gl::TEXTURE_2D_ARRAY)
+                    n::ImageKind::Texture(name, glow::TEXTURE_2D_ARRAY)
                 }
                 _ => unimplemented!(),
             }
@@ -1523,16 +1521,8 @@ impl d::Device<B> for Device {
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, d::DeviceLost> {
         let gl = &self.share.context;
 
-        let mut len = 0;
-        let mut values = [0];
-        gl.GetSynciv(fence.0.get(), gl::SYNC_STATUS, values.len() as i32, &mut len, values.as_mut_ptr());
-
-        if len == 0 {
-            error!("Error getting fence status: {:?}", self.share.check());
-            Ok(false)
-        } else {
-            Ok(values[0] as gl::types::GLenum == gl::SIGNALED)
-        }
+        let status = gl.get_sync_status(fence.0.get().unwrap());
+        Ok(status == glow::SIGNALED)
     }
 
     fn create_event(&self) -> Result<(), d::OutOfMemory> {

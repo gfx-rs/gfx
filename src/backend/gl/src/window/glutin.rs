@@ -235,7 +235,7 @@ impl Device {
                             }
                         }
                     };
-                    native::ImageKind::Texture(name, gl::TEXTURE_2D)
+                    native::ImageKind::Texture(name, glow::TEXTURE_2D)
                 } else {
                     let name = gl.create_renderbuffer().unwrap();
                     match config.extent {

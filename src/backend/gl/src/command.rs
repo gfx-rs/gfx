@@ -120,7 +120,7 @@ pub enum Command {
 
     BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
     BindTexture(u32, n::Texture, n::TextureType),
-    BindSampler(u32, n::Texture),
+    BindSampler(u32, n::Sampler),
     SetTextureSamplerSettings(u32, n::Texture, n::TextureType, image::SamplerInfo),
 }
 
@@ -1047,7 +1047,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                             self.push_cmd(Command::SetTextureSamplerSettings(
                                 binding,
                                 txt,
-                                txttype,
+                                textype,
                                 sinfo.clone(),
                             ))
                         }

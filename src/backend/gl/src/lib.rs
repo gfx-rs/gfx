@@ -545,13 +545,13 @@ impl hal::QueueFamily for QueueFamily {
     }
 }
 
-#[cfg(feature = "glutin")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub enum Instance {
     Headless(Headless),
     Surface(Surface)
 }
 
-#[cfg(feature = "glutin")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 impl hal::Instance for Instance {
     type Backend = Backend;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
@@ -562,7 +562,7 @@ impl hal::Instance for Instance {
     }
 }
 
-#[cfg(feature = "glutin")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 impl Instance {
     /// TODO: Update portability to make this more flexible
     #[cfg(target_os = "linux")]
