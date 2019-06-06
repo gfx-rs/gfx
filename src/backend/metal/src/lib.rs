@@ -189,12 +189,12 @@ impl Instance {
         #[cfg(target_os = "ios")]
         {
             use winit::os::ios::WindowExt;
-            unsafe { self.create_from_uiview(window.get_uiview()) }.into_surface(false)
+            self.create_surface_from_uiview(window.get_uiview(), false)
         }
         #[cfg(target_os = "macos")]
         {
             use winit::os::macos::WindowExt;
-            unsafe { self.create_from_nsview(window.get_nsview()) }.into_surface(false)
+            self.create_surface_from_nsview(window.get_nsview(), false)
         }
     }
 
@@ -293,6 +293,16 @@ impl Instance {
 
     pub fn create_surface_from_layer(&self, layer: CAMetalLayer, enable_signposts: bool) -> Surface {
         unsafe { self.create_from_layer(layer) }.into_surface(enable_signposts)
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn create_surface_from_nsview(&self, nsview: *mut c_void, enable_signposts: bool) -> Surface {
+        unsafe { self.create_from_nsview(nsview) }.into_surface(enable_signposts)
+    }
+
+    #[cfg(target_os = "ios")]
+    pub fn create_surface_from_uiview(&self, uiview: *mut c_void, enable_signposts: bool) -> Surface {
+        unsafe { self.create_from_uiview(uiview) }.into_surface(enable_signposts)
     }
 }
 
