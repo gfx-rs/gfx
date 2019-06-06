@@ -126,7 +126,7 @@ impl BlendOp {
 }
 
 /// Specifies whether to use blending, and if so,
-/// which operatiosn to use for color and alpha channels.
+/// which operations to use for color and alpha channels.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BlendState {
