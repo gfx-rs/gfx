@@ -2886,6 +2886,22 @@ impl d::Device<B> for Device {
         }
     }
 
+    fn create_event(&self) -> Result<(), d::OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn get_event_status(&self, event: &()) -> Result<bool, d::OomOrDeviceLost> {
+        unimplemented!()
+    }
+
+    unsafe fn set_event(&self, event: &()) -> Result<(), d::OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn reset_event(&self, event: &()) -> Result<(), d::OutOfMemory> {
+        unimplemented!()
+    }
+
     unsafe fn free_memory(&self, memory: r::Memory) {
         memory.heap.destroy();
         if let Some(buffer) = memory.resource {
@@ -3001,6 +3017,10 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_semaphore(&self, semaphore: r::Semaphore) {
         semaphore.raw.destroy();
+    }
+
+    unsafe fn destroy_event(&self, event: ()) {
+        unimplemented!()
     }
 
     unsafe fn create_swapchain(

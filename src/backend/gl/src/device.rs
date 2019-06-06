@@ -1608,6 +1608,22 @@ impl d::Device<B> for Device {
         }
     }
 
+    fn create_event(&self) -> Result<(), d::OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn get_event_status(&self, event: &()) -> Result<bool, d::OomOrDeviceLost> {
+        unimplemented!()
+    }
+
+    unsafe fn set_event(&self, event: &()) -> Result<(), d::OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn reset_event(&self, event: &()) -> Result<(), d::OutOfMemory> {
+        unimplemented!()
+    }
+
     unsafe fn free_memory(&self, _memory: n::Memory) {
         // Nothing to do
     }
@@ -1705,6 +1721,10 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_semaphore(&self, _: n::Semaphore) {
         // Nothing to do
+    }
+
+    unsafe fn destroy_event(&self, event: ()) {
+        unimplemented!()
     }
 
     unsafe fn create_swapchain(

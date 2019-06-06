@@ -1270,6 +1270,28 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
+    unsafe fn set_event(&mut self, _: &(), _: pso::PipelineStage) {
+        unimplemented!()
+    }
+
+    unsafe fn reset_event(&mut self, _: &(), _: pso::PipelineStage) {
+        unimplemented!()
+    }
+
+    unsafe fn wait_events<'a, I, J>(
+        &mut self,
+        _: I,
+        _: Range<pso::PipelineStage>,
+        _: J
+    ) where
+        I: IntoIterator,
+    I::Item: Borrow<()>,
+    J: IntoIterator,
+    J::Item: Borrow<memory::Barrier<'a, Backend>>,
+    {
+        unimplemented!()
+    }
+
     unsafe fn begin_query(&mut self, _query: query::Query<Backend>, _flags: query::ControlFlags) {
         unimplemented!()
     }

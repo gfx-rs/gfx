@@ -49,6 +49,7 @@ impl hal::Backend for Backend {
 
     type Fence = ();
     type Semaphore = ();
+    type Event = ();
     type QueryPool = ();
 }
 
@@ -345,6 +346,22 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
+    fn create_event(&self) -> Result<(), device::OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn get_event_status(&self, _: &()) -> Result<bool, device::OomOrDeviceLost> {
+        unimplemented!()
+    }
+
+    unsafe fn set_event(&self, _: &()) -> Result<(), device::OutOfMemory> {
+        unimplemented!()
+    }
+
+    unsafe fn reset_event(&self, _: &()) -> Result<(), device::OutOfMemory> {
+        unimplemented!()
+    }
+
     unsafe fn create_query_pool(&self, _: query::Type, _: u32) -> Result<(), query::CreationError> {
         unimplemented!()
     }
@@ -447,6 +464,10 @@ impl hal::Device<Backend> for Device {
     }
 
     unsafe fn destroy_semaphore(&self, _: ()) {
+        unimplemented!()
+    }
+
+    unsafe fn destroy_event(&self, _: ()) {
         unimplemented!()
     }
 
@@ -758,6 +779,28 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _: hal::DrawCount,
         _: u32,
     ) {
+        unimplemented!()
+    }
+
+    unsafe fn set_event(&mut self, _: &(), _: pso::PipelineStage) {
+        unimplemented!()
+    }
+
+    unsafe fn reset_event(&mut self, _: &(), _: pso::PipelineStage) {
+        unimplemented!()
+    }
+
+    unsafe fn wait_events<'a, I, J>(
+        &mut self,
+        _: I,
+        _: Range<pso::PipelineStage>,
+        _: J
+    ) where
+        I: IntoIterator,
+        I::Item: Borrow<()>,
+        J: IntoIterator,
+        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+    {
         unimplemented!()
     }
 

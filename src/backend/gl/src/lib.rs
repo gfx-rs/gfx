@@ -94,6 +94,7 @@ impl hal::Backend for Backend {
 
     type Fence = native::Fence;
     type Semaphore = native::Semaphore;
+    type Event = ();
     type QueryPool = ();
 }
 

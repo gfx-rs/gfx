@@ -1159,6 +1159,7 @@ impl hal::Backend for Backend {
 
     type Fence = resource::Fence;
     type Semaphore = resource::Semaphore;
+    type Event = ();
     type QueryPool = resource::QueryPool;
 }
 
