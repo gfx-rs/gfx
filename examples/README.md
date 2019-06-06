@@ -20,13 +20,17 @@ The quad example also supports WebGL and WebAssembly (`wasm32-unknown-unknown`).
 
 To run the quad example with WebAssembly:
 
-- `cd ..` to move up to the parent directory of the gfx repository
-- `git clone https://github.com/grovesNL/spirv_cross` to clone spirv_cross locally
-- `cargo install wasm-bindgen-cli` to install wasm-bindgen
-- `cd examples` to set the working directory to examples (in the gfx repository)
-- `cargo +nightly build --target wasm32-unknown-unknown --features gl --bin quad` to build the quad example to wasm32-unknown-unknown
-- `wasm-bindgen ../target/wasm32-unknown-unknown/debug/quad.wasm --out-dir ../examples/generated-wasm --web` to generate wasm bindings
-- `cd generated-wasm` to set the working directory to the newly created wasm bindings directory
-- `cp ../quad/data/index.html ./` to copy a HTML file containing some simple initialization code to the generated-wasm directory
-- `cp ../../../../spirv_cross/wasm/spirv_cross_wrapper_glsl.js ../../../../spirv_cross/wasm/spirv_cross_wrapper_glsl.wasm ./` to copy the spirv_cross JavaScript and WebAssembly files to the generated-wasm directory (alternatively symlink could be used)
-- Run any HTTP server supporting `application/wasm` from the `generated-wasm` directory
+- `cd ..` to move up to the parent directory of the gfx repository.
+- `git clone https://github.com/grovesNL/spirv_cross` to clone spirv_cross locally.
+- `cargo install wasm-bindgen-cli` to install the command line interface (CLI) for wasm-bindgen.
+- `cd examples` to set the working directory to examples (in the gfx repository).
+- `cargo +nightly build --target wasm32-unknown-unknown --features gl --bin quad` to build the quad example to wasm32-unknown-unknown.
+  - Some crates may fail to build. If they do not build correctly, you may need to update your packages locally by removing your existing Cargo.lock and cleaning your target directory, or forcing certain packages to be updated (i.e. `cargo update -p package-name --precise x.y.z`).
+- `wasm-bindgen ../target/wasm32-unknown-unknown/debug/quad.wasm --out-dir ../examples/generated-wasm --web` to generate wasm bindings.
+- `cd generated-wasm` to set the working directory to the newly created wasm bindings directory.
+- `cp ../quad/data/index.html ./` to copy a HTML file containing some simple initialization code to the generated-wasm directory.
+- `cp ../../../../spirv_cross/wasm/spirv_cross_wrapper_glsl.js ../../../../spirv_cross/wasm/spirv_cross_wrapper_glsl.wasm ./` to copy the spirv_cross JavaScript and WebAssembly files to the generated-wasm directory
+  - Alternatively symlink or similar could be used.
+- Run any HTTP server supporting `application/wasm` from the `generated-wasm` directory.
+  - You may need to add `application/wasm` to your web server).
+- Open the `index.html` file in your web browser.
