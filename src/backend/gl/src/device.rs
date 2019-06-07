@@ -1817,7 +1817,7 @@ impl d::Device<B> for Device {
         let context = {
             use crate::window::wgl::PresentContext;
 
-            let context = PresentContext::new(surface, &self.share.instance_ctxt);
+            let context = PresentContext::new(surface, &self.share.instance_context);
             context.make_current();
             context
         };
@@ -1862,7 +1862,7 @@ impl d::Device<B> for Device {
 
         #[cfg(feature = "wgl")]
         let swapchain = {
-            self.share.instance_ctxt.make_current();
+            self.share.instance_context.make_current();
             Swapchain { fbos, context, extent: config.extent }
         };
         #[cfg(feature = "glutin")]

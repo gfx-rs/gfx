@@ -56,6 +56,7 @@ pub(crate) struct GlContainer {
 }
 
 impl GlContainer {
+    #[cfg(feature = "glutin")]
     fn make_current(&self) {
         // Unimplemented
     }
@@ -236,7 +237,7 @@ struct Share {
     ///
     /// Parenting context for all device contexts shared with it.
     /// Used for querying basic information and spawning shared contexts.
-    instance_ctxt: DeviceContext,
+    instance_context: DeviceContext,
 
     info: Info,
     features: hal::Features,
@@ -465,7 +466,7 @@ impl PhysicalDevice {
         // create the shared context
         let share = Share {
             context: gl,
-            instance_ctxt,
+            instance_context,
             info,
             features,
             legacy_features,

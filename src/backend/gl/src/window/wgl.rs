@@ -1,22 +1,20 @@
+use hal::window::Extent2D;
+use hal::{self, format as f, image, CompositeAlpha};
 
-use std::ptr;
-use std::sync::Arc;
-use std::os::raw::c_void;
-use std::ffi::{CStr, CString, OsStr};
-use std::os::windows::ffi::OsStrExt;
-use crate::hal::window::Extent2D;
-use crate::hal::{self, format as f, image, memory, CompositeAlpha};
-
-use hal::image::{NumSamples, Size};
+use crate::{native, Backend, PhysicalDevice, QueueFamily};
 use hal::format::Format;
-use crate::{native, QueueFamily, PhysicalDevice, Backend};
 
+use std::{
+    ffi::{CString, OsStr},
+    mem,
+    os::{raw::c_void, windows::ffi::OsStrExt},
+    ptr,
+};
 use winapi::shared::minwindef::*;
 use winapi::shared::windef::*;
 use winapi::um::libloaderapi::*;
 use winapi::um::wingdi::*;
 use winapi::um::winuser::*;
-use std::mem;
 
 pub mod wgl_sys {
     include!(concat!(env!("OUT_DIR"), "/wgl_sys.rs"));
@@ -39,97 +37,109 @@ pub(crate) struct Entry {
     lib: HMODULE,
 }
 
-unsafe impl Sync for Entry { }
+unsafe impl Sync for Entry {}
 
 impl Entry {
     pub fn new() -> Self {
         unsafe {
-            let mut class: WNDCLASSEXW = std::mem::zeroed();
-        let instance = GetModuleHandleW(std::ptr::null());
-        let class_name = OsStr::new("regl")
-            .encode_wide()
-            .chain(Some(0).into_iter())
-            .collect::<Vec<_>>();
-
-        class.cbSize = std::mem::size_of::<WNDCLASSEXW>() as UINT;
-        class.lpszClassName = class_name.as_ptr();
-        class.lpfnWndProc = Some(DefWindowProcW);
-
-        RegisterClassExW(&class);
-
-        let hwnd = CreateWindowExW(
-            0,
-            class_name.as_ptr(),
-            std::ptr::null(),
-            0,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            CW_USEDEFAULT,
-            std::ptr::null_mut(),
-            std::ptr::null_mut(),
-            instance,
-            std::ptr::null_mut(),
-        );
-
-        let hdc = GetDC(hwnd);
-
-        let desc = PIXELFORMATDESCRIPTOR {
-            nSize: std::mem::size_of::<PIXELFORMATDESCRIPTOR>() as u16,
-            nVersion: 1,
-            dwFlags: PFD_DRAW_TO_WINDOW | PFD_SUPPORT_OPENGL | PFD_DOUBLEBUFFER,
-            iPixelType: PFD_TYPE_RGBA,
-            cColorBits: 32,
-            cRedBits: 0,
-            cRedShift: 0,
-            cGreenBits: 0,
-            cGreenShift: 0,
-            cBlueBits: 0,
-            cBlueShift: 0,
-            cAlphaBits: 8,
-            cAlphaShift: 0,
-            cAccumBits: 0,
-            cAccumRedBits: 0,
-            cAccumGreenBits: 0,
-            cAccumBlueBits: 0,
-            cAccumAlphaBits: 0,
-            cDepthBits: 0,
-            cStencilBits: 0,
-            cAuxBuffers: 0,
-            iLayerType: PFD_MAIN_PLANE,
-            bReserved: 0,
-            dwLayerMask: 0,
-            dwVisibleMask: 0,
-            dwDamageMask: 0,
-        };
-
-        let format_id = ChoosePixelFormat(hdc, &desc);
-        SetPixelFormat(hdc, format_id, &desc);
-
-        let hglrc = wglCreateContext(hdc);
-
-        println!("{:?}", (hwnd, hdc, format_id, hglrc));
-
-        dbg!(wglMakeCurrent(hdc, hglrc));
-
-        let name = OsStr::new("opengl32.dll")
+            let mut class: WNDCLASSEXW = mem::zeroed();
+            let instance = GetModuleHandleW(ptr::null());
+            let class_name = OsStr::new("gfx-rs wgl")
                 .encode_wide()
                 .chain(Some(0).into_iter())
                 .collect::<Vec<_>>();
 
-        let lib = dbg!(LoadLibraryW(name.as_ptr()));
+            class.cbSize = mem::size_of::<WNDCLASSEXW>() as UINT;
+            class.lpszClassName = class_name.as_ptr();
+            class.lpfnWndProc = Some(DefWindowProcW);
 
-        let wgl = wgl_ext_sys::Wgl::load_with(|sym| {
-            let sym = CString::new(sym.as_bytes()).unwrap();
-            let addr = wgl_sys::GetProcAddress(sym.as_ptr()) as *const ();
-            if !addr.is_null() {
-                addr as *const _
-            } else {
-                GetProcAddress(lib, sym.as_ptr()) as *const _
+            RegisterClassExW(&class);
+
+            let hwnd = CreateWindowExW(
+                0,
+                class_name.as_ptr(),
+                std::ptr::null(),
+                0,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                CW_USEDEFAULT,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                instance,
+                std::ptr::null_mut(),
+            );
+
+            let hdc = GetDC(hwnd);
+
+            let desc = PIXELFORMATDESCRIPTOR {
+                nSize: std::mem::size_of::<PIXELFORMATDESCRIPTOR>() as u16,
+                nVersion: 1,
+                dwFlags: PFD_SUPPORT_OPENGL,
+                iPixelType: PFD_TYPE_RGBA,
+                cColorBits: 8,
+                cRedBits: 0,
+                cRedShift: 0,
+                cGreenBits: 0,
+                cGreenShift: 0,
+                cBlueBits: 0,
+                cBlueShift: 0,
+                cAlphaBits: 8,
+                cAlphaShift: 0,
+                cAccumBits: 0,
+                cAccumRedBits: 0,
+                cAccumGreenBits: 0,
+                cAccumBlueBits: 0,
+                cAccumAlphaBits: 0,
+                cDepthBits: 0,
+                cStencilBits: 0,
+                cAuxBuffers: 0,
+                iLayerType: PFD_MAIN_PLANE,
+                bReserved: 0,
+                dwLayerMask: 0,
+                dwVisibleMask: 0,
+                dwDamageMask: 0,
+            };
+
+            let format_id = ChoosePixelFormat(hdc, &desc);
+            SetPixelFormat(hdc, format_id, &desc);
+            let hglrc = wglCreateContext(hdc);
+
+            println!("{:?}", (hwnd, hdc, format_id, hglrc));
+
+            wglMakeCurrent(hdc, hglrc);
+
+            let name = OsStr::new("opengl32.dll")
+                .encode_wide()
+                .chain(Some(0).into_iter())
+                .collect::<Vec<_>>();
+
+            let lib = LoadLibraryW(name.as_ptr());
+
+            let wgl = wgl_ext_sys::Wgl::load_with(|sym| {
+                let sym = CString::new(sym.as_bytes()).unwrap();
+                let addr = wgl_sys::GetProcAddress(sym.as_ptr()) as *const ();
+                if !addr.is_null() {
+                    addr as *const _
+                } else {
+                    GetProcAddress(lib, sym.as_ptr()) as *const _
+                }
+            });
+
+            Entry {
+                hwnd,
+                hdc: hdc as _,
+                wgl,
+                lib,
             }
-        });
+        }
+    }
+}
 
-        Entry { hwnd, hdc: hdc as _, wgl, lib }
+impl Drop for Entry {
+    fn drop(&mut self) {
+        unsafe {
+            DestroyWindow(self.hwnd);
         }
     }
 }
@@ -144,28 +154,30 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn create(name: &str, version: u32) -> Self {
+    pub fn create(_name: &str, version: u32) -> Self {
         unsafe {
-            let glrc = dbg!(WGL_ENTRY.wgl.CreateContextAttribsARB(
+            let glrc = WGL_ENTRY.wgl.CreateContextAttribsARB(
                 WGL_ENTRY.hdc as *const _,
                 ptr::null(),
-                ptr::null()
-            ) as HGLRC);
+                ptr::null(),
+            ) as HGLRC;
 
-            dbg!(wglMakeCurrent(WGL_ENTRY.hdc as *mut _, glrc));
+            wglMakeCurrent(WGL_ENTRY.hdc as *mut _, glrc);
 
-            Instance { ctxt: DeviceContext {
-                ctxt: Context { glrc },
-                hdc: WGL_ENTRY.hdc,
-            }}
+            Instance {
+                ctxt: DeviceContext {
+                    ctxt: Context { glrc },
+                    hdc: WGL_ENTRY.hdc,
+                },
+            }
         }
     }
 
     #[cfg(windows)]
-    pub fn create_surface_from_hwnd(
-        &self, hwnd: *mut c_void
-    ) -> Surface {
-        Surface { hwnd: hwnd as *mut _}
+    pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
+        Surface {
+            hwnd: hwnd as *mut _,
+        }
     }
 
     #[cfg(feature = "winit")]
@@ -200,14 +212,15 @@ pub struct Surface {
 }
 
 // TODO: high -msiglreith
-unsafe impl Send for Surface { }
-unsafe impl Sync for Surface { }
-
+unsafe impl Send for Surface {}
+unsafe impl Sync for Surface {}
 
 impl Surface {
     fn get_extent(&self) -> hal::window::Extent2D {
         let mut rect: RECT = unsafe { mem::uninitialized() };
-        unsafe { GetClientRect(self.hwnd, &mut rect); }
+        unsafe {
+            GetClientRect(self.hwnd, &mut rect);
+        }
         hal::window::Extent2D {
             width: (rect.right - rect.left) as _,
             height: (rect.bottom - rect.top) as _,
@@ -221,8 +234,13 @@ impl hal::Surface<Backend> for Surface {
     }
 
     fn compatibility(
-        &self, physical_device: &PhysicalDevice
-    ) -> (hal::SurfaceCapabilities, Option<Vec<Format>>, Vec<hal::PresentMode>) {
+        &self,
+        physical_device: &PhysicalDevice,
+    ) -> (
+        hal::SurfaceCapabilities,
+        Option<Vec<Format>>,
+        Vec<hal::PresentMode>,
+    ) {
         let extent = self.get_extent();
 
         let caps = hal::SurfaceCapabilities {
@@ -240,10 +258,14 @@ impl hal::Surface<Backend> for Surface {
             hal::PresentMode::Fifo, //TODO
         ];
 
-        (caps, Some(vec![f::Format::Rgba8Srgb, f::Format::Bgra8Srgb]), present_modes)
+        (
+            caps,
+            Some(vec![f::Format::Rgba8Srgb, f::Format::Bgra8Srgb]),
+            present_modes,
+        )
     }
 
-    fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
+    fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         true
     }
 }
@@ -266,7 +288,8 @@ impl Swapchain {
 
 impl hal::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
-        &mut self, _timeout_ns: u64,
+        &mut self,
+        _timeout_ns: u64,
         _semaphore: Option<&native::Semaphore>,
         _fence: Option<&native::Fence>,
     ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
@@ -299,12 +322,14 @@ pub(crate) struct DeviceContext {
 }
 
 // TODO
-unsafe impl Send for DeviceContext { }
-unsafe impl Sync for DeviceContext { }
+unsafe impl Send for DeviceContext {}
+unsafe impl Sync for DeviceContext {}
 
 impl DeviceContext {
     pub(crate) fn make_current(&self) {
-        unsafe { self.ctxt.make_current(self.hdc); }
+        unsafe {
+            self.ctxt.make_current(self.hdc);
+        }
     }
 }
 
@@ -319,15 +344,14 @@ pub(crate) struct PresentContext {
 }
 
 // TODO
-unsafe impl Send for PresentContext { }
-unsafe impl Sync for PresentContext { }
-
+unsafe impl Send for PresentContext {}
+unsafe impl Sync for PresentContext {}
 
 impl PresentContext {
     pub(crate) fn new(surface: &Surface, device_ctxt: &DeviceContext) -> Self {
         // TODO: configuration options
         unsafe {
-            let hdc = dbg!(GetDC(surface.hwnd));
+            let hdc = GetDC(surface.hwnd);
 
             let desc = PIXELFORMATDESCRIPTOR {
                 nSize: std::mem::size_of::<PIXELFORMATDESCRIPTOR>() as u16,
@@ -361,23 +385,30 @@ impl PresentContext {
             let format_id = ChoosePixelFormat(hdc, &desc);
             SetPixelFormat(hdc, format_id, &desc);
 
-            let glrc = dbg!(WGL_ENTRY.wgl.CreateContextAttribsARB(
+            let glrc = WGL_ENTRY.wgl.CreateContextAttribsARB(
                 hdc as *const _,
                 device_ctxt.ctxt.glrc as _,
-                ptr::null()
-            ) as HGLRC);
+                ptr::null(),
+            ) as HGLRC;
 
             wglMakeCurrent(hdc, glrc);
 
-            PresentContext { ctxt: Context { glrc }, hdc }
+            PresentContext {
+                ctxt: Context { glrc },
+                hdc,
+            }
         }
     }
 
     pub(crate) fn make_current(&self) {
-        unsafe { self.ctxt.make_current(self.hdc); }
+        unsafe {
+            self.ctxt.make_current(self.hdc);
+        }
     }
 
     fn swap_buffers(&self) {
-        unsafe { SwapBuffers(self.hdc); }
+        unsafe {
+            SwapBuffers(self.hdc);
+        }
     }
 }

@@ -1040,7 +1040,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
 
         #[cfg(feature = "wgl")]
-        self.share.instance_ctxt.make_current();
+        self.share.instance_context.make_current();
 
         Ok(None)
     }
