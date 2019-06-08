@@ -7,12 +7,9 @@
 extern crate bitflags;
 #[macro_use]
 extern crate log;
-extern crate gfx_gl as gl;
 extern crate gfx_hal as hal;
-#[cfg(feature = "glutin")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub extern crate glutin;
-extern crate smallvec;
-extern crate spirv_cross;
 
 use std::cell::Cell;
 use std::fmt;
@@ -36,23 +33,73 @@ mod queue;
 mod state;
 mod window;
 
-#[cfg(feature = "glutin")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
+#[cfg(target_arch = "wasm32")]
+pub use crate::window::web::{Surface, Swapchain, Window};
+
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+pub use glow::native::Context as GlContext;
+#[cfg(target_arch = "wasm32")]
+pub use glow::web::Context as GlContext;
+use glow::Context;
 
 pub(crate) struct GlContainer {
-    context: gl::Gl,
+    context: GlContext,
 }
 
 impl GlContainer {
     fn make_current(&self) {
         // Unimplemented
     }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn from_fn_proc<F>(fn_proc: F) -> GlContainer
+    where F: FnMut(&str) -> *const std::os::raw::c_void {
+        let context = glow::native::Context::from_loader_function(fn_proc);
+        GlContainer { context }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn from_new_canvas() -> GlContainer {
+        let context = {
+            use wasm_bindgen::JsCast;
+            let document = web_sys::window()
+                .and_then(|win| win.document())
+                .expect("Cannot get document");
+            let canvas = document
+                .create_element("canvas")
+                .expect("Cannot create canvas")
+                .dyn_into::<web_sys::HtmlCanvasElement>()
+                .expect("Cannot get canvas element");
+            // TODO: Remove hardcoded width/height
+            canvas.set_attribute("width", "640").expect("Cannot set width");
+            canvas.set_attribute("height", "480").expect("Cannot set height");
+            let context_options = js_sys::Object::new();
+            js_sys::Reflect::set(
+                &context_options,
+                &"antialias".into(),
+                &wasm_bindgen::JsValue::FALSE
+            ).expect("Cannot create context options");
+            let webgl2_context = canvas
+                .get_context_with_context_options("webgl2", &context_options)
+                .expect("Cannot create WebGL2 context")
+                .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
+                .expect("Cannot convert into WebGL2 context");
+            document.body()
+                .expect("Cannot get document body")
+                .append_child(&canvas)
+                .expect("Cannot insert canvas into document body");
+            glow::web::Context::from_webgl2_context(webgl2_context)
+        };
+        GlContainer { context }
+    }
 }
 
 impl Deref for GlContainer {
-    type Target = gl::Gl;
-    fn deref(&self) -> &gl::Gl {
-        #[cfg(feature = "glutin")]
+    type Target = GlContext;
+    fn deref(&self) -> &GlContext {
+        #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
         self.make_current();
         &self.context
     }
@@ -76,7 +123,7 @@ impl hal::Backend for Backend {
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
-    type Framebuffer = native::FrameBuffer;
+    type Framebuffer = Option<native::FrameBuffer>;
 
     type Buffer = native::Buffer;
     type BufferView = native::BufferView;
@@ -110,14 +157,14 @@ pub enum Error {
 }
 
 impl Error {
-    pub fn from_error_code(error_code: gl::types::GLenum) -> Error {
+    pub fn from_error_code(error_code: u32) -> Error {
         match error_code {
-            gl::NO_ERROR => Error::NoError,
-            gl::INVALID_ENUM => Error::InvalidEnum,
-            gl::INVALID_VALUE => Error::InvalidValue,
-            gl::INVALID_OPERATION => Error::InvalidOperation,
-            gl::INVALID_FRAMEBUFFER_OPERATION => Error::InvalidFramebufferOperation,
-            gl::OUT_OF_MEMORY => Error::OutOfMemory,
+            glow::NO_ERROR => Error::NoError,
+            glow::INVALID_ENUM => Error::InvalidEnum,
+            glow::INVALID_VALUE => Error::InvalidValue,
+            glow::INVALID_OPERATION => Error::InvalidOperation,
+            glow::INVALID_FRAMEBUFFER_OPERATION => Error::InvalidFramebufferOperation,
+            glow::OUT_OF_MEMORY => Error::OutOfMemory,
             _ => Error::UnknownError,
         }
     }
@@ -140,7 +187,7 @@ impl Share {
     fn check(&self) -> Result<(), Error> {
         if cfg!(debug_assertions) {
             let gl = &self.context;
-            let err = Error::from_error_code(unsafe { gl.GetError() });
+            let err = Error::from_error_code(unsafe { gl.get_error() });
             if err != Error::NoError {
                 return Err(err);
             }
@@ -236,14 +283,8 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 pub struct PhysicalDevice(Starc<Share>);
 
 impl PhysicalDevice {
-    fn new_adapter<F>(fn_proc: F) -> hal::Adapter<Backend>
-    where
-        F: FnMut(&str) -> *const std::os::raw::c_void,
-    {
-        let gl = GlContainer {
-            context: gl::Gl::load_with(fn_proc),
-        };
-
+    #[allow(unused)]
+    fn new_adapter(gl: GlContainer) -> hal::Adapter<Backend> {
         // query information
         let (info, features, legacy_features, limits, private_caps) = info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
@@ -256,9 +297,9 @@ impl PhysicalDevice {
         for extension in info.extensions.iter() {
             debug!("- {}", *extension);
         }
-        let name = info.platform_name.renderer.into();
-        let vendor: std::string::String = info.platform_name.vendor.into();
-        let renderer: std::string::String = info.platform_name.renderer.into();
+        let name = info.platform_name.renderer.clone();
+        let vendor: std::string::String = info.platform_name.vendor.clone();
+        let renderer: std::string::String = info.platform_name.renderer.clone();
 
         // create the shared context
         let share = Share {
@@ -381,17 +422,16 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .contains(info::LegacyFeatures::SRGB_COLOR)
         {
             // TODO: Find way to emulate this on older Opengl versions.
-
-            gl.Enable(gl::FRAMEBUFFER_SRGB);
+            gl.enable(glow::FRAMEBUFFER_SRGB);
         }
 
-        gl.PixelStorei(gl::UNPACK_ALIGNMENT, 1);
+        gl.pixel_store_i32(glow::UNPACK_ALIGNMENT, 1);
 
         // create main VAO and bind it
-        let mut vao = 0;
+        let mut vao = None;
         if self.0.private_caps.vertex_array {
-            gl.GenVertexArrays(1, &mut vao);
-            gl.BindVertexArray(vao);
+            vao = Some(gl.create_vertex_array().unwrap());
+            gl.bind_vertex_array(vao);
         }
 
         if let Err(err) = self.0.check() {
@@ -443,7 +483,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         // COHERENT flags require that the backend does flushing and invalidation
         // by itself. If we move towards persistent mapping we need to re-evaluate it.
-        let memory_types = if self.0.private_caps.map {
+        let caps = &self.0.private_caps;
+        let memory_types = if caps.map || caps.emulate_map {
             vec![
                 hal::MemoryType {
                     properties: Properties::DEVICE_LOCAL,
@@ -499,13 +540,13 @@ impl hal::QueueFamily for QueueFamily {
     }
 }
 
-#[cfg(feature = "glutin")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub enum Instance {
     Headless(Headless),
     Surface(Surface)
 }
 
-#[cfg(feature = "glutin")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 impl hal::Instance for Instance {
     type Backend = Backend;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
@@ -516,7 +557,7 @@ impl hal::Instance for Instance {
     }
 }
 
-#[cfg(feature = "glutin")]
+#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 impl Instance {
     /// TODO: Update portability to make this more flexible
     #[cfg(target_os = "linux")]

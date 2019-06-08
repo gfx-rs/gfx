@@ -1,31 +1,30 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::hal::backend::FastHashMap;
 use crate::hal::memory::{Properties, Requirements};
 use crate::hal::{format, image as i, pass, pso};
 
-use crate::gl;
-use crate::Backend;
+use crate::{Backend, GlContext};
 
-pub type TextureType = gl::types::GLenum;
+pub type TextureType = u32;
 
-pub type RawBuffer = gl::types::GLuint;
-pub type Shader = gl::types::GLuint;
-pub type Program = gl::types::GLuint;
-pub type FrameBuffer = gl::types::GLuint;
-pub type Surface = gl::types::GLuint;
-pub type Texture = gl::types::GLuint;
-pub type Sampler = gl::types::GLuint;
-
+// TODO: Consider being generic over `glow::Context` instead
+pub type VertexArray = <GlContext as glow::Context>::VertexArray;
+pub type RawBuffer = <GlContext as glow::Context>::Buffer;
+pub type Shader = <GlContext as glow::Context>::Shader;
+pub type Program = <GlContext as glow::Context>::Program;
+pub type FrameBuffer = <GlContext as glow::Context>::Framebuffer;
+pub type Surface = <GlContext as glow::Context>::Renderbuffer;
+pub type Texture = <GlContext as glow::Context>::Texture;
+pub type Sampler = <GlContext as glow::Context>::Sampler;
+pub type UniformLocation = <GlContext as glow::Context>::UniformLocation;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
-
-pub const DEFAULT_FRAMEBUFFER: FrameBuffer = 0;
 
 #[derive(Debug)]
 pub struct Buffer {
     pub(crate) raw: RawBuffer,
-    pub(crate) target: gl::types::GLenum,
+    pub(crate) target: u32,
     pub(crate) requirements: Requirements,
 }
 
@@ -33,12 +32,12 @@ pub struct Buffer {
 pub struct BufferView;
 
 #[derive(Debug)]
-pub struct Fence(pub(crate) Cell<gl::types::GLsync>);
+pub struct Fence(pub(crate) Cell<Option<<GlContext as glow::Context>::Fence>>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
 
 impl Fence {
-    pub(crate) fn new(sync: gl::types::GLsync) -> Self {
+    pub(crate) fn new(sync: Option<<GlContext as glow::Context>::Fence>) -> Self {
         Fence(Cell::new(sync))
     }
 }
@@ -132,8 +131,8 @@ impl DescRemapData {
 #[derive(Clone, Debug)]
 pub struct GraphicsPipeline {
     pub(crate) program: Program,
-    pub(crate) primitive: gl::types::GLenum,
-    pub(crate) patch_size: Option<gl::types::GLint>,
+    pub(crate) primitive: u32,
+    pub(crate) patch_size: Option<i32>,
     pub(crate) blend_targets: Vec<pso::ColorBlendDesc>,
     pub(crate) attributes: Vec<AttributeDesc>,
     pub(crate) vertex_buffers: Vec<Option<pso::VertexBufferDesc>>,
@@ -182,8 +181,8 @@ pub(crate) enum DescSetBindings {
         ty: BindingTypes,
         binding: pso::DescriptorBinding,
         buffer: RawBuffer,
-        offset: gl::types::GLintptr,
-        size: gl::types::GLsizeiptr,
+        offset: i32,
+        size: i32,
     },
     Texture(pso::DescriptorBinding, Texture, TextureType),
     Sampler(pso::DescriptorBinding, Sampler),
@@ -231,9 +230,10 @@ pub enum ShaderModule {
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) properties: Properties,
-    pub(crate) first_bound_buffer: Cell<RawBuffer>,
+    pub(crate) first_bound_buffer: Cell<Option<RawBuffer>>,
     /// Allocation size
     pub(crate) size: u64,
+    pub(crate) emulate_map_allocation: RefCell<*mut u8>,
 }
 
 unsafe impl Send for Memory {}
@@ -249,13 +249,13 @@ impl Memory {
             .contains(Properties::CPU_VISIBLE | Properties::CPU_CACHED)
     }
 
-    pub fn map_flags(&self) -> gl::types::GLenum {
+    pub fn map_flags(&self) -> u32 {
         let mut flags = 0;
         if self.can_download() {
-            flags |= gl::MAP_READ_BIT;
+            flags |= glow::MAP_READ_BIT;
         }
         if self.can_upload() {
-            flags |= gl::MAP_WRITE_BIT;
+            flags |= glow::MAP_WRITE_BIT;
         }
         flags
     }
@@ -296,19 +296,19 @@ pub struct Semaphore;
 
 #[derive(Clone, Debug)]
 pub struct AttributeDesc {
-    pub(crate) location: gl::types::GLuint,
+    pub(crate) location: u32,
     pub(crate) offset: u32,
-    pub(crate) binding: gl::types::GLuint,
-    pub(crate) size: gl::types::GLint,
-    pub(crate) format: gl::types::GLenum,
+    pub(crate) binding: u32,
+    pub(crate) size: i32,
+    pub(crate) format: u32,
     pub(crate) vertex_attrib_fn: VertexAttribFunction,
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct UniformDesc {
-    pub(crate) location: gl::types::GLuint,
+    pub(crate) location: UniformLocation,
     pub(crate) offset: u32,
-    pub(crate) utype: gl::types::GLenum,
+    pub(crate) utype: u32,
 }
 
 #[derive(Debug, Clone, Copy)]

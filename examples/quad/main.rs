@@ -9,7 +9,6 @@
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
 
-extern crate env_logger;
 #[cfg(feature = "dx11")]
 extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "dx12")]
@@ -22,9 +21,15 @@ extern crate gfx_backend_metal as back;
 extern crate gfx_backend_vulkan as back;
 extern crate gfx_hal as hal;
 
-extern crate glsl_to_spirv;
-extern crate image;
-extern crate winit;
+#[cfg(target_arch = "wasm32")]
+use wasm_bindgen::prelude::*;
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen(start)]
+pub fn wasm_main() {
+    std::panic::set_hook(Box::new(console_error_panic_hook::hook));
+    main();
+}
 
 use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
 use hal::pass::Subpass;
@@ -36,8 +41,7 @@ use hal::{
 use hal::{DescriptorPool, Primitive, SwapchainConfig};
 use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 
-use std::fs;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 const DIMS: Extent2D = Extent2D { width: 1024,height: 768 };
@@ -76,10 +80,15 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     feature = "gl"
 ))]
 fn main() {
+    #[cfg(target_arch = "wasm32")]
+    console_log::init_with_level(log::Level::Debug).unwrap();
+    #[cfg(not(target_arch = "wasm32"))]
     env_logger::init();
 
+    #[cfg(not(target_arch = "wasm32"))]
     let mut events_loop = winit::EventsLoop::new();
 
+    #[cfg(not(target_arch = "wasm32"))]
     let wb = winit::WindowBuilder::new()
         .with_min_dimensions(winit::dpi::LogicalSize::new(
             1.0,
@@ -101,12 +110,15 @@ fn main() {
     };
     #[cfg(feature = "gl")]
     let (mut adapters, mut surface) = {
+        #[cfg(not(target_arch = "wasm32"))]
         let window = {
             let builder =
                 back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
                     .with_vsync(true);
             back::glutin::WindowedContext::new_windowed(wb, builder, &events_loop).unwrap()
         };
+        #[cfg(target_arch = "wasm32")]
+        let window = { back::Window };
 
         let surface = back::Surface::from_window(window);
         let adapters = surface.enumerate_adapters();
@@ -520,22 +532,12 @@ fn main() {
     .expect("Can't create pipeline layout");
     let pipeline = {
         let vs_module = {
-            let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
-            let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
-                .unwrap()
-                .bytes()
-                .map(|b| b.unwrap())
-                .collect();
-            unsafe { device.create_shader_module(&spirv) }.unwrap()
+            let spirv = include_bytes!("data/quad.vert.spv");
+            unsafe { device.create_shader_module(spirv) }.unwrap()
         };
         let fs_module = {
-            let glsl = fs::read_to_string("quad/data/quad.frag").unwrap();
-            let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
-                .unwrap()
-                .bytes()
-                .map(|b| b.unwrap())
-                .collect();
-            unsafe { device.create_shader_module(&spirv) }.unwrap()
+            let spirv = include_bytes!("./data/quad.frag.spv");
+            unsafe { device.create_shader_module(spirv) }.unwrap()
         };
 
         let pipeline = {
@@ -632,6 +634,8 @@ fn main() {
     };
     let mut frame: u64 = 0;
     while running {
+        running = !cfg!(target_arch = "wasm32");
+        #[cfg(not(target_arch = "wasm32"))]
         events_loop.poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
                 #[allow(unused_variables)]
