@@ -40,16 +40,17 @@ pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
 #[cfg(target_arch = "wasm32")]
 pub use crate::window::web::{Surface, Swapchain, Window};
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+#[cfg(feature = "wgl")]
+use window::wgl::{DeviceContext, Surface, Swapchain};
+#[cfg(feature = "wgl")]
+pub use window::wgl::{Instance};
+
+#[cfg(not(target_arch = "wasm32"))]
 pub use glow::native::Context as GlContext;
 #[cfg(target_arch = "wasm32")]
 pub use glow::web::Context as GlContext;
 use glow::Context;
 
-#[cfg(feature = "wgl")]
-use window::wgl::{DeviceContext, Surface, Swapchain};
-#[cfg(feature = "wgl")]
-pub use window::wgl::{Instance};
 
 pub(crate) struct GlContainer {
     context: GlContext,
@@ -381,12 +382,12 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 #[derive(Debug)]
 pub struct PhysicalDevice(Starc<Share>);
 
-#[cfg(feature = "glutin")]
+#[cfg(any(feature = "glutin", target_arch = "wasm32"))]
 type DeviceContext = ();
 
 impl PhysicalDevice {
     #[allow(unused)]
-    fn new_adapter(gl: GlContainer) -> hal::Adapter<Backend> {
+    fn new_adapter(instance_context: DeviceContext, gl: GlContainer) -> hal::Adapter<Backend> {
         // query information
         let (info, features, legacy_features, limits, private_caps) = info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);

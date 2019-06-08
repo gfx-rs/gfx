@@ -1,7 +1,7 @@
 use hal::window::Extent2D;
 use hal::{self, format as f, image, CompositeAlpha};
 
-use crate::{native, Backend, PhysicalDevice, QueueFamily};
+use crate::{native, Backend, PhysicalDevice, QueueFamily, GlContainer};
 use hal::format::Format;
 
 use std::{
@@ -193,7 +193,7 @@ impl hal::Instance for Instance {
     type Backend = Backend;
 
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
-        let adapter = PhysicalDevice::new_adapter(self.ctxt, |s| unsafe {
+        let gl_container = GlContainer::from_fn_proc(|s| unsafe {
             let sym = CString::new(s.as_bytes()).unwrap();
             let addr = wgl_sys::GetProcAddress(sym.as_ptr()) as *const ();
             if !addr.is_null() {
@@ -202,6 +202,7 @@ impl hal::Instance for Instance {
                 GetProcAddress(WGL_ENTRY.lib, sym.as_ptr()) as *const _
             }
         });
+        let adapter = PhysicalDevice::new_adapter(self.ctxt, gl_container);
         vec![adapter]
     }
 }

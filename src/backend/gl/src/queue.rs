@@ -1000,7 +1000,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     }
     }
 
-    #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+    #[cfg(all(not(target_arch = "wasm32"), any(feature = "glutin", feature = "wgl")))]
     unsafe fn present<'a, W, Is, S, Iw>(
         &mut self,
         swapchains: Is,
@@ -1015,10 +1015,12 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         let gl = &self.share.context;
 
         for (swapchain, index) in swapchains {
+            let extent = swapchain.borrow().extent;
+
             #[cfg(feature = "wgl")]
             swapchain.borrow().make_current();
 
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, self.state.fbo);
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.borrow().fbos[index as usize]));
             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
             gl.blit_framebuffer(
                 0,

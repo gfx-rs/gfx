@@ -1805,9 +1805,9 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
 
         let (int_format, iformat, itype) = match config.format {
-            Format::Rgba8Unorm => (gl::RGBA8, gl::RGBA, gl::UNSIGNED_BYTE),
-            Format::Bgra8Unorm => (gl::RGBA8, gl::BGRA, gl::UNSIGNED_BYTE),
-            Format::Rgba8Srgb => (gl::SRGB8_ALPHA8, gl::RGBA, gl::UNSIGNED_BYTE),
+            Format::Rgba8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
+            Format::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE),
+            Format::Rgba8Srgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
             _ => unimplemented!(),
         };
 
@@ -1827,9 +1827,8 @@ impl d::Device<B> for Device {
 
         for _ in 0..config.image_count {
             unsafe {
-                let mut fbo = 0;
-                gl.GenFramebuffers(1, &mut fbo);
-                gl.BindFramebuffer(gl::FRAMEBUFFER, fbo);
+                let fbo = gl.create_framebuffer().unwrap();
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
                 fbos.push(fbo);
 
                 let Extent2D { width, height } = config.extent;
@@ -1844,14 +1843,14 @@ impl d::Device<B> for Device {
 
                 match image.kind {
                     n::ImageKind::Surface(surface) => {
-                        gl.FramebufferRenderbuffer(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, gl::RENDERBUFFER, surface);
+                        gl.framebuffer_renderbuffer(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::RENDERBUFFER, Some(surface));
                     }
                     n::ImageKind::Texture(texture, textype) => {
                         if self.share.private_caps.framebuffer_texture {
-                            gl.FramebufferTexture(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, texture, 0);
+                            gl.framebuffer_texture(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, Some(texture), 0);
                         } else {
-                            gl.BindTexture(textype, texture);
-                            gl.FramebufferTexture2D(gl::FRAMEBUFFER, gl::COLOR_ATTACHMENT0, textype, texture, 0);
+                            gl.bind_texture(textype, Some(texture));
+                            gl.framebuffer_texture_2d(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, textype, Some(texture), 0);
                         }
                     }
                 }
