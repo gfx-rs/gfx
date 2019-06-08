@@ -3,7 +3,7 @@
 use glow::Context;
 use crate::hal::{pso, ColorSlot};
 use smallvec::SmallVec;
-use crate::GlContainer;
+use crate::{GlContainer, Share};
 
 pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
     let attachments: SmallVec<[u32; 16]> = (0..num)
@@ -157,8 +157,11 @@ pub(crate) fn bind_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
     }
 }
 
-pub(crate) fn bind_blend_slot(gl: &GlContainer, slot: ColorSlot, desc: &pso::ColorBlendDesc, supports_draw_buffers: bool) {
+pub(crate) fn bind_blend_slot(share: &Share, slot: ColorSlot, desc: &pso::ColorBlendDesc) {
     use crate::hal::pso::ColorMask as Cm;
+
+    let gl = &share.context;
+    let supports_draw_buffers = share.private_caps.draw_buffers;
 
     match desc.1 {
         pso::BlendState::On { color, alpha } => unsafe {

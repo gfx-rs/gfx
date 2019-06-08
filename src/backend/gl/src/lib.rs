@@ -8,13 +8,8 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 extern crate gfx_hal as hal;
-extern crate glow;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub extern crate glutin;
-extern crate smallvec;
-extern crate spirv_cross;
-#[cfg(target_arch = "wasm32")]
-extern crate wasm_bindgen;
 
 use std::cell::Cell;
 use std::fmt;

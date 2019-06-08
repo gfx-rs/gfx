@@ -532,7 +532,7 @@ impl CommandQueue {
                 self.share.context.use_program(Some(program));
             },
             com::Command::BindBlendSlot(slot, ref blend) => {
-                state::bind_blend_slot(&self.share.context, slot, blend, self.share.private_caps.draw_buffers);
+                state::bind_blend_slot(&self.share, slot, blend);
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
                 use crate::native::VertexAttribFunction::*;
@@ -828,8 +828,7 @@ impl CommandQueue {
                     _ => unsafe { gl.disable(gl_offset) },
                 }
 
-                // `MULTISAMPLE` may not be available for OpenGL ES or WebGL
-                if !self.share.info.version.is_embedded {
+                if !self.share.info.is_webgl() && !self.share.info.version.is_embedded {
                     match false {
                         //TODO
                         true => unsafe { gl.enable(glow::MULTISAMPLE) },

@@ -181,7 +181,10 @@ pub struct PrivateCaps {
     pub sync: bool,
     /// Can map memory
     pub map: bool,
-    /// Whether to emulate map memory
+    /// Whether to emulate memory mapping (`glMapBuffer`/`glMapBufferRange`)
+    /// when it is not available:
+    /// - In OpenGL ES 2 it may be available behind optional extensions
+    /// - In WebGL 1 and WebGL 2 it is never available
     pub emulate_map: bool,
     /// Indicates if we only have support via the EXT.
     pub sampler_anisotropy_ext: bool,
@@ -254,11 +257,11 @@ impl Info {
     fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
         let version =
-            Version::parse(get_string(gl, glow::VERSION).unwrap_or_else(|_| String::from("")))
+            Version::parse(get_string(gl, glow::VERSION).unwrap_or_default())
                 .unwrap();
         #[cfg(not(target_arch = "wasm32"))]
         let shading_language = Version::parse(
-            get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_else(|_| String::from("")),
+            get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_default(),
         )
         .unwrap();
         #[cfg(target_arch = "wasm32")]
@@ -319,6 +322,10 @@ impl Info {
             Es(major, minor) => self.is_embedded_version_supported(major, minor),
             Ext(extension) => self.is_extension_supported(extension),
         })
+    }
+
+    pub fn is_webgl(&self) -> bool {
+        cfg!(target_arch = "wasm32")
     }
 }
 
@@ -476,7 +483,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         clear_buffer: info.is_supported(&[Core(3, 0), Es(3, 0)]),
         program_interface: info.is_supported(&[Core(4, 3), Ext("GL_ARB_program_interface_query")]),
         frag_data_location: !info.version.is_embedded,
-        sync: false && info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]), // TODO
+        sync: !info.is_webgl() && info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]), // TODO
         map: !info.version.is_embedded, //TODO: OES extension
         sampler_anisotropy_ext: !info
             .is_supported(&[Core(4, 6), Ext("GL_ARB_texture_filter_anisotropic")])

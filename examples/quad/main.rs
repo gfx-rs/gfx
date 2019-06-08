@@ -41,8 +41,7 @@ use hal::{
 use hal::{DescriptorPool, Primitive, SwapchainConfig};
 use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 
-use std::fs;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 const DIMS: Extent2D = Extent2D { width: 1024,height: 768 };
@@ -533,31 +532,12 @@ fn main() {
     .expect("Can't create pipeline layout");
     let pipeline = {
         let vs_module = {
-            #[cfg(target_arch = "wasm32")]
-            let spirv = include_bytes!("./data/quad.vert.spv").to_vec();
-            #[cfg(not(target_arch = "wasm32"))]
-            let glsl = fs::read_to_string("quad/data/quad.vert").unwrap();
-            #[cfg(not(target_arch = "wasm32"))]
-            let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
-                .unwrap()
-                .bytes()
-                .map(|b| b.unwrap())
-                .collect();
-
-            unsafe { device.create_shader_module(&spirv) }.unwrap()
+            let spirv = include_bytes!("data/quad.vert.spv");
+            unsafe { device.create_shader_module(spirv) }.unwrap()
         };
         let fs_module = {
-            #[cfg(target_arch = "wasm32")]
-            let spirv = include_bytes!("./data/quad.frag.spv").to_vec();
-            #[cfg(not(target_arch = "wasm32"))]
-            let glsl = fs::read_to_string("quad/data/quad.frag").unwrap();
-            #[cfg(not(target_arch = "wasm32"))]
-            let spirv: Vec<u8> = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
-                .unwrap()
-                .bytes()
-                .map(|b| b.unwrap())
-                .collect();
-            unsafe { device.create_shader_module(&spirv) }.unwrap()
+            let spirv = include_bytes!("./data/quad.frag.spv");
+            unsafe { device.create_shader_module(spirv) }.unwrap()
         };
 
         let pipeline = {
@@ -654,10 +634,7 @@ fn main() {
     };
     let mut frame: u64 = 0;
     while running {
-        #[cfg(target_arch = "wasm32")] // TODO
-        {
-            running = false;
-        }
+        running = !cfg!(target_arch = "wasm32");
         #[cfg(not(target_arch = "wasm32"))]
         events_loop.poll_events(|event| {
             if let winit::Event::WindowEvent { event, .. } = event {
@@ -835,9 +812,6 @@ fn main() {
         }
         // Increment our frame
         frame += 1;
-
-        #[cfg(target_arch = "wasm32")] // TODO
-        return;
     }
 
     // cleanup!

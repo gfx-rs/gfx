@@ -9,6 +9,7 @@ use crate::{Backend, GlContext};
 
 pub type TextureType = u32;
 
+// TODO: Consider being generic over `glow::Context` instead
 pub type VertexArray = <GlContext as glow::Context>::VertexArray;
 pub type RawBuffer = <GlContext as glow::Context>::Buffer;
 pub type Shader = <GlContext as glow::Context>::Shader;

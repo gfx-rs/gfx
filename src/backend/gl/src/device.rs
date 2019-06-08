@@ -408,6 +408,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     mut set_param_float_vec: SetParamFloatVec,
     mut set_param_int: SetParamInt,
 ) where
+    // TODO: Move these into a trait and implement for sampler/texture objects
     SetParamFloat: FnMut(u32, f32),
     SetParamFloatVec: FnMut(u32, &mut [f32]),
     SetParamInt: FnMut(u32, i32),
