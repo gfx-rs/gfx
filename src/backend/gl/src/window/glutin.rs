@@ -91,7 +91,7 @@ impl hal::Swapchain<B> for Swapchain {
 // and actually respect the swapchain configuration provided by the user.
 #[derive(Debug)]
 pub struct Surface {
-    context: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
+    pub(crate) context: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
 }
 
 impl Surface {
@@ -172,7 +172,7 @@ impl hal::Surface<B> for Surface {
 impl hal::Instance for Surface {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
-        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(|s| {
+        let adapter = PhysicalDevice::new_adapter((), GlContainer::from_fn_proc(|s| {
             self.context.get_proc_address(s) as *const _
         }));
         vec![adapter]
@@ -212,7 +212,7 @@ impl Headless {
 impl hal::Instance for Headless {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
-        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(|s| {
+        let adapter = PhysicalDevice::new_adapter((), GlContainer::from_fn_proc(|s| {
             self.0.get_proc_address(s) as *const _
         }));
         vec![adapter]

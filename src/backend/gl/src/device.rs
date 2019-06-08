@@ -1290,7 +1290,7 @@ impl d::Device<B> for Device {
                     }
                     n::ImageKind::Texture {
                         texture: name,
-                        target: glow::TEXTURE_2D, 
+                        target: glow::TEXTURE_2D,
                         format: iformat,
                         pixel_type: itype,
                     }
@@ -1333,7 +1333,7 @@ impl d::Device<B> for Device {
                     }
                     n::ImageKind::Texture {
                         texture: name,
-                        target: glow::TEXTURE_2D_ARRAY, 
+                        target: glow::TEXTURE_2D_ARRAY,
                         format: iformat,
                         pixel_type: itype,
                     }
@@ -1796,6 +1796,17 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
+    #[cfg(target_arch = "wasm32")]
+    unsafe fn create_swapchain(
+        &self,
+        surface: &mut Surface,
+        config: c::SwapchainConfig,
+        _old_swapchain: Option<Swapchain>,
+    ) -> Result<(Swapchain, Vec<n::Image>), c::window::CreationError> {
+        Ok(self.create_swapchain_impl(surface, config))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
     unsafe fn create_swapchain(
         &self,
         surface: &mut Surface,
@@ -1845,12 +1856,12 @@ impl d::Device<B> for Device {
                     n::ImageKind::Surface(surface) => {
                         gl.framebuffer_renderbuffer(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::RENDERBUFFER, Some(surface));
                     }
-                    n::ImageKind::Texture(texture, textype) => {
+                    n::ImageKind::Texture { texture, target, .. } => {
                         if self.share.private_caps.framebuffer_texture {
                             gl.framebuffer_texture(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, Some(texture), 0);
                         } else {
-                            gl.bind_texture(textype, Some(texture));
-                            gl.framebuffer_texture_2d(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, textype, Some(texture), 0);
+                            gl.bind_texture(target, Some(texture));
+                            gl.framebuffer_texture_2d(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, target, Some(texture), 0);
                         }
                     }
                 }
@@ -1868,7 +1879,7 @@ impl d::Device<B> for Device {
         let swapchain = Swapchain {
             fbos,
             extent: config.extent,
-            window: surface.window.clone(),
+            context: surface.context.clone(),
         };
 
         Ok((swapchain, images))

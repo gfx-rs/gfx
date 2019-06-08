@@ -1036,7 +1036,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             );
 
             #[cfg(feature = "glutin")]
-            swapchain.0.borrow().context.swap_buffers().unwrap();
+            swapchain.borrow().context.swap_buffers().unwrap();
             #[cfg(feature = "wgl")]
             swapchain.borrow().swap_buffers();
         }
