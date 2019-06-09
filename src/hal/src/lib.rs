@@ -252,7 +252,8 @@ pub struct Limits {
     pub max_sampler_allocation_count: usize,
     ///
     pub max_bound_descriptor_sets: pso::DescriptorSetIndex,
-
+    ///
+    pub max_framebuffer_layers: usize,
     ///
     pub max_per_stage_descriptor_samplers: usize,
     ///
