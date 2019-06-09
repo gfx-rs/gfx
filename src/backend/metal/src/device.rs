@@ -417,9 +417,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_storage_buffer_range: pc.max_buffer_size,
             // "Maximum length of an inlined constant data buffer, per graphics or compute function"
             max_push_constants_size: 0x1000,
-            max_memory_allocation_count: !0,
             max_sampler_allocation_count: !0,
             max_bound_descriptor_sets: 0x100, // arbitrary
+            max_descriptor_set_uniform_buffers: 0x100, // also arbitrary, but probably shouldn't be more than max_bound_descriptor_sets
+            max_fragment_input_components: 32, // TODO: Add to private caps since 32 is only for mac
+            max_framebuffer_layers: 2048, // TODO: Determine is this is the correct value
+            max_memory_allocation_count: 4096, // TODO: Determine is this is the correct value
 
             max_per_stage_descriptor_samplers: pc.max_samplers_per_stage as usize,
             max_per_stage_descriptor_uniform_buffers: pc.max_buffers_per_stage as usize,
@@ -2561,19 +2564,19 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn get_event_status(&self, event: &()) -> Result<bool, OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, OomOrDeviceLost> {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, event: &()) -> Result<(), OutOfMemory> {
+    unsafe fn set_event(&self, _event: &()) -> Result<(), OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, event: &()) -> Result<(), OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &()) -> Result<(), OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn destroy_event(&self, event: ()) {
+    unsafe fn destroy_event(&self, _event: ()) {
         unimplemented!()
     }
 
