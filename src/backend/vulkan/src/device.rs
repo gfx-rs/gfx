@@ -600,10 +600,13 @@ impl d::Device<B> for Device {
 
                 let multisampling_state = match desc.multisampling {
                     Some(ref ms) => {
-                        let sample_mask = [
-                            (ms.sample_mask & 0xFFFFFFFF) as u32,
-                            ((ms.sample_mask >> 32) & 0xFFFFFFFF) as u32,
-                        ];
+                        let sample_mask = match ms.sample_mask {
+                            Some(mask) => Some([
+                                (mask & 0xFFFFFFFF) as u32,
+                                ((mask >> 32) & 0xFFFFFFFF) as u32,
+                            ]),
+                            None => None
+                        };
                         sample_masks.push(sample_mask);
 
                         vk::PipelineMultisampleStateCreateInfo {
@@ -616,7 +619,10 @@ impl d::Device<B> for Device {
                             ),
                             sample_shading_enable: ms.sample_shading.is_some() as _,
                             min_sample_shading: ms.sample_shading.unwrap_or(0.0),
-                            p_sample_mask: sample_masks.last().unwrap().as_ptr(),
+                            p_sample_mask: match sample_masks.last().unwrap() {
+                                Some(mask) => mask.as_ptr(),
+                                None => ptr::null()
+                            },
                             alpha_to_coverage_enable: ms.alpha_coverage as _,
                             alpha_to_one_enable: ms.alpha_to_one as _,
                         }

@@ -273,7 +273,7 @@ pub struct Multisampling {
     ///
     pub sample_shading: Option<f32>,
     ///
-    pub sample_mask: SampleMask,
+    pub sample_mask: Option<SampleMask>,
     /// Toggles alpha-to-coverage multisampling, which can produce nicer edges
     /// when many partially-transparent polygons are overlapping.
     /// See [here]( https://msdn.microsoft.com/en-us/library/windows/desktop/bb205072(v=vs.85).aspx#Alpha_To_Coverage) for a full description.
