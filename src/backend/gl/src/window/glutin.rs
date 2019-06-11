@@ -49,7 +49,7 @@ use crate::{native, Backend as B, Device, GlContainer, PhysicalDevice, QueueFami
 
 use glow::Context;
 
-use glutin::{self, ContextTrait};
+use glutin;
 
 fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
     let px = window

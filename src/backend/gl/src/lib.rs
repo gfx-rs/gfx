@@ -563,7 +563,6 @@ impl Instance {
     #[cfg(target_os = "linux")]
     pub fn create(_: &str, _: u32) -> Instance {
         use glutin::os::unix::OsMesaContextExt;
-        use glutin::ContextTrait;
         let size = glutin::dpi::PhysicalSize::from((800, 600));
         let builder = glutin::ContextBuilder::new()
             .with_hardware_acceleration(Some(false));
