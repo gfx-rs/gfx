@@ -3,11 +3,11 @@
 //! An image is a block of GPU memory representing a grid of texels.
 
 use std::ops::Range;
-
-use crate::buffer::Offset as RawOffset;
-use crate::device;
-use crate::format;
-use crate::pso::{Comparison, Rect};
+use crate::{
+    buffer::Offset as RawOffset,
+    device, format,
+    pso::{Comparison, Rect},
+};
 
 /// Dimension size.
 pub type Size = u32;
