@@ -1,9 +1,6 @@
 //! RenderPass handling.
 
-use crate::format::Format;
-use crate::image;
-use crate::pso::PipelineStage;
-use crate::Backend;
+use crate::{format::Format, image, pso::PipelineStage, Backend};
 use std::ops::Range;
 
 /// Specifies the operation which will be applied at the beginning of a subpass.
