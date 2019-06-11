@@ -670,6 +670,7 @@ impl Drop for Device {
     }
 }
 
+#[derive(Debug)]
 pub struct Instance {
     pub(crate) factory: native::WeakPtr<dxgi1_4::IDXGIFactory4>,
 }

@@ -616,6 +616,7 @@ impl hal::QueueFamily for QueueFamily {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+#[derive(Debug)]
 pub enum Instance {
     Headless(Headless),
     Surface(Surface)
