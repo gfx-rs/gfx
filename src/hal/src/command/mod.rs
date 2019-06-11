@@ -37,10 +37,12 @@ pub use self::transfer::*;
 /// Trait indicating how many times a Submit object can be submitted to a command buffer.
 pub trait Shot {}
 /// Indicates a Submit that can only be submitted once.
+#[derive(Debug)]
 pub enum OneShot {}
 impl Shot for OneShot {}
 
 /// Indicates a Submit that can be submitted multiple times.
+#[derive(Debug)]
 pub enum MultiShot {}
 impl Shot for MultiShot {}
 
@@ -51,6 +53,7 @@ pub trait Level {}
 
 /// Vulkan describes a primary command buffer as one which can be directly submitted
 /// to a queue, and can execute `Secondary` command buffers.
+#[derive(Debug)]
 pub enum Primary {}
 impl Level for Primary {}
 
@@ -60,6 +63,7 @@ impl Level for Primary {}
 /// to a queue, but can be executed by a primary command buffer. This allows
 /// multiple secondary command buffers to be constructed which do specific
 /// things and can then be composed together into primary command buffers.
+#[derive(Debug)]
 pub enum Secondary {}
 impl Level for Secondary {}
 

@@ -38,6 +38,7 @@ pub trait QueueFamily: Debug + Any + Send + Sync {
 pub struct QueueFamilyId(pub usize);
 
 /// Strong-typed group of queues of the same queue family.
+#[derive(Debug)]
 pub struct QueueGroup<B: Backend, C> {
     family: QueueFamilyId,
     /// Command queues created in this family.
@@ -72,6 +73,7 @@ impl<B: Backend, C: Capability> QueueGroup<B, C> {
 
 /// Contains a list of all instantiated queues. Conceptually structured as a collection of
 /// `QueueGroup`s, one for each queue family.
+#[derive(Debug)]
 pub struct Queues<B: Backend>(pub(crate) Vec<RawQueueGroup<B>>);
 
 impl<B: Backend> Queues<B> {

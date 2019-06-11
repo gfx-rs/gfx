@@ -11,6 +11,7 @@ use fxhash::FxHasher;
 /// Bare-metal queue group.
 ///
 /// Denotes all queues created from one queue family.
+#[derive(Debug)]
 pub struct RawQueueGroup<B: Backend> {
     pub family: B::QueueFamily,
     pub queues: Vec<B::CommandQueue>,

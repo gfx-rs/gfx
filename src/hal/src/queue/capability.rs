@@ -2,15 +2,20 @@
 use crate::queue::QueueType;
 
 /// General capability, supporting graphics, compute and transfer operations.
+#[derive(Debug)]
 pub enum General {}
 /// Graphics capability, supporting graphics and transfer operations.
+#[derive(Debug)]
 pub enum Graphics {}
 /// Compute capability, supporting compute and transfer operations.
+#[derive(Debug)]
 pub enum Compute {}
 /// Transfer capability, supporting only transfer operations.
+#[derive(Debug)]
 pub enum Transfer {}
 
 /// Graphics or compute capability.
+#[derive(Debug)]
 pub enum GraphicsOrCompute {}
 
 /// A Capability is an object that specifies what kind of operations

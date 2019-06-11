@@ -1,5 +1,8 @@
 # Change Log
 
+## hal-0.2.1 (10-06-2019)
+  - `Debug` implementations
+
 ## hal-0.2.0 (10-05-2019)
   - pipeline cache support
   - rich presentation errors
