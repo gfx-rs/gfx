@@ -141,6 +141,7 @@ impl Shared {
     }
 }
 
+#[derive(Debug)]
 pub struct Instance;
 
 impl hal::Instance for Instance {
