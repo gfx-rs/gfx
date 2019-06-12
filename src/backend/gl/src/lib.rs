@@ -566,11 +566,10 @@ impl Instance {
         let size = glutin::dpi::PhysicalSize::from((800, 600));
         let builder = glutin::ContextBuilder::new()
             .with_hardware_acceleration(Some(false));
-        let context: glutin::Context<glutin::NotCurrent> = HeadlessContextExt::build_osmesa(builder, size)
-            .expect("failed to create osmesa context");
-        let context = unsafe {
-            context.make_current()
-        }.expect("failed to make context current");
+        let context: glutin::Context<glutin::NotCurrent> =
+            HeadlessContextExt::build_osmesa(builder, size)
+                .expect("failed to create osmesa context");
+        let context = unsafe { context.make_current() }.expect("failed to make context current");
         let headless = Headless::from_context(context);
         Instance::Headless(headless)
     }

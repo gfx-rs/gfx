@@ -685,10 +685,9 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
         let builder =
             back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
                 .with_vsync(true);
-        let context = builder.build_windowed(
-            window_state.wb.take().unwrap(),
-            &window_state.events_loop,
-        ).unwrap();
+        let context = builder
+            .build_windowed(window_state.wb.take().unwrap(), &window_state.events_loop)
+            .unwrap();
         unsafe { context.make_current() }.expect("Unable to make context current")
     };
 
