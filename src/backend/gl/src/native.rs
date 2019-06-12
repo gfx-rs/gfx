@@ -1,9 +1,10 @@
 use std::cell::{Cell, RefCell};
+use std::ops::Range;
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::hal::backend::FastHashMap;
 use crate::hal::memory::{Properties, Requirements};
-use crate::hal::{format, image as i, pass, pso};
+use crate::hal::{buffer, format, image as i, pass, pso};
 
 use crate::{Backend, GlContext};
 
@@ -22,10 +23,29 @@ pub type UniformLocation = <GlContext as glow::Context>::UniformLocation;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
 
 #[derive(Debug)]
-pub struct Buffer {
-    pub(crate) raw: RawBuffer,
-    pub(crate) target: u32,
-    pub(crate) requirements: Requirements,
+pub enum Buffer {
+    Unbound {
+        size: buffer::Offset,
+        usage: buffer::Usage,
+    },
+    Bound {
+        // DEVICE_LOCAL memory types are faked and have no associated buffer.
+        buffer: Option<RawBuffer>,
+        range: Range<buffer::Offset>,
+    },
+}
+
+impl Buffer {
+    // Asserts that the buffer is a bound, CPU_VISIBLE buffer and returns the raw gl buffer along
+    // with its sub-range.
+    pub(crate) fn as_bound(&self) -> (RawBuffer, Range<u64>) {
+        match self {
+            Buffer::Unbound { .. } => panic!("Expected bound buffer!"),
+            Buffer::Bound {
+                buffer, range, ..
+            } => (buffer.expect("unsupported buffer type"), range.clone()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -230,7 +250,9 @@ pub enum ShaderModule {
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) properties: Properties,
-    pub(crate) first_bound_buffer: Cell<Option<RawBuffer>>,
+    // DEVICE_LOCAL memory types are faked and have no associated buffer
+    pub(crate) buffer: Option<RawBuffer>,
+    pub(crate) target: u32,
     /// Allocation size
     pub(crate) size: u64,
     pub(crate) emulate_map_allocation: RefCell<*mut u8>,

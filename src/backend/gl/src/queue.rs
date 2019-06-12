@@ -612,7 +612,7 @@ impl CommandQueue {
                     r.image_extent.height as _,
                     glow::RGBA,
                     glow::UNSIGNED_BYTE,
-                    0,
+                    r.buffer_offset as i32,
                 );
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
             },

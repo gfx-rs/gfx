@@ -1,11 +1,11 @@
 use std::borrow::Borrow;
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::{Arc, Mutex, RwLock};
 use std::slice;
 
 use glow::Context;
-use crate::{GlContainer, GlContext};
+use crate::{GlContainer, GlContext, IMAGE_MEM_TYPE_MASK, INDEX_MEM_TYPE_MASK, OTHER_MEM_TYPE_MASK, IMAGE_MEMORY_TYPE, INDEX_MEMORY_TYPE};
 
 use crate::hal::backend::FastHashMap;
 use crate::hal::format::{Format, Swizzle};
@@ -460,16 +460,53 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
 impl d::Device<B> for Device {
     unsafe fn allocate_memory(
         &self,
-        _mem_type: c::MemoryTypeId,
+        mem_type: c::MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
-        // TODO
-        Ok(n::Memory {
-            properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
-            first_bound_buffer: Cell::new(None),
-            size,
-            emulate_map_allocation: RefCell::new(std::ptr::null_mut()),
-        })
+        if mem_type.0 == IMAGE_MEMORY_TYPE {
+            Ok(n::Memory {
+                properties: memory::Properties::DEVICE_LOCAL,
+                buffer: None,
+                target: 0,
+                size,
+                emulate_map_allocation: RefCell::new(std::ptr::null_mut()),
+            })
+        } else {
+            assert!(self.share.private_caps.buffer_role_change);
+
+            let target = if mem_type.0 == INDEX_MEMORY_TYPE {
+                glow::ELEMENT_ARRAY_BUFFER
+            } else {
+                glow::ARRAY_BUFFER
+            };
+
+            let gl = &self.share.context;
+
+            let raw = gl.create_buffer().unwrap();
+            //TODO: use *Named calls to avoid binding
+            gl.bind_buffer(target, Some(raw));
+            if self.share.private_caps.buffer_storage {
+                //TODO: glow::DYNAMIC_STORAGE_BIT | glow::MAP_PERSISTENT_BIT
+                gl.buffer_storage(target, size as i32, None, glow::MAP_READ_BIT | glow::MAP_WRITE_BIT);
+            } else {
+                gl.buffer_data_size(target, size as i32, glow::DYNAMIC_DRAW);
+            }
+            gl.bind_buffer(target, None);
+
+            if let Err(err) = self.share.check() {
+                panic!("Error allocating memory buffer {:?}", err);
+            }
+
+            Ok(n::Memory {
+                properties: memory::Properties::CPU_VISIBLE
+                    | memory::Properties::COHERENT
+                    | memory::Properties::CPU_CACHED,
+                buffer: Some(raw),
+                target,
+                size,
+                emulate_map_allocation: RefCell::new(std::ptr::null_mut()),
+            })
+        }
     }
 
     unsafe fn create_command_pool(
@@ -970,31 +1007,36 @@ impl d::Device<B> for Device {
             return Err(buffer::CreationError::UnsupportedUsage { usage });
         }
 
-        let target = if self.share.private_caps.buffer_role_change {
-            glow::ARRAY_BUFFER
-        } else {
-            match conv::buffer_usage_to_gl_target(usage) {
-                Some(target) => target,
-                None => return Err(buffer::CreationError::UnsupportedUsage { usage }),
-            }
-        };
-
-        let gl = &self.share.context;
-        let raw = gl.create_buffer().unwrap();
-
-        Ok(n::Buffer {
-            raw,
-            target,
-            requirements: memory::Requirements {
-                size,
-                alignment: 1, // TODO: do we need specific alignment for any use-case?
-                type_mask: 0x7,
-            },
+        Ok(n::Buffer::Unbound {
+            size,
+            usage,
         })
     }
 
     unsafe fn get_buffer_requirements(&self, buffer: &n::Buffer) -> memory::Requirements {
-        buffer.requirements
+        let (size, usage) = match *buffer {
+            n::Buffer::Unbound { size, usage } => (size, usage),
+            n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
+        };
+
+        let (type_mask, alignment) = if usage.contains(buffer::Usage::INDEX) {
+            // Buffers are only allowed to be INDEX usage XOR another type of usage, they are not
+            // allowed to have both INDEX and non-INDEX usage.
+            if !(buffer::Usage::INDEX | buffer::Usage::TRANSFER_SRC | buffer::Usage::TRANSFER_DST).contains(usage) {
+                (0, 1)
+            } else {
+                // Alignment of 4 covers indexes of type u16 and u32
+                (INDEX_MEM_TYPE_MASK, 4)
+            }
+        } else {
+            (OTHER_MEM_TYPE_MASK, 1)
+        };
+
+        memory::Requirements {
+            size: size as u64,
+            alignment,
+            type_mask
+        }
     }
 
     unsafe fn bind_buffer_memory(
@@ -1003,47 +1045,15 @@ impl d::Device<B> for Device {
         offset: u64,
         buffer: &mut n::Buffer,
     ) -> Result<(), d::BindError> {
-        let gl = &self.share.context;
-        let target = buffer.target;
+        let size = match *buffer {
+            n::Buffer::Unbound { size, .. } => size,
+            n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
+        };
 
-        if offset == 0 {
-            memory.first_bound_buffer.set(Some(buffer.raw));
-        } else {
-            assert!(memory.first_bound_buffer.get().is_some());
-        }
-
-        let cpu_can_read = memory.can_download();
-        let cpu_can_write = memory.can_upload();
-
-        if self.share.private_caps.buffer_storage {
-            //TODO: glow::DYNAMIC_STORAGE_BIT | glow::MAP_PERSISTENT_BIT
-            let flags = memory.map_flags();
-            //TODO: use *Named calls to avoid binding
-            gl.bind_buffer(target, Some(buffer.raw));
-            gl.buffer_storage(target, buffer.requirements.size as _, None, flags);
-            gl.bind_buffer(target, None);
-        } else {
-            let flags = if cpu_can_read && cpu_can_write {
-                glow::DYNAMIC_DRAW
-            } else if cpu_can_write {
-                glow::STREAM_DRAW
-            } else if cpu_can_read {
-                glow::STREAM_READ
-            } else {
-                glow::STATIC_DRAW
-            };
-
-            gl.bind_buffer(target, Some(buffer.raw));
-            gl.buffer_data_size(target, buffer.requirements.size as i32, flags);
-            gl.bind_buffer(target, None);
-        }
-
-        if let Err(err) = self.share.check() {
-            panic!(
-                "Error {:?} initializing buffer {:?}, memory {:?}",
-                err, buffer, memory.properties
-            );
-        }
+        *buffer = n::Buffer::Bound {
+            buffer: memory.buffer,
+            range: offset..offset + size,
+        };
 
         Ok(())
     }
@@ -1054,28 +1064,23 @@ impl d::Device<B> for Device {
         range: R,
     ) -> Result<*mut u8, mapping::Error> {
         let gl = &self.share.context;
-        let buffer = match memory.first_bound_buffer.get() {
-            None => panic!("No buffer has been bound yet, can't map memory!"),
-            Some(other) => other,
-        };
-
         let caps = &self.share.private_caps;
 
         assert!(caps.buffer_role_change);
-        let target = glow::PIXEL_PACK_BUFFER;
         let access = memory.map_flags();
 
         let offset = *range.start().unwrap_or(&0);
         let size = *range.end().unwrap_or(&memory.size) - offset;
 
+        let buffer = memory.buffer.expect("cannot map DEVICE_LOCAL memory");
         let ptr = if caps.emulate_map {
             let raw = Box::into_raw(vec![0u8; size as usize].into_boxed_slice()) as *mut u8;
-            *memory.emulate_map_allocation.borrow_mut() = raw;
+            assert!(memory.emulate_map_allocation.replace(raw).is_null(), "more than one memory mapping unsupported");
             raw
         } else {
-            gl.bind_buffer(target, Some(buffer));
-            let raw = gl.map_buffer_range(target, offset as _, size as _, access);
-            gl.bind_buffer(target, None);
+            gl.bind_buffer(memory.target, Some(buffer));
+            let raw = gl.map_buffer_range(memory.target, offset as i32, size as i32, access);
+            gl.bind_buffer(memory.target, None);
             raw
         };
 
@@ -1088,25 +1093,21 @@ impl d::Device<B> for Device {
 
     unsafe fn unmap_memory(&self, memory: &n::Memory) {
         let gl = &self.share.context;
-        let buffer = match memory.first_bound_buffer.get() {
-            None => panic!("No buffer has been bound yet, can't map memory!"),
-            Some(other) => other,
-        };
-        let target = glow::PIXEL_PACK_BUFFER;
+        let buffer = memory.buffer.expect("cannot unmap DEVICE_LOCAL memory");
 
-        gl.bind_buffer(target, Some(buffer));
+        gl.bind_buffer(memory.target, Some(buffer));
 
         if self.share.private_caps.emulate_map {
             let raw = memory.emulate_map_allocation.replace(std::ptr::null_mut());
             let mapped = slice::from_raw_parts_mut(raw, memory.size as usize);
             // TODO: Access
-            gl.buffer_data_u8_slice(target, mapped, glow::DYNAMIC_DRAW);
+            gl.buffer_data_u8_slice(memory.target, mapped, glow::DYNAMIC_DRAW);
             let _ = *Box::from_raw(raw);
         } else {
-            gl.unmap_buffer(target);
+            gl.unmap_buffer(memory.target);
         }
 
-        gl.bind_buffer(target, None);
+        gl.bind_buffer(memory.target, None);
 
         if let Err(err) = self.share.check() {
             panic!("Error unmapping memory: {:?} for memory {:?}", err, memory);
@@ -1281,7 +1282,7 @@ impl d::Device<B> for Device {
             requirements: memory::Requirements {
                 size,
                 alignment: 1,
-                type_mask: 0x7,
+                type_mask: IMAGE_MEM_TYPE_MASK,
             },
         })
     }
@@ -1391,20 +1392,21 @@ impl d::Device<B> for Device {
             let set = &mut write.set;
             let mut bindings = set.bindings.lock().unwrap();
             let binding = write.binding;
-            let mut offset = write.array_offset as _;
+            let mut offset = write.array_offset as i32;
 
             for descriptor in write.descriptors {
                 match descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
-                        let start = range.start.unwrap_or(0);
-                        let end = range.end.unwrap_or(buffer.requirements.size);
-                        let size = (end - start) as _;
+                        let (raw_buffer, buffer_range) = buffer.as_bound();
+                        let start = buffer_range.start as i32 + range.start.unwrap_or(0) as i32;
+                        let end = buffer_range.start as i32 + range.end.unwrap_or((buffer_range.end - buffer_range.start) as u64) as i32;
+                        let size = end - start;
 
                         bindings.push(n::DescSetBindings::Buffer {
                             ty: n::BindingTypes::UniformBuffers,
                             binding,
-                            buffer: buffer.raw,
-                            offset,
+                            buffer: raw_buffer,
+                            offset: offset + start,
                             size,
                         });
 
@@ -1522,20 +1524,22 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    unsafe fn get_event_status(&self, event: &()) -> Result<bool, d::OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, d::OomOrDeviceLost> {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn set_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn free_memory(&self, _memory: n::Memory) {
-        // Nothing to do
+    unsafe fn free_memory(&self, memory: n::Memory) {
+        if let Some(buffer) = memory.buffer {
+            self.share.context.delete_buffer(buffer);
+        }
     }
 
     unsafe fn create_query_pool(
@@ -1588,9 +1592,10 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn destroy_buffer(&self, buffer: n::Buffer) {
-        self.share.context.delete_buffer(buffer.raw);
+    unsafe fn destroy_buffer(&self, _buffer: n::Buffer) {
+        // Nothing to do
     }
+
     unsafe fn destroy_buffer_view(&self, _: n::BufferView) {
         // Nothing to do
     }
@@ -1636,7 +1641,7 @@ impl d::Device<B> for Device {
         // Nothing to do
     }
 
-    unsafe fn destroy_event(&self, event: ()) {
+    unsafe fn destroy_event(&self, _event: ()) {
         unimplemented!()
     }
 

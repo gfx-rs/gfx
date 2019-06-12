@@ -44,6 +44,12 @@ pub use glow::native::Context as GlContext;
 pub use glow::web::Context as GlContext;
 use glow::Context;
 
+pub(crate) const IMAGE_MEMORY_TYPE: usize = 0;
+pub(crate) const INDEX_MEMORY_TYPE: usize = 2;
+pub(crate) const IMAGE_MEM_TYPE_MASK: u64 = 0x1;
+pub(crate) const OTHER_MEM_TYPE_MASK: u64 = 0x2;
+pub(crate) const INDEX_MEM_TYPE_MASK: u64 = 0x4;
+
 pub(crate) struct GlContainer {
     context: GlContext,
 }
@@ -484,35 +490,34 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         // COHERENT flags require that the backend does flushing and invalidation
         // by itself. If we move towards persistent mapping we need to re-evaluate it.
         let caps = &self.0.private_caps;
-        let memory_types = if caps.map || caps.emulate_map {
-            vec![
-                hal::MemoryType {
-                    properties: Properties::DEVICE_LOCAL,
-                    heap_index: 1,
-                },
-                hal::MemoryType {
-                    // upload
-                    properties: Properties::CPU_VISIBLE | Properties::COHERENT,
-                    heap_index: 0,
-                },
-                hal::MemoryType {
-                    // download
-                    properties: Properties::CPU_VISIBLE
-                        | Properties::COHERENT
-                        | Properties::CPU_CACHED,
-                    heap_index: 0,
-                },
-            ]
-        } else {
-            vec![hal::MemoryType {
+        assert!(caps.map || caps.emulate_map);
+        let memory_types = vec![
+            // Faked DEVICE_LOCAL memory for images, no gl buffer is actually allocated for it.
+            hal::MemoryType {
                 properties: Properties::DEVICE_LOCAL,
                 heap_index: 0,
-            }]
-        };
+            },
+            // Memory type for uses other than images and INDEX
+            hal::MemoryType {
+                properties: Properties::CPU_VISIBLE
+                    | Properties::COHERENT
+                    | Properties::CPU_CACHED,
+                heap_index: 1,
+            },
+            // For security reasons, WebGL does not allow "element array buffers" to be used as any
+            // other kind of buffer.  We need to provide a unique type of memory specifically for
+            // buffers with INDEX usage.
+            hal::MemoryType {
+                properties: Properties::CPU_VISIBLE
+                    | Properties::COHERENT
+                    | Properties::CPU_CACHED,
+                heap_index: 2,
+            },
+        ];
 
         hal::MemoryProperties {
             memory_types,
-            memory_heaps: vec![!0, !0],
+            memory_heaps: vec![!0, !0, !0],
         }
     }
 

@@ -147,8 +147,8 @@ pub struct RenderPassCache {
 struct Cache {
     // Active primitive topology, set by the current pipeline.
     primitive: Option<u32>,
-    // Active index type, set by the current index buffer.
-    index_type: Option<hal::IndexType>,
+    // Active index type and buffer range, set by the current index buffer.
+    index_type_range: Option<(hal::IndexType, Range<u64>)>,
     // Stencil reference values (front, back).
     stencil_ref: Option<(pso::StencilValue, pso::StencilValue)>,
     // Blend color.
@@ -164,8 +164,8 @@ struct Cache {
     program: Option<n::Program>,
     // Blend per attachment.
     blend_targets: Option<Vec<Option<pso::ColorBlendDesc>>>,
-    // Maps bound vertex buffer offset (index) to handle.
-    vertex_buffers: Vec<Option<n::RawBuffer>>,
+    // Maps bound vertex buffer offset (index) to handle / buffer range
+    vertex_buffers: Vec<Option<(n::RawBuffer, Range<u64>)>>,
     // Active vertex buffer descriptions.
     vertex_buffer_descs: Vec<Option<pso::VertexBufferDesc>>,
     // Active attributes.
@@ -178,7 +178,7 @@ impl Cache {
     pub fn new() -> Cache {
         Cache {
             primitive: None,
-            index_type: None,
+            index_type_range: None,
             stencil_ref: None,
             blend_color: None,
             framebuffer: None,
@@ -382,7 +382,10 @@ impl RawCommandBuffer {
                 error!("No vertex buffer bound at {}", binding);
             }
 
-            let handle = vertex_buffers[binding];
+            let (handle, range) = vertex_buffers[binding].as_ref().unwrap();
+
+            let mut attribute = attribute.clone();
+            attribute.offset += range.start as u32;
 
             match vertex_buffer_descs.get(binding) {
                 Some(&Some(desc)) => {
@@ -391,8 +394,8 @@ impl RawCommandBuffer {
                         &mut self.memory,
                         &mut self.buf,
                         Command::BindAttribute(
-                            attribute.clone(),
-                            handle.unwrap(),
+                            attribute,
+                            *handle,
                             desc.stride as _,
                             desc.rate.as_uint() as u32,
                         ),
@@ -749,13 +752,10 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
-        // TODO: how can we incorporate the buffer offset?
-        if ibv.offset > 0 {
-            warn!("Non-zero index buffer offset currently not handled.");
-        }
+        let (raw_buffer, range) = ibv.buffer.as_bound();
 
-        self.cache.index_type = Some(ibv.index_type);
-        self.push_cmd(Command::BindIndexBuffer(ibv.buffer.raw));
+        self.cache.index_type_range = Some((ibv.index_type, range.start + ibv.offset..range.end));
+        self.push_cmd(Command::BindIndexBuffer(raw_buffer));
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
@@ -768,10 +768,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             if self.cache.vertex_buffers.len() <= index {
                 self.cache.vertex_buffers.resize(index + 1, None);
             }
-            self.cache.vertex_buffers[index] = Some(buffer.borrow().raw);
-            if offset != 0 {
-                error!("Vertex buffer offset {} is not supported", offset);
-            }
+
+            let (raw_buffer, range) = buffer.borrow().as_bound();
+            self.cache.vertex_buffers[index] = Some((raw_buffer, range.start + offset..range.end));
         }
     }
 
@@ -1088,7 +1087,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
-        self.push_cmd(Command::DispatchIndirect(buffer.raw, offset));
+        let (raw_buffer, range) = buffer.borrow().as_bound();
+        assert_eq!(range.start, 0, "buffer offset unsupported in indirect draw");
+        self.push_cmd(Command::DispatchIndirect(raw_buffer, offset));
     }
 
     unsafe fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
@@ -1098,9 +1099,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     {
         let old_size = self.buf.size;
 
+        let (src_raw, src_range) = src.as_bound();
+        let (dst_raw, dst_range) = dst.as_bound();
         for region in regions {
-            let r = region.borrow().clone();
-            let cmd = Command::CopyBufferToBuffer(src.raw, dst.raw, r);
+            let mut r = region.borrow().clone();
+            r.src += src_range.start;
+            r.dst += dst_range.start;
+            let cmd = Command::CopyBufferToBuffer(src_raw, dst_raw, r);
             self.push_cmd(cmd);
         }
 
@@ -1148,11 +1153,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     {
         let old_size = self.buf.size;
 
+        let (src_raw, src_range) = src.as_bound();
         for region in regions {
-            let r = region.borrow().clone();
+            let mut r = region.borrow().clone();
+            r.buffer_offset += src_range.start;
             let cmd = match dst.kind {
-                n::ImageKind::Surface(s) => Command::CopyBufferToSurface(src.raw, s, r),
-                n::ImageKind::Texture(t, tt) => Command::CopyBufferToTexture(src.raw, t, tt, r),
+                n::ImageKind::Surface(s) => Command::CopyBufferToSurface(src_raw, s, r),
+                n::ImageKind::Texture(t, tt) => Command::CopyBufferToTexture(src_raw, t, tt, r),
             };
             self.push_cmd(cmd);
         }
@@ -1173,12 +1180,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         T::Item: Borrow<command::BufferImageCopy>,
     {
         let old_size = self.buf.size;
+        let (dst_raw, dst_range) = dst.as_bound();
 
         for region in regions {
-            let r = region.borrow().clone();
+            let mut r = region.borrow().clone();
+            r.buffer_offset += dst_range.start;
             let cmd = match src.kind {
-                n::ImageKind::Surface(s) => Command::CopySurfaceToBuffer(s, dst.raw, r),
-                n::ImageKind::Texture(t, tt) => Command::CopyTextureToBuffer(t, tt, dst.raw, r),
+                n::ImageKind::Surface(s) => Command::CopySurfaceToBuffer(s, dst_raw, r),
+                n::ImageKind::Texture(t, tt) => Command::CopyTextureToBuffer(t, tt, dst_raw, r),
             };
             self.push_cmd(cmd);
         }
@@ -1218,22 +1227,27 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     ) {
         self.bind_attributes();
 
-        let (start, index_type) = match self.cache.index_type {
-            Some(hal::IndexType::U16) => (indices.start * 2, glow::UNSIGNED_SHORT),
-            Some(hal::IndexType::U32) => (indices.start * 4, glow::UNSIGNED_INT),
+        let (index_type, buffer_range) = match &self.cache.index_type_range {
+            Some((index_type, buffer_range)) => (index_type, buffer_range),
             None => {
                 warn!("No index type bound. An index buffer needs to be bound before calling `draw_indexed`.");
                 self.cache.error_state = true;
                 return;
             }
         };
+
+        let (start, index_type) = match index_type {
+            hal::IndexType::U16 => (indices.start as buffer::Offset * 2 + buffer_range.start, glow::UNSIGNED_SHORT),
+            hal::IndexType::U32 => (indices.start as buffer::Offset * 4 + buffer_range.start, glow::UNSIGNED_INT),
+        };
+
         match self.cache.primitive {
             Some(primitive) => {
                 self.push_cmd(Command::DrawIndexed {
                     primitive,
                     index_type,
                     index_count: indices.end - indices.start,
-                    index_buffer_offset: start as _,
+                    index_buffer_offset: start,
                     base_vertex,
                     instances,
                 });

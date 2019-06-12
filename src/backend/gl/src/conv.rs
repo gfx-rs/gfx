@@ -1,5 +1,5 @@
 use crate::hal::format::Format;
-use crate::hal::{buffer, image as i, Primitive};
+use crate::hal::{image as i, Primitive};
 use crate::native::VertexAttribFunction;
 
 /*
@@ -44,6 +44,7 @@ pub fn wrap_to_gl(w: i::WrapMode) -> u32 {
     }
 }
 
+/*
 pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<u32> {
     use self::buffer::Usage;
     match usage & (Usage::UNIFORM | Usage::INDEX | Usage::VERTEX | Usage::INDIRECT) {
@@ -54,6 +55,7 @@ pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<u32> {
         _ => None,
     }
 }
+*/
 
 pub fn primitive_to_gl_primitive(primitive: Primitive) -> u32 {
     match primitive {
