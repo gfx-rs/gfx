@@ -51,7 +51,11 @@ use glow::Context;
 
 use glutin;
 
-fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
+fn get_window_extent<C>(context: &glutin::WindowedContext<C>) -> image::Extent
+where
+    C: glutin::ContextCurrentState,
+{
+    let window = context.window();
     let px = window
         .get_inner_size()
         .unwrap()
@@ -66,7 +70,7 @@ fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
 #[derive(Debug)]
 pub struct Swapchain {
     // Underlying window, required for presentation
-    pub(crate) window: Starc<glutin::WindowedContext>,
+    pub(crate) window: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
     // Extent because the window lies
     pub(crate) extent: Extent2D,
 }
@@ -88,21 +92,21 @@ impl hal::Swapchain<B> for Swapchain {
 // and actually respect the swapchain configuration provided by the user.
 #[derive(Debug)]
 pub struct Surface {
-    window: Starc<glutin::WindowedContext>,
+    window: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
 }
 
 impl Surface {
-    pub fn from_window(window: glutin::WindowedContext) -> Self {
+    pub fn from_window(window: glutin::WindowedContext<glutin::PossiblyCurrent>) -> Self {
         Surface {
             window: Starc::new(window),
         }
     }
 
-    pub fn get_window(&self) -> &glutin::WindowedContext {
+    pub fn get_window(&self) -> &glutin::WindowedContext<glutin::PossiblyCurrent> {
         &*self.window
     }
 
-    pub fn window(&self) -> &glutin::WindowedContext {
+    pub fn window(&self) -> &glutin::WindowedContext<glutin::PossiblyCurrent> {
         &self.window
     }
 
@@ -282,18 +286,21 @@ impl hal::Instance for Surface {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
         unsafe { self.window.make_current().unwrap() };
-        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(
-            |s| self.window.get_proc_address(s) as *const _
-        ));
+        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(|s| {
+            self.window.get_proc_address(s) as *const _
+        }));
         vec![adapter]
     }
 }
 
-pub fn config_context(
-    builder: glutin::ContextBuilder,
+pub fn config_context<C>(
+    builder: glutin::ContextBuilder<C>,
     color_format: f::Format,
     ds_format: Option<f::Format>,
-) -> glutin::ContextBuilder {
+) -> glutin::ContextBuilder<C>
+where
+    C: glutin::ContextCurrentState,
+{
     let color_base = color_format.base_format();
     let color_bits = color_base.0.describe_bits();
     let depth_bits = match ds_format {
@@ -307,7 +314,7 @@ pub fn config_context(
         .with_srgb(color_base.1 == f::ChannelType::Srgb)
 }
 
-pub struct Headless(pub glutin::Context);
+pub struct Headless(pub glutin::Context<glutin::PossiblyCurrent>);
 
 unsafe impl Send for Headless {}
 unsafe impl Sync for Headless {}
@@ -316,9 +323,9 @@ impl hal::Instance for Headless {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
         unsafe { self.0.make_current().unwrap() };
-        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(
-            |s| self.0.get_proc_address(s) as *const _
-        ));
+        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(|s| {
+            self.0.get_proc_address(s) as *const _
+        }));
         vec![adapter]
     }
 }
