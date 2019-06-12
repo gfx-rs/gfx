@@ -528,7 +528,7 @@ impl<B: Backend> RendererState<B> {
                 .framebuffer
                 .get_frame_data(Some(frame as usize), Some(sem_index));
 
-            let (framebuffer_fence, framebuffer, command_pool) = fid.unwrap();
+            let (framebuffer_fence, framebuffer, command_pool, command_buffers) = fid.unwrap();
             let (image_acquired, image_present) = sid.unwrap();
 
             unsafe {
@@ -545,7 +545,10 @@ impl<B: Backend> RendererState<B> {
                 command_pool.reset();
 
                 // Rendering
-                let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
+                let mut cmd_buffer = match command_buffers.pop() {
+                    Some(cmd_buffer) => cmd_buffer,
+                    None => command_pool.acquire_command_buffer(),
+                };
                 cmd_buffer.begin();
 
                 cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
@@ -583,6 +586,7 @@ impl<B: Backend> RendererState<B> {
 
                 self.device.borrow_mut().queues.queues[0]
                     .submit(submission, Some(framebuffer_fence));
+                command_buffers.push(cmd_buffer);
 
                 // present frame
                 if let Err(_) = self
@@ -737,13 +741,13 @@ impl<B: Backend> AdapterState<B> {
 struct DeviceState<B: Backend> {
     device: B::Device,
     physical_device: B::PhysicalDevice,
-    queues: QueueGroup<B, ::hal::Graphics>,
+    queues: QueueGroup<B, hal::Graphics>,
 }
 
 impl<B: Backend> DeviceState<B> {
     fn new(adapter: Adapter<B>, surface: &B::Surface) -> Self {
         let (device, queues) = adapter
-            .open_with::<_, ::hal::Graphics>(1, |family| surface.supports_queue_family(family))
+            .open_with::<_, hal::Graphics>(1, |family| surface.supports_queue_family(family))
             .unwrap();
 
         DeviceState {
@@ -1122,13 +1126,13 @@ struct ImageState<B: Backend> {
 }
 
 impl<B: Backend> ImageState<B> {
-    unsafe fn new<T: ::hal::Supports<::hal::Transfer>>(
+    unsafe fn new<T: hal::Supports<hal::Transfer>>(
         mut desc: DescSet<B>,
         img: &::image::ImageBuffer<::image::Rgba<u8>, Vec<u8>>,
         adapter: &AdapterState<B>,
         usage: buffer::Usage,
         device_state: &mut DeviceState<B>,
-        staging_pool: &mut ::hal::CommandPool<B, ::hal::Graphics>,
+        staging_pool: &mut hal::CommandPool<B, hal::Graphics>,
     ) -> Self {
         let (buffer, dims, row_pitch, stride) = BufferState::new_texture(
             Rc::clone(&desc.layout.device),
@@ -1492,6 +1496,7 @@ struct FramebufferState<B: Backend> {
     framebuffers: Option<Vec<B::Framebuffer>>,
     framebuffer_fences: Option<Vec<B::Fence>>,
     command_pools: Option<Vec<hal::CommandPool<B, hal::Graphics>>>,
+    command_buffer_lists: Vec<Vec<hal::command::CommandBuffer<B, hal::Graphics>>>,
     frame_images: Option<Vec<(B::Image, B::ImageView)>>,
     acquire_semaphores: Option<Vec<B::Semaphore>>,
     present_semaphores: Option<Vec<B::Semaphore>>,
@@ -1553,6 +1558,7 @@ impl<B: Backend> FramebufferState<B> {
 
         let mut fences: Vec<B::Fence> = vec![];
         let mut command_pools: Vec<hal::CommandPool<B, hal::Graphics>> = vec![];
+        let mut command_buffer_lists = Vec::new();
         let mut acquire_semaphores: Vec<B::Semaphore> = vec![];
         let mut present_semaphores: Vec<B::Semaphore> = vec![];
 
@@ -1568,6 +1574,7 @@ impl<B: Backend> FramebufferState<B> {
                     )
                     .expect("Can't create command pool"),
             );
+            command_buffer_lists.push(Vec::new());
 
             acquire_semaphores.push(device.borrow().device.create_semaphore().unwrap());
             present_semaphores.push(device.borrow().device.create_semaphore().unwrap());
@@ -1578,6 +1585,7 @@ impl<B: Backend> FramebufferState<B> {
             framebuffers: Some(framebuffers),
             framebuffer_fences: Some(fences),
             command_pools: Some(command_pools),
+            command_buffer_lists,
             present_semaphores: Some(present_semaphores),
             acquire_semaphores: Some(acquire_semaphores),
             device,
@@ -1603,7 +1611,8 @@ impl<B: Backend> FramebufferState<B> {
         Option<(
             &mut B::Fence,
             &mut B::Framebuffer,
-            &mut hal::CommandPool<B, ::hal::Graphics>,
+            &mut hal::CommandPool<B, hal::Graphics>,
+            &mut Vec<hal::command::CommandBuffer<B, hal::Graphics>>,
         )>,
         Option<(&mut B::Semaphore, &mut B::Semaphore)>,
     ) {
@@ -1613,6 +1622,7 @@ impl<B: Backend> FramebufferState<B> {
                     &mut self.framebuffer_fences.as_mut().unwrap()[fid],
                     &mut self.framebuffers.as_mut().unwrap()[fid],
                     &mut self.command_pools.as_mut().unwrap()[fid],
+                    &mut self.command_buffer_lists[fid],
                 ))
             } else {
                 None
@@ -1639,7 +1649,13 @@ impl<B: Backend> Drop for FramebufferState<B> {
                 device.destroy_fence(fence);
             }
 
-            for command_pool in self.command_pools.take().unwrap() {
+            for (mut command_pool, comamnd_buffer_list) in self.command_pools
+                .take()
+                .unwrap()
+                .into_iter()
+                .zip(self.command_buffer_lists.drain(..))
+            {
+                command_pool.free(comamnd_buffer_list);
                 device.destroy_command_pool(command_pool.into_raw());
             }
 
