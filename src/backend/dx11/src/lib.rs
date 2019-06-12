@@ -2500,7 +2500,7 @@ unsafe impl Send for CommandPool {}
 unsafe impl Sync for CommandPool {}
 
 impl hal::pool::RawCommandPool<Backend> for CommandPool {
-    unsafe fn reset(&mut self) {
+    unsafe fn reset(&mut self, _release_resources: bool) {
         //unimplemented!()
     }
 

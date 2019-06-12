@@ -763,7 +763,7 @@ fn main() {
             device
                 .reset_fence(&submission_complete_fences[frame_idx])
                 .expect("Failed to reset fence");
-            cmd_pools[frame_idx].reset();
+            cmd_pools[frame_idx].reset(false);
         }
 
         // Rendering

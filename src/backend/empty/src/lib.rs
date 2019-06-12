@@ -507,7 +507,7 @@ impl queue::QueueFamily for QueueFamily {
 #[derive(Debug)]
 pub struct RawCommandPool;
 impl pool::RawCommandPool<Backend> for RawCommandPool {
-    unsafe fn reset(&mut self) {
+    unsafe fn reset(&mut self, _: bool) {
         unimplemented!()
     }
 
