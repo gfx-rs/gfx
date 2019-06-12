@@ -568,11 +568,10 @@ impl Instance {
             .with_hardware_acceleration(Some(false));
         let context: glutin::Context<glutin::NotCurrent> = HeadlessContextExt::build_osmesa(builder, size)
             .expect("failed to create osmesa context");
-        unsafe {
+        let context = unsafe {
             context.make_current()
-                .expect("failed to make context current");
-        }
-        let headless = Headless(context);
+        }.expect("failed to make context current");
+        let headless = Headless::from_context(context);
         Instance::Headless(headless)
     }
 }
