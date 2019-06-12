@@ -15,8 +15,8 @@
 //!     // First create a window using glutin.
 //!     let mut events_loop = EventsLoop::new();
 //!     let wb = WindowBuilder::new();
-//!     let cb = ContextBuilder::new().with_vsync(true);
-//!     let glutin_window = WindowedContext::new_windowed(wb, cb, &events_loop).unwrap();
+//!     let glutin_window = ContextBuilder::new().with_vsync(true).build_windowed(wb, &events_loop).unwrap();
+//!     let glutin_window = unsafe { glutin_window.make_current() }.expect("Failed to make the context current");
 //!
 //!     // Then use the glutin window to create a gfx surface.
 //!     let surface = Surface::from_window(glutin_window);
@@ -36,9 +36,10 @@
 //!
 //! fn main() {
 //!     let events_loop = EventsLoop::new();
-//!     let context = Context::new_headless(&events_loop, ContextBuilder::new(), glutin::dpi::PhysicalSize::new(0.0, 0.0))
+//!     let context = ContextBuilder::new().build_headless(&events_loop, glutin::dpi::PhysicalSize::new(0.0, 0.0))
 //!         .expect("Failed to build headless context");
-//!     let headless = Headless(context);
+//!     let context = unsafe { context.make_current() }.expect("Failed to make the context current");
+//!     let headless = Headless::from_context(context);
 //!     let _adapters = headless.enumerate_adapters();
 //! }
 //! ```
