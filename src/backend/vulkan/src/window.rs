@@ -42,7 +42,7 @@ impl Drop for RawSurface {
 }
 
 impl Instance {
-    #[cfg(all(unix, not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
     pub fn create_surface_from_xlib(&self, dpy: *mut vk::Display, window: vk::Window) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -80,7 +80,7 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface, width, height, 1)
     }
 
-    #[cfg(all(unix, not(target_os = "android")))]
+    #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
     pub fn create_surface_from_xcb(
         &self,
         connection: *mut vk::xcb_connection_t,
@@ -194,16 +194,15 @@ impl Instance {
         }
 
         let surface = {
+            let info = vk::Win32SurfaceCreateInfoKHR {
+                s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
+                p_next: ptr::null(),
+                flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
+                hinstance: hinstance as *mut _,
+                hwnd: hwnd as *mut _,
+            };
             let win32_loader = khr::Win32Surface::new(entry, &self.raw.0);
             unsafe {
-                let info = vk::Win32SurfaceCreateInfoKHR {
-                    s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
-                    p_next: ptr::null(),
-                    flags: vk::Win32SurfaceCreateFlagsKHR::empty(),
-                    hinstance: hinstance as *mut _,
-                    hwnd: hwnd as *mut _,
-                };
-
                 win32_loader
                     .create_win32_surface(&info, None)
                     .expect("Unable to create Win32 surface")
@@ -228,9 +227,50 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface, width, height, 1)
     }
 
+    #[cfg(target_os = "macos")]
+    pub fn create_surface_from_nsview(&self, view: *mut c_void) -> Surface {
+        use ash::extensions::mvk;
+        use core_graphics::geometry::CGRect;
+        use objc::runtime::Object;
+
+        let entry = VK_ENTRY
+            .as_ref()
+            .expect("Unable to load Vulkan entry points");
+
+        if !self.extensions.contains(&mvk::MacOSSurface::name()) {
+            panic!("Vulkan driver does not support VK_MVK_MACOS_SURFACE");
+        }
+
+        let surface = {
+            let mac_os_loader = mvk::MacOSSurface::new(entry, &self.raw.0);
+            let info = vk::MacOSSurfaceCreateInfoMVK {
+                s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
+                p_next: ptr::null(),
+                flags: vk::MacOSSurfaceCreateFlagsMVK::empty(),
+                p_view: view,
+            };
+
+            unsafe {
+                mac_os_loader
+                    .create_mac_os_surface_mvk(&info, None)
+                    .expect("Unable to create macOS surface")
+            }
+        };
+
+        let (width, height) = {
+            //TODO: this is probably wrong, needs refinement
+            let bounds: CGRect = unsafe {
+                msg_send![view as *mut Object, bounds]
+            };
+            (bounds.size.width as u32, bounds.size.height as u32)
+        };
+
+        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
+    }
+
     #[cfg(feature = "winit")]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
-        #[cfg(all(unix, not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
         {
             use winit::os::unix::WindowExt;
 
@@ -271,6 +311,12 @@ impl Instance {
             let hinstance = unsafe { GetModuleHandleW(ptr::null()) };
             let hwnd = window.get_hwnd();
             self.create_surface_from_hwnd(hinstance as *mut _, hwnd as *mut _)
+        }
+        #[cfg(target_os = "macos")]
+        {
+            use winit::os::macos::WindowExt;
+
+            self.create_surface_from_nsview(window.get_nsview())
         }
     }
 
