@@ -511,13 +511,14 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 properties: Properties::CPU_VISIBLE
                     | Properties::COHERENT
                     | Properties::CPU_CACHED,
-                heap_index: 2,
+                heap_index: 1,
             },
         ];
 
         hal::MemoryProperties {
             memory_types,
-            memory_heaps: vec![!0, !0, !0],
+            // heap 0 is DEVICE_LOCAL, heap 1 is CPU_VISIBLE
+            memory_heaps: vec![!0, !0],
         }
     }
 
