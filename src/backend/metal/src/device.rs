@@ -837,7 +837,7 @@ impl hal::Device<Backend> for Device {
 
     unsafe fn destroy_command_pool(&self, mut pool: command::CommandPool) {
         use hal::pool::RawCommandPool;
-        pool.reset();
+        pool.reset(false);
     }
 
     unsafe fn create_render_pass<'a, IA, IS, ID>(
