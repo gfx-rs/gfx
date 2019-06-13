@@ -1088,8 +1088,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     unsafe fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
         let (raw_buffer, range) = buffer.borrow().as_bound();
-        assert_eq!(range.start, 0, "buffer offset unsupported in indirect draw");
-        self.push_cmd(Command::DispatchIndirect(raw_buffer, offset));
+        self.push_cmd(Command::DispatchIndirect(raw_buffer, range.start + offset));
     }
 
     unsafe fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
