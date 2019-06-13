@@ -486,8 +486,16 @@ impl d::Device<B> for Device {
             //TODO: use *Named calls to avoid binding
             gl.bind_buffer(target, Some(raw));
             if self.share.private_caps.buffer_storage {
-                //TODO: glow::DYNAMIC_STORAGE_BIT | glow::MAP_PERSISTENT_BIT
-                gl.buffer_storage(target, size as i32, None, glow::MAP_READ_BIT | glow::MAP_WRITE_BIT);
+                gl.buffer_storage(
+                    target,
+                    size as i32,
+                    None,
+                    glow::MAP_READ_BIT
+                        | glow::MAP_WRITE_BIT
+                        | glow::MAP_PERSISTENT_BIT
+                        | glow::MAP_COHERENT_BIT
+                        | glow::DYNAMIC_STORAGE_BIT
+                );
             } else {
                 gl.buffer_data_size(target, size as i32, glow::DYNAMIC_DRAW);
             }
@@ -1067,7 +1075,7 @@ impl d::Device<B> for Device {
         let caps = &self.share.private_caps;
 
         assert!(caps.buffer_role_change);
-        let access = memory.map_flags();
+        let access = memory.map_flags() | glow::MAP_PERSISTENT_BIT | glow::MAP_COHERENT_BIT;
 
         let offset = *range.start().unwrap_or(&0);
         let size = *range.end().unwrap_or(&memory.size) - offset;

@@ -487,10 +487,10 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     fn memory_properties(&self) -> hal::MemoryProperties {
         use crate::hal::memory::Properties;
 
-        // COHERENT flags require that the backend does flushing and invalidation
-        // by itself. If we move towards persistent mapping we need to re-evaluate it.
         let caps = &self.0.private_caps;
         assert!(caps.map || caps.emulate_map);
+
+        // TODO: Remove COHERENT flag and move toward explicit flushing and invalidation.
         let memory_types = vec![
             // Faked DEVICE_LOCAL memory for images, no gl buffer is actually allocated for it.
             hal::MemoryType {
