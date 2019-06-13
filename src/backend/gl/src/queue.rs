@@ -628,7 +628,7 @@ impl CommandQueue {
                 gl.active_texture(glow::TEXTURE0);
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer));
                 gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                gl.get_tex_image(
+                gl.get_tex_image_pixel_buffer_offset(
                     glow::TEXTURE_2D,
                     r.image_layers.level as _,
                     //r.image_offset.x,
@@ -637,7 +637,7 @@ impl CommandQueue {
                     //r.image_extent.height as _,
                     glow::RGBA,
                     glow::UNSIGNED_BYTE,
-                    None,
+                    r.buffer_offset as i32,
                 );
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
             },
