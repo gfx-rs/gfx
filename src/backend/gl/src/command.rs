@@ -148,7 +148,7 @@ struct Cache {
     // Active primitive topology, set by the current pipeline.
     primitive: Option<u32>,
     // Active index type and buffer range, set by the current index buffer.
-    index_type_range: Option<(hal::IndexType, Range<u64>)>,
+    index_type_range: Option<(hal::IndexType, Range<buffer::Offset>)>,
     // Stencil reference values (front, back).
     stencil_ref: Option<(pso::StencilValue, pso::StencilValue)>,
     // Blend color.
@@ -165,7 +165,7 @@ struct Cache {
     // Blend per attachment.
     blend_targets: Option<Vec<Option<pso::ColorBlendDesc>>>,
     // Maps bound vertex buffer offset (index) to handle / buffer range
-    vertex_buffers: Vec<Option<(n::RawBuffer, Range<u64>)>>,
+    vertex_buffers: Vec<Option<(n::RawBuffer, Range<buffer::Offset>)>>,
     // Active vertex buffer descriptions.
     vertex_buffer_descs: Vec<Option<pso::VertexBufferDesc>>,
     // Active attributes.
