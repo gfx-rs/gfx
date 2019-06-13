@@ -542,7 +542,7 @@ impl<B: Backend> RendererState<B> {
                     .device
                     .reset_fence(framebuffer_fence)
                     .unwrap();
-                command_pool.reset();
+                command_pool.reset(false);
 
                 // Rendering
                 let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();

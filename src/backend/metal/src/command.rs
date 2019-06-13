@@ -2153,9 +2153,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
 }
 
 impl pool::RawCommandPool<Backend> for CommandPool {
-    unsafe fn reset(&mut self) {
+    unsafe fn reset(&mut self, release_resources: bool) {
         for cmd_buffer in &self.allocated {
-            cmd_buffer.borrow_mut().reset(&self.shared, false);
+            cmd_buffer.borrow_mut().reset(&self.shared, release_resources);
         }
     }
 

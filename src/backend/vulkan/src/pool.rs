@@ -16,12 +16,18 @@ pub struct RawCommandPool {
 }
 
 impl pool::RawCommandPool<Backend> for RawCommandPool {
-    unsafe fn reset(&mut self) {
+    unsafe fn reset(&mut self, release_resources: bool) {
+        let flags = if release_resources {
+            vk::CommandPoolResetFlags::RELEASE_RESOURCES
+        } else {
+            vk::CommandPoolResetFlags::empty()
+        };
+
         assert_eq!(
             Ok(()),
             self.device
                 .0
-                .reset_command_pool(self.raw, vk::CommandPoolResetFlags::empty())
+                .reset_command_pool(self.raw, flags)
         );
     }
 

@@ -28,7 +28,7 @@ pub trait RawCommandPool<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Reset the command pool and the corresponding command buffers.
     ///
     /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
-    unsafe fn reset(&mut self);
+    unsafe fn reset(&mut self, release_resources: bool);
 
     /// Allocate a single command buffers from the pool.
     fn allocate_one(&mut self, level: RawLevel) -> B::CommandBuffer {
@@ -76,8 +76,8 @@ impl<B: Backend, C> CommandPool<B, C> {
     /// Reset the command pool and the corresponding command buffers.
     ///
     /// # Synchronization: You may _not_ free the pool if a command buffer is still in use (pool memory still in use)
-    pub unsafe fn reset(&mut self) {
-        self.raw.reset();
+    pub unsafe fn reset(&mut self, release_resources: bool) {
+        self.raw.reset(release_resources);
     }
 
     /// Allocates a new primary command buffer from the pool.
