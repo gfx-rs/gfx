@@ -493,7 +493,6 @@ impl d::Device<B> for Device {
                     glow::MAP_READ_BIT
                         | glow::MAP_WRITE_BIT
                         | glow::MAP_PERSISTENT_BIT
-                        | glow::MAP_COHERENT_BIT
                         | glow::DYNAMIC_STORAGE_BIT
                 );
             } else {
@@ -507,7 +506,6 @@ impl d::Device<B> for Device {
 
             Ok(n::Memory {
                 properties: memory::Properties::CPU_VISIBLE
-                    | memory::Properties::COHERENT
                     | memory::Properties::CPU_CACHED,
                 buffer: Some(raw),
                 target,
@@ -1075,7 +1073,7 @@ impl d::Device<B> for Device {
         let caps = &self.share.private_caps;
 
         assert!(caps.buffer_role_change);
-        let access = memory.map_flags() | glow::MAP_PERSISTENT_BIT | glow::MAP_COHERENT_BIT;
+        let access = memory.map_flags() | glow::MAP_PERSISTENT_BIT | glow::MAP_FLUSH_EXPLICIT_BIT;
 
         let offset = *range.start().unwrap_or(&0);
         let size = *range.end().unwrap_or(&memory.size) - offset;
@@ -1122,13 +1120,32 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, _: I) -> Result<(), d::OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
-        warn!("memory range invalidation not implemented!");
+        let gl = &self.share.context;
+
+        for i in ranges {
+            let (mem, range) = i.borrow();
+            let buffer = mem.buffer.expect("cannot flush DEVICE_LOCAL memory");
+            gl.bind_buffer(mem.target, Some(buffer));
+
+            if self.share.private_caps.emulate_map {
+                unimplemented!()
+            } else {
+                let offset = *range.start().unwrap_or(&0);
+                let size = *range.end().unwrap_or(&mem.size) - offset;
+                gl.flush_mapped_buffer_range(mem.target, offset as i32, size as i32);
+            }
+            gl.bind_buffer(mem.target, None);
+            if let Err(err) = self.share.check() {
+                panic!("Error flushing memory range: {:?} for memory {:?}", err, mem);
+            }
+        }
+
         Ok(())
     }
 

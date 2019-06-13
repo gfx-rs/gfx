@@ -490,7 +490,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let caps = &self.0.private_caps;
         assert!(caps.map || caps.emulate_map);
 
-        // TODO: Remove COHERENT flag and move toward explicit flushing and invalidation.
         let memory_types = vec![
             // Faked DEVICE_LOCAL memory for images, no gl buffer is actually allocated for it.
             hal::MemoryType {
@@ -500,7 +499,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             // Memory type for uses other than images and INDEX
             hal::MemoryType {
                 properties: Properties::CPU_VISIBLE
-                    | Properties::COHERENT
                     | Properties::CPU_CACHED,
                 heap_index: 1,
             },
@@ -509,7 +507,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             // buffers with INDEX usage.
             hal::MemoryType {
                 properties: Properties::CPU_VISIBLE
-                    | Properties::COHERENT
                     | Properties::CPU_CACHED,
                 heap_index: 1,
             },
