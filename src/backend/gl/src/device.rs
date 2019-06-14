@@ -1121,7 +1121,7 @@ impl d::Device<B> for Device {
             let ptr = memory.emulate_map_allocation.replace(None).unwrap();
             let allocation = slice::from_raw_parts_mut(ptr, memory.size as usize);
             // TODO: Access
-            gl.buffer_data_u8_slice(memory.target, &allocation, glow::DYNAMIC_DRAW);
+            gl.buffer_sub_data(memory.target, 0, &allocation);
             let _ = Box::from_raw(allocation);
         } else {
             gl.unmap_buffer(memory.target);
@@ -1153,7 +1153,7 @@ impl d::Device<B> for Device {
             if self.share.private_caps.emulate_map {
                 let ptr = mem.emulate_map_allocation.get().unwrap();
                 let slice = slice::from_raw_parts_mut(ptr.offset(offset as isize), size as usize);;
-                gl.buffer_data_u8_slice(mem.target, slice, glow::DYNAMIC_DRAW);
+                gl.buffer_sub_data(mem.target, offset as i32, slice);
             } else {
                 gl.flush_mapped_buffer_range(mem.target, offset as i32, size as i32);
             }

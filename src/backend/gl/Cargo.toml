@@ -23,7 +23,7 @@ bitflags = "1"
 log = { version = "0.4" }
 gfx-hal = { path = "../../hal", version = "0.2" }
 smallvec = "0.6"
-glow = { git = "https://github.com/grovesNL/glow", rev = "054aabc1bfbad472e4a08bc55912552d8211daee" }
+glow = { git = "https://github.com/grovesNL/glow", rev = "7131fc75c1afb460161dd84b9d44fadef24f5a90" }
 spirv_cross = { version = "0.14.0", features = ["glsl"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
