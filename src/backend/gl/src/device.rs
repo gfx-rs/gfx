@@ -1,5 +1,5 @@
 use std::borrow::Borrow;
-use std::cell::RefCell;
+use std::cell::Cell;
 use std::ops::Range;
 use std::sync::{Arc, Mutex, RwLock};
 use std::slice;
@@ -469,7 +469,7 @@ impl d::Device<B> for Device {
                 buffer: None,
                 target: 0,
                 size,
-                emulate_map_allocation: RefCell::new(std::ptr::null_mut()),
+                emulate_map_allocation: Cell::new(None),
             })
         } else {
             assert!(self.share.private_caps.buffer_role_change);
@@ -510,7 +510,7 @@ impl d::Device<B> for Device {
                 buffer: Some(raw),
                 target,
                 size,
-                emulate_map_allocation: RefCell::new(std::ptr::null_mut()),
+                emulate_map_allocation: Cell::new(None),
             })
         }
     }
@@ -1080,9 +1080,15 @@ impl d::Device<B> for Device {
 
         let buffer = memory.buffer.expect("cannot map DEVICE_LOCAL memory");
         let ptr = if caps.emulate_map {
-            let raw = Box::into_raw(vec![0u8; size as usize].into_boxed_slice()) as *mut u8;
-            assert!(memory.emulate_map_allocation.replace(raw).is_null(), "more than one memory mapping unsupported");
-            raw
+            let ptr: *mut u8 = if let Some(ptr) = memory.emulate_map_allocation.get() {
+                ptr
+            } else {
+                let ptr = Box::into_raw(vec![0; memory.size as usize].into_boxed_slice()) as *mut u8;
+                memory.emulate_map_allocation.set(Some(ptr));
+                ptr
+            };
+
+            ptr.offset(offset as isize)
         } else {
             gl.bind_buffer(memory.target, Some(buffer));
             let raw = gl.map_buffer_range(memory.target, offset as i32, size as i32, access);
@@ -1104,11 +1110,11 @@ impl d::Device<B> for Device {
         gl.bind_buffer(memory.target, Some(buffer));
 
         if self.share.private_caps.emulate_map {
-            let raw = memory.emulate_map_allocation.replace(std::ptr::null_mut());
-            let mapped = slice::from_raw_parts_mut(raw, memory.size as usize);
+            let ptr = memory.emulate_map_allocation.replace(None).unwrap();
+            let allocation = slice::from_raw_parts_mut(ptr, memory.size as usize);
             // TODO: Access
-            gl.buffer_data_u8_slice(memory.target, mapped, glow::DYNAMIC_DRAW);
-            let _ = *Box::from_raw(raw);
+            gl.buffer_data_u8_slice(memory.target, &allocation, glow::DYNAMIC_DRAW);
+            let _ = Box::from_raw(allocation);
         } else {
             gl.unmap_buffer(memory.target);
         }
@@ -1133,11 +1139,14 @@ impl d::Device<B> for Device {
             let buffer = mem.buffer.expect("cannot flush DEVICE_LOCAL memory");
             gl.bind_buffer(mem.target, Some(buffer));
 
+            let offset = *range.start().unwrap_or(&0);
+            let size = *range.end().unwrap_or(&mem.size) - offset;
+
             if self.share.private_caps.emulate_map {
-                unimplemented!()
+                let ptr = mem.emulate_map_allocation.get().unwrap();
+                let slice = slice::from_raw_parts_mut(ptr.offset(offset as isize), size as usize);;
+                gl.buffer_data_u8_slice(mem.target, slice, glow::DYNAMIC_DRAW);
             } else {
-                let offset = *range.start().unwrap_or(&0);
-                let size = *range.end().unwrap_or(&mem.size) - offset;
                 gl.flush_mapped_buffer_range(mem.target, offset as i32, size as i32);
             }
             gl.bind_buffer(mem.target, None);

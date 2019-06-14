@@ -44,19 +44,6 @@ pub fn wrap_to_gl(w: i::WrapMode) -> u32 {
     }
 }
 
-/*
-pub fn buffer_usage_to_gl_target(usage: buffer::Usage) -> Option<u32> {
-    use self::buffer::Usage;
-    match usage & (Usage::UNIFORM | Usage::INDEX | Usage::VERTEX | Usage::INDIRECT) {
-        Usage::UNIFORM => Some(glow::UNIFORM_BUFFER),
-        Usage::INDEX => Some(glow::ELEMENT_ARRAY_BUFFER),
-        Usage::VERTEX => Some(glow::ARRAY_BUFFER),
-        Usage::INDIRECT => unimplemented!(),
-        _ => None,
-    }
-}
-*/
-
 pub fn primitive_to_gl_primitive(primitive: Primitive) -> u32 {
     match primitive {
         Primitive::PointList => glow::POINTS,

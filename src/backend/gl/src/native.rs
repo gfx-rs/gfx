@@ -1,4 +1,4 @@
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
 use std::ops::Range;
 use std::sync::{Arc, Mutex, RwLock};
 
@@ -255,7 +255,7 @@ pub struct Memory {
     pub(crate) target: u32,
     /// Allocation size
     pub(crate) size: u64,
-    pub(crate) emulate_map_allocation: RefCell<*mut u8>,
+    pub(crate) emulate_map_allocation: Cell<Option<*mut u8>>,
 }
 
 unsafe impl Send for Memory {}
