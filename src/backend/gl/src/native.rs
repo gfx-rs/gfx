@@ -250,38 +250,17 @@ pub enum ShaderModule {
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) properties: Properties,
-    // DEVICE_LOCAL memory types are faked and have no associated buffer
+    // Image memory types are faked and have no associated buffer
     pub(crate) buffer: Option<RawBuffer>,
     pub(crate) target: u32,
     /// Allocation size
     pub(crate) size: u64,
     pub(crate) emulate_map_allocation: Cell<Option<*mut u8>>,
+    pub(crate) map_flags: u32,
 }
 
 unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
-
-impl Memory {
-    pub fn can_upload(&self) -> bool {
-        self.properties.contains(Properties::CPU_VISIBLE)
-    }
-
-    pub fn can_download(&self) -> bool {
-        self.properties
-            .contains(Properties::CPU_VISIBLE | Properties::CPU_CACHED)
-    }
-
-    pub fn map_flags(&self) -> u32 {
-        let mut flags = 0;
-        if self.can_download() {
-            flags |= glow::MAP_READ_BIT;
-        }
-        if self.can_upload() {
-            flags |= glow::MAP_WRITE_BIT;
-        }
-        flags
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct RenderPass {

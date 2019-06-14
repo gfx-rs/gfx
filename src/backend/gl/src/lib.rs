@@ -44,10 +44,19 @@ pub use glow::native::Context as GlContext;
 pub use glow::web::Context as GlContext;
 use glow::Context;
 
+// 0x01 -> DEVICE_LOCAL memory for images
+// 0x02 -> DEVICE_LOCAL memory for INDEX buffers
+// 0x04 -> DEVICE_LOCAL memory for non-INDEX buffers
+// 0x08 -> Incoherent CPU_LOCAL memory for INDEX buffers
+// 0x10 -> Incoherent CPU_LOCAL memory for non-INDEX buffers
+// 0x20 -> Coherent CPU_LOCAL memory for INDEX buffers
+// 0x40 -> Coherent CPU_LOCAL memory for non-INDEX buffers
+
 pub(crate) const IMAGE_MEM_TYPE_MASK: u64 = 0x1;
-pub(crate) const INDEX_MEM_TYPE_MASK: u64 = 0xa;
-pub(crate) const OTHER_MEM_TYPE_MASK: u64 = 0x14;
+pub(crate) const INDEX_MEM_TYPE_MASK: u64 = 0x2a;
+pub(crate) const OTHER_MEM_TYPE_MASK: u64 = 0x54;
 pub(crate) const DEVICE_LOCAL_MASK: u64 = 0x7;
+pub(crate) const COHERENT_MASK: u64 = 0x60;
 
 pub(crate) struct GlContainer {
     context: GlContext,
@@ -492,7 +501,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         // For security reasons, WebGL does not allow "element array buffers" to be used as any
         // other kind of buffer.  We need to provide unique types of memory specifically for buffers
         // with INDEX usage.
-        let memory_types = vec![
+        let mut memory_types = vec![
             // Faked DEVICE_LOCAL memory for images, no gl buffer is actually allocated for them.
             hal::MemoryType {
                 properties: Properties::DEVICE_LOCAL,
@@ -503,24 +512,47 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 properties: Properties::DEVICE_LOCAL,
                 heap_index: 0,
             },
-            // DEVICE_LOCAL memory for buffers other than INDEX
+            // DEVICE_LOCAL memory for non-INDEX buffers
             hal::MemoryType {
                 properties: Properties::DEVICE_LOCAL,
                 heap_index: 0,
             },
-            // CPU_VISIBLE memory for INDEX buffers
+            // Incoherent CPU_VISIBLE memory for INDEX buffers
             hal::MemoryType {
                 properties: Properties::CPU_VISIBLE
                     | Properties::CPU_CACHED,
                 heap_index: 1,
             },
-            // CPU_VISIBLE memory for buffers other than INDEX
+            // Incoherent CPU_VISIBLE memory for non-INDEX buffers
             hal::MemoryType {
                 properties: Properties::CPU_VISIBLE
                     | Properties::CPU_CACHED,
                 heap_index: 1,
             },
         ];
+
+        // If we are not emulating buffer mapping, we can provide coherent buffer mapping by
+        // omitting the GL_MAP_FLUSH_EXPLICIT_BIT flag.
+        if !self.0.private_caps.emulate_map {
+            memory_types.push(
+                // Coherent CPU_VISIBLE memory for INDEX buffers
+                hal::MemoryType {
+                    properties: Properties::CPU_VISIBLE
+                        | Properties::COHERENT
+                        | Properties::CPU_CACHED,
+                    heap_index: 1,
+                }
+            );
+            memory_types.push(
+                // Coherent CPU_VISIBLE memory for non-INDEX buffers
+                hal::MemoryType {
+                    properties: Properties::CPU_VISIBLE
+                        | Properties::COHERENT
+                        | Properties::CPU_CACHED,
+                    heap_index: 1,
+                },
+            );
+        }
 
         hal::MemoryProperties {
             memory_types,

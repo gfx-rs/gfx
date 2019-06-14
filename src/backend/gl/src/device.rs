@@ -5,7 +5,8 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::slice;
 
 use glow::Context;
-use crate::{GlContainer, GlContext, IMAGE_MEM_TYPE_MASK, INDEX_MEM_TYPE_MASK, OTHER_MEM_TYPE_MASK, DEVICE_LOCAL_MASK};
+use crate::{GlContainer, GlContext, IMAGE_MEM_TYPE_MASK, INDEX_MEM_TYPE_MASK, OTHER_MEM_TYPE_MASK,
+            DEVICE_LOCAL_MASK, COHERENT_MASK};
 
 use crate::hal::backend::FastHashMap;
 use crate::hal::format::{Format, Swizzle};
@@ -471,6 +472,7 @@ impl d::Device<B> for Device {
                 target: 0,
                 size,
                 emulate_map_allocation: Cell::new(None),
+                map_flags: 0,
             })
         } else {
             assert!(self.share.private_caps.buffer_role_change);
@@ -512,6 +514,11 @@ impl d::Device<B> for Device {
                 panic!("Error allocating memory buffer {:?}", err);
             }
 
+            let mut map_flags = glow::MAP_READ_BIT | glow::MAP_WRITE_BIT | glow::MAP_PERSISTENT_BIT;
+            if (1 << mem_type.0) & COHERENT_MASK == 0 {
+                map_flags |= glow::MAP_FLUSH_EXPLICIT_BIT;
+            }
+
             Ok(n::Memory {
                 properties: memory::Properties::CPU_VISIBLE
                     | memory::Properties::CPU_CACHED,
@@ -519,6 +526,7 @@ impl d::Device<B> for Device {
                 target,
                 size,
                 emulate_map_allocation: Cell::new(None),
+                map_flags,
             })
         }
     }
@@ -1081,8 +1089,6 @@ impl d::Device<B> for Device {
         let caps = &self.share.private_caps;
 
         assert!(caps.buffer_role_change);
-        let access = memory.map_flags() | glow::MAP_PERSISTENT_BIT | glow::MAP_FLUSH_EXPLICIT_BIT;
-
         let offset = *range.start().unwrap_or(&0);
         let size = *range.end().unwrap_or(&memory.size) - offset;
 
@@ -1099,7 +1105,7 @@ impl d::Device<B> for Device {
             ptr.offset(offset as isize)
         } else {
             gl.bind_buffer(memory.target, Some(buffer));
-            let raw = gl.map_buffer_range(memory.target, offset as i32, size as i32, access);
+            let raw = gl.map_buffer_range(memory.target, offset as i32, size as i32, memory.map_flags);
             gl.bind_buffer(memory.target, None);
             raw
         };
@@ -1121,7 +1127,7 @@ impl d::Device<B> for Device {
             let ptr = memory.emulate_map_allocation.replace(None).unwrap();
             let allocation = slice::from_raw_parts_mut(ptr, memory.size as usize);
             // TODO: Access
-            gl.buffer_sub_data(memory.target, 0, &allocation);
+            gl.buffer_sub_data_u8_slice(memory.target, 0, &allocation);
             let _ = Box::from_raw(allocation);
         } else {
             gl.unmap_buffer(memory.target);
@@ -1153,7 +1159,7 @@ impl d::Device<B> for Device {
             if self.share.private_caps.emulate_map {
                 let ptr = mem.emulate_map_allocation.get().unwrap();
                 let slice = slice::from_raw_parts_mut(ptr.offset(offset as isize), size as usize);;
-                gl.buffer_sub_data(mem.target, offset as i32, slice);
+                gl.buffer_sub_data_u8_slice(mem.target, offset as i32, slice);
             } else {
                 gl.flush_mapped_buffer_range(mem.target, offset as i32, size as i32);
             }
