@@ -1,10 +1,16 @@
 # Change Log
 
+### backend-vulkan-0.2.2 (14-06-2019)
+  - allow building on macOS for Vulkan Portability
+
 ### backend-metal-0.2.1 (14-06-2019)
   - fixed memory leaks in render pass descriptors and function strings
 
 ### hal-0.2.1 (10-06-2019)
   - `Debug` implementations
+
+### backend-vulkan-0.2.1 (23-05-2019)
+  - fix `VK_EXT_debug_utils` check at startup
 
 ## hal-0.2.0 (10-05-2019)
   - pipeline cache support

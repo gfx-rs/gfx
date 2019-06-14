@@ -33,8 +33,10 @@ else
 		EXCLUDES+= --exclude gfx-backend-metal
 		FEATURES_HAL=vulkan
 	endif
-	ifeq ($(UNAME_S),Darwin)
+	ifeq ($(TARGET),aarch64-apple-ios)
 		EXCLUDES+= --exclude gfx-backend-vulkan
+	endif
+	ifeq ($(UNAME_S),Darwin)
 		FEATURES_HAL=metal
 	endif
 endif
