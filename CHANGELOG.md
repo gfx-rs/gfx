@@ -1,6 +1,9 @@
 # Change Log
 
-## hal-0.2.1 (10-06-2019)
+### backend-metal-0.2.1 (14-06-2019)
+  - fixed memory leaks in render pass descriptors and function strings
+
+### hal-0.2.1 (10-06-2019)
   - `Debug` implementations
 
 ## hal-0.2.0 (10-05-2019)
