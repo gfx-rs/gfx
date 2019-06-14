@@ -29,7 +29,7 @@ pub enum Buffer {
         usage: buffer::Usage,
     },
     Bound {
-        // DEVICE_LOCAL memory types are faked and have no associated buffer.
+        // Image memory types are faked and have no associated buffer.
         buffer: Option<RawBuffer>,
         range: Range<buffer::Offset>,
     },

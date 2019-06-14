@@ -44,11 +44,10 @@ pub use glow::native::Context as GlContext;
 pub use glow::web::Context as GlContext;
 use glow::Context;
 
-pub(crate) const IMAGE_MEMORY_TYPE: usize = 0;
-pub(crate) const INDEX_MEMORY_TYPE: usize = 2;
 pub(crate) const IMAGE_MEM_TYPE_MASK: u64 = 0x1;
-pub(crate) const OTHER_MEM_TYPE_MASK: u64 = 0x2;
-pub(crate) const INDEX_MEM_TYPE_MASK: u64 = 0x4;
+pub(crate) const INDEX_MEM_TYPE_MASK: u64 = 0xa;
+pub(crate) const OTHER_MEM_TYPE_MASK: u64 = 0x14;
+pub(crate) const DEVICE_LOCAL_MASK: u64 = 0x7;
 
 pub(crate) struct GlContainer {
     context: GlContext,
@@ -490,21 +489,32 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let caps = &self.0.private_caps;
         assert!(caps.map || caps.emulate_map);
 
+        // For security reasons, WebGL does not allow "element array buffers" to be used as any
+        // other kind of buffer.  We need to provide unique types of memory specifically for buffers
+        // with INDEX usage.
         let memory_types = vec![
-            // Faked DEVICE_LOCAL memory for images, no gl buffer is actually allocated for it.
+            // Faked DEVICE_LOCAL memory for images, no gl buffer is actually allocated for them.
             hal::MemoryType {
                 properties: Properties::DEVICE_LOCAL,
                 heap_index: 0,
             },
-            // Memory type for uses other than images and INDEX
+            // DEVICE_LOCAL memory for INDEX buffers
+            hal::MemoryType {
+                properties: Properties::DEVICE_LOCAL,
+                heap_index: 0,
+            },
+            // DEVICE_LOCAL memory for buffers other than INDEX
+            hal::MemoryType {
+                properties: Properties::DEVICE_LOCAL,
+                heap_index: 0,
+            },
+            // CPU_VISIBLE memory for INDEX buffers
             hal::MemoryType {
                 properties: Properties::CPU_VISIBLE
                     | Properties::CPU_CACHED,
                 heap_index: 1,
             },
-            // For security reasons, WebGL does not allow "element array buffers" to be used as any
-            // other kind of buffer.  We need to provide a unique type of memory specifically for
-            // buffers with INDEX usage.
+            // CPU_VISIBLE memory for buffers other than INDEX
             hal::MemoryType {
                 properties: Properties::CPU_VISIBLE
                     | Properties::CPU_CACHED,

@@ -5,7 +5,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::slice;
 
 use glow::Context;
-use crate::{GlContainer, GlContext, IMAGE_MEM_TYPE_MASK, INDEX_MEM_TYPE_MASK, OTHER_MEM_TYPE_MASK, IMAGE_MEMORY_TYPE, INDEX_MEMORY_TYPE};
+use crate::{GlContainer, GlContext, IMAGE_MEM_TYPE_MASK, INDEX_MEM_TYPE_MASK, OTHER_MEM_TYPE_MASK, DEVICE_LOCAL_MASK};
 
 use crate::hal::backend::FastHashMap;
 use crate::hal::format::{Format, Swizzle};
@@ -463,7 +463,8 @@ impl d::Device<B> for Device {
         mem_type: c::MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
-        if mem_type.0 == IMAGE_MEMORY_TYPE {
+        if (1 << mem_type.0) & IMAGE_MEM_TYPE_MASK != 0 {
+            assert_ne!((1 << mem_type.0) & DEVICE_LOCAL_MASK, 0);
             Ok(n::Memory {
                 properties: memory::Properties::DEVICE_LOCAL,
                 buffer: None,
@@ -474,11 +475,13 @@ impl d::Device<B> for Device {
         } else {
             assert!(self.share.private_caps.buffer_role_change);
 
-            let target = if mem_type.0 == INDEX_MEMORY_TYPE {
+            let target = if (1 << mem_type.0) & INDEX_MEM_TYPE_MASK != 0 {
                 glow::ELEMENT_ARRAY_BUFFER
             } else {
                 glow::ARRAY_BUFFER
             };
+
+            let is_device_local = (1 << mem_type.0) & DEVICE_LOCAL_MASK != 0;
 
             let gl = &self.share.context;
 
@@ -486,17 +489,22 @@ impl d::Device<B> for Device {
             //TODO: use *Named calls to avoid binding
             gl.bind_buffer(target, Some(raw));
             if self.share.private_caps.buffer_storage {
-                gl.buffer_storage(
-                    target,
-                    size as i32,
-                    None,
+                let flags = if is_device_local {
+                    0
+                } else {
                     glow::MAP_READ_BIT
                         | glow::MAP_WRITE_BIT
                         | glow::MAP_PERSISTENT_BIT
                         | glow::DYNAMIC_STORAGE_BIT
-                );
+                };
+                gl.buffer_storage(target, size as i32, None, flags);
             } else {
-                gl.buffer_data_size(target, size as i32, glow::DYNAMIC_DRAW);
+                let usage = if is_device_local {
+                    glow::STATIC_DRAW
+                } else {
+                    glow::DYNAMIC_DRAW
+                };
+                gl.buffer_data_size(target, size as i32, usage);
             }
             gl.bind_buffer(target, None);
 
