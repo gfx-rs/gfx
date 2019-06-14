@@ -3214,70 +3214,74 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // we stack the subpasses in the opposite order
         for subpass in render_pass.subpasses.iter().rev() {
             let mut combined_aspects = Aspects::empty();
-            let descriptor = metal::RenderPassDescriptor::new().to_owned();
-            descriptor.set_visibility_result_buffer(Some(&self.shared.visibility.buffer));
-            if self.shared.private_caps.layered_rendering {
-                descriptor.set_render_target_array_length(framebuffer.extent.depth as _);
-            }
-
-            for (i, &(at_id, op_flags)) in subpass.colors.iter().enumerate() {
-                let rat = &render_pass.attachments[at_id];
-                let texture = &framebuffer.attachments[at_id];
-                let desc = descriptor.color_attachments().object_at(i as _).unwrap();
-
-                combined_aspects |= Aspects::COLOR;
-                desc.set_texture(Some(texture));
-
-                if op_flags.contains(native::SubpassOps::LOAD) {
-                    desc.set_load_action(conv::map_load_operation(rat.ops.load));
-                    if rat.ops.load == AttachmentLoadOp::Clear {
-                        let channel = subpass.target_formats.colors[i].1;
-                        let raw = self.temp.clear_values[at_id].unwrap().color;
-                        desc.set_clear_color(channel.interpret(raw));
-                    }
+            let descriptor = autoreleasepool(|| {
+                let descriptor = metal::RenderPassDescriptor::new().to_owned();
+                descriptor.set_visibility_result_buffer(Some(&self.shared.visibility.buffer));
+                if self.shared.private_caps.layered_rendering {
+                    descriptor.set_render_target_array_length(framebuffer.extent.depth as _);
                 }
-                if op_flags.contains(native::SubpassOps::STORE) {
-                    desc.set_store_action(conv::map_store_operation(rat.ops.store));
-                }
-            }
 
-            if let Some((at_id, op_flags)) = subpass.depth_stencil {
-                let rat = &render_pass.attachments[at_id];
-                let texture = &framebuffer.attachments[at_id];
-                let aspects = rat.format.unwrap().surface_desc().aspects;
-                combined_aspects |= aspects;
+                for (i, &(at_id, op_flags)) in subpass.colors.iter().enumerate() {
+                    let rat = &render_pass.attachments[at_id];
+                    let texture = &framebuffer.attachments[at_id];
+                    let desc = descriptor.color_attachments().object_at(i as _).unwrap();
 
-                if aspects.contains(Aspects::DEPTH) {
-                    let desc = descriptor.depth_attachment().unwrap();
+                    combined_aspects |= Aspects::COLOR;
                     desc.set_texture(Some(texture));
 
                     if op_flags.contains(native::SubpassOps::LOAD) {
                         desc.set_load_action(conv::map_load_operation(rat.ops.load));
                         if rat.ops.load == AttachmentLoadOp::Clear {
-                            let raw = self.temp.clear_values[at_id].unwrap().depth_stencil;
-                            desc.set_clear_depth(raw.depth as f64);
+                            let channel = subpass.target_formats.colors[i].1;
+                            let raw = self.temp.clear_values[at_id].unwrap().color;
+                            desc.set_clear_color(channel.interpret(raw));
                         }
                     }
                     if op_flags.contains(native::SubpassOps::STORE) {
                         desc.set_store_action(conv::map_store_operation(rat.ops.store));
                     }
                 }
-                if aspects.contains(Aspects::STENCIL) {
-                    let desc = descriptor.stencil_attachment().unwrap();
-                    desc.set_texture(Some(texture));
 
-                    if op_flags.contains(native::SubpassOps::LOAD) {
-                        desc.set_load_action(conv::map_load_operation(rat.stencil_ops.load));
-                        if rat.stencil_ops.load == AttachmentLoadOp::Clear {
-                            let raw = self.temp.clear_values[at_id].unwrap().depth_stencil;
-                            desc.set_clear_stencil(raw.stencil);
+                if let Some((at_id, op_flags)) = subpass.depth_stencil {
+                    let rat = &render_pass.attachments[at_id];
+                    let texture = &framebuffer.attachments[at_id];
+                    let aspects = rat.format.unwrap().surface_desc().aspects;
+                    combined_aspects |= aspects;
+
+                    if aspects.contains(Aspects::DEPTH) {
+                        let desc = descriptor.depth_attachment().unwrap();
+                        desc.set_texture(Some(texture));
+
+                        if op_flags.contains(native::SubpassOps::LOAD) {
+                            desc.set_load_action(conv::map_load_operation(rat.ops.load));
+                            if rat.ops.load == AttachmentLoadOp::Clear {
+                                let raw = self.temp.clear_values[at_id].unwrap().depth_stencil;
+                                desc.set_clear_depth(raw.depth as f64);
+                            }
+                        }
+                        if op_flags.contains(native::SubpassOps::STORE) {
+                            desc.set_store_action(conv::map_store_operation(rat.ops.store));
                         }
                     }
-                    if op_flags.contains(native::SubpassOps::STORE) {
-                        desc.set_store_action(conv::map_store_operation(rat.stencil_ops.store));
+                    if aspects.contains(Aspects::STENCIL) {
+                        let desc = descriptor.stencil_attachment().unwrap();
+                        desc.set_texture(Some(texture));
+
+                        if op_flags.contains(native::SubpassOps::LOAD) {
+                            desc.set_load_action(conv::map_load_operation(rat.stencil_ops.load));
+                            if rat.stencil_ops.load == AttachmentLoadOp::Clear {
+                                let raw = self.temp.clear_values[at_id].unwrap().depth_stencil;
+                                desc.set_clear_stencil(raw.stencil);
+                            }
+                        }
+                        if op_flags.contains(native::SubpassOps::STORE) {
+                            desc.set_store_action(conv::map_store_operation(rat.stencil_ops.store));
+                        }
                     }
                 }
-            }
+
+                descriptor
+            });
 
             self.state.pending_subpasses.alloc().init(SubpassInfo {
                 descriptor,
