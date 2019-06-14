@@ -1714,7 +1714,7 @@ impl hal::Device<Backend> for Device {
 
             let device = self.shared.device.lock();
             let arg_array = metal::Array::from_owned_slice(&arguments);
-            let encoder = device.new_argument_encoder(&arg_array);
+            let encoder = device.new_argument_encoder(arg_array);
 
             let total_size = encoder.encoded_length();
             let raw = device.new_buffer(total_size, MTLResourceOptions::empty());
@@ -1757,7 +1757,7 @@ impl hal::Device<Backend> for Device {
                 })
                 .collect::<Vec<_>>();
             let arg_array = metal::Array::from_owned_slice(&arguments);
-            let encoder = self.shared.device.lock().new_argument_encoder(&arg_array);
+            let encoder = self.shared.device.lock().new_argument_encoder(arg_array);
 
             Ok(n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags))
         } else {
