@@ -1168,14 +1168,36 @@ impl d::Device<B> for Device {
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
         &self,
-        _ranges: I,
+        ranges: I,
     ) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
-        unimplemented!()
+        if self.share.private_caps.emulate_map {
+            // Nothing to do
+            return Ok(());
+        }
+
+        let gl = &self.share.context;
+
+        for i in ranges {
+            let (mem, range) = i.borrow();
+            let buffer = mem.buffer.expect("cannot invalidate DEVICE_LOCAL memory");
+            gl.bind_buffer(mem.target, Some(buffer));
+
+            let offset = *range.start().unwrap_or(&0);
+            let size = *range.end().unwrap_or(&mem.size) - offset;
+
+            gl.invalidate_buffer_sub_data(mem.target, offset as i32, size as i32);
+            gl.bind_buffer(mem.target, None);
+            if let Err(err) = self.share.check() {
+                panic!("Error invalidating memory range: {:?} for memory {:?}", err, mem);
+            }
+        }
+
+        Ok(())
     }
 
     unsafe fn create_buffer_view<R: RangeArg<u64>>(
