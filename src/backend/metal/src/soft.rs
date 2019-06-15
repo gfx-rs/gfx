@@ -7,19 +7,19 @@ use crate::{
 use hal;
 use metal;
 
-use std::ops::Range;
+use std::{fmt::Debug, ops::Range};
 
 
 pub type CacheResourceIndex = u32;
 
-pub trait Resources {
-    type Data;
-    type BufferArray;
-    type TextureArray;
-    type SamplerArray;
-    type DepthStencil;
-    type RenderPipeline;
-    type ComputePipeline;
+pub trait Resources: Debug {
+    type Data: Debug;
+    type BufferArray: Debug;
+    type TextureArray: Debug;
+    type SamplerArray: Debug;
+    type DepthStencil: Debug;
+    type RenderPipeline: Debug;
+    type ComputePipeline: Debug;
 }
 
 #[derive(Clone, Debug, Default)]

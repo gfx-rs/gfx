@@ -633,7 +633,7 @@ impl PrivateCapabilities {
             exposed_queues: 1,
             expose_line_mode: true,
             resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
-            argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT) && false, //TODO
+            argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT),
             shared_textures: !os_is_mac,
             base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
             dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
