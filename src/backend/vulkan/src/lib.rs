@@ -18,9 +18,9 @@ extern crate smallvec;
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
-#[cfg(all(unix, not(target_os = "android")))]
+#[cfg(all(feature = "x11", unix, not(target_os = "android")))]
 extern crate x11;
-#[cfg(all(unix, not(target_os = "android")))]
+#[cfg(all(feature = "xcb", unix, not(target_os = "android")))]
 extern crate xcb;
 
 use ash::extensions::{ext, khr};
