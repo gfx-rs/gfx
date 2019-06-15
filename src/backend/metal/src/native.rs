@@ -487,7 +487,12 @@ impl DescriptorPool {
                     allocators.buffers.total_available(),
                 );
             }
-            DescriptorPool::ArgumentBuffer { .. } => {}
+            DescriptorPool::ArgumentBuffer { ref range_allocator, .. } => {
+                trace!(
+                    "\tavailable {} bytes",
+                    range_allocator.total_available(),
+                );
+            }
         }
     }
 }
@@ -833,6 +838,73 @@ pub(crate) enum MemoryHeap {
     Private,
     Public(MemoryTypeId, metal::Buffer),
     Native(metal::Heap),
+}
+
+#[derive(Default)]
+pub(crate) struct ArgumentArray {
+    arguments: Vec<metal::ArgumentDescriptor>,
+}
+
+impl ArgumentArray {
+    pub fn push(
+        &mut self,
+        ty: pso::DescriptorType,
+        index: usize,
+        count: usize,
+    ) {
+        use hal::pso::DescriptorType as Dt;
+        use metal::{MTLArgumentAccess, MTLDataType};
+
+        let arg = metal::ArgumentDescriptor::new();
+        arg.set_array_length(count as u64);
+        arg.set_index(index as u64);
+
+        match ty {
+            Dt::Sampler => {
+                arg.set_access(MTLArgumentAccess::ReadOnly);
+                arg.set_data_type(MTLDataType::Sampler);
+            }
+            Dt::CombinedImageSampler => {
+                let other = metal::ArgumentDescriptor::new();
+                other.set_array_length(count as u64);
+                other.set_index(index as u64);
+                other.set_access(MTLArgumentAccess::ReadOnly);
+                other.set_data_type(MTLDataType::Texture);
+                self.arguments.push(other.to_owned());
+
+                arg.set_index(index as u64); //TODO
+                arg.set_access(MTLArgumentAccess::ReadOnly);
+                arg.set_data_type(MTLDataType::Sampler);
+            }
+            Dt::SampledImage |
+            Dt::InputAttachment => {
+                arg.set_access(MTLArgumentAccess::ReadOnly);
+                arg.set_data_type(MTLDataType::Texture);
+            }
+            Dt::StorageImage => {
+                arg.set_access(MTLArgumentAccess::ReadWrite);
+                arg.set_data_type(MTLDataType::Texture);
+            }
+            Dt::UniformBuffer |
+            Dt::UniformBufferDynamic |
+            Dt::UniformTexelBuffer => {
+                arg.set_access(MTLArgumentAccess::ReadOnly);
+                arg.set_data_type(MTLDataType::Struct);
+            }
+            Dt::StorageBuffer |
+            Dt::StorageBufferDynamic |
+            Dt::StorageTexelBuffer => {
+                arg.set_access(MTLArgumentAccess::ReadWrite);
+                arg.set_data_type(MTLDataType::Struct);
+            }
+        }
+
+        self.arguments.push(arg.to_owned());
+    }
+
+    pub fn build<'a>(self) -> &'a metal::ArrayRef<metal::ArgumentDescriptor> {
+        metal::Array::from_owned_slice(&self.arguments)
+    }
 }
 
 #[derive(Debug)]

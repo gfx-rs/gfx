@@ -24,7 +24,7 @@ use copyless::VecHelper;
 use foreign_types::ForeignType;
 use metal::{
     self,
-    CaptureManager, MTLArgumentAccess, MTLCPUCacheMode, MTLDataType, MTLLanguageVersion,
+    CaptureManager, MTLCPUCacheMode, MTLLanguageVersion,
     MTLPrimitiveTopologyClass, MTLPrimitiveType, MTLResourceOptions, MTLSamplerBorderColor,
     MTLSamplerMipFilter, MTLStorageMode, MTLTextureType, MTLVertexStepFunction,
 };
@@ -104,7 +104,7 @@ fn get_final_function(
         {
             Some(c) => unsafe {
                 let ptr = &specialization.data[c.range.start as usize] as *const u8 as *const _;
-                let ty: MTLDataType = msg_send![object, type];
+                let ty: metal::MTLDataType = msg_send![object, type];
                 constants.set_constant_value_at_index(c.id as NSUInteger, ty, ptr);
             },
             None if required != NO => {
@@ -711,41 +711,6 @@ impl Device {
         Ok((lib, mtl_function, wg_size, info.rasterization_enabled))
     }
 
-    fn describe_argument(
-        ty: pso::DescriptorType,
-        index: pso::DescriptorBinding,
-        count: usize,
-    ) -> metal::ArgumentDescriptor {
-        let arg = metal::ArgumentDescriptor::new().to_owned();
-        arg.set_array_length(count as _);
-
-        match ty {
-            pso::DescriptorType::Sampler => {
-                arg.set_access(MTLArgumentAccess::ReadOnly);
-                arg.set_data_type(MTLDataType::Sampler);
-                arg.set_index(index as _);
-            }
-            pso::DescriptorType::SampledImage => {
-                arg.set_access(MTLArgumentAccess::ReadOnly);
-                arg.set_data_type(MTLDataType::Texture);
-                arg.set_index(index as _);
-            }
-            pso::DescriptorType::UniformBuffer => {
-                arg.set_access(MTLArgumentAccess::ReadOnly);
-                arg.set_data_type(MTLDataType::Struct);
-                arg.set_index(index as _);
-            }
-            pso::DescriptorType::StorageBuffer => {
-                arg.set_access(MTLArgumentAccess::ReadWrite);
-                arg.set_data_type(MTLDataType::Struct);
-                arg.set_index(index as _);
-            }
-            _ => unimplemented!(),
-        }
-
-        arg
-    }
-
     pub fn make_sampler_descriptor(
         &self,
         info: image::SamplerInfo,
@@ -800,6 +765,10 @@ impl Device {
                     MTLSamplerBorderColor::TransparentBlack
                 }
             });
+        }
+
+        if self.shared.private_caps.argument_buffers {
+            descriptor.set_support_argument_buffers(true);
         }
 
         Ok(descriptor)
@@ -1108,6 +1077,7 @@ impl hal::Device<Backend> for Device {
         shader_compiler_options.enable_point_size_builtin = false;
         shader_compiler_options.vertex.invert_y = true;
         shader_compiler_options.resource_binding_overrides = res_overrides;
+        shader_compiler_options.enable_argument_buffers = self.shared.private_caps.argument_buffers;
         let mut shader_compiler_options_point = shader_compiler_options.clone();
         shader_compiler_options_point.enable_point_size_builtin = true;
 
@@ -1692,29 +1662,17 @@ impl hal::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        let mut counters = n::ResourceData::<n::PoolResourceIndex>::new();
-
         if self.shared.private_caps.argument_buffers {
-            let mut arguments = Vec::new();
+            let mut arguments = n::ArgumentArray::default();
+            let mut index = 0;
             for desc_range in descriptor_ranges {
-                let desc = desc_range.borrow();
-                let offset_ref = match desc.ty {
-                    pso::DescriptorType::Sampler => &mut counters.samplers,
-                    pso::DescriptorType::SampledImage => &mut counters.textures,
-                    pso::DescriptorType::UniformBuffer | pso::DescriptorType::StorageBuffer => {
-                        &mut counters.buffers
-                    }
-                    _ => unimplemented!(),
-                };
-                let index = *offset_ref;
-                *offset_ref += desc.count as n::PoolResourceIndex;
-                let arg_desc = Self::describe_argument(desc.ty, index as _, desc.count);
-                arguments.push(arg_desc);
+                let dr = desc_range.borrow();
+                arguments.push(dr.ty, index, dr.count);
+                index += dr.count; //TODO: combined image-samplers
             }
 
             let device = self.shared.device.lock();
-            let arg_array = metal::Array::from_owned_slice(&arguments);
-            let encoder = device.new_argument_encoder(arg_array);
+            let encoder = device.new_argument_encoder(arguments.build());
 
             let total_size = encoder.encoded_length();
             let raw = device.new_buffer(total_size, MTLResourceOptions::empty());
@@ -1724,6 +1682,7 @@ impl hal::Device<Backend> for Device {
                 range_allocator: RangeAllocator::new(0..total_size),
             })
         } else {
+            let mut counters = n::ResourceData::<n::PoolResourceIndex>::new();
             for desc_range in descriptor_ranges {
                 let dr = desc_range.borrow();
                 counters.add_many(
@@ -1748,16 +1707,15 @@ impl hal::Device<Backend> for Device {
     {
         if self.shared.private_caps.argument_buffers {
             let mut stage_flags = pso::ShaderStageFlags::empty();
-            let arguments = binding_iter
-                .into_iter()
-                .map(|desc| {
-                    let desc = desc.borrow();
-                    stage_flags |= desc.stage_flags;
-                    Self::describe_argument(desc.ty, desc.binding, desc.count)
-                })
-                .collect::<Vec<_>>();
-            let arg_array = metal::Array::from_owned_slice(&arguments);
-            let encoder = self.shared.device.lock().new_argument_encoder(arg_array);
+            let mut arguments = n::ArgumentArray::default();
+            for desc in binding_iter {
+                let desc = desc.borrow();
+                stage_flags |= desc.stage_flags;
+                arguments.push(desc.ty, desc.binding as usize, desc.count);
+            };
+            let encoder = self.shared.device
+                .lock()
+                .new_argument_encoder(arguments.build());
 
             Ok(n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags))
         } else {
