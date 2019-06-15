@@ -36,7 +36,7 @@ pub type PoolResourceIndex = u32;
 /// depend on pipeline layout, in which case the value would become `Compiled`.
 pub enum ShaderModule {
     Compiled(ModuleInfo),
-    Raw(Vec<u8>),
+    Raw(Vec<u32>),
 }
 
 impl fmt::Debug for ShaderModule {
@@ -213,7 +213,7 @@ pub struct ModuleInfo {
 }
 
 pub struct PipelineCache {
-    pub(crate) modules: FastStorageMap<msl::CompilerOptions, FastStorageMap<Vec<u8>, ModuleInfo>>,
+    pub(crate) modules: FastStorageMap<msl::CompilerOptions, FastStorageMap<Vec<u32>, ModuleInfo>>,
 }
 
 impl fmt::Debug for PipelineCache {

@@ -42,7 +42,7 @@ struct Dimensions<T> {
 }
 
 use std::cell::RefCell;
-use std::io::{Cursor, Read};
+use std::io::Cursor;
 use std::mem::size_of;
 use std::rc::Rc;
 use std::{fs, iter};
@@ -1332,22 +1332,16 @@ impl<B: Backend> PipelineState<B> {
         let pipeline = {
             let vs_module = {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.vert").unwrap();
-                let spirv: Vec<u8> =
-                    glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
-                        .unwrap()
-                        .bytes()
-                        .map(|b| b.unwrap())
-                        .collect();
+                let file = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
+                    .unwrap();
+                let spirv: Vec<u32> = hal::read_spirv(file).unwrap();
                 device.create_shader_module(&spirv).unwrap()
             };
             let fs_module = {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.frag").unwrap();
-                let spirv: Vec<u8> =
-                    glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
-                        .unwrap()
-                        .bytes()
-                        .map(|b| b.unwrap())
-                        .collect();
+                let file = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
+                    .unwrap();
+                let spirv: Vec<u32> = hal::read_spirv(file).unwrap();
                 device.create_shader_module(&spirv).unwrap()
             };
 

@@ -1018,17 +1018,14 @@ impl d::Device<B> for Device {
 
     unsafe fn create_shader_module(
         &self,
-        spirv_data: &[u8],
+        spirv_data: &[u32],
     ) -> Result<n::ShaderModule, d::ShaderError> {
-        // spec requires "codeSize must be a multiple of 4"
-        assert_eq!(spirv_data.len() & 3, 0);
-
         let info = vk::ShaderModuleCreateInfo {
             s_type: vk::StructureType::SHADER_MODULE_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::ShaderModuleCreateFlags::empty(),
-            code_size: spirv_data.len(),
-            p_code: spirv_data as *const _ as *const u32,
+            code_size: spirv_data.len() * 4,
+            p_code: spirv_data.as_ptr(),
         };
 
         let module = self.raw.0.create_shader_module(&info, None);

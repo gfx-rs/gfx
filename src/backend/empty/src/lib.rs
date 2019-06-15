@@ -213,7 +213,7 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn create_shader_module(&self, _: &[u8]) -> Result<(), device::ShaderError> {
+    unsafe fn create_shader_module(&self, _: &[u32]) -> Result<(), device::ShaderError> {
         unimplemented!()
     }
 

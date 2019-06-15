@@ -4,7 +4,7 @@ use glsl_to_spirv;
 
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::Read;
+use std::io::{self, Read};
 use std::path::PathBuf;
 use std::{iter, slice};
 
@@ -567,7 +567,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     }
                     let full_path = data_path.join(local_path);
                     let base_file = File::open(&full_path).unwrap();
-                    let mut file = match &*full_path.extension().unwrap().to_string_lossy() {
+                    let file = match &*full_path.extension().unwrap().to_string_lossy() {
                         "spirv" => base_file,
                         #[cfg(feature = "glsl-to-spirv")]
                         "vert" => transpile(base_file, glsl_to_spirv::ShaderType::Vertex),
@@ -577,8 +577,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         "comp" => transpile(base_file, glsl_to_spirv::ShaderType::Compute),
                         other => panic!("Unknown shader extension: {}", other),
                     };
-                    let mut spirv = Vec::new();
-                    file.read_to_end(&mut spirv).unwrap();
+                    let spirv = hal::read_spirv(file).unwrap();
                     let module = unsafe { device.create_shader_module(&spirv) }.unwrap();
                     resources.shaders.insert(name.clone(), module);
                 }

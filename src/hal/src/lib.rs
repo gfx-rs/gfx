@@ -27,7 +27,7 @@ pub use self::adapter::{
 };
 pub use self::device::Device;
 pub use self::pool::CommandPool;
-pub use self::pso::DescriptorPool;
+pub use self::pso::{DescriptorPool, read_spirv};
 pub use self::queue::{
     Capability, CommandQueue, Compute, General, Graphics, QueueFamily, QueueGroup, QueueType,
     Submission, Supports, Transfer,
