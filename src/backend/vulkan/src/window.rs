@@ -42,7 +42,7 @@ impl Drop for RawSurface {
 }
 
 impl Instance {
-    #[cfg(all(unix, not(target_os = "android")))]
+    #[cfg(all(feature = "x11", unix, not(target_os = "android")))]
     pub fn create_surface_from_xlib(&self, dpy: *mut vk::Display, window: vk::Window) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -80,7 +80,7 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface, width, height, 1)
     }
 
-    #[cfg(all(unix, not(target_os = "android")))]
+    #[cfg(all(feature = "xcb", unix, not(target_os = "android")))]
     pub fn create_surface_from_xcb(
         &self,
         connection: *mut vk::xcb_connection_t,
@@ -229,8 +229,9 @@ impl Instance {
     }
 
     #[cfg(feature = "winit")]
+    #[allow(unreachable_code)]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
-        #[cfg(all(unix, not(target_os = "android")))]
+        #[cfg(all(feature = "x11", unix, not(target_os = "android")))]
         {
             use winit::os::unix::WindowExt;
 
@@ -261,7 +262,7 @@ impl Instance {
             let logical_size = window.get_inner_size().unwrap();
             let width = logical_size.width * window.get_hidpi_factor();
             let height = logical_size.height * window.get_hidpi_factor();
-            self.create_surface_android(window.get_native_window(), width as _, height as _)
+            return self.create_surface_android(window.get_native_window(), width as _, height as _);
         }
         #[cfg(windows)]
         {
@@ -270,8 +271,10 @@ impl Instance {
 
             let hinstance = unsafe { GetModuleHandleW(ptr::null()) };
             let hwnd = window.get_hwnd();
-            self.create_surface_from_hwnd(hinstance as *mut _, hwnd as *mut _)
+            return self.create_surface_from_hwnd(hinstance as *mut _, hwnd as *mut _);
         }
+        let _ = window;
+        panic!("No suitable WSI enabled!");
     }
 
     pub fn create_surface_from_vk_surface_khr(
