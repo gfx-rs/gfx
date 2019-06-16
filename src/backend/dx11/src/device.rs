@@ -1065,7 +1065,7 @@ impl hal::Device<Backend> for Device {
 
     unsafe fn create_shader_module(
         &self,
-        raw_data: &[u8],
+        raw_data: &[u32],
     ) -> Result<ShaderModule, device::ShaderError> {
         Ok(ShaderModule::Spirv(raw_data.into()))
     }

@@ -17,7 +17,7 @@ use std::ops::Range;
 #[derive(Debug, Hash)]
 pub enum ShaderModule {
     Compiled(BTreeMap<String, native::Blob>),
-    Spirv(Vec<u8>),
+    Spirv(Vec<u32>),
 }
 unsafe impl Send for ShaderModule {}
 unsafe impl Sync for ShaderModule {}

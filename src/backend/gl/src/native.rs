@@ -224,7 +224,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 #[derive(Clone, Debug, Hash)]
 pub enum ShaderModule {
     Raw(Shader),
-    Spirv(Vec<u8>),
+    Spirv(Vec<u32>),
 }
 
 #[derive(Debug)]

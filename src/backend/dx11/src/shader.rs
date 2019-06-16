@@ -30,7 +30,7 @@ fn gen_query_error(err: SpirvErrorCode) -> device::ShaderError {
 }
 
 pub(crate) fn compile_spirv_entrypoint(
-    raw_data: &[u8],
+    raw_data: &[u32],
     stage: pso::Stage,
     source: &pso::EntryPoint<Backend>,
     layout: &PipelineLayout,
@@ -144,16 +144,8 @@ pub(crate) fn compile_hlsl_shader(
     }
 }
 
-fn parse_spirv(raw_data: &[u8]) -> Result<spirv::Ast<hlsl::Target>, device::ShaderError> {
-    // spec requires "codeSize must be a multiple of 4"
-    assert_eq!(raw_data.len() & 3, 0);
-
-    let module = spirv::Module::from_words(unsafe {
-        slice::from_raw_parts(
-            raw_data.as_ptr() as *const u32,
-            raw_data.len() / mem::size_of::<u32>(),
-        )
-    });
+fn parse_spirv(raw_data: &[u32]) -> Result<spirv::Ast<hlsl::Target>, device::ShaderError> {
+    let module = spirv::Module::from_words(raw_data);
 
     spirv::Ast::parse(&module).map_err(|err| {
         let msg = match err {

@@ -2523,7 +2523,7 @@ impl hal::pool::RawCommandPool<Backend> for CommandPool {
 //#[derivative(Debug)]
 pub enum ShaderModule {
     Dxbc(Vec<u8>),
-    Spirv(Vec<u8>),
+    Spirv(Vec<u32>),
 }
 
 // TODO: temporary

@@ -532,12 +532,12 @@ fn main() {
     .expect("Can't create pipeline layout");
     let pipeline = {
         let vs_module = {
-            let spirv = include_bytes!("data/quad.vert.spv");
-            unsafe { device.create_shader_module(spirv) }.unwrap()
+            let spirv = hal::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..])).unwrap();
+            unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
         let fs_module = {
-            let spirv = include_bytes!("./data/quad.frag.spv");
-            unsafe { device.create_shader_module(spirv) }.unwrap()
+            let spirv = hal::read_spirv(Cursor::new(&include_bytes!("./data/quad.frag.spv")[..])).unwrap();
+            unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
 
         let pipeline = {

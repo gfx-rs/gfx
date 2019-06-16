@@ -40,7 +40,7 @@ use std::collections::BTreeMap;
 use std::ops::Range;
 use std::path::Path;
 use std::sync::Arc;
-use std::{cmp, iter, mem, ptr, slice, thread, time};
+use std::{cmp, iter, mem, ptr, thread, time};
 
 
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
@@ -553,19 +553,11 @@ impl Device {
 
     fn compile_shader_library(
         device: &Mutex<metal::Device>,
-        raw_data: &[u8],
+        raw_data: &[u32],
         compiler_options: &msl::CompilerOptions,
         msl_version: MTLLanguageVersion,
     ) -> Result<n::ModuleInfo, ShaderError> {
-        // spec requires "codeSize must be a multiple of 4"
-        assert_eq!(raw_data.len() & 3, 0);
-
-        let module = spirv::Module::from_words(unsafe {
-            slice::from_raw_parts(
-                raw_data.as_ptr() as *const u32,
-                raw_data.len() / mem::size_of::<u32>(),
-            )
-        });
+        let module = spirv::Module::from_words(raw_data);
 
         // now parse again using the new overrides
         let mut ast = spirv::Ast::<msl::Target>::parse(&module).map_err(gen_parse_error)?;
@@ -1553,7 +1545,7 @@ impl hal::Device<Backend> for Device {
         })
     }
 
-    unsafe fn create_shader_module(&self, raw_data: &[u8]) -> Result<n::ShaderModule, ShaderError> {
+    unsafe fn create_shader_module(&self, raw_data: &[u32]) -> Result<n::ShaderModule, ShaderError> {
         //TODO: we can probably at least parse here and save the `Ast`
         let depends_on_pipeline_layout = true; //TODO: !self.private_caps.argument_buffers
         Ok(if depends_on_pipeline_layout {

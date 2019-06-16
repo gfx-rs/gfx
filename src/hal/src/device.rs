@@ -380,7 +380,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// shader stages as described in *Compute Pipelines* and *Graphics Pipelines*.
     unsafe fn create_shader_module(
         &self,
-        spirv_data: &[u8],
+        spirv_data: &[u32],
     ) -> Result<B::ShaderModule, ShaderError>;
 
     /// Destroy a shader module module
