@@ -1332,7 +1332,7 @@ impl<B: Backend> PipelineState<B> {
         let pipeline = {
             let vs_module = {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.vert").unwrap();
-                let file = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
+                let file = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
                     .unwrap();
                 let spirv: Vec<u32> = hal::read_spirv(file).unwrap();
                 device.create_shader_module(&spirv).unwrap()
