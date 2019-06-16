@@ -36,12 +36,15 @@ use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::{Entry, LoadingError};
 
-use hal::adapter::DeviceType;
-use hal::error::{DeviceCreationError, HostExecutionError};
-use hal::device::{DeviceLost, OutOfMemory, SurfaceLost};
-use hal::pso::PipelineStage;
-use hal::{format, image, memory, queue, window::{PresentError, Suboptimal}};
-use hal::{Features, Limits, PatchSize, QueueType, SwapImageIndex};
+use crate::hal::adapter::DeviceType;
+use crate::hal::device::{DeviceLost, OutOfMemory, SurfaceLost};
+use crate::hal::error::{DeviceCreationError, HostExecutionError};
+use crate::hal::pso::PipelineStage;
+use crate::hal::{
+    format, image, memory, queue,
+    window::{PresentError, Suboptimal},
+};
+use crate::hal::{Features, Limits, PatchSize, QueueType, SwapImageIndex};
 
 use std::borrow::{Borrow, Cow};
 use std::ffi::{CStr, CString};
@@ -667,7 +670,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let memory_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize]
             .iter()
             .map(|mem| {
-                use memory::Properties;
+                use crate::memory::Properties;
                 let mut type_flags = Properties::empty();
 
                 if mem

@@ -6,13 +6,13 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::{mem, ptr};
 
-use hal::format::Aspects;
-use hal::image::{Filter, Layout, SubresourceRange};
-use hal::range::RangeArg;
-use hal::{buffer, command as com, memory, pso, query};
-use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
-use {conv, native as n};
-use {Backend, RawDevice};
+use crate::hal::format::Aspects;
+use crate::hal::image::{Filter, Layout, SubresourceRange};
+use crate::hal::range::RangeArg;
+use crate::hal::{buffer, command as com, memory, pso, query};
+use crate::hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use crate::{conv, native as n};
+use crate::{Backend, RawDevice};
 
 #[derive(Debug)]
 pub struct CommandBuffer {
