@@ -14,16 +14,23 @@ extern crate lazy_static;
 extern crate shared_library;
 extern crate smallvec;
 
+#[cfg(target_os = "macos")]
+extern crate core_graphics;
+#[cfg(target_os = "macos")]
+#[macro_use]
+extern crate objc;
+
 #[cfg(windows)]
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
-#[cfg(all(feature = "x11", unix, not(target_os = "android")))]
+#[cfg(all(feature = "x11", unix, not(target_os = "android"), not(target_os = "macos")))]
 extern crate x11;
-#[cfg(all(feature = "xcb", unix, not(target_os = "android")))]
+#[cfg(all(feature = "xcb", unix, not(target_os = "android"), not(target_os = "macos")))]
 extern crate xcb;
 
-use ash::extensions::{ext, khr};
+
+use ash::extensions::{self, ext::DebugUtils};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
@@ -71,20 +78,22 @@ lazy_static! {
         vec![]
     };
     static ref EXTENSIONS: Vec<&'static CStr> = vec![#[cfg(debug_assertions)] CStr::from_bytes_with_nul(b"VK_EXT_debug_utils\0").unwrap()];
-    static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![khr::Swapchain::name()];
+    static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![extensions::khr::Swapchain::name()];
     static ref SURFACE_EXTENSIONS: Vec<&'static CStr> = vec![
-        khr::Surface::name(),
+        extensions::khr::Surface::name(),
         // Platform-specific WSI extensions
         #[cfg(all(unix, not(target_os = "android")))]
-        khr::XlibSurface::name(),
+        extensions::khr::XlibSurface::name(),
         #[cfg(all(unix, not(target_os = "android")))]
-        khr::XcbSurface::name(),
+        extensions::khr::XcbSurface::name(),
         #[cfg(all(unix, not(target_os = "android")))]
-        khr::WaylandSurface::name(),
+        extensions::khr::WaylandSurface::name(),
         #[cfg(target_os = "android")]
-        khr::AndroidSurface::name(),
+        extensions::khr::AndroidSurface::name(),
         #[cfg(target_os = "windows")]
-        khr::Win32Surface::name(),
+        extensions::khr::Win32Surface::name(),
+        #[cfg(target_os = "macos")]
+        extensions::mvk::MacOSSurface::name(),
     ];
 }
 
@@ -109,7 +118,7 @@ lazy_static! {
 
 pub struct RawInstance(
     pub ash::Instance,
-    Option<(ext::DebugUtils, vk::DebugUtilsMessengerEXT)>,
+    Option<(DebugUtils, vk::DebugUtilsMessengerEXT)>,
 );
 
 impl Drop for RawInstance {
@@ -383,9 +392,9 @@ impl Instance {
         let debug_messenger = {
             // make sure VK_EXT_debug_utils is available
             if instance_extensions.iter().any(|props| unsafe {
-                CStr::from_ptr(props.extension_name.as_ptr()) == ext::DebugUtils::name()
+                CStr::from_ptr(props.extension_name.as_ptr()) == DebugUtils::name()
             }) {
-                let ext = ext::DebugUtils::new(entry, &instance);
+                let ext = DebugUtils::new(entry, &instance);
                 let info = vk::DebugUtilsMessengerCreateInfoEXT {
                     s_type: vk::StructureType::DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT,
                     p_next: ptr::null(),
