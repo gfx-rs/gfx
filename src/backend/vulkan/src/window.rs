@@ -230,8 +230,38 @@ impl Instance {
     #[cfg(target_os = "macos")]
     pub fn create_surface_from_nsview(&self, view: *mut c_void) -> Surface {
         use ash::extensions::mvk;
-        use core_graphics::geometry::CGRect;
-        use objc::runtime::Object;
+        use core_graphics::{
+            geometry::CGRect,
+            base::CGFloat,
+        };
+        use objc::runtime::{Object, YES, BOOL};
+
+        // TODO: this logic is duplicated from gfx-backend-metal, refactor?
+        unsafe {
+            let view = view as *mut Object;
+            let existing: *mut Object = msg_send![view, layer];
+            let class = class!(CAMetalLayer);
+
+            let use_current = if existing.is_null() {
+                false
+            } else {
+                let result: BOOL = msg_send![existing, isKindOfClass: class];
+                result == YES
+            };
+
+            if !use_current {
+                let layer: *mut Object = msg_send![class, new];
+                msg_send![view, setLayer: layer];
+                let bounds: CGRect = msg_send![view, bounds];
+                msg_send![layer, setBounds: bounds];
+
+                let window: *mut Object = msg_send![view, window];
+                if !window.is_null() {
+                    let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
+                    msg_send![layer, setContentsScale: scale_factor];
+                }
+            }
+        }
 
         let entry = VK_ENTRY
             .as_ref()
@@ -244,7 +274,7 @@ impl Instance {
         let surface = {
             let mac_os_loader = mvk::MacOSSurface::new(entry, &self.raw.0);
             let info = vk::MacOSSurfaceCreateInfoMVK {
-                s_type: vk::StructureType::WIN32_SURFACE_CREATE_INFO_KHR,
+                s_type: vk::StructureType::MACOS_SURFACE_CREATE_INFO_M,
                 p_next: ptr::null(),
                 flags: vk::MacOSSurfaceCreateFlagsMVK::empty(),
                 p_view: view,
