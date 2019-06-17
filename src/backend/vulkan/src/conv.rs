@@ -1,10 +1,10 @@
 use ash::vk;
 
-use hal::range::RangeArg;
-use hal::{buffer, command, format, image, pass, pso, query};
-use hal::{CompositeAlpha, Features, IndexType, PresentMode, Primitive};
+use crate::hal::range::RangeArg;
+use crate::hal::{buffer, command, format, image, pass, pso, query};
+use crate::hal::{CompositeAlpha, Features, IndexType, PresentMode, Primitive};
 
-use native as n;
+use crate::native as n;
 use std::borrow::Borrow;
 use std::mem;
 use std::ptr;
@@ -26,7 +26,7 @@ pub fn map_tiling(tiling: image::Tiling) -> vk::ImageTiling {
 }
 
 pub fn map_component(component: format::Component) -> vk::ComponentSwizzle {
-    use hal::format::Component::*;
+    use crate::hal::format::Component::*;
     match component {
         Zero => vk::ComponentSwizzle::ZERO,
         One => vk::ComponentSwizzle::ONE,
@@ -54,7 +54,7 @@ pub fn map_index_type(index_type: IndexType) -> vk::IndexType {
 }
 
 pub fn map_image_layout(layout: image::Layout) -> vk::ImageLayout {
-    use hal::image::Layout as Il;
+    use crate::hal::image::Layout as Il;
     match layout {
         Il::General => vk::ImageLayout::GENERAL,
         Il::ColorAttachmentOptimal => vk::ImageLayout::COLOR_ATTACHMENT_OPTIMAL,
@@ -125,7 +125,7 @@ pub fn map_subresource_range(range: &image::SubresourceRange) -> vk::ImageSubres
 }
 
 pub fn map_attachment_load_op(op: pass::AttachmentLoadOp) -> vk::AttachmentLoadOp {
-    use hal::pass::AttachmentLoadOp as Alo;
+    use crate::hal::pass::AttachmentLoadOp as Alo;
     match op {
         Alo::Load => vk::AttachmentLoadOp::LOAD,
         Alo::Clear => vk::AttachmentLoadOp::CLEAR,
@@ -134,7 +134,7 @@ pub fn map_attachment_load_op(op: pass::AttachmentLoadOp) -> vk::AttachmentLoadO
 }
 
 pub fn map_attachment_store_op(op: pass::AttachmentStoreOp) -> vk::AttachmentStoreOp {
-    use hal::pass::AttachmentStoreOp as Aso;
+    use crate::hal::pass::AttachmentStoreOp as Aso;
     match op {
         Aso::Store => vk::AttachmentStoreOp::STORE,
         Aso::DontCare => vk::AttachmentStoreOp::DONT_CARE,
@@ -182,7 +182,7 @@ pub fn map_mip_filter(filter: image::Filter) -> vk::SamplerMipmapMode {
 }
 
 pub fn map_wrap(wrap: image::WrapMode) -> vk::SamplerAddressMode {
-    use hal::image::WrapMode as Wm;
+    use crate::hal::image::WrapMode as Wm;
     match wrap {
         Wm::Tile => vk::SamplerAddressMode::REPEAT,
         Wm::Mirror => vk::SamplerAddressMode::MIRRORED_REPEAT,
@@ -240,7 +240,7 @@ pub fn map_front_face(ff: pso::FrontFace) -> vk::FrontFace {
 }
 
 pub fn map_comparison(fun: pso::Comparison) -> vk::CompareOp {
-    use hal::pso::Comparison::*;
+    use crate::hal::pso::Comparison::*;
     match fun {
         Never => vk::CompareOp::NEVER,
         Less => vk::CompareOp::LESS,
@@ -254,7 +254,7 @@ pub fn map_comparison(fun: pso::Comparison) -> vk::CompareOp {
 }
 
 pub fn map_stencil_op(op: pso::StencilOp) -> vk::StencilOp {
-    use hal::pso::StencilOp::*;
+    use crate::hal::pso::StencilOp::*;
     match op {
         Keep => vk::StencilOp::KEEP,
         Zero => vk::StencilOp::ZERO,
@@ -289,7 +289,7 @@ pub fn map_stencil_side(side: &pso::StencilFace) -> vk::StencilOpState {
 }
 
 pub fn map_blend_factor(factor: pso::Factor) -> vk::BlendFactor {
-    use hal::pso::Factor::*;
+    use crate::hal::pso::Factor::*;
     match factor {
         Zero => vk::BlendFactor::ZERO,
         One => vk::BlendFactor::ONE,
@@ -314,7 +314,7 @@ pub fn map_blend_factor(factor: pso::Factor) -> vk::BlendFactor {
 }
 
 pub fn map_blend_op(operation: pso::BlendOp) -> (vk::BlendOp, vk::BlendFactor, vk::BlendFactor) {
-    use hal::pso::BlendOp::*;
+    use crate::hal::pso::BlendOp::*;
     match operation {
         Add { src, dst } => (
             vk::BlendOp::ADD,
@@ -503,8 +503,8 @@ pub fn map_view_kind(
     ty: vk::ImageType,
     is_cube: bool,
 ) -> Option<vk::ImageViewType> {
-    use image::ViewKind::*;
-    use vk::ImageType;
+    use crate::image::ViewKind::*;
+    use crate::vk::ImageType;
 
     Some(match (ty, kind) {
         (ImageType::TYPE_1D, D1) => vk::ImageViewType::TYPE_1D,

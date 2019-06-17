@@ -5,15 +5,15 @@ use std::sync::Arc;
 use ash::extensions::khr;
 use ash::vk;
 
-use hal;
-use hal::format::Format;
-use hal::image::{NumSamples, Size};
+use crate::hal;
+use crate::hal::format::Format;
+use crate::hal::image::{NumSamples, Size};
 
 #[cfg(feature = "winit")]
 use winit;
 
-use {conv, native};
-use {Backend, Instance, PhysicalDevice, QueueFamily, RawInstance, VK_ENTRY};
+use crate::{conv, native};
+use crate::{Backend, Instance, PhysicalDevice, QueueFamily, RawInstance, VK_ENTRY};
 
 #[derive(Derivative)]
 #[derivative(Debug)]

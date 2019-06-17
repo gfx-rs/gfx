@@ -3,14 +3,14 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use smallvec::SmallVec;
 
-use hal;
-use hal::error::HostExecutionError;
-use hal::memory::Requirements;
-use hal::pool::CommandPoolCreateFlags;
-use hal::pso::VertexInputRate;
-use hal::range::RangeArg;
-use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
-use hal::{Features, MemoryTypeId, SwapchainConfig};
+use crate::hal;
+use crate::hal::error::HostExecutionError;
+use crate::hal::memory::Requirements;
+use crate::hal::pool::CommandPoolCreateFlags;
+use crate::hal::pso::VertexInputRate;
+use crate::hal::range::RangeArg;
+use crate::hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
+use crate::hal::{Features, MemoryTypeId, SwapchainConfig};
 
 use std::borrow::Borrow;
 use std::ffi::CString;
@@ -18,9 +18,9 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::{mem, ptr};
 
-use pool::RawCommandPool;
-use {conv, native as n, result, window as w};
-use {Backend as B, Device};
+use crate::pool::RawCommandPool;
+use crate::{conv, native as n, result, window as w};
+use crate::{Backend as B, Device};
 
 impl d::Device<B> for Device {
     unsafe fn allocate_memory(
@@ -558,7 +558,7 @@ impl d::Device<B> for Device {
                     line_width,
                 });
 
-                use hal::Primitive::PatchList;
+                use crate::hal::Primitive::PatchList;
                 if let PatchList(patch_control_points) = desc.input_assembler.primitive {
                     info_tessellation_states.push(vk::PipelineTessellationStateCreateInfo {
                         s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
@@ -1048,7 +1048,7 @@ impl d::Device<B> for Device {
         &self,
         sampler_info: image::SamplerInfo,
     ) -> Result<n::Sampler, d::AllocationError> {
-        use hal::pso::Comparison;
+        use crate::hal::pso::Comparison;
 
         let (anisotropy_enable, max_anisotropy) = match sampler_info.anisotropic {
             image::Anisotropic::Off => (vk::FALSE, 1.0),
@@ -1549,7 +1549,7 @@ impl d::Device<B> for Device {
 
         // Patch the pointers now that we have all the storage allocated
         for raw in &mut raw_writes {
-            use vk::DescriptorType as Dt;
+            use crate::vk::DescriptorType as Dt;
             match raw.descriptor_type {
                 Dt::SAMPLER
                 | Dt::SAMPLED_IMAGE
