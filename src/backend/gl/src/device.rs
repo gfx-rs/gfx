@@ -1048,6 +1048,7 @@ impl d::Device<B> for Device {
             // Buffers are only allowed to be INDEX usage XOR another type of usage, they are not
             // allowed to have both INDEX and non-INDEX usage.
             if !(buffer::Usage::INDEX | buffer::Usage::TRANSFER_SRC | buffer::Usage::TRANSFER_DST).contains(usage) {
+                error!("gl backend does not allow a buffer to be used for both INDEX and non-INDEX usage");
                 (0, 1)
             } else {
                 // Alignment of 4 covers indexes of type u16 and u32
