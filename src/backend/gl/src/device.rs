@@ -464,8 +464,13 @@ impl d::Device<B> for Device {
         mem_type: c::MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
-        if (1 << mem_type.0) & IMAGE_MEM_TYPE_MASK != 0 {
-            assert_ne!((1 << mem_type.0) & DEVICE_LOCAL_MASK, 0);
+        let is_device_local_memory = (1 << mem_type.0) & DEVICE_LOCAL_MASK != 0;
+        let is_image_memory = (1 << mem_type.0) & IMAGE_MEM_TYPE_MASK != 0;
+        let is_index_memory = (1 << mem_type.0) & INDEX_MEM_TYPE_MASK != 0;
+        let is_coherent_memory = (1 << mem_type.0) & COHERENT_MASK != 0;
+
+        if is_image_memory {
+            assert!(is_device_local_memory);
             Ok(n::Memory {
                 properties: memory::Properties::DEVICE_LOCAL,
                 buffer: None,
@@ -477,13 +482,11 @@ impl d::Device<B> for Device {
         } else {
             assert!(self.share.private_caps.buffer_role_change);
 
-            let target = if (1 << mem_type.0) & INDEX_MEM_TYPE_MASK != 0 {
+            let target = if is_index_memory {
                 glow::ELEMENT_ARRAY_BUFFER
             } else {
                 glow::ARRAY_BUFFER
             };
-
-            let is_device_local = (1 << mem_type.0) & DEVICE_LOCAL_MASK != 0;
 
             let gl = &self.share.context;
 
@@ -491,7 +494,7 @@ impl d::Device<B> for Device {
             //TODO: use *Named calls to avoid binding
             gl.bind_buffer(target, Some(raw));
             if self.share.private_caps.buffer_storage {
-                let flags = if is_device_local {
+                let flags = if is_device_local_memory {
                     0
                 } else {
                     glow::MAP_READ_BIT
@@ -501,7 +504,7 @@ impl d::Device<B> for Device {
                 };
                 gl.buffer_storage(target, size as i32, None, flags);
             } else {
-                let usage = if is_device_local {
+                let usage = if is_device_local_memory {
                     glow::STATIC_DRAW
                 } else {
                     glow::DYNAMIC_DRAW
@@ -515,7 +518,7 @@ impl d::Device<B> for Device {
             }
 
             let mut map_flags = glow::MAP_READ_BIT | glow::MAP_WRITE_BIT | glow::MAP_PERSISTENT_BIT;
-            if (1 << mem_type.0) & COHERENT_MASK == 0 {
+            if !is_coherent_memory {
                 map_flags |= glow::MAP_FLUSH_EXPLICIT_BIT;
             }
 
