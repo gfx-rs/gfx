@@ -31,11 +31,13 @@ use parking_lot::Mutex;
 #[cfg(feature = "dispatch")]
 use dispatch;
 
-use std::borrow::Borrow;
-use std::cell::RefCell;
-use std::ops::{Deref, Range};
-use std::sync::Arc;
-use std::{cmp, iter, mem, slice, time};
+use std::{
+    cmp, iter, mem, ptr, slice, time,
+    borrow::Borrow,
+    cell::RefCell,
+    ops::{Deref, Range},
+    sync::Arc,
+};
 
 
 const WORD_SIZE: usize = 4;
@@ -1523,6 +1525,9 @@ where
         Cmd::BindPipeline(ref pipeline_state) => {
             encoder.set_render_pipeline_state(pipeline_state.borrow());
         }
+        Cmd::UseResource { resource, usage } => {
+            encoder.use_resource(resource.as_native(), usage);
+        }
         Cmd::Draw {
             primitive_type,
             ref vertices,
@@ -1815,6 +1820,9 @@ where
         }
         Cmd::BindPipeline(ref pipeline) => {
             encoder.set_compute_pipeline_state(pipeline.borrow());
+        }
+        Cmd::UseResource { resource, usage } => {
+            encoder.use_resource(resource.as_native(), usage);
         }
         Cmd::Dispatch { wg_size, wg_count } => {
             encoder.dispatch_thread_groups(wg_count, wg_size);
@@ -3556,6 +3564,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     ref raw,
                     offset,
                     stage_flags,
+                    ref resources,
                     ..
                 } => {
                     //Note: this is incompatible with the binding scheme below
@@ -3582,6 +3591,14 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             buffer: AsNative::from(raw.as_ref()),
                             offset,
                         });
+                    }
+                    if stage_flags.intersects(pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT) {
+                        for used_resource in resources.values() {
+                            pre.issue(soft::RenderCommand::UseResource {
+                                resource: ptr::NonNull::new(used_resource.ptr.get()).unwrap(),
+                                usage: used_resource.usage,
+                            });
+                        }
                     }
                 }
             }
@@ -3698,6 +3715,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     ref raw,
                     offset,
                     stage_flags,
+                    ref resources,
                     ..
                 } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
@@ -3709,6 +3727,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             buffer: AsNative::from(raw.as_ref()),
                             offset,
                         });
+                        for used_resource in resources.values() {
+                            pre.issue(soft::ComputeCommand::UseResource {
+                                resource: ptr::NonNull::new(used_resource.ptr.get()).unwrap(),
+                                usage: used_resource.usage,
+                            });
+                        }
                     }
                 }
             }

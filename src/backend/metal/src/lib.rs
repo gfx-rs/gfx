@@ -812,6 +812,9 @@ trait AsNative {
 pub type BufferPtr = NonNull<metal::MTLBuffer>;
 pub type TexturePtr = NonNull<metal::MTLTexture>;
 pub type SamplerPtr = NonNull<metal::MTLSamplerState>;
+pub type ResourcePtr = NonNull<metal::MTLResource>;
+
+//TODO: make this a generic struct with a single generic implementation
 
 impl AsNative for BufferPtr {
     type Native = metal::BufferRef;
@@ -846,5 +849,17 @@ impl AsNative for SamplerPtr {
     #[inline]
     fn as_native(&self) -> &metal::SamplerStateRef {
         unsafe { metal::SamplerStateRef::from_ptr(self.as_ptr()) }
+    }
+}
+
+impl AsNative for ResourcePtr {
+    type Native = metal::ResourceRef;
+    #[inline]
+    fn from(native: &metal::ResourceRef) -> Self {
+        unsafe { NonNull::new_unchecked(native.as_ptr()) }
+    }
+    #[inline]
+    fn as_native(&self) -> &metal::ResourceRef {
+        unsafe { metal::ResourceRef::from_ptr(self.as_ptr()) }
     }
 }

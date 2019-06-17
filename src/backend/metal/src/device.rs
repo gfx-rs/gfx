@@ -8,6 +8,7 @@ use crate::{
 
 use hal::{
     buffer, error, format, image, mapping, memory, pass, pso, query, window,
+    backend::FastHashMap,
     device::{
         AllocationError, BindError, DeviceLost, OomOrDeviceLost, OutOfMemory, ShaderError,
     },
@@ -998,7 +999,7 @@ impl hal::Device<Backend> for Device {
                         }
                     }
                 }
-                n::DescriptorSetLayout::ArgumentBuffer(_, stage_flags) => {
+                n::DescriptorSetLayout::ArgumentBuffer { stage_flags, .. } => {
                     for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
                         if !stage_flags.contains(stage_bit) {
                             continue;
@@ -1708,16 +1709,24 @@ impl hal::Device<Backend> for Device {
         if self.shared.private_caps.argument_buffers {
             let mut stage_flags = pso::ShaderStageFlags::empty();
             let mut arguments = n::ArgumentArray::default();
+            let mut usages = FastHashMap::default();
             for desc in binding_iter {
                 let desc = desc.borrow();
                 stage_flags |= desc.stage_flags;
-                arguments.push(desc.ty, desc.binding as usize, desc.count);
+                let usage = arguments.push(desc.ty, desc.binding as usize, desc.count);
+                if let Some(usage) = usage {
+                    usages.insert(desc.binding, usage);
+                }
             };
             let encoder = self.shared.device
                 .lock()
                 .new_argument_encoder(arguments.build());
 
-            Ok(n::DescriptorSetLayout::ArgumentBuffer(encoder, stage_flags))
+            Ok(n::DescriptorSetLayout::ArgumentBuffer {
+                encoder,
+                stage_flags,
+                usages,
+            })
         } else {
             struct TempSampler {
                 sampler: metal::SamplerState,
@@ -1781,6 +1790,8 @@ impl hal::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
+        use foreign_types::ForeignTypeRef;
+
         debug!("write_descriptor_sets");
         for write in write_iter {
             match *write.set {
@@ -1853,6 +1864,7 @@ impl hal::Device<Backend> for Device {
                     ref raw,
                     offset,
                     ref encoder,
+                    ref resources,
                     ..
                 } => {
                     debug_assert!(self.shared.private_caps.argument_buffers);
@@ -1860,14 +1872,15 @@ impl hal::Device<Backend> for Device {
                     encoder.set_argument_buffer(raw, offset);
                     //TODO: range checks, need to keep some layout metadata around
                     assert_eq!(write.array_offset, 0); //TODO
-
                     for descriptor in write.descriptors {
-                        match *descriptor.borrow() {
+                        let resource: Option<&metal::ResourceRef> = match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
                                 encoder.set_sampler_states(&[&sampler.0], write.binding as _);
+                                None
                             }
                             pso::Descriptor::Image(image, _layout) => {
                                 encoder.set_textures(&[&image.raw], write.binding as _);
+                                Some(&image.raw)
                             }
                             pso::Descriptor::Buffer(buffer, ref desc_range) => {
                                 let (raw, range) = buffer.as_bound();
@@ -1876,10 +1889,23 @@ impl hal::Device<Backend> for Device {
                                     range.start + desc_range.start.unwrap_or(0),
                                     write.binding as _,
                                 );
+                                Some(raw)
                             }
                             pso::Descriptor::CombinedImageSampler(..)
                             | pso::Descriptor::UniformTexelBuffer(..)
                             | pso::Descriptor::StorageTexelBuffer(..) => unimplemented!(),
+                        };
+                        match (resource, resources.get(&write.binding)) {
+                            (Some(res), Some(used_resource)) => {
+                                used_resource.ptr.set(res.as_ptr());
+                            }
+                            (None, None) => {}
+                            (None, Some(used_resource)) => {
+                                panic!("Expected {:?}, found nothing", used_resource);
+                            }
+                            (Some(res), None) => {
+                                panic!("Unexpected {:?}", res);
+                            }
                         }
                     }
                 }
