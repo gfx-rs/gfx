@@ -21,11 +21,14 @@ use metal;
 use parking_lot::{Mutex, RwLock};
 use spirv_cross::{msl, spirv};
 
-use std::cell::RefCell;
-use std::fmt;
-use std::ops::Range;
-use std::os::raw::{c_long, c_void};
-use std::sync::Arc;
+use std::{
+    cell::{Cell, RefCell},
+    fmt,
+    ops::Range,
+    os::raw::{c_long, c_void},
+    ptr,
+    sync::Arc,
+};
 
 
 pub type EntryPointMap = FastHashMap<String, spirv::EntryPoint>;
@@ -616,16 +619,27 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 ref raw,
                 ref mut range_allocator,
             } => {
-                let (encoder, stage_flags) = match *set_layout {
-                    DescriptorSetLayout::ArgumentBuffer(ref encoder, stages) => (encoder, stages),
+                let (encoder, stage_flags, usages) = match *set_layout {
+                    DescriptorSetLayout::ArgumentBuffer { ref encoder, stage_flags, ref usages } =>
+                        (encoder, stage_flags, usages),
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
+                let resources = usages
+                    .iter()
+                    .map(|(&binding, &usage)| {
+                        (binding, UsedResource {
+                            ptr: Cell::new(ptr::null_mut()),
+                            usage,
+                        })
+                    })
+                    .collect();
                 match range_allocator.allocate_range(encoder.encoded_length()) {
                     Ok(range) => Ok(DescriptorSet::ArgumentBuffer {
                         raw: raw.clone(),
                         offset: range.start,
                         encoder: encoder.clone(),
                         stage_flags,
+                        resources,
                     }),
                     Err(_) => Err(pso::AllocationError::OutOfPoolMemory),
                 }
@@ -792,10 +806,20 @@ pub struct DescriptorLayout {
 #[derive(Debug)]
 pub enum DescriptorSetLayout {
     Emulated(Arc<Vec<DescriptorLayout>>, Vec<metal::SamplerState>),
-    ArgumentBuffer(metal::ArgumentEncoder, pso::ShaderStageFlags),
+    ArgumentBuffer {
+        encoder: metal::ArgumentEncoder,
+        stage_flags: pso::ShaderStageFlags,
+        usages: FastHashMap<pso::DescriptorBinding, metal::MTLResourceUsage>,
+    },
 }
 unsafe impl Send for DescriptorSetLayout {}
 unsafe impl Sync for DescriptorSetLayout {}
+
+#[derive(Debug)]
+pub struct UsedResource {
+    pub(crate) ptr: Cell<*mut metal::MTLResource>,
+    pub(crate) usage: metal::MTLResourceUsage,
+}
 
 #[derive(Debug)]
 pub enum DescriptorSet {
@@ -809,6 +833,7 @@ pub enum DescriptorSet {
         offset: NSUInteger,
         encoder: metal::ArgumentEncoder,
         stage_flags: pso::ShaderStageFlags,
+        resources: FastHashMap<pso::DescriptorBinding, UsedResource>,
     },
 }
 unsafe impl Send for DescriptorSet {}
@@ -851,18 +876,19 @@ impl ArgumentArray {
         ty: pso::DescriptorType,
         index: usize,
         count: usize,
-    ) {
+    ) -> Option<metal::MTLResourceUsage> {
         use hal::pso::DescriptorType as Dt;
-        use metal::{MTLArgumentAccess, MTLDataType};
+        use metal::{MTLArgumentAccess, MTLDataType, MTLResourceUsage};
 
         let arg = metal::ArgumentDescriptor::new();
         arg.set_array_length(count as u64);
         arg.set_index(index as u64);
 
-        match ty {
+        let usage = match ty {
             Dt::Sampler => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Sampler);
+                None
             }
             Dt::CombinedImageSampler => {
                 let other = metal::ArgumentDescriptor::new();
@@ -875,31 +901,37 @@ impl ArgumentArray {
                 arg.set_index(index as u64); //TODO
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Sampler);
+                Some(MTLResourceUsage::Sample)
             }
             Dt::SampledImage |
             Dt::InputAttachment => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Texture);
+                Some(MTLResourceUsage::Sample)
             }
             Dt::StorageImage => {
                 arg.set_access(MTLArgumentAccess::ReadWrite);
                 arg.set_data_type(MTLDataType::Texture);
+                Some(MTLResourceUsage::Write)
             }
             Dt::UniformBuffer |
             Dt::UniformBufferDynamic |
             Dt::UniformTexelBuffer => {
                 arg.set_access(MTLArgumentAccess::ReadOnly);
                 arg.set_data_type(MTLDataType::Struct);
+                Some(MTLResourceUsage::Read)
             }
             Dt::StorageBuffer |
             Dt::StorageBufferDynamic |
             Dt::StorageTexelBuffer => {
                 arg.set_access(MTLArgumentAccess::ReadWrite);
                 arg.set_data_type(MTLDataType::Struct);
+                Some(MTLResourceUsage::Write)
             }
-        }
+        };
 
         self.arguments.push(arg.to_owned());
+        usage
     }
 
     pub fn build<'a>(self) -> &'a metal::ArrayRef<metal::ArgumentDescriptor> {

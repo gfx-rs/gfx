@@ -1,5 +1,5 @@
 use crate::{
-    BufferPtr, ResourceIndex, SamplerPtr, TexturePtr,
+    BufferPtr, ResourceIndex, ResourcePtr, SamplerPtr, TexturePtr,
     command::IndexBuffer,
     native::RasterizerState,
 };
@@ -91,6 +91,10 @@ pub enum RenderCommand<R: Resources> {
         samplers: R::SamplerArray,
     },
     BindPipeline(R::RenderPipeline),
+    UseResource {
+        resource: ResourcePtr,
+        usage: metal::MTLResourceUsage,
+    },
     Draw {
         primitive_type: metal::MTLPrimitiveType,
         vertices: Range<hal::VertexCount>,
@@ -171,6 +175,10 @@ pub enum ComputeCommand<R: Resources> {
         samplers: R::SamplerArray,
     },
     BindPipeline(R::ComputePipeline),
+    UseResource {
+        resource: ResourcePtr,
+        usage: metal::MTLResourceUsage,
+    },
     Dispatch {
         wg_size: metal::MTLSize,
         wg_count: metal::MTLSize,
@@ -269,6 +277,7 @@ impl Own {
                 },
             },
             BindPipeline(pso) => BindPipeline(pso.to_owned()),
+            UseResource { resource, usage } => UseResource { resource, usage },
             Draw {
                 primitive_type,
                 vertices,
@@ -359,6 +368,7 @@ impl Own {
                 },
             },
             BindPipeline(pso) => BindPipeline(pso.to_owned()),
+            UseResource { resource, usage } => UseResource { resource, usage },
             Dispatch { wg_size, wg_count } => Dispatch { wg_size, wg_count },
             DispatchIndirect {
                 wg_size,
@@ -398,6 +408,7 @@ impl Own {
                 samplers.end += self.samplers.len() as CacheResourceIndex;
             }
             BindPipeline(..)
+            | UseResource { .. }
             | Draw { .. }
             | DrawIndexed { .. }
             | DrawIndirect { .. }
@@ -423,6 +434,7 @@ impl Own {
                 samplers.end += self.samplers.len() as CacheResourceIndex;
             }
             BindPipeline(..) |
+            UseResource { .. } |
             Dispatch { .. } |
             DispatchIndirect { .. } => {}
         }
