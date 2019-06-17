@@ -1182,11 +1182,6 @@ impl d::Device<B> for Device {
         I::Item: Borrow<(&'a n::Memory, R)>,
         R: RangeArg<u64>,
     {
-        if self.share.private_caps.emulate_map {
-            // Nothing to do
-            return Ok(());
-        }
-
         let gl = &self.share.context;
 
         for i in ranges {
@@ -1197,8 +1192,15 @@ impl d::Device<B> for Device {
             let offset = *range.start().unwrap_or(&0);
             let size = *range.end().unwrap_or(&mem.size) - offset;
 
-            gl.invalidate_buffer_sub_data(mem.target, offset as i32, size as i32);
-            gl.bind_buffer(mem.target, None);
+            if self.share.private_caps.emulate_map {
+                let ptr = mem.emulate_map_allocation.get().unwrap();
+                let slice = slice::from_raw_parts_mut(ptr.offset(offset as isize), size as usize);
+                gl.get_buffer_sub_data(mem.target, offset as i32, slice);
+            } else {
+                gl.invalidate_buffer_sub_data(mem.target, offset as i32, size as i32);
+                gl.bind_buffer(mem.target, None);
+            }
+
             if let Err(err) = self.share.check() {
                 panic!("Error invalidating memory range: {:?} for memory {:?}", err, mem);
             }
