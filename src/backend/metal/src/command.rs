@@ -624,7 +624,7 @@ impl StageResources {
     fn bind_set(
         &mut self,
         stage: pso::ShaderStageFlags,
-        data: &native::DescriptorPoolInner,
+        data: &native::DescriptorEmulatedPoolInner,
         mut res_offset: native::ResourceData<ResourceIndex>,
         layouts: &[native::DescriptorLayout],
         pool_range: &native::ResourceData<Range<native::PoolResourceIndex>>,
@@ -3562,9 +3562,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
                 native::DescriptorSet::ArgumentBuffer {
                     ref raw,
-                    offset,
+                    raw_offset,
+                    ref pool,
+                    ref range,
                     stage_flags,
-                    ref resources,
                     ..
                 } => {
                     //Note: this is incompatible with the binding scheme below
@@ -3572,33 +3573,36 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         let index = info.offsets.vs.buffers;
                         self.state.resources_vs.buffers[index as usize] =
                             Some(AsNative::from(raw.as_ref()));
-                        self.state.resources_vs.buffer_offsets[index as usize] = offset;
+                        self.state.resources_vs.buffer_offsets[index as usize] = raw_offset;
                         pre.issue(soft::RenderCommand::BindBuffer {
                             stage: pso::Stage::Vertex,
                             index,
                             buffer: AsNative::from(raw.as_ref()),
-                            offset,
+                            offset: raw_offset,
                         });
                     }
                     if stage_flags.contains(pso::ShaderStageFlags::FRAGMENT) {
                         let index = info.offsets.ps.buffers;
                         self.state.resources_ps.buffers[index as usize] =
                             Some(AsNative::from(raw.as_ref()));
-                        self.state.resources_ps.buffer_offsets[index as usize] = offset;
+                        self.state.resources_ps.buffer_offsets[index as usize] = raw_offset;
                         pre.issue(soft::RenderCommand::BindBuffer {
                             stage: pso::Stage::Fragment,
                             index,
                             buffer: AsNative::from(raw.as_ref()),
-                            offset,
+                            offset: raw_offset,
                         });
                     }
                     if stage_flags.intersects(pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT) {
-                        for used_resource in resources.values() {
-                            pre.issue(soft::RenderCommand::UseResource {
-                                resource: ptr::NonNull::new(used_resource.ptr.get()).unwrap(),
+                        pre.issue_many(pool
+                            .read()
+                            .resources[range.start as usize .. range.end as usize]
+                            .iter()
+                            .map(|used_resource| soft::RenderCommand::UseResource {
+                                resource: ptr::NonNull::new(used_resource.ptr).unwrap(),
                                 usage: used_resource.usage,
-                            });
-                        }
+                            })
+                        );
                     }
                 }
             }
@@ -3713,26 +3717,30 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
                 native::DescriptorSet::ArgumentBuffer {
                     ref raw,
-                    offset,
+                    raw_offset,
+                    ref pool,
+                    ref range,
                     stage_flags,
-                    ref resources,
                     ..
                 } => {
                     if stage_flags.contains(pso::ShaderStageFlags::COMPUTE) {
                         let index = res_offset.buffers;
                         cache.buffers[index as usize] = Some(AsNative::from(raw.as_ref()));
-                        cache.buffer_offsets[index as usize] = offset;
+                        cache.buffer_offsets[index as usize] = raw_offset;
                         pre.issue(soft::ComputeCommand::BindBuffer {
                             index,
                             buffer: AsNative::from(raw.as_ref()),
-                            offset,
+                            offset: raw_offset,
                         });
-                        for used_resource in resources.values() {
-                            pre.issue(soft::ComputeCommand::UseResource {
-                                resource: ptr::NonNull::new(used_resource.ptr.get()).unwrap(),
+                        pre.issue_many(pool
+                            .read()
+                            .resources[range.start as usize .. range.end as usize]
+                            .iter()
+                            .map(|used_resource| soft::ComputeCommand::UseResource {
+                                resource: ptr::NonNull::new(used_resource.ptr).unwrap(),
                                 usage: used_resource.usage,
-                            });
-                        }
+                            })
+                        );
                     }
                 }
             }
