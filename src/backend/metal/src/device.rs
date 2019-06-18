@@ -18,11 +18,9 @@ use hal::{
     queue::{QueueFamilyId, Queues},
     range::RangeArg,
 };
-use range_alloc::RangeAllocator;
-
 use cocoa::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
-use foreign_types::ForeignType;
+use foreign_types::{ForeignType, ForeignTypeRef};
 use metal::{
     self,
     CaptureManager, MTLCPUCacheMode, MTLLanguageVersion,
@@ -999,22 +997,19 @@ impl hal::Device<Backend> for Device {
                         }
                     }
                 }
-                n::DescriptorSetLayout::ArgumentBuffer { stage_flags, .. } => {
-                    for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
-                        if !stage_flags.contains(stage_bit) {
-                            continue;
-                        }
-                        let location = msl::ResourceBindingLocation {
-                            stage,
-                            desc_set: set_index as _,
-                            binding: 0,
-                        };
-                        let res_binding = msl::ResourceBinding {
-                            buffer_id: counters.buffers as _,
-                            texture_id: !0,
-                            sampler_id: !0,
-                        };
-                        res_overrides.insert(location, res_binding);
+                n::DescriptorSetLayout::ArgumentBuffer { ref bindings, .. } => {
+                    for &mut (_stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
+                        res_overrides.extend(bindings
+                            .iter()
+                            .map(|(&binding, arg)| {
+                                let key = msl::ResourceBindingLocation {
+                                    stage,
+                                    desc_set: set_index as _,
+                                    binding,
+                                };
+                                (key, arg.res.clone())
+                            })
+                        );
                         counters.buffers += 1;
                     }
                 }
@@ -1665,23 +1660,29 @@ impl hal::Device<Backend> for Device {
     {
         if self.shared.private_caps.argument_buffers {
             let mut arguments = n::ArgumentArray::default();
-            let mut index = 0;
             for desc_range in descriptor_ranges {
                 let dr = desc_range.borrow();
-                arguments.push(dr.ty, index, dr.count);
-                index += dr.count; //TODO: combined image-samplers
+                let content = n::DescriptorContent::from(dr.ty);
+                let usage = n::ArgumentArray::describe_usage(dr.ty);
+                if content.contains(n::DescriptorContent::BUFFER) {
+                    arguments.push(metal::MTLDataType::Struct, dr.count, usage);
+                }
+                if content.contains(n::DescriptorContent::TEXTURE) {
+                    arguments.push(metal::MTLDataType::Texture, dr.count, usage);
+                }
+                if content.contains(n::DescriptorContent::SAMPLER) {
+                    arguments.push(metal::MTLDataType::Sampler, dr.count, usage);
+                }
             }
 
             let device = self.shared.device.lock();
-            let encoder = device.new_argument_encoder(arguments.build());
+            let (array_ref, total_resources) = arguments.build();
+            let encoder = device.new_argument_encoder(array_ref);
 
             let total_size = encoder.encoded_length();
             let raw = device.new_buffer(total_size, MTLResourceOptions::empty());
 
-            Ok(n::DescriptorPool::ArgumentBuffer {
-                raw,
-                range_allocator: RangeAllocator::new(0..total_size),
-            })
+            Ok(n::DescriptorPool::new_argument(raw, total_size, total_resources))
         } else {
             let mut counters = n::ResourceData::<n::PoolResourceIndex>::new();
             for desc_range in descriptor_ranges {
@@ -1709,23 +1710,51 @@ impl hal::Device<Backend> for Device {
         if self.shared.private_caps.argument_buffers {
             let mut stage_flags = pso::ShaderStageFlags::empty();
             let mut arguments = n::ArgumentArray::default();
-            let mut usages = FastHashMap::default();
+            let mut bindings = FastHashMap::default();
             for desc in binding_iter {
                 let desc = desc.borrow();
                 stage_flags |= desc.stage_flags;
-                let usage = arguments.push(desc.ty, desc.binding as usize, desc.count);
-                if let Some(usage) = usage {
-                    usages.insert(desc.binding, usage);
-                }
+                let content = n::DescriptorContent::from(desc.ty);
+                let usage = n::ArgumentArray::describe_usage(desc.ty);
+                let res = msl::ResourceBinding {
+                    buffer_id: if content.contains(n::DescriptorContent::BUFFER)
+                    {
+                        arguments.push(metal::MTLDataType::Struct, desc.count, usage) as u32
+                    } else {
+                        !0
+                    },
+                    texture_id: if content.contains(n::DescriptorContent::TEXTURE)
+                    {
+                        arguments.push(metal::MTLDataType::Texture, desc.count, usage) as u32
+                    } else {
+                        !0
+                    },
+                    sampler_id: if content.contains(n::DescriptorContent::SAMPLER)
+                    {
+                        arguments.push(metal::MTLDataType::Sampler, desc.count, usage) as u32
+                    } else {
+                        !0
+                    },
+                };
+                let res_offset = res.buffer_id.min(res.texture_id).min(res.sampler_id);
+                bindings.insert(desc.binding, n::ArgumentLayout {
+                    res,
+                    res_offset,
+                    count: desc.count,
+                    usage,
+                });
             };
+
+            let (array_ref, arg_total) = arguments.build();
             let encoder = self.shared.device
                 .lock()
-                .new_argument_encoder(arguments.build());
+                .new_argument_encoder(array_ref);
 
             Ok(n::DescriptorSetLayout::ArgumentBuffer {
                 encoder,
                 stage_flags,
-                usages,
+                bindings: Arc::new(bindings),
+                total: arg_total as n::PoolResourceIndex,
             })
         } else {
             struct TempSampler {
@@ -1790,8 +1819,6 @@ impl hal::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
-        use foreign_types::ForeignTypeRef;
-
         debug!("write_descriptor_sets");
         for write in write_iter {
             match *write.set {
@@ -1862,50 +1889,54 @@ impl hal::Device<Backend> for Device {
                 }
                 n::DescriptorSet::ArgumentBuffer {
                     ref raw,
-                    offset,
+                    raw_offset,
+                    ref pool,
+                    ref range,
                     ref encoder,
-                    ref resources,
+                    ref bindings,
                     ..
                 } => {
                     debug_assert!(self.shared.private_caps.argument_buffers);
 
-                    encoder.set_argument_buffer(raw, offset);
-                    //TODO: range checks, need to keep some layout metadata around
-                    assert_eq!(write.array_offset, 0); //TODO
-                    for descriptor in write.descriptors {
-                        let resource: Option<&metal::ResourceRef> = match *descriptor.borrow() {
+                    encoder.set_argument_buffer(raw, raw_offset);
+                    let mut arg_index = {
+                        let binding = &bindings[&write.binding];
+                        debug_assert!((write.array_offset as usize) < binding.count);
+                        (range.start + binding.res_offset + (write.array_offset as n::PoolResourceIndex)) as NSUInteger
+                    };
+
+                    for (data, descriptor) in pool
+                        .write()
+                        .resources[arg_index as usize .. range.end as usize]
+                        .iter_mut()
+                        .zip(write.descriptors)
+                    {
+                        match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
-                                encoder.set_sampler_states(&[&sampler.0], write.binding as _);
-                                None
+                                encoder.set_sampler_states(&[&sampler.0], arg_index);
+                                arg_index += 1;
                             }
                             pso::Descriptor::Image(image, _layout) => {
-                                encoder.set_textures(&[&image.raw], write.binding as _);
-                                Some(&image.raw)
+                                encoder.set_textures(&[&image.raw], arg_index);
+                                data.ptr = (&**image.raw).as_ptr();
+                                arg_index += 1;
                             }
                             pso::Descriptor::Buffer(buffer, ref desc_range) => {
-                                let (raw, range) = buffer.as_bound();
+                                let (buf_raw, buf_range) = buffer.as_bound();
                                 encoder.set_buffer(
-                                    raw,
-                                    range.start + desc_range.start.unwrap_or(0),
-                                    write.binding as _,
+                                    buf_raw,
+                                    buf_range.start + desc_range.start.unwrap_or(0),
+                                    arg_index,
                                 );
-                                Some(raw)
+                                data.ptr = (&**buf_raw).as_ptr();
+                                arg_index += 1;
                             }
+                            //TODO: supporting arrays of combined image-samplers can be tricky.
+                            // We need to scan both sampler and image sections of the encoder
+                            // at the same time.
                             pso::Descriptor::CombinedImageSampler(..)
                             | pso::Descriptor::UniformTexelBuffer(..)
                             | pso::Descriptor::StorageTexelBuffer(..) => unimplemented!(),
-                        };
-                        match (resource, resources.get(&write.binding)) {
-                            (Some(res), Some(used_resource)) => {
-                                used_resource.ptr.set(res.as_ptr());
-                            }
-                            (None, None) => {}
-                            (None, Some(used_resource)) => {
-                                panic!("Expected {:?}, found nothing", used_resource);
-                            }
-                            (Some(res), None) => {
-                                panic!("Unexpected {:?}", res);
-                            }
                         }
                     }
                 }
