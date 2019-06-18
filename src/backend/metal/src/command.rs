@@ -3597,9 +3597,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             .read()
                             .resources[range.start as usize .. range.end as usize]
                             .iter()
-                            .map(|used_resource| soft::RenderCommand::UseResource {
-                                resource: ptr::NonNull::new(used_resource.ptr).unwrap(),
-                                usage: used_resource.usage,
+                            .filter(|ur| !ur.usage.is_empty())
+                            .map(|ur| soft::RenderCommand::UseResource {
+                                resource: ptr::NonNull::new(ur.ptr).unwrap(),
+                                usage: ur.usage,
                             })
                         );
                     }
@@ -3735,9 +3736,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             .read()
                             .resources[range.start as usize .. range.end as usize]
                             .iter()
-                            .map(|used_resource| soft::ComputeCommand::UseResource {
-                                resource: ptr::NonNull::new(used_resource.ptr).unwrap(),
-                                usage: used_resource.usage,
+                            .filter(|ur| !ur.usage.is_empty())
+                            .map(|ur| soft::ComputeCommand::UseResource {
+                                resource: ptr::NonNull::new(ur.ptr).unwrap(),
+                                usage: ur.usage,
                             })
                         );
                     }
