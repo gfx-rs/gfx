@@ -5,8 +5,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use std::slice;
 
 use glow::Context;
-use crate::{GlContainer, GlContext, IMAGE_MEM_TYPE_MASK, INDEX_MEM_TYPE_MASK, OTHER_MEM_TYPE_MASK,
-            DEVICE_LOCAL_MASK, COHERENT_MASK};
+use crate::{GlContainer, GlContext};
 
 use crate::hal::backend::FastHashMap;
 use crate::hal::format::{Format, Swizzle};
@@ -22,7 +21,7 @@ use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 use crate::info::LegacyFeatures;
 use crate::pool::{BufferMemory, OwnedBuffer, RawCommandPool};
 use crate::{conv, native as n, state};
-use crate::{Backend as B, Share, Starc, Surface, Swapchain};
+use crate::{Backend as B, Share, MemoryRole, Starc, Surface, Swapchain};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -464,73 +463,81 @@ impl d::Device<B> for Device {
         mem_type: c::MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
-        let is_device_local_memory = (1 << mem_type.0) & DEVICE_LOCAL_MASK != 0;
-        let is_image_memory = (1 << mem_type.0) & IMAGE_MEM_TYPE_MASK != 0;
-        let is_index_memory = (1 << mem_type.0) & INDEX_MEM_TYPE_MASK != 0;
-        let is_coherent_memory = (1 << mem_type.0) & COHERENT_MASK != 0;
+        let (memory_type, memory_role) = self.share.memory_types[mem_type.0 as usize];
 
-        if is_image_memory {
-            assert!(is_device_local_memory);
-            Ok(n::Memory {
-                properties: memory::Properties::DEVICE_LOCAL,
-                buffer: None,
-                target: 0,
-                size,
-                emulate_map_allocation: Cell::new(None),
-                map_flags: 0,
-            })
-        } else {
-            assert!(self.share.private_caps.buffer_role_change);
+        let is_device_local_memory = memory_type.properties.contains(memory::Properties::DEVICE_LOCAL);
+        let is_cpu_visible_memory = memory_type.properties.contains(memory::Properties::CPU_VISIBLE);
+        let is_coherent_memory = memory_type.properties.contains(memory::Properties::COHERENT);
+        let is_readable_memory = memory_type.properties.contains(memory::Properties::CPU_CACHED);
 
-            let target = if is_index_memory {
-                glow::ELEMENT_ARRAY_BUFFER
-            } else {
-                glow::ARRAY_BUFFER
-            };
+        match memory_role {
+            MemoryRole::Buffer { target, .. } => {
+                let gl = &self.share.context;
 
-            let gl = &self.share.context;
-
-            let raw = gl.create_buffer().unwrap();
-            //TODO: use *Named calls to avoid binding
-            gl.bind_buffer(target, Some(raw));
-            if self.share.private_caps.buffer_storage {
-                let flags = if is_device_local_memory {
-                    0
+                let raw = gl.create_buffer().unwrap();
+                //TODO: use *Named calls to avoid binding
+                gl.bind_buffer(target, Some(raw));
+                if self.share.private_caps.buffer_storage {
+                    let flags = if is_device_local_memory {
+                        0
+                    } else {
+                        assert!(is_cpu_visible_memory);
+                        let read_flag = if is_readable_memory {
+                            glow::MAP_READ_BIT
+                        } else {
+                            0
+                        };
+                        read_flag
+                            | glow::MAP_WRITE_BIT
+                            | glow::MAP_PERSISTENT_BIT
+                            | glow::DYNAMIC_STORAGE_BIT
+                    };
+                    gl.buffer_storage(target, size as i32, None, flags);
                 } else {
-                    glow::MAP_READ_BIT
-                        | glow::MAP_WRITE_BIT
-                        | glow::MAP_PERSISTENT_BIT
-                        | glow::DYNAMIC_STORAGE_BIT
-                };
-                gl.buffer_storage(target, size as i32, None, flags);
-            } else {
-                let usage = if is_device_local_memory {
-                    glow::STATIC_DRAW
-                } else {
-                    glow::DYNAMIC_DRAW
-                };
-                gl.buffer_data_size(target, size as i32, usage);
-            }
-            gl.bind_buffer(target, None);
+                    let usage = if is_device_local_memory {
+                        glow::STATIC_DRAW
+                    } else {
+                        glow::DYNAMIC_DRAW
+                    };
+                    gl.buffer_data_size(target, size as i32, usage);
+                }
+                gl.bind_buffer(target, None);
 
-            if let Err(err) = self.share.check() {
-                panic!("Error allocating memory buffer {:?}", err);
+                if let Err(err) = self.share.check() {
+                    panic!("Error allocating memory buffer {:?}", err);
+                }
+
+                let mut map_flags = glow::MAP_WRITE_BIT
+                    | glow::MAP_PERSISTENT_BIT
+                    | glow::MAP_FLUSH_EXPLICIT_BIT;
+                if is_readable_memory {
+                    map_flags |= glow::MAP_READ_BIT;
+                }
+                if !is_coherent_memory {
+                    map_flags |= glow::MAP_COHERENT_BIT;
+                }
+
+                Ok(n::Memory {
+                    properties: memory_type.properties,
+                    buffer: Some(raw),
+                    size,
+                    target,
+                    map_flags,
+                    emulate_map_allocation: Cell::new(None),
+                })
             }
 
-            let mut map_flags = glow::MAP_READ_BIT | glow::MAP_WRITE_BIT | glow::MAP_PERSISTENT_BIT;
-            if !is_coherent_memory {
-                map_flags |= glow::MAP_FLUSH_EXPLICIT_BIT;
+            MemoryRole::Image => {
+                assert!(is_device_local_memory);
+                Ok(n::Memory {
+                    properties: memory::Properties::DEVICE_LOCAL,
+                    buffer: None,
+                    size,
+                    target: 0,
+                    map_flags: 0,
+                    emulate_map_allocation: Cell::new(None),
+                })
             }
-
-            Ok(n::Memory {
-                properties: memory::Properties::CPU_VISIBLE
-                    | memory::Properties::CPU_CACHED,
-                buffer: Some(raw),
-                target,
-                size,
-                emulate_map_allocation: Cell::new(None),
-                map_flags,
-            })
         }
     }
 
@@ -1044,24 +1051,36 @@ impl d::Device<B> for Device {
             n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
         };
 
-        let (type_mask, alignment) = if usage.contains(buffer::Usage::INDEX) {
-            // Buffers are only allowed to be INDEX usage XOR another type of usage, they are not
-            // allowed to have both INDEX and non-INDEX usage.
-            if !(buffer::Usage::INDEX | buffer::Usage::TRANSFER_SRC | buffer::Usage::TRANSFER_DST).contains(usage) {
-                error!("gl backend does not allow a buffer to be used for both INDEX and non-INDEX usage");
-                (0, 1)
-            } else {
-                // Alignment of 4 covers indexes of type u16 and u32
-                (INDEX_MEM_TYPE_MASK, 4)
-            }
+        let alignment = if usage.contains(buffer::Usage::INDEX) {
+            // Alignment of 4 covers indexes of type u16 and u32
+            4
         } else {
-            (OTHER_MEM_TYPE_MASK, 1)
+            1
         };
+
+        let mut type_mask = 0;
+        for (type_index, &(_, role)) in self.share.memory_types.iter().enumerate() {
+            match role {
+                MemoryRole::Buffer {
+                    allowed_usage,
+                    ..
+                } => {
+                    if allowed_usage.contains(usage) {
+                        type_mask |= 1 << type_index;
+                    }
+                }
+                MemoryRole::Image => {},
+            }
+        }
+
+        if type_mask == 0 {
+            error!("gl backend capability does not allow a buffer with usage {:?}", usage);
+        }
 
         memory::Requirements {
             size: size as u64,
             alignment,
-            type_mask
+            type_mask,
         }
     }
 
@@ -1077,7 +1096,7 @@ impl d::Device<B> for Device {
         };
 
         *buffer = n::Buffer::Bound {
-            buffer: memory.buffer,
+            buffer: memory.buffer.expect("Improper memory type used for buffer memory"),
             range: offset..offset + size,
         };
 
@@ -1096,7 +1115,7 @@ impl d::Device<B> for Device {
         let offset = *range.start().unwrap_or(&0);
         let size = *range.end().unwrap_or(&memory.size) - offset;
 
-        let buffer = memory.buffer.expect("cannot map DEVICE_LOCAL memory");
+        let buffer = memory.buffer.expect("cannot map image memory");
         let ptr = if caps.emulate_map {
             let ptr: *mut u8 = if let Some(ptr) = memory.emulate_map_allocation.get() {
                 ptr
@@ -1123,7 +1142,7 @@ impl d::Device<B> for Device {
 
     unsafe fn unmap_memory(&self, memory: &n::Memory) {
         let gl = &self.share.context;
-        let buffer = memory.buffer.expect("cannot unmap DEVICE_LOCAL memory");
+        let buffer = memory.buffer.expect("cannot unmap image memory");
 
         gl.bind_buffer(memory.target, Some(buffer));
 
@@ -1151,7 +1170,7 @@ impl d::Device<B> for Device {
 
         for i in ranges {
             let (mem, range) = i.borrow();
-            let buffer = mem.buffer.expect("cannot flush DEVICE_LOCAL memory");
+            let buffer = mem.buffer.expect("cannot flush image memory");
             gl.bind_buffer(mem.target, Some(buffer));
 
             let offset = *range.start().unwrap_or(&0);
@@ -1349,13 +1368,24 @@ impl d::Device<B> for Device {
             );
         }
 
+        let mut type_mask = 0;
+        for (type_index, &(_, role)) in self.share.memory_types.iter().enumerate() {
+            match role {
+                MemoryRole::Buffer { .. } => {},
+                MemoryRole::Image => {
+                    type_mask |= 1 << type_index;
+                },
+            }
+        }
+        assert_ne!(type_mask, 0);
+
         Ok(n::Image {
             kind: image,
             channel,
             requirements: memory::Requirements {
                 size,
                 alignment: 1,
-                type_mask: IMAGE_MEM_TYPE_MASK,
+                type_mask,
             },
         })
     }

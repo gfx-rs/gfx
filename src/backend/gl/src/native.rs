@@ -29,21 +29,19 @@ pub enum Buffer {
         usage: buffer::Usage,
     },
     Bound {
-        // Image memory types are faked and have no associated buffer.
-        buffer: Option<RawBuffer>,
+        buffer: RawBuffer,
         range: Range<buffer::Offset>,
     },
 }
 
 impl Buffer {
-    // Asserts that the buffer is a bound, CPU_VISIBLE buffer and returns the raw gl buffer along
-    // with its sub-range.
+    // Asserts that the buffer is bound and returns the raw gl buffer along with its sub-range.
     pub(crate) fn as_bound(&self) -> (RawBuffer, Range<u64>) {
         match self {
             Buffer::Unbound { .. } => panic!("Expected bound buffer!"),
             Buffer::Bound {
                 buffer, range, ..
-            } => (buffer.expect("unsupported buffer type"), range.clone()),
+            } => (*buffer, range.clone()),
         }
     }
 }
@@ -250,13 +248,13 @@ pub enum ShaderModule {
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) properties: Properties,
-    // Image memory types are faked and have no associated buffer
+    // Image memory is faked and has no associated gl buffer
     pub(crate) buffer: Option<RawBuffer>,
-    pub(crate) target: u32,
     /// Allocation size
     pub(crate) size: u64,
-    pub(crate) emulate_map_allocation: Cell<Option<*mut u8>>,
+    pub(crate) target: u32,
     pub(crate) map_flags: u32,
+    pub(crate) emulate_map_allocation: Cell<Option<*mut u8>>,
 }
 
 unsafe impl Send for Memory {}
