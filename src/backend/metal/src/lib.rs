@@ -68,6 +68,7 @@ impl Default for OnlineRecording {
 const MAX_ACTIVE_COMMAND_BUFFERS: usize = 1 << 14;
 const MAX_VISIBILITY_QUERIES: usize = 1 << 14;
 const MAX_COLOR_ATTACHMENTS: usize = 4;
+const MAX_BOUND_DESCRIPTOR_SETS: usize = 16;
 
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily {}

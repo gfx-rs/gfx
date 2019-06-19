@@ -1,4 +1,5 @@
 use crate::{
+    MAX_BOUND_DESCRIPTOR_SETS,
     conversions as conv, native, soft, window,
     internal::{BlitVertex, ClearKey, ClearVertex},
     AsNative, Backend, BufferPtr, OnlineRecording, PrivateDisabilities,
@@ -18,6 +19,7 @@ use hal::{
     WorkGroupCount, window::{PresentError, Suboptimal},
 };
 
+use arrayvec::ArrayVec;
 use block::ConcreteBlock;
 use cocoa::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
@@ -196,6 +198,11 @@ struct SubpassInfo {
     formats: native::SubpassFormats,
 }
 
+#[derive(Debug, Default)]
+struct DescriptorSetInfo {
+    used_resources: Vec<(ResourcePtr, metal::MTLResourceUsage)>,
+}
+
 /// The current state of a command buffer, used for two distinct purposes:
 ///   1. inherit resource bindings between passes
 ///   2. avoid redundant state settings
@@ -240,9 +247,7 @@ struct State {
     target_formats: native::SubpassFormats,
     visibility_query: (metal::MTLVisibilityResultMode, buffer::Offset),
     pending_subpasses: Vec<SubpassInfo>,
-    //TODO: consider avoid repetitions here
-    //TODO: figure out where these need to be cleared
-    used_resources: Vec<(ResourcePtr, metal::MTLResourceUsage)>,
+    descriptor_sets: ArrayVec<[DescriptorSetInfo; MAX_BOUND_DESCRIPTOR_SETS]>,
 }
 
 impl State {
@@ -254,7 +259,9 @@ impl State {
         self.push_constants.clear();
         self.vertex_buffers.clear();
         self.pending_subpasses.clear();
-        self.used_resources.clear();
+        for ds in self.descriptor_sets.iter_mut() {
+            ds.used_resources.clear();
+        }
     }
 
     fn clamp_scissor(sr: MTLScissorRect, extent: Extent) -> MTLScissorRect {
@@ -358,11 +365,15 @@ impl State {
                     .chain(iter::once(com_samplers))
                     .chain(com_push_constants)
             });
-        let com_used_resources = self.used_resources
+        let com_used_resources = self.descriptor_sets
             .iter()
-            .map(|&(resource, usage)| soft::RenderCommand::UseResource {
-                resource,
-                usage,
+            .flat_map(|ds| {
+                ds.used_resources
+                    .iter()
+                    .map(|&(resource, usage)| soft::RenderCommand::UseResource {
+                        resource,
+                        usage,
+                    })
             });
 
         com_vp
@@ -403,12 +414,17 @@ impl State {
                     index: pc.buffer_index as _,
                     words: &self.push_constants[..pc.count as usize],
                 });
-        let com_used_resources = self.used_resources
+        let com_used_resources = self.descriptor_sets
             .iter()
-            .map(|&(resource, usage)| soft::ComputeCommand::UseResource {
-                resource,
-                usage,
+            .flat_map(|ds| {
+                ds.used_resources
+                    .iter()
+                    .map(|&(resource, usage)| soft::ComputeCommand::UseResource {
+                        resource,
+                        usage,
+                    })
             });
+
 
         com_pso
             .into_iter()
@@ -2238,7 +2254,9 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 target_formats: native::SubpassFormats::default(),
                 visibility_query: (metal::MTLVisibilityResultMode::Disabled, 0),
                 pending_subpasses: Vec::new(),
-                used_resources: Vec::new(),
+                descriptor_sets: (0 .. MAX_BOUND_DESCRIPTOR_SETS)
+                    .map(|_| DescriptorSetInfo::default())
+                    .collect(),
             },
             temp: Temp {
                 clear_vertices: Vec::new(),
@@ -3538,7 +3556,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 cs: first.cs.map(|&i| i..i),
             }
         };
-        for (info, desc_set) in pipe_layout.infos[first_set..].iter().zip(sets) {
+        for ((info, desc_set), cached_ds) in pipe_layout.infos[first_set..]
+            .iter()
+            .zip(sets)
+            .zip(self.state.descriptor_sets[first_set..].iter_mut())
+        {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated {
                     ref pool,
@@ -3613,8 +3635,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         });
                     }
                     if stage_flags.intersects(pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT) {
-                        let pos = self.state.used_resources.len();
-                        self.state.used_resources.extend(pool
+                        cached_ds.used_resources.clear();
+                        cached_ds.used_resources.extend(pool
                             .read()
                             .resources[range.start as usize .. range.end as usize]
                             .iter()
@@ -3622,7 +3644,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 ptr::NonNull::new(ur.ptr).map(|res| (res, ur.usage))
                             })
                         );
-                        pre.issue_many(self.state.used_resources[pos ..]
+                        pre.issue_many(cached_ds.used_resources
                             .iter()
                             .map(|&(resource, usage)| soft::RenderCommand::UseResource {
                                 resource,
@@ -3711,7 +3733,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let cache = &mut self.state.resources_cs;
         let mut bind_range = pipe_layout.infos[first_set].offsets.cs.map(|&i| i..i);
 
-        for (info, desc_set) in pipe_layout.infos[first_set..].iter().zip(sets) {
+        for ((info, desc_set), cached_ds) in pipe_layout.infos[first_set..]
+            .iter()
+            .zip(sets)
+            .zip(self.state.descriptor_sets[first_set..].iter_mut())
+        {
             let res_offset = &info.offsets.cs;
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated {
@@ -3758,8 +3784,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             buffer: AsNative::from(raw.as_ref()),
                             offset: raw_offset,
                         });
-                        let pos = self.state.used_resources.len();
-                        self.state.used_resources.extend(pool
+
+                        cached_ds.used_resources.clear();
+                        cached_ds.used_resources.extend(pool
                             .read()
                             .resources[range.start as usize .. range.end as usize]
                             .iter()
@@ -3767,7 +3794,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 ptr::NonNull::new(ur.ptr).map(|res| (res, ur.usage))
                             })
                         );
-                        pre.issue_many(self.state.used_resources[pos ..]
+                        pre.issue_many(cached_ds.used_resources
                             .iter()
                             .map(|&(resource, usage)| soft::ComputeCommand::UseResource {
                                 resource,
