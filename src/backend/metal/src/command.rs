@@ -2,7 +2,7 @@ use crate::{
     conversions as conv, native, soft, window,
     internal::{BlitVertex, ClearKey, ClearVertex},
     AsNative, Backend, BufferPtr, OnlineRecording, PrivateDisabilities,
-    ResourceIndex, SamplerPtr, Shared, TexturePtr,
+    ResourceIndex, ResourcePtr, SamplerPtr, Shared, TexturePtr,
 };
 
 use hal::{
@@ -240,6 +240,9 @@ struct State {
     target_formats: native::SubpassFormats,
     visibility_query: (metal::MTLVisibilityResultMode, buffer::Offset),
     pending_subpasses: Vec<SubpassInfo>,
+    //TODO: consider avoid repetitions here
+    //TODO: figure out where these need to be cleared
+    used_resources: Vec<(ResourcePtr, metal::MTLResourceUsage)>,
 }
 
 impl State {
@@ -251,6 +254,7 @@ impl State {
         self.push_constants.clear();
         self.vertex_buffers.clear();
         self.pending_subpasses.clear();
+        self.used_resources.clear();
     }
 
     fn clamp_scissor(sr: MTLScissorRect, extent: Extent) -> MTLScissorRect {
@@ -354,6 +358,12 @@ impl State {
                     .chain(iter::once(com_samplers))
                     .chain(com_push_constants)
             });
+        let com_used_resources = self.used_resources
+            .iter()
+            .map(|&(resource, usage)| soft::RenderCommand::UseResource {
+                resource,
+                usage,
+            });
 
         com_vp
             .into_iter()
@@ -365,6 +375,7 @@ impl State {
             .chain(com_rast)
             //.chain(com_ds) // done outside
             .chain(com_resources)
+            .chain(com_used_resources)
     }
 
     fn make_compute_commands(&self) -> impl Iterator<Item = soft::ComputeCommand<&soft::Ref>> {
@@ -392,6 +403,12 @@ impl State {
                     index: pc.buffer_index as _,
                     words: &self.push_constants[..pc.count as usize],
                 });
+        let com_used_resources = self.used_resources
+            .iter()
+            .map(|&(resource, usage)| soft::ComputeCommand::UseResource {
+                resource,
+                usage,
+            });
 
         com_pso
             .into_iter()
@@ -399,6 +416,7 @@ impl State {
             .chain(iter::once(com_textures))
             .chain(iter::once(com_samplers))
             .chain(com_push_constants)
+            .chain(com_used_resources)
     }
 
     fn set_vertex_buffers(&mut self) -> Option<soft::RenderCommand<&soft::Ref>> {
@@ -2220,6 +2238,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
                 target_formats: native::SubpassFormats::default(),
                 visibility_query: (metal::MTLVisibilityResultMode::Disabled, 0),
                 pending_subpasses: Vec::new(),
+                used_resources: Vec::new(),
             },
             temp: Temp {
                 clear_vertices: Vec::new(),
@@ -3593,14 +3612,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         });
                     }
                     if stage_flags.intersects(pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT) {
-                        pre.issue_many(pool
+                        let pos = self.state.used_resources.len();
+                        self.state.used_resources.extend(pool
                             .read()
                             .resources[range.start as usize .. range.end as usize]
                             .iter()
-                            .filter(|ur| !ur.usage.is_empty())
-                            .map(|ur| soft::RenderCommand::UseResource {
-                                resource: ptr::NonNull::new(ur.ptr).unwrap(),
-                                usage: ur.usage,
+                            .filter_map(|ur| {
+                                ptr::NonNull::new(ur.ptr).map(|res| (res, ur.usage))
+                            })
+                        );
+                        pre.issue_many(self.state.used_resources[pos ..]
+                            .iter()
+                            .map(|&(resource, usage)| soft::RenderCommand::UseResource {
+                                resource,
+                                usage,
                             })
                         );
                     }
@@ -3732,14 +3757,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             buffer: AsNative::from(raw.as_ref()),
                             offset: raw_offset,
                         });
-                        pre.issue_many(pool
+                        let pos = self.state.used_resources.len();
+                        self.state.used_resources.extend(pool
                             .read()
                             .resources[range.start as usize .. range.end as usize]
                             .iter()
-                            .filter(|ur| !ur.usage.is_empty())
-                            .map(|ur| soft::ComputeCommand::UseResource {
-                                resource: ptr::NonNull::new(ur.ptr).unwrap(),
-                                usage: ur.usage,
+                            .filter_map(|ur| {
+                                ptr::NonNull::new(ur.ptr).map(|res| (res, ur.usage))
+                            })
+                        );
+                        pre.issue_many(self.state.used_resources[pos ..]
+                            .iter()
+                            .map(|&(resource, usage)| soft::ComputeCommand::UseResource {
+                                resource,
+                                usage,
                             })
                         );
                     }

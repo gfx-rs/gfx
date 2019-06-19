@@ -1665,7 +1665,7 @@ impl hal::Device<Backend> for Device {
                 let content = n::DescriptorContent::from(dr.ty);
                 let usage = n::ArgumentArray::describe_usage(dr.ty);
                 if content.contains(n::DescriptorContent::BUFFER) {
-                    arguments.push(metal::MTLDataType::Struct, dr.count, usage);
+                    arguments.push(metal::MTLDataType::Pointer, dr.count, usage);
                 }
                 if content.contains(n::DescriptorContent::TEXTURE) {
                     arguments.push(metal::MTLDataType::Texture, dr.count, usage);
@@ -1719,7 +1719,7 @@ impl hal::Device<Backend> for Device {
                 let res = msl::ResourceBinding {
                     buffer_id: if content.contains(n::DescriptorContent::BUFFER)
                     {
-                        arguments.push(metal::MTLDataType::Struct, desc.count, usage) as u32
+                        arguments.push(metal::MTLDataType::Pointer, desc.count, usage) as u32
                     } else {
                         !0
                     },
