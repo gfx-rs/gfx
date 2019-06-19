@@ -3,7 +3,7 @@ use crate::{
     internal::{Channel, FastStorageMap},
     AsNative, Backend, OnlineRecording, QueueFamily, ResourceIndex, Shared,
     Surface, Swapchain, VisibilityShared,
-    MAX_COLOR_ATTACHMENTS,
+    MAX_COLOR_ATTACHMENTS, MAX_BOUND_DESCRIPTOR_SETS,
 };
 
 use hal::{
@@ -417,7 +417,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             // "Maximum length of an inlined constant data buffer, per graphics or compute function"
             max_push_constants_size: 0x1000,
             max_sampler_allocation_count: !0,
-            max_bound_descriptor_sets: 0x100, // arbitrary
+            max_bound_descriptor_sets: MAX_BOUND_DESCRIPTOR_SETS as _,
             max_descriptor_set_uniform_buffers: 0x100, // also arbitrary, but probably shouldn't be more than max_bound_descriptor_sets
             max_fragment_input_components: 32, // TODO: Add to private caps since 32 is only for mac
             max_framebuffer_layers: 2048, // TODO: Determine is this is the correct value
@@ -1913,11 +1913,11 @@ impl hal::Device<Backend> for Device {
                     {
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
-                                encoder.set_sampler_states(&[&sampler.0], arg_index);
+                                encoder.set_sampler_state(&sampler.0, arg_index);
                                 arg_index += 1;
                             }
                             pso::Descriptor::Image(image, _layout) => {
-                                encoder.set_textures(&[&image.raw], arg_index);
+                                encoder.set_texture(&image.raw, arg_index);
                                 data.ptr = (&**image.raw).as_ptr();
                                 arg_index += 1;
                             }

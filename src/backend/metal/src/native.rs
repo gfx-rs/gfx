@@ -80,7 +80,7 @@ impl SubpassFormats {
 
 #[derive(Debug)]
 pub struct Subpass {
-    pub colors: Vec<(AttachmentId, SubpassOps)>,
+    pub colors: ArrayVec<[(AttachmentId, SubpassOps); MAX_COLOR_ATTACHMENTS]>,
     pub depth_stencil: Option<(AttachmentId, SubpassOps)>,
     pub inputs: Vec<AttachmentId>,
     pub target_formats: SubpassFormats,
