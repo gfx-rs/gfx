@@ -1,9 +1,10 @@
-use std::cell::{Cell, RefCell};
+use std::cell::Cell;
+use std::ops::Range;
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::hal::backend::FastHashMap;
 use crate::hal::memory::{Properties, Requirements};
-use crate::hal::{format, image as i, pass, pso};
+use crate::hal::{buffer, format, image as i, pass, pso};
 
 use crate::{Backend, GlContext};
 
@@ -22,10 +23,27 @@ pub type UniformLocation = <GlContext as glow::Context>::UniformLocation;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
 
 #[derive(Debug)]
-pub struct Buffer {
-    pub(crate) raw: RawBuffer,
-    pub(crate) target: u32,
-    pub(crate) requirements: Requirements,
+pub enum Buffer {
+    Unbound {
+        size: buffer::Offset,
+        usage: buffer::Usage,
+    },
+    Bound {
+        buffer: RawBuffer,
+        range: Range<buffer::Offset>,
+    },
+}
+
+impl Buffer {
+    // Asserts that the buffer is bound and returns the raw gl buffer along with its sub-range.
+    pub(crate) fn as_bound(&self) -> (RawBuffer, Range<u64>) {
+        match self {
+            Buffer::Unbound { .. } => panic!("Expected bound buffer!"),
+            Buffer::Bound {
+                buffer, range, ..
+            } => (*buffer, range.clone()),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -230,36 +248,17 @@ pub enum ShaderModule {
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) properties: Properties,
-    pub(crate) first_bound_buffer: Cell<Option<RawBuffer>>,
+    /// Gl buffer and the target that should be used for transfer operations.  Image memory is faked
+    /// and has no associated buffer, so this will be None for image memory.
+    pub(crate) buffer: Option<(RawBuffer, u32)>,
     /// Allocation size
     pub(crate) size: u64,
-    pub(crate) emulate_map_allocation: RefCell<*mut u8>,
+    pub(crate) map_flags: u32,
+    pub(crate) emulate_map_allocation: Cell<Option<*mut u8>>,
 }
 
 unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
-
-impl Memory {
-    pub fn can_upload(&self) -> bool {
-        self.properties.contains(Properties::CPU_VISIBLE)
-    }
-
-    pub fn can_download(&self) -> bool {
-        self.properties
-            .contains(Properties::CPU_VISIBLE | Properties::CPU_CACHED)
-    }
-
-    pub fn map_flags(&self) -> u32 {
-        let mut flags = 0;
-        if self.can_download() {
-            flags |= glow::MAP_READ_BIT;
-        }
-        if self.can_upload() {
-            flags |= glow::MAP_WRITE_BIT;
-        }
-        flags
-    }
-}
 
 #[derive(Clone, Debug)]
 pub struct RenderPass {

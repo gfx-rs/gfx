@@ -18,7 +18,7 @@ use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 
 use crate::hal::queue::{QueueFamilyId, Queues};
-use crate::hal::{error, image, pso};
+use crate::hal::{error, image, pso, buffer, memory};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -170,6 +170,20 @@ impl Error {
     }
 }
 
+const DEVICE_LOCAL_HEAP: usize = 0;
+const CPU_VISIBLE_HEAP: usize = 1;
+
+#[derive(Copy, Clone)]
+enum MemoryRole {
+    Buffer {
+        allowed_usage: buffer::Usage,
+        /// If the raw buffer requires a specific target only, this will be set to that specifc
+        /// target.  Otherwise, it will be set to a generic target suitable for transfer operations.
+        target: u32,
+    },
+    Image,
+}
+
 /// Internal struct of shared data between the physical and logical device.
 struct Share {
     context: GlContainer,
@@ -180,6 +194,7 @@ struct Share {
     private_caps: info::PrivateCaps,
     // Indicates if there is an active logical device.
     open: Cell<bool>,
+    memory_types: Vec<(hal::MemoryType, MemoryRole)>,
 }
 
 impl Share {
@@ -193,6 +208,41 @@ impl Share {
             }
         }
         Ok(())
+    }
+
+    fn buffer_memory_type_mask(&self, usage: buffer::Usage) -> u64 {
+        let mut type_mask = 0;
+        for (type_index, &(_, role)) in self.memory_types.iter().enumerate() {
+            match role {
+                MemoryRole::Buffer {
+                    allowed_usage,
+                    ..
+                } => {
+                    if allowed_usage.contains(usage) {
+                        type_mask |= 1 << type_index;
+                    }
+                }
+                MemoryRole::Image => {},
+            }
+        }
+        if type_mask == 0 {
+            error!("gl backend capability does not allow a buffer with usage {:?}", usage);
+        }
+        type_mask
+    }
+
+    fn image_memory_type_mask(&self) -> u64 {
+        let mut type_mask = 0;
+        for (type_index, &(_, role)) in self.memory_types.iter().enumerate() {
+            match role {
+                MemoryRole::Buffer { .. } => {},
+                MemoryRole::Image => {
+                    type_mask |= 1 << type_index;
+                },
+            }
+        }
+        assert_ne!(type_mask, 0);
+        type_mask
     }
 }
 
@@ -301,6 +351,151 @@ impl PhysicalDevice {
         let vendor: std::string::String = info.platform_name.vendor.clone();
         let renderer: std::string::String = info.platform_name.renderer.clone();
 
+        // An array of hal `MemoryType`s each corresponding to a set of memory types generated for
+        // every allowed role.  In the OpenGL backend, depending on platform capabilities, we may
+        // need multiple different memory types with the same properties / heap_index but different
+        // allowed opengl roles.
+        let mut buffer_role_memory_types = Vec::new();
+
+        // Mimicking vulkan, memory types with more flags should come before those with fewer flags
+        if private_caps.map {
+            buffer_role_memory_types.push(hal::MemoryType {
+                properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED | memory::Properties::COHERENT,
+                heap_index: CPU_VISIBLE_HEAP,
+            });
+            buffer_role_memory_types.push(hal::MemoryType {
+                properties: memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
+                heap_index: CPU_VISIBLE_HEAP,
+            });
+            buffer_role_memory_types.push(hal::MemoryType {
+                properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
+                heap_index: CPU_VISIBLE_HEAP,
+            });
+        } else if private_caps.emulate_map {
+            buffer_role_memory_types.push(hal::MemoryType {
+                properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
+                heap_index: CPU_VISIBLE_HEAP,
+            });
+        }
+        buffer_role_memory_types.push(hal::MemoryType {
+            properties: memory::Properties::DEVICE_LOCAL,
+            heap_index: DEVICE_LOCAL_HEAP,
+        });
+
+        let mut memory_types = Vec::new();
+
+        for &buffer_role_memory_type in &buffer_role_memory_types {
+            if private_caps.buffer_role_change {
+                if info.is_webgl() {
+                    // For security reasons, WebGL does not allow "element array buffers" to be used
+                    // as any other kind of buffer (even when `buffer_role_change` is true).  We
+                    // need to provide unique types of memory specifically for buffers with INDEX
+                    // usage if we are on WebGL.
+                    memory_types.push((
+                        buffer_role_memory_type,
+                        MemoryRole::Buffer {
+                            allowed_usage: buffer::Usage::INDEX,
+                            target: glow::ELEMENT_ARRAY_BUFFER,
+                        }
+                    ));
+                    memory_types.push((
+                        buffer_role_memory_type,
+                        MemoryRole::Buffer {
+                            allowed_usage: buffer::Usage::all() - buffer::Usage::INDEX,
+                            target: glow::PIXEL_PACK_BUFFER,
+                        }
+                    ));
+                } else {
+                    // If we have `buffer_role_change` capability and are not on WebGL, a buffer can
+                    // be used for any role.
+                    memory_types.push((
+                        buffer_role_memory_type,
+                        MemoryRole::Buffer {
+                            allowed_usage: buffer::Usage::all(),
+                            target: glow::PIXEL_PACK_BUFFER,
+                        }
+                    ));
+                }
+            } else {
+                // If we do not have `buffer_role_change` capability, we must add a separate set of
+                // memory types for every role.
+                memory_types.push((
+                    buffer_role_memory_type,
+                    MemoryRole::Buffer {
+                        allowed_usage: buffer::Usage::TRANSFER_SRC,
+                        target: glow::PIXEL_PACK_BUFFER,
+                    }
+                ));
+                memory_types.push((
+                    buffer_role_memory_type,
+                    MemoryRole::Buffer {
+                        allowed_usage: buffer::Usage::TRANSFER_DST,
+                        target: glow::PIXEL_UNPACK_BUFFER,
+                    }
+                ));
+                memory_types.push((
+                    buffer_role_memory_type,
+                    MemoryRole::Buffer {
+                        allowed_usage: buffer::Usage::UNIFORM_TEXEL | buffer::Usage::STORAGE_TEXEL,
+                        target: glow::TEXTURE_BUFFER,
+                    }
+                ));
+                memory_types.push((
+                    buffer_role_memory_type,
+                    MemoryRole::Buffer {
+                        allowed_usage: buffer::Usage::UNIFORM,
+                        target: glow::UNIFORM_BUFFER,
+                    }
+                ));
+                memory_types.push((
+                    buffer_role_memory_type,
+                    MemoryRole::Buffer {
+                        allowed_usage: buffer::Usage::UNIFORM,
+                        target: glow::UNIFORM_BUFFER,
+                    }
+                ));
+                memory_types.push((
+                    buffer_role_memory_type,
+                    MemoryRole::Buffer {
+                        allowed_usage: buffer::Usage::STORAGE,
+                        target: glow::SHADER_STORAGE_BUFFER,
+                    }
+                ));
+                memory_types.push((
+                    buffer_role_memory_type,
+                    MemoryRole::Buffer {
+                        allowed_usage: buffer::Usage::INDEX,
+                        target: glow::ELEMENT_ARRAY_BUFFER,
+                    }
+                ));
+                memory_types.push((
+                    buffer_role_memory_type,
+                    MemoryRole::Buffer {
+                        allowed_usage: buffer::Usage::VERTEX,
+                        target: glow::ARRAY_BUFFER,
+                    }
+                ));
+                memory_types.push((
+                    buffer_role_memory_type,
+                    MemoryRole::Buffer {
+                        allowed_usage: buffer::Usage::INDIRECT,
+                        target: glow::DRAW_INDIRECT_BUFFER,
+                    }
+                ));
+            }
+        }
+
+        // There is always a single device-local memory type for images
+        memory_types.push((
+            hal::MemoryType {
+                properties: memory::Properties::DEVICE_LOCAL,
+                heap_index: DEVICE_LOCAL_HEAP,
+            },
+            MemoryRole::Image,
+        ));
+
+        assert!(memory_types.len() <= 64);
+
         // create the shared context
         let share = Share {
             context: gl,
@@ -310,6 +505,7 @@ impl PhysicalDevice {
             limits,
             private_caps,
             open: Cell::new(false),
+            memory_types,
         };
         if let Err(err) = share.check() {
             panic!("Error querying info: {:?}", err);
@@ -479,39 +675,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {
-        use crate::hal::memory::Properties;
-
-        // COHERENT flags require that the backend does flushing and invalidation
-        // by itself. If we move towards persistent mapping we need to re-evaluate it.
-        let caps = &self.0.private_caps;
-        let memory_types = if caps.map || caps.emulate_map {
-            vec![
-                hal::MemoryType {
-                    properties: Properties::DEVICE_LOCAL,
-                    heap_index: 1,
-                },
-                hal::MemoryType {
-                    // upload
-                    properties: Properties::CPU_VISIBLE | Properties::COHERENT,
-                    heap_index: 0,
-                },
-                hal::MemoryType {
-                    // download
-                    properties: Properties::CPU_VISIBLE
-                        | Properties::COHERENT
-                        | Properties::CPU_CACHED,
-                    heap_index: 0,
-                },
-            ]
-        } else {
-            vec![hal::MemoryType {
-                properties: Properties::DEVICE_LOCAL,
-                heap_index: 0,
-            }]
-        };
-
         hal::MemoryProperties {
-            memory_types,
+            memory_types: self.0.memory_types.iter().map(|(mem_type, _)| *mem_type).collect(),
+            // heap 0 is DEVICE_LOCAL, heap 1 is CPU_VISIBLE
             memory_heaps: vec![!0, !0],
         }
     }

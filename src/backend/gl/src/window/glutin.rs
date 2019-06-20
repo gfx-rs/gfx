@@ -254,6 +254,7 @@ impl Device {
                 let bytes_per_texel = surface_desc.bits / 8;
                 let ext = config.extent;
                 let size = (ext.width * ext.height) as u64 * bytes_per_texel as u64;
+                let type_mask = self.share.image_memory_type_mask();
 
                 if let Err(err) = self.share.check() {
                     panic!(
@@ -268,7 +269,7 @@ impl Device {
                     requirements: memory::Requirements {
                         size,
                         alignment: 1,
-                        type_mask: 0x7,
+                        type_mask,
                     },
                 }
             })
