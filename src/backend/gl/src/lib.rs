@@ -364,6 +364,10 @@ impl PhysicalDevice {
                 heap_index: CPU_VISIBLE_HEAP,
             });
             buffer_role_memory_types.push(hal::MemoryType {
+                properties: memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
+                heap_index: CPU_VISIBLE_HEAP,
+            });
+            buffer_role_memory_types.push(hal::MemoryType {
                 properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
                 heap_index: CPU_VISIBLE_HEAP,
             });
@@ -397,14 +401,7 @@ impl PhysicalDevice {
                     memory_types.push((
                         buffer_role_memory_type,
                         MemoryRole::Buffer {
-                            allowed_usage: buffer::Usage::TRANSFER_SRC
-                                | buffer::Usage::TRANSFER_DST
-                                | buffer::Usage::UNIFORM_TEXEL
-                                | buffer::Usage::STORAGE_TEXEL
-                                | buffer::Usage::UNIFORM
-                                | buffer::Usage::STORAGE
-                                | buffer::Usage::VERTEX
-                                | buffer::Usage::INDIRECT,
+                            allowed_usage: buffer::Usage::all() - buffer::Usage::INDEX,
                             target: glow::PIXEL_PACK_BUFFER,
                         }
                     ));
@@ -414,15 +411,7 @@ impl PhysicalDevice {
                     memory_types.push((
                         buffer_role_memory_type,
                         MemoryRole::Buffer {
-                            allowed_usage: buffer::Usage::TRANSFER_SRC
-                                | buffer::Usage::TRANSFER_DST
-                                | buffer::Usage::UNIFORM_TEXEL
-                                | buffer::Usage::STORAGE_TEXEL
-                                | buffer::Usage::UNIFORM
-                                | buffer::Usage::STORAGE
-                                | buffer::Usage::INDEX
-                                | buffer::Usage::VERTEX
-                                | buffer::Usage::INDIRECT,
+                            allowed_usage: buffer::Usage::all(),
                             target: glow::PIXEL_PACK_BUFFER,
                         }
                     ));

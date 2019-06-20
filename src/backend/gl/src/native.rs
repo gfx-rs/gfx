@@ -248,11 +248,11 @@ pub enum ShaderModule {
 #[derive(Debug)]
 pub struct Memory {
     pub(crate) properties: Properties,
-    // Image memory is faked and has no associated gl buffer
-    pub(crate) buffer: Option<RawBuffer>,
+    /// Gl buffer and the target that should be used for transfer operations.  Image memory is faked
+    /// and has no associated buffer, so this will be None for image memory.
+    pub(crate) buffer: Option<(RawBuffer, u32)>,
     /// Allocation size
     pub(crate) size: u64,
-    pub(crate) target: u32,
     pub(crate) map_flags: u32,
     pub(crate) emulate_map_allocation: Cell<Option<*mut u8>>,
 }

@@ -478,21 +478,19 @@ impl d::Device<B> for Device {
                 //TODO: use *Named calls to avoid binding
                 gl.bind_buffer(target, Some(raw));
                 if self.share.private_caps.buffer_storage {
-                    let flags = if is_device_local_memory {
-                        0
-                    } else {
-                        assert!(is_cpu_visible_memory);
-                        let read_flag = if is_readable_memory {
-                            glow::MAP_READ_BIT
-                        } else {
-                            0
-                        };
-                        read_flag
-                            | glow::MAP_WRITE_BIT
+                    let mut storage_flags = 0;
+                    if is_cpu_visible_memory {
+                        storage_flags |= glow::MAP_WRITE_BIT
                             | glow::MAP_PERSISTENT_BIT
-                            | glow::DYNAMIC_STORAGE_BIT
-                    };
-                    gl.buffer_storage(target, size as i32, None, flags);
+                            | glow::DYNAMIC_STORAGE_BIT;
+                        if is_readable_memory {
+                            storage_flags |= glow::MAP_READ_BIT;
+                        }
+                        if is_coherent_memory {
+                            storage_flags |= glow::MAP_COHERENT_BIT;
+                        }
+                    }
+                    gl.buffer_storage(target, size as i32, None, storage_flags);
                 } else {
                     let usage = if is_device_local_memory {
                         glow::STATIC_DRAW
@@ -513,15 +511,14 @@ impl d::Device<B> for Device {
                 if is_readable_memory {
                     map_flags |= glow::MAP_READ_BIT;
                 }
-                if !is_coherent_memory {
+                if is_coherent_memory {
                     map_flags |= glow::MAP_COHERENT_BIT;
                 }
 
                 Ok(n::Memory {
                     properties: memory_type.properties,
-                    buffer: Some(raw),
+                    buffer: Some((raw, target)),
                     size,
-                    target,
                     map_flags,
                     emulate_map_allocation: Cell::new(None),
                 })
@@ -533,7 +530,6 @@ impl d::Device<B> for Device {
                     properties: memory::Properties::DEVICE_LOCAL,
                     buffer: None,
                     size,
-                    target: 0,
                     map_flags: 0,
                     emulate_map_allocation: Cell::new(None),
                 })
@@ -1051,19 +1047,12 @@ impl d::Device<B> for Device {
             n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
         };
 
-        let alignment = if usage.contains(buffer::Usage::INDEX) {
-            // Alignment of 4 covers indexes of type u16 and u32
-            4
-        } else {
-            1
-        };
-
-        let type_mask = self.share.buffer_memory_type_mask(usage);
-
         memory::Requirements {
             size: size as u64,
-            alignment,
-            type_mask,
+            // Alignment of 4 covers indexes of type u16 and u32 in index buffers, which is
+            // currently the only alignment requirement.
+            alignment: 4,
+            type_mask: self.share.buffer_memory_type_mask(usage),
         }
     }
 
@@ -1079,7 +1068,7 @@ impl d::Device<B> for Device {
         };
 
         *buffer = n::Buffer::Bound {
-            buffer: memory.buffer.expect("Improper memory type used for buffer memory"),
+            buffer: memory.buffer.expect("Improper memory type used for buffer memory").0,
             range: offset..offset + size,
         };
 
@@ -1098,7 +1087,7 @@ impl d::Device<B> for Device {
         let offset = *range.start().unwrap_or(&0);
         let size = *range.end().unwrap_or(&memory.size) - offset;
 
-        let buffer = memory.buffer.expect("cannot map image memory");
+        let (buffer, target) = memory.buffer.expect("cannot map image memory");
         let ptr = if caps.emulate_map {
             let ptr: *mut u8 = if let Some(ptr) = memory.emulate_map_allocation.get() {
                 ptr
@@ -1110,9 +1099,9 @@ impl d::Device<B> for Device {
 
             ptr.offset(offset as isize)
         } else {
-            gl.bind_buffer(memory.target, Some(buffer));
-            let raw = gl.map_buffer_range(memory.target, offset as i32, size as i32, memory.map_flags);
-            gl.bind_buffer(memory.target, None);
+            gl.bind_buffer(target, Some(buffer));
+            let raw = gl.map_buffer_range(target, offset as i32, size as i32, memory.map_flags);
+            gl.bind_buffer(target, None);
             raw
         };
 
@@ -1125,18 +1114,18 @@ impl d::Device<B> for Device {
 
     unsafe fn unmap_memory(&self, memory: &n::Memory) {
         let gl = &self.share.context;
-        let buffer = memory.buffer.expect("cannot unmap image memory");
+        let (buffer, target) = memory.buffer.expect("cannot unmap image memory");
 
-        gl.bind_buffer(memory.target, Some(buffer));
+        gl.bind_buffer(target, Some(buffer));
 
         if self.share.private_caps.emulate_map {
             let ptr = memory.emulate_map_allocation.replace(None).unwrap();
             let _ = Box::from_raw(slice::from_raw_parts_mut(ptr, memory.size as usize));
         } else {
-            gl.unmap_buffer(memory.target);
+            gl.unmap_buffer(target);
         }
 
-        gl.bind_buffer(memory.target, None);
+        gl.bind_buffer(target, None);
 
         if let Err(err) = self.share.check() {
             panic!("Error unmapping memory: {:?} for memory {:?}", err, memory);
@@ -1153,8 +1142,8 @@ impl d::Device<B> for Device {
 
         for i in ranges {
             let (mem, range) = i.borrow();
-            let buffer = mem.buffer.expect("cannot flush image memory");
-            gl.bind_buffer(mem.target, Some(buffer));
+            let (buffer, target) = mem.buffer.expect("cannot flush image memory");
+            gl.bind_buffer(target, Some(buffer));
 
             let offset = *range.start().unwrap_or(&0);
             let size = *range.end().unwrap_or(&mem.size) - offset;
@@ -1162,11 +1151,11 @@ impl d::Device<B> for Device {
             if self.share.private_caps.emulate_map {
                 let ptr = mem.emulate_map_allocation.get().unwrap();
                 let slice = slice::from_raw_parts_mut(ptr.offset(offset as isize), size as usize);
-                gl.buffer_sub_data_u8_slice(mem.target, offset as i32, slice);
+                gl.buffer_sub_data_u8_slice(target, offset as i32, slice);
             } else {
-                gl.flush_mapped_buffer_range(mem.target, offset as i32, size as i32);
+                gl.flush_mapped_buffer_range(target, offset as i32, size as i32);
             }
-            gl.bind_buffer(mem.target, None);
+            gl.bind_buffer(target, None);
             if let Err(err) = self.share.check() {
                 panic!("Error flushing memory range: {:?} for memory {:?}", err, mem);
             }
@@ -1188,8 +1177,8 @@ impl d::Device<B> for Device {
 
         for i in ranges {
             let (mem, range) = i.borrow();
-            let buffer = mem.buffer.expect("cannot invalidate DEVICE_LOCAL memory");
-            gl.bind_buffer(mem.target, Some(buffer));
+            let (buffer, target) = mem.buffer.expect("cannot invalidate image memory");
+            gl.bind_buffer(target, Some(buffer));
 
             let offset = *range.start().unwrap_or(&0);
             let size = *range.end().unwrap_or(&mem.size) - offset;
@@ -1197,10 +1186,10 @@ impl d::Device<B> for Device {
             if self.share.private_caps.emulate_map {
                 let ptr = mem.emulate_map_allocation.get().unwrap();
                 let slice = slice::from_raw_parts_mut(ptr.offset(offset as isize), size as usize);
-                gl.get_buffer_sub_data(mem.target, offset as i32, slice);
+                gl.get_buffer_sub_data(target, offset as i32, slice);
             } else {
-                gl.invalidate_buffer_sub_data(mem.target, offset as i32, size as i32);
-                gl.bind_buffer(mem.target, None);
+                gl.invalidate_buffer_sub_data(target, offset as i32, size as i32);
+                gl.bind_buffer(target, None);
             }
 
             if let Err(err) = self.share.check() {
@@ -1613,7 +1602,7 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn free_memory(&self, memory: n::Memory) {
-        if let Some(buffer) = memory.buffer {
+        if let Some((buffer, _)) = memory.buffer {
             self.share.context.delete_buffer(buffer);
         }
     }
