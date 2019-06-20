@@ -1650,7 +1650,7 @@ impl hal::Device<Backend> for Device {
 
     unsafe fn create_descriptor_pool<I>(
         &self,
-        _max_sets: usize,
+        max_sets: usize,
         descriptor_ranges: I,
         _flags: pso::DescriptorPoolCreateFlags,
     ) -> Result<n::DescriptorPool, OutOfMemory>
@@ -1679,10 +1679,11 @@ impl hal::Device<Backend> for Device {
             let (array_ref, total_resources) = arguments.build();
             let encoder = device.new_argument_encoder(array_ref);
 
-            let total_size = encoder.encoded_length();
+            let alignment = self.shared.private_caps.buffer_alignment;
+            let total_size = encoder.encoded_length() + (max_sets as u64) * alignment;
             let raw = device.new_buffer(total_size, MTLResourceOptions::empty());
 
-            Ok(n::DescriptorPool::new_argument(raw, total_size, total_resources))
+            Ok(n::DescriptorPool::new_argument(raw, total_size, alignment, total_resources))
         } else {
             let mut counters = n::ResourceData::<n::PoolResourceIndex>::new();
             for desc_range in descriptor_ranges {
@@ -1742,6 +1743,7 @@ impl hal::Device<Backend> for Device {
                     res_offset,
                     count: desc.count,
                     usage,
+                    content,
                 });
             };
 
@@ -1902,7 +1904,7 @@ impl hal::Device<Backend> for Device {
                     let mut arg_index = {
                         let binding = &bindings[&write.binding];
                         debug_assert!((write.array_offset as usize) < binding.count);
-                        (range.start + binding.res_offset + (write.array_offset as n::PoolResourceIndex)) as NSUInteger
+                        (binding.res_offset as NSUInteger) + (write.array_offset as NSUInteger)
                     };
 
                     for (data, descriptor) in pool
@@ -1921,6 +1923,26 @@ impl hal::Device<Backend> for Device {
                                 data.ptr = (&**image.raw).as_ptr();
                                 arg_index += 1;
                             }
+                            pso::Descriptor::CombinedImageSampler(image, _il, sampler) => {
+                                let binding = &bindings[&write.binding];
+                                if !binding.content
+                                    .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
+                                {
+                                    //TODO: supporting arrays of combined image-samplers can be tricky.
+                                    // We need to scan both sampler and image sections of the encoder
+                                    // at the same time.
+                                    assert!(arg_index < (binding.res_offset as NSUInteger) + (binding.count as NSUInteger));
+                                    encoder.set_sampler_state(&sampler.0, arg_index + binding.count as NSUInteger);
+                                }
+                                encoder.set_texture(&image.raw, arg_index);
+                                data.ptr = (&**image.raw).as_ptr();
+                            }
+                            pso::Descriptor::UniformTexelBuffer(view) |
+                            pso::Descriptor::StorageTexelBuffer(view) => {
+                                encoder.set_texture(&view.raw, arg_index);
+                                data.ptr = (&**view.raw).as_ptr();
+                                arg_index += 1;
+                            }
                             pso::Descriptor::Buffer(buffer, ref desc_range) => {
                                 let (buf_raw, buf_range) = buffer.as_bound();
                                 encoder.set_buffer(
@@ -1931,12 +1953,6 @@ impl hal::Device<Backend> for Device {
                                 data.ptr = (&**buf_raw).as_ptr();
                                 arg_index += 1;
                             }
-                            //TODO: supporting arrays of combined image-samplers can be tricky.
-                            // We need to scan both sampler and image sections of the encoder
-                            // at the same time.
-                            pso::Descriptor::CombinedImageSampler(..)
-                            | pso::Descriptor::UniformTexelBuffer(..)
-                            | pso::Descriptor::StorageTexelBuffer(..) => unimplemented!(),
                         }
                     }
                 }
