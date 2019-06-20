@@ -85,11 +85,11 @@ lazy_static! {
     static ref SURFACE_EXTENSIONS: Vec<&'static CStr> = vec![
         extensions::khr::Surface::name(),
         // Platform-specific WSI extensions
-        #[cfg(all(unix, not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
         extensions::khr::XlibSurface::name(),
-        #[cfg(all(unix, not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
         extensions::khr::XcbSurface::name(),
-        #[cfg(all(unix, not(target_os = "android")))]
+        #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
         extensions::khr::WaylandSurface::name(),
         #[cfg(target_os = "android")]
         extensions::khr::AndroidSurface::name(),
