@@ -645,7 +645,7 @@ impl WindowState {
                 DIMS.width as _,
                 DIMS.height as _,
             ))
-            .with_title("quad".to_string());
+            .with_title("colour-uniform".to_string());
 
         WindowState {
             events_loop,
@@ -670,7 +670,7 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
         .unwrap()
         .build(&window_state.events_loop)
         .unwrap();
-    let instance = back::Instance::create("gfx-rs quad", 1);
+    let instance = back::Instance::create("gfx-rs colour-uniform", 1);
     let surface = instance.create_surface(&window);
     let mut adapters = instance.enumerate_adapters();
     (

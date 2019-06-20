@@ -998,6 +998,10 @@ impl hal::Device<Backend> for Device {
                     }
                 }
                 n::DescriptorSetLayout::ArgumentBuffer { ref bindings, .. } => {
+                    //Note: we specifically ignore the stage flags and unconditionally
+                    // add resource overrides and bump the counter, because there is no
+                    // way to override the argument buffer binding itself in SPIRV-Cross.
+                    //TODO: ^^
                     for &mut (_stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
                         res_overrides.extend(bindings
                             .iter()
@@ -1019,6 +1023,12 @@ impl hal::Device<Backend> for Device {
                 offsets,
                 dynamic_buffers,
             });
+        }
+
+        if self.shared.private_caps.argument_buffers && false { //TODO: profile this
+            for si in stage_infos.iter_mut() {
+                si.2.buffers = MAX_BOUND_DESCRIPTOR_SETS as n::PoolResourceIndex;
+            }
         }
 
         let mut pc_buffers = [None; 3];
