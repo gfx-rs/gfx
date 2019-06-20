@@ -209,6 +209,41 @@ impl Share {
         }
         Ok(())
     }
+
+    fn buffer_memory_type_mask(&self, usage: buffer::Usage) -> u64 {
+        let mut type_mask = 0;
+        for (type_index, &(_, role)) in self.memory_types.iter().enumerate() {
+            match role {
+                MemoryRole::Buffer {
+                    allowed_usage,
+                    ..
+                } => {
+                    if allowed_usage.contains(usage) {
+                        type_mask |= 1 << type_index;
+                    }
+                }
+                MemoryRole::Image => {},
+            }
+        }
+        if type_mask == 0 {
+            error!("gl backend capability does not allow a buffer with usage {:?}", usage);
+        }
+        type_mask
+    }
+
+    fn image_memory_type_mask(&self) -> u64 {
+        let mut type_mask = 0;
+        for (type_index, &(_, role)) in self.memory_types.iter().enumerate() {
+            match role {
+                MemoryRole::Buffer { .. } => {},
+                MemoryRole::Image => {
+                    type_mask |= 1 << type_index;
+                },
+            }
+        }
+        assert_ne!(type_mask, 0);
+        type_mask
+    }
 }
 
 /// Single-threaded `Arc`.

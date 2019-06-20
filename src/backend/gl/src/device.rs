@@ -1058,24 +1058,7 @@ impl d::Device<B> for Device {
             1
         };
 
-        let mut type_mask = 0;
-        for (type_index, &(_, role)) in self.share.memory_types.iter().enumerate() {
-            match role {
-                MemoryRole::Buffer {
-                    allowed_usage,
-                    ..
-                } => {
-                    if allowed_usage.contains(usage) {
-                        type_mask |= 1 << type_index;
-                    }
-                }
-                MemoryRole::Image => {},
-            }
-        }
-
-        if type_mask == 0 {
-            error!("gl backend capability does not allow a buffer with usage {:?}", usage);
-        }
+        let type_mask = self.share.buffer_memory_type_mask(usage);
 
         memory::Requirements {
             size: size as u64,
@@ -1360,6 +1343,7 @@ impl d::Device<B> for Device {
         let bytes_per_texel = surface_desc.bits / 8;
         let ext = kind.extent();
         let size = (ext.width * ext.height * ext.depth) as u64 * bytes_per_texel as u64;
+        let type_mask = self.share.image_memory_type_mask();
 
         if let Err(err) = self.share.check() {
             panic!(
@@ -1367,17 +1351,6 @@ impl d::Device<B> for Device {
                 err, kind, format
             );
         }
-
-        let mut type_mask = 0;
-        for (type_index, &(_, role)) in self.share.memory_types.iter().enumerate() {
-            match role {
-                MemoryRole::Buffer { .. } => {},
-                MemoryRole::Image => {
-                    type_mask |= 1 << type_index;
-                },
-            }
-        }
-        assert_ne!(type_mask, 0);
 
         Ok(n::Image {
             kind: image,
