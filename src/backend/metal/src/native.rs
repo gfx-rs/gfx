@@ -948,9 +948,11 @@ impl ArgumentArray {
             Dt::InputAttachment => {
                 MTLResourceUsage::Sample
             }
-            Dt::UniformBuffer |
-            Dt::UniformBufferDynamic |
             Dt::UniformTexelBuffer => {
+                MTLResourceUsage::Sample
+            }
+            Dt::UniformBuffer |
+            Dt::UniformBufferDynamic => {
                 MTLResourceUsage::Read
             }
             Dt::StorageImage |

@@ -1909,7 +1909,7 @@ impl hal::Device<Backend> for Device {
 
                     for (data, descriptor) in pool
                         .write()
-                        .resources[arg_index as usize .. range.end as usize]
+                        .resources[range.start as usize + arg_index as usize .. range.end as usize]
                         .iter_mut()
                         .zip(write.descriptors)
                     {

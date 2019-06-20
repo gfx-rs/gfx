@@ -109,8 +109,8 @@ unsafe impl Send for Shared {}
 unsafe impl Sync for Shared {}
 
 impl Shared {
-    fn new(device: metal::Device) -> Self {
-        let private_caps = PrivateCapabilities::new(&device);
+    fn new(device: metal::Device, experiments: &Experiments) -> Self {
+        let private_caps = PrivateCapabilities::new(&device, experiments);
 
         let visibility = VisibilityShared {
             buffer: device.new_buffer(
@@ -142,7 +142,14 @@ impl Shared {
     }
 }
 
-pub struct Instance;
+#[derive(Clone, Debug, Default)]
+pub struct Experiments {
+    pub argument_buffers: bool,
+}
+
+pub struct Instance {
+    pub experiments: Experiments,
+}
 
 impl hal::Instance for Instance {
     type Backend = Backend;
@@ -153,7 +160,8 @@ impl hal::Instance for Instance {
             .into_iter()
             .map(|dev| {
                 let name = dev.name().into();
-                let physical_device = device::PhysicalDevice::new(Arc::new(Shared::new(dev)));
+                let shared = Shared::new(dev, &self.experiments);
+                let physical_device = device::PhysicalDevice::new(Arc::new(shared));
                 hal::Adapter {
                     info: hal::AdapterInfo {
                         name,
@@ -182,7 +190,9 @@ impl hal::Instance for Instance {
 
 impl Instance {
     pub fn create(_: &str, _: u32) -> Self {
-        Instance
+        Instance {
+             experiments: Experiments::default(),
+        }
     }
 
     #[cfg(feature = "winit")]
@@ -587,7 +597,7 @@ impl PrivateCapabilities {
             .any(|x| raw.supports_feature_set(x))
     }
 
-    fn new(device: &metal::Device) -> Self {
+    fn new(device: &metal::Device, experiments: &Experiments) -> Self {
         #[repr(C)]
         #[derive(Clone, Copy, Debug)]
         struct NSOperatingSystemVersion {
@@ -634,7 +644,8 @@ impl PrivateCapabilities {
             exposed_queues: 1,
             expose_line_mode: true,
             resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
-            argument_buffers: Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT),
+            argument_buffers: experiments.argument_buffers &&
+                Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT),
             shared_textures: !os_is_mac,
             base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
             dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
