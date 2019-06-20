@@ -4505,6 +4505,17 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 _ => panic!("Unexpected secondary sink!"),
             };
 
+            for (a, b) in self.state.descriptor_sets.iter_mut().zip(&outer_borrowed.state.descriptor_sets) {
+                if !b.graphics_resources.is_empty() {
+                    a.graphics_resources.clear();
+                    a.graphics_resources.extend_from_slice(&b.graphics_resources);
+                }
+                if !b.compute_resources.is_empty() {
+                    a.compute_resources.clear();
+                    a.compute_resources.extend_from_slice(&b.compute_resources);
+                }
+            }
+
             match *self.inner
                 .borrow_mut()
                 .sink()
