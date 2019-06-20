@@ -200,7 +200,8 @@ struct SubpassInfo {
 
 #[derive(Debug, Default)]
 struct DescriptorSetInfo {
-    used_resources: Vec<(ResourcePtr, metal::MTLResourceUsage)>,
+    graphics_resources: Vec<(ResourcePtr, metal::MTLResourceUsage)>,
+    compute_resources: Vec<(ResourcePtr, metal::MTLResourceUsage)>,
 }
 
 /// The current state of a command buffer, used for two distinct purposes:
@@ -260,7 +261,8 @@ impl State {
         self.vertex_buffers.clear();
         self.pending_subpasses.clear();
         for ds in self.descriptor_sets.iter_mut() {
-            ds.used_resources.clear();
+            ds.graphics_resources.clear();
+            ds.compute_resources.clear();
         }
     }
 
@@ -368,7 +370,7 @@ impl State {
         let com_used_resources = self.descriptor_sets
             .iter()
             .flat_map(|ds| {
-                ds.used_resources
+                ds.graphics_resources
                     .iter()
                     .map(|&(resource, usage)| soft::RenderCommand::UseResource {
                         resource,
@@ -417,7 +419,7 @@ impl State {
         let com_used_resources = self.descriptor_sets
             .iter()
             .flat_map(|ds| {
-                ds.used_resources
+                ds.compute_resources
                     .iter()
                     .map(|&(resource, usage)| soft::ComputeCommand::UseResource {
                         resource,
@@ -3634,8 +3636,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         });
                     }
                     if stage_flags.intersects(pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT) {
-                        cached_ds.used_resources.clear();
-                        cached_ds.used_resources.extend(pool
+                        cached_ds.graphics_resources.clear();
+                        cached_ds.graphics_resources.extend(pool
                             .read()
                             .resources[range.start as usize .. range.end as usize]
                             .iter()
@@ -3643,7 +3645,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 ptr::NonNull::new(ur.ptr).map(|res| (res, ur.usage))
                             })
                         );
-                        pre.issue_many(cached_ds.used_resources
+                        pre.issue_many(cached_ds.graphics_resources
                             .iter()
                             .map(|&(resource, usage)| soft::RenderCommand::UseResource {
                                 resource,
@@ -3784,8 +3786,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             offset: raw_offset,
                         });
 
-                        cached_ds.used_resources.clear();
-                        cached_ds.used_resources.extend(pool
+                        cached_ds.compute_resources.clear();
+                        cached_ds.compute_resources.extend(pool
                             .read()
                             .resources[range.start as usize .. range.end as usize]
                             .iter()
@@ -3793,7 +3795,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 ptr::NonNull::new(ur.ptr).map(|res| (res, ur.usage))
                             })
                         );
-                        pre.issue_many(cached_ds.used_resources
+                        pre.issue_many(cached_ds.compute_resources
                             .iter()
                             .map(|&(resource, usage)| soft::ComputeCommand::UseResource {
                                 resource,
