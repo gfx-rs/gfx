@@ -462,6 +462,7 @@ pub enum DescriptorPool {
     ArgumentBuffer {
         raw: metal::Buffer,
         raw_allocator: RangeAllocator<buffer::Offset>,
+        alignment: buffer::Offset,
         inner: Arc<RwLock<DescriptorArgumentPoolInner>>,
         res_allocator: RangeAllocator<PoolResourceIndex>,
     },
@@ -488,7 +489,8 @@ impl DescriptorPool {
     }
 
     pub(crate) fn new_argument(
-        raw: metal::Buffer, total_bytes: buffer::Offset, total_resources: usize,
+        raw: metal::Buffer, total_bytes: buffer::Offset,
+        alignment: buffer::Offset, total_resources: usize,
     ) -> Self {
         let default = UsedResource {
             ptr: ptr::null_mut(),
@@ -497,6 +499,7 @@ impl DescriptorPool {
         DescriptorPool::ArgumentBuffer {
             raw,
             raw_allocator: RangeAllocator::new(0 .. total_bytes),
+            alignment,
             inner: Arc::new(RwLock::new(DescriptorArgumentPoolInner {
                 resources: vec![default; total_resources],
             })),
@@ -643,6 +646,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
             DescriptorPool::ArgumentBuffer {
                 ref raw,
                 ref mut raw_allocator,
+                alignment,
                 ref inner,
                 ref mut res_allocator,
             } => {
@@ -654,6 +658,11 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 let range = res_allocator
                     .allocate_range(total as PoolResourceIndex)
                     .map_err(|_| pso::AllocationError::OutOfPoolMemory)?;
+
+                let raw_range = raw_allocator
+                    .allocate_range(encoder.encoded_length() + alignment)
+                    .expect("Argument encoding length is inconsistent!");
+                let raw_offset = (raw_range.start + alignment - 1) & !(alignment - 1);
 
                 let mut data = inner.write();
                 for arg in bindings.values() {
@@ -667,10 +676,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
 
                 Ok(DescriptorSet::ArgumentBuffer {
                     raw: raw.clone(),
-                    raw_offset: raw_allocator
-                        .allocate_range(encoder.encoded_length())
-                        .expect("Argument encoding length is inconsistent!")
-                        .start,
+                    raw_offset,
                     pool: Arc::clone(inner),
                     range,
                     encoder: encoder.clone(),
@@ -730,8 +736,10 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
             DescriptorPool::ArgumentBuffer {
                 ref mut raw_allocator,
                 ref mut res_allocator,
+                ref inner,
                 ..
             } => {
+                let mut data = inner.write();
                 for descriptor_set in descriptor_sets {
                     match descriptor_set {
                         DescriptorSet::Emulated { .. } => panic!(
@@ -740,6 +748,11 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                         DescriptorSet::ArgumentBuffer {
                             raw_offset, range, encoder, ..
                         } => {
+                            for ur in data.resources[range.start as usize .. range.end as usize].iter_mut() {
+                                ur.ptr = ptr::null_mut();
+                                ur.usage = metal::MTLResourceUsage::empty();
+                            }
+
                             let handle_range = raw_offset .. raw_offset + encoder.encoded_length();
                             raw_allocator.free_range(handle_range);
                             res_allocator.free_range(range);
@@ -847,6 +860,7 @@ pub struct ArgumentLayout {
     pub(crate) res_offset: PoolResourceIndex,
     pub(crate) count: pso::DescriptorArrayIndex,
     pub(crate) usage: metal::MTLResourceUsage,
+    pub(crate) content: DescriptorContent,
 }
 
 #[derive(Debug)]
