@@ -1610,7 +1610,7 @@ impl d::Device<B> for Device {
         let performance = web_sys::window().unwrap().performance().unwrap();
         let start = performance.now();;
         let get_elapsed = || {
-            ((performance.now() - start) * 1000.0) as u64
+            ((performance.now() - start) * 1_000_000.0) as u64
         };
 
         match wait {
@@ -1629,10 +1629,12 @@ impl d::Device<B> for Device {
                 Ok(true)
             }
             d::WaitFor::Any => {
+                const FENCE_WAIT_NS: u64 = 100_000;
+
                 let fences: Vec<_> = fences.into_iter().collect();
                 loop {
                     for fence in &fences {
-                        if self.wait_for_fence(fence.borrow(), 1000)? {
+                        if self.wait_for_fence(fence.borrow(), FENCE_WAIT_NS)? {
                             return Ok(true);
                         }
                     }
