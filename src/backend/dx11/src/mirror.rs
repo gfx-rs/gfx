@@ -132,8 +132,8 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 (hr, desc)
             };
             assert!(winerror::SUCCEEDED(hr));
-            info!("\tAttribute {}, system type {:?}, mask {}, read-write mask {}",
-                convert_str(desc.SemanticName), desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
+            info!("\tAttribute {}, semantic index {}, system type {:?}, mask {}, read-write mask {}",
+                convert_str(desc.SemanticName), desc.SemanticIndex, desc.SystemValueType, desc.Mask, desc.ReadWriteMask);
             if desc.SystemValueType != d3dcommon::D3D_NAME_UNDEFINED {
                 // system value semantic detected, skipping
                 continue
@@ -143,11 +143,11 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 continue
             }
             let name = convert_str(desc.SemanticName);
-            if desc.SemanticIndex != 0 {
-                error!("Semantic {} has non-zero index {} - not supported by the backend", name, desc.SemanticIndex);
-            }
             info.vertex_attributes.push(s::AttributeVar {
-                name: name,
+                name: crate::factory::VertexSemantic {
+                    name: &name,
+                    index: desc.SemanticIndex
+                }.into(),
                 slot: desc.Register as core::AttributeSlot,
                 base_type: map_base_type_from_component(desc.ComponentType),
                 container: mask_to_vector(desc.Mask),

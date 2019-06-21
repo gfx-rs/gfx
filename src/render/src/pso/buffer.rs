@@ -182,9 +182,40 @@ impl<'a,
     }
     fn link_input(&mut self, at: &shade::AttributeVar, _: &Self::Init) ->
                   Option<Result<pso::AttributeDesc, Format>> {
-        T::query(&at.name).map(|el| {
-            self.0.link(at, el)
-        })
+        T::query(&at.name)
+            .or_else(|| {
+                // Hack: if the DX11 backend implicitly adds semantic index 0, try removing it, in case the user didn't explicitly call out the implied semantic index in their pipeline definition.
+                strip_dx_semantic_index_0(&at.name).and_then(T::query)
+            })
+            .map(|el| {
+                self.0.link(at, el)
+            })
+    }
+}
+
+ /// DX11: Returns just the name part of the attribute, if the semantic index is `0`. Otherwise, return `None`.
+fn strip_dx_semantic_index_0(name: &str) -> Option<&str> {
+    let mut last_two_rev = name.chars().rev().take(2);
+    let last = last_two_rev.next()?;
+    let second_last = last_two_rev.next()?;
+
+    if last == '0' && !second_last.is_ascii_digit() {
+        Some(&name[..(name.len() - 1)])
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod dx11_hack_tests {
+    use super::*;
+
+    #[test]
+    fn strip_index() {
+        assert_eq!(Some("TEXCOORD"), strip_dx_semantic_index_0("TEXCOORD0"));
+        assert_eq!(None, strip_dx_semantic_index_0("TEXCOORD"));
+        assert_eq!(None, strip_dx_semantic_index_0("TEXCOORD2"));
+        assert_eq!(None, strip_dx_semantic_index_0("TEXCOORD10"));
     }
 }
 
