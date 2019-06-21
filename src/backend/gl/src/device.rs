@@ -483,42 +483,50 @@ impl d::Device<B> for Device {
                 let raw = gl.create_buffer().unwrap();
                 //TODO: use *Named calls to avoid binding
                 gl.bind_buffer(target, Some(raw));
+
+                let mut map_flags = 0;
+
+                if is_cpu_visible_memory {
+                    map_flags |= glow::MAP_WRITE_BIT | glow::MAP_FLUSH_EXPLICIT_BIT;
+                    if is_readable_memory {
+                        map_flags |= glow::MAP_READ_BIT;
+                    }
+                }
+
                 if self.share.private_caps.buffer_storage {
                     let mut storage_flags = 0;
+
                     if is_cpu_visible_memory {
+                        map_flags |= glow::MAP_PERSISTENT_BIT;
                         storage_flags |= glow::MAP_WRITE_BIT
                             | glow::MAP_PERSISTENT_BIT
                             | glow::DYNAMIC_STORAGE_BIT;
+
                         if is_readable_memory {
                             storage_flags |= glow::MAP_READ_BIT;
                         }
+
                         if is_coherent_memory {
+                            map_flags |= glow::MAP_COHERENT_BIT;
                             storage_flags |= glow::MAP_COHERENT_BIT;
                         }
                     }
+
                     gl.buffer_storage(target, size as i32, None, storage_flags);
                 } else {
-                    let usage = if is_device_local_memory {
-                        glow::STATIC_DRAW
-                    } else {
+                    assert!(!is_coherent_memory);
+                    let usage = if is_cpu_visible_memory {
                         glow::DYNAMIC_DRAW
+                    } else {
+                        glow::STATIC_DRAW
                     };
                     gl.buffer_data_size(target, size as i32, usage);
                 }
+
                 gl.bind_buffer(target, None);
 
                 if let Err(err) = self.share.check() {
                     panic!("Error allocating memory buffer {:?}", err);
-                }
-
-                let mut map_flags = glow::MAP_WRITE_BIT
-                    | glow::MAP_PERSISTENT_BIT
-                    | glow::MAP_FLUSH_EXPLICIT_BIT;
-                if is_readable_memory {
-                    map_flags |= glow::MAP_READ_BIT;
-                }
-                if is_coherent_memory {
-                    map_flags |= glow::MAP_COHERENT_BIT;
                 }
 
                 Ok(n::Memory {

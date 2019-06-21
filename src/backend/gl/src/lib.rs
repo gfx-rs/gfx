@@ -370,7 +370,8 @@ impl PhysicalDevice {
         };
 
         // Mimicking vulkan, memory types with more flags should come before those with fewer flags
-        if private_caps.map {
+        if private_caps.map && private_caps.buffer_storage {
+            // Coherent memory is only available if we have `glBufferStorage`
             add_memory_type(hal::MemoryType {
                 properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED | memory::Properties::COHERENT,
                 heap_index: CPU_VISIBLE_HEAP,
@@ -379,16 +380,15 @@ impl PhysicalDevice {
                 properties: memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
                 heap_index: CPU_VISIBLE_HEAP,
             });
-            add_memory_type(hal::MemoryType {
-                properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
-                heap_index: CPU_VISIBLE_HEAP,
-            });
-        } else if private_caps.emulate_map {
+        }
+
+        if private_caps.map || private_caps.emulate_map {
             add_memory_type(hal::MemoryType {
                 properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
                 heap_index: CPU_VISIBLE_HEAP,
             });
         }
+
         add_memory_type(hal::MemoryType {
             properties: memory::Properties::DEVICE_LOCAL,
             heap_index: DEVICE_LOCAL_HEAP,
