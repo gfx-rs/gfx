@@ -170,9 +170,9 @@ pub struct PrivateCaps {
     pub framebuffer: bool,
     /// FBO support to call `glFramebufferTexture`
     pub framebuffer_texture: bool,
-    /// Can bind a buffer to a different target than was
-    /// used upon the buffer creation/initialization
-    pub buffer_role_change: bool,
+    /// If true, then buffers used as ELEMENT_ARRAY_BUFFER may be created / initialized / used as
+    /// other targets, if false they must not be mixed with other targets.
+    pub index_buffer_role_change: bool,
     pub buffer_storage: bool,
     pub image_storage: bool,
     pub clear_buffer: bool,
@@ -477,7 +477,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         framebuffer: info.is_supported(&[Core(3, 0), Es(2, 0), Ext("GL_ARB_framebuffer_object")]),
         // TODO && gl.GenFramebuffers.is_loaded(),
         framebuffer_texture: info.is_supported(&[Core(3, 0)]), //TODO: double check
-        buffer_role_change: true || !info.version.is_embedded, // TODO
+        index_buffer_role_change: !info.is_webgl(),
         image_storage: info.is_supported(&[Core(4, 2), Ext("GL_ARB_texture_storage")]),
         buffer_storage: info.is_supported(&[Core(4, 4), Ext("GL_ARB_buffer_storage")]),
         clear_buffer: info.is_supported(&[Core(3, 0), Es(3, 0)]),

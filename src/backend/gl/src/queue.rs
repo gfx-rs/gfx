@@ -583,17 +583,17 @@ impl CommandQueue {
             }*/
             com::Command::CopyBufferToBuffer(src, dst, ref r) => unsafe {
                 let gl = &self.share.context;
-                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(src));
-                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(dst));
+                gl.bind_buffer(glow::COPY_READ_BUFFER, Some(src));
+                gl.bind_buffer(glow::COPY_WRITE_BUFFER, Some(dst));
                 gl.copy_buffer_sub_data(
-                    glow::PIXEL_UNPACK_BUFFER,
-                    glow::PIXEL_PACK_BUFFER,
+                    glow::COPY_READ_BUFFER,
+                    glow::COPY_WRITE_BUFFER,
                     r.src as _,
                     r.dst as _,
                     r.size as _,
                 );
-                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
-                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
+                gl.bind_buffer(glow::COPY_READ_BUFFER, None);
+                gl.bind_buffer(glow::COPY_WRITE_BUFFER, None);
             },
             com::Command::CopyBufferToTexture(buffer, texture, textype, ref r) => unsafe {
                 // TODO: Fix format and active texture
