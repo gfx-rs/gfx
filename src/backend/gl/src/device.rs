@@ -21,7 +21,7 @@ use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 use crate::info::LegacyFeatures;
 use crate::pool::{BufferMemory, OwnedBuffer, RawCommandPool};
 use crate::{conv, native as n, state};
-use crate::{Backend as B, Share, MemoryRole, Starc, Surface, Swapchain};
+use crate::{Backend as B, Share, MemoryUsage, Starc, Surface, Swapchain};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -471,8 +471,14 @@ impl d::Device<B> for Device {
         let is_readable_memory = memory_type.properties.contains(memory::Properties::CPU_CACHED);
 
         match memory_role {
-            MemoryRole::Buffer { target, .. } => {
+            MemoryUsage::Buffer(buffer_usage) => {
                 let gl = &self.share.context;
+                let target = if buffer_usage.contains(buffer::Usage::INDEX)
+                    && !self.share.private_caps.index_buffer_role_change {
+                    glow::ELEMENT_ARRAY_BUFFER
+                } else {
+                    glow::ARRAY_BUFFER
+                };
 
                 let raw = gl.create_buffer().unwrap();
                 //TODO: use *Named calls to avoid binding
@@ -524,7 +530,7 @@ impl d::Device<B> for Device {
                 })
             }
 
-            MemoryRole::Image => {
+            MemoryUsage::Image => {
                 assert!(is_device_local_memory);
                 Ok(n::Memory {
                     properties: memory::Properties::DEVICE_LOCAL,
@@ -1083,7 +1089,6 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         let caps = &self.share.private_caps;
 
-        assert!(caps.buffer_role_change);
         let offset = *range.start().unwrap_or(&0);
         let size = *range.end().unwrap_or(&memory.size) - offset;
 
