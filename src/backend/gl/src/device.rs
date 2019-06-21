@@ -1584,7 +1584,11 @@ impl d::Device<B> for Device {
                         }
                         Ok(false)
                     }
-                    _ => Ok(true),
+                    glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => {
+                        fence.0.set(n::FenceInner::Idle { signaled: true });
+                        Ok(true)
+                    },
+                    _ => unreachable!(),
                 }
             }
             n::FenceInner::Pending(None) => {
