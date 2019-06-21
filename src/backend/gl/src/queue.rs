@@ -922,19 +922,6 @@ impl CommandQueue {
             panic!("Error {:?} executing command: {:?}", err, cmd)
         }
     }
-
-    fn signal_fence(&mut self, fence: &native::Fence) {
-        if self.share.private_caps.sync {
-            let gl = &self.share.context;
-            let sync = if self.share.private_caps.sync {
-                Some(unsafe { gl.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0).unwrap() })
-            } else {
-                None
-            };
-
-            fence.0.set(sync);
-        }
-    }
 }
 
 impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
@@ -972,7 +959,14 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
                 }
             }
         }
-        fence.map(|fence| self.signal_fence(fence));
+
+        if let Some(fence) = fence {
+            fence.0.set(native::FenceInner::Pending(if self.share.private_caps.sync {
+                Some(self.share.context.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0).unwrap())
+            } else {
+                None
+            }));
+        }
     }
 
     #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]

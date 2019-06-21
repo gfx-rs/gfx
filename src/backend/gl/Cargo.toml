@@ -35,4 +35,18 @@ wasm-bindgen = "0.2.39"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
 version = "0.3.6"
-features = [ "console", "Document", "Element", "HtmlCanvasElement", "WebGlBuffer", "WebGlRenderingContext", "WebGl2RenderingContext", "WebGlProgram", "WebGlSampler", "WebGlShader", "WebGlTexture", "Window" ]
+features = [
+    "console",
+    "Document",
+    "Element",
+    "HtmlCanvasElement",
+    "Performance",
+    "WebGlBuffer",
+    "WebGlRenderingContext",
+    "WebGl2RenderingContext",
+    "WebGlProgram",
+    "WebGlSampler",
+    "WebGlShader",
+    "WebGlTexture",
+    "Window",
+]
