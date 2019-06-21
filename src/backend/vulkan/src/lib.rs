@@ -871,35 +871,44 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn is_valid_cache(&self, cache: &[u8]) -> bool {
-        assert!(cache.len() > 16 + vk::UUID_SIZE);
-        let cache_info: &[u32] = unsafe { slice::from_raw_parts(cache as *const _ as *const _, 4) };
+        const HEADER_SIZE: usize = 16 + vk::UUID_SIZE;
+
+        if cache.len() < HEADER_SIZE {
+            warn!("Bad cache data length {:?}", cache.len());
+            return false;
+        }
+
+        let header_len = u32::from_le_bytes([cache[0], cache[1], cache[2], cache[3]]);
+        let header_version = u32::from_le_bytes([cache[4], cache[5], cache[6], cache[7]]);
+        let vendor_id = u32::from_le_bytes([cache[8], cache[9], cache[10], cache[11]]);
+        let device_id = u32::from_le_bytes([cache[12], cache[13], cache[14], cache[15]]);
 
         // header length
-        if cache_info[0] <= 0 {
-            warn!("Bad header length {:?}", cache_info[0]);
+        if (header_len as usize) < HEADER_SIZE {
+            warn!("Bad header length {:?}", header_len);
             return false;
         }
 
         // cache header version
-        if cache_info[1] != vk::PipelineCacheHeaderVersion::ONE.as_raw() as u32 {
-            warn!("Unsupported cache header version: {:?}", cache_info[1]);
+        if header_version != vk::PipelineCacheHeaderVersion::ONE.as_raw() as u32 {
+            warn!("Unsupported cache header version: {:?}", header_version);
             return false;
         }
 
         // vendor id
-        if cache_info[2] != self.properties.vendor_id {
+        if vendor_id != self.properties.vendor_id {
             warn!(
                 "Vendor ID mismatch. Device: {:?}, cache: {:?}.",
-                self.properties.vendor_id, cache_info[2],
+                self.properties.vendor_id, vendor_id,
             );
             return false;
         }
 
         // device id
-        if cache_info[3] != self.properties.device_id {
+        if device_id != self.properties.device_id {
             warn!(
                 "Device ID mismatch. Device: {:?}, cache: {:?}.",
-                self.properties.device_id, cache_info[3],
+                self.properties.device_id, device_id,
             );
             return false;
         }
