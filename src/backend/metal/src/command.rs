@@ -3192,7 +3192,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::ClearValueRaw>,
     {
         // fill out temporary clear values per attachment
-        self.temp.clear_values.clear();
         self.temp
             .clear_values
             .resize(render_pass.attachments.len(), None);
