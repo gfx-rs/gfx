@@ -427,8 +427,8 @@ impl CommandQueue {
                         if self.share.private_caps.depth_range_f64_precision {
                             gl.depth_range_f64(depth_range[0], depth_range[1]);
                         } else {
-                            warn!("Depth ranges with f64 precision are not supported");
-                            // TODO: fallback to f32?
+                            debug!("Depth ranges with f64 precision are not supported, falling back to f32");
+                            gl.depth_range_f32(depth_range[0] as f32, depth_range[1] as f32);
                         }
                     };
                 } else if num_viewports > 1 {
