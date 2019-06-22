@@ -160,14 +160,15 @@ impl d::Device<B> for Device {
                     .iter()
                     .map(|&id| id as u32)
                     .collect::<Box<[_]>>();
+                let resolves = subpass.resolves.iter().map(make_ref).collect::<Box<[_]>>();
 
-                (colors, depth_stencil, inputs, preserves)
+                (colors, depth_stencil, inputs, preserves, resolves)
             })
             .collect::<Box<[_]>>();
 
         let subpasses = attachment_refs
             .iter()
-            .map(|(colors, depth_stencil, inputs, preserves)| {
+            .map(|(colors, depth_stencil, inputs, preserves, resolves)| {
                 vk::SubpassDescription {
                     flags: vk::SubpassDescriptionFlags::empty(),
                     pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
@@ -175,7 +176,7 @@ impl d::Device<B> for Device {
                     p_input_attachments: inputs.as_ptr(),
                     color_attachment_count: colors.len() as u32,
                     p_color_attachments: colors.as_ptr(),
-                    p_resolve_attachments: ptr::null(), // TODO
+                    p_resolve_attachments: if resolves.is_empty() { ptr::null() } else { resolves.as_ptr() },
                     p_depth_stencil_attachment: match depth_stencil {
                         Some(ref aref) => aref as *const _,
                         None => ptr::null(),
