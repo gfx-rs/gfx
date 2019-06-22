@@ -49,16 +49,16 @@ impl Buffer {
 #[derive(Debug)]
 pub struct BufferView;
 
+#[derive(Copy, Clone, Debug)]
+pub(crate) enum FenceInner {
+    Idle { signaled: bool },
+    Pending(Option<<GlContext as glow::Context>::Fence>),
+}
+
 #[derive(Debug)]
-pub struct Fence(pub(crate) Cell<Option<<GlContext as glow::Context>::Fence>>);
+pub struct Fence(pub(crate) Cell<FenceInner>);
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
-
-impl Fence {
-    pub(crate) fn new(sync: Option<<GlContext as glow::Context>::Fence>) -> Self {
-        Fence(Cell::new(sync))
-    }
-}
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum BindingTypes {

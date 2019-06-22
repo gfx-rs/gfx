@@ -1543,31 +1543,13 @@ impl d::Device<B> for Device {
         Ok(n::Semaphore)
     }
 
-    fn create_fence(&self, signalled: bool) -> Result<n::Fence, d::OutOfMemory> {
-        let sync = if signalled && self.share.private_caps.sync {
-            let gl = &self.share.context;
-            Some(unsafe { gl.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0).unwrap() })
-        } else {
-            None
-        };
-        Ok(n::Fence::new(sync))
+    fn create_fence(&self, signaled: bool) -> Result<n::Fence, d::OutOfMemory> {
+        let cell = Cell::new(n::FenceInner::Idle { signaled });
+        Ok(n::Fence(cell))
     }
 
-    unsafe fn reset_fences<I>(&self, fences: I) -> Result<(), d::OutOfMemory>
-    where
-        I: IntoIterator,
-        I::Item: Borrow<n::Fence>,
-    {
-        let gl = &self.share.context;
-        for fence in fences {
-            let fence = fence.borrow();
-            if let Some(sync) = fence.0.get() {
-                if self.share.private_caps.sync && gl.is_sync(sync) {
-                    gl.delete_sync(sync);
-                }
-            }
-            fence.0.set(None);
-        }
+    unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), d::OutOfMemory> {
+        fence.0.replace(n::FenceInner::Idle { signaled: false });
         Ok(())
     }
 
@@ -1576,26 +1558,106 @@ impl d::Device<B> for Device {
         fence: &n::Fence,
         timeout_ns: u64,
     ) -> Result<bool, d::OomOrDeviceLost> {
-        if !self.share.private_caps.sync {
-            return Ok(true);
-        }
-        match wait_fence(fence, &self.share, timeout_ns) {
-            glow::TIMEOUT_EXPIRED => Ok(false),
-            glow::WAIT_FAILED => {
-                if let Err(err) = self.share.check() {
-                    error!("Error when waiting on fence: {:?}", err);
+        // TODO:
+        // This can be called by multiple objects wanting to ensure they have exclusive
+        // access to a resource. How much does this call costs ? The status of the fence
+        // could be cached to avoid calling this more than once (in core or in the backend ?).
+        let gl = &self.share.context;
+        match fence.0.get() {
+            n::FenceInner::Idle { signaled } => {
+                if !signaled {
+                    warn!("Fence ptr {:?} is not pending, waiting not possible", fence.0.as_ptr());
                 }
-                Ok(false)
+                Ok(signaled)
             }
-            _ => Ok(true),
+            n::FenceInner::Pending(Some(sync)) => {
+                // TODO: Could `wait_sync` be used here instead?
+                match gl.client_wait_sync(
+                    sync,
+                    glow::SYNC_FLUSH_COMMANDS_BIT,
+                    timeout_ns as i32,
+                ) {
+                    glow::TIMEOUT_EXPIRED => Ok(false),
+                    glow::WAIT_FAILED => {
+                        if let Err(err) = self.share.check() {
+                            error!("Error when waiting on fence: {:?}", err);
+                        }
+                        Ok(false)
+                    }
+                    glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => {
+                        fence.0.set(n::FenceInner::Idle { signaled: true });
+                        Ok(true)
+                    },
+                    _ => unreachable!(),
+                }
+            }
+            n::FenceInner::Pending(None) => {
+                // No sync capability, we fallback to waiting for *everything* to finish
+                gl.flush();
+                fence.0.set(n::FenceInner::Idle { signaled: true });
+                Ok(true)
+            }
+        }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    unsafe fn wait_for_fences<I>(
+        &self,
+        fences: I,
+        wait: d::WaitFor,
+        timeout_ns: u64,
+    ) -> Result<bool, d::OomOrDeviceLost>
+    where
+        I: IntoIterator,
+        I::Item: Borrow<n::Fence>,
+    {
+        let performance = web_sys::window().unwrap().performance().unwrap();
+        let start = performance.now();;
+        let get_elapsed = || {
+            ((performance.now() - start) * 1_000_000.0) as u64
+        };
+
+        match wait {
+            d::WaitFor::All => {
+                for fence in fences {
+                    if !self.wait_for_fence(fence.borrow(), 0)? {
+                        let elapsed_ns = get_elapsed();
+                        if elapsed_ns > timeout_ns {
+                            return Ok(false);
+                        }
+                        if !self.wait_for_fence(fence.borrow(), timeout_ns - elapsed_ns)? {
+                            return Ok(false);
+                        }
+                    }
+                }
+                Ok(true)
+            }
+            d::WaitFor::Any => {
+                const FENCE_WAIT_NS: u64 = 100_000;
+
+                let fences: Vec<_> = fences.into_iter().collect();
+                loop {
+                    for fence in &fences {
+                        if self.wait_for_fence(fence.borrow(), FENCE_WAIT_NS)? {
+                            return Ok(true);
+                        }
+                    }
+                    if get_elapsed() >= timeout_ns {
+                        return Ok(false);
+                    }
+                }
+            }
         }
     }
 
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, d::DeviceLost> {
-        let gl = &self.share.context;
-
-        let status = gl.get_sync_status(fence.0.get().unwrap());
-        Ok(status == glow::SIGNALED)
+        Ok(match fence.0.get() {
+            n::FenceInner::Pending(Some(sync)) => {
+                self.share.context.get_sync_status(sync) == glow::SIGNALED
+            }
+            n::FenceInner::Pending(None) => false,
+            n::FenceInner::Idle { signaled } => signaled,
+        })
     }
 
     fn create_event(&self) -> Result<(), d::OutOfMemory> {
@@ -1707,11 +1769,11 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_fence(&self, fence: n::Fence) {
-        let gl = &self.share.context;
-        if let Some(sync) = fence.0.get() {
-            if self.share.private_caps.sync && gl.is_sync(sync) {
-                gl.delete_sync(sync);
+        match fence.0.get() {
+            n::FenceInner::Pending(Some(sync)) => {
+                self.share.context.delete_sync(sync);
             }
+            _ => {},
         }
     }
 
@@ -1741,27 +1803,5 @@ impl d::Device<B> for Device {
             self.share.context.finish();
         }
         Ok(())
-    }
-}
-
-pub(crate) fn wait_fence(fence: &n::Fence, share: &Starc<Share>, timeout_ns: u64) -> u32 {
-    // TODO:
-    // This can be called by multiple objects wanting to ensure they have exclusive
-    // access to a resource. How much does this call costs ? The status of the fence
-    // could be cached to avoid calling this more than once (in core or in the backend ?).
-    let gl = &share.context;
-    unsafe {
-        if share.private_caps.sync {
-            // TODO: Could `wait_sync` be used here instead?
-            gl.client_wait_sync(
-                fence.0.get().expect("No fence was set"),
-                glow::SYNC_FLUSH_COMMANDS_BIT,
-                timeout_ns as i32,
-            )
-        } else {
-            // We fallback to waiting for *everything* to finish
-            gl.flush();
-            glow::CONDITION_SATISFIED
-        }
     }
 }
