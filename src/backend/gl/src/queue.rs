@@ -598,22 +598,46 @@ impl CommandQueue {
             com::Command::CopyBufferToTexture(buffer, texture, textype, ref r) => unsafe {
                 // TODO: Fix format and active texture
                 assert_eq!(r.image_offset.z, 0);
-                assert_eq!(textype, glow::TEXTURE_2D);
+
                 let gl = &self.share.context;
+
                 gl.active_texture(glow::TEXTURE0);
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer));
-                gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                gl.tex_sub_image_2d_pixel_buffer_offset(
-                    glow::TEXTURE_2D,
-                    r.image_layers.level as _,
-                    r.image_offset.x,
-                    r.image_offset.y,
-                    r.image_extent.width as _,
-                    r.image_extent.height as _,
-                    glow::RGBA,
-                    glow::UNSIGNED_BYTE,
-                    r.buffer_offset as i32,
-                );
+
+                match textype {
+                    glow::TEXTURE_2D => {
+                        gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                        gl.tex_sub_image_2d_pixel_buffer_offset(
+                            glow::TEXTURE_2D,
+                            r.image_layers.level as _,
+                            r.image_offset.x,
+                            r.image_offset.y,
+                            r.image_extent.width as _,
+                            r.image_extent.height as _,
+                            glow::RGBA,
+                            glow::UNSIGNED_BYTE,
+                            r.buffer_offset as i32,
+                        );
+                    }
+                    glow::TEXTURE_2D_ARRAY => {
+                        gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(texture));
+                        gl.tex_sub_image_3d_pixel_buffer_offset(
+                            glow::TEXTURE_2D_ARRAY,
+                            r.image_layers.level as _,
+                            r.image_offset.x,
+                            r.image_offset.y,
+                            r.image_layers.layers.start as i32,
+                            r.image_extent.width as _,
+                            r.image_extent.height as _,
+                            r.image_layers.layers.end as i32 - r.image_layers.layers.start as i32,
+                            glow::RGBA,
+                            glow::UNSIGNED_BYTE,
+                            r.buffer_offset as i32,
+                        );
+                    }
+                    _ => unimplemented!(),
+                }
+
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
             },
             com::Command::CopyBufferToSurface(..) => {
