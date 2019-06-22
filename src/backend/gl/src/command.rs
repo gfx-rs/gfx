@@ -108,6 +108,7 @@ pub enum Command {
     SetPatchSize(i32),
     BindProgram(<GlContext as glow::Context>::Program),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
+    BindAllBlendSlots(pso::ColorBlendDesc),
     BindAttribute(n::AttributeDesc, n::RawBuffer, i32, u32),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
@@ -163,7 +164,7 @@ struct Cache {
     // Active program name.
     program: Option<n::Program>,
     // Blend per attachment.
-    blend_targets: Option<Vec<Option<pso::ColorBlendDesc>>>,
+    blend_targets: Vec<Option<pso::ColorBlendDesc>>,
     // Maps bound vertex buffer offset (index) to handle / buffer range
     vertex_buffers: Vec<Option<(n::RawBuffer, Range<buffer::Offset>)>>,
     // Active vertex buffer descriptions.
@@ -185,7 +186,7 @@ impl Cache {
             error_state: false,
             patch_size: None,
             program: None,
-            blend_targets: None,
+            blend_targets: Vec::new(),
             vertex_buffers: Vec::new(),
             vertex_buffer_descs: Vec::new(),
             attributes: Vec::new(),
@@ -326,43 +327,43 @@ impl RawCommandBuffer {
 
     fn update_blend_targets(&mut self, blend_targets: &Vec<pso::ColorBlendDesc>) {
         let max_blend_slots = blend_targets.len();
-
-        if max_blend_slots > 0 {
-            match self.cache.blend_targets {
-                Some(ref mut cached) => {
-                    if cached.len() < max_blend_slots {
-                        cached.resize(max_blend_slots, None);
-                    }
-                }
-                None => {
-                    self.cache.blend_targets = Some(vec![None; max_blend_slots]);
-                }
-            };
+        if max_blend_slots == 0 {
+            return;
         }
 
-        for (slot, blend_target) in blend_targets.iter().enumerate() {
-            let mut update_blend = false;
-            if let Some(ref mut cached_targets) = self.cache.blend_targets {
-                if let Some(cached_target) = cached_targets.get(slot) {
-                    match cached_target {
-                        &Some(ref cache) => {
-                            if cache != blend_target {
-                                update_blend = true;
-                            }
-                        }
-                        &None => {
-                            update_blend = true;
-                        }
+        if self.cache.blend_targets.len() < max_blend_slots {
+            self.cache.blend_targets.resize(max_blend_slots, None);
+        }
+
+        let mut all_targets_same = true;
+        for blend_target in &blend_targets[1..] {
+            if blend_target != &blend_targets[0] {
+                all_targets_same = false;
+                break;
+            }
+        }
+
+        if all_targets_same {
+            for cached_target in &mut self.cache.blend_targets {
+                *cached_target = Some(blend_targets[0]);
+            }
+            self.push_cmd(Command::BindAllBlendSlots(blend_targets[0]));
+        } else {
+            for (slot, blend_target) in blend_targets.iter().enumerate() {
+                let cached_target = self.cache.blend_targets.get_mut(slot).unwrap();
+                let update_blend = match cached_target {
+                    Some(cache) => {
+                        cache != blend_target
                     }
-                }
+                    None => {
+                        true
+                    }
+                };
 
                 if update_blend {
-                    cached_targets[slot] = Some(*blend_target);
+                    *cached_target = Some(*blend_target);
+                    self.push_cmd(Command::BindBlendSlot(slot as _, *blend_target));
                 }
-            }
-
-            if update_blend {
-                self.push_cmd(Command::BindBlendSlot(slot as _, *blend_target));
             }
         }
     }
