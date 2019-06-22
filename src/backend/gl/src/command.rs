@@ -344,10 +344,16 @@ impl RawCommandBuffer {
         }
 
         if all_targets_same {
+            let mut update_blend = false;
             for cached_target in &mut self.cache.blend_targets {
-                *cached_target = Some(blend_targets[0]);
+                if cached_target.as_ref() != Some(&blend_targets[0]) {
+                    *cached_target = Some(blend_targets[0]);
+                    update_blend = true;
+                }
             }
-            self.push_cmd(Command::BindAllBlendSlots(blend_targets[0]));
+            if update_blend {
+                self.push_cmd(Command::BindAllBlendSlots(blend_targets[0]));
+            }
         } else {
             for (slot, blend_target) in blend_targets.iter().enumerate() {
                 let cached_target = self.cache.blend_targets.get_mut(slot).unwrap();
