@@ -13,6 +13,28 @@ end of the VS buffer table.
 
 When argument buffers are supported, each descriptor set becomes a buffer binding,
 but the general placement rule is the same.
+
+## Command recording
+
+One-time-submit primary command buffers are recorded "live" into `MTLCommandBuffer`.
+Special care is taken to the recording state: active bindings are restored at the
+start of any render or compute pass.
+
+Multi-submit and secondary command buffers are recorded as "soft" commands into
+`Journal`. Actual native recording is done at either `submit` or `execute_commands`
+correspondingly. When that happens, we `enqueue` the command buffer at the start
+of recording, which allows the driver to work on pass translation at the same time
+as we are recording the following passes.
+
+## Memory
+
+In general, "Shared" storage is used for CPU-coherent memory. "Managed" is used for
+non-coherent CPU-visible memory. Finally, "Private" storage is backing device-local
+memory types.
+
+Metal doesn't have CPU-visible memory for textures. We only allow RGBA8 2D textures
+to be allocated from it, and only for the matter of transfer operations, which is
+the minimum required by Vulkan. In fact, these become just glorified staging buffers.
 !*/
 
 #[macro_use]
