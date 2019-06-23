@@ -175,6 +175,7 @@ impl Shared {
             disabilities: PrivateDisabilities {
                 broken_viewport_near_depth: device.name().starts_with("Intel")
                     && !device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v4),
+                broken_layered_clear_image: device.name().starts_with("Intel"),
             },
             private_caps,
             device: Mutex::new(device),
@@ -853,7 +854,10 @@ impl PrivateCapabilities {
 
 #[derive(Clone, Copy, Debug)]
 struct PrivateDisabilities {
+    /// Near depth is not respected properly on some Intel GPUs.
     broken_viewport_near_depth: bool,
+    /// Multi-target clears don't appear to work properly on Intel GPUs.
+    broken_layered_clear_image: bool,
 }
 
 trait AsNative {

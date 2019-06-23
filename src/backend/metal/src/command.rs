@@ -44,10 +44,6 @@ use std::{
 
 const WORD_SIZE: usize = 4;
 const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
-/// Enable an optimization to have multi-layered render passed
-/// with clear operations set up to implement our `clear_image`
-/// Note: multi-target clears don't appear to work properly on Intel GPUs
-const CLEAR_IMAGE_ARRAY: bool = false && cfg!(target_os = "macos");
 /// Number of frames to average when reporting the performance counters.
 const COUNTERS_REPORT_WINDOW: usize = 0;
 
@@ -2602,18 +2598,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let clear_color = image.shader_channel.interpret(color);
         let base_extent = image.kind.extent();
+        let is_layered = !self.shared.disabilities.broken_layered_clear_image;
 
         autoreleasepool(|| {
             let raw = image.like.as_texture();
             for subresource_range in subresource_ranges {
                 let sub = subresource_range.borrow();
                 let num_layers = (sub.layers.end - sub.layers.start) as u64;
-                let layers = if CLEAR_IMAGE_ARRAY {
+                let layers = if is_layered {
                     0..1
                 } else {
                     sub.layers.clone()
                 };
-                let texture = if CLEAR_IMAGE_ARRAY && sub.layers.start > 0 {
+                let texture = if is_layered && sub.layers.start > 0 {
                     // aliasing is necessary for bulk-clearing all layers starting with 0
                     let tex = raw.new_texture_view_from_slice(
                         image.mtl_format,
@@ -2640,7 +2637,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             assert_eq!(sub.layers.end, 1);
                             let depth = base_extent.at_level(level).depth as u64;
                             descriptor.set_render_target_array_length(depth);
-                        } else if CLEAR_IMAGE_ARRAY {
+                        } else if is_layered {
                             descriptor.set_render_target_array_length(num_layers);
                         };
 
@@ -2648,7 +2645,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let attachment = descriptor.color_attachments().object_at(0).unwrap();
                             attachment.set_texture(Some(texture));
                             attachment.set_level(level as _);
-                            if !CLEAR_IMAGE_ARRAY {
+                            if !is_layered {
                                 attachment.set_slice(layer as _);
                             }
                             attachment.set_store_action(metal::MTLStoreAction::Store);
@@ -2666,7 +2663,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let attachment = descriptor.depth_attachment().unwrap();
                             attachment.set_texture(Some(texture));
                             attachment.set_level(level as _);
-                            if !CLEAR_IMAGE_ARRAY {
+                            if !is_layered {
                                 attachment.set_slice(layer as _);
                             }
                             attachment.set_store_action(metal::MTLStoreAction::Store);
@@ -2684,7 +2681,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let attachment = descriptor.stencil_attachment().unwrap();
                             attachment.set_texture(Some(texture));
                             attachment.set_level(level as _);
-                            if !CLEAR_IMAGE_ARRAY {
+                            if !is_layered {
                                 attachment.set_slice(layer as _);
                             }
                             attachment.set_store_action(metal::MTLStoreAction::Store);
