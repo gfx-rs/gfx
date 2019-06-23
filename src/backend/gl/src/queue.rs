@@ -595,8 +595,8 @@ impl CommandQueue {
                 gl.bind_buffer(glow::COPY_READ_BUFFER, None);
                 gl.bind_buffer(glow::COPY_WRITE_BUFFER, None);
             },
-            com::Command::CopyBufferToTexture(buffer, texture, textype, ref r) => unsafe {
-                // TODO: Fix format and active texture
+            com::Command::CopyBufferToTexture(buffer, texture, textype, format, ref r) => unsafe {
+                // TODO: Fix active texture
                 assert_eq!(r.image_offset.z, 0);
 
                 let gl = &self.share.context;
@@ -614,7 +614,7 @@ impl CommandQueue {
                             r.image_offset.y,
                             r.image_extent.width as _,
                             r.image_extent.height as _,
-                            glow::RGBA,
+                            format,
                             glow::UNSIGNED_BYTE,
                             r.buffer_offset as i32,
                         );
@@ -630,7 +630,7 @@ impl CommandQueue {
                             r.image_extent.width as _,
                             r.image_extent.height as _,
                             r.image_layers.layers.end as i32 - r.image_layers.layers.start as i32,
-                            glow::RGBA,
+                            format,
                             glow::UNSIGNED_BYTE,
                             r.buffer_offset as i32,
                         );
@@ -643,8 +643,8 @@ impl CommandQueue {
             com::Command::CopyBufferToSurface(..) => {
                 unimplemented!() //TODO: use FBO
             }
-            com::Command::CopyTextureToBuffer(texture, textype, buffer, ref r) => unsafe {
-                // TODO: Fix format and active texture
+            com::Command::CopyTextureToBuffer(texture, textype, format, buffer, ref r) => unsafe {
+                // TODO: Fix active texture
                 // TODO: handle partial copies gracefully
                 assert_eq!(r.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
                 assert_eq!(textype, glow::TEXTURE_2D);
@@ -659,7 +659,7 @@ impl CommandQueue {
                     //r.image_offset.y,
                     //r.image_extent.width as _,
                     //r.image_extent.height as _,
-                    glow::RGBA,
+                    format,
                     glow::UNSIGNED_BYTE,
                     r.buffer_offset as i32,
                 );

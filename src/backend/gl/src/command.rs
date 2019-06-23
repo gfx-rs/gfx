@@ -111,17 +111,17 @@ pub enum Command {
     BindAttribute(n::AttributeDesc, n::RawBuffer, i32, u32),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
-    CopyBufferToTexture(n::RawBuffer, n::Texture, n::TextureType, command::BufferImageCopy),
+    CopyBufferToTexture(n::RawBuffer, n::Texture, n::TextureTarget, n::TextureFormat, command::BufferImageCopy),
     CopyBufferToSurface(n::RawBuffer, n::Surface, command::BufferImageCopy),
-    CopyTextureToBuffer(n::Texture, n::TextureType, n::RawBuffer, command::BufferImageCopy),
+    CopyTextureToBuffer(n::Texture, n::TextureTarget, n::TextureFormat, n::RawBuffer, command::BufferImageCopy),
     CopySurfaceToBuffer(n::Surface, n::RawBuffer, command::BufferImageCopy),
-    CopyImageToTexture(n::ImageKind, n::Texture, n::TextureType, command::ImageCopy),
+    CopyImageToTexture(n::ImageKind, n::Texture, n::TextureTarget, command::ImageCopy),
     CopyImageToSurface(n::ImageKind, n::Surface, command::ImageCopy),
 
     BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
-    BindTexture(u32, n::Texture, n::TextureType),
+    BindTexture(u32, n::Texture, n::TextureTarget),
     BindSampler(u32, n::Sampler),
-    SetTextureSamplerSettings(u32, n::Texture, n::TextureType, image::SamplerInfo),
+    SetTextureSamplerSettings(u32, n::Texture, n::TextureTarget, image::SamplerInfo),
 }
 
 pub type FrameBufferTarget = u32;
@@ -675,7 +675,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 // 2. ClearBuffer
                 let view = match image.kind {
                     n::ImageKind::Surface(id) => n::ImageView::Surface(id),
-                    n::ImageKind::Texture(id, textype) => n::ImageView::Texture(id, textype, 0), //TODO
+                    n::ImageKind::Texture { texture, target, .. } => {
+                        n::ImageView::Texture(texture, target, 0) //TODO
+                    }
                 };
                 self.push_cmd(Command::BindFrameBuffer(glow::DRAW_FRAMEBUFFER, Some(fbo)));
                 self.push_cmd(Command::BindTargetView(
@@ -701,12 +703,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             }
             None => {
                 // 1. glClear
-                let (tex, textype) = match image.kind {
-                    n::ImageKind::Texture(id, textype) => (id, textype), //TODO
+                let (tex, target) = match image.kind {
+                    n::ImageKind::Texture { texture, target, .. } => (texture, target), //TODO
                     n::ImageKind::Surface(_id) => unimplemented!(),
                 };
 
-                self.push_cmd(Command::BindTexture(0, tex, textype));
+                self.push_cmd(Command::BindTexture(0, tex, target));
                 self.push_cmd(Command::ClearTexture(color.float32));
             }
         }
@@ -1130,7 +1132,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             let r = region.borrow().clone();
             let cmd = match dst.kind {
                 n::ImageKind::Surface(s) => Command::CopyImageToSurface(src.kind, s, r),
-                n::ImageKind::Texture(t, tt) => Command::CopyImageToTexture(src.kind, t, tt, r),
+                n::ImageKind::Texture { texture, target, .. } => {
+                    Command::CopyImageToTexture(src.kind, texture, target, r)
+                },
             };
             self.push_cmd(cmd);
         }
@@ -1158,7 +1162,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             r.buffer_offset += src_range.start;
             let cmd = match dst.kind {
                 n::ImageKind::Surface(s) => Command::CopyBufferToSurface(src_raw, s, r),
-                n::ImageKind::Texture(t, tt) => Command::CopyBufferToTexture(src_raw, t, tt, r),
+                n::ImageKind::Texture { texture, target, format } => {
+                    Command::CopyBufferToTexture(src_raw, texture, target, format, r)
+                },
             };
             self.push_cmd(cmd);
         }
@@ -1186,7 +1192,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             r.buffer_offset += dst_range.start;
             let cmd = match src.kind {
                 n::ImageKind::Surface(s) => Command::CopySurfaceToBuffer(s, dst_raw, r),
-                n::ImageKind::Texture(t, tt) => Command::CopyTextureToBuffer(t, tt, dst_raw, r),
+                n::ImageKind::Texture { texture, target, format } => {
+                    Command::CopyTextureToBuffer(texture, target, format, dst_raw, r)
+                },
             };
             self.push_cmd(cmd);
         }
