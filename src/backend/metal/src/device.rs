@@ -922,6 +922,55 @@ impl hal::Device<Backend> for Device {
         let mut res_overrides = BTreeMap::new();
         let mut infos = Vec::new();
 
+        // First, place the push constants
+        let mut pc_buffers = [None; 3];
+        let mut pc_limits = [0u32; 3];
+        for pcr in push_constant_ranges {
+            let (flags, range) = pcr.borrow();
+            for (limit, &(stage_bit, _, _)) in pc_limits.iter_mut().zip(&stage_infos) {
+                if flags.contains(stage_bit) {
+                    *limit = range.end.max(*limit);
+                }
+            }
+        }
+
+        const LIMIT_MASK: u32 = 3;
+        // round up the limits alignment to 4, so that it matches MTL compiler logic
+        //TODO: figure out what and how exactly does the alignment. Clearly, it's not
+        // straightforward, given that value of 2 stays non-aligned.
+        for limit in &mut pc_limits {
+            if *limit > LIMIT_MASK {
+                *limit = (*limit + LIMIT_MASK) & !LIMIT_MASK;
+            }
+        }
+
+        for ((limit, ref mut buffer_index), &mut (_, stage, ref mut counters)) in pc_limits
+            .iter()
+            .zip(pc_buffers.iter_mut())
+            .zip(stage_infos.iter_mut())
+        {
+            // handle the push constant buffer assignment and shader overrides
+            if *limit != 0 {
+                let index = counters.buffers;
+                **buffer_index = Some(index);
+                counters.buffers += 1;
+
+                res_overrides.insert(
+                    msl::ResourceBindingLocation {
+                        stage,
+                        desc_set: PUSH_CONSTANTS_DESC_SET,
+                        binding: PUSH_CONSTANTS_DESC_BINDING,
+                    },
+                    msl::ResourceBinding {
+                        buffer_id: index as _,
+                        texture_id: !0,
+                        sampler_id: !0,
+                    },
+                );
+            }
+        }
+
+        // Second, place the descripted resources
         for (set_index, set_layout) in set_layouts.into_iter().enumerate() {
             // remember where the resources for this set start at each shader stage
             let mut dynamic_buffers = Vec::new();
@@ -1025,48 +1074,8 @@ impl hal::Device<Backend> for Device {
             });
         }
 
-        if self.shared.private_caps.argument_buffers && false { //TODO: profile this
-            for si in stage_infos.iter_mut() {
-                si.2.buffers = MAX_BOUND_DESCRIPTOR_SETS as n::PoolResourceIndex;
-            }
-        }
-
-        let mut pc_buffers = [None; 3];
-        let mut pc_limits = [0u32; 3];
-        for pcr in push_constant_ranges {
-            let (flags, range) = pcr.borrow();
-            for (limit, &(stage_bit, _, _)) in pc_limits.iter_mut().zip(&stage_infos) {
-                if flags.contains(stage_bit) {
-                    *limit = range.end.max(*limit);
-                }
-            }
-        }
-
-        for ((limit, ref mut buffer_index), &mut (_, stage, ref mut counters)) in pc_limits
-            .iter()
-            .zip(pc_buffers.iter_mut())
-            .zip(stage_infos.iter_mut())
-        {
-            // handle the push constant buffer assignment and shader overrides
-            if *limit != 0 {
-                let index = counters.buffers;
-                **buffer_index = Some(index);
-                counters.buffers += 1;
-
-                res_overrides.insert(
-                    msl::ResourceBindingLocation {
-                        stage,
-                        desc_set: PUSH_CONSTANTS_DESC_SET,
-                        binding: PUSH_CONSTANTS_DESC_BINDING,
-                    },
-                    msl::ResourceBinding {
-                        buffer_id: index as _,
-                        texture_id: !0,
-                        sampler_id: !0,
-                    },
-                );
-            }
-            // make sure we fit the limits
+        // Finally, make sure we fit the limits
+        for &(_, _, ref counters) in stage_infos.iter() {
             assert!(counters.buffers <= self.shared.private_caps.max_buffers_per_stage);
             assert!(counters.textures <= self.shared.private_caps.max_textures_per_stage);
             assert!(counters.samplers <= self.shared.private_caps.max_samplers_per_stage);
@@ -1086,16 +1095,6 @@ impl hal::Device<Backend> for Device {
         shader_compiler_options.enable_argument_buffers = self.shared.private_caps.argument_buffers;
         let mut shader_compiler_options_point = shader_compiler_options.clone();
         shader_compiler_options_point.enable_point_size_builtin = true;
-
-        const LIMIT_MASK: u32 = 3;
-        // round up the limits alignment to 4, so that it matches MTL compiler logic
-        //TODO: figure out what and how exactly does the alignment. Clearly, it's not
-        // straightforward, given that value of 2 stays non-aligned.
-        for limit in &mut pc_limits {
-            if *limit > LIMIT_MASK {
-                *limit = (*limit + LIMIT_MASK) & !LIMIT_MASK;
-            }
-        }
 
         Ok(n::PipelineLayout {
             shader_compiler_options,
@@ -1315,7 +1314,6 @@ impl hal::Device<Backend> for Device {
         }
 
         // Vertex buffers
-        let attribute_buffer_index = pipeline_layout.attribute_buffer_index();
         let vertex_descriptor = metal::VertexDescriptor::new();
         let mut vertex_buffers: n::VertexBufferVec = Vec::new();
         trace!("Vertex attribute remapping started");
@@ -1351,8 +1349,8 @@ impl hal::Device<Backend> for Device {
                     vertex_buffers.alloc().init((original.clone(), base_offset));
                     vertex_buffers.len() - 1
                 });
-            let mtl_buffer_index = attribute_buffer_index as usize + relative_index;
-            if mtl_buffer_index >= self.shared.private_caps.max_buffers_per_stage as usize {
+            let mtl_buffer_index = self.shared.private_caps.max_buffers_per_stage - 1 - (relative_index as ResourceIndex);
+            if mtl_buffer_index < pipeline_layout.total.vs.buffers {
                 error!("Attribute offset {} exceeds the stride {}, and there is no room for replacement.",
                     element.offset, original.stride);
                 return Err(pso::CreationError::Other);
@@ -1374,7 +1372,7 @@ impl hal::Device<Backend> for Device {
         for (i, (vb, _)) in vertex_buffers.iter().enumerate() {
             let mtl_buffer_desc = vertex_descriptor
                 .layouts()
-                .object_at(attribute_buffer_index as usize + i)
+                .object_at(self.shared.private_caps.max_buffers_per_stage as usize - 1 - i)
                 .expect("too many vertex descriptor layouts");
             if vb.stride % STRIDE_GRANULARITY != 0 {
                 error!(
@@ -1454,7 +1452,6 @@ impl hal::Device<Backend> for Device {
                 fs_lib,
                 raw,
                 primitive_type,
-                attribute_buffer_index,
                 vs_pc_info: pipeline_desc.layout.push_constants.vs,
                 ps_pc_info: pipeline_desc.layout.push_constants.ps,
                 rasterizer_state,

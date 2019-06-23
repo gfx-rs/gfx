@@ -1,3 +1,20 @@
+/*!
+# Metal backend internals.
+
+## Pipeline Layout
+
+In Metal, push constants, vertex buffers, and resources in the descriptor sets
+are all placed together in the native resource bindings, which work similarly to D3D11:
+there are tables of textures, buffers, and samplers.
+
+We put push constants first (if any) in the table, followed by descriptor set 0
+resource, followed by other descriptor sets. The vertex buffers are bound at the very
+end of the VS buffer table.
+
+When argument buffers are supported, each descriptor set becomes a buffer binding,
+but the general placement rule is the same.
+!*/
+
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
