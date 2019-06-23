@@ -325,7 +325,7 @@ impl RawCommandBuffer {
         slice
     }
 
-    fn update_blend_targets(&mut self, blend_targets: &Vec<pso::ColorBlendDesc>) {
+    fn update_blend_targets(&mut self, blend_targets: &[pso::ColorBlendDesc]) {
         let max_blend_slots = blend_targets.len();
         if max_blend_slots == 0 {
             return;
@@ -335,13 +335,7 @@ impl RawCommandBuffer {
             self.cache.blend_targets.resize(max_blend_slots, None);
         }
 
-        let mut all_targets_same = true;
-        for blend_target in &blend_targets[1..] {
-            if blend_target != &blend_targets[0] {
-                all_targets_same = false;
-                break;
-            }
-        }
+        let all_targets_same = blend_targets[1..].iter().all(|target| target == &blend_targets[0]);
 
         if all_targets_same {
             let mut update_blend = false;
@@ -356,14 +350,10 @@ impl RawCommandBuffer {
             }
         } else {
             for (slot, blend_target) in blend_targets.iter().enumerate() {
-                let cached_target = self.cache.blend_targets.get_mut(slot).unwrap();
+                let cached_target = &mut self.cache.blend_targets[slot];
                 let update_blend = match cached_target {
-                    Some(cache) => {
-                        cache != blend_target
-                    }
-                    None => {
-                        true
-                    }
+                    Some(cache) => cache != blend_target,
+                    None => true,
                 };
 
                 if update_blend {

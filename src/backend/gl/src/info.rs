@@ -471,7 +471,9 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         legacy |= LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING;
     }
 
-    let per_draw_buffer_blending = info.is_supported(&[Core(4, 0), Es(3, 2)]) && !info.is_webgl();
+    let per_draw_buffer_blending =
+        info.is_supported(&[Core(4, 0), Es(3, 2), Ext("GL_EXT_draw_buffers2")])
+        && !info.is_webgl();
     if per_draw_buffer_blending {
         features |= Features::INDEPENDENT_BLENDING;
     }
