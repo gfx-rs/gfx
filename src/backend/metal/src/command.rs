@@ -38,7 +38,7 @@ use std::{
     borrow::Borrow,
     cell::RefCell,
     ops::{Deref, Range},
-    sync::Arc,
+    sync::{Arc, atomic::{AtomicBool, Ordering}},
 };
 
 
@@ -1310,6 +1310,9 @@ pub struct IndexBuffer<B> {
     stride: u32,
 }
 
+/// This is an inner mutable part of the command buffer that is
+/// accessible by the owning command pool for one single reason:
+/// to reset it.
 #[derive(Debug)]
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
@@ -1320,6 +1323,7 @@ pub struct CommandBufferInner {
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
     active_visibility_queries: Vec<query::Id>,
+    events: Vec<(Arc<AtomicBool>, bool)>,
 }
 
 impl Drop for CommandBufferInner {
@@ -1361,6 +1365,7 @@ impl CommandBufferInner {
         self.retained_buffers.clear();
         self.retained_textures.clear();
         self.active_visibility_queries.clear();
+        self.events.clear();
     }
 
     fn sink(&mut self) -> &mut CommandSink {
@@ -1978,6 +1983,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         #[allow(unused_mut)]
         let (mut num_immediate, mut num_deferred, mut num_remote) = (0, 0, 0);
+        let mut event_commands = Vec::new();
         let do_signal = fence.is_some() || !system_semaphores.is_empty();
 
         autoreleasepool(|| {
@@ -1992,8 +1998,11 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     ref mut retained_buffers,
                     ref mut retained_textures,
                     ref mut active_visibility_queries,
+                    ref events,
                     ..
                 } = *inner;
+
+                event_commands.extend_from_slice(events);
 
                 match *sink {
                     Some(CommandSink::Immediate {
@@ -2055,7 +2064,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 }
             }
 
-            if do_signal || !self.active_visibility_queries.is_empty() {
+            if do_signal
+                || !event_commands.is_empty()
+                || !self.active_visibility_queries.is_empty()
+            {
                 //Note: there is quite a bit copying here
                 let free_buffers = self
                     .retained_buffers
@@ -2079,6 +2091,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     // signal the semaphores
                     for semaphore in &system_semaphores {
                         semaphore.signal();
+                    }
+                    // process events
+                    for &(ref atomic, value) in &event_commands {
+                        atomic.store(value, Ordering::Release);
                     }
                     // free all the manually retained resources
                     let _ = free_buffers;
@@ -2216,6 +2232,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             retained_buffers: Vec::new(),
             retained_textures: Vec::new(),
             active_visibility_queries: Vec::new(),
+            events: Vec::new(),
         }));
         self.allocated.push(Arc::clone(&inner));
 
@@ -4228,26 +4245,35 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue_many(commands);
     }
 
-    unsafe fn set_event(&mut self, _: &(), _: pso::PipelineStage) {
-        unimplemented!()
+    unsafe fn set_event(&mut self, event: &native::Event, _: pso::PipelineStage) {
+        self.inner
+            .borrow_mut()
+            .events
+            .push((Arc::clone(&event.0), true));
     }
 
-    unsafe fn reset_event(&mut self, _: &(), _: pso::PipelineStage) {
-        unimplemented!()
+    unsafe fn reset_event(&mut self, event: &native::Event, _: pso::PipelineStage) {
+        self.inner
+            .borrow_mut()
+            .events
+            .push((Arc::clone(&event.0), false));
     }
 
     unsafe fn wait_events<'a, I, J>(
         &mut self,
-        _: I,
-        _: Range<pso::PipelineStage>,
-        _: J
+        _events: I,
+        stages: Range<pso::PipelineStage>,
+        barriers: J
     ) where
         I: IntoIterator,
-    I::Item: Borrow<()>,
-    J: IntoIterator,
-    J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        I::Item: Borrow<native::Event>,
+        J: IntoIterator,
+        J::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        unimplemented!()
+        // Events can't be used for GPU to wait for the host, so the only possible
+        // valid thing that could set the corresponding events is some commands
+        // executed on the same queue prior to this command.
+        self.pipeline_barrier(stages, memory::Dependencies::empty(), barriers);
     }
 
     unsafe fn begin_query(&mut self, query: query::Query<Backend>, flags: query::ControlFlags) {
@@ -4496,10 +4522,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
             }
 
-            match *self.inner
-                .borrow_mut()
-                .sink()
-            {
+            let mut inner_self = self.inner.borrow_mut();
+            inner_self.events.extend_from_slice(&inner_borrowed.events);
+
+            match *inner_self.sink() {
                 CommandSink::Immediate { ref mut cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
                     if is_inheriting {
                         let encoder = match encoder_state {

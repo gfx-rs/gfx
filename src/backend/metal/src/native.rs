@@ -27,7 +27,7 @@ use std::{
     ops::Range,
     os::raw::{c_long, c_void},
     ptr,
-    sync::Arc,
+    sync::{Arc, atomic::AtomicBool},
 };
 
 
@@ -1006,6 +1006,10 @@ pub struct Fence(pub(crate) RefCell<FenceInner>);
 
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
+
+//TODO: review the atomic ordering
+#[derive(Debug)]
+pub struct Event(pub(crate) Arc<AtomicBool>);
 
 extern "C" {
     fn dispatch_semaphore_wait(semaphore: *mut c_void, timeout: u64) -> c_long;
