@@ -138,6 +138,7 @@ struct VisibilityShared {
 struct Shared {
     device: Mutex<metal::Device>,
     queue: Mutex<command::QueueInner>,
+    queue_blocker: Mutex<command::QueueBlocker>,
     service_pipes: internal::ServicePipes,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
@@ -169,6 +170,7 @@ impl Shared {
                 &device,
                 Some(MAX_ACTIVE_COMMAND_BUFFERS),
             )),
+            queue_blocker: Mutex::new(command::QueueBlocker::default()),
             service_pipes: internal::ServicePipes::new(&device),
             disabilities: PrivateDisabilities {
                 broken_viewport_near_depth: device.name().starts_with("Intel")

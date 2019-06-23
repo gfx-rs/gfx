@@ -398,7 +398,7 @@ pub struct Sampler(pub(crate) metal::SamplerState);
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Semaphore {
     pub(crate) system: Option<SystemSemaphore>,
     pub(crate) image_ready: Arc<Mutex<Option<SwapchainImage>>>,

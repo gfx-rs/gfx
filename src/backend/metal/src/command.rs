@@ -122,6 +122,50 @@ impl QueueInner {
 }
 
 #[derive(Debug)]
+pub struct BlockedSubmission {
+    wait_events: Vec<Arc<AtomicBool>>,
+    command_buffers: Vec<metal::CommandBuffer>,
+    affect_events: Vec<Arc<AtomicBool>>,
+}
+
+/// Class responsible for keeping the state of submissions between the
+/// requested user submission that is blocked by a host event, and
+/// setting the event itself on the host.
+#[derive(Debug, Default)]
+pub struct QueueBlocker {
+    submissions: Vec<BlockedSubmission>,
+}
+
+impl QueueBlocker {
+    fn submit_impl(&mut self, cmd_buffer: &metal::CommandBufferRef) {
+        match self.submissions.last_mut() {
+            Some(blocked) => blocked.command_buffers.push(cmd_buffer.to_owned()),
+            None => cmd_buffer.commit(),
+        }
+    }
+
+    pub(crate) fn set_host_event(&mut self, event: &Arc<AtomicBool>) {
+        // clean up the relevant blocks
+        for blocked in self.submissions.iter_mut() {
+            blocked.wait_events.retain(|ev| !Arc::ptr_eq(ev, event));
+            if blocked.affect_events.iter().any(|ev| Arc::ptr_eq(ev, event)) {
+                // Execution of this command buffer affects the event,
+                // we can't look further ahead.
+                break;
+            }
+        }
+        // execute unblocked command buffers
+        while self.submissions.first().map_or(false, |blocked| blocked.wait_events.is_empty()) {
+            let blocked = self.submissions.remove(0);
+            for cmd_buf in blocked.command_buffers {
+                cmd_buf.commit();
+            }
+        }
+    }
+}
+
+
+#[derive(Debug)]
 struct PoolShared {
     online_recording: OnlineRecording,
     #[cfg(feature = "dispatch")]
@@ -1324,6 +1368,7 @@ pub struct CommandBufferInner {
     retained_textures: Vec<metal::Texture>,
     active_visibility_queries: Vec<query::Id>,
     events: Vec<(Arc<AtomicBool>, bool)>,
+    host_events: Vec<Arc<AtomicBool>>,
 }
 
 impl Drop for CommandBufferInner {
@@ -1989,6 +2034,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
         autoreleasepool(|| {
             // for command buffers
             let cmd_queue = self.shared.queue.lock();
+            let mut blocker = self.shared.queue_blocker.lock();
             let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
 
             for buffer in command_buffers {
@@ -1999,10 +2045,33 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     ref mut retained_textures,
                     ref mut active_visibility_queries,
                     ref events,
+                    ref host_events,
                     ..
                 } = *inner;
 
+                //TODO: split event commands into immediate/blocked submissions?
                 event_commands.extend_from_slice(events);
+                // wait for anything not previously fired
+                let wait_events = host_events
+                    .iter()
+                    .filter(|event| {
+                        event_commands
+                            .iter()
+                            .rfind(|ev| Arc::ptr_eq(event, &ev.0))
+                            .map_or(true, |ev| !ev.1)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if !wait_events.is_empty() {
+                    blocker.submissions.push(BlockedSubmission {
+                        wait_events,
+                        command_buffers: Vec::new(),
+                        affect_events: events
+                            .iter()
+                            .map(|ev| Arc::clone(&ev.0))
+                            .collect(),
+                    });
+                }
 
                 match *sink {
                     Some(CommandSink::Immediate {
@@ -2020,9 +2089,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
                         if num_passes != 0 {
                             // flush the deferred recording, if any
                             if let Some(cb) = deferred_cmd_buffer.take() {
-                                cb.commit();
+                                blocker.submit_impl(cb);
                             }
-                            cmd_buffer.commit();
+                            blocker.submit_impl(cmd_buffer);
                         }
                     }
                     Some(CommandSink::Deferred { ref journal, .. }) => {
@@ -2041,7 +2110,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                             if self.stitch_deferred {
                                 deferred_cmd_buffer = Some(cmd_buffer);
                             } else {
-                                cmd_buffer.commit();
+                                blocker.submit_impl(cmd_buffer);
                             }
                         }
                     }
@@ -2056,6 +2125,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                         trace!("\tremote {:?}", token);
                         cmd_buffer.lock().enqueue();
                         let shared_cb = SharedCommandBuffer(Arc::clone(cmd_buffer));
+                        //TODO: make this compatible with events
                         queue.sync(move || {
                             shared_cb.0.lock().commit();
                         });
@@ -2122,14 +2192,14 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     cmd_buffer
                 });
                 msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
-                cmd_buffer.commit();
+                blocker.submit_impl(cmd_buffer);
 
                 if let Some(fence) = fence {
                     debug!("\tmarking fence ptr {:?} as pending", fence.0.as_ptr());
                     fence.0.replace(native::FenceInner::PendingSubmission(cmd_buffer.to_owned()));
                 }
             } else if let Some(cmd_buffer) = deferred_cmd_buffer {
-                cmd_buffer.commit();
+                blocker.submit_impl(cmd_buffer);
             }
         });
 
@@ -2233,6 +2303,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             retained_textures: Vec::new(),
             active_visibility_queries: Vec::new(),
             events: Vec::new(),
+            host_events: Vec::new(),
         }));
         self.allocated.push(Arc::clone(&inner));
 
@@ -2393,7 +2464,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     let pass_desc = metal::RenderPassDescriptor::new().to_owned();
                     journal.passes.alloc().init((soft::Pass::Render(pass_desc), 0..0));
                 }
-                _ => unreachable!(),
+                _ => {
+                    warn!("Unexpected inheritance info on a primary command buffer");
+                }
             }
         }
     }
@@ -4261,7 +4334,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn wait_events<'a, I, J>(
         &mut self,
-        _events: I,
+        events: I,
         stages: Range<pso::PipelineStage>,
         barriers: J
     ) where
@@ -4270,10 +4343,25 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        // Events can't be used for GPU to wait for the host, so the only possible
-        // valid thing that could set the corresponding events is some commands
-        // executed on the same queue prior to this command.
-        self.pipeline_barrier(stages, memory::Dependencies::empty(), barriers);
+        let mut need_barrier = false;
+
+        for event in events {
+            let mut inner = self.inner.borrow_mut();
+            let event = &event.borrow().0;
+            let is_local = inner.events
+                .iter()
+                .rfind(|ev| Arc::ptr_eq(&ev.0, event))
+                .map_or(false, |ev| ev.1);
+            if is_local {
+                need_barrier = true;
+            } else {
+                inner.host_events.push(Arc::clone(event));
+            }
+        }
+
+        if need_barrier {
+            self.pipeline_barrier(stages, memory::Dependencies::empty(), barriers);
+        }
     }
 
     unsafe fn begin_query(&mut self, query: query::Query<Backend>, flags: query::ControlFlags) {

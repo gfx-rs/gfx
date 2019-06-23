@@ -2526,11 +2526,13 @@ impl hal::Device<Backend> for Device {
         debug!("Creating fence ptr {:?} with signal={}", cell.as_ptr(), signaled);
         Ok(n::Fence(cell))
     }
+
     unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), OutOfMemory> {
         debug!("Resetting fence ptr {:?}", fence.0.as_ptr());
         fence.0.replace(n::FenceInner::Idle { signaled: false });
         Ok(())
     }
+
     unsafe fn wait_for_fence(
         &self,
         fence: &n::Fence,
@@ -2576,6 +2578,7 @@ impl hal::Device<Backend> for Device {
             }
         }
     }
+
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, DeviceLost> {
         Ok(match *fence.0.borrow() {
             n::FenceInner::Idle { signaled } => signaled,
@@ -2588,6 +2591,7 @@ impl hal::Device<Backend> for Device {
             }
         })
     }
+
     unsafe fn destroy_fence(&self, _fence: n::Fence) {
         //empty
     }
@@ -2601,6 +2605,7 @@ impl hal::Device<Backend> for Device {
     }
 
     unsafe fn set_event(&self, event: &n::Event) -> Result<(), OutOfMemory> {
+        self.shared.queue_blocker.lock().set_host_event(&event.0);
         Ok(event.0.store(true, Ordering::Release))
     }
 
