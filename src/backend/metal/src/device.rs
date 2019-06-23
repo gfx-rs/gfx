@@ -2564,6 +2564,7 @@ impl hal::Device<Backend> for Device {
                         return Ok(false);
                     }
                     thread::sleep(time::Duration::from_millis(1));
+                    self.shared.queue_blocker.lock().triage();
                 }
             }
             n::FenceInner::AcquireFrame { ref swapchain_image, iteration } => {
@@ -2605,8 +2606,9 @@ impl hal::Device<Backend> for Device {
     }
 
     unsafe fn set_event(&self, event: &n::Event) -> Result<(), OutOfMemory> {
-        self.shared.queue_blocker.lock().set_host_event(&event.0);
-        Ok(event.0.store(true, Ordering::Release))
+        event.0.store(true, Ordering::Release);
+        self.shared.queue_blocker.lock().triage();
+        Ok(())
     }
 
     unsafe fn reset_event(&self, event: &n::Event) -> Result<(), OutOfMemory> {

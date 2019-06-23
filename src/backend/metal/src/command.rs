@@ -125,7 +125,6 @@ impl QueueInner {
 pub struct BlockedSubmission {
     wait_events: Vec<Arc<AtomicBool>>,
     command_buffers: Vec<metal::CommandBuffer>,
-    affect_events: Vec<Arc<AtomicBool>>,
 }
 
 /// Class responsible for keeping the state of submissions between the
@@ -144,18 +143,19 @@ impl QueueBlocker {
         }
     }
 
-    pub(crate) fn set_host_event(&mut self, event: &Arc<AtomicBool>) {
+    pub(crate) fn triage(&mut self) {
         // clean up the relevant blocks
-        for blocked in self.submissions.iter_mut() {
-            blocked.wait_events.retain(|ev| !Arc::ptr_eq(ev, event));
-            if blocked.affect_events.iter().any(|ev| Arc::ptr_eq(ev, event)) {
-                // Execution of this command buffer affects the event,
-                // we can't look further ahead.
-                break;
-            }
-        }
+        let done = {
+            let blocked = match self.submissions.first_mut() {
+                Some(blocked) => blocked,
+                None => return,
+            };
+            blocked.wait_events.retain(|ev| !ev.load(Ordering::Acquire));
+            blocked.wait_events.is_empty()
+        };
+
         // execute unblocked command buffers
-        while self.submissions.first().map_or(false, |blocked| blocked.wait_events.is_empty()) {
+        if done {
             let blocked = self.submissions.remove(0);
             for cmd_buf in blocked.command_buffers {
                 cmd_buf.commit();
@@ -2066,10 +2066,6 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     blocker.submissions.push(BlockedSubmission {
                         wait_events,
                         command_buffers: Vec::new(),
-                        affect_events: events
-                            .iter()
-                            .map(|ev| Arc::clone(&ev.0))
-                            .collect(),
                     });
                 }
 
