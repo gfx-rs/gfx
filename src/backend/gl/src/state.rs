@@ -131,7 +131,7 @@ fn map_blend_op(operation: pso::BlendOp) -> (u32, u32, u32) {
     }
 }
 
-pub(crate) fn bind_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
+pub(crate) fn set_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
     use crate::hal::pso::ColorMask as Cm;
 
     match desc.1 {
@@ -157,7 +157,7 @@ pub(crate) fn bind_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
     }
 }
 
-pub(crate) fn bind_blend_slot(share: &Share, slot: ColorSlot, desc: &pso::ColorBlendDesc) {
+pub(crate) fn set_blend_slot(share: &Share, slot: ColorSlot, desc: &pso::ColorBlendDesc) {
     use crate::hal::pso::ColorMask as Cm;
 
     let gl = &share.context;
@@ -184,36 +184,6 @@ pub(crate) fn bind_blend_slot(share: &Share, slot: ColorSlot, desc: &pso::ColorB
     unsafe {
         gl.color_mask_draw_buffer(
             slot as _,
-            desc.0.contains(Cm::RED) as _,
-            desc.0.contains(Cm::GREEN) as _,
-            desc.0.contains(Cm::BLUE) as _,
-            desc.0.contains(Cm::ALPHA) as _,
-        );
-    }
-}
-
-pub(crate) fn set_all_blend_slots(share: &Share, desc: &pso::ColorBlendDesc) {
-    use crate::hal::pso::ColorMask as Cm;
-
-    let gl = &share.context;
-
-    match desc.1 {
-        pso::BlendState::On { color, alpha } => unsafe {
-            let (color_eq, color_src, color_dst) = map_blend_op(color);
-            let (alpha_eq, alpha_src, alpha_dst) = map_blend_op(alpha);
-            gl.enable(glow::BLEND);
-            gl.blend_equation_separate(color_eq, alpha_eq);
-            gl.blend_func_separate(
-                color_src, color_dst, alpha_src, alpha_dst,
-            );
-        },
-        pso::BlendState::Off => unsafe {
-            gl.disable(glow::BLEND);
-        },
-    };
-
-    unsafe {
-        gl.color_mask(
             desc.0.contains(Cm::RED) as _,
             desc.0.contains(Cm::GREEN) as _,
             desc.0.contains(Cm::BLUE) as _,

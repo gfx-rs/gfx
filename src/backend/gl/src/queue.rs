@@ -531,11 +531,11 @@ impl CommandQueue {
             com::Command::BindProgram(program) => unsafe {
                 self.share.context.use_program(Some(program));
             },
-            com::Command::BindBlendSlot(slot, ref blend) => {
-                state::bind_blend_slot(&self.share, slot, blend);
+            com::Command::SetBlend(ref blend) => {
+                state::set_blend(&self.share.context, blend);
             }
-            com::Command::SetAllBlendSlots(ref blend) => {
-                state::set_all_blend_slots(&self.share, blend);
+            com::Command::SetBlendSlot(slot, ref blend) => {
+                state::set_blend_slot(&self.share, slot, blend);
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
                 use crate::native::VertexAttribFunction::*;
