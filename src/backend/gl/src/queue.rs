@@ -596,10 +596,10 @@ impl CommandQueue {
                 gl.bind_buffer(glow::COPY_WRITE_BUFFER, None);
             },
             com::Command::CopyBufferToTexture {
-                src_buffer, dst_texture, texture_target, texture_format, pixel_type, ref command
+                src_buffer, dst_texture, texture_target, texture_format, pixel_type, ref data
             } => unsafe {
                 // TODO: Fix active texture
-                assert_eq!(command.image_offset.z, 0);
+                assert_eq!(data.image_offset.z, 0);
 
                 let gl = &self.share.context;
 
@@ -611,30 +611,30 @@ impl CommandQueue {
                         gl.bind_texture(glow::TEXTURE_2D, Some(dst_texture));
                         gl.tex_sub_image_2d_pixel_buffer_offset(
                             glow::TEXTURE_2D,
-                            command.image_layers.level as _,
-                            command.image_offset.x,
-                            command.image_offset.y,
-                            command.image_extent.width as _,
-                            command.image_extent.height as _,
+                            data.image_layers.level as _,
+                            data.image_offset.x,
+                            data.image_offset.y,
+                            data.image_extent.width as _,
+                            data.image_extent.height as _,
                             texture_format,
                             pixel_type,
-                            command.buffer_offset as i32,
+                            data.buffer_offset as i32,
                         );
                     }
                     glow::TEXTURE_2D_ARRAY => {
                         gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(dst_texture));
                         gl.tex_sub_image_3d_pixel_buffer_offset(
                             glow::TEXTURE_2D_ARRAY,
-                            command.image_layers.level as _,
-                            command.image_offset.x,
-                            command.image_offset.y,
-                            command.image_layers.layers.start as i32,
-                            command.image_extent.width as _,
-                            command.image_extent.height as _,
-                            command.image_layers.layers.end as i32 - command.image_layers.layers.start as i32,
+                            data.image_layers.level as _,
+                            data.image_offset.x,
+                            data.image_offset.y,
+                            data.image_layers.layers.start as i32,
+                            data.image_extent.width as _,
+                            data.image_extent.height as _,
+                            data.image_layers.layers.end as i32 - data.image_layers.layers.start as i32,
                             texture_format,
                             pixel_type,
-                            command.buffer_offset as i32,
+                            data.buffer_offset as i32,
                         );
                     }
                     _ => unimplemented!(),
@@ -646,11 +646,11 @@ impl CommandQueue {
                 unimplemented!() //TODO: use FBO
             }
             com::Command::CopyTextureToBuffer {
-                src_texture, texture_target, texture_format, pixel_type, dst_buffer, ref command
+                src_texture, texture_target, texture_format, pixel_type, dst_buffer, ref data
             }=> unsafe {
                 // TODO: Fix active texture
                 // TODO: handle partial copies gracefully
-                assert_eq!(command.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
+                assert_eq!(data.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
                 assert_eq!(texture_target, glow::TEXTURE_2D);
                 let gl = &self.share.context;
                 gl.active_texture(glow::TEXTURE0);
@@ -658,14 +658,14 @@ impl CommandQueue {
                 gl.bind_texture(glow::TEXTURE_2D, Some(src_texture));
                 gl.get_tex_image_pixel_buffer_offset(
                     glow::TEXTURE_2D,
-                    command.image_layers.level as _,
-                    //r.image_offset.x,
-                    //r.image_offset.y,
-                    //r.image_extent.width as _,
-                    //r.image_extent.height as _,
+                    data.image_layers.level as _,
+                    //data.image_offset.x,
+                    //data.image_offset.y,
+                    //data.image_extent.width as _,
+                    //data.image_extent.height as _,
                     texture_format,
                     pixel_type,
-                    command.buffer_offset as i32,
+                    data.buffer_offset as i32,
                 );
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
             },

@@ -117,7 +117,7 @@ pub enum Command {
         texture_target: n::TextureTarget,
         texture_format: n::TextureFormat,
         pixel_type: n::DataType,
-        command: command::BufferImageCopy,
+        data: command::BufferImageCopy,
     },
     CopyBufferToSurface(n::RawBuffer, n::Surface, command::BufferImageCopy),
     CopyTextureToBuffer {
@@ -126,7 +126,7 @@ pub enum Command {
         texture_format: n::TextureFormat,
         pixel_type: n::DataType,
         dst_buffer: n::RawBuffer,
-        command: command::BufferImageCopy,
+        data: command::BufferImageCopy,
     },
     CopySurfaceToBuffer(n::Surface, n::RawBuffer, command::BufferImageCopy),
     CopyImageToTexture(n::ImageKind, n::Texture, n::TextureTarget, command::ImageCopy),
@@ -1183,7 +1183,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         texture_target: target,
                         texture_format: format,
                         pixel_type,
-                        command: r,
+                        data: r,
                     }
                 },
             };
@@ -1220,7 +1220,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         texture_format: format,
                         pixel_type: pixel_type,
                         dst_buffer: dst_raw,
-                        command: r,
+                        data: r,
                     }
                 },
             };
