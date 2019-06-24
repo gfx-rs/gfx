@@ -8,7 +8,9 @@ use crate::hal::{buffer, format, image as i, pass, pso};
 
 use crate::{Backend, GlContext};
 
-pub type TextureType = u32;
+pub type TextureTarget = u32;
+pub type TextureFormat = u32;
+pub type DataType = u32;
 
 // TODO: Consider being generic over `glow::Context` instead
 pub type VertexArray = <GlContext as glow::Context>::VertexArray;
@@ -175,7 +177,12 @@ pub struct Image {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ImageKind {
     Surface(Surface),
-    Texture(Texture, TextureType),
+    Texture {
+        texture: Texture,
+        target: TextureTarget,
+        format: TextureFormat,
+        pixel_type: DataType,
+    },
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -189,8 +196,8 @@ pub enum FatSampler {
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ImageView {
     Surface(Surface),
-    Texture(Texture, TextureType, i::Level),
-    TextureLayer(Texture, TextureType, i::Level, i::Layer),
+    Texture(Texture, TextureTarget, i::Level),
+    TextureLayer(Texture, TextureTarget, i::Level, i::Layer),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
@@ -202,7 +209,7 @@ pub(crate) enum DescSetBindings {
         offset: i32,
         size: i32,
     },
-    Texture(pso::DescriptorBinding, Texture, TextureType),
+    Texture(pso::DescriptorBinding, Texture, TextureTarget),
     Sampler(pso::DescriptorBinding, Sampler),
     SamplerInfo(pso::DescriptorBinding, i::SamplerInfo),
 }

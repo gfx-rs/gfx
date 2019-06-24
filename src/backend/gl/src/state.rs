@@ -131,7 +131,7 @@ fn map_blend_op(operation: pso::BlendOp) -> (u32, u32, u32) {
     }
 }
 
-pub(crate) fn bind_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
+pub(crate) fn set_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
     use crate::hal::pso::ColorMask as Cm;
 
     match desc.1 {
@@ -157,43 +157,38 @@ pub(crate) fn bind_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
     }
 }
 
-pub(crate) fn bind_blend_slot(share: &Share, slot: ColorSlot, desc: &pso::ColorBlendDesc) {
+pub(crate) fn set_blend_slot(share: &Share, slot: ColorSlot, desc: &pso::ColorBlendDesc) {
     use crate::hal::pso::ColorMask as Cm;
 
     let gl = &share.context;
-    let supports_draw_buffers = share.private_caps.draw_buffers;
+    if !share.private_caps.draw_buffers || !share.private_caps.per_draw_buffer_blending {
+        warn!("independent blending is not supported");
+        return;
+    }
 
     match desc.1 {
         pso::BlendState::On { color, alpha } => unsafe {
             let (color_eq, color_src, color_dst) = map_blend_op(color);
             let (alpha_eq, alpha_src, alpha_dst) = map_blend_op(alpha);
-            if supports_draw_buffers {
-                gl.enable_draw_buffer(glow::BLEND, slot as _);
-                gl.blend_equation_separate_draw_buffer(slot as _, color_eq, alpha_eq);
-                gl.blend_func_separate_draw_buffer(
-                    slot as _, color_src, color_dst, alpha_src, alpha_dst,
-                );
-            } else {
-                warn!("Draw buffers are not supported");
-            }
+            gl.enable_draw_buffer(glow::BLEND, slot as _);
+            gl.blend_equation_separate_draw_buffer(slot as _, color_eq, alpha_eq);
+            gl.blend_func_separate_draw_buffer(
+                slot as _, color_src, color_dst, alpha_src, alpha_dst,
+            );
         },
         pso::BlendState::Off => unsafe {
             gl.disable_draw_buffer(glow::BLEND, slot as _);
         },
     };
 
-    if supports_draw_buffers {
-        unsafe {
-            gl.color_mask_draw_buffer(
-                slot as _,
-                desc.0.contains(Cm::RED) as _,
-                desc.0.contains(Cm::GREEN) as _,
-                desc.0.contains(Cm::BLUE) as _,
-                desc.0.contains(Cm::ALPHA) as _,
-            );
-        }
-    } else {
-        warn!("Draw buffers are not supported");
+    unsafe {
+        gl.color_mask_draw_buffer(
+            slot as _,
+            desc.0.contains(Cm::RED) as _,
+            desc.0.contains(Cm::GREEN) as _,
+            desc.0.contains(Cm::BLUE) as _,
+            desc.0.contains(Cm::ALPHA) as _,
+        );
     }
 }
 

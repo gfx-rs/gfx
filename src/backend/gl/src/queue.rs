@@ -531,8 +531,11 @@ impl CommandQueue {
             com::Command::BindProgram(program) => unsafe {
                 self.share.context.use_program(Some(program));
             },
-            com::Command::BindBlendSlot(slot, ref blend) => {
-                state::bind_blend_slot(&self.share, slot, blend);
+            com::Command::SetBlend(ref blend) => {
+                state::set_blend(&self.share.context, blend);
+            }
+            com::Command::SetBlendSlot(slot, ref blend) => {
+                state::set_blend_slot(&self.share, slot, blend);
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
                 use crate::native::VertexAttribFunction::*;
@@ -595,49 +598,77 @@ impl CommandQueue {
                 gl.bind_buffer(glow::COPY_READ_BUFFER, None);
                 gl.bind_buffer(glow::COPY_WRITE_BUFFER, None);
             },
-            com::Command::CopyBufferToTexture(buffer, texture, textype, ref r) => unsafe {
-                // TODO: Fix format and active texture
-                assert_eq!(r.image_offset.z, 0);
-                assert_eq!(textype, glow::TEXTURE_2D);
+            com::Command::CopyBufferToTexture {
+                src_buffer, dst_texture, texture_target, texture_format, pixel_type, ref data
+            } => unsafe {
+                // TODO: Fix active texture
+                assert_eq!(data.image_offset.z, 0);
+
                 let gl = &self.share.context;
+
                 gl.active_texture(glow::TEXTURE0);
-                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(buffer));
-                gl.bind_texture(glow::TEXTURE_2D, Some(texture));
-                gl.tex_sub_image_2d_pixel_buffer_offset(
-                    glow::TEXTURE_2D,
-                    r.image_layers.level as _,
-                    r.image_offset.x,
-                    r.image_offset.y,
-                    r.image_extent.width as _,
-                    r.image_extent.height as _,
-                    glow::RGBA,
-                    glow::UNSIGNED_BYTE,
-                    r.buffer_offset as i32,
-                );
+                gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, Some(src_buffer));
+
+                match texture_target {
+                    glow::TEXTURE_2D => {
+                        gl.bind_texture(glow::TEXTURE_2D, Some(dst_texture));
+                        gl.tex_sub_image_2d_pixel_buffer_offset(
+                            glow::TEXTURE_2D,
+                            data.image_layers.level as _,
+                            data.image_offset.x,
+                            data.image_offset.y,
+                            data.image_extent.width as _,
+                            data.image_extent.height as _,
+                            texture_format,
+                            pixel_type,
+                            data.buffer_offset as i32,
+                        );
+                    }
+                    glow::TEXTURE_2D_ARRAY => {
+                        gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(dst_texture));
+                        gl.tex_sub_image_3d_pixel_buffer_offset(
+                            glow::TEXTURE_2D_ARRAY,
+                            data.image_layers.level as _,
+                            data.image_offset.x,
+                            data.image_offset.y,
+                            data.image_layers.layers.start as i32,
+                            data.image_extent.width as _,
+                            data.image_extent.height as _,
+                            data.image_layers.layers.end as i32 - data.image_layers.layers.start as i32,
+                            texture_format,
+                            pixel_type,
+                            data.buffer_offset as i32,
+                        );
+                    }
+                    _ => unimplemented!(),
+                }
+
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
             },
             com::Command::CopyBufferToSurface(..) => {
                 unimplemented!() //TODO: use FBO
             }
-            com::Command::CopyTextureToBuffer(texture, textype, buffer, ref r) => unsafe {
-                // TODO: Fix format and active texture
+            com::Command::CopyTextureToBuffer {
+                src_texture, texture_target, texture_format, pixel_type, dst_buffer, ref data
+            }=> unsafe {
+                // TODO: Fix active texture
                 // TODO: handle partial copies gracefully
-                assert_eq!(r.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
-                assert_eq!(textype, glow::TEXTURE_2D);
+                assert_eq!(data.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
+                assert_eq!(texture_target, glow::TEXTURE_2D);
                 let gl = &self.share.context;
                 gl.active_texture(glow::TEXTURE0);
-                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(buffer));
-                gl.bind_texture(glow::TEXTURE_2D, Some(texture));
+                gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(dst_buffer));
+                gl.bind_texture(glow::TEXTURE_2D, Some(src_texture));
                 gl.get_tex_image_pixel_buffer_offset(
                     glow::TEXTURE_2D,
-                    r.image_layers.level as _,
-                    //r.image_offset.x,
-                    //r.image_offset.y,
-                    //r.image_extent.width as _,
-                    //r.image_extent.height as _,
-                    glow::RGBA,
-                    glow::UNSIGNED_BYTE,
-                    r.buffer_offset as i32,
+                    data.image_layers.level as _,
+                    //data.image_offset.x,
+                    //data.image_offset.y,
+                    //data.image_extent.width as _,
+                    //data.image_extent.height as _,
+                    texture_format,
+                    pixel_type,
+                    data.buffer_offset as i32,
                 );
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
             },

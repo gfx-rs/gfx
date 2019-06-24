@@ -1287,7 +1287,12 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
-                    n::ImageKind::Texture(name, glow::TEXTURE_2D)
+                    n::ImageKind::Texture {
+                        texture: name,
+                        target: glow::TEXTURE_2D, 
+                        format: iformat,
+                        pixel_type: itype,
+                    }
                 }
                 i::Kind::D2(w, h, l, 1) => {
                     gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(name));
@@ -1325,7 +1330,12 @@ impl d::Device<B> for Device {
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
-                    n::ImageKind::Texture(name, glow::TEXTURE_2D_ARRAY)
+                    n::ImageKind::Texture {
+                        texture: name,
+                        target: glow::TEXTURE_2D_ARRAY, 
+                        format: iformat,
+                        pixel_type: itype,
+                    }
                 }
                 _ => unimplemented!(),
             }
@@ -1412,14 +1422,14 @@ impl d::Device<B> for Device {
                     )))
                 }
             }
-            n::ImageKind::Texture(texture, textype) => {
+            n::ImageKind::Texture { texture, target, .. } => {
                 //TODO: check that `level` exists
                 if range.layers.start == 0 {
-                    Ok(n::ImageView::Texture(texture, textype, level))
+                    Ok(n::ImageView::Texture(texture, target, level))
                 } else if range.layers.start + 1 == range.layers.end {
                     Ok(n::ImageView::TextureLayer(
                         texture,
-                        textype,
+                        target,
                         level,
                         range.layers.start,
                     ))
@@ -1744,7 +1754,7 @@ impl d::Device<B> for Device {
         let gl = &self.share.context;
         match image.kind {
             n::ImageKind::Surface(rb) => gl.delete_renderbuffer(rb),
-            n::ImageKind::Texture(t, _) => gl.delete_texture(t),
+            n::ImageKind::Texture { texture, .. } => gl.delete_texture(texture),
         }
     }
 

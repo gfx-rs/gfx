@@ -107,21 +107,36 @@ pub enum Command {
     SetDrawColorBuffers(usize),
     SetPatchSize(i32),
     BindProgram(<GlContext as glow::Context>::Program),
-    BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
+    SetBlend(pso::ColorBlendDesc),
+    SetBlendSlot(ColorSlot, pso::ColorBlendDesc),
     BindAttribute(n::AttributeDesc, n::RawBuffer, i32, u32),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
-    CopyBufferToTexture(n::RawBuffer, n::Texture, n::TextureType, command::BufferImageCopy),
+    CopyBufferToTexture {
+        src_buffer: n::RawBuffer,
+        dst_texture: n::Texture,
+        texture_target: n::TextureTarget,
+        texture_format: n::TextureFormat,
+        pixel_type: n::DataType,
+        data: command::BufferImageCopy,
+    },
     CopyBufferToSurface(n::RawBuffer, n::Surface, command::BufferImageCopy),
-    CopyTextureToBuffer(n::Texture, n::TextureType, n::RawBuffer, command::BufferImageCopy),
+    CopyTextureToBuffer {
+        src_texture: n::Texture,
+        texture_target: n::TextureTarget,
+        texture_format: n::TextureFormat,
+        pixel_type: n::DataType,
+        dst_buffer: n::RawBuffer,
+        data: command::BufferImageCopy,
+    },
     CopySurfaceToBuffer(n::Surface, n::RawBuffer, command::BufferImageCopy),
-    CopyImageToTexture(n::ImageKind, n::Texture, n::TextureType, command::ImageCopy),
+    CopyImageToTexture(n::ImageKind, n::Texture, n::TextureTarget, command::ImageCopy),
     CopyImageToSurface(n::ImageKind, n::Surface, command::ImageCopy),
 
     BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
-    BindTexture(u32, n::Texture, n::TextureType),
+    BindTexture(u32, n::Texture, n::TextureTarget),
     BindSampler(u32, n::Sampler),
-    SetTextureSamplerSettings(u32, n::Texture, n::TextureType, image::SamplerInfo),
+    SetTextureSamplerSettings(u32, n::Texture, n::TextureTarget, image::SamplerInfo),
 }
 
 pub type FrameBufferTarget = u32;
@@ -163,7 +178,7 @@ struct Cache {
     // Active program name.
     program: Option<n::Program>,
     // Blend per attachment.
-    blend_targets: Option<Vec<Option<pso::ColorBlendDesc>>>,
+    blend_targets: Vec<Option<pso::ColorBlendDesc>>,
     // Maps bound vertex buffer offset (index) to handle / buffer range
     vertex_buffers: Vec<Option<(n::RawBuffer, Range<buffer::Offset>)>>,
     // Active vertex buffer descriptions.
@@ -185,7 +200,7 @@ impl Cache {
             error_state: false,
             patch_size: None,
             program: None,
-            blend_targets: None,
+            blend_targets: Vec::new(),
             vertex_buffers: Vec::new(),
             vertex_buffer_descs: Vec::new(),
             attributes: Vec::new(),
@@ -324,45 +339,48 @@ impl RawCommandBuffer {
         slice
     }
 
-    fn update_blend_targets(&mut self, blend_targets: &Vec<pso::ColorBlendDesc>) {
+    fn update_blend_targets(&mut self, blend_targets: &[pso::ColorBlendDesc]) {
         let max_blend_slots = blend_targets.len();
-
-        if max_blend_slots > 0 {
-            match self.cache.blend_targets {
-                Some(ref mut cached) => {
-                    if cached.len() < max_blend_slots {
-                        cached.resize(max_blend_slots, None);
-                    }
-                }
-                None => {
-                    self.cache.blend_targets = Some(vec![None; max_blend_slots]);
-                }
-            };
+        if max_blend_slots == 0 {
+            return;
         }
 
-        for (slot, blend_target) in blend_targets.iter().enumerate() {
-            let mut update_blend = false;
-            if let Some(ref mut cached_targets) = self.cache.blend_targets {
-                if let Some(cached_target) = cached_targets.get(slot) {
-                    match cached_target {
-                        &Some(ref cache) => {
-                            if cache != blend_target {
-                                update_blend = true;
-                            }
-                        }
-                        &None => {
-                            update_blend = true;
-                        }
-                    }
-                }
+        if self.cache.blend_targets.len() < max_blend_slots {
+            self.cache.blend_targets.resize(max_blend_slots, None);
+        }
 
-                if update_blend {
-                    cached_targets[slot] = Some(*blend_target);
+        let all_targets_same = blend_targets[1..].iter().all(|target| target == &blend_targets[0]);
+
+        if all_targets_same {
+            let mut update_blend = false;
+            for cached_target in &mut self.cache.blend_targets {
+                if cached_target.as_ref() != Some(&blend_targets[0]) {
+                    *cached_target = Some(blend_targets[0]);
+                    update_blend = true;
                 }
             }
-
             if update_blend {
-                self.push_cmd(Command::BindBlendSlot(slot as _, *blend_target));
+                self.push_cmd(Command::SetBlend(blend_targets[0]));
+            }
+        } else {
+            for (slot, (blend_target, cached_target)) in blend_targets
+                .iter()
+                .zip(&mut self.cache.blend_targets)
+                .enumerate() {
+                let update_blend = match cached_target {
+                    Some(cache) => cache != blend_target,
+                    None => true,
+                };
+
+                if update_blend {
+                    *cached_target = Some(*blend_target);
+                    push_cmd_internal(
+                        &self.id,
+                        &mut self.memory,
+                        &mut self.buf,
+                        Command::SetBlendSlot(slot as _, *blend_target)
+                    );
+                }
             }
         }
     }
@@ -675,7 +693,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 // 2. ClearBuffer
                 let view = match image.kind {
                     n::ImageKind::Surface(id) => n::ImageView::Surface(id),
-                    n::ImageKind::Texture(id, textype) => n::ImageView::Texture(id, textype, 0), //TODO
+                    n::ImageKind::Texture { texture, target, .. } => {
+                        n::ImageView::Texture(texture, target, 0) //TODO
+                    }
                 };
                 self.push_cmd(Command::BindFrameBuffer(glow::DRAW_FRAMEBUFFER, Some(fbo)));
                 self.push_cmd(Command::BindTargetView(
@@ -701,12 +721,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             }
             None => {
                 // 1. glClear
-                let (tex, textype) = match image.kind {
-                    n::ImageKind::Texture(id, textype) => (id, textype), //TODO
+                let (tex, target) = match image.kind {
+                    n::ImageKind::Texture { texture, target, .. } => (texture, target), //TODO
                     n::ImageKind::Surface(_id) => unimplemented!(),
                 };
 
-                self.push_cmd(Command::BindTexture(0, tex, textype));
+                self.push_cmd(Command::BindTexture(0, tex, target));
                 self.push_cmd(Command::ClearTexture(color.float32));
             }
         }
@@ -1130,7 +1150,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             let r = region.borrow().clone();
             let cmd = match dst.kind {
                 n::ImageKind::Surface(s) => Command::CopyImageToSurface(src.kind, s, r),
-                n::ImageKind::Texture(t, tt) => Command::CopyImageToTexture(src.kind, t, tt, r),
+                n::ImageKind::Texture { texture, target, .. } => {
+                    Command::CopyImageToTexture(src.kind, texture, target, r)
+                },
             };
             self.push_cmd(cmd);
         }
@@ -1158,7 +1180,16 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             r.buffer_offset += src_range.start;
             let cmd = match dst.kind {
                 n::ImageKind::Surface(s) => Command::CopyBufferToSurface(src_raw, s, r),
-                n::ImageKind::Texture(t, tt) => Command::CopyBufferToTexture(src_raw, t, tt, r),
+                n::ImageKind::Texture { texture, target, format, pixel_type } => {
+                    Command::CopyBufferToTexture {
+                        src_buffer: src_raw,
+                        dst_texture: texture,
+                        texture_target: target,
+                        texture_format: format,
+                        pixel_type,
+                        data: r,
+                    }
+                },
             };
             self.push_cmd(cmd);
         }
@@ -1186,7 +1217,16 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             r.buffer_offset += dst_range.start;
             let cmd = match src.kind {
                 n::ImageKind::Surface(s) => Command::CopySurfaceToBuffer(s, dst_raw, r),
-                n::ImageKind::Texture(t, tt) => Command::CopyTextureToBuffer(t, tt, dst_raw, r),
+                n::ImageKind::Texture { texture, target, format, pixel_type } => {
+                    Command::CopyTextureToBuffer {
+                        src_texture: texture,
+                        texture_target: target,
+                        texture_format: format,
+                        pixel_type: pixel_type,
+                        dst_buffer: dst_raw,
+                        data: r,
+                    }
+                },
             };
             self.push_cmd(cmd);
         }
