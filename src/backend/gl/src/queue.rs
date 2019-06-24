@@ -1001,7 +1001,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
                 glow::LINEAR,
             );
 
-            swapchain.0.borrow().window.swap_buffers().unwrap();
+            swapchain.0.borrow().context.swap_buffers().unwrap();
         }
 
         Ok(None)

@@ -15,8 +15,8 @@
 //!     // First create a window using glutin.
 //!     let mut events_loop = EventsLoop::new();
 //!     let wb = WindowBuilder::new();
-//!     let cb = ContextBuilder::new().with_vsync(true);
-//!     let glutin_window = WindowedContext::new_windowed(wb, cb, &events_loop).unwrap();
+//!     let glutin_window = ContextBuilder::new().with_vsync(true).build_windowed(wb, &events_loop).unwrap();
+//!     let glutin_window = unsafe { glutin_window.make_current() }.expect("Failed to make the context current");
 //!
 //!     // Then use the glutin window to create a gfx surface.
 //!     let surface = Surface::from_window(glutin_window);
@@ -36,9 +36,10 @@
 //!
 //! fn main() {
 //!     let events_loop = EventsLoop::new();
-//!     let context = Context::new_headless(&events_loop, ContextBuilder::new(), glutin::dpi::PhysicalSize::new(0.0, 0.0))
+//!     let context = ContextBuilder::new().build_headless(&events_loop, glutin::dpi::PhysicalSize::new(0.0, 0.0))
 //!         .expect("Failed to build headless context");
-//!     let headless = Headless(context);
+//!     let context = unsafe { context.make_current() }.expect("Failed to make the context current");
+//!     let headless = Headless::from_context(context);
 //!     let _adapters = headless.enumerate_adapters();
 //! }
 //! ```
@@ -49,9 +50,9 @@ use crate::{native, Backend as B, Device, GlContainer, PhysicalDevice, QueueFami
 
 use glow::Context;
 
-use glutin::{self, ContextTrait};
+use glutin;
 
-fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
+fn get_window_extent(window: &glutin::Window) -> image::Extent {
     let px = window
         .get_inner_size()
         .unwrap()
@@ -66,7 +67,7 @@ fn get_window_extent(window: &glutin::WindowedContext) -> image::Extent {
 #[derive(Debug)]
 pub struct Swapchain {
     // Underlying window, required for presentation
-    pub(crate) window: Starc<glutin::WindowedContext>,
+    pub(crate) context: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
     // Extent because the window lies
     pub(crate) extent: Extent2D,
 }
@@ -88,26 +89,26 @@ impl hal::Swapchain<B> for Swapchain {
 // and actually respect the swapchain configuration provided by the user.
 #[derive(Debug)]
 pub struct Surface {
-    window: Starc<glutin::WindowedContext>,
+    context: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
 }
 
 impl Surface {
-    pub fn from_window(window: glutin::WindowedContext) -> Self {
+    pub fn from_window(context: glutin::WindowedContext<glutin::PossiblyCurrent>) -> Self {
         Surface {
-            window: Starc::new(window),
+            context: Starc::new(context),
         }
     }
 
-    pub fn get_window(&self) -> &glutin::WindowedContext {
-        &*self.window
+    pub fn get_context(&self) -> &glutin::WindowedContext<glutin::PossiblyCurrent> {
+        &*self.context
     }
 
-    pub fn window(&self) -> &glutin::WindowedContext {
-        &self.window
+    pub fn context(&self) -> &glutin::WindowedContext<glutin::PossiblyCurrent> {
+        &self.context
     }
 
     fn swapchain_formats(&self) -> Vec<f::Format> {
-        let pixel_format = self.window.get_pixel_format();
+        let pixel_format = self.context.get_pixel_format();
         let color_bits = pixel_format.color_bits;
         let alpha_bits = pixel_format.alpha_bits;
         let srgb = pixel_format.srgb;
@@ -123,8 +124,8 @@ impl Surface {
 
 impl hal::Surface<B> for Surface {
     fn kind(&self) -> hal::image::Kind {
-        let ex = get_window_extent(&self.window);
-        let samples = self.window.get_pixel_format().multisampling.unwrap_or(1);
+        let ex = get_window_extent(&self.context.window());
+        let samples = self.context.get_pixel_format().multisampling.unwrap_or(1);
         hal::image::Kind::D2(ex.width, ex.height, 1, samples as _)
     }
 
@@ -136,11 +137,11 @@ impl hal::Surface<B> for Surface {
         Option<Vec<f::Format>>,
         Vec<hal::PresentMode>,
     ) {
-        let ex = get_window_extent(&self.window);
+        let ex = get_window_extent(&self.context.window());
         let extent = hal::window::Extent2D::from(ex);
 
         let caps = hal::SurfaceCapabilities {
-            image_count: if self.window.get_pixel_format().double_buffer {
+            image_count: if self.context.get_pixel_format().double_buffer {
                 2..3
             } else {
                 1..2
@@ -174,7 +175,7 @@ impl Device {
     ) -> (Swapchain, Vec<native::Image>) {
         let swapchain = Swapchain {
             extent: config.extent,
-            window: surface.window.clone(),
+            context: surface.context.clone(),
         };
 
         let gl = &self.share.context;
@@ -282,19 +283,21 @@ impl Device {
 impl hal::Instance for Surface {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
-        unsafe { self.window.make_current().unwrap() };
-        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(
-            |s| self.window.get_proc_address(s) as *const _
-        ));
+        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(|s| {
+            self.context.get_proc_address(s) as *const _
+        }));
         vec![adapter]
     }
 }
 
-pub fn config_context(
-    builder: glutin::ContextBuilder,
+pub fn config_context<C>(
+    builder: glutin::ContextBuilder<C>,
     color_format: f::Format,
     ds_format: Option<f::Format>,
-) -> glutin::ContextBuilder {
+) -> glutin::ContextBuilder<C>
+where
+    C: glutin::ContextCurrentState,
+{
     let color_base = color_format.base_format();
     let color_bits = color_base.0.describe_bits();
     let depth_bits = match ds_format {
@@ -308,18 +311,20 @@ pub fn config_context(
         .with_srgb(color_base.1 == f::ChannelType::Srgb)
 }
 
-pub struct Headless(pub glutin::Context);
+pub struct Headless(pub Starc<glutin::Context<glutin::PossiblyCurrent>>);
 
-unsafe impl Send for Headless {}
-unsafe impl Sync for Headless {}
+impl Headless {
+    pub fn from_context(context: glutin::Context<glutin::PossiblyCurrent>) -> Headless {
+        Headless(Starc::new(context))
+    }
+}
 
 impl hal::Instance for Headless {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
-        unsafe { self.0.make_current().unwrap() };
-        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(
-            |s| self.0.get_proc_address(s) as *const _
-        ));
+        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(|s| {
+            self.0.get_proc_address(s) as *const _
+        }));
         vec![adapter]
     }
 }

@@ -224,12 +224,11 @@ fn main() {
         use gfx_backend_gl::glutin;
         println!("Warding GL:");
         let events_loop = glutin::EventsLoop::new();
-        let window = glutin::WindowedContext::new_windowed(
-            glutin::WindowBuilder::new(),
-            glutin::ContextBuilder::new().with_gl_profile(glutin::GlProfile::Core),
-            &events_loop,
-        )
-        .unwrap();
+        let window = glutin::ContextBuilder::new()
+            .with_gl_profile(glutin::GlProfile::Core)
+            .build_windowed(glutin::WindowBuilder::new(), &events_loop)
+            .unwrap();
+        let window = unsafe { window.make_current() }.expect("Unable to make window current");
         let instance = gfx_backend_gl::Surface::from_window(window);
         num_failures += harness.run(instance, Disabilities::default());
     }
@@ -238,9 +237,11 @@ fn main() {
         use gfx_backend_gl::glutin;
         println!("Warding GL headless:");
         let events_loop = glutin::EventsLoop::new();
-        let context =
-            glutin::Context::new_headless(&events_loop, glutin::ContextBuilder::new(), glutin::dpi::PhysicalSize::new(0.0, 0.0)).unwrap();
-        let instance = gfx_backend_gl::Headless(context);
+        let context = glutin::ContextBuilder::new()
+            .build_headless(&events_loop, glutin::dpi::PhysicalSize::new(0.0, 0.0))
+            .unwrap();
+        let context = unsafe { context.make_current() }.expect("Unable to make context current");
+        let instance = gfx_backend_gl::Headless::from_context(context);
         num_failures += harness.run(instance, Disabilities::default());
     }
     let _ = harness;

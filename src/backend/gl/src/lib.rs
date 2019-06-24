@@ -637,18 +637,15 @@ impl Instance {
     /// TODO: Update portability to make this more flexible
     #[cfg(target_os = "linux")]
     pub fn create(_: &str, _: u32) -> Instance {
-        use glutin::os::unix::OsMesaContextExt;
-        use glutin::ContextTrait;
+        use glutin::os::unix::HeadlessContextExt;
         let size = glutin::dpi::PhysicalSize::from((800, 600));
         let builder = glutin::ContextBuilder::new()
             .with_hardware_acceleration(Some(false));
-        let context: glutin::Context = OsMesaContextExt::new_osmesa(builder, size)
-            .expect("failed to create osmesa context");
-        unsafe {
-            context.make_current()
-                .expect("failed to make context current");
-        }
-        let headless = Headless(context);
+        let context: glutin::Context<glutin::NotCurrent> =
+            HeadlessContextExt::build_osmesa(builder, size)
+                .expect("failed to create osmesa context");
+        let context = unsafe { context.make_current() }.expect("failed to make context current");
+        let headless = Headless::from_context(context);
         Instance::Headless(headless)
     }
 }

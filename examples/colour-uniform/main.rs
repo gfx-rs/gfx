@@ -105,13 +105,13 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 
 trait SurfaceTrait {
     #[cfg(feature = "gl")]
-    fn get_window_t(&self) -> &back::glutin::WindowedContext;
+    fn get_window_t(&self) -> &back::glutin::WindowedContext<back::glutin::PossiblyCurrent>;
 }
 
 impl SurfaceTrait for <back::Backend as hal::Backend>::Surface {
     #[cfg(feature = "gl")]
-    fn get_window_t(&self) -> &back::glutin::WindowedContext {
-        self.get_window()
+    fn get_window_t(&self) -> &back::glutin::WindowedContext<back::glutin::PossiblyCurrent> {
+        self.get_context()
     }
 }
 
@@ -387,7 +387,7 @@ impl<B: Backend> RendererState<B> {
                             winit::WindowEvent::Resized(dims) => {
                                 #[cfg(feature = "gl")]
                                 backend.surface.get_window_t().resize(dims.to_physical(
-                                    backend.surface.get_window_t().get_hidpi_factor(),
+                                    backend.surface.get_window_t().window().get_hidpi_factor(),
                                 ));
                                 recreate_swapchain = true;
                             }
@@ -689,12 +689,10 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
         let builder =
             back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
                 .with_vsync(true);
-        back::glutin::WindowedContext::new_windowed(
-            window_state.wb.take().unwrap(),
-            builder,
-            &window_state.events_loop,
-        )
-        .unwrap()
+        let context = builder
+            .build_windowed(window_state.wb.take().unwrap(), &window_state.events_loop)
+            .unwrap();
+        unsafe { context.make_current() }.expect("Unable to make context current")
     };
 
     let surface = back::Surface::from_window(window);

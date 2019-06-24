@@ -115,7 +115,8 @@ fn main() {
             let builder =
                 back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
                     .with_vsync(true);
-            back::glutin::WindowedContext::new_windowed(wb, builder, &events_loop).unwrap()
+            let context = builder.build_windowed(wb, &events_loop).unwrap();
+            unsafe { context.make_current() }.expect("Unable to make context current")
         };
         #[cfg(target_arch = "wasm32")]
         let window = { back::Window };
@@ -652,9 +653,10 @@ fn main() {
                     winit::WindowEvent::Resized(dims) => {
                         println!("resized to {:?}", dims);
                         #[cfg(feature = "gl")]
-                        surface
-                            .get_window()
-                            .resize(dims.to_physical(surface.get_window().get_hidpi_factor()));
+                        {
+                            let context = surface.get_context();
+                            context.resize(dims.to_physical(context.window().get_hidpi_factor()));
+                        }
                         recreate_swapchain = true;
                         resize_dims.width = dims.width as u32;
                         resize_dims.height = dims.height as u32;
