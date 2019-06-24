@@ -108,7 +108,7 @@ pub enum Command {
     SetPatchSize(i32),
     BindProgram(<GlContext as glow::Context>::Program),
     BindBlendSlot(ColorSlot, pso::ColorBlendDesc),
-    BindAllBlendSlots(pso::ColorBlendDesc),
+    SetAllBlendSlots(pso::ColorBlendDesc),
     BindAttribute(n::AttributeDesc, n::RawBuffer, i32, u32),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
@@ -346,11 +346,13 @@ impl RawCommandBuffer {
                 }
             }
             if update_blend {
-                self.push_cmd(Command::BindAllBlendSlots(blend_targets[0]));
+                self.push_cmd(Command::SetAllBlendSlots(blend_targets[0]));
             }
         } else {
-            for (slot, blend_target) in blend_targets.iter().enumerate() {
-                let cached_target = &mut self.cache.blend_targets[slot];
+            for (slot, (blend_target, cached_target)) in blend_targets
+                .iter()
+                .zip(&mut self.cache.blend_targets)
+                .enumerate() {
                 let update_blend = match cached_target {
                     Some(cache) => cache != blend_target,
                     None => true,
@@ -358,7 +360,12 @@ impl RawCommandBuffer {
 
                 if update_blend {
                     *cached_target = Some(*blend_target);
-                    self.push_cmd(Command::BindBlendSlot(slot as _, *blend_target));
+                    push_cmd_internal(
+                        &self.id,
+                        &mut self.memory,
+                        &mut self.buf,
+                        Command::BindBlendSlot(slot as _, *blend_target)
+                    );
                 }
             }
         }

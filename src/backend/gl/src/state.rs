@@ -192,7 +192,7 @@ pub(crate) fn bind_blend_slot(share: &Share, slot: ColorSlot, desc: &pso::ColorB
     }
 }
 
-pub(crate) fn bind_all_blend_slots(share: &Share, desc: &pso::ColorBlendDesc) {
+pub(crate) fn set_all_blend_slots(share: &Share, desc: &pso::ColorBlendDesc) {
     use crate::hal::pso::ColorMask as Cm;
 
     let gl = &share.context;

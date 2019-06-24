@@ -534,8 +534,8 @@ impl CommandQueue {
             com::Command::BindBlendSlot(slot, ref blend) => {
                 state::bind_blend_slot(&self.share, slot, blend);
             }
-            com::Command::BindAllBlendSlots(ref blend) => {
-                state::bind_all_blend_slots(&self.share, blend);
+            com::Command::SetAllBlendSlots(ref blend) => {
+                state::set_all_blend_slots(&self.share, blend);
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
                 use crate::native::VertexAttribFunction::*;
