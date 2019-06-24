@@ -210,6 +210,7 @@ impl Device {
                         texture: name,
                         target: glow::TEXTURE_2D,
                         format: iformat,
+                        pixel_type: itype,
                     }
                 } else {
                     let name = gl.create_renderbuffer().unwrap();

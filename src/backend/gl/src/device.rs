@@ -1291,6 +1291,7 @@ impl d::Device<B> for Device {
                         texture: name,
                         target: glow::TEXTURE_2D, 
                         format: iformat,
+                        pixel_type: itype,
                     }
                 }
                 i::Kind::D2(w, h, l, 1) => {
@@ -1333,6 +1334,7 @@ impl d::Device<B> for Device {
                         texture: name,
                         target: glow::TEXTURE_2D_ARRAY, 
                         format: iformat,
+                        pixel_type: itype,
                     }
                 }
                 _ => unimplemented!(),

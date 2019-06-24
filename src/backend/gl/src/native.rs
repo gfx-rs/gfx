@@ -10,6 +10,7 @@ use crate::{Backend, GlContext};
 
 pub type TextureTarget = u32;
 pub type TextureFormat = u32;
+pub type DataType = u32;
 
 // TODO: Consider being generic over `glow::Context` instead
 pub type VertexArray = <GlContext as glow::Context>::VertexArray;
@@ -180,6 +181,7 @@ pub enum ImageKind {
         texture: Texture,
         target: TextureTarget,
         format: TextureFormat,
+        pixel_type: DataType,
     },
 }
 
