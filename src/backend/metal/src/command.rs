@@ -34,7 +34,7 @@ use parking_lot::Mutex;
 use dispatch;
 
 use std::{
-    cmp, iter, mem, ptr, slice, time,
+    iter, mem, ptr, slice, time,
     borrow::Borrow,
     cell::RefCell,
     ops::{Deref, Range},
@@ -187,7 +187,6 @@ struct RenderPipelineState {
     raw: metal::RenderPipelineState,
     ds_desc: pso::DepthStencilDesc,
     vertex_buffers: VertexBufferMaybeVec,
-    attribute_buffer_index: ResourceIndex,
     formats: native::SubpassFormats,
 }
 
@@ -437,15 +436,17 @@ impl State {
             .chain(com_used_resources)
     }
 
-    fn set_vertex_buffers(&mut self) -> Option<soft::RenderCommand<&soft::Ref>> {
+    fn set_vertex_buffers(
+        &mut self, end: usize
+    ) -> Option<soft::RenderCommand<&soft::Ref>> {
         let rps = self.render_pso.as_ref()?;
-        let start = rps.attribute_buffer_index as usize;
-        let end = start + rps.vertex_buffers.len();
+        let start = end - rps.vertex_buffers.len();
         self.resources_vs.pre_allocate_buffers(end);
 
-        for ((out_buffer, out_offset), vb_maybe) in self.resources_vs.buffers[start..]
+        for ((out_buffer, out_offset), vb_maybe) in self.resources_vs.buffers[..end]
             .iter_mut()
-            .zip(self.resources_vs.buffer_offsets[start..].iter_mut())
+            .rev()
+            .zip(self.resources_vs.buffer_offsets[..end].iter_mut().rev())
             .zip(&rps.vertex_buffers)
         {
             match vb_maybe {
@@ -470,7 +471,7 @@ impl State {
 
         Some(soft::RenderCommand::BindBuffers {
             stage: pso::Stage::Vertex,
-            index: rps.attribute_buffer_index,
+            index: start as ResourceIndex,
             buffers: (
                 &self.resources_vs.buffers[start..end],
                 &self.resources_vs.buffer_offsets[start..end],
@@ -3121,7 +3122,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 .set(Some((buffer_ptr, range.start + offset)));
         }
 
-        if let Some(command) = self.state.set_vertex_buffers() {
+        if let Some(command) = self.state.set_vertex_buffers(self.shared.private_caps.max_buffers_per_stage as usize) {
             self.inner.borrow_mut().sink().pre_render().issue(command);
         }
     }
@@ -3413,7 +3414,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
-        let mut old_attribute_buffer_index = 0;
 
         if set_stencil_references {
             pre.issue(soft::RenderCommand::SetStencilReferenceValues(
@@ -3426,12 +3426,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let set_pipeline = match self.state.render_pso {
             Some(ref ps) if ps.raw.as_ptr() == pipeline.raw.as_ptr() => false,
             Some(ref mut ps) => {
-                old_attribute_buffer_index = ps.attribute_buffer_index;
                 ps.raw = pipeline.raw.to_owned();
                 ps.vertex_buffers.clear();
                 ps.vertex_buffers
                     .extend(pipeline.vertex_buffers.iter().cloned().map(Some));
-                ps.attribute_buffer_index = pipeline.attribute_buffer_index;
                 ps.ds_desc = pipeline.depth_stencil_desc;
                 ps.formats.copy_from(&pipeline.attachment_formats);
                 true
@@ -3441,7 +3439,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     raw: pipeline.raw.to_owned(),
                     ds_desc: pipeline.depth_stencil_desc,
                     vertex_buffers: pipeline.vertex_buffers.iter().cloned().map(Some).collect(),
-                    attribute_buffer_index: pipeline.attribute_buffer_index,
                     formats: pipeline.attachment_formats.clone(),
                 });
                 true
@@ -3458,33 +3455,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     pre.issue(soft::RenderCommand::SetRasterizerState(rs.clone()))
                 }
                 // re-bind vertex buffers
-                if let Some(command) = self.state.set_vertex_buffers() {
+                if let Some(command) = self.state.set_vertex_buffers(self.shared.private_caps.max_buffers_per_stage as usize) {
                     pre.issue(command);
-                }
-                // Note: all VS resources past the `old_attribute_buffer_index` have to be re-bound
-                // but ones after `pipeline.attribute_buffer_index` are already covered by `set_vertex_buffers()`.
-                // re-bind damaged VS buffers
-                let vs_end = cmp::min(
-                    self.state.resources_vs.buffers.len(),
-                    pipeline.attribute_buffer_index as usize,
-                );
-                if vs_end > old_attribute_buffer_index as usize {
-                    pre.issue(soft::RenderCommand::BindBuffers {
-                        stage: pso::Stage::Vertex,
-                        index: old_attribute_buffer_index,
-                        buffers: (
-                            &self.state.resources_vs.buffers
-                                [old_attribute_buffer_index as usize..vs_end],
-                            &self.state.resources_vs.buffer_offsets
-                                [old_attribute_buffer_index as usize..vs_end],
-                        ),
-                    });
                 }
                 // re-bind push constants
                 if let Some(pc) = pipeline.vs_pc_info {
-                    if Some(pc) != self.state.resources_vs.push_constants
-                        || pc.buffer_index >= old_attribute_buffer_index
-                    {
+                    if Some(pc) != self.state.resources_vs.push_constants {
                         // if we don't have enough constants, then binding will follow
                         if pc.count as usize <= self.state.push_constants.len() {
                             pre.issue(self.state.push_vs_constants(pc));
@@ -3543,6 +3519,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<com::DescriptorSetOffset>,
     {
+        let vbuf_count = self.state.render_pso
+            .as_ref()
+            .map_or(0, |pso| pso.vertex_buffers.len()) as ResourceIndex;
+        assert!(pipe_layout.total.vs.buffers + vbuf_count <= self.shared.private_caps.max_buffers_per_stage);
+
         self.state.resources_vs.pre_allocate(&pipe_layout.total.vs);
         self.state.resources_ps.pre_allocate(&pipe_layout.total.ps);
 

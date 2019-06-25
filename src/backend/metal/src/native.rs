@@ -200,14 +200,6 @@ pub struct PipelineLayout {
     pub(crate) total_push_constants: u32,
 }
 
-impl PipelineLayout {
-    /// Get the first vertex buffer index to be used by attributes.
-    #[inline(always)]
-    pub(crate) fn attribute_buffer_index(&self) -> ResourceIndex {
-        self.total.vs.buffers as _
-    }
-}
-
 #[derive(Clone)]
 pub struct ModuleInfo {
     pub library: metal::Library,
@@ -265,7 +257,6 @@ pub struct GraphicsPipeline {
     pub(crate) fs_lib: Option<metal::Library>,
     pub(crate) raw: metal::RenderPipelineState,
     pub(crate) primitive_type: metal::MTLPrimitiveType,
-    pub(crate) attribute_buffer_index: ResourceIndex,
     pub(crate) vs_pc_info: Option<PushConstantInfo>,
     pub(crate) ps_pc_info: Option<PushConstantInfo>,
     pub(crate) rasterizer_state: Option<RasterizerState>,
