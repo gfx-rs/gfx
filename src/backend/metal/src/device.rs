@@ -1046,24 +1046,35 @@ impl hal::Device<Backend> for Device {
                         }
                     }
                 }
-                n::DescriptorSetLayout::ArgumentBuffer { ref bindings, .. } => {
-                    //Note: we specifically ignore the stage flags and unconditionally
-                    // add resource overrides and bump the counter, because there is no
-                    // way to override the argument buffer binding itself in SPIRV-Cross.
-                    //TODO: ^^
-                    for &mut (_stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
-                        res_overrides.extend(bindings
-                            .iter()
-                            .map(|(&binding, arg)| {
-                                let key = msl::ResourceBindingLocation {
-                                    stage,
-                                    desc_set: set_index as _,
-                                    binding,
-                                };
-                                (key, arg.res.clone())
-                            })
+                n::DescriptorSetLayout::ArgumentBuffer { ref bindings, stage_flags, .. } => {
+                    for &mut (stage_bit, stage, ref mut counters) in stage_infos.iter_mut() {
+                        let has_stage = stage_flags.contains(stage_bit);
+                        res_overrides.insert(
+                            msl::ResourceBindingLocation {
+                                stage,
+                                desc_set: set_index as _,
+                                binding: msl::ARGUMENT_BUFFER_BINDING,
+                            },
+                            msl::ResourceBinding {
+                                buffer_id: if has_stage { counters.buffers } else { !0 },
+                                texture_id: !0,
+                                sampler_id: !0,
+                            },
                         );
-                        counters.buffers += 1;
+                        if has_stage {
+                            res_overrides.extend(bindings
+                                .iter()
+                                .map(|(&binding, arg)| {
+                                    let key = msl::ResourceBindingLocation {
+                                        stage,
+                                        desc_set: set_index as _,
+                                        binding,
+                                    };
+                                    (key, arg.res.clone())
+                                })
+                            );
+                            counters.buffers += 1;
+                        }
                     }
                 }
             }
@@ -1721,6 +1732,22 @@ impl hal::Device<Backend> for Device {
             let mut bindings = FastHashMap::default();
             for desc in binding_iter {
                 let desc = desc.borrow();
+                //TODO: have the API providing the dimensions and MSAA flag
+                // for textures in an argument buffer
+                match desc.ty {
+                    pso::DescriptorType::UniformBufferDynamic |
+                    pso::DescriptorType::StorageBufferDynamic => {
+                        //TODO: apply the offsets somehow at the binding time
+                        error!("Dynamic offsets are not yet supported in argument buffers!");
+                    }
+                    pso::DescriptorType::StorageImage |
+                    pso::DescriptorType::StorageTexelBuffer => {
+                        //TODO: bind storage images separately
+                        error!("Storage images are not yet supported in argument buffers!");
+                    }
+                    _ => {}
+                }
+
                 stage_flags |= desc.stage_flags;
                 let content = n::DescriptorContent::from(desc.ty);
                 let usage = n::ArgumentArray::describe_usage(desc.ty);
