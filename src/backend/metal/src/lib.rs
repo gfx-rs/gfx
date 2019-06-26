@@ -186,6 +186,7 @@ pub struct Experiments {
     pub argument_buffers: bool,
 }
 
+#[derive(Debug)]
 pub struct Instance {
     pub experiments: Experiments,
 }

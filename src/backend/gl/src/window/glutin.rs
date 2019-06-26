@@ -316,6 +316,7 @@ where
         .with_srgb(color_base.1 == f::ChannelType::Srgb)
 }
 
+#[derive(Debug)]
 pub struct Headless(pub Starc<glutin::Context<glutin::PossiblyCurrent>>);
 
 impl Headless {
