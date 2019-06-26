@@ -1022,7 +1022,6 @@ impl hal::Device<Backend> for Device {
                                 } else {
                                     !0
                                 },
-                                force_used: false,
                             };
                             if layout.array_index == 0 {
                                 let location = msl::ResourceBindingLocation {
@@ -1049,7 +1048,6 @@ impl hal::Device<Backend> for Device {
                             buffer_id: counters.buffers as _,
                             texture_id: !0,
                             sampler_id: !0,
-                            force_used: false,
                         };
                         res_overrides.insert(location, res_binding);
                         counters.buffers += 1;
@@ -1095,7 +1093,6 @@ impl hal::Device<Backend> for Device {
                         buffer_id: index as _,
                         texture_id: !0,
                         sampler_id: !0,
-                        force_used: false,
                     },
                 );
             }
