@@ -77,6 +77,10 @@ The code in `master` is a complete low-level rewrite of gfx based on HAL as desc
 
 The previously released crates (`gfx_core`, `gfx`, `gfx_device_*`, `gfx_window_`) are still being developed and published from the [pre-ll](https://github.com/gfx-rs/gfx/tree/pre-ll) (pre-low level rewrite) branch.
 
+## Contributing
+
+We are actively looking for new contributors and aim to be welcoming and helpful to anyone that is interested! We know the code base can be a bit intimidating in size and depth at first, and to this end we have a [label](https://github.com/gfx-rs/gfx/issues?q=is%3Aissue+is%3Aopen+label%3Acontributor-friendly) on the issue tracker which marks issues that are new contributor friendly and have some basic direction for completion in the issue comments. If you have any questions about any of these issues (or any other issues) you may want to work on, please comment on GitHub and/or drop a message in our [Gitter chat](https://gitter.im/gfx-rs/gfx)!
+
 ## License
 
 [license]: #license
@@ -88,6 +92,6 @@ This repository is licensed under either of
 
 at your option.
 
-## Contributions
+### Contribution Licensing
 
 Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in the work by you, as defined in the Apache-2.0 license, shall be dual licensed as above, without any additional terms or conditions.
