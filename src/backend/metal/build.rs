@@ -20,8 +20,9 @@ fn main() {
 
     let (sdk_name, platform_args): (_, &[_]) = match (os, arch) {
         ("ios", "aarch64") => ("iphoneos", &["-mios-version-min=8.0"]),
+        ("ios", "x86_64") => ("iphonesimulator", &["-mios-simulator-version-min=8.0"]),
         ("ios", "armv7s") | ("ios", "armv7") => panic!("32-bit iOS does not have metal support"),
-        ("ios", "i386") | ("ios", "x86_64") => panic!("iOS simulator does not have metal support"),
+        ("ios", "i386") => panic!("32-bit iOS simulator does not have metal support"),
         ("darwin", _) => ("macosx", &["-mmacosx-version-min=10.11"]),
         _ => panic!("unsupported target {}", target),
     };
