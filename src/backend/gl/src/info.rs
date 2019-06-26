@@ -337,7 +337,8 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     use self::Requirement::*;
     let info = Info::get(gl);
     let max_texture_size = get_usize(gl, glow::MAX_TEXTURE_SIZE).unwrap_or(64) as u32;
-    let max_color_attachments = get_usize(gl, glow::MAX_COLOR_ATTACHMENTS).unwrap_or(8) as u8;
+    let max_samples = get_usize(gl, glow::MAX_SAMPLES).unwrap_or(8);
+    let max_samples_mask = (max_samples * 2 - 1) as u8;
 
     let mut limits = Limits {
         max_image_1d_size: max_texture_size,
@@ -352,7 +353,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         min_texel_buffer_offset_alignment: 1,   // TODO
         min_uniform_buffer_offset_alignment: 1, // TODO
         min_storage_buffer_offset_alignment: 1, // TODO
-        framebuffer_color_samples_count: max_color_attachments,
+        framebuffer_color_samples_count: max_samples_mask,
         non_coherent_atom_size: 1,
         ..Limits::default()
     };
