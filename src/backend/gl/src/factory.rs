@@ -224,6 +224,14 @@ impl Factory {
                 shaders[3] = *ps.reference(&mut handler);
                 &shaders[..4]
             },
+            &d::ShaderSet::TessellatedGeometry(ref vs, ref hs, ref ds, ref gs, ref ps) => {
+                shaders[0] = *vs.reference(&mut handler);
+                shaders[1] = *hs.reference(&mut handler);
+                shaders[2] = *ds.reference(&mut handler);
+                shaders[3] = *gs.reference(&mut handler);
+                shaders[4] = *ps.reference(&mut handler);
+                &shaders[..5]
+            },
         };
         let result = create_program(&self.share.context, &self.share.capabilities,
                                     &self.share.private_caps, shader_slice, usage);
@@ -384,6 +392,13 @@ impl f::Factory<R> for Factory {
         let mut inputs = [None; d::MAX_VERTEX_ATTRIBUTES];
         for i in 0 .. d::MAX_VERTEX_ATTRIBUTES {
             inputs[i] = desc.attributes[i].map(|at| BufferElement {
+                // Note: this `Option::unwrap` call fails the emscripten (sdk-1.38.16-64bit) build. Inlining the call seems to work around the issue. (See #2721)
+                #[cfg(target_os = "emscripten")]
+                desc: match desc.vertex_buffers[at.0 as usize] {
+                    Some(val) => val,
+                    None => panic!("called `Option::unwrap()` on a `None` value"),
+                },
+                #[cfg(not(target_os = "emscripten"))]
                 desc: desc.vertex_buffers[at.0 as usize].unwrap(),
                 elem: at.1,
             });
@@ -450,7 +465,7 @@ impl f::Factory<R> for Factory {
         }
         let view = ResourceView::new_buffer(name);
         if let Err(err) = self.share.check() {
-            panic!("Error {:?} creating buffer SRV: {:?}", err, hbuf.get_info())
+            panic!("Error {:?} creating buffer SRV: {:?}", err, hbuf.get_info());
         }
         Ok(self.share.handles.borrow_mut().make_buffer_srv(view, hbuf))
     }
@@ -460,13 +475,26 @@ impl f::Factory<R> for Factory {
         Err(f::ResourceViewError::Unsupported) //TODO
     }
 
-    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, _desc: t::ResourceDesc)
-                                       -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
+    fn view_texture_as_shader_resource_raw(&mut self, htex: &handle::RawTexture<R>, desc: t::ResourceDesc)
+                                           -> Result<handle::RawShaderResourceView<R>, f::ResourceViewError> {
         match htex.resource() {
             &NewTexture::Surface(_) => Err(f::ResourceViewError::NoBindFlag),
-            &NewTexture::Texture(t) => {
+            &NewTexture::Texture(source) => {
                 //TODO: use the view descriptor
-                let view = ResourceView::new_texture(t, htex.get_info().kind);
+                let info = htex.get_info();
+                let view = if desc.layer.is_none() && desc.min == 0 && desc.max + 1 >= info.levels {
+                    ResourceView::new_texture(source, info.kind)
+                } else if self.share.private_caps.texture_view_supported {
+                    let t = tex::make_view(&self.share.context, source, &info, &desc)?;
+                    ResourceView::new_texture_owned(t, info.kind)
+                } else {
+                    error!("SRV descriptor doesn't cover the whole resource, and views are not supported by this GL context: {:?}",
+                        desc);
+                    return Err(f::ResourceViewError::Unsupported);
+                };
+                if let Err(err) = self.share.check() {
+                    panic!("Error {:?} creating SRV: {:?}, desc: {:?}", err, info, desc);
+                }
                 Ok(self.share.handles.borrow_mut().make_texture_srv(view, htex))
             },
         }

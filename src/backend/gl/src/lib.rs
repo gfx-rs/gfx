@@ -120,12 +120,22 @@ impl ResourceView {
             owned: false,
         }
     }
+    pub fn new_texture_owned(t: Texture, kind: texture::Kind) -> ResourceView {
+        ResourceView {
+            object: t,
+            bind: tex::kind_to_gl(kind),
+            owned: true,
+        }
+    }
     pub fn new_buffer(b: Texture) -> ResourceView {
         ResourceView {
             object: b,
             bind: gl::TEXTURE_BUFFER,
             owned: true,
         }
+    }
+    pub fn gl_texture(&self) -> Texture {
+        self.object
     }
 }
 
@@ -259,6 +269,8 @@ pub struct Device {
     info: Info,
     share: Rc<Share>,
     vao: ArrayBuffer,
+    /// Temporary handles to keep alive for the frame.
+    /// Note: this manager is not meant for resource creation or cleanup!
     frame_handles: handle::Manager<Resources>,
     max_resource_count: Option<usize>,
     reset: Vec<Command>,
@@ -901,7 +913,8 @@ impl Device {
         let fence = unsafe {
             gl.FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0)
         };
-        self.frame_handles.make_fence(Fence(fence))
+
+        self.share.handles.borrow_mut().make_fence(Fence(fence))
     }
 
     // MappingKind::Persistent

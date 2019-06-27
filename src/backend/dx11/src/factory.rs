@@ -129,20 +129,28 @@ impl Factory {
                               -> Result<h::RawBuffer<R>, buffer::CreationError> {
         use data::{map_bind, map_usage};
 
+        // we are not allowed to pass size=0, 
+        // otherwise it panics
+        let buffer_size = if info.size == 0 {
+            1
+        } else {
+            info.size
+        };
+
         let (subind, size) = match info.role {
             buffer::Role::Vertex   =>
-                (d3d11::D3D11_BIND_VERTEX_BUFFER, info.size),
+                (d3d11::D3D11_BIND_VERTEX_BUFFER, buffer_size),
             buffer::Role::Index    => {
                 if info.stride != 2 && info.stride != 4 {
                     error!("Only U16 and U32 index buffers are allowed");
                     return Err(buffer::CreationError::Other);
                 }
-                (d3d11::D3D11_BIND_INDEX_BUFFER, info.size)
+                (d3d11::D3D11_BIND_INDEX_BUFFER, buffer_size)
             },
             buffer::Role::Constant  => // 16 bit alignment
-                (d3d11::D3D11_BIND_CONSTANT_BUFFER, (info.size + 0xF) & !0xF),
+                (d3d11::D3D11_BIND_CONSTANT_BUFFER, (buffer_size + 0xF) & !0xF),
             buffer::Role::Staging =>
-                (0, info.size)
+                (0, buffer_size)
         };
 
         assert!(size >= info.size);
@@ -533,7 +541,26 @@ impl core::Factory<R> for Factory {
                     ps: ps.object as *mut d3d11::ID3D11PixelShader,
                     vs_hash: vs.code_hash,
                 }
+            },
+            &core::ShaderSet::TessellatedGeometry(ref vs, ref hs, ref ds, ref gs, ref ps) => {
+                let (vs, hs, ds, gs, ps) = (vs.reference(fh), hs.reference(fh), ds.reference(fh), gs.reference(fh), ps.reference(fh));
+
+                populate_info(&mut info, Stage::Vertex, vs.reflection);
+                populate_info(&mut info, Stage::Hull,   hs.reflection);
+                populate_info(&mut info, Stage::Domain, ds.reflection);
+                populate_info(&mut info, Stage::Geometry, gs.reflection);
+                populate_info(&mut info, Stage::Pixel,  ps.reflection);
+                unsafe { (*vs.object).AddRef(); (*hs.object).AddRef(); (*ds.object).AddRef(); (*gs.object).AddRef(); (*ps.object).AddRef(); }
+                Program {
+                    vs: vs.object as *mut d3d11::ID3D11VertexShader,
+                    hs: hs.object as *mut d3d11::ID3D11HullShader,
+                    ds: ds.object as *mut d3d11::ID3D11DomainShader,
+                    gs: gs.object as *mut d3d11::ID3D11GeometryShader,
+                    ps: ps.object as *mut d3d11::ID3D11PixelShader,
+                    vs_hash: vs.code_hash,
+                }
             }
+
         };
         Ok(self.share.handles.borrow_mut().make_program(prog, info))
     }
@@ -560,9 +587,10 @@ impl core::Factory<R> for Factory {
                     attrib.name, elem.offset);
                 return Err(core::pso::CreationError);
             }
+            let vertex_semantic: VertexSemantic = attrib.name.as_str().into();
             layouts.push(d3d11::D3D11_INPUT_ELEMENT_DESC {
                 SemanticName: &charbuf[charpos],
-                SemanticIndex: 0,
+                SemanticIndex: vertex_semantic.index,
                 Format: match map_format(elem.format, false) {
                     Some(fm) => fm,
                     None => {
@@ -570,7 +598,7 @@ impl core::Factory<R> for Factory {
                         return Err(core::pso::CreationError);
                     }
                 },
-                InputSlot: attrib.slot as _,
+                InputSlot: attrib.slot as _, // NOTE: gfx_backend_dx11 has a vertex buffer binding per attribute.
                 AlignedByteOffset: elem.offset as _,
                 InputSlotClass: if bdesc.rate == 0 {
                     d3d11::D3D11_INPUT_PER_VERTEX_DATA
@@ -579,7 +607,7 @@ impl core::Factory<R> for Factory {
                 },
                 InstanceDataStepRate: bdesc.rate as _,
             });
-            for (out, inp) in charbuf[charpos..].iter_mut().zip(attrib.name.as_bytes().iter()) {
+            for (out, inp) in charbuf[charpos..].iter_mut().zip(vertex_semantic.name.as_bytes().iter()) {
                 *out = *inp as i8;
             }
             charpos += attrib.name.as_bytes().len() + 1;
@@ -1015,5 +1043,90 @@ pub fn ensure_unmapped(mapping: &mut MappingGate,
         }
 
         mapping.pointer = ptr::null_mut();
+    }
+}
+
+/// Hack: We're packing the semantic name/index into a `String` in the format that HLSL parses the information from (i.e. the name and index are simply concatted together). This loses some type safety and incurs a cost to marshal in and out of this struct. We're doing this to work around not changing `AttributeVar` (which could be parameterized over the `name` type and be specialized to this struct for DX11). When the next minor version of `gfx_core` is released we may be able to remove this hack.
+/// 
+/// `'s` is the lifetime of the `str` pointing at the semantic name.
+#[derive(PartialEq, Debug)]
+pub struct VertexSemantic<'s> {
+    pub name: &'s str,
+    pub index: u32,
+}
+
+impl<'s> From<&'s str> for VertexSemantic<'s> {
+    fn from(packed: &'s str) -> Self {
+        fn is_not_ascii_digit(c: char) -> bool {
+            !char::is_ascii_digit(&c)
+        }
+
+        // Note: a semantic name can't be just numeric, so this will succeed if called correctly.
+        let partition_index = packed.rfind(is_not_ascii_digit).map(|i| i + 1).unwrap();
+
+        Self {
+            name: &packed[..partition_index],
+            index: str::parse(&packed[partition_index..]).unwrap_or(0),
+        }
+    }
+}
+
+impl Into<String> for VertexSemantic<'_> {
+    fn into(self) -> String {
+        format!("{}{}", self.name, self.index)
+    }
+}
+
+#[cfg(test)]
+mod vertex_semantic_tests {
+    use super::*;
+
+    #[test]
+    fn pack() {
+        let vertex_semantic = VertexSemantic {
+            name: "TEST",
+            index: 1,
+        };
+        let packed: String = vertex_semantic.into();
+        assert_eq!("TEST1", packed);
+    }
+
+    #[test]
+    fn unpack() {
+        let test1 = "TEST1";
+        let packed: VertexSemantic = test1.into();
+        assert_eq!(
+            VertexSemantic {
+                name: "TEST",
+                index: 1,
+            },
+            packed,
+        );
+    }
+
+    #[test]
+    fn unpack_inner_numbers() {
+        let test1 = "TEST1A1";
+        let packed: VertexSemantic = test1.into();
+        assert_eq!(
+            VertexSemantic {
+                name: "TEST1A",
+                index: 1,
+            },
+            packed,
+        );
+    }
+
+    #[test]
+    fn unpack_implied_index() {
+        let test = "TEST";
+        let packed: VertexSemantic = test.into();
+        assert_eq!(
+            VertexSemantic {
+                name: "TEST",
+                index: 0,
+            },
+            packed,
+        );
     }
 }

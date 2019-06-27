@@ -145,11 +145,16 @@ pub type Location = usize;
 #[cfg_attr(feature = "serialize", derive(Serialize, Deserialize))]
 pub enum UniformValue {
     I32(i32),
+    U32(u32),
     F32(f32),
 
     I32Vector2([i32; 2]),
     I32Vector3([i32; 3]),
     I32Vector4([i32; 4]),
+
+    U32Vector2([u32; 2]),
+    U32Vector3([u32; 3]),
+    U32Vector4([u32; 4]),
 
     F32Vector2([f32; 2]),
     F32Vector3([f32; 3]),
@@ -164,11 +169,16 @@ impl fmt::Debug for UniformValue {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match *self {
             UniformValue::I32(x)            => write!(f, "ValueI32({:?})", x),
+            UniformValue::U32(x)            => write!(f, "ValueU32({:?})", x),
             UniformValue::F32(x)            => write!(f, "ValueF32({:?})", x),
 
             UniformValue::I32Vector2(ref v) => write!(f, "ValueI32Vector2({:?})", &v[..]),
             UniformValue::I32Vector3(ref v) => write!(f, "ValueI32Vector3({:?})", &v[..]),
             UniformValue::I32Vector4(ref v) => write!(f, "ValueI32Vector4({:?})", &v[..]),
+
+            UniformValue::U32Vector2(ref v) => write!(f, "ValueU32Vector2({:?})", &v[..]),
+            UniformValue::U32Vector3(ref v) => write!(f, "ValueU32Vector3({:?})", &v[..]),
+            UniformValue::U32Vector4(ref v) => write!(f, "ValueU32Vector4({:?})", &v[..]),
 
             UniformValue::F32Vector2(ref v) => write!(f, "ValueF32Vector2({:?})", &v[..]),
             UniformValue::F32Vector3(ref v) => write!(f, "ValueF32Vector3({:?})", &v[..]),
@@ -553,15 +563,20 @@ impl ConstVar {
         }
         match (self.base_type, self.container, *value) {
             (BaseType::I32, ContainerType::Single,         UniformValue::I32(_))        => Ok(()),
+            (BaseType::U32, ContainerType::Single,         UniformValue::U32(_))        => Ok(()),
             (BaseType::F32, ContainerType::Single,         UniformValue::F32(_))        => Ok(()),
-
-            (BaseType::F32, ContainerType::Vector(2),      UniformValue::F32Vector2(_)) => Ok(()),
-            (BaseType::F32, ContainerType::Vector(3),      UniformValue::F32Vector3(_)) => Ok(()),
-            (BaseType::F32, ContainerType::Vector(4),      UniformValue::F32Vector4(_)) => Ok(()),
 
             (BaseType::I32, ContainerType::Vector(2),      UniformValue::I32Vector2(_)) => Ok(()),
             (BaseType::I32, ContainerType::Vector(3),      UniformValue::I32Vector3(_)) => Ok(()),
             (BaseType::I32, ContainerType::Vector(4),      UniformValue::I32Vector4(_)) => Ok(()),
+
+            (BaseType::U32, ContainerType::Vector(2),      UniformValue::U32Vector2(_)) => Ok(()),
+            (BaseType::U32, ContainerType::Vector(3),      UniformValue::U32Vector3(_)) => Ok(()),
+            (BaseType::U32, ContainerType::Vector(4),      UniformValue::U32Vector4(_)) => Ok(()),
+
+            (BaseType::F32, ContainerType::Vector(2),      UniformValue::F32Vector2(_)) => Ok(()),
+            (BaseType::F32, ContainerType::Vector(3),      UniformValue::F32Vector3(_)) => Ok(()),
+            (BaseType::F32, ContainerType::Vector(4),      UniformValue::F32Vector4(_)) => Ok(()),
 
             (BaseType::F32, ContainerType::Matrix(_, 2,2), UniformValue::F32Matrix2(_)) => Ok(()),
             (BaseType::F32, ContainerType::Matrix(_, 3,3), UniformValue::F32Matrix3(_)) => Ok(()),

@@ -129,6 +129,11 @@ pub struct ShaderResourceView<R: Resources, T>(
     PhantomData<T>
 );
 
+impl<R: Resources, T> ShaderResourceView<R, T> {
+    /// Gets the raw view
+    pub fn raw_view(&self) -> &R::ShaderResourceView { &(self.0).0 }
+}
+
 impl<R: Resources, T> Typed for ShaderResourceView<R, T> {
     type Raw = RawShaderResourceView<R>;
     fn new(handle: RawShaderResourceView<R>) -> ShaderResourceView<R, T> {

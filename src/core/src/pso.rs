@@ -62,7 +62,7 @@ pub struct ColorInfo {
     pub alpha: Option<s::BlendChannel>,
 }
 impl From<s::ColorMask> for ColorInfo {
-    fn from(mask: s::ColorMask) -> ColorInfo {
+    fn from(mask: s::ColorMask) -> Self {
         ColorInfo {
             mask: mask,
             color: None,
@@ -71,7 +71,7 @@ impl From<s::ColorMask> for ColorInfo {
     }
 }
 impl From<s::Blend> for ColorInfo {
-    fn from(blend: s::Blend) -> ColorInfo {
+    fn from(blend: s::Blend) -> Self {
         ColorInfo {
             mask: s::ColorMask::all(),
             color: Some(blend.color),
@@ -256,7 +256,7 @@ pub struct PixelTargetSet<R: Resources> {
 
 impl<R: Resources> PixelTargetSet<R> {
     /// Create an empty set
-    pub fn new() -> PixelTargetSet<R> {
+    pub fn new() -> Self {
         PixelTargetSet {
             colors: [None; MAX_COLOR_TARGETS],
             depth: None,

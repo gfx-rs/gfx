@@ -20,7 +20,7 @@ extern crate glutin;
 
 use gfx::traits::FactoryExt;
 use gfx::Device;
-use glutin::{GlContext, Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use glutin::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
@@ -68,8 +68,9 @@ pub fn main() {
     let context = glutin::ContextBuilder::new()
         .with_gl(glutin::GlRequest::Specific(api, version))
         .with_vsync(true);
-    let (window, mut device, mut factory, main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_config, context, &events_loop);
+    let (window_ctx, mut device, mut factory, main_color, mut main_depth) =
+        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_config, context, &events_loop)
+            .expect("Failed to create window");
     let mut encoder = gfx::Encoder::from(factory.create_command_buffer());
 
     let pso = factory.create_pipeline_simple(&vs_code, &fs_code, pipe::new())
@@ -94,8 +95,8 @@ pub fn main() {
                         ..
                     } => running = false,
                     WindowEvent::Resized(size) => {
-                        window.resize(size.to_physical(window.get_hidpi_factor()));
-                        gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
+                        window_ctx.resize(size.to_physical(window_ctx.window().get_hidpi_factor()));
+                        gfx_window_glutin::update_views(&window_ctx, &mut data.out, &mut main_depth);
                     },
                     _ => (),
                 }
@@ -106,7 +107,7 @@ pub fn main() {
         encoder.clear(&data.out, CLEAR_COLOR);
         encoder.draw(&slice, &pso, &data);
         encoder.flush(&mut device);
-        window.swap_buffers().unwrap();
+        window_ctx.swap_buffers().unwrap();
         device.cleanup();
     }
 }

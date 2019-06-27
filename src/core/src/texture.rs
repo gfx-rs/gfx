@@ -269,9 +269,9 @@ impl Kind {
     pub fn get_dimensions(&self) -> Dimensions {
         let s0 = AaMode::Single;
         match *self {
-            Kind::D1(w) => (w, 0, 0, s0),
-            Kind::D1Array(w, a) => (w, 0, a as Size, s0),
-            Kind::D2(w, h, s) => (w, h, 0, s),
+            Kind::D1(w) => (w, 1, 1, s0),
+            Kind::D1Array(w, a) => (w, 1, a as Size, s0),
+            Kind::D2(w, h, s) => (w, h, 1, s),
             Kind::D2Array(w, h, a, s) => (w, h, a as Size, s),
             Kind::D3(w, h, d) => (w, h, d, s0),
             Kind::Cube(w) => (w, w, 6, s0),
@@ -284,12 +284,7 @@ impl Kind {
         // unused dimensions must stay 0, all others must be at least 1
         let map = |val| max(min(val, 1), val >> min(level, MAX_LEVEL));
         let (w, h, da, _) = self.get_dimensions();
-        let dm = if self.get_num_slices().is_some() {
-            0
-        } else {
-            map(da)
-        };
-        (map(w), map(h), dm, AaMode::Single)
+        (map(w), map(h), map(da), AaMode::Single)
     }
     /// Count the number of mipmap levels.
     pub fn get_num_levels(&self) -> Level {
@@ -491,12 +486,16 @@ pub struct SamplerInfo {
     /// This bias is added to every computed mipmap level (N + lod_bias). For
     /// example, if it would select mipmap level 2 and lod_bias is 1, it will
     /// use mipmap level 3.
+    #[cfg_attr(feature = "serialize", serde(default = "SamplerInfo::def_lod_bias"))]
     pub lod_bias: Lod,
     /// This range is used to clamp LOD level used for sampling.
+    #[cfg_attr(feature = "serialize", serde(default = "SamplerInfo::def_lod_range"))]
     pub lod_range: (Lod, Lod),
     /// Comparison mode, used primary for a shadow map.
+    #[cfg_attr(feature = "serialize", serde(default))]
     pub comparison: Option<state::Comparison>,
     /// Border color is used when one of the wrap modes is set to border.
+    #[cfg_attr(feature = "serialize", serde(default = "SamplerInfo::def_border"))]
     pub border: PackedColor,
 }
 
@@ -507,11 +506,23 @@ impl SamplerInfo {
         SamplerInfo {
             filter: filter,
             wrap_mode: (wrap, wrap, wrap),
-            lod_bias: Lod(0),
-            lod_range: (Lod(-8000), Lod(8000)),
+            lod_bias: Self::def_lod_bias(),
+            lod_range: Self::def_lod_range(),
             comparison: None,
-            border: PackedColor(0),
+            border: Self::def_border(),
         }
+    }
+
+    fn def_lod_bias() -> Lod {
+        Lod(0)
+    }
+
+    fn def_lod_range() -> (Lod, Lod) {
+        (Lod(-8000), Lod(8000))
+    }
+
+    fn def_border() -> PackedColor {
+        PackedColor(0)
     }
 }
 

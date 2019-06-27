@@ -23,7 +23,6 @@ use gfx::traits::{Factory, FactoryExt};
 use gfx::Device;
 use gfx::memory::Typed;
 use gfx::format::{Formatted, SurfaceTyped};
-use glutin::GlContext;
 
 pub type ColorFormat = gfx::format::Rgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
@@ -75,7 +74,8 @@ pub fn main() {
         .with_gl(glutin::GlRequest::Specific(api, version))
         .with_vsync(true);
     let (window, mut device, mut factory, main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_builder, context, &events_loop);
+        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_builder, context, &events_loop)
+            .expect("Failed to create window");
     let mut encoder = gfx::Encoder::from(factory.create_command_buffer());
     let pso = factory.create_pipeline_simple(&vs_code, &fs_code, pipe::new())
         .unwrap();
@@ -106,7 +106,7 @@ pub fn main() {
                         ..
                     } => running = false,
                     WindowEvent::Resized(size) => {
-                        window.resize(size.to_physical(window.get_hidpi_factor()));
+                        window.resize(size.to_physical(window.window().get_hidpi_factor()));
                         gfx_window_glutin::update_views(&window, &mut data.out, &mut main_depth);
                         download = factory
                             .create_download_buffer(

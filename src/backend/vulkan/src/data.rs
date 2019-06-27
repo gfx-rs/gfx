@@ -167,6 +167,7 @@ pub fn map_format(surface: SurfaceType, chan: ChannelType) -> Option<vk::Format>
             Srgb  => vk::FORMAT_R8G8B8A8_SRGB,
             _ => return None,
         },
+        BC1_R8_G8_B8 | BC3_R8_G8_B8_A8 => return None,
         R10_G10_B10_A2 => match chan {
             Int   => vk::FORMAT_A2R10G10B10_SINT_PACK32,
             Uint  => vk::FORMAT_A2R10G10B10_UINT_PACK32,

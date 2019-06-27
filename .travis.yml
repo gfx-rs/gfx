@@ -4,12 +4,42 @@ cache:
   cargo: true
   directories:
    - $HOME/deps
-rust:
-  - stable
-  - nightly
-os:
-  - linux
-  - osx
+
+matrix:
+  include:
+    # Linux 64bit
+    - os: linux
+      rust: stable
+      compiler: gcc
+    - os: linux
+      rust: nightly
+      compiler: gcc
+
+    # macOS 64bit
+    - env: MACOSX_DEPLOYMENT_TARGET=10.9
+      os: osx
+      rust: stable
+      osx_image: xcode9
+      compiler: clang
+    - env: MACOSX_DEPLOYMENT_TARGET=10.9
+      os: osx
+      rust: nightly
+      osx_image: xcode9
+      compiler: clang
+
+    # iPhoneOS 64bit
+    - env: TARGET=aarch64-apple-ios
+      os: osx
+      osx_image: xcode9
+      rust: nightly
+
+    # Windows 64bit
+    - os: windows
+      rust: stable
+      # caching on windows is slow, can cause failures:
+      # "No output has been received in the last 10m0s..."
+      cache: false
+
 branches:
   except:
     - staging.tmp
@@ -22,16 +52,19 @@ notifications:
     on_failure: always
     on_start: false
 before_install:
-  - "export DISPLAY=:99.0"
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then sh -e /etc/init.d/xvfb start; fi
+  # Do not run bors builds against the nightly compiler.
+  # We want to find out about nightly bugs, so they're done in master, but we don't block on them.
+  - if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then exit; fi
   # Extract SDL2 .deb into a cached directory (see cache section above and LIBRARY_PATH exports below)
   # Will no longer be needed when Trusty build environment goes out of beta at Travis CI
   # (assuming it will have libsdl2-dev and Rust by then)
   # see https://docs.travis-ci.com/user/trusty-ci-environment/
-  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then scripts/travis-install-sdl2.sh ; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew update; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew install sdl2; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then brew outdated cmake || brew upgrade cmake; fi
+  - "export DISPLAY=:99.0"
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then sh -e /etc/init.d/xvfb start; fi
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then scripts/travis-install-sdl2.sh ; fi
+  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then brew update; fi
+  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then brew install sdl2; fi
+  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then brew outdated cmake || brew upgrade cmake; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then rustup target add asmjs-unknown-emscripten ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then rustup target add wasm32-unknown-emscripten ; fi
   # The binary emsdk packages don't work as they are built to expect GLIBCXX_3.4.21 which isn't
@@ -44,6 +77,9 @@ addons:
     sources:
       # install a newer cmake since at this time Travis only has version 2.8.7
       - george-edison55-precise-backports
+      - llvm-toolchain-precise-3.8
+      - ubuntu-toolchain-r-test
+      #- ppa:xorg-edgers/ppa # for libosmesa6-dev
     packages:
       - xdotool
       - cmake
@@ -57,7 +93,12 @@ addons:
       - libosmesa6-dev
       - libxi-dev
       - libxrandr-dev
+      - g++-5
+      - gcc
+
 script:
+  - if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then exit; fi
+  - export PATH=$PATH:$HOME/deps/bin
   - export RUST_BACKTRACE=1
   - export CARGO_INCREMENTAL=0 # We are running out of storage with incremental builds
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export PATH=$PATH:$HOME/deps/bin ; fi
@@ -68,11 +109,12 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HEADLESS_FEATURE="--features headless"; fi
   - cargo test --all
   - cargo test -p gfx -p gfx_core --features "mint serialize"
-  - cargo test -p gfx_window_sdl --features "sdl"
-  - cargo test -p gfx_window_glfw --features "glfw"
   - cargo test -p gfx_device_gl
   - cargo test -p gfx_window_glutin $HEADLESS_FEATURE
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test -p gfx_window_sdl --features "sdl"; fi
+  - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test -p gfx_window_glfw --features "glfw"; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --all --features vulkan; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --all --features metal; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker exec -it emscripten cargo test --all --target=asmjs-unknown-emscripten ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then docker exec -it emscripten cargo test --all --target=wasm32-unknown-emscripten ; fi
+  #- if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cargo test --all --features d3d11; fi

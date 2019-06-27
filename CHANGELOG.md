@@ -1,5 +1,13 @@
 ## Change Log
 
+### v0.18 (2019-02-12)
+  - changed `get_dimensions` to return a minimum of 1
+  - Features:
+    - raw target clearing ([#2197](https://github.com/gfx-rs/gfx/pull/2197))
+    - tessellation with geometry shaders ([#2462](https://github.com/gfx-rs/gfx/pull/2462))
+    - GL native texture views ([#2545](https://github.com/gfx-rs/gfx/pull/2545))
+    - unsigned uniforms
+
 ### v0.17 (2017-12-30)
   - basic WebGL2 support via `wasm32-unknown-emscripten` target ([#1706](https://github.com/gfx-rs/gfx/pull/1706), [#1681](https://github.com/gfx-rs/gfx/pull/1681))
   - `mint` integration instead of `cgmath` ([#1301](https://github.com/gfx-rs/gfx/pull/1301))

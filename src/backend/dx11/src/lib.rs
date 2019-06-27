@@ -26,6 +26,7 @@ pub use self::command::CommandBuffer;
 pub use self::data::map_format;
 pub use self::factory::Factory;
 
+mod debug;
 mod command;
 mod data;
 mod execute;
@@ -172,6 +173,13 @@ pub struct Device {
     share: Arc<Share>,
     frame_handles: h::Manager<Resources>,
     max_resource_count: Option<usize>,
+    infoqueue: Option<debug::InfoQueue>,
+}
+
+impl Drop for Device {
+    fn drop(&mut self) {
+        unsafe { (*self.context).Release(); }
+    }
 }
 
 static FEATURE_LEVELS: [d3dcommon::D3D_FEATURE_LEVEL; 3] = [
@@ -183,8 +191,30 @@ static FEATURE_LEVELS: [d3dcommon::D3D_FEATURE_LEVEL; 3] = [
 pub fn create(driver_type: d3dcommon::D3D_DRIVER_TYPE, desc: &dxgi::DXGI_SWAP_CHAIN_DESC)
               -> Result<(Device, Factory, *mut dxgi::IDXGISwapChain), winerror::HRESULT> {
     let mut swap_chain = ptr::null_mut();
-    let create_flags = 0; //D3D11_CREATE_DEVICE_DEBUG;
+    let create_flags = debug::add_debug_flag_if_needed(0);
     let mut device = ptr::null_mut();
+    let mut context = ptr::null_mut();
+    let mut feature_level = d3dcommon::D3D_FEATURE_LEVEL_10_0;
+    let hr = unsafe {
+        d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(), driver_type, ptr::null_mut(), create_flags,
+            &FEATURE_LEVELS[0], FEATURE_LEVELS.len() as _, d3d11::D3D11_SDK_VERSION, desc,
+            &mut swap_chain, &mut device, &mut feature_level, &mut context)
+    };
+    if !winerror::SUCCEEDED(hr) {
+        return Err(hr);
+    }
+
+    let (dev, factory) = create_from_existing(device, context)?;
+    Ok((dev, factory, swap_chain))
+}
+
+pub fn create_from_existing(device: *mut winapi::um::d3d11::ID3D11Device, context: *mut winapi::um::d3d11::ID3D11DeviceContext)
+    -> Result<(Device, Factory), winerror::HRESULT>
+{
+    if device.is_null() || context.is_null() {
+        return Err(winerror::E_INVALIDARG);
+    }
+
     let share = Share {
         capabilities: core::Capabilities {
             max_vertex_count: 0,
@@ -204,16 +234,10 @@ pub fn create(driver_type: d3dcommon::D3D_DRIVER_TYPE, desc: &dxgi::DXGI_SWAP_CH
         handles: RefCell::new(h::Manager::new()),
     };
 
-    let mut context = ptr::null_mut();
-    let mut feature_level = d3dcommon::D3D_FEATURE_LEVEL_10_0;
-    let hr = unsafe {
-        d3d11::D3D11CreateDeviceAndSwapChain(ptr::null_mut(), driver_type, ptr::null_mut(), create_flags,
-            &FEATURE_LEVELS[0], FEATURE_LEVELS.len() as _, d3d11::D3D11_SDK_VERSION, desc,
-            &mut swap_chain, &mut device, &mut feature_level, &mut context)
+    let feature_level = unsafe {
+        let device_obj = & *device;
+        device_obj.GetFeatureLevel()
     };
-    if !winerror::SUCCEEDED(hr) {
-        return Err(hr)
-    }
 
     let dev = Device {
         context: context,
@@ -221,10 +245,11 @@ pub fn create(driver_type: d3dcommon::D3D_DRIVER_TYPE, desc: &dxgi::DXGI_SWAP_CH
         share: Arc::new(share),
         frame_handles: h::Manager::new(),
         max_resource_count: None,
+        infoqueue: debug::InfoQueue::try_create(device),
     };
     let factory = Factory::new(device, dev.share.clone());
 
-    Ok((dev, factory, swap_chain))
+    Ok((dev, factory))
 }
 
 pub type ShaderModel = u16;
@@ -403,6 +428,10 @@ impl core::Device for Device {
             |_, v| unsafe { (*v.0).Release(); }, //sampler
             |_, _fence| {},
         );
+
+        if let Some(ref infoqueue) = self.infoqueue {
+            infoqueue.flush_messages();
+        }
     }
 }
 

@@ -183,6 +183,7 @@ pub struct PrivateCaps {
     pub frag_data_location_supported: bool,
     pub sampler_lod_bias_supported: bool,
     pub texture_border_clamp_supported: bool,
+    pub texture_view_supported: bool,
 }
 
 /// OpenGL implementation information
@@ -297,8 +298,7 @@ pub fn get_all(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
                                                                Ext ("GL_ARB_framebuffer_sRGB")]),
         constant_buffer_supported:         info.is_supported(&[Core(3,1),
                                                                Es  (3,0),
-                                                               Ext ("GL_ARB_uniform_buffer_object")])
-                                           && !is_emscripten,
+                                                               Ext ("GL_ARB_uniform_buffer_object")]),
         unordered_access_view_supported:   info.is_supported(&[Core(4,0)]), //TODO: extension
         separate_blending_slots_supported: info.is_supported(&[Core(4,0),
                                                                Es  (3,2), // see `glDisablei`
@@ -333,6 +333,8 @@ pub fn get_all(gl: &gl::Gl) -> (Info, Capabilities, PrivateCaps) {
         texture_border_clamp_supported:    info.is_supported(&[Core(2,0), //TODO?
                                                                Es  (3,2),
                                                                Ext ("GL_EXT_texture_border_clamp")]),
+        texture_view_supported:            info.is_supported(&[Core(4,3),
+                                                               Ext ("GL_EXT_texture_view")]),
     };
     (info, caps, private)
 }

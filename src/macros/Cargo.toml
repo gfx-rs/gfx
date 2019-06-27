@@ -28,5 +28,6 @@ categories = ["rendering::graphics-api"]
 proc-macro = true
 
 [dependencies]
-syn = "0.11"
-quote = "0.3"
+proc-macro2 = "0.4"
+syn = "0.15"
+quote = "0.6"

@@ -108,15 +108,17 @@ macro_rules! define_shaders {
 
 define_shaders!(VertexShader, HullShader, DomainShader, GeometryShader, PixelShader);
 
-/// A complete set of shaders to link a program.
+/// A complete set of shaders to link a program. TODO: TransformFeedback
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum ShaderSet<R: Resources> {
     /// Simple program: Vs-Ps
     Simple(VertexShader<R>, PixelShader<R>),
     /// Geometry shader programs: Vs-Gs-Ps
     Geometry(VertexShader<R>, GeometryShader<R>, PixelShader<R>),
-    /// Tessellated TODO: Tessellated, TessellatedGeometry, TransformFeedback
+    /// Tessellation programs: Vs-Hs-Ds-Ps
     Tessellated(VertexShader<R>, HullShader<R>, DomainShader<R>, PixelShader<R>),
+    /// TessellatedGeometry programs: Vs-Hs-Ds-Hs-Ps
+    TessellatedGeometry(VertexShader<R>, HullShader<R>, DomainShader<R>, GeometryShader<R>, PixelShader<R>),
 }
 
 impl<R: Resources> ShaderSet<R> {
@@ -127,6 +129,7 @@ impl<R: Resources> ShaderSet<R> {
             ShaderSet::Simple(..) => Usage::VERTEX | Usage::PIXEL,
             ShaderSet::Geometry(..) => Usage::VERTEX | Usage::GEOMETRY | Usage::PIXEL,
             ShaderSet::Tessellated(..) => Usage::VERTEX | Usage::HULL | Usage::DOMAIN | Usage::PIXEL,
+            ShaderSet::TessellatedGeometry(..) => Usage::VERTEX | Usage::HULL | Usage::DOMAIN | Usage::GEOMETRY | Usage::PIXEL,
         }
     }
 }
