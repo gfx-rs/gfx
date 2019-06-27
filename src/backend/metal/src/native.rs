@@ -1075,5 +1075,7 @@ impl Signpost {
         unsafe {
             kdebug_signpost(code, args[0], args[1], args[2], args[3]);
         }
+        #[cfg(not(feature = "signpost"))]
+        let _ = (code, args);
     }
 }
