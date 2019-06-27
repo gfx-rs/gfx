@@ -22,9 +22,9 @@ impl Instance {
     }
 
     #[cfg(feature = "winit")]
-    pub fn create_surface(&self, window: &winit::Window) -> Surface {
-        use winit::os::windows::WindowExt;
-        self.create_surface_from_hwnd(window.get_hwnd() as *mut _)
+    pub fn create_surface(&self, window: &winit::window::Window) -> Surface {
+        use winit::platform::windows::WindowExtWindows;
+        self.create_surface_from_hwnd(window.hwnd() as *mut _)
     }
 }
 

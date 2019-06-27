@@ -928,7 +928,7 @@ impl Instance {
     }
 
     #[cfg(feature = "winit")]
-    pub fn create_surface(&self, _: &winit::Window) -> Surface {
+    pub fn create_surface(&self, _: &winit::window::Window) -> Surface {
         unimplemented!()
     }
 }
