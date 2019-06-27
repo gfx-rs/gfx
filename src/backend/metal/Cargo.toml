@@ -15,6 +15,7 @@ edition = "2018"
 [features]
 default = ["winit"]
 auto-capture = []
+signpost = []
 
 [lib]
 name = "gfx_backend_metal"

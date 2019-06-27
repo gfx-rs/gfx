@@ -40,6 +40,8 @@ use std::{
     ops::{Deref, Range},
     sync::Arc,
 };
+#[cfg(feature = "dispatch")]
+use std::fmt;
 
 
 const WORD_SIZE: usize = 4;
@@ -50,6 +52,15 @@ const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
 const CLEAR_IMAGE_ARRAY: bool = false && cfg!(target_os = "macos");
 /// Number of frames to average when reporting the performance counters.
 const COUNTERS_REPORT_WINDOW: usize = 0;
+
+#[cfg(feature = "dispatch")]
+struct NoDebug<T>(T);
+#[cfg(feature = "dispatch")]
+impl<T> fmt::Debug for NoDebug<T> {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "<hidden>")
+    }
+}
 
 #[derive(Debug)]
 pub struct QueueInner {
@@ -125,7 +136,7 @@ impl QueueInner {
 struct PoolShared {
     online_recording: OnlineRecording,
     #[cfg(feature = "dispatch")]
-    dispatch_queue: Option<dispatch::Queue>,
+    dispatch_queue: Option<NoDebug<dispatch::Queue>>,
 }
 
 type CommandBufferInnerPtr = Arc<RefCell<CommandBufferInner>>;
@@ -147,8 +158,8 @@ impl CommandPool {
             #[cfg(feature = "dispatch")]
             dispatch_queue: match online_recording {
                 OnlineRecording::Immediate | OnlineRecording::Deferred => None,
-                OnlineRecording::Remote(priority) => {
-                    Some(dispatch::Queue::global(priority.clone()))
+                OnlineRecording::Remote(ref priority) => {
+                    Some(NoDebug(dispatch::Queue::global(priority.clone())))
                 }
             },
             online_recording,
@@ -709,12 +720,17 @@ struct Capacity {
 
 //TODO: make sure to recycle the heap allocation of these commands.
 #[cfg(feature = "dispatch")]
+#[derive(Debug)]
 enum EncodePass {
     Render(
         Vec<soft::RenderCommand<soft::Own>>,
+        soft::Own,
         metal::RenderPassDescriptor,
     ),
-    Compute(Vec<soft::ComputeCommand<soft::Own>>),
+    Compute(
+        Vec<soft::ComputeCommand<soft::Own>>,
+        soft::Own,
+    ),
     Blit(Vec<soft::BlitCommand>),
 }
 #[cfg(feature = "dispatch")]
@@ -730,21 +746,21 @@ impl EncodePass {
     fn schedule(self, queue: &dispatch::Queue, cmd_buffer_arc: &Arc<Mutex<metal::CommandBuffer>>) {
         let cmd_buffer = SharedCommandBuffer(Arc::clone(cmd_buffer_arc));
         queue.r#async(move || match self {
-            EncodePass::Render(list, desc) => {
+            EncodePass::Render(list, resources, desc) => {
                 let encoder = cmd_buffer
                     .0
                     .lock()
                     .new_render_command_encoder(&desc)
                     .to_owned();
                 for command in list {
-                    exec_render(&encoder, command);
+                    exec_render(&encoder, command, &resources);
                 }
                 encoder.end_encoding();
             }
-            EncodePass::Compute(list) => {
+            EncodePass::Compute(list, resources) => {
                 let encoder = cmd_buffer.0.lock().new_compute_command_encoder().to_owned();
                 for command in list {
-                    exec_compute(&encoder, command);
+                    exec_compute(&encoder, command, &resources);
                 }
                 encoder.end_encoding();
             }
@@ -760,8 +776,8 @@ impl EncodePass {
 
     fn update(&self, capacity: &mut Capacity) {
         match &self {
-            EncodePass::Render(ref list, _) => capacity.render = capacity.render.max(list.len()),
-            EncodePass::Compute(ref list) => capacity.compute = capacity.compute.max(list.len()),
+            EncodePass::Render(ref list, _, _) => capacity.render = capacity.render.max(list.len()),
+            EncodePass::Compute(ref list, _) => capacity.compute = capacity.compute.max(list.len()),
             EncodePass::Blit(ref list) => capacity.blit = capacity.blit.max(list.len()),
         }
     }
@@ -888,7 +904,7 @@ enum CommandSink {
     },
     #[cfg(feature = "dispatch")]
     Remote {
-        queue: dispatch::Queue,
+        queue: NoDebug<dispatch::Queue>,
         cmd_buffer: Arc<Mutex<metal::CommandBuffer>>,
         token: Token,
         pass: Option<EncodePass>,
@@ -1002,7 +1018,7 @@ impl CommandSink {
             }
             #[cfg(feature = "dispatch")]
             CommandSink::Remote {
-                ref queue,
+                queue: NoDebug(ref queue),
                 ref cmd_buffer,
                 ref mut pass,
                 ref mut capacity,
@@ -1036,9 +1052,9 @@ impl CommandSink {
             },
             #[cfg(feature = "dispatch")]
             CommandSink::Remote {
-                pass: Some(EncodePass::Render(ref mut list, _)),
+                pass: Some(EncodePass::Render(ref mut list, ref mut resources, _)),
                 ..
-            } => PreRender::Deferred(list),
+            } => PreRender::Deferred(resources, list),
             _ => PreRender::Void,
         }
     }
@@ -1079,10 +1095,11 @@ impl CommandSink {
                 ref capacity,
                 ..
             } => {
-                let mut list = Vec::with_capacity(capacity.render);
-                *pass = Some(EncodePass::Render(list, descriptor));
+                let list = Vec::with_capacity(capacity.render);
+                *pass = Some(EncodePass::Render(list, soft::Own::default(), descriptor));
                 match *pass {
-                    Some(EncodePass::Render(ref mut list, _)) => PreRender::Deferred(list),
+                    Some(EncodePass::Render(ref mut list, ref mut resources, _)) =>
+                        PreRender::Deferred(resources, list),
                     _ => unreachable!(),
                 }
             }
@@ -1159,7 +1176,7 @@ impl CommandSink {
             } => PreBlit::Deferred(list),
             #[cfg(feature = "dispatch")]
             CommandSink::Remote {
-                ref queue,
+                queue: NoDebug(ref queue),
                 ref cmd_buffer,
                 ref mut pass,
                 ref mut capacity,
@@ -1169,7 +1186,7 @@ impl CommandSink {
                     pass.update(capacity);
                     pass.schedule(queue, cmd_buffer);
                 }
-                let mut list = Vec::with_capacity(capacity.blit);
+                let list = Vec::with_capacity(capacity.blit);
                 *pass = Some(EncodePass::Blit(list));
                 match *pass {
                     Some(EncodePass::Blit(ref mut list)) => PreBlit::Deferred(list),
@@ -1210,9 +1227,9 @@ impl CommandSink {
             },
             #[cfg(feature = "dispatch")]
             CommandSink::Remote {
-                pass: Some(EncodePass::Compute(ref mut list)),
+                pass: Some(EncodePass::Compute(ref mut list, ref mut resources)),
                 ..
-            } => PreCompute::Deferred(list),
+            } => PreCompute::Deferred(resources, list),
             _ => PreCompute::Void,
         }
     }
@@ -1261,12 +1278,12 @@ impl CommandSink {
             }
             #[cfg(feature = "dispatch")]
             CommandSink::Remote {
-                pass: Some(EncodePass::Compute(ref mut list)),
+                pass: Some(EncodePass::Compute(ref mut list, ref mut resources)),
                 ..
-            } => (PreCompute::Deferred(list), false),
+            } => (PreCompute::Deferred(resources, list), false),
             #[cfg(feature = "dispatch")]
             CommandSink::Remote {
-                ref queue,
+                queue: NoDebug(ref queue),
                 ref cmd_buffer,
                 ref mut pass,
                 ref mut capacity,
@@ -1276,10 +1293,11 @@ impl CommandSink {
                     pass.update(capacity);
                     pass.schedule(queue, cmd_buffer);
                 }
-                let mut list = Vec::with_capacity(capacity.compute);
-                *pass = Some(EncodePass::Compute(list));
+                let list = Vec::with_capacity(capacity.compute);
+                *pass = Some(EncodePass::Compute(list, soft::Own::default()));
                 match *pass {
-                    Some(EncodePass::Compute(ref mut list)) => (PreCompute::Deferred(list), true),
+                    Some(EncodePass::Compute(ref mut list, ref mut resources)) =>
+                        (PreCompute::Deferred(resources, list), true),
                     _ => unreachable!(),
                 }
             }
@@ -2038,7 +2056,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     }
                     #[cfg(feature = "dispatch")]
                     Some(CommandSink::Remote {
-                        ref queue,
+                        queue: NoDebug(ref queue),
                         ref cmd_buffer,
                         ref token,
                         ..
@@ -2330,15 +2348,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             OnlineRecording::Remote(_) if can_immediate => {
                 let (cmd_buffer, token) = self.shared.queue.lock().spawn();
                 CommandSink::Remote {
-                    queue: dispatch::Queue::with_target_queue(
+                    queue: NoDebug(dispatch::Queue::with_target_queue(
                         "gfx-metal",
                         dispatch::QueueAttribute::Serial,
-                        self.pool_shared
+                        &self.pool_shared
                             .borrow_mut()
                             .dispatch_queue
                             .as_ref()
-                            .unwrap(),
-                    ),
+                            .unwrap().0,
+                    )),
                     cmd_buffer: Arc::new(Mutex::new(cmd_buffer)),
                     token,
                     pass: None,
