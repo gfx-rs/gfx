@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx11-0.2.1, backend-dx12-0.2.1, backend-metal-0.2.2, backend-empty-0.2.1 (28-06-2019)
+  - `Debug` implementations for `Instance`
+
 ### backend-vulkan-0.2.2 (14-06-2019)
   - allow building on macOS for Vulkan Portability
 
