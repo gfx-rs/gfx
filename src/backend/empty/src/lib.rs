@@ -866,6 +866,7 @@ impl hal::Swapchain<Backend> for Swapchain {
     }
 }
 
+#[derive(Debug)]
 pub struct Instance;
 
 impl Instance {

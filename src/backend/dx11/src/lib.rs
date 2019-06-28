@@ -99,6 +99,7 @@ pub(crate) struct ViewInfo {
     range: image::SubresourceRange,
 }
 
+#[derive(Debug)]
 pub struct Instance {
     pub(crate) factory: ComPtr<IDXGIFactory>,
     pub(crate) dxgi_version: dxgi::DxgiVersion,
