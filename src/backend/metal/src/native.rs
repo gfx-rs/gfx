@@ -27,7 +27,7 @@ use std::{
     ops::Range,
     os::raw::{c_long, c_void},
     ptr,
-    sync::Arc,
+    sync::{Arc, atomic::AtomicBool},
 };
 
 
@@ -398,7 +398,7 @@ pub struct Sampler(pub(crate) metal::SamplerState);
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Semaphore {
     pub(crate) system: Option<SystemSemaphore>,
     pub(crate) image_ready: Arc<Mutex<Option<SwapchainImage>>>,
@@ -1006,6 +1006,10 @@ pub struct Fence(pub(crate) RefCell<FenceInner>);
 
 unsafe impl Send for Fence {}
 unsafe impl Sync for Fence {}
+
+//TODO: review the atomic ordering
+#[derive(Debug)]
+pub struct Event(pub(crate) Arc<AtomicBool>);
 
 extern "C" {
     fn dispatch_semaphore_wait(semaphore: *mut c_void, timeout: u64) -> c_long;

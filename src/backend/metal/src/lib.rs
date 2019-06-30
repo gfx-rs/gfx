@@ -35,6 +35,20 @@ memory types.
 Metal doesn't have CPU-visible memory for textures. We only allow RGBA8 2D textures
 to be allocated from it, and only for the matter of transfer operations, which is
 the minimum required by Vulkan. In fact, these become just glorified staging buffers.
+
+## Events
+
+Events are represented by just an atomic bool. When recording, a command buffer keeps
+track of all events set or reset. Signalling within a command buffer is therefore a
+matter of simply checking that local list. When making a submission, used events are
+also accumulated temporarily, so that we can change their values in the completion
+handler of the last command buffer. We also check this list in order to resolve events
+fired in one command buffer and waited in another one within the same submission.
+
+Waiting for an event from a different submission is accomplished similar to waiting
+for the host. We block all the submissions until the host blockers are resolved, and
+these are checked at certain points like setting an event by the device, or waiting
+for a fence.
 !*/
 
 #[macro_use]
@@ -138,6 +152,7 @@ struct VisibilityShared {
 struct Shared {
     device: Mutex<metal::Device>,
     queue: Mutex<command::QueueInner>,
+    queue_blocker: Mutex<command::QueueBlocker>,
     service_pipes: internal::ServicePipes,
     disabilities: PrivateDisabilities,
     private_caps: PrivateCapabilities,
@@ -169,10 +184,12 @@ impl Shared {
                 &device,
                 Some(MAX_ACTIVE_COMMAND_BUFFERS),
             )),
+            queue_blocker: Mutex::new(command::QueueBlocker::default()),
             service_pipes: internal::ServicePipes::new(&device),
             disabilities: PrivateDisabilities {
                 broken_viewport_near_depth: device.name().starts_with("Intel")
                     && !device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v4),
+                broken_layered_clear_image: device.name().starts_with("Intel"),
             },
             private_caps,
             device: Mutex::new(device),
@@ -393,7 +410,7 @@ impl hal::Backend for Backend {
 
     type Fence = native::Fence;
     type Semaphore = native::Semaphore;
-    type Event = ();
+    type Event = native::Event;
     type QueryPool = native::QueryPool;
 }
 
@@ -852,7 +869,10 @@ impl PrivateCapabilities {
 
 #[derive(Clone, Copy, Debug)]
 struct PrivateDisabilities {
+    /// Near depth is not respected properly on some Intel GPUs.
     broken_viewport_near_depth: bool,
+    /// Multi-target clears don't appear to work properly on Intel GPUs.
+    broken_layered_clear_image: bool,
 }
 
 trait AsNative {

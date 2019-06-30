@@ -38,7 +38,7 @@ use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::path::Path;
-use std::sync::Arc;
+use std::sync::{Arc, atomic::{AtomicBool, Ordering}};
 use std::{cmp, iter, mem, ptr, thread, time};
 
 
@@ -2553,11 +2553,13 @@ impl hal::Device<Backend> for Device {
         debug!("Creating fence ptr {:?} with signal={}", cell.as_ptr(), signaled);
         Ok(n::Fence(cell))
     }
+
     unsafe fn reset_fence(&self, fence: &n::Fence) -> Result<(), OutOfMemory> {
         debug!("Resetting fence ptr {:?}", fence.0.as_ptr());
         fence.0.replace(n::FenceInner::Idle { signaled: false });
         Ok(())
     }
+
     unsafe fn wait_for_fence(
         &self,
         fence: &n::Fence,
@@ -2589,6 +2591,7 @@ impl hal::Device<Backend> for Device {
                         return Ok(false);
                     }
                     thread::sleep(time::Duration::from_millis(1));
+                    self.shared.queue_blocker.lock().triage();
                 }
             }
             n::FenceInner::AcquireFrame { ref swapchain_image, iteration } => {
@@ -2603,6 +2606,7 @@ impl hal::Device<Backend> for Device {
             }
         }
     }
+
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, DeviceLost> {
         Ok(match *fence.0.borrow() {
             n::FenceInner::Idle { signaled } => signaled,
@@ -2615,26 +2619,31 @@ impl hal::Device<Backend> for Device {
             }
         })
     }
-    unsafe fn destroy_fence(&self, _fence: n::Fence) {}
 
-    fn create_event(&self) -> Result<(), OutOfMemory> {
-        unimplemented!()
+    unsafe fn destroy_fence(&self, _fence: n::Fence) {
+        //empty
     }
 
-    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, OomOrDeviceLost> {
-        unimplemented!()
+    fn create_event(&self) -> Result<n::Event, OutOfMemory> {
+        Ok(n::Event(Arc::new(AtomicBool::new(false))))
     }
 
-    unsafe fn set_event(&self, _event: &()) -> Result<(), OutOfMemory> {
-        unimplemented!()
+    unsafe fn get_event_status(&self, event: &n::Event) -> Result<bool, OomOrDeviceLost> {
+        Ok(event.0.load(Ordering::Acquire))
     }
 
-    unsafe fn reset_event(&self, _event: &()) -> Result<(), OutOfMemory> {
-        unimplemented!()
+    unsafe fn set_event(&self, event: &n::Event) -> Result<(), OutOfMemory> {
+        event.0.store(true, Ordering::Release);
+        self.shared.queue_blocker.lock().triage();
+        Ok(())
     }
 
-    unsafe fn destroy_event(&self, _event: ()) {
-        unimplemented!()
+    unsafe fn reset_event(&self, event: &n::Event) -> Result<(), OutOfMemory> {
+        Ok(event.0.store(false, Ordering::Release))
+    }
+
+    unsafe fn destroy_event(&self, _event: n::Event) {
+        //empty
     }
 
     unsafe fn create_query_pool(

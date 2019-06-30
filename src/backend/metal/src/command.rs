@@ -38,7 +38,7 @@ use std::{
     borrow::Borrow,
     cell::RefCell,
     ops::{Deref, Range},
-    sync::Arc,
+    sync::{Arc, atomic::{AtomicBool, Ordering}},
 };
 #[cfg(feature = "dispatch")]
 use std::fmt;
@@ -46,10 +46,6 @@ use std::fmt;
 
 const WORD_SIZE: usize = 4;
 const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
-/// Enable an optimization to have multi-layered render passed
-/// with clear operations set up to implement our `clear_image`
-/// Note: multi-target clears don't appear to work properly on Intel GPUs
-const CLEAR_IMAGE_ARRAY: bool = false && cfg!(target_os = "macos");
 /// Number of frames to average when reporting the performance counters.
 const COUNTERS_REPORT_WINDOW: usize = 0;
 
@@ -131,6 +127,50 @@ impl QueueInner {
         queue.lock().release(token);
     }
 }
+
+#[derive(Debug)]
+pub struct BlockedSubmission {
+    wait_events: Vec<Arc<AtomicBool>>,
+    command_buffers: Vec<metal::CommandBuffer>,
+}
+
+/// Class responsible for keeping the state of submissions between the
+/// requested user submission that is blocked by a host event, and
+/// setting the event itself on the host.
+#[derive(Debug, Default)]
+pub struct QueueBlocker {
+    submissions: Vec<BlockedSubmission>,
+}
+
+impl QueueBlocker {
+    fn submit_impl(&mut self, cmd_buffer: &metal::CommandBufferRef) {
+        match self.submissions.last_mut() {
+            Some(blocked) => blocked.command_buffers.push(cmd_buffer.to_owned()),
+            None => cmd_buffer.commit(),
+        }
+    }
+
+    pub(crate) fn triage(&mut self) {
+        // clean up the relevant blocks
+        let done = {
+            let blocked = match self.submissions.first_mut() {
+                Some(blocked) => blocked,
+                None => return,
+            };
+            blocked.wait_events.retain(|ev| !ev.load(Ordering::Acquire));
+            blocked.wait_events.is_empty()
+        };
+
+        // execute unblocked command buffers
+        if done {
+            let blocked = self.submissions.remove(0);
+            for cmd_buf in blocked.command_buffers {
+                cmd_buf.commit();
+            }
+        }
+    }
+}
+
 
 #[derive(Debug)]
 struct PoolShared {
@@ -1328,6 +1368,9 @@ pub struct IndexBuffer<B> {
     stride: u32,
 }
 
+/// This is an inner mutable part of the command buffer that is
+/// accessible by the owning command pool for one single reason:
+/// to reset it.
 #[derive(Debug)]
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
@@ -1338,6 +1381,8 @@ pub struct CommandBufferInner {
     retained_buffers: Vec<metal::Buffer>,
     retained_textures: Vec<metal::Texture>,
     active_visibility_queries: Vec<query::Id>,
+    events: Vec<(Arc<AtomicBool>, bool)>,
+    host_events: Vec<Arc<AtomicBool>>,
 }
 
 impl Drop for CommandBufferInner {
@@ -1379,6 +1424,7 @@ impl CommandBufferInner {
         self.retained_buffers.clear();
         self.retained_textures.clear();
         self.active_visibility_queries.clear();
+        self.events.clear();
     }
 
     fn sink(&mut self) -> &mut CommandSink {
@@ -1996,11 +2042,13 @@ impl RawCommandQueue<Backend> for CommandQueue {
 
         #[allow(unused_mut)]
         let (mut num_immediate, mut num_deferred, mut num_remote) = (0, 0, 0);
+        let mut event_commands = Vec::new();
         let do_signal = fence.is_some() || !system_semaphores.is_empty();
 
         autoreleasepool(|| {
             // for command buffers
             let cmd_queue = self.shared.queue.lock();
+            let mut blocker = self.shared.queue_blocker.lock();
             let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
 
             for buffer in command_buffers {
@@ -2010,8 +2058,30 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     ref mut retained_buffers,
                     ref mut retained_textures,
                     ref mut active_visibility_queries,
+                    ref events,
+                    ref host_events,
                     ..
                 } = *inner;
+
+                //TODO: split event commands into immediate/blocked submissions?
+                event_commands.extend_from_slice(events);
+                // wait for anything not previously fired
+                let wait_events = host_events
+                    .iter()
+                    .filter(|event| {
+                        event_commands
+                            .iter()
+                            .rfind(|ev| Arc::ptr_eq(event, &ev.0))
+                            .map_or(true, |ev| !ev.1)
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                if !wait_events.is_empty() {
+                    blocker.submissions.push(BlockedSubmission {
+                        wait_events,
+                        command_buffers: Vec::new(),
+                    });
+                }
 
                 match *sink {
                     Some(CommandSink::Immediate {
@@ -2029,9 +2099,9 @@ impl RawCommandQueue<Backend> for CommandQueue {
                         if num_passes != 0 {
                             // flush the deferred recording, if any
                             if let Some(cb) = deferred_cmd_buffer.take() {
-                                cb.commit();
+                                blocker.submit_impl(cb);
                             }
-                            cmd_buffer.commit();
+                            blocker.submit_impl(cmd_buffer);
                         }
                     }
                     Some(CommandSink::Deferred { ref journal, .. }) => {
@@ -2050,7 +2120,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                             if self.stitch_deferred {
                                 deferred_cmd_buffer = Some(cmd_buffer);
                             } else {
-                                cmd_buffer.commit();
+                                blocker.submit_impl(cmd_buffer);
                             }
                         }
                     }
@@ -2065,6 +2135,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                         trace!("\tremote {:?}", token);
                         cmd_buffer.lock().enqueue();
                         let shared_cb = SharedCommandBuffer(Arc::clone(cmd_buffer));
+                        //TODO: make this compatible with events
                         queue.sync(move || {
                             shared_cb.0.lock().commit();
                         });
@@ -2073,7 +2144,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
                 }
             }
 
-            if do_signal || !self.active_visibility_queries.is_empty() {
+            if do_signal
+                || !event_commands.is_empty()
+                || !self.active_visibility_queries.is_empty()
+            {
                 //Note: there is quite a bit copying here
                 let free_buffers = self
                     .retained_buffers
@@ -2097,6 +2171,10 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     // signal the semaphores
                     for semaphore in &system_semaphores {
                         semaphore.signal();
+                    }
+                    // process events
+                    for &(ref atomic, value) in &event_commands {
+                        atomic.store(value, Ordering::Release);
                     }
                     // free all the manually retained resources
                     let _ = free_buffers;
@@ -2124,14 +2202,14 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     cmd_buffer
                 });
                 msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
-                cmd_buffer.commit();
+                blocker.submit_impl(cmd_buffer);
 
                 if let Some(fence) = fence {
                     debug!("\tmarking fence ptr {:?} as pending", fence.0.as_ptr());
                     fence.0.replace(native::FenceInner::PendingSubmission(cmd_buffer.to_owned()));
                 }
             } else if let Some(cmd_buffer) = deferred_cmd_buffer {
-                cmd_buffer.commit();
+                blocker.submit_impl(cmd_buffer);
             }
         });
 
@@ -2234,6 +2312,8 @@ impl pool::RawCommandPool<Backend> for CommandPool {
             retained_buffers: Vec::new(),
             retained_textures: Vec::new(),
             active_visibility_queries: Vec::new(),
+            events: Vec::new(),
+            host_events: Vec::new(),
         }));
         self.allocated.push(Arc::clone(&inner));
 
@@ -2394,7 +2474,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     let pass_desc = metal::RenderPassDescriptor::new().to_owned();
                     journal.passes.alloc().init((soft::Pass::Render(pass_desc), 0..0));
                 }
-                _ => unreachable!(),
+                _ => {
+                    warn!("Unexpected inheritance info on a primary command buffer");
+                }
             }
         }
     }
@@ -2534,18 +2616,19 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         let clear_color = image.shader_channel.interpret(color);
         let base_extent = image.kind.extent();
+        let is_layered = !self.shared.disabilities.broken_layered_clear_image;
 
         autoreleasepool(|| {
             let raw = image.like.as_texture();
             for subresource_range in subresource_ranges {
                 let sub = subresource_range.borrow();
                 let num_layers = (sub.layers.end - sub.layers.start) as u64;
-                let layers = if CLEAR_IMAGE_ARRAY {
+                let layers = if is_layered {
                     0..1
                 } else {
                     sub.layers.clone()
                 };
-                let texture = if CLEAR_IMAGE_ARRAY && sub.layers.start > 0 {
+                let texture = if is_layered && sub.layers.start > 0 {
                     // aliasing is necessary for bulk-clearing all layers starting with 0
                     let tex = raw.new_texture_view_from_slice(
                         image.mtl_format,
@@ -2572,7 +2655,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             assert_eq!(sub.layers.end, 1);
                             let depth = base_extent.at_level(level).depth as u64;
                             descriptor.set_render_target_array_length(depth);
-                        } else if CLEAR_IMAGE_ARRAY {
+                        } else if is_layered {
                             descriptor.set_render_target_array_length(num_layers);
                         };
 
@@ -2580,7 +2663,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let attachment = descriptor.color_attachments().object_at(0).unwrap();
                             attachment.set_texture(Some(texture));
                             attachment.set_level(level as _);
-                            if !CLEAR_IMAGE_ARRAY {
+                            if !is_layered {
                                 attachment.set_slice(layer as _);
                             }
                             attachment.set_store_action(metal::MTLStoreAction::Store);
@@ -2598,7 +2681,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let attachment = descriptor.depth_attachment().unwrap();
                             attachment.set_texture(Some(texture));
                             attachment.set_level(level as _);
-                            if !CLEAR_IMAGE_ARRAY {
+                            if !is_layered {
                                 attachment.set_slice(layer as _);
                             }
                             attachment.set_store_action(metal::MTLStoreAction::Store);
@@ -2616,7 +2699,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             let attachment = descriptor.stencil_attachment().unwrap();
                             attachment.set_texture(Some(texture));
                             attachment.set_level(level as _);
-                            if !CLEAR_IMAGE_ARRAY {
+                            if !is_layered {
                                 attachment.set_slice(layer as _);
                             }
                             attachment.set_store_action(metal::MTLStoreAction::Store);
@@ -4246,26 +4329,50 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .issue_many(commands);
     }
 
-    unsafe fn set_event(&mut self, _: &(), _: pso::PipelineStage) {
-        unimplemented!()
+    unsafe fn set_event(&mut self, event: &native::Event, _: pso::PipelineStage) {
+        self.inner
+            .borrow_mut()
+            .events
+            .push((Arc::clone(&event.0), true));
     }
 
-    unsafe fn reset_event(&mut self, _: &(), _: pso::PipelineStage) {
-        unimplemented!()
+    unsafe fn reset_event(&mut self, event: &native::Event, _: pso::PipelineStage) {
+        self.inner
+            .borrow_mut()
+            .events
+            .push((Arc::clone(&event.0), false));
     }
 
     unsafe fn wait_events<'a, I, J>(
         &mut self,
-        _: I,
-        _: Range<pso::PipelineStage>,
-        _: J
+        events: I,
+        stages: Range<pso::PipelineStage>,
+        barriers: J
     ) where
         I: IntoIterator,
-    I::Item: Borrow<()>,
-    J: IntoIterator,
-    J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        I::Item: Borrow<native::Event>,
+        J: IntoIterator,
+        J::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        unimplemented!()
+        let mut need_barrier = false;
+
+        for event in events {
+            let mut inner = self.inner.borrow_mut();
+            let event = &event.borrow().0;
+            let is_local = inner.events
+                .iter()
+                .rfind(|ev| Arc::ptr_eq(&ev.0, event))
+                .map_or(false, |ev| ev.1);
+            if is_local {
+                need_barrier = true;
+            } else {
+                inner.host_events.push(Arc::clone(event));
+            }
+        }
+
+        if need_barrier {
+            self.pipeline_barrier(stages, memory::Dependencies::empty(), barriers);
+        }
     }
 
     unsafe fn begin_query(&mut self, query: query::Query<Backend>, flags: query::ControlFlags) {
@@ -4514,10 +4621,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 }
             }
 
-            match *self.inner
-                .borrow_mut()
-                .sink()
-            {
+            let mut inner_self = self.inner.borrow_mut();
+            inner_self.events.extend_from_slice(&inner_borrowed.events);
+
+            match *inner_self.sink() {
                 CommandSink::Immediate { ref mut cmd_buffer, ref mut encoder_state, ref mut num_passes, .. } => {
                     if is_inheriting {
                         let encoder = match encoder_state {
