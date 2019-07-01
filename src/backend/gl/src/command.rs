@@ -136,7 +136,12 @@ pub enum Command {
         n::TextureTarget,
         command::ImageCopy,
     ),
-    CopyImageToSurface(n::ImageKind, n::Surface, command::ImageCopy),
+    CopyImageToSurface {
+        src_image: n::ImageKind,
+        dst_surface: n::Surface,
+        dst_format: n::TextureFormat,
+        data: command::ImageCopy
+    },
 
     BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
     BindTexture(u32, n::Texture, n::TextureTarget),
@@ -697,7 +702,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 // TODO: reset color mask
                 // 2. ClearBuffer
                 let view = match image.kind {
-                    n::ImageKind::Surface(id) => n::ImageView::Surface(id),
+                    n::ImageKind::Surface { surface, .. } => n::ImageView::Surface(surface),
                     n::ImageKind::Texture {
                         texture, target, ..
                     } => {
@@ -732,7 +737,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                     n::ImageKind::Texture {
                         texture, target, ..
                     } => (texture, target), //TODO
-                    n::ImageKind::Surface(_id) => unimplemented!(),
+                    n::ImageKind::Surface { .. } => unimplemented!(),
                 };
 
                 self.push_cmd(Command::BindTexture(0, tex, target));
@@ -1156,7 +1161,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         for region in regions {
             let r = region.borrow().clone();
             let cmd = match dst.kind {
-                n::ImageKind::Surface(s) => Command::CopyImageToSurface(src.kind, s, r),
+                n::ImageKind::Surface { surface, format } => Command::CopyImageToSurface {
+                    src_image: src.kind,
+                    dst_surface: surface,
+                    dst_format: format,
+                    data: r
+                },
                 n::ImageKind::Texture {
                     texture, target, ..
                 } => Command::CopyImageToTexture(src.kind, texture, target, r),
@@ -1186,7 +1196,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             let mut r = region.borrow().clone();
             r.buffer_offset += src_range.start;
             let cmd = match dst.kind {
-                n::ImageKind::Surface(s) => Command::CopyBufferToSurface(src_raw, s, r),
+                n::ImageKind::Surface { surface, .. } =>
+                    Command::CopyBufferToSurface(src_raw, surface, r),
                 n::ImageKind::Texture {
                     texture,
                     target,
@@ -1226,7 +1237,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             let mut r = region.borrow().clone();
             r.buffer_offset += dst_range.start;
             let cmd = match src.kind {
-                n::ImageKind::Surface(s) => Command::CopySurfaceToBuffer(s, dst_raw, r),
+                n::ImageKind::Surface { surface, .. } =>
+                    Command::CopySurfaceToBuffer(surface, dst_raw, r),
                 n::ImageKind::Texture {
                     texture,
                     target,

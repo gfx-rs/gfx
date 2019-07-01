@@ -181,7 +181,10 @@ pub struct Image {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ImageKind {
-    Surface(Surface),
+    Surface {
+        surface: Surface,
+        format: TextureFormat
+    },
     Texture {
         texture: Texture,
         target: TextureTarget,
