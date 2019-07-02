@@ -70,6 +70,8 @@ pub struct Swapchain {
     pub(crate) context: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
     // Extent because the window lies
     pub(crate) extent: Extent2D,
+    ///
+    pub(crate) fbos: Vec<native::FrameBuffer>,
 }
 
 impl hal::Swapchain<B> for Swapchain {
@@ -89,7 +91,7 @@ impl hal::Swapchain<B> for Swapchain {
 // and actually respect the swapchain configuration provided by the user.
 #[derive(Debug)]
 pub struct Surface {
-    context: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
+    pub(crate) context: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
 }
 
 impl Surface {
@@ -167,128 +169,10 @@ impl hal::Surface<B> for Surface {
     }
 }
 
-impl Device {
-    pub(crate) fn create_swapchain_impl(
-        &self,
-        surface: &mut Surface,
-        config: hal::SwapchainConfig,
-    ) -> (Swapchain, Vec<native::Image>) {
-        let swapchain = Swapchain {
-            extent: config.extent,
-            context: surface.context.clone(),
-        };
-
-        let gl = &self.share.context;
-
-        let (int_format, iformat, itype) = match config.format {
-            f::Format::Rgba8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
-            f::Format::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE),
-            f::Format::Rgba8Srgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
-            _ => unimplemented!(),
-        };
-
-        let channel = config.format.base_format().1;
-
-        let images = (0..config.image_count)
-            .map(|_| unsafe {
-                let image = if config.image_layers > 1
-                    || config.image_usage.contains(image::Usage::STORAGE)
-                    || config.image_usage.contains(image::Usage::SAMPLED)
-                {
-                    let name = gl.create_texture().unwrap();
-                    match config.extent {
-                        Extent2D {
-                            width: w,
-                            height: h,
-                        } => {
-                            gl.bind_texture(glow::TEXTURE_2D, Some(name));
-                            if self.share.private_caps.image_storage {
-                                gl.tex_storage_2d(
-                                    glow::TEXTURE_2D,
-                                    config.image_layers as _,
-                                    int_format,
-                                    w as _,
-                                    h as _,
-                                );
-                            } else {
-                                gl.tex_parameter_i32(
-                                    glow::TEXTURE_2D,
-                                    glow::TEXTURE_MAX_LEVEL,
-                                    (config.image_layers - 1) as _,
-                                );
-                                let mut w = w;
-                                let mut h = h;
-                                for i in 0..config.image_layers {
-                                    gl.tex_image_2d(
-                                        glow::TEXTURE_2D,
-                                        i as _,
-                                        int_format as _,
-                                        w as _,
-                                        h as _,
-                                        0,
-                                        iformat,
-                                        itype,
-                                        None,
-                                    );
-                                    w = std::cmp::max(w / 2, 1);
-                                    h = std::cmp::max(h / 2, 1);
-                                }
-                            }
-                        }
-                    };
-                    native::ImageKind::Texture {
-                        texture: name,
-                        target: glow::TEXTURE_2D,
-                        format: iformat,
-                        pixel_type: itype,
-                    }
-                } else {
-                    let name = gl.create_renderbuffer().unwrap();
-                    match config.extent {
-                        Extent2D {
-                            width: w,
-                            height: h,
-                        } => {
-                            gl.bind_renderbuffer(glow::RENDERBUFFER, Some(name));
-                            gl.renderbuffer_storage(glow::RENDERBUFFER, int_format, w as _, h as _);
-                        }
-                    };
-                    native::ImageKind::Surface(name)
-                };
-
-                let surface_desc = config.format.base_format().0.desc();
-                let bytes_per_texel = surface_desc.bits / 8;
-                let ext = config.extent;
-                let size = (ext.width * ext.height) as u64 * bytes_per_texel as u64;
-                let type_mask = self.share.image_memory_type_mask();
-
-                if let Err(err) = self.share.check() {
-                    panic!(
-                        "Error creating swapchain image: {:?} with {:?} format",
-                        err, config.format
-                    );
-                }
-
-                native::Image {
-                    kind: image,
-                    channel,
-                    requirements: memory::Requirements {
-                        size,
-                        alignment: 1,
-                        type_mask,
-                    },
-                }
-            })
-            .collect::<Vec<_>>();
-
-        (swapchain, images)
-    }
-}
-
 impl hal::Instance for Surface {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
-        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(|s| {
+        let adapter = PhysicalDevice::new_adapter((), GlContainer::from_fn_proc(|s| {
             self.context.get_proc_address(s) as *const _
         }));
         vec![adapter]
@@ -328,7 +212,7 @@ impl Headless {
 impl hal::Instance for Headless {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
-        let adapter = PhysicalDevice::new_adapter(GlContainer::from_fn_proc(|s| {
+        let adapter = PhysicalDevice::new_adapter((), GlContainer::from_fn_proc(|s| {
             self.0.get_proc_address(s) as *const _
         }));
         vec![adapter]

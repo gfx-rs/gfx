@@ -238,7 +238,7 @@ impl CommandQueue {
             unsafe {
                 gl.viewport_f32_slice(0, viewports.len() as i32, &viewports);
                 gl.depth_range_f64_slice(0, depth_ranges.len() as i32, &depth_ranges);
-            }
+        }
         }
 
         // Reset scissors
@@ -566,7 +566,7 @@ impl CommandQueue {
                     }
                     Double => {
                         gl.vertex_attrib_pointer_f64(location, size, format, stride, offset as i32)
-                    }
+                }
                 }
 
                 if rate != 0 {
@@ -612,8 +612,8 @@ impl CommandQueue {
                 match texture_target {
                     glow::TEXTURE_2D => {
                         gl.bind_texture(glow::TEXTURE_2D, Some(dst_texture));
-                        gl.tex_sub_image_2d_pixel_buffer_offset(
-                            glow::TEXTURE_2D,
+                gl.tex_sub_image_2d_pixel_buffer_offset(
+                    glow::TEXTURE_2D,
                             data.image_layers.level as _,
                             data.image_offset.x,
                             data.image_offset.y,
@@ -622,7 +622,7 @@ impl CommandQueue {
                             texture_format,
                             pixel_type,
                             data.buffer_offset as i32,
-                        );
+                );
                     }
                     glow::TEXTURE_2D_ARRAY => {
                         gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(dst_texture));
@@ -811,13 +811,13 @@ impl CommandQueue {
                         _ => panic!("Unsupported uniform datatype!"),
                     }
                 }
-            } 
-            com::Command::BindRasterizer { rasterizer } => { 
+            }
+            com::Command::BindRasterizer { rasterizer } => {
                 use crate::hal::pso::FrontFace::*;
                 use crate::hal::pso::PolygonMode::*;
-                
+
                 let gl = &self.share.context;
-                
+
                 unsafe {
                     gl.front_face(match rasterizer.front_face {
                         Clockwise => glow::CW,
@@ -860,18 +860,18 @@ impl CommandQueue {
                 }
 
                 if !self.share.info.is_webgl() && !self.share.info.version.is_embedded {
-                    match false {
-                        //TODO
+                match false {
+                    //TODO
                         true => unsafe { gl.enable(glow::MULTISAMPLE) },
                         false => unsafe { gl.disable(glow::MULTISAMPLE) },
-                    }
                 }
+            }
             }
             com::Command::BindDepth { depth } => {
                 use crate::hal::pso::Comparison::*;
-                
+
                 let gl = &self.share.context;
-                
+
                 match depth {
                     hal::pso::DepthTest::On { fun, write } => unsafe {
                         gl.enable(glow::DEPTH_TEST);
@@ -997,27 +997,30 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             } else {
                 None
             }));
-        }
+    }
     }
 
-    #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+    #[cfg(all(not(target_arch = "wasm32"), any(feature = "glutin", feature = "wgl")))]
     unsafe fn present<'a, W, Is, S, Iw>(
         &mut self,
         swapchains: Is,
         _wait_semaphores: Iw,
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError>
     where
-        W: 'a + Borrow<window::glutin::Swapchain>,
+        W: 'a + Borrow<crate::Swapchain>,
         Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
         S: 'a + Borrow<native::Semaphore>,
         Iw: IntoIterator<Item = &'a S>,
     {
         let gl = &self.share.context;
 
-        for swapchain in swapchains {
-            let extent = swapchain.0.borrow().extent;
+        for (swapchain, index) in swapchains {
+            let extent = swapchain.borrow().extent;
 
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, self.state.fbo);
+            #[cfg(feature = "wgl")]
+            swapchain.borrow().make_current();
+
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.borrow().fbos[index as usize]));
             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
             gl.blit_framebuffer(
                 0,
@@ -1032,8 +1035,14 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
                 glow::LINEAR,
             );
 
-            swapchain.0.borrow().context.swap_buffers().unwrap();
+            #[cfg(feature = "glutin")]
+            swapchain.borrow().context.swap_buffers().unwrap();
+            #[cfg(feature = "wgl")]
+            swapchain.borrow().swap_buffers();
         }
+
+        #[cfg(feature = "wgl")]
+        self.share.instance_context.make_current();
 
         Ok(None)
     }

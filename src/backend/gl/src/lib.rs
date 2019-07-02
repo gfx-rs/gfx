@@ -10,6 +10,8 @@ extern crate log;
 extern crate gfx_hal as hal;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub extern crate glutin;
+#[macro_use]
+extern crate lazy_static;
 
 use std::cell::Cell;
 use std::fmt;
@@ -38,17 +40,24 @@ pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
 #[cfg(target_arch = "wasm32")]
 pub use crate::window::web::{Surface, Swapchain, Window};
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+#[cfg(feature = "wgl")]
+use window::wgl::{DeviceContext, Surface, Swapchain};
+#[cfg(feature = "wgl")]
+pub use window::wgl::{Instance};
+
+#[cfg(not(target_arch = "wasm32"))]
 pub use glow::native::Context as GlContext;
 #[cfg(target_arch = "wasm32")]
 pub use glow::web::Context as GlContext;
 use glow::Context;
+
 
 pub(crate) struct GlContainer {
     context: GlContext,
 }
 
 impl GlContainer {
+    #[cfg(feature = "glutin")]
     fn make_current(&self) {
         // Unimplemented
     }
@@ -225,6 +234,12 @@ enum MemoryUsage {
 /// Internal struct of shared data between the physical and logical device.
 struct Share {
     context: GlContainer,
+    /// Context associated with an instance.
+    ///
+    /// Parenting context for all device contexts shared with it.
+    /// Used for querying basic information and spawning shared contexts.
+    instance_context: DeviceContext,
+
     info: Info,
     features: hal::Features,
     legacy_features: info::LegacyFeatures,
@@ -367,9 +382,12 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 #[derive(Debug)]
 pub struct PhysicalDevice(Starc<Share>);
 
+#[cfg(any(feature = "glutin", target_arch = "wasm32"))]
+type DeviceContext = ();
+
 impl PhysicalDevice {
     #[allow(unused)]
-    fn new_adapter(gl: GlContainer) -> hal::Adapter<Backend> {
+    fn new_adapter(instance_context: DeviceContext, gl: GlContainer) -> hal::Adapter<Backend> {
         // query information
         let (info, features, legacy_features, limits, private_caps) = info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
@@ -449,6 +467,7 @@ impl PhysicalDevice {
         // create the shared context
         let share = Share {
             context: gl,
+            instance_context,
             info,
             features,
             legacy_features,

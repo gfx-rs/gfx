@@ -11,12 +11,14 @@ readme = "README.md"
 documentation = "https://docs.rs/gfx-backend-gl"
 workspace = "../../.."
 edition = "2018"
+build = "build.rs"
 
 [lib]
 name = "gfx_backend_gl"
 
 [features]
 default = ["glutin"]
+wgl = []
 
 [dependencies]
 bitflags = "1"
@@ -25,9 +27,11 @@ gfx-hal = { path = "../../hal", version = "0.2" }
 smallvec = "0.6"
 glow = { git = "https://github.com/grovesNL/glow", rev = "abc536c6b9b6a96c7f6c758d938fcb38f9b55938" }
 spirv_cross = { version = "0.14.0", features = ["glsl"] }
+lazy_static = "1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 glutin = { version = "0.21", optional = true }
+winit = { version = "0.19", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3.6"
@@ -50,3 +54,9 @@ features = [
     "WebGlTexture",
     "Window",
 ]
+
+[target.'cfg(windows)'.dependencies]
+winapi = { version = "0.3" }
+
+[build-dependencies]
+gl_generator = "0.11"

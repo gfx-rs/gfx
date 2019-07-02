@@ -13,8 +13,9 @@ use crate::hal::pool::CommandPoolCreateFlags;
 use crate::hal::queue::QueueFamilyId;
 use crate::hal::range::RangeArg;
 use crate::hal::{
-    self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query,
+    self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query
 };
+use crate::hal::window::Extent2D;
 
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
@@ -1289,7 +1290,7 @@ impl d::Device<B> for Device {
                     }
                     n::ImageKind::Texture {
                         texture: name,
-                        target: glow::TEXTURE_2D, 
+                        target: glow::TEXTURE_2D,
                         format: iformat,
                         pixel_type: itype,
                     }
@@ -1332,7 +1333,7 @@ impl d::Device<B> for Device {
                     }
                     n::ImageKind::Texture {
                         texture: name,
-                        target: glow::TEXTURE_2D_ARRAY, 
+                        target: glow::TEXTURE_2D_ARRAY,
                         format: iformat,
                         pixel_type: itype,
                     }
@@ -1795,6 +1796,7 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
+    #[cfg(target_arch = "wasm32")]
     unsafe fn create_swapchain(
         &self,
         surface: &mut Surface,
@@ -1802,6 +1804,85 @@ impl d::Device<B> for Device {
         _old_swapchain: Option<Swapchain>,
     ) -> Result<(Swapchain, Vec<n::Image>), c::window::CreationError> {
         Ok(self.create_swapchain_impl(surface, config))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    unsafe fn create_swapchain(
+        &self,
+        surface: &mut Surface,
+        config: c::SwapchainConfig,
+        _old_swapchain: Option<Swapchain>,
+    ) -> Result<(Swapchain, Vec<n::Image>), c::window::CreationError> {
+        let gl = &self.share.context;
+
+        let (int_format, iformat, itype) = match config.format {
+            Format::Rgba8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
+            Format::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE),
+            Format::Rgba8Srgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
+            _ => unimplemented!(),
+        };
+
+        let channel = config.format.base_format().1;
+
+        #[cfg(feature = "wgl")]
+        let context = {
+            use crate::window::wgl::PresentContext;
+
+            let context = PresentContext::new(surface, &self.share.instance_context);
+            context.make_current();
+            context
+        };
+
+        let mut fbos = Vec::new();
+        let mut images = Vec::new();
+
+        for _ in 0..config.image_count {
+            unsafe {
+                let fbo = gl.create_framebuffer().unwrap();
+                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
+                fbos.push(fbo);
+
+                let Extent2D { width, height } = config.extent;
+                let image = self.create_image(
+                    i::Kind::D2(width, height, config.image_layers, 1),
+                    1,
+                    config.format,
+                    i::Tiling::Optimal,
+                    config.image_usage,
+                    i::ViewCapabilities::empty(),
+                ).unwrap();
+
+                match image.kind {
+                    n::ImageKind::Surface(surface) => {
+                        gl.framebuffer_renderbuffer(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::RENDERBUFFER, Some(surface));
+                    }
+                    n::ImageKind::Texture { texture, target, .. } => {
+                        if self.share.private_caps.framebuffer_texture {
+                            gl.framebuffer_texture(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, Some(texture), 0);
+                        } else {
+                            gl.bind_texture(target, Some(texture));
+                            gl.framebuffer_texture_2d(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, target, Some(texture), 0);
+                        }
+                    }
+                }
+
+                images.push(image);
+            }
+        }
+
+        #[cfg(feature = "wgl")]
+        let swapchain = {
+            self.share.instance_context.make_current();
+            Swapchain { fbos, context, extent: config.extent }
+        };
+        #[cfg(feature = "glutin")]
+        let swapchain = Swapchain {
+            fbos,
+            extent: config.extent,
+            context: surface.context.clone(),
+        };
+
+        Ok((swapchain, images))
     }
 
     unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {

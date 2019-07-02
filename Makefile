@@ -3,6 +3,7 @@ EXCLUDES:=
 FEATURES_EXTRA:=mint serialize
 FEATURES_HAL:=
 FEATURES_HAL2:=
+FEATURES_HAL3:=
 
 SDL2_DEST=$(HOME)/deps
 SDL2_CONFIG=$(SDL2_DEST)/usr/bin/sdl2-config
@@ -25,6 +26,7 @@ ifeq ($(OS),Windows_NT)
 	else
 		FEATURES_HAL2=dx12
 	endif
+	FEATURES_HAL3=wgl
 else
 	UNAME_S:=$(shell uname -s)
 	EXCLUDES+= --exclude gfx-backend-dx12
@@ -55,6 +57,7 @@ check:
 	cd examples && cargo check $(CHECK_TARGET_FLAG) --features "gl"
 	cd examples && cargo check $(CHECK_TARGET_FLAG) --features "$(FEATURES_HAL)"
 	cd examples && cargo check $(CHECK_TARGET_FLAG) --features "$(FEATURES_HAL2)"
+	cd examples && cargo check $(CHECK_TARGET_FLAG) --features "$(FEATURES_HAL3)"
 	cd src/warden && cargo check $(CHECK_TARGET_FLAG) --no-default-features
 	cd src/warden && cargo check $(CHECK_TARGET_FLAG) --features "env_logger gl gl-headless $(FEATURES_HAL) $(FEATURES_HAL2)"
 
