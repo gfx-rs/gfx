@@ -37,6 +37,7 @@ pub(crate) struct Entry {
     lib: HMODULE,
 }
 
+unsafe impl Send for Entry {}
 unsafe impl Sync for Entry {}
 
 impl Entry {
