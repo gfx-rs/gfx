@@ -24,9 +24,19 @@ extern crate objc;
 extern crate winapi;
 #[cfg(feature = "winit")]
 extern crate winit;
-#[cfg(all(feature = "x11", unix, not(target_os = "android"), not(target_os = "macos")))]
+#[cfg(all(
+    feature = "x11",
+    unix,
+    not(target_os = "android"),
+    not(target_os = "macos")
+))]
 extern crate x11;
-#[cfg(all(feature = "xcb", unix, not(target_os = "android"), not(target_os = "macos")))]
+#[cfg(all(
+    feature = "xcb",
+    unix,
+    not(target_os = "android"),
+    not(target_os = "macos")
+))]
 extern crate xcb;
 
 
@@ -41,7 +51,10 @@ use crate::hal::device::{DeviceLost, OutOfMemory, SurfaceLost};
 use crate::hal::error::{DeviceCreationError, HostExecutionError};
 use crate::hal::pso::PipelineStage;
 use crate::hal::{
-    format, image, memory, queue,
+    format,
+    image,
+    memory,
+    queue,
     window::{PresentError, Suboptimal},
 };
 use crate::hal::{Features, Limits, PatchSize, QueueType, SwapImageIndex};
@@ -384,7 +397,7 @@ impl Instance {
                 enabled_layer_count: layers.len() as _,
                 pp_enabled_layer_names: str_pointers.as_ptr(),
                 enabled_extension_count: extensions.len() as _,
-                pp_enabled_extension_names: str_pointers[layers.len()..].as_ptr(),
+                pp_enabled_extension_names: str_pointers[layers.len() ..].as_ptr(),
             };
 
             unsafe { entry.create_instance(&create_info, None) }
@@ -580,7 +593,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             .map(|&(family, ref priorities)| {
                 let family_index = family.index;
                 let mut family_raw = hal::backend::RawQueueGroup::new(family.clone());
-                for id in 0..priorities.len() {
+                for id in 0 .. priorities.len() {
                     let queue_raw = device_arc.0.get_device_queue(family_index, id as _);
                     family_raw.add_queue(CommandQueue {
                         raw: Arc::new(queue_raw),
@@ -663,11 +676,13 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 .0
                 .get_physical_device_memory_properties(self.handle)
         };
-        let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize]
+        let memory_heaps = mem_properties.memory_heaps
+            [.. mem_properties.memory_heap_count as usize]
             .iter()
             .map(|mem| mem.size)
             .collect();
-        let memory_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize]
+        let memory_types = mem_properties.memory_types
+            [.. mem_properties.memory_type_count as usize]
             .iter()
             .map(|mem| {
                 use crate::memory::Properties;
@@ -680,8 +695,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     type_flags |= Properties::DEVICE_LOCAL;
                 }
                 if mem
-                  .property_flags
-                  .intersects(vk::MemoryPropertyFlags::HOST_VISIBLE)
+                    .property_flags
+                    .intersects(vk::MemoryPropertyFlags::HOST_VISIBLE)
                 {
                     type_flags |= Properties::CPU_VISIBLE;
                 }
@@ -727,9 +742,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     == info::intel::DEVICE_SKY_LAKE_MASK);
 
         let features = unsafe { self.instance.0.get_physical_device_features(self.handle) };
-        let mut bits = Features::TRIANGLE_FAN |
-            Features::SEPARATE_STENCIL_REF_VALUES |
-            Features::SAMPLER_MIP_LOD_BIAS;
+        let mut bits = Features::TRIANGLE_FAN
+            | Features::SEPARATE_STENCIL_REF_VALUES
+            | Features::SAMPLER_MIP_LOD_BIAS;
 
         if features.robust_buffer_access != 0 {
             bits |= Features::ROBUST_BUFFER_ACCESS;
@@ -853,7 +868,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_vertex_input_binding_stride: limits.max_vertex_input_binding_stride as _,
             max_vertex_output_components: limits.max_vertex_output_components as _,
             optimal_buffer_copy_offset_alignment: limits.optimal_buffer_copy_offset_alignment as _,
-            optimal_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment as _,
+            optimal_buffer_copy_pitch_alignment: limits.optimal_buffer_copy_row_pitch_alignment
+                as _,
             min_texel_buffer_offset_alignment: limits.min_texel_buffer_offset_alignment as _,
             min_uniform_buffer_offset_alignment: limits.min_uniform_buffer_offset_alignment as _,
             min_storage_buffer_offset_alignment: limits.min_storage_buffer_offset_alignment as _,
@@ -866,7 +882,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             non_coherent_atom_size: limits.non_coherent_atom_size as _,
             max_sampler_anisotropy: limits.max_sampler_anisotropy,
             min_vertex_input_binding_stride_alignment: 1,
-            .. Limits::default() //TODO: please halp
+            ..Limits::default() //TODO: please halp
         }
     }
 
@@ -913,11 +929,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             return false;
         }
 
-        if self.properties.pipeline_cache_uuid != cache[16..16 + vk::UUID_SIZE] {
+        if self.properties.pipeline_cache_uuid != cache[16 .. 16 + vk::UUID_SIZE] {
             warn!(
                 "Pipeline cache UUID mismatch. Device: {:?}, cache: {:?}.",
                 self.properties.pipeline_cache_uuid,
-                &cache[16..16 + vk::UUID_SIZE],
+                &cache[16 .. 16 + vk::UUID_SIZE],
             );
             return false;
         }
@@ -1043,8 +1059,12 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         match self.swapchain_fn.queue_present_khr(*self.raw, &info) {
             vk::Result::SUCCESS => Ok(None),
             vk::Result::SUBOPTIMAL_KHR => Ok(Some(Suboptimal)),
-            vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(PresentError::OutOfMemory(OutOfMemory::OutOfHostMemory)),
-            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(PresentError::OutOfMemory(OutOfMemory::OutOfDeviceMemory)),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                Err(PresentError::OutOfMemory(OutOfMemory::OutOfHostMemory))
+            }
+            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+                Err(PresentError::OutOfMemory(OutOfMemory::OutOfDeviceMemory))
+            }
             vk::Result::ERROR_DEVICE_LOST => Err(PresentError::DeviceLost(DeviceLost)),
             vk::Result::ERROR_OUT_OF_DATE_KHR => Err(PresentError::OutOfDate),
             vk::Result::ERROR_SURFACE_LOST_KHR => Err(PresentError::SurfaceLost(SurfaceLost)),

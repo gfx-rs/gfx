@@ -3,8 +3,17 @@ use std::borrow::Borrow;
 use std::ops::Range;
 
 use super::{
-    ClearColorRaw, ClearDepthStencilRaw, ClearValueRaw, CommandBuffer, DescriptorSetOffset, Level,
-    Primary, RawCommandBuffer, RenderPassInlineEncoder, RenderPassSecondaryEncoder, Shot,
+    ClearColorRaw,
+    ClearDepthStencilRaw,
+    ClearValueRaw,
+    CommandBuffer,
+    DescriptorSetOffset,
+    Level,
+    Primary,
+    RawCommandBuffer,
+    RenderPassInlineEncoder,
+    RenderPassSecondaryEncoder,
+    Shot,
 };
 use crate::queue::capability::{Graphics, GraphicsOrCompute, Supports};
 use crate::Backend;

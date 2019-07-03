@@ -1,14 +1,11 @@
-use crate::{
-    conversions as conv,
-    PrivateCapabilities,
-};
+use crate::{conversions as conv, PrivateCapabilities};
 
 use hal::{
-    pso,
     backend::FastHashMap,
     command::ClearColorRaw,
     format::{Aspects, ChannelType},
     image::Filter,
+    pso,
 };
 
 use metal;
@@ -331,7 +328,7 @@ impl ImageClearPipes {
         let vertex_descriptor = metal::VertexDescriptor::new();
         let mtl_buffer_desc = vertex_descriptor.layouts().object_at(0).unwrap();
         mtl_buffer_desc.set_stride(mem::size_of::<ClearVertex>() as _);
-        for i in 0..1 {
+        for i in 0 .. 1 {
             let mtl_attribute_desc = vertex_descriptor
                 .attributes()
                 .object_at(i)
@@ -427,7 +424,7 @@ impl ImageBlitPipes {
         let vertex_descriptor = metal::VertexDescriptor::new();
         let mtl_buffer_desc = vertex_descriptor.layouts().object_at(0).unwrap();
         mtl_buffer_desc.set_stride(mem::size_of::<BlitVertex>() as _);
-        for i in 0..2 {
+        for i in 0 .. 2 {
             let mtl_attribute_desc = vertex_descriptor
                 .attributes()
                 .object_at(i)

@@ -112,12 +112,12 @@ impl hal::Surface<B> for Surface {
 
         let caps = hal::SurfaceCapabilities {
             image_count: if self.window.get_pixel_format().double_buffer {
-                2..3
+                2 .. 3
             } else {
-                1..2
+                1 .. 2
             },
             current_extent: Some(extent),
-            extents: extent..hal::window::Extent2D {
+            extents: extent .. hal::window::Extent2D {
                 width: ex.width + 1,
                 height: ex.height + 1,
             },
@@ -159,7 +159,7 @@ impl Device {
 
         let channel = config.format.base_format().1;
 
-        let images = (0..config.image_count)
+        let images = (0 .. config.image_count)
             .map(|_| unsafe {
                 let image = if config.image_layers > 1
                     || config.image_usage.contains(image::Usage::STORAGE)
@@ -188,7 +188,7 @@ impl Device {
                                 );
                                 let mut w = w;
                                 let mut h = h;
-                                for i in 0..config.image_layers {
+                                for i in 0 .. config.image_layers {
                                     gl.tex_image_2d(
                                         glow::TEXTURE_2D,
                                         i as _,

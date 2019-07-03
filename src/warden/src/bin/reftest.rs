@@ -139,7 +139,8 @@ impl Harness {
                 let mut max_compute_work_groups = [0; 3];
                 for job_name in &test.jobs {
                     if let warden::raw::Job::Compute { dispatch, .. } = tg.scene.jobs[job_name] {
-                        for (max, count) in max_compute_work_groups.iter_mut().zip(dispatch.iter()) {
+                        for (max, count) in max_compute_work_groups.iter_mut().zip(dispatch.iter())
+                        {
                             *max = (*max).max(*count);
                         }
                     }

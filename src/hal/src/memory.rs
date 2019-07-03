@@ -1,6 +1,6 @@
 //! Types to describe the properties of memory allocated for gfx resources.
 
-use crate::{Backend, buffer, image, queue};
+use crate::{buffer, image, queue, Backend};
 use std::{mem, ops::Range};
 
 /// A trait for plain-old-data types.
@@ -114,7 +114,7 @@ impl<'a, B: Backend> Barrier<'a, B> {
             states,
             target,
             families: None,
-            range: None..None,
+            range: None .. None,
         }
     }
 }

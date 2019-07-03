@@ -42,7 +42,12 @@ impl Drop for RawSurface {
 }
 
 impl Instance {
-    #[cfg(all(feature = "x11", unix, not(target_os = "android"), not(target_os = "macos")))]
+    #[cfg(all(
+        feature = "x11",
+        unix,
+        not(target_os = "android"),
+        not(target_os = "macos")
+    ))]
     pub fn create_surface_from_xlib(&self, dpy: *mut vk::Display, window: vk::Window) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -80,7 +85,12 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface, width, height, 1)
     }
 
-    #[cfg(all(feature = "xcb", unix, not(target_os = "android"), not(target_os = "macos")))]
+    #[cfg(all(
+        feature = "xcb",
+        unix,
+        not(target_os = "android"),
+        not(target_os = "macos")
+    ))]
     pub fn create_surface_from_xcb(
         &self,
         connection: *mut vk::xcb_connection_t,
@@ -230,11 +240,8 @@ impl Instance {
     #[cfg(target_os = "macos")]
     pub fn create_surface_from_nsview(&self, view: *mut c_void) -> Surface {
         use ash::extensions::mvk;
-        use core_graphics::{
-            geometry::CGRect,
-            base::CGFloat,
-        };
-        use objc::runtime::{Object, YES, BOOL};
+        use core_graphics::{base::CGFloat, geometry::CGRect};
+        use objc::runtime::{Object, BOOL, YES};
 
         // TODO: this logic is duplicated from gfx-backend-metal, refactor?
         unsafe {
@@ -289,9 +296,7 @@ impl Instance {
 
         let (width, height) = {
             //TODO: this is probably wrong, needs refinement
-            let bounds: CGRect = unsafe {
-                msg_send![view as *mut Object, bounds]
-            };
+            let bounds: CGRect = unsafe { msg_send![view as *mut Object, bounds] };
             (bounds.size.width as u32, bounds.size.height as u32)
         };
 
@@ -301,7 +306,12 @@ impl Instance {
     #[cfg(feature = "winit")]
     #[allow(unreachable_code)]
     pub fn create_surface(&self, window: &winit::Window) -> Surface {
-        #[cfg(all(feature = "x11", unix, not(target_os = "android"), not(target_os = "macos")))]
+        #[cfg(all(
+            feature = "x11",
+            unix,
+            not(target_os = "android"),
+            not(target_os = "macos")
+        ))]
         {
             use winit::os::unix::WindowExt;
 
@@ -332,7 +342,11 @@ impl Instance {
             let logical_size = window.get_inner_size().unwrap();
             let width = logical_size.width * window.get_hidpi_factor();
             let height = logical_size.height * window.get_hidpi_factor();
-            return self.create_surface_android(window.get_native_window(), width as _, height as _);
+            return self.create_surface_android(
+                window.get_native_window(),
+                width as _,
+                height as _,
+            );
         }
         #[cfg(windows)]
         {
@@ -431,9 +445,9 @@ impl hal::Surface<Backend> for Surface {
         };
 
         let capabilities = hal::SurfaceCapabilities {
-            image_count: caps.min_image_count..max_images,
+            image_count: caps.min_image_count .. max_images,
             current_extent,
-            extents: min_extent..max_extent,
+            extents: min_extent .. max_extent,
             max_image_layers: caps.max_image_array_layers as _,
             usage: conv::map_vk_image_usage(caps.supported_usage_flags),
             composite_alpha: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
@@ -518,18 +532,16 @@ impl hal::Swapchain<Backend> for Swapchain {
             }
             Err(vk::Result::NOT_READY) => Err(hal::AcquireError::NotReady),
             Err(vk::Result::TIMEOUT) => Err(hal::AcquireError::Timeout),
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => {
-                Err(hal::AcquireError::OutOfDate)
-            }
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(hal::AcquireError::OutOfDate),
             Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
                 Err(hal::AcquireError::SurfaceLost(hal::device::SurfaceLost))
             }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(hal::AcquireError::OutOfMemory(hal::device::OutOfMemory::OutOfHostMemory))
-            }
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(hal::AcquireError::OutOfMemory(hal::device::OutOfMemory::OutOfDeviceMemory))
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(hal::AcquireError::OutOfMemory(
+                hal::device::OutOfMemory::OutOfHostMemory,
+            )),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(hal::AcquireError::OutOfMemory(
+                hal::device::OutOfMemory::OutOfDeviceMemory,
+            )),
             Err(vk::Result::ERROR_DEVICE_LOST) => {
                 Err(hal::AcquireError::DeviceLost(hal::device::DeviceLost))
             }

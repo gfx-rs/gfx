@@ -1,7 +1,7 @@
 use hal::window::Extent2D;
 use hal::{self, format as f, image, CompositeAlpha};
 
-use crate::{native, Backend, PhysicalDevice, QueueFamily, GlContainer};
+use crate::{native, Backend, GlContainer, PhysicalDevice, QueueFamily};
 use hal::format::Format;
 
 use std::{
@@ -246,9 +246,9 @@ impl hal::Surface<Backend> for Surface {
         let extent = self.get_extent();
 
         let caps = hal::SurfaceCapabilities {
-            image_count: 2..3,
+            image_count: 2 .. 3,
             current_extent: Some(extent),
-            extents: extent..hal::window::Extent2D {
+            extents: extent .. hal::window::Extent2D {
                 width: extent.width + 1,
                 height: extent.height + 1,
             },

@@ -1,28 +1,37 @@
 use std::borrow::Borrow;
 use std::cell::Cell;
 use std::ops::Range;
-use std::sync::{Arc, Mutex, RwLock};
 use std::slice;
+use std::sync::{Arc, Mutex, RwLock};
 
-use glow::Context;
 use crate::{GlContainer, GlContext};
+use glow::Context;
 
 use crate::hal::backend::FastHashMap;
 use crate::hal::format::{Format, Swizzle};
 use crate::hal::pool::CommandPoolCreateFlags;
 use crate::hal::queue::QueueFamilyId;
 use crate::hal::range::RangeArg;
-use crate::hal::{
-    self as c, buffer, device as d, error, image as i, mapping, memory, pass, pso, query
-};
 use crate::hal::window::Extent2D;
+use crate::hal::{
+    self as c,
+    buffer,
+    device as d,
+    error,
+    image as i,
+    mapping,
+    memory,
+    pass,
+    pso,
+    query,
+};
 
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
 use crate::info::LegacyFeatures;
 use crate::pool::{BufferMemory, OwnedBuffer, RawCommandPool};
 use crate::{conv, native as n, state};
-use crate::{Backend as B, Share, MemoryUsage, Starc, Surface, Swapchain};
+use crate::{Backend as B, MemoryUsage, Share, Starc, Surface, Swapchain};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -115,7 +124,14 @@ impl Device {
             },
             n::ImageView::TextureLayer(texture, textype, level, layer) => unsafe {
                 gl.bind_texture(textype, Some(texture));
-                gl.framebuffer_texture_3d(point, attachment, textype, Some(texture), level as _, layer as _);
+                gl.framebuffer_texture_3d(
+                    point,
+                    attachment,
+                    textype,
+                    Some(texture),
+                    level as _,
+                    layer as _,
+                );
             },
         }
     }
@@ -129,7 +145,13 @@ impl Device {
                 gl.framebuffer_texture(point, attachment, Some(texture), level as _);
             },
             n::ImageView::TextureLayer(texture, _, level, layer) => unsafe {
-                gl.framebuffer_texture_layer(point, attachment, Some(texture), level as _, layer as _);
+                gl.framebuffer_texture_layer(
+                    point,
+                    attachment,
+                    Some(texture),
+                    level as _,
+                    layer as _,
+                );
             },
         }
     }
@@ -163,7 +185,7 @@ impl Device {
             {
                 // Override specialization constant values
                 let value = specialization.data
-                    [constant.range.start as usize..constant.range.end as usize]
+                    [constant.range.start as usize .. constant.range.end as usize]
                     .iter()
                     .rev()
                     .fold(0u64, |u, &b| (u << 8) + b as u64);
@@ -369,7 +391,8 @@ impl Device {
             n::ShaderModule::Spirv(ref spirv) => {
                 let mut ast = self.parse_spirv(spirv).unwrap();
 
-                self.specialize_ast(&mut ast, &point.specialization).unwrap();
+                self.specialize_ast(&mut ast, &point.specialization)
+                    .unwrap();
                 self.remap_bindings(&mut ast, desc_remap_data, name_binding_map);
                 self.combine_separate_images_and_samplers(
                     &mut ast,
@@ -380,10 +403,7 @@ impl Device {
 
                 let glsl = self.translate_spirv(&mut ast).unwrap();
                 debug!("SPIRV-Cross generated shader:\n{}", glsl);
-                let shader = match self
-                    .create_shader_module_from_source(&glsl, stage)
-                    .unwrap()
-                {
+                let shader = match self.create_shader_module_from_source(&glsl, stage).unwrap() {
                     n::ShaderModule::Raw(raw) => raw,
                     _ => panic!("Unhandled"),
                 };
@@ -426,10 +446,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     set_param_int(glow::TEXTURE_WRAP_T, conv::wrap_to_gl(t) as i32);
     set_param_int(glow::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as i32);
 
-    if share
-        .features
-        .contains(hal::Features::SAMPLER_MIP_LOD_BIAS)
-    {
+    if share.features.contains(hal::Features::SAMPLER_MIP_LOD_BIAS) {
         set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.into());
     }
     if share
@@ -466,16 +483,25 @@ impl d::Device<B> for Device {
     ) -> Result<n::Memory, d::AllocationError> {
         let (memory_type, memory_role) = self.share.memory_types[mem_type.0 as usize];
 
-        let is_device_local_memory = memory_type.properties.contains(memory::Properties::DEVICE_LOCAL);
-        let is_cpu_visible_memory = memory_type.properties.contains(memory::Properties::CPU_VISIBLE);
-        let is_coherent_memory = memory_type.properties.contains(memory::Properties::COHERENT);
-        let is_readable_memory = memory_type.properties.contains(memory::Properties::CPU_CACHED);
+        let is_device_local_memory = memory_type
+            .properties
+            .contains(memory::Properties::DEVICE_LOCAL);
+        let is_cpu_visible_memory = memory_type
+            .properties
+            .contains(memory::Properties::CPU_VISIBLE);
+        let is_coherent_memory = memory_type
+            .properties
+            .contains(memory::Properties::COHERENT);
+        let is_readable_memory = memory_type
+            .properties
+            .contains(memory::Properties::CPU_CACHED);
 
         match memory_role {
             MemoryUsage::Buffer(buffer_usage) => {
                 let gl = &self.share.context;
                 let target = if buffer_usage.contains(buffer::Usage::INDEX)
-                    && !self.share.private_caps.index_buffer_role_change {
+                    && !self.share.private_caps.index_buffer_role_change
+                {
                     glow::ELEMENT_ARRAY_BUFFER
                 } else {
                     glow::ARRAY_BUFFER
@@ -747,7 +773,7 @@ impl d::Device<B> for Device {
                 .collect::<Vec<_>>();
 
             if !share.private_caps.program_interface && share.private_caps.frag_data_location {
-                for i in 0..subpass.color_attachments.len() {
+                for i in 0 .. subpass.color_attachments.len() {
                     let color_name = format!("Target{}\0", i);
                     gl.bind_frag_data_location(name, i as u32, color_name.as_str());
                 }
@@ -812,12 +838,9 @@ impl d::Device<B> for Device {
 
             let mut offset = 0;
 
-            for uniform in 0..count {
-                let glow::ActiveUniform {
-                    size,
-                    utype,
-                    name,
-                } = gl.get_active_uniform(program, uniform).unwrap();
+            for uniform in 0 .. count {
+                let glow::ActiveUniform { size, utype, name } =
+                    gl.get_active_uniform(program, uniform).unwrap();
 
                 let location = gl.get_uniform_location(program, &name).unwrap();
 
@@ -1050,10 +1073,7 @@ impl d::Device<B> for Device {
             return Err(buffer::CreationError::UnsupportedUsage { usage });
         }
 
-        Ok(n::Buffer::Unbound {
-            size,
-            usage,
-        })
+        Ok(n::Buffer::Unbound { size, usage })
     }
 
     unsafe fn get_buffer_requirements(&self, buffer: &n::Buffer) -> memory::Requirements {
@@ -1083,8 +1103,11 @@ impl d::Device<B> for Device {
         };
 
         *buffer = n::Buffer::Bound {
-            buffer: memory.buffer.expect("Improper memory type used for buffer memory").0,
-            range: offset..offset + size,
+            buffer: memory
+                .buffer
+                .expect("Improper memory type used for buffer memory")
+                .0,
+            range: offset .. offset + size,
         };
 
         Ok(())
@@ -1106,7 +1129,8 @@ impl d::Device<B> for Device {
             let ptr: *mut u8 = if let Some(ptr) = memory.emulate_map_allocation.get() {
                 ptr
             } else {
-                let ptr = Box::into_raw(vec![0; memory.size as usize].into_boxed_slice()) as *mut u8;
+                let ptr =
+                    Box::into_raw(vec![0; memory.size as usize].into_boxed_slice()) as *mut u8;
                 memory.emulate_map_allocation.set(Some(ptr));
                 ptr
             };
@@ -1171,7 +1195,10 @@ impl d::Device<B> for Device {
             }
             gl.bind_buffer(target, None);
             if let Err(err) = self.share.check() {
-                panic!("Error flushing memory range: {:?} for memory {:?}", err, mem);
+                panic!(
+                    "Error flushing memory range: {:?} for memory {:?}",
+                    err, mem
+                );
             }
         }
 
@@ -1207,7 +1234,10 @@ impl d::Device<B> for Device {
             }
 
             if let Err(err) = self.share.check() {
-                panic!("Error invalidating memory range: {:?} for memory {:?}", err, mem);
+                panic!(
+                    "Error invalidating memory range: {:?} for memory {:?}",
+                    err, mem
+                );
             }
         }
 
@@ -1243,7 +1273,7 @@ impl d::Device<B> for Device {
                 glow::DEPTH_STENCIL,
                 glow::FLOAT_32_UNSIGNED_INT_24_8_REV,
             ),
-            _ => unimplemented!()
+            _ => unimplemented!(),
         };
 
         let channel = format.base_format().1;
@@ -1272,7 +1302,7 @@ impl d::Device<B> for Device {
                         );
                         let mut w = w;
                         let mut h = h;
-                        for i in 0..num_levels {
+                        for i in 0 .. num_levels {
                             gl.tex_image_2d(
                                 glow::TEXTURE_2D,
                                 i as _,
@@ -1314,7 +1344,7 @@ impl d::Device<B> for Device {
                         );
                         let mut w = w;
                         let mut h = h;
-                        for i in 0..num_levels {
+                        for i in 0 .. num_levels {
                             gl.tex_image_3d(
                                 glow::TEXTURE_2D_ARRAY,
                                 i as _,
@@ -1423,7 +1453,9 @@ impl d::Device<B> for Device {
                     )))
                 }
             }
-            n::ImageKind::Texture { texture, target, .. } => {
+            n::ImageKind::Texture {
+                texture, target, ..
+            } => {
                 //TODO: check that `level` exists
                 if range.layers.start == 0 {
                     Ok(n::ImageView::Texture(texture, target, level))
@@ -1488,7 +1520,11 @@ impl d::Device<B> for Device {
                     pso::Descriptor::Buffer(buffer, ref range) => {
                         let (raw_buffer, buffer_range) = buffer.as_bound();
                         let start = buffer_range.start as i32 + range.start.unwrap_or(0) as i32;
-                        let end = buffer_range.start as i32 + range.end.unwrap_or((buffer_range.end - buffer_range.start) as u64) as i32;
+                        let end = buffer_range.start as i32
+                            + range
+                                .end
+                                .unwrap_or((buffer_range.end - buffer_range.start) as u64)
+                                as i32;
                         let size = end - start;
 
                         bindings.push(n::DescSetBindings::Buffer {
@@ -1518,7 +1554,8 @@ impl d::Device<B> for Device {
                         }
                     }
                     pso::Descriptor::Image(view, _layout) => match view {
-                        n::ImageView::Texture(tex, textype, _) | n::ImageView::TextureLayer(tex, textype, _, _) => {
+                        n::ImageView::Texture(tex, textype, _)
+                        | n::ImageView::TextureLayer(tex, textype, _, _) => {
                             bindings.push(n::DescSetBindings::Texture(binding, *tex, *textype))
                         }
                         n::ImageView::Surface(_) => panic!(
@@ -1577,17 +1614,16 @@ impl d::Device<B> for Device {
         match fence.0.get() {
             n::FenceInner::Idle { signaled } => {
                 if !signaled {
-                    warn!("Fence ptr {:?} is not pending, waiting not possible", fence.0.as_ptr());
+                    warn!(
+                        "Fence ptr {:?} is not pending, waiting not possible",
+                        fence.0.as_ptr()
+                    );
                 }
                 Ok(signaled)
             }
             n::FenceInner::Pending(Some(sync)) => {
                 // TODO: Could `wait_sync` be used here instead?
-                match gl.client_wait_sync(
-                    sync,
-                    glow::SYNC_FLUSH_COMMANDS_BIT,
-                    timeout_ns as i32,
-                ) {
+                match gl.client_wait_sync(sync, glow::SYNC_FLUSH_COMMANDS_BIT, timeout_ns as i32) {
                     glow::TIMEOUT_EXPIRED => Ok(false),
                     glow::WAIT_FAILED => {
                         if let Err(err) = self.share.check() {
@@ -1598,7 +1634,7 @@ impl d::Device<B> for Device {
                     glow::CONDITION_SATISFIED | glow::ALREADY_SIGNALED => {
                         fence.0.set(n::FenceInner::Idle { signaled: true });
                         Ok(true)
-                    },
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -1624,9 +1660,7 @@ impl d::Device<B> for Device {
     {
         let performance = web_sys::window().unwrap().performance().unwrap();
         let start = performance.now();;
-        let get_elapsed = || {
-            ((performance.now() - start) * 1_000_000.0) as u64
-        };
+        let get_elapsed = || ((performance.now() - start) * 1_000_000.0) as u64;
 
         match wait {
             d::WaitFor::All => {
@@ -1784,7 +1818,7 @@ impl d::Device<B> for Device {
             n::FenceInner::Pending(Some(sync)) => {
                 self.share.context.delete_sync(sync);
             }
-            _ => {},
+            _ => {}
         }
     }
 
@@ -1836,32 +1870,52 @@ impl d::Device<B> for Device {
         let mut fbos = Vec::new();
         let mut images = Vec::new();
 
-        for _ in 0..config.image_count {
+        for _ in 0 .. config.image_count {
             unsafe {
                 let fbo = gl.create_framebuffer().unwrap();
                 gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
                 fbos.push(fbo);
 
                 let Extent2D { width, height } = config.extent;
-                let image = self.create_image(
-                    i::Kind::D2(width, height, config.image_layers, 1),
-                    1,
-                    config.format,
-                    i::Tiling::Optimal,
-                    config.image_usage,
-                    i::ViewCapabilities::empty(),
-                ).unwrap();
+                let image = self
+                    .create_image(
+                        i::Kind::D2(width, height, config.image_layers, 1),
+                        1,
+                        config.format,
+                        i::Tiling::Optimal,
+                        config.image_usage,
+                        i::ViewCapabilities::empty(),
+                    )
+                    .unwrap();
 
                 match image.kind {
                     n::ImageKind::Surface(surface) => {
-                        gl.framebuffer_renderbuffer(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::RENDERBUFFER, Some(surface));
+                        gl.framebuffer_renderbuffer(
+                            glow::FRAMEBUFFER,
+                            glow::COLOR_ATTACHMENT0,
+                            glow::RENDERBUFFER,
+                            Some(surface),
+                        );
                     }
-                    n::ImageKind::Texture { texture, target, .. } => {
+                    n::ImageKind::Texture {
+                        texture, target, ..
+                    } => {
                         if self.share.private_caps.framebuffer_texture {
-                            gl.framebuffer_texture(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, Some(texture), 0);
+                            gl.framebuffer_texture(
+                                glow::FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                Some(texture),
+                                0,
+                            );
                         } else {
                             gl.bind_texture(target, Some(texture));
-                            gl.framebuffer_texture_2d(glow::FRAMEBUFFER, glow::COLOR_ATTACHMENT0, target, Some(texture), 0);
+                            gl.framebuffer_texture_2d(
+                                glow::FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                target,
+                                Some(texture),
+                                0,
+                            );
                         }
                     }
                 }
@@ -1873,7 +1927,11 @@ impl d::Device<B> for Device {
         #[cfg(feature = "wgl")]
         let swapchain = {
             self.share.instance_context.make_current();
-            Swapchain { fbos, context, extent: config.extent }
+            Swapchain {
+                fbos,
+                context,
+                extent: config.extent,
+            }
         };
         #[cfg(feature = "glutin")]
         let swapchain = Swapchain {

@@ -292,7 +292,7 @@ where
         });
         storage.constants.push(SpecializationConstant {
             id: self.head.0,
-            range: offset..offset + size as u16,
+            range: offset .. offset + size as u16,
         });
         self.tail.fold(storage)
     }

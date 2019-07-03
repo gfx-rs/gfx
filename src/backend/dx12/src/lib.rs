@@ -256,7 +256,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     }
                     QueueFamily::Normal(_) => {
                         let list_type = family.native_type();
-                        for _ in 0..priorities.len() {
+                        for _ in 0 .. priorities.len() {
                             let (queue, hr_queue) = device_raw.create_command_queue(
                                 list_type,
                                 native::queue::Priority::Normal,
@@ -761,7 +761,9 @@ impl hal::Instance for Instance {
             if winerror::SUCCEEDED(hr) {
                 // It's okay to decrement the refcount here because we
                 // have another reference to the factory already owned by `self`.
-                unsafe { f6.destroy(); }
+                unsafe {
+                    f6.destroy();
+                }
                 (true, f6)
             } else {
                 (false, native::WeakPtr::null())
@@ -832,7 +834,7 @@ impl hal::Instance for Instance {
 
             let device_name = {
                 let len = desc.Description.iter().take_while(|&&c| c != 0).count();
-                let name = <OsString as OsStringExt>::from_wide(&desc.Description[..len]);
+                let name = <OsString as OsStringExt>::from_wide(&desc.Description[.. len]);
                 name.to_string_lossy().into_owned()
             };
 
@@ -980,7 +982,7 @@ impl hal::Instance for Instance {
                 // `device::MEM_TYPE_IMAGE_SHIFT`, `device::MEM_TYPE_TARGET_SHIFT`)
                 // denote the usage group.
                 let mut types = Vec::new();
-                for i in 0..MemoryGroup::NumGroups as _ {
+                for i in 0 .. MemoryGroup::NumGroups as _ {
                     types.extend(base_memory_types.iter().map(|mem_type| {
                         let mut ty = mem_type.clone();
 
@@ -1172,10 +1174,7 @@ fn validate_line_width(width: f32) {
 }
 
 #[derive(Debug)]
-pub struct FormatProperties(
-    Box<[Mutex<Option<f::Properties>>]>,
-    native::Device,
-);
+pub struct FormatProperties(Box<[Mutex<Option<f::Properties>>]>, native::Device);
 
 impl Drop for FormatProperties {
     fn drop(&mut self) {
@@ -1189,7 +1188,7 @@ impl FormatProperties {
     fn new(device: native::Device) -> Self {
         let mut buf = Vec::with_capacity(f::NUM_FORMATS);
         buf.push(Mutex::new(Some(f::Properties::default())));
-        for _ in 1..f::NUM_FORMATS {
+        for _ in 1 .. f::NUM_FORMATS {
             buf.push(Mutex::new(None))
         }
         FormatProperties(buf.into_boxed_slice(), device)
@@ -1241,8 +1240,7 @@ impl FormatProperties {
             props.optimal_tiling |= f::ImageFeature::SAMPLED_LINEAR;
         }
         if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET != 0 {
-            props.optimal_tiling |=
-                f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+            props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
             if can_linear {
                 props.linear_tiling |=
                     f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;

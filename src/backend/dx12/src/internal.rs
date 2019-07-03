@@ -108,7 +108,7 @@ impl ServicePipes {
             0,
             d3d12::D3D12_COMPARISON_FUNC_ALWAYS,
             descriptor::StaticBorderColor::TransparentBlack,
-            0.0..d3d12::D3D12_FLOAT32_MAX,
+            0.0 .. d3d12::D3D12_FLOAT32_MAX,
         )];
 
         let ((signature_raw, error), _hr) = native::RootSignature::serialize(

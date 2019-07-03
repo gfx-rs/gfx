@@ -23,18 +23,39 @@ use std::hash::Hash;
 //TODO: reconsider what is publicly exported
 
 pub use self::adapter::{
-    Adapter, AdapterInfo, MemoryProperties, MemoryType, MemoryTypeId, PhysicalDevice, QueuePriority,
+    Adapter,
+    AdapterInfo,
+    MemoryProperties,
+    MemoryType,
+    MemoryTypeId,
+    PhysicalDevice,
+    QueuePriority,
 };
 pub use self::device::Device;
 pub use self::pool::CommandPool;
-pub use self::pso::{DescriptorPool, read_spirv};
+pub use self::pso::{read_spirv, DescriptorPool};
 pub use self::queue::{
-    Capability, CommandQueue, Compute, General, Graphics, QueueFamily, QueueGroup, QueueType,
-    Submission, Supports, Transfer,
+    Capability,
+    CommandQueue,
+    Compute,
+    General,
+    Graphics,
+    QueueFamily,
+    QueueGroup,
+    QueueType,
+    Submission,
+    Supports,
+    Transfer,
 };
 pub use self::window::{
-    AcquireError, CompositeAlpha, PresentMode, Surface, SurfaceCapabilities, SwapImageIndex,
-    Swapchain, SwapchainConfig,
+    AcquireError,
+    CompositeAlpha,
+    PresentMode,
+    Surface,
+    SurfaceCapabilities,
+    SwapImageIndex,
+    Swapchain,
+    SwapchainConfig,
 };
 
 pub mod adapter;

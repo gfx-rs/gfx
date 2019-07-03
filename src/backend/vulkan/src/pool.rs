@@ -23,12 +23,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
             vk::CommandPoolResetFlags::empty()
         };
 
-        assert_eq!(
-            Ok(()),
-            self.device
-                .0
-                .reset_command_pool(self.raw, flags)
-        );
+        assert_eq!(Ok(()), self.device.0.reset_command_pool(self.raw, flags));
     }
 
     fn allocate_vec(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {

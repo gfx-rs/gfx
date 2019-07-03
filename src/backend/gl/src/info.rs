@@ -74,13 +74,13 @@ impl Version {
         let es_sig = " ES ";
         let is_es = match src.rfind(es_sig) {
             Some(pos) => {
-                src = src[pos + es_sig.len()..].to_string();
+                src = src[pos + es_sig.len() ..].to_string();
                 true
             }
             None => false,
         };
         let (version, vendor_info) = match src.find(' ') {
-            Some(i) => (src[..i].to_string(), src[i + 1..].to_string()),
+            Some(i) => (src[.. i].to_string(), src[i + 1 ..].to_string()),
             None => (src.to_string(), String::from("")),
         };
 
@@ -258,14 +258,11 @@ pub enum Requirement<'a> {
 impl Info {
     fn get(gl: &GlContainer) -> Info {
         let platform_name = PlatformName::get(gl);
-        let version =
-            Version::parse(get_string(gl, glow::VERSION).unwrap_or_default())
-                .unwrap();
+        let version = Version::parse(get_string(gl, glow::VERSION).unwrap_or_default()).unwrap();
         #[cfg(not(target_arch = "wasm32"))]
-        let shading_language = Version::parse(
-            get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_default(),
-        )
-        .unwrap();
+        let shading_language =
+            Version::parse(get_string(gl, glow::SHADING_LANGUAGE_VERSION).unwrap_or_default())
+                .unwrap();
         #[cfg(target_arch = "wasm32")]
         let shading_language = Version::new_embedded(3, 0, String::from(""));
         // TODO: Use separate path for WebGL extensions in `glow` somehow
@@ -275,7 +272,7 @@ impl Info {
         #[cfg(not(target_arch = "wasm32"))]
         let extensions = if version >= Version::new(3, 0, None, String::from("")) {
             let num_exts = get_usize(gl, glow::NUM_EXTENSIONS).unwrap();
-            (0..num_exts)
+            (0 .. num_exts)
                 .map(|i| unsafe { gl.get_parameter_indexed_string(glow::EXTENSIONS, i as u32) })
                 .collect()
         } else {
@@ -473,8 +470,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     }
 
     let per_draw_buffer_blending =
-        info.is_supported(&[Core(4, 0), Es(3, 2), Ext("GL_EXT_draw_buffers2")])
-        && !info.is_webgl();
+        info.is_supported(&[Core(4, 0), Es(3, 2), Ext("GL_EXT_draw_buffers2")]) && !info.is_webgl();
     if per_draw_buffer_blending {
         features |= Features::INDEPENDENT_BLENDING;
     }
@@ -498,7 +494,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         sampler_anisotropy_ext: !info
             .is_supported(&[Core(4, 6), Ext("GL_ARB_texture_filter_anisotropic")])
             && info.is_supported(&[Ext("GL_EXT_texture_filter_anisotropic")]),
-        emulate_map, // TODO
+        emulate_map,                                          // TODO
         depth_range_f64_precision: !info.version.is_embedded, // TODO
         draw_buffers: info.is_supported(&[Core(2, 0), Es(3, 0)]),
         per_draw_buffer_blending,
@@ -515,10 +511,22 @@ mod tests {
     fn test_version_parse() {
         assert_eq!(Version::parse("1".to_string()), Err("1".to_string()));
         assert_eq!(Version::parse("1.".to_string()), Err("1.".to_string()));
-        assert_eq!(Version::parse("1 h3l1o. W0rld".to_string()), Err("1 h3l1o. W0rld".to_string()));
-        assert_eq!(Version::parse("1. h3l1o. W0rld".to_string()), Err("1. h3l1o. W0rld".to_string()));
-        assert_eq!(Version::parse("1.2.3".to_string()), Ok(Version::new(1, 2, Some(3), "".to_string())));
-        assert_eq!(Version::parse("1.2".to_string()), Ok(Version::new(1, 2, None, "".to_string())));
+        assert_eq!(
+            Version::parse("1 h3l1o. W0rld".to_string()),
+            Err("1 h3l1o. W0rld".to_string())
+        );
+        assert_eq!(
+            Version::parse("1. h3l1o. W0rld".to_string()),
+            Err("1. h3l1o. W0rld".to_string())
+        );
+        assert_eq!(
+            Version::parse("1.2.3".to_string()),
+            Ok(Version::new(1, 2, Some(3), "".to_string()))
+        );
+        assert_eq!(
+            Version::parse("1.2".to_string()),
+            Ok(Version::new(1, 2, None, "".to_string()))
+        );
         assert_eq!(
             Version::parse("1.2 h3l1o. W0rld".to_string()),
             Ok(Version::new(1, 2, None, "h3l1o. W0rld".to_string()))

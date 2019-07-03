@@ -66,13 +66,13 @@ use cocoa;
 use cocoa::foundation::NSInteger;
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
+#[cfg(feature = "dispatch")]
+use dispatch;
 use foreign_types::ForeignTypeRef;
 use metal::MTLFeatureSet;
 use metal::MTLLanguageVersion;
 use objc::runtime::{Object, BOOL, YES};
 use parking_lot::{Condvar, Mutex};
-#[cfg(feature = "dispatch")]
-use dispatch;
 #[cfg(feature = "winit")]
 use winit;
 
@@ -173,7 +173,7 @@ impl Shared {
                 metal::MTLResourceOptions::StorageModeShared,
             ),
             allocator: Mutex::new(RangeAllocator::new(
-                0..MAX_VISIBILITY_QUERIES as hal::query::Id,
+                0 .. MAX_VISIBILITY_QUERIES as hal::query::Id,
             )),
             availability_offset: (MAX_VISIBILITY_QUERIES * mem::size_of::<u64>())
                 as hal::buffer::Offset,
@@ -248,7 +248,7 @@ impl hal::Instance for Instance {
 impl Instance {
     pub fn create(_: &str, _: u32) -> Self {
         Instance {
-             experiments: Experiments::default(),
+            experiments: Experiments::default(),
         }
     }
 
@@ -359,17 +359,29 @@ impl Instance {
         window::SurfaceInner::new(None, layer)
     }
 
-    pub fn create_surface_from_layer(&self, layer: CAMetalLayer, enable_signposts: bool) -> Surface {
+    pub fn create_surface_from_layer(
+        &self,
+        layer: CAMetalLayer,
+        enable_signposts: bool,
+    ) -> Surface {
         unsafe { self.create_from_layer(layer) }.into_surface(enable_signposts)
     }
 
     #[cfg(target_os = "macos")]
-    pub fn create_surface_from_nsview(&self, nsview: *mut c_void, enable_signposts: bool) -> Surface {
+    pub fn create_surface_from_nsview(
+        &self,
+        nsview: *mut c_void,
+        enable_signposts: bool,
+    ) -> Surface {
         unsafe { self.create_from_nsview(nsview) }.into_surface(enable_signposts)
     }
 
     #[cfg(target_os = "ios")]
-    pub fn create_surface_from_uiview(&self, uiview: *mut c_void, enable_signposts: bool) -> Surface {
+    pub fn create_surface_from_uiview(
+        &self,
+        uiview: *mut c_void,
+        enable_signposts: bool,
+    ) -> Surface {
         unsafe { self.create_from_uiview(uiview) }.into_surface(enable_signposts)
     }
 }
@@ -701,8 +713,8 @@ impl PrivateCapabilities {
             exposed_queues: 1,
             expose_line_mode: true,
             resource_heaps: Self::supports_any(&device, RESOURCE_HEAP_SUPPORT),
-            argument_buffers: experiments.argument_buffers &&
-                Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT),
+            argument_buffers: experiments.argument_buffers
+                && Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT),
             shared_textures: !os_is_mac,
             base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
             dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
@@ -828,10 +840,13 @@ impl PrivateCapabilities {
             ) && !os_is_mac,
             format_rgba32float_all: os_is_mac,
             format_depth16unorm: device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v2),
-            format_depth32float_filter: device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1),
-            format_depth32float_none: !device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1),
+            format_depth32float_filter: device
+                .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1),
+            format_depth32float_none: !device
+                .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1),
             format_bgr10a2_all: Self::supports_any(&device, BGR10A2_ALL),
-            format_bgr10a2_no_write: !device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v3),
+            format_bgr10a2_no_write: !device
+                .supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v3),
             max_buffers_per_stage: 31,
             max_textures_per_stage: if os_is_mac { 128 } else { 31 },
             max_samplers_per_stage: 16,
@@ -841,17 +856,23 @@ impl PrivateCapabilities {
             } else {
                 1 << 28 // 256MB otherwise
             },
-            max_texture_size: if Self::supports_any(&device, &[
-                MTLFeatureSet::iOS_GPUFamily3_v1,
-                MTLFeatureSet::tvOS_GPUFamily2_v1,
-                MTLFeatureSet::macOS_GPUFamily1_v1,
-            ]) {
+            max_texture_size: if Self::supports_any(
+                &device,
+                &[
+                    MTLFeatureSet::iOS_GPUFamily3_v1,
+                    MTLFeatureSet::tvOS_GPUFamily2_v1,
+                    MTLFeatureSet::macOS_GPUFamily1_v1,
+                ],
+            ) {
                 16384
-            } else if Self::supports_any(&device, &[
-                MTLFeatureSet::iOS_GPUFamily1_v2,
-                MTLFeatureSet::iOS_GPUFamily2_v2,
-                MTLFeatureSet::tvOS_GPUFamily1_v1,
-            ]) {
+            } else if Self::supports_any(
+                &device,
+                &[
+                    MTLFeatureSet::iOS_GPUFamily1_v2,
+                    MTLFeatureSet::iOS_GPUFamily2_v2,
+                    MTLFeatureSet::tvOS_GPUFamily1_v1,
+                ],
+            ) {
                 8192
             } else {
                 4096

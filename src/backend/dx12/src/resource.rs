@@ -45,7 +45,7 @@ impl BarrierDesc {
         BarrierDesc {
             flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY,
             ..self.clone()
-        }..BarrierDesc {
+        } .. BarrierDesc {
             flags: d3d12::D3D12_RESOURCE_BARRIER_FLAG_END_ONLY,
             ..self
         }
@@ -244,8 +244,8 @@ impl ImageBound {
     pub fn to_subresource_range(&self, aspects: format::Aspects) -> image::SubresourceRange {
         image::SubresourceRange {
             aspects,
-            levels: 0..self.descriptor.MipLevels as _,
-            layers: 0..self.kind.num_layers(),
+            levels: 0 .. self.descriptor.MipLevels as _,
+            layers: 0 .. self.kind.num_layers(),
         }
     }
 
@@ -514,7 +514,7 @@ impl DescriptorHeapSlice {
     /// Free handles previously given out by this `DescriptorHeapSlice`.  Do not use this with handles not given out by this `DescriptorHeapSlice`.
     pub(crate) fn free_handles(&mut self, handle: DualHandle) {
         let start = (handle.gpu.ptr - self.start.gpu.ptr) / self.handle_size;
-        let handle_range = start..start + handle.size as u64;
+        let handle_range = start .. start + handle.size as u64;
         self.range_allocator.free_range(handle_range);
     }
 

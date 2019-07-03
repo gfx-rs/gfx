@@ -26,8 +26,18 @@ use pool::{CommandPoolAllocator, RawCommandPool};
 use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
 use {
-    conv, descriptors_cpu, native, resource as r, root_constants, window as w, Backend as B,
-    Device, MemoryGroup, MAX_VERTEX_BUFFERS, NUM_HEAP_PROPERTIES, QUEUE_FAMILIES,
+    conv,
+    descriptors_cpu,
+    native,
+    resource as r,
+    root_constants,
+    window as w,
+    Backend as B,
+    Device,
+    MemoryGroup,
+    MAX_VERTEX_BUFFERS,
+    NUM_HEAP_PROPERTIES,
+    QUEUE_FAMILIES,
 };
 
 // Register space used for root constants.
@@ -418,7 +428,7 @@ impl Device {
                     {
                         // Override specialization constant values
                         let value = source.specialization.data
-                            [constant.range.start as usize..constant.range.end as usize]
+                            [constant.range.start as usize .. constant.range.end as usize]
                             .iter()
                             .rev()
                             .fold(0u64, |u, &b| (u << 8) + b as u64);
@@ -511,7 +521,7 @@ impl Device {
         let cpu_handle = heap.start_cpu_descriptor();
         let gpu_handle = heap.start_gpu_descriptor();
 
-        let range_allocator = RangeAllocator::new(0..(capacity as u64));
+        let range_allocator = RangeAllocator::new(0 .. (capacity as u64));
 
         r::DescriptorHeap {
             raw: heap,
@@ -732,7 +742,7 @@ impl Device {
 
         match info.view_kind {
             image::ViewKind::D1 => {
-                assert_eq!(info.range.layers, 0..1);
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_SRV {
                     MostDetailedMip,
@@ -751,14 +761,14 @@ impl Device {
                 }
             }
             image::ViewKind::D2 if is_msaa => {
-                assert_eq!(info.range.layers, 0..1);
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2DMS;
                 *unsafe { desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_SRV {
                     UnusedField_NothingToDefine: 0,
                 }
             }
             image::ViewKind::D2 => {
-                assert_eq!(info.range.layers, 0..1);
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_SRV {
                     MostDetailedMip,
@@ -786,7 +796,7 @@ impl Device {
                 }
             }
             image::ViewKind::D3 => {
-                assert_eq!(info.range.layers, 0..1);
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE3D;
                 *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_SRV {
                     MostDetailedMip,
@@ -873,7 +883,7 @@ impl Device {
 
         match info.view_kind {
             image::ViewKind::D1 => {
-                assert_eq!(info.range.layers, 0..1);
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_UAV { MipSlice }
             }
@@ -886,7 +896,7 @@ impl Device {
                 }
             }
             image::ViewKind::D2 => {
-                assert_eq!(info.range.layers, 0..1);
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_UAV {
                     MipSlice,
@@ -903,7 +913,7 @@ impl Device {
                 }
             }
             image::ViewKind::D3 => {
-                assert_eq!(info.range.layers, 0..1);
+                assert_eq!(info.range.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE3D;
                 *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_UAV {
                     MipSlice,
@@ -1202,7 +1212,7 @@ impl d::Device<B> for Device {
                         ai.barrier_start_index = rp.subpasses.len() + 1;
                     }
                     SubState::New(state) if state != ai.last_state => {
-                        let barrier = r::BarrierDesc::new(att_id, ai.last_state..state);
+                        let barrier = r::BarrierDesc::new(att_id, ai.last_state .. state);
                         match rp.subpasses.get_mut(ai.barrier_start_index) {
                             Some(past_subpass) => {
                                 let split = barrier.split();
@@ -1217,7 +1227,7 @@ impl d::Device<B> for Device {
                     SubState::Resolve(state) => {
                         // 1. Standard pre barrier to update state from previous pass into desired substate.
                         if state != ai.last_state {
-                            let barrier = r::BarrierDesc::new(att_id, ai.last_state..state);
+                            let barrier = r::BarrierDesc::new(att_id, ai.last_state .. state);
                             match rp.subpasses.get_mut(ai.barrier_start_index) {
                                 Some(past_subpass) => {
                                     let split = barrier.split();
@@ -1230,7 +1240,7 @@ impl d::Device<B> for Device {
 
                         // 2. Post Barrier at the end of the subpass into RESOLVE_SOURCE.
                         let resolve_state = d3d12::D3D12_RESOURCE_STATE_RESOLVE_SOURCE;
-                        let barrier = r::BarrierDesc::new(att_id, state..resolve_state);
+                        let barrier = r::BarrierDesc::new(att_id, state .. resolve_state);
                         post_barriers.push(barrier);
 
                         ai.last_state = resolve_state;
@@ -1259,7 +1269,7 @@ impl d::Device<B> for Device {
             if state_dst == ai.last_state {
                 continue;
             }
-            let barrier = r::BarrierDesc::new(att_id, ai.last_state..state_dst);
+            let barrier = r::BarrierDesc::new(att_id, ai.last_state .. state_dst);
             match rp.subpasses.get_mut(ai.barrier_start_index) {
                 Some(past_subpass) => {
                     let split = barrier.split();
@@ -1305,7 +1315,7 @@ impl d::Device<B> for Device {
                 assert!(constant.range.start <= constant.range.end);
                 RootConstant {
                     stages: constant.stages,
-                    range: constant.range.start..constant.range.end,
+                    range: constant.range.start .. constant.range.end,
                 }
             })
             .collect::<Vec<_>>();
@@ -1368,7 +1378,7 @@ impl d::Device<B> for Device {
             if ranges.len() > range_base {
                 parameters.push(native::descriptor::RootParameter::descriptor_table(
                     native::descriptor::ShaderVisibility::All, // TODO
-                    &ranges[range_base..],
+                    &ranges[range_base ..],
                 ));
                 table_type |= r::SRV_CBV_UAV;
             }
@@ -1389,7 +1399,7 @@ impl d::Device<B> for Device {
             if ranges.len() > range_base {
                 parameters.push(native::descriptor::RootParameter::descriptor_table(
                     native::descriptor::ShaderVisibility::All, // TODO
-                    &ranges[range_base..],
+                    &ranges[range_base ..],
                 ));
                 table_type |= r::SAMPLERS;
             }
@@ -1531,8 +1541,12 @@ impl d::Device<B> for Device {
                 };
 
                 let (slot_class, step_rate) = match buffer_desc.rate {
-                    VertexInputRate::Vertex => (d3d12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0),
-                    VertexInputRate::Instance(divisor) => (d3d12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, divisor),
+                    VertexInputRate::Vertex => {
+                        (d3d12::D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0)
+                    }
+                    VertexInputRate::Instance(divisor) => {
+                        (d3d12::D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA, divisor)
+                    }
                 };
                 let format = attrib.element.format;
 
@@ -2119,7 +2133,7 @@ impl d::Device<B> for Device {
         let depth_pitch = (footprint.Footprint.RowPitch * num_rows) as buffer::Offset;
         let array_pitch = footprint.Footprint.Depth as buffer::Offset * depth_pitch;
         image::SubresourceFootprint {
-            slice: footprint.Offset..footprint.Offset + total_bytes,
+            slice: footprint.Offset .. footprint.Offset + total_bytes,
             row_pitch: footprint.Footprint.RowPitch as _,
             depth_pitch,
             array_pitch,
@@ -2175,8 +2189,8 @@ impl d::Device<B> for Device {
             component_mapping: IDENTITY_MAPPING,
             range: image::SubresourceRange {
                 aspects: Aspects::empty(),
-                levels: 0..0,
-                layers: 0..0,
+                levels: 0 .. 0,
+                layers: 0 .. 0,
             },
         };
 
@@ -2214,14 +2228,14 @@ impl d::Device<B> for Device {
             block_dim: image_unbound.block_dim,
             clear_cv: if aspects.contains(Aspects::COLOR) && can_clear_color {
                 let format = image_unbound.view_format.unwrap();
-                (0..num_layers)
+                (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_render_target(ViewInfo {
                             format,
                             range: image::SubresourceRange {
                                 aspects: Aspects::COLOR,
-                                levels: 0..1, //TODO?
-                                layers: layer..layer + 1,
+                                levels: 0 .. 1, //TODO?
+                                layers: layer .. layer + 1,
                             },
                             ..info.clone()
                         })
@@ -2233,14 +2247,14 @@ impl d::Device<B> for Device {
             },
             clear_dv: if aspects.contains(Aspects::DEPTH) && can_clear_depth {
                 let format = image_unbound.dsv_format.unwrap();
-                (0..num_layers)
+                (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(ViewInfo {
                             format,
                             range: image::SubresourceRange {
                                 aspects: Aspects::DEPTH,
-                                levels: 0..1, //TODO?
-                                layers: layer..layer + 1,
+                                levels: 0 .. 1, //TODO?
+                                layers: layer .. layer + 1,
                             },
                             ..info.clone()
                         })
@@ -2252,14 +2266,14 @@ impl d::Device<B> for Device {
             },
             clear_sv: if aspects.contains(Aspects::STENCIL) && can_clear_depth {
                 let format = image_unbound.dsv_format.unwrap();
-                (0..num_layers)
+                (0 .. num_layers)
                     .map(|layer| {
                         self.view_image_as_depth_stencil(ViewInfo {
                             format,
                             range: image::SubresourceRange {
                                 aspects: Aspects::STENCIL,
-                                levels: 0..1, //TODO?
-                                layers: layer..layer + 1,
+                                levels: 0 .. 1, //TODO?
+                                layers: layer .. layer + 1,
                             },
                             ..info.clone()
                         })
@@ -2375,7 +2389,7 @@ impl d::Device<B> for Device {
             },
             conv::map_comparison(info.comparison.unwrap_or(pso::Comparison::Always)),
             info.border.into(),
-            info.lod_range.start.into()..info.lod_range.end.into(),
+            info.lod_range.start.into() .. info.lod_range.end.into(),
         );
 
         Ok(r::Sampler { handle })
@@ -2418,7 +2432,7 @@ impl d::Device<B> for Device {
             let mut heap_srv_cbv_uav = self.heap_srv_cbv_uav.lock().unwrap();
 
             let range = match num_srv_cbv_uav {
-                0 => 0..0,
+                0 => 0 .. 0,
                 _ => heap_srv_cbv_uav
                     .range_allocator
                     .allocate_range(num_srv_cbv_uav as _)
@@ -2437,7 +2451,7 @@ impl d::Device<B> for Device {
             let mut heap_sampler = self.heap_sampler.lock().unwrap();
 
             let range = match num_samplers {
-                0 => 0..0,
+                0 => 0 .. 0,
                 _ => heap_sampler
                     .range_allocator
                     .allocate_range(num_samplers as _)
@@ -2824,7 +2838,7 @@ impl d::Device<B> for Device {
     {
         let fences = fences.into_iter().collect::<Vec<_>>();
         let mut events = self.events.lock().unwrap();
-        for _ in events.len()..fences.len() {
+        for _ in events.len() .. fences.len() {
             events.push(native::Event::create(false, false));
         }
 
@@ -2863,8 +2877,8 @@ impl d::Device<B> for Device {
         const WAIT_OBJECT_LAST: u32 = winbase::WAIT_OBJECT_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         const WAIT_ABANDONED_LAST: u32 = winbase::WAIT_ABANDONED_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         match hr {
-            winbase::WAIT_OBJECT_0...WAIT_OBJECT_LAST => Ok(true),
-            winbase::WAIT_ABANDONED_0...WAIT_ABANDONED_LAST => Ok(true), //TODO?
+            winbase::WAIT_OBJECT_0 ... WAIT_OBJECT_LAST => Ok(true),
+            winbase::WAIT_ABANDONED_0 ... WAIT_ABANDONED_LAST => Ok(true), //TODO?
             winerror::WAIT_TIMEOUT => Ok(false),
             _ => panic!("Unexpected wait status 0x{:X}", hr),
         }
@@ -3094,7 +3108,7 @@ impl d::Device<B> for Device {
 
         // Get backbuffer images
         let mut resources: Vec<native::Resource> = Vec::new();
-        let images = (0..config.image_count)
+        let images = (0 .. config.image_count)
             .map(|i| {
                 let mut resource = native::Resource::null();
                 swap_chain3.GetBuffer(

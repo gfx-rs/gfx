@@ -130,7 +130,12 @@ pub enum Command {
         data: command::BufferImageCopy,
     },
     CopySurfaceToBuffer(n::Surface, n::RawBuffer, command::BufferImageCopy),
-    CopyImageToTexture(n::ImageKind, n::Texture, n::TextureTarget, command::ImageCopy),
+    CopyImageToTexture(
+        n::ImageKind,
+        n::Texture,
+        n::TextureTarget,
+        command::ImageCopy,
+    ),
     CopyImageToSurface(n::ImageKind, n::Surface, command::ImageCopy),
 
     BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
@@ -349,7 +354,9 @@ impl RawCommandBuffer {
             self.cache.blend_targets.resize(max_blend_slots, None);
         }
 
-        let all_targets_same = blend_targets[1..].iter().all(|target| target == &blend_targets[0]);
+        let all_targets_same = blend_targets[1 ..]
+            .iter()
+            .all(|target| target == &blend_targets[0]);
 
         if all_targets_same {
             let mut update_blend = false;
@@ -366,7 +373,8 @@ impl RawCommandBuffer {
             for (slot, (blend_target, cached_target)) in blend_targets
                 .iter()
                 .zip(&mut self.cache.blend_targets)
-                .enumerate() {
+                .enumerate()
+            {
                 let update_blend = match cached_target {
                     Some(cache) => cache != blend_target,
                     None => true,
@@ -378,7 +386,7 @@ impl RawCommandBuffer {
                         &self.id,
                         &mut self.memory,
                         &mut self.buf,
-                        Command::SetBlendSlot(slot as _, *blend_target)
+                        Command::SetBlendSlot(slot as _, *blend_target),
                     );
                 }
             }
@@ -693,7 +701,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                 // 2. ClearBuffer
                 let view = match image.kind {
                     n::ImageKind::Surface(id) => n::ImageView::Surface(id),
-                    n::ImageKind::Texture { texture, target, .. } => {
+                    n::ImageKind::Texture {
+                        texture, target, ..
+                    } => {
                         n::ImageView::Texture(texture, target, 0) //TODO
                     }
                 };
@@ -722,7 +732,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             None => {
                 // 1. glClear
                 let (tex, target) = match image.kind {
-                    n::ImageKind::Texture { texture, target, .. } => (texture, target), //TODO
+                    n::ImageKind::Texture {
+                        texture, target, ..
+                    } => (texture, target), //TODO
                     n::ImageKind::Surface(_id) => unimplemented!(),
                 };
 
@@ -774,7 +786,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
         let (raw_buffer, range) = ibv.buffer.as_bound();
 
-        self.cache.index_type_range = Some((ibv.index_type, range.start + ibv.offset..range.end));
+        self.cache.index_type_range = Some((ibv.index_type, range.start + ibv.offset .. range.end));
         self.push_cmd(Command::BindIndexBuffer(raw_buffer));
     }
 
@@ -790,7 +802,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             }
 
             let (raw_buffer, range) = buffer.borrow().as_bound();
-            self.cache.vertex_buffers[index] = Some((raw_buffer, range.start + offset..range.end));
+            self.cache.vertex_buffers[index] =
+                Some((raw_buffer, range.start + offset .. range.end));
         }
     }
 
@@ -964,12 +977,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
         self.update_blend_targets(blend_targets);
 
-        self.push_cmd(Command::BindRasterizer { 
-            rasterizer, 
-        });
-        self.push_cmd(Command::BindDepth { 
-            depth,
-        });
+        self.push_cmd(Command::BindRasterizer { rasterizer });
+        self.push_cmd(Command::BindDepth { depth });
     }
 
     unsafe fn bind_graphics_descriptor_sets<I, J>(
@@ -1150,9 +1159,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             let r = region.borrow().clone();
             let cmd = match dst.kind {
                 n::ImageKind::Surface(s) => Command::CopyImageToSurface(src.kind, s, r),
-                n::ImageKind::Texture { texture, target, .. } => {
-                    Command::CopyImageToTexture(src.kind, texture, target, r)
-                },
+                n::ImageKind::Texture {
+                    texture, target, ..
+                } => Command::CopyImageToTexture(src.kind, texture, target, r),
             };
             self.push_cmd(cmd);
         }
@@ -1180,15 +1189,18 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             r.buffer_offset += src_range.start;
             let cmd = match dst.kind {
                 n::ImageKind::Surface(s) => Command::CopyBufferToSurface(src_raw, s, r),
-                n::ImageKind::Texture { texture, target, format, pixel_type } => {
-                    Command::CopyBufferToTexture {
-                        src_buffer: src_raw,
-                        dst_texture: texture,
-                        texture_target: target,
-                        texture_format: format,
-                        pixel_type,
-                        data: r,
-                    }
+                n::ImageKind::Texture {
+                    texture,
+                    target,
+                    format,
+                    pixel_type,
+                } => Command::CopyBufferToTexture {
+                    src_buffer: src_raw,
+                    dst_texture: texture,
+                    texture_target: target,
+                    texture_format: format,
+                    pixel_type,
+                    data: r,
                 },
             };
             self.push_cmd(cmd);
@@ -1217,15 +1229,18 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             r.buffer_offset += dst_range.start;
             let cmd = match src.kind {
                 n::ImageKind::Surface(s) => Command::CopySurfaceToBuffer(s, dst_raw, r),
-                n::ImageKind::Texture { texture, target, format, pixel_type } => {
-                    Command::CopyTextureToBuffer {
-                        src_texture: texture,
-                        texture_target: target,
-                        texture_format: format,
-                        pixel_type: pixel_type,
-                        dst_buffer: dst_raw,
-                        data: r,
-                    }
+                n::ImageKind::Texture {
+                    texture,
+                    target,
+                    format,
+                    pixel_type,
+                } => Command::CopyTextureToBuffer {
+                    src_texture: texture,
+                    texture_target: target,
+                    texture_format: format,
+                    pixel_type: pixel_type,
+                    dst_buffer: dst_raw,
+                    data: r,
                 },
             };
             self.push_cmd(cmd);
@@ -1276,8 +1291,14 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         };
 
         let (start, index_type) = match index_type {
-            hal::IndexType::U16 => (indices.start as buffer::Offset * 2 + buffer_range.start, glow::UNSIGNED_SHORT),
-            hal::IndexType::U32 => (indices.start as buffer::Offset * 4 + buffer_range.start, glow::UNSIGNED_INT),
+            hal::IndexType::U16 => (
+                indices.start as buffer::Offset * 2 + buffer_range.start,
+                glow::UNSIGNED_SHORT,
+            ),
+            hal::IndexType::U32 => (
+                indices.start as buffer::Offset * 4 + buffer_range.start,
+                glow::UNSIGNED_INT,
+            ),
         };
 
         match self.cache.primitive {
@@ -1326,16 +1347,12 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn wait_events<'a, I, J>(
-        &mut self,
-        _: I,
-        _: Range<pso::PipelineStage>,
-        _: J
-    ) where
+    unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
+    where
         I: IntoIterator,
-    I::Item: Borrow<()>,
-    J: IntoIterator,
-    J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        I::Item: Borrow<()>,
+        J: IntoIterator,
+        J::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
         unimplemented!()
     }

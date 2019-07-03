@@ -23,8 +23,19 @@ use hal::format::ChannelType;
 use hal::queue::{QueueFamilyId, Queues};
 use hal::range::RangeArg;
 use hal::{
-    buffer, command, error, format, image, memory, pass, pso, query, CompositeAlpha, Features,
-    Limits, QueueType,
+    buffer,
+    command,
+    error,
+    format,
+    image,
+    memory,
+    pass,
+    pso,
+    query,
+    CompositeAlpha,
+    Features,
+    Limits,
+    QueueType,
 };
 use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 
@@ -155,12 +166,11 @@ fn get_features(
 ) -> hal::Features {
     use hal::Features;
 
-    let features =
-        Features::ROBUST_BUFFER_ACCESS |
-        Features::FULL_DRAW_INDEX_U32 |
-        Features::FORMAT_BC |
-        Features::INSTANCE_RATE |
-        Features::SAMPLER_MIP_LOD_BIAS;
+    let features = Features::ROBUST_BUFFER_ACCESS
+        | Features::FULL_DRAW_INDEX_U32
+        | Features::FORMAT_BC
+        | Features::INSTANCE_RATE
+        | Features::SAMPLER_MIP_LOD_BIAS;
 
     features
 }
@@ -348,7 +358,8 @@ impl hal::Instance for Instance {
                 max_patch_size: 0,                                                    // TODO
                 max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
                 max_viewport_dimensions: [d3d11::D3D11_VIEWPORT_BOUNDS_MAX; 2],
-                max_framebuffer_extent: hal::image::Extent { //TODO
+                max_framebuffer_extent: hal::image::Extent {
+                    //TODO
                     width: 4096,
                     height: 4096,
                     depth: 1,
@@ -358,7 +369,11 @@ impl hal::Instance for Instance {
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_Y,
                     d3d11::D3D11_CS_THREAD_GROUP_MAX_Z,
                 ],
-                max_compute_work_group_size: [d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP, 1, 1], // TODO
+                max_compute_work_group_size: [
+                    d3d11::D3D11_CS_THREAD_GROUP_MAX_THREADS_PER_GROUP,
+                    1,
+                    1,
+                ], // TODO
                 max_vertex_input_attribute_offset: 255, // TODO
                 max_vertex_input_attributes: d3d11::D3D11_IA_VERTEX_INPUT_RESOURCE_SLOT_COUNT as _,
                 max_vertex_input_binding_stride:
@@ -373,12 +388,12 @@ impl hal::Instance for Instance {
                 framebuffer_stencil_samples_count: 1,    // TODO
                 max_color_attachments: d3d11::D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
                 buffer_image_granularity: 1,
-                non_coherent_atom_size: 1,               // TODO
+                non_coherent_atom_size: 1, // TODO
                 max_sampler_anisotropy: 16.,
-                optimal_buffer_copy_offset_alignment: 1,                                      // TODO
-                optimal_buffer_copy_pitch_alignment: 1,                                       // TODO
+                optimal_buffer_copy_offset_alignment: 1, // TODO
+                optimal_buffer_copy_pitch_alignment: 1,  // TODO
                 min_vertex_input_binding_stride_alignment: 1,
-                .. hal::Limits::default() //TODO
+                ..hal::Limits::default() //TODO
             };
 
             let features = get_features(device.clone(), feature_level);
@@ -459,7 +474,7 @@ fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL
                     d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
                     ptr::null_mut(),
                     0,
-                    requested_feature_levels[1..].as_ptr(),
+                    requested_feature_levels[1 ..].as_ptr(),
                     (requested_feature_levels.len() - 1) as _,
                     d3d11::D3D11_SDK_VERSION,
                     ptr::null_mut(),
@@ -712,9 +727,9 @@ impl hal::Surface<Backend> for Surface {
         // NOTE: some swap effects affect msaa capabilities..
         // TODO: _DISCARD swap effects can only have one image?
         let capabilities = hal::SurfaceCapabilities {
-            image_count: 1..16, // TODO:
+            image_count: 1 .. 16, // TODO:
             current_extent: Some(extent),
-            extents: extent..extent,
+            extents: extent .. extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
             composite_alpha: CompositeAlpha::OPAQUE, //TODO
@@ -895,7 +910,7 @@ impl RenderPassCache {
             attachments,
             &[pso::ClearRect {
                 rect: self.target_rect,
-                layers: 0..1,
+                layers: 0 .. 1,
             }],
             &self,
         );
@@ -2142,12 +2157,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn wait_events<'a, I, J>(
-        &mut self,
-        _: I,
-        _: Range<pso::PipelineStage>,
-        _: J
-    ) where
+    unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
+    where
         I: IntoIterator,
         I::Item: Borrow<()>,
         J: IntoIterator,
@@ -2252,7 +2263,7 @@ fn intersection(a: &Range<u64>, b: &Range<u64>) -> Option<Range<u64>> {
         None
     } else {
         let end = if min.end < max.end { min.end } else { max.end };
-        Some(max.start..end)
+        Some(max.start .. end)
     }
 }
 
@@ -2333,15 +2344,15 @@ impl MemoryInvalidate {
         let remainder = len % stride;
 
         // we split up the copies into chunks the size of our working buffer
-        for i in 0..chunks {
+        for i in 0 .. chunks {
             let offset = range.start + i * stride;
-            let range = offset..(offset + stride);
+            let range = offset .. (offset + stride);
 
             self.download(context, self.buffer, range);
         }
 
         if remainder != 0 {
-            self.download(context, self.buffer, (chunks * stride)..range.end);
+            self.download(context, self.buffer, (chunks * stride) .. range.end);
         }
     }
 
@@ -2404,7 +2415,7 @@ unsafe impl Sync for Memory {}
 
 impl Memory {
     pub fn resolve<R: hal::range::RangeArg<u64>>(&self, range: &R) -> Range<u64> {
-        *range.start().unwrap_or(&0)..*range.end().unwrap_or(&self.size)
+        *range.start().unwrap_or(&0) .. *range.end().unwrap_or(&self.size)
     }
 
     pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) {
@@ -2460,7 +2471,7 @@ impl Memory {
 
                     MemoryFlush {
                         host_memory: unsafe { ptr.offset(range.start as _) },
-                        sync_range: SyncRange::Partial(local_start..(local_start + local_len)),
+                        sync_range: SyncRange::Partial(local_start .. (local_start + local_len)),
                         buffer: buffer.raw,
                     }
                     .do_flush(&context);
@@ -2977,7 +2988,7 @@ impl DescriptorPool {
     pub fn with_capacity(size: usize) -> Self {
         DescriptorPool {
             handles: vec![Descriptor(ptr::null_mut()); size],
-            allocator: RangeAllocator::new(0..size),
+            allocator: RangeAllocator::new(0 .. size),
         }
     }
 }
@@ -3018,7 +3029,7 @@ impl hal::DescriptorPool<Backend> for DescriptorPool {
     {
         for set in descriptor_sets {
             self.allocator
-                .free_range(set.offset..(set.offset + set.len))
+                .free_range(set.offset .. (set.offset + set.len))
         }
     }
 

@@ -5,7 +5,7 @@ use std::mem;
 
 use winapi::shared::basetsd::UINT8;
 use winapi::shared::dxgiformat::*;
-use winapi::shared::minwindef::{FALSE, INT, UINT, TRUE};
+use winapi::shared::minwindef::{FALSE, INT, TRUE, UINT};
 use winapi::um::d3d12::*;
 use winapi::um::d3dcommon::*;
 
@@ -110,23 +110,26 @@ pub fn map_swizzle(swizzle: Swizzle) -> UINT {
     [swizzle.0, swizzle.1, swizzle.2, swizzle.3]
         .iter()
         .enumerate()
-        .fold(D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES, |mapping, (i, &component)| {
-            let value = match component {
-                R => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_0,
-                G => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1,
-                B => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2,
-                A => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_3,
-                Zero => D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
-                One => D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1,
-            };
-            mapping | (value << D3D12_SHADER_COMPONENT_MAPPING_SHIFT as usize * i)
-        })
+        .fold(
+            D3D12_SHADER_COMPONENT_MAPPING_ALWAYS_SET_BIT_AVOIDING_ZEROMEM_MISTAKES,
+            |mapping, (i, &component)| {
+                let value = match component {
+                    R => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_0,
+                    G => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_1,
+                    B => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_2,
+                    A => D3D12_SHADER_COMPONENT_MAPPING_FROM_MEMORY_COMPONENT_3,
+                    Zero => D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_0,
+                    One => D3D12_SHADER_COMPONENT_MAPPING_FORCE_VALUE_1,
+                };
+                mapping | (value << D3D12_SHADER_COMPONENT_MAPPING_SHIFT as usize * i)
+            },
+        )
 }
 
 pub fn map_surface_type(st: SurfaceType) -> Option<DXGI_FORMAT> {
     use hal::format::SurfaceType::*;
 
-    assert_eq!(1, unsafe {*(&1u32 as *const _ as *const u8)});
+    assert_eq!(1, unsafe { *(&1u32 as *const _ as *const u8) });
     Some(match st {
         R5_G6_B5 => DXGI_FORMAT_B5G6R5_UNORM,
         A1_R5_G5_B5 => DXGI_FORMAT_B5G5R5A1_UNORM,
@@ -150,7 +153,7 @@ pub fn map_surface_type(st: SurfaceType) -> Option<DXGI_FORMAT> {
         D32 => DXGI_FORMAT_R32_TYPELESS,
         D24_S8 => DXGI_FORMAT_D24_UNORM_S8_UINT,
         D32_S8 => DXGI_FORMAT_D32_FLOAT_S8X24_UINT,
-        _ => return None
+        _ => return None,
     })
 }
 

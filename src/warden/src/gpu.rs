@@ -15,8 +15,8 @@ use crate::raw;
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     aspects: f::Aspects::COLOR,
-    levels: 0..1,
-    layers: 0..1,
+    levels: 0 .. 1,
+    layers: 0 .. 1,
 };
 
 pub struct FetchGuard<'a, B: hal::Backend> {
@@ -56,10 +56,10 @@ pub struct Buffer<B: hal::Backend> {
 
 impl<B: hal::Backend> Buffer<B> {
     fn barrier_to(&self, access: b::Access) -> memory::Barrier<B> {
-        memory::Barrier::whole_buffer(&self.handle, self.stable_state..access)
+        memory::Barrier::whole_buffer(&self.handle, self.stable_state .. access)
     }
     fn barrier_from(&self, access: b::Access) -> memory::Barrier<B> {
-        memory::Barrier::whole_buffer(&self.handle, access..self.stable_state)
+        memory::Barrier::whole_buffer(&self.handle, access .. self.stable_state)
     }
 }
 
@@ -75,7 +75,7 @@ pub struct Image<B: hal::Backend> {
 impl<B: hal::Backend> Image<B> {
     fn barrier_to(&self, access: i::Access, layout: i::Layout) -> memory::Barrier<B> {
         memory::Barrier::Image {
-            states: self.stable_state..(access, layout),
+            states: self.stable_state .. (access, layout),
             target: &self.handle,
             families: None,
             range: self.range.clone(),
@@ -83,7 +83,7 @@ impl<B: hal::Backend> Image<B> {
     }
     fn barrier_from(&self, access: i::Access, layout: i::Layout) -> memory::Barrier<B> {
         memory::Barrier::Image {
-            states: (access, layout)..self.stable_state,
+            states: (access, layout) .. self.stable_state,
             target: &self.handle,
             families: None,
             range: self.range.clone(),
@@ -230,12 +230,14 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         let access = b::Access::SHADER_READ; //TODO
                         if false {
                             //TODO
-                            let buffer_barrier =
-                                memory::Barrier::whole_buffer(&buffer, b::Access::empty()..access);
+                            let buffer_barrier = memory::Barrier::whole_buffer(
+                                &buffer,
+                                b::Access::empty() .. access,
+                            );
                             unsafe {
                                 init_cmd.pipeline_barrier(
                                     pso::PipelineStage::TOP_OF_PIPE
-                                        ..pso::PipelineStage::BOTTOM_OF_PIPE,
+                                        .. pso::PipelineStage::BOTTOM_OF_PIPE,
                                     memory::Dependencies::empty(),
                                     &[buffer_barrier],
                                 );
@@ -244,7 +246,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         access
                     } else {
                         // calculate required sizes
-                        let upload_size = align(size as _, limits.optimal_buffer_copy_pitch_alignment);
+                        let upload_size =
+                            align(size as _, limits.optimal_buffer_copy_pitch_alignment);
                         // create upload buffer
                         let mut upload_buffer =
                             unsafe { device.create_buffer(upload_size, b::Usage::TRANSFER_SRC) }
@@ -260,7 +263,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         // write the data
                         unsafe {
                             let mut mapping = device
-                                .acquire_mapping_writer::<u8>(&upload_memory, 0..size as _)
+                                .acquire_mapping_writer::<u8>(&upload_memory, 0 .. size as _)
                                 .unwrap();
                             File::open(data_path.join(data))
                                 .unwrap()
@@ -272,11 +275,11 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         let final_state = b::Access::SHADER_READ;
                         let pre_barrier = memory::Barrier::whole_buffer(
                             &buffer,
-                            b::Access::empty()..b::Access::TRANSFER_WRITE,
+                            b::Access::empty() .. b::Access::TRANSFER_WRITE,
                         );
                         unsafe {
                             init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                                 memory::Dependencies::empty(),
                                 &[pre_barrier],
                             );
@@ -291,11 +294,11 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         }
                         let post_barrier = memory::Barrier::whole_buffer(
                             &buffer,
-                            b::Access::TRANSFER_WRITE..final_state,
+                            b::Access::TRANSFER_WRITE .. final_state,
                         );
                         unsafe {
                             init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                                 memory::Dependencies::empty(),
                                 &[post_barrier],
                             );
@@ -367,7 +370,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             //TODO
                             let image_barrier = memory::Barrier::Image {
                                 states: (i::Access::empty(), i::Layout::Undefined)
-                                    ..(access, layout),
+                                    .. (access, layout),
                                 target: &image,
                                 families: None,
                                 range: i::SubresourceRange {
@@ -378,7 +381,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             unsafe {
                                 init_cmd.pipeline_barrier(
                                     pso::PipelineStage::TOP_OF_PIPE
-                                        ..pso::PipelineStage::BOTTOM_OF_PIPE,
+                                        .. pso::PipelineStage::BOTTOM_OF_PIPE,
                                     memory::Dependencies::empty(),
                                     &[image_barrier],
                                 );
@@ -400,7 +403,8 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         let d = extent.depth;
 
                         let width_bytes = (format_desc.bits as u64 * w) / (8 * block_width as u64);
-                        let row_pitch = align(width_bytes, limits.optimal_buffer_copy_pitch_alignment);
+                        let row_pitch =
+                            align(width_bytes, limits.optimal_buffer_copy_pitch_alignment);
                         let upload_size =
                             (row_pitch as u64 * h as u64 * d as u64) / block_height as u64;
                         // create upload buffer
@@ -418,12 +422,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         {
                             let mut file = File::open(data_path.join(data)).unwrap();
                             let mut mapping = unsafe {
-                                device.acquire_mapping_writer::<u8>(&upload_memory, 0..upload_size)
+                                device
+                                    .acquire_mapping_writer::<u8>(&upload_memory, 0 .. upload_size)
                             }
                             .unwrap();
-                            for y in 0..(h as usize * d as usize) {
+                            for y in 0 .. (h as usize * d as usize) {
                                 let dest_range = y * row_pitch as usize
-                                    ..y * row_pitch as usize + width_bytes as usize;
+                                    .. y * row_pitch as usize + width_bytes as usize;
                                 file.read_exact(&mut mapping[dest_range]).unwrap();
                             }
                             unsafe {
@@ -435,14 +440,14 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal);
                         let pre_barrier = memory::Barrier::Image {
                             states: (i::Access::empty(), i::Layout::Undefined)
-                                ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                                .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                             families: None,
                             target: &image,
                             range: COLOR_RANGE.clone(), //TODO
                         };
                         unsafe {
                             init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                                 memory::Dependencies::empty(),
                                 &[pre_barrier],
                             );
@@ -456,7 +461,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             image_layers: i::SubresourceLayers {
                                 aspects: f::Aspects::COLOR,
                                 level: 0,
-                                layers: 0..1,
+                                layers: 0 .. 1,
                             },
                             image_offset: i::Offset::ZERO,
                             image_extent: extent,
@@ -471,14 +476,14 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         }
                         let post_barrier = memory::Barrier::Image {
                             states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
-                                ..final_state,
+                                .. final_state,
                             families: None,
                             target: &image,
                             range: COLOR_RANGE.clone(), //TODO
                         };
                         unsafe {
                             init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                                 memory::Dependencies::empty(),
                                 &[post_barrier],
                             );
@@ -545,7 +550,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         })
                         .collect::<Vec<_>>();
                     let raw_deps = dependencies.iter().map(|dep| hal::pass::SubpassDependency {
-                        passes: subpass_ref(&dep.passes.start)..subpass_ref(&dep.passes.end),
+                        passes: subpass_ref(&dep.passes.start) .. subpass_ref(&dep.passes.end),
                         stages: dep.stages.clone(),
                         accesses: dep.accesses.clone(),
                     });
@@ -664,7 +669,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                         .buffers
                                         .get(s)
                                         .expect(&format!("Missing buffer: {}", s));
-                                    hal::pso::Descriptor::Buffer(&buf.handle, None..None)
+                                    hal::pso::Descriptor::Buffer(&buf.handle, None .. None)
                                 }),
                                 raw::DescriptorRange::Images(_) => unimplemented!(),
                             },
@@ -831,7 +836,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             .get(dst)
                             .expect(&format!("Missing destination buffer: {}", dst));
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                             memory::Dependencies::empty(),
                             vec![
                                 sb.barrier_to(b::State::TRANSFER_READ),
@@ -840,7 +845,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         );
                         command_buf.copy_buffer(&sb.handle, &db.handle, regions);
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                             memory::Dependencies::empty(),
                             vec![
                                 sb.barrier_from(b::State::TRANSFER_READ),
@@ -862,7 +867,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             .get(dst)
                             .expect(&format!("Missing destination image: {}", dst));
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                             memory::Dependencies::empty(),
                             vec![
                                 st.barrier_to(
@@ -883,7 +888,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             regions,
                         );
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                             memory::Dependencies::empty(),
                             vec![
                                 st.barrier_from(
@@ -911,7 +916,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             .get(dst)
                             .expect(&format!("Missing destination image: {}", dst));
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                             memory::Dependencies::empty(),
                             vec![
                                 sb.barrier_to(b::State::TRANSFER_READ),
@@ -928,7 +933,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             regions,
                         );
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                             memory::Dependencies::empty(),
                             vec![
                                 sb.barrier_from(b::State::TRANSFER_READ),
@@ -953,7 +958,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             .get(dst)
                             .expect(&format!("Missing destination buffer: {}", dst));
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                             memory::Dependencies::empty(),
                             vec![
                                 st.barrier_to(
@@ -970,7 +975,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             regions,
                         );
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                             memory::Dependencies::empty(),
                             vec![
                                 st.barrier_from(
@@ -992,7 +997,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             .get(image)
                             .expect(&format!("Missing clear image: {}", image));
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                             memory::Dependencies::empty(),
                             vec![img.barrier_to(
                                 i::Access::TRANSFER_WRITE,
@@ -1007,7 +1012,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             ranges,
                         );
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                             memory::Dependencies::empty(),
                             vec![img.barrier_from(
                                 i::Access::TRANSFER_WRITE,
@@ -1030,7 +1035,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             .get(dst)
                             .expect(&format!("Missing destination image: {}", dst));
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                             memory::Dependencies::empty(),
                             vec![
                                 st.barrier_to(
@@ -1052,7 +1057,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             regions,
                         );
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                             memory::Dependencies::empty(),
                             vec![
                                 st.barrier_from(
@@ -1077,13 +1082,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             .get(buffer)
                             .expect(&format!("Missing buffer: {}", buffer));
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                            pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                             memory::Dependencies::empty(),
                             vec![buf.barrier_to(b::State::TRANSFER_WRITE)],
                         );
                         command_buf.fill_buffer(&buf.handle, (start, end), data);
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                            pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                             memory::Dependencies::empty(),
                             vec![buf.barrier_from(b::State::TRANSFER_WRITE)],
                         );
@@ -1109,7 +1114,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         0,
                         Some(pso::Viewport {
                             rect,
-                            depth: 0.0..1.0,
+                            depth: 0.0 .. 1.0,
                         }),
                     );
 
@@ -1279,7 +1284,10 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             .expect(&format!("Unable to find buffer to fetch: {}", name));
         let limits = &self.limits;
 
-        let down_size = align(buffer.size as u64, limits.optimal_buffer_copy_pitch_alignment);
+        let down_size = align(
+            buffer.size as u64,
+            limits.optimal_buffer_copy_pitch_alignment,
+        );
 
         let mut down_buffer =
             unsafe { self.device.create_buffer(down_size, b::Usage::TRANSFER_DST) }.unwrap();
@@ -1309,10 +1317,10 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             cmd_buffer.begin();
             let pre_barrier = memory::Barrier::whole_buffer(
                 &buffer.handle,
-                buffer.stable_state..b::Access::TRANSFER_READ,
+                buffer.stable_state .. b::Access::TRANSFER_READ,
             );
             cmd_buffer.pipeline_barrier(
-                pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                 memory::Dependencies::empty(),
                 &[pre_barrier],
             );
@@ -1326,10 +1334,10 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 
             let post_barrier = memory::Barrier::whole_buffer(
                 &buffer.handle,
-                b::Access::TRANSFER_READ..buffer.stable_state,
+                b::Access::TRANSFER_READ .. buffer.stable_state,
             );
             cmd_buffer.pipeline_barrier(
-                pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                 memory::Dependencies::empty(),
                 &[post_barrier],
             );
@@ -1348,7 +1356,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             self.device.destroy_command_pool(command_pool.into_raw());
         }
 
-        let mapping = unsafe { self.device.map_memory(&down_memory, 0..down_size) }.unwrap();
+        let mapping = unsafe { self.device.map_memory(&down_memory, 0 .. down_size) }.unwrap();
 
         FetchGuard {
             device: &mut self.device,
@@ -1415,13 +1423,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             cmd_buffer.begin();
             let pre_barrier = memory::Barrier::Image {
                 states: image.stable_state
-                    ..(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
+                    .. (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
                 target: &image.handle,
                 families: None,
                 range: COLOR_RANGE.clone(), //TODO
             };
             cmd_buffer.pipeline_barrier(
-                pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
+                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                 memory::Dependencies::empty(),
                 &[pre_barrier],
             );
@@ -1433,7 +1441,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 image_layers: i::SubresourceLayers {
                     aspects: f::Aspects::COLOR,
                     level: 0,
-                    layers: 0..1,
+                    layers: 0 .. 1,
                 },
                 image_offset: i::Offset { x: 0, y: 0, z: 0 },
                 image_extent: i::Extent {
@@ -1451,13 +1459,13 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 
             let post_barrier = memory::Barrier::Image {
                 states: (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal)
-                    ..image.stable_state,
+                    .. image.stable_state,
                 target: &image.handle,
                 families: None,
                 range: COLOR_RANGE.clone(), //TODO
             };
             cmd_buffer.pipeline_barrier(
-                pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
+                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                 memory::Dependencies::empty(),
                 &[post_barrier],
             );
@@ -1476,7 +1484,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             self.device.destroy_command_pool(command_pool.into_raw());
         }
 
-        let mapping = unsafe { self.device.map_memory(&down_memory, 0..down_size) }.unwrap();
+        let mapping = unsafe { self.device.map_memory(&down_memory, 0 .. down_size) }.unwrap();
 
         FetchGuard {
             device: &mut self.device,

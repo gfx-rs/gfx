@@ -2,12 +2,13 @@
 //!
 //! An image is a block of GPU memory representing a grid of texels.
 
-use std::ops::Range;
 use crate::{
     buffer::Offset as RawOffset,
-    device, format,
+    device,
+    format,
     pso::{Comparison, Rect},
 };
+use std::ops::Range;
 
 /// Dimension size.
 pub type Size = u32;
@@ -86,7 +87,7 @@ impl Offset {
             y: self.y + extent.height as i32,
             z: self.z + extent.depth as i32,
         };
-        self..end
+        self .. end
     }
 }
 
@@ -320,7 +321,7 @@ impl Kind {
             _ => {
                 let extent = self.extent();
                 let dominant = max(max(extent.width, extent.height), extent.depth);
-                (1..).find(|level| dominant >> level == 0).unwrap()
+                (1 ..).find(|level| dominant >> level == 0).unwrap()
             }
         }
     }
@@ -519,7 +520,7 @@ impl SamplerInfo {
             mip_filter: filter,
             wrap_mode: (wrap, wrap, wrap),
             lod_bias: Lod(0),
-            lod_range: Lod(-8000)..Lod(8000),
+            lod_range: Lod(-8000) .. Lod(8000),
             comparison: None,
             border: PackedColor(0),
             anisotropic: Anisotropic::Off,

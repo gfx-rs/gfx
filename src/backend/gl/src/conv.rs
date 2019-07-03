@@ -59,9 +59,7 @@ pub fn primitive_to_gl_primitive(primitive: Primitive) -> u32 {
     }
 }
 
-pub fn format_to_gl_format(
-    format: Format,
-) -> Option<(i32, u32, VertexAttribFunction)> {
+pub fn format_to_gl_format(format: Format) -> Option<(i32, u32, VertexAttribFunction)> {
     use crate::hal::format::Format::*;
     use crate::native::VertexAttribFunction::*;
     let _ = Double; //mark as used

@@ -41,9 +41,7 @@ impl Buffer {
     pub(crate) fn as_bound(&self) -> (RawBuffer, Range<u64>) {
         match self {
             Buffer::Unbound { .. } => panic!("Expected bound buffer!"),
-            Buffer::Bound {
-                buffer, range, ..
-            } => (*buffer, range.clone()),
+            Buffer::Bound { buffer, range, .. } => (*buffer, range.clone()),
         }
     }
 }

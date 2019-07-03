@@ -168,23 +168,27 @@ impl d::Device<B> for Device {
 
         let subpasses = attachment_refs
             .iter()
-            .map(|(colors, depth_stencil, inputs, preserves, resolves)| {
-                vk::SubpassDescription {
+            .map(
+                |(colors, depth_stencil, inputs, preserves, resolves)| vk::SubpassDescription {
                     flags: vk::SubpassDescriptionFlags::empty(),
                     pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
                     input_attachment_count: inputs.len() as u32,
                     p_input_attachments: inputs.as_ptr(),
                     color_attachment_count: colors.len() as u32,
                     p_color_attachments: colors.as_ptr(),
-                    p_resolve_attachments: if resolves.is_empty() { ptr::null() } else { resolves.as_ptr() },
+                    p_resolve_attachments: if resolves.is_empty() {
+                        ptr::null()
+                    } else {
+                        resolves.as_ptr()
+                    },
                     p_depth_stencil_attachment: match depth_stencil {
                         Some(ref aref) => aref as *const _,
                         None => ptr::null(),
                     },
                     preserve_attachment_count: preserves.len() as u32,
                     p_preserve_attachments: preserves.as_ptr(),
-                }
-            })
+                },
+            )
             .collect::<Box<[_]>>();
 
         let dependencies = dependencies
@@ -1280,7 +1284,7 @@ impl d::Device<B> for Device {
         let layout = self.raw.0.get_image_subresource_layout(image.raw, sub);
 
         image::SubresourceFootprint {
-            slice: layout.offset..layout.offset + layout.size,
+            slice: layout.offset .. layout.offset + layout.size,
             row_pitch: layout.row_pitch,
             array_pitch: layout.array_pitch,
             depth_pitch: layout.depth_pitch,
@@ -1432,7 +1436,7 @@ impl d::Device<B> for Device {
                 descriptor_count: b.count as _,
                 stage_flags: conv::map_stage_flags(b.stage_flags),
                 p_immutable_samplers: if b.immutable_samplers {
-                    let slice = &immutable_samplers[sampler_offset..];
+                    let slice = &immutable_samplers[sampler_offset ..];
                     sampler_offset += b.count;
                     slice.as_ptr()
                 } else {
@@ -1559,13 +1563,13 @@ impl d::Device<B> for Device {
                     raw.p_buffer_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
                     let base = raw.p_image_info as usize - raw.descriptor_count as usize;
-                    raw.p_image_info = image_infos[base..].as_ptr();
+                    raw.p_image_info = image_infos[base ..].as_ptr();
                 }
                 Dt::UNIFORM_TEXEL_BUFFER | Dt::STORAGE_TEXEL_BUFFER => {
                     raw.p_buffer_info = ptr::null();
                     raw.p_image_info = ptr::null();
                     let base = raw.p_texel_buffer_view as usize - raw.descriptor_count as usize;
-                    raw.p_texel_buffer_view = texel_buffer_views[base..].as_ptr();
+                    raw.p_texel_buffer_view = texel_buffer_views[base ..].as_ptr();
                 }
                 Dt::UNIFORM_BUFFER
                 | Dt::STORAGE_BUFFER
@@ -1574,7 +1578,7 @@ impl d::Device<B> for Device {
                     raw.p_image_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
                     let base = raw.p_buffer_info as usize - raw.descriptor_count as usize;
-                    raw.p_buffer_info = buffer_infos[base..].as_ptr();
+                    raw.p_buffer_info = buffer_infos[base ..].as_ptr();
                 }
                 _ => panic!("unknown descriptor type"),
             }
