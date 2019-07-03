@@ -3,9 +3,21 @@ use std::marker::PhantomData;
 use std::ops::{Deref, DerefMut, Range};
 
 use super::{
-    AttachmentClear, ClearValue, ClearValueRaw, CommandBuffer, CommandBufferFlags,
-    CommandBufferInheritanceInfo, DescriptorSetOffset, IntoRawCommandBuffer, MultiShot, OneShot,
-    Primary, RawCommandBuffer, Secondary, Shot, Submittable,
+    AttachmentClear,
+    ClearValue,
+    ClearValueRaw,
+    CommandBuffer,
+    CommandBufferFlags,
+    CommandBufferInheritanceInfo,
+    DescriptorSetOffset,
+    IntoRawCommandBuffer,
+    MultiShot,
+    OneShot,
+    Primary,
+    RawCommandBuffer,
+    Secondary,
+    Shot,
+    Submittable,
 };
 use crate::queue::{Capability, Graphics, Supports};
 use crate::{buffer, pass, pso, query};

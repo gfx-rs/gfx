@@ -138,7 +138,7 @@ fn get_adapter_desc(adapter: *mut dxgi::IDXGIAdapter, version: DxgiVersion) -> A
 
             let device_name = {
                 let len = desc.Description.iter().take_while(|&&c| c != 0).count();
-                let name = <OsString as OsStringExt>::from_wide(&desc.Description[..len]);
+                let name = <OsString as OsStringExt>::from_wide(&desc.Description[.. len]);
                 name.to_string_lossy().into_owned()
             };
 
@@ -164,7 +164,7 @@ fn get_adapter_desc(adapter: *mut dxgi::IDXGIAdapter, version: DxgiVersion) -> A
 
             let device_name = {
                 let len = desc.Description.iter().take_while(|&&c| c != 0).count();
-                let name = <OsString as OsStringExt>::from_wide(&desc.Description[..len]);
+                let name = <OsString as OsStringExt>::from_wide(&desc.Description[.. len]);
                 name.to_string_lossy().into_owned()
             };
 

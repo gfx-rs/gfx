@@ -27,12 +27,12 @@ impl RootConstant {
         assert!(self.range.start <= other.range.start);
         let left = RootConstant {
             stages: self.stages,
-            range: self.range.start..other.range.start,
+            range: self.range.start .. other.range.start,
         };
 
         let right = RootConstant {
             stages: self.stages,
-            range: other.range.start..self.range.end,
+            range: other.range.start .. self.range.end,
         };
 
         (left, right)
@@ -143,7 +143,7 @@ mod tests {
 
     #[test]
     fn test_single() {
-        let range = &[(pso::ShaderStageFlags::VERTEX, 0..3)];
+        let range = &[(pso::ShaderStageFlags::VERTEX, 0 .. 3)];
         assert_eq!(into_vec(range), split(range));
     }
 
@@ -153,22 +153,22 @@ mod tests {
         //      |----------|
         //          |------------|
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 0..3),
-            (pso::ShaderStageFlags::FRAGMENT, 2..4),
+            (pso::ShaderStageFlags::VERTEX, 0 .. 3),
+            (pso::ShaderStageFlags::FRAGMENT, 2 .. 4),
         ];
 
         let reference = vec![
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX,
-                range: 0..2,
+                range: 0 .. 2,
             },
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT,
-                range: 2..3,
+                range: 2 .. 3,
             },
             RootConstant {
                 stages: pso::ShaderStageFlags::FRAGMENT,
-                range: 3..4,
+                range: 3 .. 4,
             },
         ];
         assert_eq!(reference, split(ranges));
@@ -180,22 +180,22 @@ mod tests {
         //      |-------------------|
         //          |------------|
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 0..5),
-            (pso::ShaderStageFlags::FRAGMENT, 2..4),
+            (pso::ShaderStageFlags::VERTEX, 0 .. 5),
+            (pso::ShaderStageFlags::FRAGMENT, 2 .. 4),
         ];
 
         let reference = vec![
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX,
-                range: 0..2,
+                range: 0 .. 2,
             },
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT,
-                range: 2..4,
+                range: 2 .. 4,
             },
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX,
-                range: 4..5,
+                range: 4 .. 5,
             },
         ];
         assert_eq!(reference, split(ranges));
@@ -207,18 +207,18 @@ mod tests {
         //      |--------------|
         //      |------------|
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 0..5),
-            (pso::ShaderStageFlags::FRAGMENT, 0..4),
+            (pso::ShaderStageFlags::VERTEX, 0 .. 5),
+            (pso::ShaderStageFlags::FRAGMENT, 0 .. 4),
         ];
 
         let reference = vec![
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT,
-                range: 0..4,
+                range: 0 .. 4,
             },
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX,
-                range: 4..5,
+                range: 4 .. 5,
             },
         ];
         assert_eq!(reference, split(ranges));
@@ -230,13 +230,13 @@ mod tests {
         //      |-----|
         //      |-----|
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 0..4),
-            (pso::ShaderStageFlags::FRAGMENT, 0..4),
+            (pso::ShaderStageFlags::VERTEX, 0 .. 4),
+            (pso::ShaderStageFlags::FRAGMENT, 0 .. 4),
         ];
 
         let reference = vec![RootConstant {
             stages: pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT,
-            range: 0..4,
+            range: 0 .. 4,
         }];
         assert_eq!(reference, split(ranges));
     }
@@ -247,8 +247,8 @@ mod tests {
         //      |------|
         //               |------------|
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 0..3),
-            (pso::ShaderStageFlags::FRAGMENT, 3..4),
+            (pso::ShaderStageFlags::VERTEX, 0 .. 3),
+            (pso::ShaderStageFlags::FRAGMENT, 3 .. 4),
         ];
         assert_eq!(into_vec(ranges), split(ranges));
     }
@@ -256,40 +256,40 @@ mod tests {
     #[test]
     fn test_complex() {
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 2..10),
-            (pso::ShaderStageFlags::FRAGMENT, 0..5),
-            (pso::ShaderStageFlags::GEOMETRY, 6..10),
-            (pso::ShaderStageFlags::HULL, 4..7),
+            (pso::ShaderStageFlags::VERTEX, 2 .. 10),
+            (pso::ShaderStageFlags::FRAGMENT, 0 .. 5),
+            (pso::ShaderStageFlags::GEOMETRY, 6 .. 10),
+            (pso::ShaderStageFlags::HULL, 4 .. 7),
         ];
 
         let reference = vec![
             RootConstant {
                 stages: pso::ShaderStageFlags::FRAGMENT,
-                range: 0..2,
+                range: 0 .. 2,
             },
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::FRAGMENT,
-                range: 2..4,
+                range: 2 .. 4,
             },
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX
                     | pso::ShaderStageFlags::FRAGMENT
                     | pso::ShaderStageFlags::HULL,
-                range: 4..5,
+                range: 4 .. 5,
             },
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::HULL,
-                range: 5..6,
+                range: 5 .. 6,
             },
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX
                     | pso::ShaderStageFlags::GEOMETRY
                     | pso::ShaderStageFlags::HULL,
-                range: 6..7,
+                range: 6 .. 7,
             },
             RootConstant {
                 stages: pso::ShaderStageFlags::VERTEX | pso::ShaderStageFlags::GEOMETRY,
-                range: 7..10,
+                range: 7 .. 10,
             },
         ];
 

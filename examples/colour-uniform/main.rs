@@ -48,9 +48,28 @@ use std::rc::Rc;
 use std::{fs, iter};
 
 use hal::{
-    buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
-    Adapter, Backend, DescriptorPool, Device, Instance, Limits, MemoryType,
-    PhysicalDevice, Primitive, QueueGroup, Surface, Swapchain, SwapchainConfig,
+    buffer,
+    command,
+    format as f,
+    image as i,
+    memory as m,
+    pass,
+    pool,
+    pso,
+    window::Extent2D,
+    Adapter,
+    Backend,
+    DescriptorPool,
+    Device,
+    Instance,
+    Limits,
+    MemoryType,
+    PhysicalDevice,
+    Primitive,
+    QueueGroup,
+    Surface,
+    Swapchain,
+    SwapchainConfig,
 };
 
 use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
@@ -99,8 +118,8 @@ const QUAD: [Vertex; 6] = [
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     aspects: f::Aspects::COLOR,
-    levels: 0..1,
-    layers: 0..1,
+    levels: 0 .. 1,
+    layers: 0 .. 1,
 };
 
 trait SurfaceTrait {
@@ -333,7 +352,7 @@ impl<B: Backend> RendererState<B> {
                 w: swapchain.extent.width as i16,
                 h: swapchain.extent.height as i16,
             },
-            depth: 0.0..1.0,
+            depth: 0.0 .. 1.0,
         }
     }
 
@@ -574,7 +593,7 @@ impl<B: Backend> RendererState<B> {
                             cr, cg, cb, 1.0,
                         ]))],
                     );
-                    encoder.draw(0..6, 0..1);
+                    encoder.draw(0 .. 6, 0 .. 1);
                 }
                 cmd_buffer.finish();
 
@@ -637,10 +656,7 @@ impl WindowState {
         let events_loop = winit::EventsLoop::new();
 
         let wb = winit::WindowBuilder::new()
-            .with_min_dimensions(winit::dpi::LogicalSize::new(
-                1.0,
-                1.0,
-            ))
+            .with_min_dimensions(winit::dpi::LogicalSize::new(1.0, 1.0))
             .with_dimensions(winit::dpi::LogicalSize::new(
                 DIMS.width as _,
                 DIMS.height as _,
@@ -657,12 +673,22 @@ impl WindowState {
 struct BackendState<B: Backend> {
     surface: B::Surface,
     adapter: AdapterState<B>,
-    #[cfg(any(feature = "vulkan", feature = "dx11", feature = "dx12", feature = "metal"))]
+    #[cfg(any(
+        feature = "vulkan",
+        feature = "dx11",
+        feature = "dx12",
+        feature = "metal"
+    ))]
     #[allow(dead_code)]
     window: winit::Window,
 }
 
-#[cfg(any(feature = "vulkan", feature = "dx11", feature = "dx12", feature = "metal"))]
+#[cfg(any(
+    feature = "vulkan",
+    feature = "dx11",
+    feature = "dx12",
+    feature = "metal"
+))]
 fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend>, back::Instance) {
     let window = window_state
         .wb
@@ -772,7 +798,7 @@ impl<B: Backend> RenderPassState<B> {
                     pass::AttachmentStoreOp::Store,
                 ),
                 stencil_ops: pass::AttachmentOps::DONT_CARE,
-                layouts: i::Layout::Undefined..i::Layout::Present,
+                layouts: i::Layout::Undefined .. i::Layout::Present,
             };
 
             let subpass = pass::SubpassDesc {
@@ -784,11 +810,11 @@ impl<B: Backend> RenderPassState<B> {
             };
 
             let dependency = pass::SubpassDependency {
-                passes: pass::SubpassRef::External..pass::SubpassRef::Pass(0),
+                passes: pass::SubpassRef::External .. pass::SubpassRef::Pass(0),
                 stages: PipelineStage::COLOR_ATTACHMENT_OUTPUT
-                    ..PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                    .. PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                 accesses: i::Access::empty()
-                    ..(i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
+                    .. (i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
             };
 
             device
@@ -870,9 +896,9 @@ impl<B: Backend> BufferState<B> {
             // TODO: check transitions: read/write mapping and vertex buffer read
             {
                 let mut data_target = device
-                    .acquire_mapping_writer::<T>(&memory, 0..size)
+                    .acquire_mapping_writer::<T>(&memory, 0 .. size)
                     .unwrap();
-                data_target[0..data_source.len()].copy_from_slice(data_source);
+                data_target[0 .. data_source.len()].copy_from_slice(data_source);
                 device.release_mapping_writer(data_target).unwrap();
             }
         }
@@ -898,9 +924,9 @@ impl<B: Backend> BufferState<B> {
 
         unsafe {
             let mut data_target = device
-                .acquire_mapping_writer::<T>(self.memory.as_ref().unwrap(), offset..self.size)
+                .acquire_mapping_writer::<T>(self.memory.as_ref().unwrap(), offset .. self.size)
                 .unwrap();
-            data_target[0..data_source.len()].copy_from_slice(data_source);
+            data_target[0 .. data_source.len()].copy_from_slice(data_source);
             device.release_mapping_writer(data_target).unwrap();
         }
     }
@@ -946,15 +972,15 @@ impl<B: Backend> BufferState<B> {
             // copy image data into staging buffer
             {
                 let mut data_target = device
-                    .acquire_mapping_writer::<u8>(&memory, 0..size)
+                    .acquire_mapping_writer::<u8>(&memory, 0 .. size)
                     .unwrap();
 
-                for y in 0..height as usize {
+                for y in 0 .. height as usize {
                     let data_source_slice = &(**img)
-                        [y * (width as usize) * stride..(y + 1) * (width as usize) * stride];
+                        [y * (width as usize) * stride .. (y + 1) * (width as usize) * stride];
                     let dest_base = y * row_pitch as usize;
 
-                    data_target[dest_base..dest_base + data_source_slice.len()]
+                    data_target[dest_base .. dest_base + data_source_slice.len()]
                         .copy_from_slice(data_source_slice);
                 }
 
@@ -1016,7 +1042,7 @@ impl<B: Backend> Uniform<B> {
                 array_offset: 0,
                 descriptors: Some(pso::Descriptor::Buffer(
                     buffer.as_ref().unwrap().get_buffer(),
-                    None..None,
+                    None .. None,
                 )),
             }],
             &mut device.borrow_mut().device,
@@ -1209,14 +1235,14 @@ impl<B: Backend> ImageState<B> {
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::empty(), i::Layout::Undefined)
-                    ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                    .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                 target: &image,
                 families: None,
                 range: COLOR_RANGE.clone(),
             };
 
             cmd_buffer.pipeline_barrier(
-                PipelineStage::TOP_OF_PIPE..PipelineStage::TRANSFER,
+                PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER,
                 m::Dependencies::empty(),
                 &[image_barrier],
             );
@@ -1232,7 +1258,7 @@ impl<B: Backend> ImageState<B> {
                     image_layers: i::SubresourceLayers {
                         aspects: f::Aspects::COLOR,
                         level: 0,
-                        layers: 0..1,
+                        layers: 0 .. 1,
                     },
                     image_offset: i::Offset { x: 0, y: 0, z: 0 },
                     image_extent: i::Extent {
@@ -1245,21 +1271,23 @@ impl<B: Backend> ImageState<B> {
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
-                    ..(i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
+                    .. (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
                 target: &image,
                 families: None,
                 range: COLOR_RANGE.clone(),
             };
             cmd_buffer.pipeline_barrier(
-                PipelineStage::TRANSFER..PipelineStage::FRAGMENT_SHADER,
+                PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER,
                 m::Dependencies::empty(),
                 &[image_barrier],
             );
 
             cmd_buffer.finish();
 
-            device_state.queues.queues[0]
-                .submit_without_semaphores(iter::once(&cmd_buffer), Some(&mut transfered_image_fence));
+            device_state.queues.queues[0].submit_without_semaphores(
+                iter::once(&cmd_buffer),
+                Some(&mut transfered_image_fence),
+            );
         }
 
         ImageState {
@@ -1324,21 +1352,21 @@ impl<B: Backend> PipelineState<B> {
     {
         let device = &device_ptr.borrow().device;
         let pipeline_layout = device
-            .create_pipeline_layout(desc_layouts, &[(pso::ShaderStageFlags::VERTEX, 0..8)])
+            .create_pipeline_layout(desc_layouts, &[(pso::ShaderStageFlags::VERTEX, 0 .. 8)])
             .expect("Can't create pipeline layout");
 
         let pipeline = {
             let vs_module = {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.vert").unwrap();
-                let file = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex)
-                    .unwrap();
+                let file =
+                    glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex).unwrap();
                 let spirv: Vec<u32> = hal::read_spirv(file).unwrap();
                 device.create_shader_module(&spirv).unwrap()
             };
             let fs_module = {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.frag").unwrap();
-                let file = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment)
-                    .unwrap();
+                let file =
+                    glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment).unwrap();
                 let spirv: Vec<u32> = hal::read_spirv(file).unwrap();
                 device.create_shader_module(&spirv).unwrap()
             };
@@ -1508,7 +1536,10 @@ impl<B: Backend> FramebufferState<B> {
                 height: swapchain.extent.height as _,
                 depth: 1,
             };
-            let pairs = swapchain.backbuffer.take().unwrap()
+            let pairs = swapchain
+                .backbuffer
+                .take()
+                .unwrap()
                 .into_iter()
                 .map(|image| {
                     let rtv = device
@@ -1554,7 +1585,7 @@ impl<B: Backend> FramebufferState<B> {
         let mut acquire_semaphores: Vec<B::Semaphore> = vec![];
         let mut present_semaphores: Vec<B::Semaphore> = vec![];
 
-        for _ in 0..iter_count {
+        for _ in 0 .. iter_count {
             fences.push(device.borrow().device.create_fence(true).unwrap());
             command_pools.push(
                 device
@@ -1641,7 +1672,8 @@ impl<B: Backend> Drop for FramebufferState<B> {
                 device.destroy_fence(fence);
             }
 
-            for (mut command_pool, comamnd_buffer_list) in self.command_pools
+            for (mut command_pool, comamnd_buffer_list) in self
+                .command_pools
                 .take()
                 .unwrap()
                 .into_iter()

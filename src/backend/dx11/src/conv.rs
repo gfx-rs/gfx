@@ -1,9 +1,27 @@
 use hal::format::Format;
 use hal::image::{Anisotropic, Filter, WrapMode};
 use hal::pso::{
-    BlendDesc, BlendOp, BlendState, ColorBlendDesc, Comparison, DepthBias, DepthStencilDesc,
-    DepthTest, Face, Factor, FrontFace, PolygonMode, Rasterizer, Rect, Stage, State, StencilFace,
-    StencilOp, StencilTest, StencilValue, Viewport,
+    BlendDesc,
+    BlendOp,
+    BlendState,
+    ColorBlendDesc,
+    Comparison,
+    DepthBias,
+    DepthStencilDesc,
+    DepthTest,
+    Face,
+    Factor,
+    FrontFace,
+    PolygonMode,
+    Rasterizer,
+    Rect,
+    Stage,
+    State,
+    StencilFace,
+    StencilOp,
+    StencilTest,
+    StencilValue,
+    Viewport,
 };
 use hal::{IndexType, Primitive};
 

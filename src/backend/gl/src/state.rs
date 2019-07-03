@@ -1,12 +1,12 @@
 #![allow(dead_code)] //TODO: remove
 
-use glow::Context;
 use crate::hal::{pso, ColorSlot};
-use smallvec::SmallVec;
 use crate::{GlContainer, Share};
+use glow::Context;
+use smallvec::SmallVec;
 
 pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
-    let attachments: SmallVec<[u32; 16]> = (0..num)
+    let attachments: SmallVec<[u32; 16]> = (0 .. num)
         .map(|x| glow::COLOR_ATTACHMENT0 + x as u32)
         .collect();
     unsafe { gl.draw_buffers(&attachments) };

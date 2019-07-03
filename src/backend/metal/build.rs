@@ -16,7 +16,7 @@ fn main() {
     } else {
         panic!("unsupported target {}", target)
     };
-    let arch = &target[..target.chars().position(|c| c == '-').unwrap()];
+    let arch = &target[.. target.chars().position(|c| c == '-').unwrap()];
 
     let (sdk_name, platform_args): (_, &[_]) = match (os, arch) {
         ("ios", "aarch64") => ("iphoneos", &["-mios-version-min=8.0"]),

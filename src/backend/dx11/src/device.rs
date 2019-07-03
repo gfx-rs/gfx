@@ -22,11 +22,37 @@ use std::sync::Arc;
 use parking_lot::{Condvar, Mutex};
 
 use {
-    Backend, Buffer, BufferView, CommandPool, ComputePipeline, Descriptor, DescriptorPool,
-    DescriptorSetLayout, Fence, Framebuffer, GraphicsPipeline, Image, ImageView, InternalBuffer,
-    InternalImage, Memory, MemoryHeapFlags, PipelineBinding, PipelineLayout, QueryPool, RawFence,
-    RegisterMapping, RegisterRemapping, RenderPass, Sampler, Semaphore, ShaderModule, SubpassDesc,
-    Surface, Swapchain, ViewInfo,
+    Backend,
+    Buffer,
+    BufferView,
+    CommandPool,
+    ComputePipeline,
+    Descriptor,
+    DescriptorPool,
+    DescriptorSetLayout,
+    Fence,
+    Framebuffer,
+    GraphicsPipeline,
+    Image,
+    ImageView,
+    InternalBuffer,
+    InternalImage,
+    Memory,
+    MemoryHeapFlags,
+    PipelineBinding,
+    PipelineLayout,
+    QueryPool,
+    RawFence,
+    RegisterMapping,
+    RegisterRemapping,
+    RenderPass,
+    Sampler,
+    Semaphore,
+    ShaderModule,
+    SubpassDesc,
+    Surface,
+    Swapchain,
+    ViewInfo,
 };
 
 use {conv, internal, shader};
@@ -191,7 +217,9 @@ impl Device {
 
                 let (slot_class, step_rate) = match buffer_desc.rate {
                     VertexInputRate::Vertex => (d3d11::D3D11_INPUT_PER_VERTEX_DATA, 0),
-                    VertexInputRate::Instance(divisor) => (d3d11::D3D11_INPUT_PER_INSTANCE_DATA, divisor)
+                    VertexInputRate::Instance(divisor) => {
+                        (d3d11::D3D11_INPUT_PER_INSTANCE_DATA, divisor)
+                    }
                 };
                 let format = attrib.element.format;
 
@@ -637,10 +665,8 @@ impl Device {
         match info.view_kind {
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2D;
-                *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_DSV {
-                    MipSlice,
-                }
-            },
+                *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_DSV { MipSlice }
+            }
             image::ViewKind::D2Array => {
                 desc.ViewDimension = d3d11::D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
                 *unsafe { desc.u.Texture2DArray_mut() } = d3d11::D3D11_TEX2D_ARRAY_DSV {
@@ -648,7 +674,7 @@ impl Device {
                     FirstArraySlice,
                     ArraySize,
                 }
-            },
+            }
             _ => unimplemented!(),
         }
 
@@ -849,7 +875,7 @@ impl hal::Device<Backend> for Device {
                                     stage,
                                     ty,
                                     binding_range: (register_offset + start)
-                                        ..(register_offset + end),
+                                        .. (register_offset + end),
                                     handle_offset: start_offset,
                                 });
 
@@ -883,7 +909,7 @@ impl hal::Device<Backend> for Device {
                     optimized_bindings.push(PipelineBinding {
                         stage,
                         ty,
-                        binding_range: (register_offset + start)..(register_offset + end),
+                        binding_range: (register_offset + start) .. (register_offset + end),
                         handle_offset: start_offset,
                     });
                 }
@@ -1131,7 +1157,7 @@ impl hal::Device<Backend> for Device {
                 usage,
             },
             ty: MemoryHeapFlags::empty(),
-            bound_range: 0..0,
+            bound_range: 0 .. 0,
             host_ptr: ptr::null_mut(),
             bind,
             requirements: memory::Requirements {
@@ -1212,7 +1238,7 @@ impl hal::Device<Backend> for Device {
                 }
 
                 ComPtr::from_raw(buffer)
-            },
+            }
             MemoryHeapFlags::HOST_VISIBLE | MemoryHeapFlags::HOST_COHERENT => {
                 let desc = d3d11::D3D11_BUFFER_DESC {
                     ByteWidth: buffer.requirements.size as _,
@@ -1358,7 +1384,7 @@ impl hal::Device<Backend> for Device {
             uav,
             usage: buffer.internal.usage,
         };
-        let range = offset..buffer.requirements.size;
+        let range = offset .. buffer.requirements.size;
 
         memory.bind_buffer(range.clone(), internal.clone());
 
@@ -1552,8 +1578,8 @@ impl hal::Device<Backend> for Device {
             image::Kind::D2(width, height, layers, _) => {
                 let mut initial_datas = Vec::new();
 
-                for _layer in 0..layers {
-                    for level in 0..image.mip_levels {
+                for _layer in 0 .. layers {
+                    for level in 0 .. image.mip_levels {
                         let width = image.kind.extent().at_level(level).width;
 
                         // TODO: layer offset?
@@ -1655,7 +1681,7 @@ impl hal::Device<Backend> for Device {
         let mut unordered_access_views = Vec::new();
 
         if image.usage.contains(Usage::TRANSFER_DST) && !compressed && !depth {
-            for mip in 0..image.mip_levels {
+            for mip in 0 .. image.mip_levels {
                 let view = ViewInfo {
                     resource: resource,
                     kind: image.kind,
@@ -1666,8 +1692,8 @@ impl hal::Device<Backend> for Device {
                     format: decomposed.copy_uav.unwrap(),
                     range: image::SubresourceRange {
                         aspects: format::Aspects::COLOR,
-                        levels: mip..(mip + 1),
-                        layers: 0..image.kind.num_layers(),
+                        levels: mip .. (mip + 1),
+                        layers: 0 .. image.kind.num_layers(),
                     },
                 };
 
@@ -1687,8 +1713,8 @@ impl hal::Device<Backend> for Device {
                 format: decomposed.copy_srv.unwrap(),
                 range: image::SubresourceRange {
                     aspects: format::Aspects::COLOR,
-                    levels: 0..image.mip_levels,
-                    layers: 0..image.kind.num_layers(),
+                    levels: 0 .. image.mip_levels,
+                    layers: 0 .. image.kind.num_layers(),
                 },
             };
 
@@ -1724,8 +1750,8 @@ impl hal::Device<Backend> for Device {
             && !compressed
             && !depth
         {
-            for layer in 0..image.kind.num_layers() {
-                for mip in 0..image.mip_levels {
+            for layer in 0 .. image.kind.num_layers() {
+                for mip in 0 .. image.mip_levels {
                     let view = ViewInfo {
                         resource: resource,
                         kind: image.kind,
@@ -1734,8 +1760,8 @@ impl hal::Device<Backend> for Device {
                         format: decomposed.rtv.unwrap(),
                         range: image::SubresourceRange {
                             aspects: format::Aspects::COLOR,
-                            levels: mip..(mip + 1),
-                            layers: layer..(layer + 1),
+                            levels: mip .. (mip + 1),
+                            layers: layer .. (layer + 1),
                         },
                     };
 
@@ -1750,8 +1776,8 @@ impl hal::Device<Backend> for Device {
         let mut depth_stencil_views = Vec::new();
 
         if depth {
-            for layer in 0..image.kind.num_layers() {
-                for mip in 0..image.mip_levels {
+            for layer in 0 .. image.kind.num_layers() {
+                for mip in 0 .. image.mip_levels {
                     let view = ViewInfo {
                         resource: resource,
                         kind: image.kind,
@@ -1760,8 +1786,8 @@ impl hal::Device<Backend> for Device {
                         format: decomposed.dsv.unwrap(),
                         range: image::SubresourceRange {
                             aspects: format::Aspects::COLOR,
-                            levels: mip..(mip + 1),
-                            layers: layer..(layer + 1),
+                            levels: mip .. (mip + 1),
+                            layers: layer .. (layer + 1),
                         },
                     };
 
@@ -1810,14 +1836,13 @@ impl hal::Device<Backend> for Device {
             } else {
                 view_kind
             },
-            format: conv::map_format(format)
-                .ok_or(image::ViewError::BadFormat(format))?,
+            format: conv::map_format(format).ok_or(image::ViewError::BadFormat(format))?,
             range,
         };
 
         let srv_info = ViewInfo {
             format: conv::viewable_format(info.format),
-            .. info.clone()
+            ..info.clone()
         };
 
         Ok(ImageView {
@@ -1995,13 +2020,13 @@ impl hal::Device<Backend> for Device {
                 bindings.push(PipelineBinding {
                     stage: binding.stage_flags,
                     ty: pso::DescriptorType::Sampler,
-                    binding_range: sampler_reg..(sampler_reg + 1),
+                    binding_range: sampler_reg .. (sampler_reg + 1),
                     handle_offset: 0,
                 });
                 bindings.push(PipelineBinding {
                     stage: binding.stage_flags,
                     ty: pso::DescriptorType::SampledImage,
-                    binding_range: image_reg..(image_reg + 1),
+                    binding_range: image_reg .. (image_reg + 1),
                     handle_offset: 0,
                 });
             } else {
@@ -2015,7 +2040,7 @@ impl hal::Device<Backend> for Device {
                 bindings.push(PipelineBinding {
                     stage: binding.stage_flags,
                     ty: binding.ty,
-                    binding_range: hlsl_reg..(hlsl_reg + 1),
+                    binding_range: hlsl_reg .. (hlsl_reg + 1),
                     handle_offset: 0,
                 });
             }
@@ -2174,7 +2199,7 @@ impl hal::Device<Backend> for Device {
         for copy in copy_iter {
             let copy = copy.borrow();
 
-            for offset in 0..copy.count {
+            for offset in 0 .. copy.count {
                 let (dst_ty, dst_handle_offset, dst_second_handle_offset) = copy
                     .dst_set
                     .get_handle_offset(copy.dst_binding + offset as u32);
@@ -2268,7 +2293,7 @@ impl hal::Device<Backend> for Device {
         // go through every range we want to read from
         for range in ranges.into_iter() {
             let &(memory, ref range) = range.borrow();
-            let range = *range.start().unwrap_or(&0)..*range.end().unwrap_or(&memory.size);
+            let range = *range.start().unwrap_or(&0) .. *range.end().unwrap_or(&memory.size);
 
             let _scope = debug_scope!(&self.context, "Range({:?})", range);
             memory.invalidate(
@@ -2538,8 +2563,8 @@ impl hal::Device<Backend> for Device {
             // TODO: can these ever differ for backbuffer?
             range: image::SubresourceRange {
                 aspects: format::Aspects::COLOR,
-                levels: 0..1,
-                layers: 0..1,
+                levels: 0 .. 1,
+                layers: 0 .. 1,
             },
         };
         let rtv = self.view_image_as_render_target(&view_info).unwrap();
@@ -2548,7 +2573,7 @@ impl hal::Device<Backend> for Device {
         view_info.view_kind = image::ViewKind::D2Array;
         let copy_srv = self.view_image_as_shader_resource(&view_info).unwrap();
 
-        let images = (0..config.image_count)
+        let images = (0 .. config.image_count)
             .map(|_i| {
                 // returning the 0th buffer for all images seems like the right thing to do. we can
                 // only get write access to the first buffer in the case of `_SEQUENTIAL` flip model,

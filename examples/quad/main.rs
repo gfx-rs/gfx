@@ -37,7 +37,15 @@ use hal::pass::Subpass;
 use hal::pso::{PipelineStage, ShaderStageFlags, VertexInputRate};
 use hal::queue::Submission;
 use hal::{
-    buffer, command, format as f, image as i, memory as m, pass, pool, pso, window::Extent2D,
+    buffer,
+    command,
+    format as f,
+    image as i,
+    memory as m,
+    pass,
+    pool,
+    pso,
+    window::Extent2D,
 };
 use hal::{DescriptorPool, Primitive, SwapchainConfig};
 use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
@@ -69,8 +77,8 @@ const QUAD: [Vertex; 6] = [
 
 const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     aspects: f::Aspects::COLOR,
-    levels: 0..1,
-    layers: 0..1,
+    levels: 0 .. 1,
+    layers: 0 .. 1,
 };
 
 #[cfg(any(
@@ -92,10 +100,7 @@ fn main() {
 
     #[cfg(not(target_arch = "wasm32"))]
     let wb = winit::WindowBuilder::new()
-        .with_min_dimensions(winit::dpi::LogicalSize::new(
-            1.0,
-            1.0,
-        ))
+        .with_min_dimensions(winit::dpi::LogicalSize::new(1.0, 1.0))
         .with_dimensions(winit::dpi::LogicalSize::new(
             DIMS.width as _,
             DIMS.height as _,
@@ -222,9 +227,9 @@ fn main() {
     // TODO: check transitions: read/write mapping and vertex buffer read
     unsafe {
         let mut vertices = device
-            .acquire_mapping_writer::<Vertex>(&buffer_memory, 0..buffer_req.size)
+            .acquire_mapping_writer::<Vertex>(&buffer_memory, 0 .. buffer_req.size)
             .unwrap();
-        vertices[0..QUAD.len()].copy_from_slice(&QUAD);
+        vertices[0 .. QUAD.len()].copy_from_slice(&QUAD);
         device.release_mapping_writer(vertices).unwrap();
     }
 
@@ -253,13 +258,13 @@ fn main() {
     // copy image data into staging buffer
     unsafe {
         let mut data = device
-            .acquire_mapping_writer::<u8>(&image_upload_memory, 0..image_mem_reqs.size)
+            .acquire_mapping_writer::<u8>(&image_upload_memory, 0 .. image_mem_reqs.size)
             .unwrap();
-        for y in 0..height as usize {
+        for y in 0 .. height as usize {
             let row = &(*img)
-                [y * (width as usize) * image_stride..(y + 1) * (width as usize) * image_stride];
+                [y * (width as usize) * image_stride .. (y + 1) * (width as usize) * image_stride];
             let dest_base = y * row_pitch as usize;
-            data[dest_base..dest_base + row.len()].copy_from_slice(row);
+            data[dest_base .. dest_base + row.len()].copy_from_slice(row);
         }
         device.release_mapping_writer(data).unwrap();
     }
@@ -330,14 +335,14 @@ fn main() {
 
         let image_barrier = m::Barrier::Image {
             states: (i::Access::empty(), i::Layout::Undefined)
-                ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
             target: &image_logo,
             families: None,
             range: COLOR_RANGE.clone(),
         };
 
         cmd_buffer.pipeline_barrier(
-            PipelineStage::TOP_OF_PIPE..PipelineStage::TRANSFER,
+            PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER,
             m::Dependencies::empty(),
             &[image_barrier],
         );
@@ -353,7 +358,7 @@ fn main() {
                 image_layers: i::SubresourceLayers {
                     aspects: f::Aspects::COLOR,
                     level: 0,
-                    layers: 0..1,
+                    layers: 0 .. 1,
                 },
                 image_offset: i::Offset { x: 0, y: 0, z: 0 },
                 image_extent: i::Extent {
@@ -366,13 +371,13 @@ fn main() {
 
         let image_barrier = m::Barrier::Image {
             states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
-                ..(i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
+                .. (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
             target: &image_logo,
             families: None,
             range: COLOR_RANGE.clone(),
         };
         cmd_buffer.pipeline_barrier(
-            PipelineStage::TRANSFER..PipelineStage::FRAGMENT_SHADER,
+            PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER,
             m::Dependencies::empty(),
             &[image_barrier],
         );
@@ -417,7 +422,7 @@ fn main() {
                 pass::AttachmentStoreOp::Store,
             ),
             stencil_ops: pass::AttachmentOps::DONT_CARE,
-            layouts: i::Layout::Undefined..i::Layout::Present,
+            layouts: i::Layout::Undefined .. i::Layout::Present,
         };
 
         let subpass = pass::SubpassDesc {
@@ -429,17 +434,18 @@ fn main() {
         };
 
         let dependency = pass::SubpassDependency {
-            passes: pass::SubpassRef::External..pass::SubpassRef::Pass(0),
-            stages: PipelineStage::COLOR_ATTACHMENT_OUTPUT..PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+            passes: pass::SubpassRef::External .. pass::SubpassRef::Pass(0),
+            stages: PipelineStage::COLOR_ATTACHMENT_OUTPUT
+                .. PipelineStage::COLOR_ATTACHMENT_OUTPUT,
             accesses: i::Access::empty()
-                ..(i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
+                .. (i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
         };
 
         unsafe { device.create_render_pass(&[attachment], &[subpass], &[dependency]) }
             .expect("Can't create render pass")
     };
 
-    let (mut frame_images, mut framebuffers) =  {
+    let (mut frame_images, mut framebuffers) = {
         let pairs = backbuffer
             .into_iter()
             .map(|image| unsafe {
@@ -494,7 +500,7 @@ fn main() {
     let mut cmd_buffers = Vec::with_capacity(frames_in_flight);
 
     cmd_pools.push(command_pool);
-    for _ in 1..frames_in_flight {
+    for _ in 1 .. frames_in_flight {
         unsafe {
             cmd_pools.push(
                 device
@@ -504,7 +510,7 @@ fn main() {
         }
     }
 
-    for _ in 0..frame_images.len() {
+    for _ in 0 .. frame_images.len() {
         image_acquire_semaphores.push(
             device
                 .create_semaphore()
@@ -512,7 +518,7 @@ fn main() {
         );
     }
 
-    for i in 0..frames_in_flight {
+    for i in 0 .. frames_in_flight {
         submission_complete_semaphores.push(
             device
                 .create_semaphore()
@@ -529,17 +535,19 @@ fn main() {
     let pipeline_layout = unsafe {
         device.create_pipeline_layout(
             std::iter::once(&set_layout),
-            &[(pso::ShaderStageFlags::VERTEX, 0..8)],
+            &[(pso::ShaderStageFlags::VERTEX, 0 .. 8)],
         )
     }
     .expect("Can't create pipeline layout");
     let pipeline = {
         let vs_module = {
-            let spirv = hal::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..])).unwrap();
+            let spirv =
+                hal::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..])).unwrap();
             unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
         let fs_module = {
-            let spirv = hal::read_spirv(Cursor::new(&include_bytes!("./data/quad.frag.spv")[..])).unwrap();
+            let spirv =
+                hal::read_spirv(Cursor::new(&include_bytes!("./data/quad.frag.spv")[..])).unwrap();
             unsafe { device.create_shader_module(&spirv) }.unwrap()
         };
 
@@ -625,7 +633,7 @@ fn main() {
             w: extent.width as _,
             h: extent.height as _,
         },
-        depth: 0.0..1.0,
+        depth: 0.0 .. 1.0,
     };
 
     //
@@ -790,7 +798,7 @@ fn main() {
                         0.8, 0.8, 0.8, 1.0,
                     ]))],
                 );
-                encoder.draw(0..6, 0..1);
+                encoder.draw(0 .. 6, 0 .. 1);
             }
 
             cmd_buffer.finish();

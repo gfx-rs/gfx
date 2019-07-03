@@ -192,7 +192,7 @@ impl CommandQueue {
     /// Return a reference to a stored data object.
     fn get_raw(data: &[u8], ptr: com::BufferSlice) -> &[u8] {
         assert!(data.len() >= (ptr.offset + ptr.size) as usize);
-        &data[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
+        &data[ptr.offset as usize .. (ptr.offset + ptr.size) as usize]
     }
 
     // Reset the state to match our _expected_ state before executing
@@ -230,15 +230,16 @@ impl CommandQueue {
             };
         } else if self.state.num_viewports > 1 {
             // 16 viewports is a common limit set in drivers.
-            let viewports: SmallVec<[[f32; 4]; 16]> = (0..self.state.num_viewports)
+            let viewports: SmallVec<[[f32; 4]; 16]> = (0 .. self.state.num_viewports)
                 .map(|_| [0.0, 0.0, 0.0, 0.0])
                 .collect();
-            let depth_ranges: SmallVec<[[f64; 2]; 16]> =
-                (0..self.state.num_viewports).map(|_| [0.0, 0.0]).collect();
+            let depth_ranges: SmallVec<[[f64; 2]; 16]> = (0 .. self.state.num_viewports)
+                .map(|_| [0.0, 0.0])
+                .collect();
             unsafe {
                 gl.viewport_f32_slice(0, viewports.len() as i32, &viewports);
                 gl.depth_range_f64_slice(0, depth_ranges.len() as i32, &depth_ranges);
-        }
+            }
         }
 
         // Reset scissors
@@ -246,8 +247,9 @@ impl CommandQueue {
             unsafe { gl.scissor(0, 0, 0, 0) };
         } else if self.state.num_scissors > 1 {
             // 16 viewports is a common limit set in drivers.
-            let scissors: SmallVec<[[i32; 4]; 16]> =
-                (0..self.state.num_scissors).map(|_| [0, 0, 0, 0]).collect();
+            let scissors: SmallVec<[[i32; 4]; 16]> = (0 .. self.state.num_scissors)
+                .map(|_| [0, 0, 0, 0])
+                .collect();
             unsafe { gl.scissor_slice(0, scissors.len() as i32, scissors.as_slice()) };
         }
     }
@@ -267,7 +269,7 @@ impl CommandQueue {
             } => {
                 let gl = &self.share.context;
                 let legacy = &self.share.legacy_features;
-                if instances == &(0u32..1) {
+                if instances == &(0u32 .. 1) {
                     unsafe {
                         gl.draw_arrays(
                             primitive,
@@ -315,7 +317,7 @@ impl CommandQueue {
                 let gl = &self.share.context;
                 let legacy = &self.share.legacy_features;
 
-                if instances == &(0u32..1) {
+                if instances == &(0u32 .. 1) {
                     if base_vertex == 0 {
                         unsafe {
                             gl.draw_elements(
@@ -480,21 +482,26 @@ impl CommandQueue {
             com::Command::ClearBufferDepthStencil(depth, stencil) => unsafe {
                 match (depth, stencil) {
                     (Some(depth), Some(stencil)) => {
-                        self.share
-                            .context
-                            .clear_buffer_depth_stencil(glow::DEPTH_STENCIL, 0, depth, stencil as _);
-                    },
+                        self.share.context.clear_buffer_depth_stencil(
+                            glow::DEPTH_STENCIL,
+                            0,
+                            depth,
+                            stencil as _,
+                        );
+                    }
                     (Some(depth), None) => {
                         let mut depths = [depth];
                         self.share
                             .context
                             .clear_buffer_f32_slice(glow::DEPTH, 0, &mut depths);
-                    },
+                    }
                     (None, Some(stencil)) => {
                         let mut stencils = [stencil as i32];
-                        self.share
-                            .context
-                            .clear_buffer_i32_slice(glow::STENCIL, 0, &mut stencils[..]);
+                        self.share.context.clear_buffer_i32_slice(
+                            glow::STENCIL,
+                            0,
+                            &mut stencils[..],
+                        );
                     }
                     _ => unreachable!(),
                 };
@@ -566,11 +573,15 @@ impl CommandQueue {
                     }
                     Double => {
                         gl.vertex_attrib_pointer_f64(location, size, format, stride, offset as i32)
-                }
+                    }
                 }
 
                 if rate != 0 {
-                    if self.share.legacy_features.contains(LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING) {
+                    if self
+                        .share
+                        .legacy_features
+                        .contains(LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING)
+                    {
                         gl.vertex_attrib_divisor(location, rate);
                     } else {
                         error!("Binding attribute with instanced input rate is not supported");
@@ -599,7 +610,12 @@ impl CommandQueue {
                 gl.bind_buffer(glow::COPY_WRITE_BUFFER, None);
             },
             com::Command::CopyBufferToTexture {
-                src_buffer, dst_texture, texture_target, texture_format, pixel_type, ref data
+                src_buffer,
+                dst_texture,
+                texture_target,
+                texture_format,
+                pixel_type,
+                ref data,
             } => unsafe {
                 // TODO: Fix active texture
                 assert_eq!(data.image_offset.z, 0);
@@ -612,8 +628,8 @@ impl CommandQueue {
                 match texture_target {
                     glow::TEXTURE_2D => {
                         gl.bind_texture(glow::TEXTURE_2D, Some(dst_texture));
-                gl.tex_sub_image_2d_pixel_buffer_offset(
-                    glow::TEXTURE_2D,
+                        gl.tex_sub_image_2d_pixel_buffer_offset(
+                            glow::TEXTURE_2D,
                             data.image_layers.level as _,
                             data.image_offset.x,
                             data.image_offset.y,
@@ -622,7 +638,7 @@ impl CommandQueue {
                             texture_format,
                             pixel_type,
                             data.buffer_offset as i32,
-                );
+                        );
                     }
                     glow::TEXTURE_2D_ARRAY => {
                         gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(dst_texture));
@@ -634,7 +650,8 @@ impl CommandQueue {
                             data.image_layers.layers.start as i32,
                             data.image_extent.width as _,
                             data.image_extent.height as _,
-                            data.image_layers.layers.end as i32 - data.image_layers.layers.start as i32,
+                            data.image_layers.layers.end as i32
+                                - data.image_layers.layers.start as i32,
                             texture_format,
                             pixel_type,
                             data.buffer_offset as i32,
@@ -649,8 +666,13 @@ impl CommandQueue {
                 unimplemented!() //TODO: use FBO
             }
             com::Command::CopyTextureToBuffer {
-                src_texture, texture_target, texture_format, pixel_type, dst_buffer, ref data
-            }=> unsafe {
+                src_texture,
+                texture_target,
+                texture_format,
+                pixel_type,
+                dst_buffer,
+                ref data,
+            } => unsafe {
                 // TODO: Fix active texture
                 // TODO: handle partial copies gracefully
                 assert_eq!(data.image_offset, hal::image::Offset { x: 0, y: 0, z: 0 });
@@ -860,12 +882,12 @@ impl CommandQueue {
                 }
 
                 if !self.share.info.is_webgl() && !self.share.info.version.is_embedded {
-                match false {
-                    //TODO
+                    match false {
+                        //TODO
                         true => unsafe { gl.enable(glow::MULTISAMPLE) },
                         false => unsafe { gl.disable(glow::MULTISAMPLE) },
+                    }
                 }
-            }
             }
             com::Command::BindDepth { depth } => {
                 use crate::hal::pso::Comparison::*;
@@ -894,8 +916,7 @@ impl CommandQueue {
                         gl.disable(glow::DEPTH_TEST);
                     },
                 }
-            }
-            /*
+            } /*
               com::Command::SetRasterizer(rast) => {
                   state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
               },
@@ -983,7 +1004,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
                 assert!(buffer.commands.len() >= (cb.buf.offset + cb.buf.size) as usize);
                 let commands = &buffer.commands
-                    [cb.buf.offset as usize..(cb.buf.offset + cb.buf.size) as usize];
+                    [cb.buf.offset as usize .. (cb.buf.offset + cb.buf.size) as usize];
                 self.reset_state();
                 for com in commands {
                     self.process(com, &buffer.data);
@@ -992,12 +1013,19 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
 
         if let Some(fence) = fence {
-            fence.0.set(native::FenceInner::Pending(if self.share.private_caps.sync {
-                Some(self.share.context.fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0).unwrap())
-            } else {
-                None
-            }));
-    }
+            fence.0.set(native::FenceInner::Pending(
+                if self.share.private_caps.sync {
+                    Some(
+                        self.share
+                            .context
+                            .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
+                            .unwrap(),
+                    )
+                } else {
+                    None
+                },
+            ));
+        }
     }
 
     #[cfg(all(not(target_arch = "wasm32"), any(feature = "glutin", feature = "wgl")))]
@@ -1020,7 +1048,10 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
             #[cfg(feature = "wgl")]
             swapchain.borrow().make_current();
 
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.borrow().fbos[index as usize]));
+            gl.bind_framebuffer(
+                glow::READ_FRAMEBUFFER,
+                Some(swapchain.borrow().fbos[index as usize]),
+            );
             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
             gl.blit_framebuffer(
                 0,

@@ -89,8 +89,8 @@ where
                 ref families,
             } => {
                 let families = match families {
-                    Some(f) => f.start.0 as u32..f.end.0 as u32,
-                    None => vk::QUEUE_FAMILY_IGNORED..vk::QUEUE_FAMILY_IGNORED,
+                    Some(f) => f.start.0 as u32 .. f.end.0 as u32,
+                    None => vk::QUEUE_FAMILY_IGNORED .. vk::QUEUE_FAMILY_IGNORED,
                 };
                 buffer.push(vk::BufferMemoryBarrier {
                     s_type: vk::StructureType::BUFFER_MEMORY_BARRIER,
@@ -114,8 +114,8 @@ where
             } => {
                 let subresource_range = conv::map_subresource_range(range);
                 let families = match families {
-                    Some(f) => f.start.0 as u32..f.end.0 as u32,
-                    None => vk::QUEUE_FAMILY_IGNORED..vk::QUEUE_FAMILY_IGNORED,
+                    Some(f) => f.start.0 as u32 .. f.end.0 as u32,
+                    None => vk::QUEUE_FAMILY_IGNORED .. vk::QUEUE_FAMILY_IGNORED,
                 };
                 image.push(vk::ImageMemoryBarrier {
                     s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
@@ -237,7 +237,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         // but can receive less clear values than total attachments.
         let clear_value_count = 64 - render_pass.clear_attachments_mask.leading_zeros() as u32;
         let mut clear_value_iter = clear_values.into_iter();
-        let raw_clear_values = (0..clear_value_count)
+        let raw_clear_values = (0 .. clear_value_count)
             .map(|i| {
                 if render_pass.clear_attachments_mask & (1 << i) != 0 {
                     // Vulkan and HAL share same memory layout
@@ -283,7 +283,11 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        let BarrierSet { global, buffer, image } = destructure_barriers(barriers);
+        let BarrierSet {
+            global,
+            buffer,
+            image,
+        } = destructure_barriers(barriers);
 
         self.device.0.cmd_pipeline_barrier(
             self.raw, // commandBuffer
@@ -837,12 +841,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        let events = events
-            .into_iter()
-            .map(|e| e.borrow().0)
-            .collect::<Vec<_>>();
+        let events = events.into_iter().map(|e| e.borrow().0).collect::<Vec<_>>();
 
-        let BarrierSet { global, buffer, image } = destructure_barriers(barriers);
+        let BarrierSet {
+            global,
+            buffer,
+            image,
+        } = destructure_barriers(barriers);
 
         self.device.0.cmd_wait_events(
             self.raw,

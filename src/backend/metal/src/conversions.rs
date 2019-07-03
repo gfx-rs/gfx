@@ -3,9 +3,12 @@ use hal;
 use crate::PrivateCapabilities;
 
 use hal::{
-    image, pass, pso, IndexType,
     format::{Format, Properties, Swizzle},
+    image,
+    pass,
+    pso,
     pso::{Comparison, StencilOp},
+    IndexType,
 };
 use metal::*;
 

@@ -4,7 +4,12 @@ use std::fmt;
 use std::ops::Range;
 
 use super::{
-    AttachmentClear, BufferCopy, BufferImageCopy, ImageBlit, ImageCopy, ImageResolve,
+    AttachmentClear,
+    BufferCopy,
+    BufferImageCopy,
+    ImageBlit,
+    ImageCopy,
+    ImageResolve,
     SubpassContents,
 };
 use crate::image::{Filter, Layout, SubresourceRange};
@@ -12,7 +17,13 @@ use crate::memory::{Barrier, Dependencies};
 use crate::range::RangeArg;
 use crate::{buffer, pass, pso, query};
 use crate::{
-    Backend, DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount,
+    Backend,
+    DrawCount,
+    IndexCount,
+    InstanceCount,
+    VertexCount,
+    VertexOffset,
+    WorkGroupCount,
 };
 
 /// Unsafe variant of `ClearColor`.

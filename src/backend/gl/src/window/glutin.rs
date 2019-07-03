@@ -144,12 +144,12 @@ impl hal::Surface<B> for Surface {
 
         let caps = hal::SurfaceCapabilities {
             image_count: if self.context.get_pixel_format().double_buffer {
-                2..3
+                2 .. 3
             } else {
-                1..2
+                1 .. 2
             },
             current_extent: Some(extent),
-            extents: extent..hal::window::Extent2D {
+            extents: extent .. hal::window::Extent2D {
                 width: ex.width + 1,
                 height: ex.height + 1,
             },
@@ -172,9 +172,10 @@ impl hal::Surface<B> for Surface {
 impl hal::Instance for Surface {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
-        let adapter = PhysicalDevice::new_adapter((), GlContainer::from_fn_proc(|s| {
-            self.context.get_proc_address(s) as *const _
-        }));
+        let adapter = PhysicalDevice::new_adapter(
+            (),
+            GlContainer::from_fn_proc(|s| self.context.get_proc_address(s) as *const _),
+        );
         vec![adapter]
     }
 }
@@ -212,9 +213,10 @@ impl Headless {
 impl hal::Instance for Headless {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
-        let adapter = PhysicalDevice::new_adapter((), GlContainer::from_fn_proc(|s| {
-            self.0.get_proc_address(s) as *const _
-        }));
+        let adapter = PhysicalDevice::new_adapter(
+            (),
+            GlContainer::from_fn_proc(|s| self.0.get_proc_address(s) as *const _),
+        );
         vec![adapter]
     }
 }

@@ -3,7 +3,13 @@ use hal::format::Aspects;
 use hal::range::RangeArg;
 use hal::{buffer, command as com, format, image, memory, pass, pool, pso, query};
 use hal::{
-    DrawCount, IndexCount, IndexType, InstanceCount, VertexCount, VertexOffset, WorkGroupCount,
+    DrawCount,
+    IndexCount,
+    IndexType,
+    InstanceCount,
+    VertexCount,
+    VertexOffset,
+    WorkGroupCount,
 };
 
 use std::borrow::Borrow;
@@ -22,8 +28,16 @@ use device::{ViewInfo, IDENTITY_MAPPING};
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 use {
-    conv, descriptors_cpu, device, internal, resource as r, validate_line_width, Backend, Device,
-    Shared, MAX_VERTEX_BUFFERS,
+    conv,
+    descriptors_cpu,
+    device,
+    internal,
+    resource as r,
+    validate_line_width,
+    Backend,
+    Device,
+    Shared,
+    MAX_VERTEX_BUFFERS,
 };
 
 // Fixed size of the root signature.
@@ -212,7 +226,7 @@ impl PipelineCache {
         self.sampler_start = sampler_start;
 
         let mut table_id = 0;
-        for table in &layout.tables[..first_set] {
+        for table in &layout.tables[.. first_set] {
             if table.contains(r::SRV_CBV_UAV) {
                 table_id += 1;
             }
@@ -226,7 +240,7 @@ impl PipelineCache {
             .iter()
             .fold(0, |sum, c| sum + c.range.end - c.range.start);
 
-        for (set, table) in sets.zip(layout.tables[first_set..].iter()) {
+        for (set, table) in sets.zip(layout.tables[first_set ..].iter()) {
             let set = set.borrow();
             set.first_gpu_view.map(|gpu| {
                 assert!(table.contains(r::SRV_CBV_UAV));
@@ -316,7 +330,7 @@ pub struct CommandBuffer {
     // `Stride` values are not known at `bind_vertex_buffers` time because they are only stored
     // inside the pipeline state.
     vertex_bindings_remap: [Option<r::VertexBinding>; MAX_VERTEX_BUFFERS],
-    
+
     #[derivative(Debug = "ignore")]
     vertex_buffer_views: [d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
 
@@ -559,7 +573,7 @@ impl CommandBuffer {
             let resolve_dst = state.framebuffer.attachments[dst_attachment];
 
             // The number of layers of the render area are given on framebuffer creation.
-            for l in 0..framebuffer.layers {
+            for l in 0 .. framebuffer.layers {
                 // Attachtments only have a single mip level by specification.
                 let subresource_src = resolve_src.calc_subresource(
                     resolve_src.mip_levels.0 as _,
@@ -729,7 +743,7 @@ impl CommandBuffer {
         for (i, root_constant) in pipeline.root_constants.iter().enumerate() {
             let num_constants = (root_constant.range.end - root_constant.range.start) as usize;
             let mut data = Vec::new();
-            for c in cur_index..cur_index + num_constants {
+            for c in cur_index .. cur_index + num_constants {
                 data.push(match user_data.data[c] {
                     RootElement::Constant(v) => v,
                     _ => {
@@ -753,7 +767,7 @@ impl CommandBuffer {
             .iter()
             .fold(0, |sum, c| sum + c.range.end - c.range.start) as usize;
 
-        for i in num_root_constant..pipeline.num_parameter_slots {
+        for i in num_root_constant .. pipeline.num_parameter_slots {
             let table_index = i - num_root_constant + table_start;
             if ((user_data.dirty_mask >> table_index) & 1) == 1 {
                 let ptr = match user_data.data[table_index] {
@@ -901,8 +915,8 @@ impl CommandBuffer {
                 }
             } else {
                 // worst case: row by row copy
-                for z in 0..r.image_extent.depth {
-                    for y in 0..image_extent_aligned.height / image.block_dim.1 as u32 {
+                for z in 0 .. r.image_extent.depth {
+                    for y in 0 .. image_extent_aligned.height / image.block_dim.1 as u32 {
                         // an image row starts non-aligned
                         let row_offset = layer_offset
                             + z as u64 * slice_pitch as u64
@@ -991,7 +1005,7 @@ impl CommandBuffer {
         let vbs = &self.vertex_buffer_views;
         let mut last_end_slot = 0;
         loop {
-            let start_offset = match vbs_remap[last_end_slot..]
+            let start_offset = match vbs_remap[last_end_slot ..]
                 .iter()
                 .position(|remap| remap.is_some())
             {
@@ -1000,7 +1014,7 @@ impl CommandBuffer {
             };
 
             let start_slot = last_end_slot + start_offset;
-            let buffers = vbs_remap[start_slot..]
+            let buffers = vbs_remap[start_slot ..]
                 .iter()
                 .take_while(|x| x.is_some())
                 .filter_map(|mapping| {
@@ -1008,29 +1022,29 @@ impl CommandBuffer {
                     let view = vbs[mapping.mapped_binding];
                     // Skip bindings that don't make sense. Since this function is called eagerly,
                     // we expect it to be called with all the valid inputs prior to drawing.
-                    view.SizeInBytes
-                        .checked_sub(mapping.offset)
-                        .map(|size| d3d12::D3D12_VERTEX_BUFFER_VIEW {
+                    view.SizeInBytes.checked_sub(mapping.offset).map(|size| {
+                        d3d12::D3D12_VERTEX_BUFFER_VIEW {
                             BufferLocation: view.BufferLocation + mapping.offset as u64,
                             SizeInBytes: size,
                             StrideInBytes: mapping.stride,
-                        })
+                        }
+                    })
                 })
                 .collect::<SmallVec<[_; MAX_VERTEX_BUFFERS]>>();
 
-                if buffers.is_empty() {
-                    last_end_slot = start_slot + 1;
-                } else {
-                    let num_views = buffers.len();
-                    unsafe {
-                        cmd_buffer.IASetVertexBuffers(
-                            start_slot as _,
-                            num_views as _,
-                            buffers.as_ptr(),
-                        );
-                    }
-                    last_end_slot = start_slot + num_views;
+            if buffers.is_empty() {
+                last_end_slot = start_slot + 1;
+            } else {
+                let num_views = buffers.len();
+                unsafe {
+                    cmd_buffer.IASetVertexBuffers(
+                        start_slot as _,
+                        num_views as _,
+                        buffers.as_ptr(),
+                    );
                 }
+                last_end_slot = start_slot + num_views;
+            }
         }
     }
 }
@@ -1042,7 +1056,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         _info: com::CommandBufferInheritanceInfo<Backend>,
     ) {
         // TODO: Implement flags and secondary command buffers (bundles).
-        if self.pool_create_flags.contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL) {
+        if self
+            .pool_create_flags
+            .contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL)
+        {
             // Command buffer has reset semantics now and doesn't require to be in `Initial` state.
             self.allocator.Reset();
         }
@@ -1056,7 +1073,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     unsafe fn reset(&mut self, _release_resources: bool) {
         // Ensure that we have a bijective relation between list and allocator.
         // This allows to modify the allocator here. Using `reset` requires this by specification.
-        assert!(self.pool_create_flags.contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL));
+        assert!(self
+            .pool_create_flags
+            .contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL));
 
         // TODO: `release_resources` should recreate the allocator to give back all memory.
         self.allocator.Reset();
@@ -1301,7 +1320,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         let image = image.expect_bound();
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
-            assert_eq!(sub.levels, 0..1); //TODO
+            assert_eq!(sub.levels, 0 .. 1); //TODO
             for layer in sub.layers.clone() {
                 if sub.aspects.contains(Aspects::COLOR) {
                     let rtv = image.clear_cv[layer as usize];
@@ -1366,9 +1385,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             component_mapping: IDENTITY_MAPPING,
                             range: image::SubresourceRange {
                                 aspects: Aspects::COLOR,
-                                levels: attachment.mip_levels.0..attachment.mip_levels.1,
-                                layers: attachment.layers.0 + clear_rect.layers.start ..
-                                    attachment.layers.0 + clear_rect.layers.end,
+                                levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
+                                layers: attachment.layers.0 + clear_rect.layers.start
+                                    .. attachment.layers.0 + clear_rect.layers.end,
                             },
                         };
                         let rtv = rtv_pool.alloc_handle();
@@ -1411,9 +1430,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                                 } else {
                                     Aspects::empty()
                                 },
-                                levels: attachment.mip_levels.0..attachment.mip_levels.1,
-                                layers: attachment.layers.0 + clear_rect.layers.start ..
-                                    attachment.layers.0 + clear_rect.layers.end,
+                                levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
+                                layers: attachment.layers.0 + clear_rect.layers.start
+                                    .. attachment.layers.0 + clear_rect.layers.end,
                             },
                         };
                         let dsv = dsv_pool.alloc_handle();
@@ -1457,7 +1476,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let r = region.borrow();
-            for layer in 0..r.extent.depth as UINT {
+            for layer in 0 .. r.extent.depth as UINT {
                 self.raw.ResolveSubresource(
                     src.resource.as_mut_ptr(),
                     src.calc_subresource(
@@ -1530,8 +1549,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             component_mapping: IDENTITY_MAPPING,
             range: image::SubresourceRange {
                 aspects: format::Aspects::COLOR, // TODO
-                levels: 0..src.descriptor.MipLevels as _,
-                layers: 0..src.kind.num_layers(),
+                levels: 0 .. src.descriptor.MipLevels as _,
+                layers: 0 .. src.kind.num_layers(),
             },
         })
         .unwrap();
@@ -1575,7 +1594,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 format::Aspects::COLOR => {
                     let format = dst.default_view_format.unwrap();
                     // Create RTVs of the dst image for the miplevel of the current region
-                    for i in 0..num_layers {
+                    for i in 0 .. num_layers {
                         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
                             Format: format,
                             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
@@ -1610,7 +1629,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
             let mut list = instances.entry(key).or_insert(Vec::new());
 
-            for i in 0..num_layers {
+            for i in 0 .. num_layers {
                 let src_layer = r.src_subresource.layers.start + i;
                 // Screen space triangle blitting
                 let data = {
@@ -1740,8 +1759,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     {
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
 
-        for (view, (buffer, offset)) in self
-            .vertex_buffer_views[first_binding as _ ..]
+        for (view, (buffer, offset)) in self.vertex_buffer_views[first_binding as _ ..]
             .iter_mut()
             .zip(buffers)
         {
@@ -2382,12 +2400,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn wait_events<'a, I, J>(
-        &mut self,
-        _: I,
-        _: Range<pso::PipelineStage>,
-        _: J
-    ) where
+    unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
+    where
         I: IntoIterator,
         I::Item: Borrow<()>,
         J: IntoIterator,

@@ -899,7 +899,7 @@ impl Internal {
         let srv = src.internal.copy_srv.clone().unwrap().as_raw();
         let uav = dst.internal.uav.unwrap();
         let format_desc = src.format.base_format().0.desc();
-        let bytes_per_texel  = format_desc.bits as u32 / 8;
+        let bytes_per_texel = format_desc.bits as u32 / 8;
 
         unsafe {
             context.CSSetShader(shader, ptr::null_mut(), 0);
@@ -927,7 +927,8 @@ impl Internal {
                 );
 
                 if let Some(disjoint_cb) = dst.internal.disjoint_cb {
-                    let total_size = copy.image_extent.depth * (copy.buffer_height * copy.buffer_width * bytes_per_texel);
+                    let total_size = copy.image_extent.depth
+                        * (copy.buffer_height * copy.buffer_width * bytes_per_texel);
                     let copy_box = d3d11::D3D11_BOX {
                         left: copy.buffer_offset as u32,
                         top: 0,
@@ -1260,7 +1261,7 @@ impl Internal {
                     for clear_rect in &clear_rects {
                         let viewport = conv::map_viewport(&Viewport {
                             rect: clear_rect.rect,
-                            depth: 0f32..1f32,
+                            depth: 0f32 .. 1f32,
                         });
 
                         debug_marker!(context, "{:?}", clear_rect.rect);
@@ -1334,7 +1335,7 @@ impl Internal {
                     for clear_rect in &clear_rects {
                         let viewport = conv::map_viewport(&Viewport {
                             rect: clear_rect.rect,
-                            depth: 0f32..1f32,
+                            depth: 0f32 .. 1f32,
                         });
 
                         unsafe {

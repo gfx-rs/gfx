@@ -1,14 +1,17 @@
 use crate::{
-    native,
-    Backend, QueueFamily,
     device::{Device, PhysicalDevice},
     internal::Channel,
+    native,
+    Backend,
+    QueueFamily,
 };
 
 use hal::{
-    format, image,
-    SwapchainConfig, CompositeAlpha,
+    format,
+    image,
     window::{Extent2D, Suboptimal},
+    CompositeAlpha,
+    SwapchainConfig,
 };
 
 use core_graphics::base::CGFloat;
@@ -113,7 +116,10 @@ impl SurfaceInner {
                     frame.drawable = Some(drawable.to_owned());
                     if self.enable_signposts && false {
                         //Note: could encode the `iteration` here if we need it
-                        frame.signpost = Some(native::Signpost::new(SIGNPOST_ID, [1, index as usize, 0, 0]));
+                        frame.signpost = Some(native::Signpost::new(
+                            SIGNPOST_ID,
+                            [1, index as usize, 0, 0],
+                        ));
                     }
 
                     debug!("Next is frame[{}]", index);
@@ -271,14 +277,20 @@ impl SwapchainImage {
         loop {
             match self.surface.next_frame(&self.frames) {
                 Ok((index, _)) if index == self.index as usize => {
-                    debug!("Swapchain image {} is ready after {} frames", self.index, count);
+                    debug!(
+                        "Swapchain image {} is ready after {} frames",
+                        self.index, count
+                    );
                     break;
                 }
                 Ok(_) => {
                     count += 1;
                 }
                 Err(_e) => {
-                    warn!("Swapchain drawables are changed, unable to wait for {}", self.index);
+                    warn!(
+                        "Swapchain drawables are changed, unable to wait for {}",
+                        self.index
+                    );
                     break;
                 }
             }
@@ -319,11 +331,11 @@ impl hal::Surface<Backend> for Surface {
             device_caps.os_is_mac || device_caps.has_version_at_least(11, 2);
 
         let image_count = if can_set_maximum_drawables_count {
-            2..4
+            2 .. 4
         } else {
             // 3 is the default in `CAMetalLayer` documentation
             // iOS 10.3 was tested to use 3 on iphone5s
-            3..4
+            3 .. 4
         };
 
         let caps = hal::SurfaceCapabilities {
@@ -333,7 +345,7 @@ impl hal::Surface<Backend> for Surface {
             extents: Extent2D {
                 width: 4,
                 height: 4,
-            }..Extent2D {
+            } .. Extent2D {
                 width: 4096,
                 height: 4096,
             },
@@ -415,7 +427,7 @@ impl Device {
             }
         };
 
-        let frames = (0..config.image_count)
+        let frames = (0 .. config.image_count)
             .map(|index| {
                 autoreleasepool(|| {
                     // for the drawable & texture
@@ -457,7 +469,10 @@ impl Device {
                         inner: Mutex::new(FrameInner {
                             drawable,
                             signpost: if index != 0 && surface.inner.enable_signposts {
-                                Some(native::Signpost::new(SIGNPOST_ID, [1, index as usize, 0, 0]))
+                                Some(native::Signpost::new(
+                                    SIGNPOST_ID,
+                                    [1, index as usize, 0, 0],
+                                ))
                             } else {
                                 None
                             },
@@ -555,7 +570,7 @@ impl hal::Swapchain<Backend> for Swapchain {
                     fence.0.replace(native::FenceInner::Idle { signaled: true });
                 }
                 pair
-            },
+            }
             AcquireMode::Oldest => {
                 let frame = match self.frames.get(oldest_index) {
                     Some(frame) => frame.inner.lock(),

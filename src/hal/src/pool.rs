@@ -1,7 +1,11 @@
 //! Command pools
 
 use crate::command::{
-    CommandBuffer, IntoRawCommandBuffer, RawLevel, SecondaryCommandBuffer, Shot,
+    CommandBuffer,
+    IntoRawCommandBuffer,
+    RawLevel,
+    SecondaryCommandBuffer,
+    Shot,
     SubpassCommandBuffer,
 };
 use crate::queue::capability::{Graphics, Supports};
@@ -37,7 +41,7 @@ pub trait RawCommandPool<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Allocate new command buffers from the pool.
     fn allocate_vec(&mut self, num: usize, level: RawLevel) -> Vec<B::CommandBuffer> {
-        (0..num).map(|_| self.allocate_one(level)).collect()
+        (0 .. num).map(|_| self.allocate_one(level)).collect()
     }
 
     /// Free command buffers which are allocated from this pool.

@@ -177,7 +177,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
             match self.allocate_set(layout.borrow()) {
                 Ok(set) => sets.push(set),
                 Err(e) => {
-                    self.free_sets(sets.drain(base..));
+                    self.free_sets(sets.drain(base ..));
                     return Err(e);
                 }
             }

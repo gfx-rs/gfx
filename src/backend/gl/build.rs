@@ -21,10 +21,7 @@ fn main() {
             (1, 0),
             Profile::Core,
             Fallbacks::All,
-            [
-                "WGL_ARB_create_context",
-                "WGL_ARB_pbuffer",
-            ],
+            ["WGL_ARB_create_context", "WGL_ARB_pbuffer"],
         )
         .write_bindings(gl_generator::StructGenerator, &mut file)
         .unwrap();

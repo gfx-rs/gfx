@@ -1,5 +1,10 @@
 #![cfg_attr(
-    not(any(feature = "vulkan", feature = "dx11", feature = "dx12", feature = "metal")),
+    not(any(
+        feature = "vulkan",
+        feature = "dx11",
+        feature = "dx12",
+        feature = "metal"
+    )),
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
 
@@ -23,7 +28,12 @@ extern crate glsl_to_spirv;
 
 use std::fs;
 
-#[cfg(any(feature = "vulkan", feature = "dx11", feature = "dx12", feature = "metal"))]
+#[cfg(any(
+    feature = "vulkan",
+    feature = "dx11",
+    feature = "dx12",
+    feature = "metal"
+))]
 fn main() {
     env_logger::init();
 
@@ -53,8 +63,7 @@ fn main() {
     let (device, mut queue_group) = adapter.open_with::<_, Compute>(1, |_family| true).unwrap();
 
     let glsl = fs::read_to_string("compute/shader/collatz.comp").unwrap();
-    let file = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Compute)
-        .unwrap();
+    let file = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Compute).unwrap();
     let spirv: Vec<u32> = hal::read_spirv(file).unwrap();
     let shader = unsafe { device.create_shader_module(&spirv) }.unwrap();
 
@@ -115,9 +124,9 @@ fn main() {
 
     unsafe {
         let mut writer = device
-            .acquire_mapping_writer::<u32>(&staging_memory, 0..staging_size)
+            .acquire_mapping_writer::<u32>(&staging_memory, 0 .. staging_size)
             .unwrap();
-        writer[0..numbers.len()].copy_from_slice(&numbers);
+        writer[0 .. numbers.len()].copy_from_slice(&numbers);
         device
             .release_mapping_writer(writer)
             .expect("Can't relase mapping writer");
@@ -142,7 +151,7 @@ fn main() {
             set: &desc_set,
             binding: 0,
             array_offset: 0,
-            descriptors: Some(pso::Descriptor::Buffer(&device_buffer, None..None)),
+            descriptors: Some(pso::Descriptor::Buffer(&device_buffer, None .. None)),
         }));
     };
 
@@ -164,28 +173,28 @@ fn main() {
             }],
         );
         command_buffer.pipeline_barrier(
-            pso::PipelineStage::TRANSFER..pso::PipelineStage::COMPUTE_SHADER,
+            pso::PipelineStage::TRANSFER .. pso::PipelineStage::COMPUTE_SHADER,
             memory::Dependencies::empty(),
             Some(memory::Barrier::Buffer {
                 states: buffer::Access::TRANSFER_WRITE
-                    ..buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
+                    .. buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
                 families: None,
                 target: &device_buffer,
-                range: None..None,
+                range: None .. None,
             }),
         );
         command_buffer.bind_compute_pipeline(&pipeline);
         command_buffer.bind_compute_descriptor_sets(&pipeline_layout, 0, &[desc_set], &[]);
         command_buffer.dispatch([numbers.len() as u32, 1, 1]);
         command_buffer.pipeline_barrier(
-            pso::PipelineStage::COMPUTE_SHADER..pso::PipelineStage::TRANSFER,
+            pso::PipelineStage::COMPUTE_SHADER .. pso::PipelineStage::TRANSFER,
             memory::Dependencies::empty(),
             Some(memory::Barrier::Buffer {
                 states: buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE
-                    ..buffer::Access::TRANSFER_READ,
+                    .. buffer::Access::TRANSFER_READ,
                 families: None,
                 target: &device_buffer,
-                range: None..None,
+                range: None .. None,
             }),
         );
         command_buffer.copy_buffer(
@@ -207,11 +216,11 @@ fn main() {
 
     unsafe {
         let reader = device
-            .acquire_mapping_reader::<u32>(&staging_memory, 0..staging_size)
+            .acquire_mapping_reader::<u32>(&staging_memory, 0 .. staging_size)
             .unwrap();
         println!(
             "Times: {:?}",
-            reader[0..numbers.len()]
+            reader[0 .. numbers.len()]
                 .into_iter()
                 .map(|n| *n)
                 .collect::<Vec<u32>>()
@@ -260,7 +269,12 @@ unsafe fn create_buffer<B: Backend>(
     (memory, buffer, requirements.size)
 }
 
-#[cfg(not(any(feature = "vulkan", feature = "dx11", feature = "dx12", feature = "metal")))]
+#[cfg(not(any(
+    feature = "vulkan",
+    feature = "dx11",
+    feature = "dx12",
+    feature = "metal"
+)))]
 fn main() {
     println!("You need to enable one of the next-gen API feature (vulkan, dx12, metal) to run this example.");
 }
