@@ -1874,6 +1874,8 @@ impl hal::Device<Backend> for Device {
         &self,
         info: image::SamplerInfo,
     ) -> Result<Sampler, device::AllocationError> {
+        assert!(info.normalized);
+
         let op = match info.comparison {
             Some(_) => d3d11::D3D11_FILTER_REDUCTION_TYPE_COMPARISON,
             None => d3d11::D3D11_FILTER_REDUCTION_TYPE_STANDARD,

@@ -25,7 +25,7 @@ hal = { path = "../../hal", version = "0.2", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 arrayvec = "0.4"
 bitflags = "1.0"
-copyless = "0.1"
+copyless = "0.1.4"
 log = { version = "0.4" }
 winit = { version = "0.19", optional = true }
 dispatch = { version = "0.1", optional = true }
@@ -36,6 +36,6 @@ block = "0.1"
 cocoa = "0.18"
 core-graphics = "0.17"
 smallvec = "0.6"
-spirv_cross = { version = "0.14.2", features = ["msl"] }
+spirv_cross = { version = "0.15", features = ["msl"] }
 parking_lot = "0.6.3"
 storage-map = "0.1.2"

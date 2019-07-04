@@ -439,6 +439,11 @@ const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily1_v3,
 ];
 
+const MUTABLE_COMPARISON_SAMPLER_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+];
+
 const ASTC_PIXEL_FORMAT_FEATURES: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily2_v1,
     MTLFeatureSet::iOS_GPUFamily2_v2,
@@ -591,6 +596,7 @@ struct PrivateCapabilities {
     resource_heaps: bool,
     argument_buffers: bool,
     shared_textures: bool,
+    mutable_comparison_samplers: bool,
     base_instance: bool,
     dual_source_blending: bool,
     low_power: bool,
@@ -716,6 +722,7 @@ impl PrivateCapabilities {
             argument_buffers: experiments.argument_buffers
                 && Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT),
             shared_textures: !os_is_mac,
+            mutable_comparison_samplers: Self::supports_any(&device, MUTABLE_COMPARISON_SAMPLER_SUPPORT),
             base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
             dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
             low_power: !os_is_mac || device.is_low_power(),

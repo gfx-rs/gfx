@@ -1096,7 +1096,7 @@ impl d::Device<B> for Device {
                     vk::BorderColor::FLOAT_TRANSPARENT_BLACK
                 }
             },
-            unnormalized_coordinates: vk::FALSE,
+            unnormalized_coordinates: if sampler_info.normalized { vk::FALSE } else { vk::TRUE },
         };
 
         let result = self.raw.0.create_sampler(&info, None);

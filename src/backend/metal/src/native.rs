@@ -1,7 +1,6 @@
 use crate::{
     internal::{Channel, FastStorageMap},
     window::SwapchainImage,
-    AsNative,
     Backend,
     BufferPtr,
     ResourceIndex,
@@ -401,7 +400,10 @@ unsafe impl Send for ImageView {}
 unsafe impl Sync for ImageView {}
 
 #[derive(Debug)]
-pub struct Sampler(pub(crate) metal::SamplerState);
+pub struct Sampler {
+    pub(crate) raw: Option<metal::SamplerState>,
+    pub(crate) data: msl::SamplerData,
+}
 
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
@@ -545,8 +547,8 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 ref mut allocators,
             } => {
                 debug!("pool: allocate_set");
-                let (layouts, immutable_samplers) = match *set_layout {
-                    DescriptorSetLayout::Emulated(ref layouts, ref samplers) => (layouts, samplers),
+                let layouts = match *set_layout {
+                    DescriptorSetLayout::Emulated(ref layouts, _) => layouts,
                     _ => return Err(pso::AllocationError::IncompatibleLayout),
                 };
 
@@ -609,32 +611,6 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                 } else {
                     0 .. 0
                 };
-
-                // step[3]: fill out immutable samplers
-                if !immutable_samplers.is_empty() {
-                    let mut data = inner.write();
-                    let mut data_iter = data.samplers
-                        [sampler_range.start as usize .. sampler_range.end as usize]
-                        .iter_mut();
-                    let mut sampler_iter = immutable_samplers.iter();
-
-                    for layout in layouts.iter() {
-                        if layout.content.contains(DescriptorContent::SAMPLER) {
-                            *data_iter.next().unwrap() = if layout
-                                .content
-                                .contains(DescriptorContent::IMMUTABLE_SAMPLER)
-                            {
-                                Some(AsNative::from(sampler_iter.next().unwrap().as_ref()))
-                            } else {
-                                None
-                            };
-                        }
-                    }
-                    debug!(
-                        "\tassigning {} immutable_samplers",
-                        immutable_samplers.len()
-                    );
-                }
 
                 let resources = ResourceData {
                     buffers: buffer_range,
@@ -880,7 +856,10 @@ pub struct ArgumentLayout {
 
 #[derive(Debug)]
 pub enum DescriptorSetLayout {
-    Emulated(Arc<Vec<DescriptorLayout>>, Vec<metal::SamplerState>),
+    Emulated(
+        Arc<Vec<DescriptorLayout>>,
+        Vec<(pso::DescriptorBinding, msl::SamplerData)>,
+    ),
     ArgumentBuffer {
         encoder: metal::ArgumentEncoder,
         stage_flags: pso::ShaderStageFlags,

@@ -169,6 +169,7 @@ impl VisibilityShared {
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
     memory_types: Vec<hal::MemoryType>,
+    features: hal::Features,
     pub online_recording: OnlineRecording,
 }
 unsafe impl Send for Device {}
@@ -313,6 +314,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let device = Device {
             shared: self.shared.clone(),
             memory_types: self.memory_types.clone(),
+            features: requested_features,
             online_recording: OnlineRecording::default(),
         };
 
@@ -739,11 +741,14 @@ impl Device {
         Ok((lib, mtl_function, wg_size, info.rasterization_enabled))
     }
 
-    pub fn make_sampler_descriptor(
+    fn make_sampler_descriptor(
         &self,
-        info: image::SamplerInfo,
-    ) -> Result<metal::SamplerDescriptor, AllocationError> {
+        info: &image::SamplerInfo,
+    ) -> Option<metal::SamplerDescriptor> {
+        let caps = &self.shared.private_caps;
         let descriptor = metal::SamplerDescriptor::new();
+
+        descriptor.set_normalized_coordinates(info.normalized);
 
         descriptor.set_min_filter(conv::map_filter(info.min_filter));
         descriptor.set_mag_filter(conv::map_filter(info.mag_filter));
@@ -766,13 +771,19 @@ impl Device {
         descriptor.set_address_mode_t(conv::map_wrap_mode(t));
         descriptor.set_address_mode_r(conv::map_wrap_mode(r));
 
-        unsafe {
-            descriptor.set_lod_bias(info.lod_bias.into());
+        let lod_bias: f32 = info.lod_bias.into();
+        if lod_bias != 0.0 {
+            if self.features.contains(hal::Features::SAMPLER_MIP_LOD_BIAS) {
+                unsafe {
+                    descriptor.set_lod_bias(info.lod_bias.into());
+                }
+            } else {
+                error!("Lod bias {:?} is not supported", info.lod_bias);
+            }
         }
         descriptor.set_lod_min_clamp(info.lod_range.start.into());
         descriptor.set_lod_max_clamp(info.lod_range.end.into());
 
-        let caps = &self.shared.private_caps;
         // TODO: Clarify minimum macOS version with Apple (43707452)
         if (caps.os_is_mac && caps.has_version_at_least(10, 13))
             || (!caps.os_is_mac && caps.has_version_at_least(9, 0))
@@ -781,6 +792,9 @@ impl Device {
         }
 
         if let Some(fun) = info.comparison {
+            if !caps.mutable_comparison_samplers {
+                return None
+            }
             descriptor.set_compare_function(conv::map_compare_function(fun));
         }
         if [r, s, t].iter().any(|&am| am == image::WrapMode::Border) {
@@ -795,18 +809,67 @@ impl Device {
             });
         }
 
-        if self.shared.private_caps.argument_buffers {
+        if caps.argument_buffers {
             descriptor.set_support_argument_buffers(true);
         }
 
-        Ok(descriptor)
+        Some(descriptor)
     }
 
-    pub fn create_sampler_from_descriptor(
-        &self,
-        descriptor: &metal::SamplerDescriptorRef,
-    ) -> n::Sampler {
-        n::Sampler(self.shared.device.lock().new_sampler(descriptor))
+    fn make_sampler_data(info: &image::SamplerInfo) -> msl::SamplerData {
+        fn map_address(wrap: image::WrapMode) -> msl::SamplerAddress {
+            match wrap {
+                image::WrapMode::Tile => msl::SamplerAddress::Repeat,
+                image::WrapMode::Mirror => msl::SamplerAddress::MirroredRepeat,
+                image::WrapMode::Clamp => msl::SamplerAddress::ClampToEdge,
+                image::WrapMode::Border => msl::SamplerAddress::ClampToBorder,
+            }
+        }
+
+        let lods: Range<f32> = info.lod_range.start.into() .. info.lod_range.end.into();
+        msl::SamplerData {
+            coord: if info.normalized {
+                msl::SamplerCoord::Normalized
+            } else {
+                msl::SamplerCoord::Pixel
+            },
+            min_filter: match info.min_filter {
+                image::Filter::Nearest => msl::SamplerFilter::Nearest,
+                image::Filter::Linear => msl::SamplerFilter::Linear,
+            },
+            mag_filter: match info.mag_filter {
+                image::Filter::Nearest => msl::SamplerFilter::Nearest,
+                image::Filter::Linear => msl::SamplerFilter::Linear,
+            },
+            mip_filter: match info.min_filter {
+                image::Filter::Nearest if info.lod_range.end < image::Lod::from(0.5) =>
+                    msl::SamplerMipFilter::None,
+                image::Filter::Nearest => msl::SamplerMipFilter::Nearest,
+                image::Filter::Linear => msl::SamplerMipFilter::Linear,
+            },
+            s_address: map_address(info.wrap_mode.0),
+            t_address: map_address(info.wrap_mode.1),
+            r_address: map_address(info.wrap_mode.2),
+            compare_func: match info.comparison {
+                Some(func) => unsafe { mem::transmute(conv::map_compare_function(func) as u32) },
+                None => msl::SamplerCompareFunc::Always,
+            },
+            border_color: match info.border.0 {
+                0x0000_0000 => msl::SamplerBorderColor::TransparentBlack,
+                0x0000_00FF => msl::SamplerBorderColor::OpaqueBlack,
+                0xFFFF_FFFF => msl::SamplerBorderColor::OpaqueWhite,
+                other => {
+                    error!("Border color 0x{:X} is not supported", other);
+                    msl::SamplerBorderColor::TransparentBlack
+                },
+            },
+            lod_clamp_min: lods.start.into(),
+            lod_clamp_max: lods.end.into(),
+            max_anisotropy: match info.anisotropic {
+                image::Anisotropic::On(aniso) => aniso as i32,
+                image::Anisotropic::Off => 0,
+            },
+        }
     }
 }
 
@@ -947,6 +1010,7 @@ impl hal::Device<Backend> for Device {
             ),
         ];
         let mut res_overrides = BTreeMap::new();
+        let mut const_samplers = BTreeMap::new();
         let mut infos = Vec::new();
 
         // First, place the push constants
@@ -1007,7 +1071,17 @@ impl hal::Device<Backend> for Device {
                 cs: stage_infos[2].2.clone(),
             };
             match *set_layout.borrow() {
-                n::DescriptorSetLayout::Emulated(ref desc_layouts, _) => {
+                n::DescriptorSetLayout::Emulated(ref desc_layouts, ref samplers) => {
+                    for &(binding, ref data) in samplers {
+                        //TODO: array support?
+                        const_samplers.insert(
+                            msl::SamplerLocation {
+                                desc_set: set_index as u32,
+                                binding,
+                            },
+                            data.clone(),
+                        );
+                    }
                     for layout in desc_layouts.iter() {
                         if layout
                             .content
@@ -1131,6 +1205,7 @@ impl hal::Device<Backend> for Device {
         shader_compiler_options.enable_point_size_builtin = false;
         shader_compiler_options.vertex.invert_y = true;
         shader_compiler_options.resource_binding_overrides = res_overrides;
+        shader_compiler_options.const_samplers = const_samplers;
         shader_compiler_options.enable_argument_buffers = self.shared.private_caps.argument_buffers;
         let mut shader_compiler_options_point = shader_compiler_options.clone();
         shader_compiler_options_point.enable_point_size_builtin = true;
@@ -1585,8 +1660,13 @@ impl hal::Device<Backend> for Device {
         &self,
         info: image::SamplerInfo,
     ) -> Result<n::Sampler, AllocationError> {
-        let descriptor = self.make_sampler_descriptor(info)?;
-        Ok(self.create_sampler_from_descriptor(&descriptor))
+        Ok(n::Sampler {
+            raw: match self.make_sampler_descriptor(&info) {
+                Some(ref descriptor) => Some(self.shared.device.lock().new_sampler(descriptor)),
+                None => None,
+            },
+            data: Self::make_sampler_data(&info),
+        })
     }
 
     unsafe fn destroy_sampler(&self, _sampler: n::Sampler) {}
@@ -1829,7 +1909,7 @@ impl hal::Device<Backend> for Device {
             })
         } else {
             struct TempSampler {
-                sampler: metal::SamplerState,
+                data: msl::SamplerData,
                 binding: pso::DescriptorBinding,
                 array_index: pso::DescriptorArrayIndex,
             };
@@ -1839,21 +1919,24 @@ impl hal::Device<Backend> for Device {
 
             for set_layout_binding in binding_iter {
                 let slb = set_layout_binding.borrow();
-                let mut content = n::DescriptorContent::from(slb.ty);
-                if slb.immutable_samplers {
-                    content |= n::DescriptorContent::IMMUTABLE_SAMPLER;
+
+                let content = if slb.immutable_samplers {
                     tmp_samplers.extend(
                         immutable_sampler_iter
                             .by_ref()
                             .take(slb.count)
                             .enumerate()
                             .map(|(array_index, sm)| TempSampler {
-                                sampler: sm.borrow().0.clone(),
+                                data: sm.borrow().data.clone(),
                                 binding: slb.binding,
                                 array_index,
                             }),
                     );
-                }
+                    n::DescriptorContent::IMMUTABLE_SAMPLER
+                } else {
+                    n::DescriptorContent::from(slb.ty)
+                };
+
                 desc_layouts.extend((0 .. slb.count).map(|array_index| n::DescriptorLayout {
                     content,
                     stages: slb.stage_flags,
@@ -1879,7 +1962,10 @@ impl hal::Device<Backend> for Device {
 
             Ok(n::DescriptorSetLayout::Emulated(
                 Arc::new(desc_layouts),
-                tmp_samplers.into_iter().map(|ts| ts.sampler).collect(),
+                tmp_samplers
+                    .into_iter()
+                    .map(|ts| (ts.binding, ts.data))
+                    .collect(),
             ))
         }
     }
@@ -1921,7 +2007,7 @@ impl hal::Device<Backend> for Device {
                                     .content
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
                                 data.samplers[counters.samplers as usize] =
-                                    Some(AsNative::from(sam.0.as_ref()));
+                                    Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref()));
                             }
                             pso::Descriptor::Image(tex, il) => {
                                 data.textures[counters.textures as usize] =
@@ -1933,7 +2019,7 @@ impl hal::Device<Backend> for Device {
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
                                 {
                                     data.samplers[counters.samplers as usize] =
-                                        Some(AsNative::from(sam.0.as_ref()));
+                                        Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref()));
                                 }
                                 data.textures[counters.textures as usize] =
                                     Some((AsNative::from(tex.raw.as_ref()), il));
@@ -1983,7 +2069,9 @@ impl hal::Device<Backend> for Device {
                     {
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
-                                encoder.set_sampler_state(&sampler.0, arg_index);
+                                debug_assert!(!bindings[&write.binding].content
+                                    .contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
+                                encoder.set_sampler_state(sampler.raw.as_ref().unwrap(), arg_index);
                                 arg_index += 1;
                             }
                             pso::Descriptor::Image(image, _layout) => {
@@ -2006,7 +2094,7 @@ impl hal::Device<Backend> for Device {
                                                 + (binding.count as NSUInteger)
                                     );
                                     encoder.set_sampler_state(
-                                        &sampler.0,
+                                        sampler.raw.as_ref().unwrap(),
                                         arg_index + binding.count as NSUInteger,
                                     );
                                 }
