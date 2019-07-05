@@ -576,16 +576,14 @@ impl CommandQueue {
                     }
                 }
 
-                if rate != 0 {
-                    if self
-                        .share
-                        .legacy_features
-                        .contains(LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING)
-                    {
-                        gl.vertex_attrib_divisor(location, rate);
-                    } else {
-                        error!("Binding attribute with instanced input rate is not supported");
-                    }
+                if self
+                    .share
+                    .legacy_features
+                    .contains(LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING)
+                {
+                    gl.vertex_attrib_divisor(location, rate);
+                } else if rate > 0 {
+                    error!("Binding attribute with instanced input rate is not supported");
                 }
 
                 gl.enable_vertex_attrib_array(location);
