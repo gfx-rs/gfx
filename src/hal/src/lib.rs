@@ -107,6 +107,8 @@ pub type ColorSlot = u8;
 pub type SamplerSlot = u8;
 
 bitflags! {
+    //TODO: add a feature for non-normalized samplers
+    //TODO: add a feature for mutable comparison samplers
     /// Features that the device supports.
     /// These only include features of the core interface and not API extensions.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

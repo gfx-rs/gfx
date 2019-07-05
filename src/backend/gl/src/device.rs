@@ -1031,6 +1031,8 @@ impl d::Device<B> for Device {
         &self,
         info: i::SamplerInfo,
     ) -> Result<n::FatSampler, d::AllocationError> {
+        assert!(info.normalized);
+
         if !self
             .share
             .legacy_features

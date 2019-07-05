@@ -8,7 +8,10 @@ use crate::{
     format,
     pso::{Comparison, Rect},
 };
-use std::ops::Range;
+use std::{
+    i16,
+    ops::Range,
+};
 
 /// Dimension size.
 pub type Size = u32;
@@ -437,19 +440,28 @@ pub enum WrapMode {
 }
 
 /// A wrapper for the LOD level of an image.
+/// The LOD is stored in base-16 fixed point format. That allows
+/// deriving Hash and Eq for it safely.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Lod(i16);
 
+impl Lod {
+    /// Zero LOD.
+    pub const ZERO: Self = Lod(0);
+    /// Maximum LOD.
+    pub const MAX: Self = Lod(i16::MAX);
+}
+
 impl From<f32> for Lod {
     fn from(v: f32) -> Lod {
-        Lod((v * 8.0) as i16)
+        Lod((v * 16.0).max(0.0).min(i16::MAX as f32) as i16)
     }
 }
 
 impl Into<f32> for Lod {
     fn into(self) -> f32 {
-        self.0 as f32 / 8.0
+        self.0 as f32 / 16.0
     }
 }
 
@@ -506,6 +518,8 @@ pub struct SamplerInfo {
     pub comparison: Option<Comparison>,
     /// Border color is used when one of the wrap modes is set to border.
     pub border: PackedColor,
+    /// Specifies whether the texture coordinates are normalized.
+    pub normalized: bool,
     /// Anisotropic filtering.
     pub anisotropic: Anisotropic,
 }
@@ -519,10 +533,11 @@ impl SamplerInfo {
             mag_filter: filter,
             mip_filter: filter,
             wrap_mode: (wrap, wrap, wrap),
-            lod_bias: Lod(0),
-            lod_range: Lod(-8000) .. Lod(8000),
+            lod_bias: Lod::ZERO,
+            lod_range: Lod::ZERO .. Lod::MAX,
             comparison: None,
             border: PackedColor(0),
+            normalized: true,
             anisotropic: Anisotropic::Off,
         }
     }

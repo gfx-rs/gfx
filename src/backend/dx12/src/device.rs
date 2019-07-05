@@ -2362,6 +2362,7 @@ impl d::Device<B> for Device {
         &self,
         info: image::SamplerInfo,
     ) -> Result<r::Sampler, d::AllocationError> {
+        assert!(info.normalized);
         let handle = self.sampler_pool.lock().unwrap().alloc_handle();
 
         let op = match info.comparison {
