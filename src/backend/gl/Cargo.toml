@@ -44,6 +44,8 @@ features = [
     "Document",
     "Element",
     "HtmlCanvasElement",
+    "HtmlElement",
+    "Node",
     "Performance",
     "WebGlBuffer",
     "WebGlRenderingContext",

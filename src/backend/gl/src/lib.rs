@@ -655,7 +655,17 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         _usage: image::Usage,
         _view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
-        None //TODO
+        Some(image::FormatProperties {
+            max_extent: image::Extent {
+                width: !0,
+                height: !0,
+                depth: !0,
+            },
+            max_levels: !0,
+            max_layers: !0,
+            sample_count_mask: 127,
+            max_resource_size: !0,
+        })
     }
 
     fn memory_properties(&self) -> hal::MemoryProperties {

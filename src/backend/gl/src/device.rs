@@ -842,17 +842,17 @@ impl d::Device<B> for Device {
                 let glow::ActiveUniform { size, utype, name } =
                     gl.get_active_uniform(program, uniform).unwrap();
 
-                let location = gl.get_uniform_location(program, &name).unwrap();
+                if let Some(location) = gl.get_uniform_location(program, &name) {
+                    // Sampler2D won't show up in UniformLocation and the only other uniforms
+                    // should be push constants
+                    uniforms.push(n::UniformDesc {
+                        location: location as _,
+                        offset,
+                        utype,
+                    });
 
-                // Sampler2D won't show up in UniformLocation and the only other uniforms
-                // should be push constants
-                uniforms.push(n::UniformDesc {
-                    location: location as _,
-                    offset,
-                    utype,
-                });
-
-                offset += size as u32;
+                    offset += size as u32;
+                }
             }
         }
 
@@ -986,6 +986,10 @@ impl d::Device<B> for Device {
                     color_attachment_index += 1;
                 }
                 Some(Format::Rgba8Srgb) => {
+                    render_attachments.push(color_attachment);
+                    color_attachment_index += 1;
+                }
+                Some(Format::Bgra8Srgb) => {
                     render_attachments.push(color_attachment);
                     color_attachment_index += 1;
                 }
@@ -1270,6 +1274,7 @@ impl d::Device<B> for Device {
             Format::Rgba8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
             Format::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE),
             Format::Rgba8Srgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
+            Format::Bgra8Srgb => (glow::SRGB8_ALPHA8, glow::BGRA, glow::UNSIGNED_BYTE),
             Format::D32Sfloat => (
                 glow::DEPTH32F_STENCIL8,
                 glow::DEPTH_STENCIL,
@@ -1855,6 +1860,7 @@ impl d::Device<B> for Device {
             Format::Rgba8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
             Format::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE),
             Format::Rgba8Srgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
+            Format::Bgra8Srgb => (glow::SRGB8_ALPHA8, glow::BGRA, glow::UNSIGNED_BYTE),
             _ => unimplemented!(),
         };
 

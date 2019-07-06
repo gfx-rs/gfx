@@ -140,6 +140,15 @@ fn get_usize(gl: &GlContainer, name: u32) -> Result<usize, Error> {
         Ok(value as usize)
     }
 }
+fn get_u64(gl: &GlContainer, name: u32) -> Result<u64, Error> {
+    let value = unsafe { gl.get_parameter_i32(name) };
+    let err = Error::from_error_code(unsafe { gl.get_error() });
+    if err != Error::NoError {
+        Err(err)
+    } else {
+        Ok(value as u64)
+    }
+}
 
 /// A unique platform identifier that does not change between releases
 #[derive(Clone, Eq, PartialEq, Debug)]
@@ -347,9 +356,9 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         max_viewports: 1,
         optimal_buffer_copy_offset_alignment: 1,
         optimal_buffer_copy_pitch_alignment: 1,
-        min_texel_buffer_offset_alignment: 1,   // TODO
-        min_uniform_buffer_offset_alignment: 1, // TODO
-        min_storage_buffer_offset_alignment: 1, // TODO
+        min_texel_buffer_offset_alignment: 1,
+        min_uniform_buffer_offset_alignment: get_u64(gl, glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT).unwrap_or(1024),
+        min_storage_buffer_offset_alignment: get_u64(gl, glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT).unwrap_or(1024),
         framebuffer_color_samples_count: max_samples_mask,
         non_coherent_atom_size: 1,
         ..Limits::default()
