@@ -1011,18 +1011,19 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
 
         if let Some(fence) = fence {
-            fence.0.set(native::FenceInner::Pending(
-                if self.share.private_caps.sync {
+            if self.share.private_caps.sync {
+                fence.0.set(native::FenceInner::Pending(
                     Some(
                         self.share
                             .context
                             .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
                             .unwrap(),
                     )
-                } else {
-                    None
-                },
-            ));
+                ));
+            } else {
+                self.share.context.flush();
+                fence.0.set(native::FenceInner::Idle { signaled: true });
+            }
         }
     }
 
