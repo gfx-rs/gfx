@@ -1838,17 +1838,6 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    #[cfg(target_arch = "wasm32")]
-    unsafe fn create_swapchain(
-        &self,
-        surface: &mut Surface,
-        config: c::SwapchainConfig,
-        _old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<n::Image>), c::window::CreationError> {
-        Ok(self.create_swapchain_impl(surface, config))
-    }
-
-    #[cfg(not(target_arch = "wasm32"))]
     unsafe fn create_swapchain(
         &self,
         surface: &mut Surface,
@@ -1856,16 +1845,6 @@ impl d::Device<B> for Device {
         _old_swapchain: Option<Swapchain>,
     ) -> Result<(Swapchain, Vec<n::Image>), c::window::CreationError> {
         let gl = &self.share.context;
-
-        let (int_format, iformat, itype) = match config.format {
-            Format::Rgba8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
-            Format::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE),
-            Format::Rgba8Srgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
-            Format::Bgra8Srgb => (glow::SRGB8_ALPHA8, glow::BGRA, glow::UNSIGNED_BYTE),
-            _ => unimplemented!(),
-        };
-
-        let channel = config.format.base_format().1;
 
         #[cfg(feature = "wgl")]
         let context = {
@@ -1880,60 +1859,58 @@ impl d::Device<B> for Device {
         let mut images = Vec::new();
 
         for _ in 0 .. config.image_count {
-            unsafe {
-                let fbo = gl.create_framebuffer().unwrap();
-                gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
-                fbos.push(fbo);
+            let fbo = gl.create_framebuffer().unwrap();
+            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
+            fbos.push(fbo);
 
-                let Extent2D { width, height } = config.extent;
-                let image = self
-                    .create_image(
-                        i::Kind::D2(width, height, config.image_layers, 1),
-                        1,
-                        config.format,
-                        i::Tiling::Optimal,
-                        config.image_usage,
-                        i::ViewCapabilities::empty(),
-                    )
-                    .unwrap();
+            let Extent2D { width, height } = config.extent;
+            let image = self
+                .create_image(
+                    i::Kind::D2(width, height, config.image_layers, 1),
+                    1,
+                    config.format,
+                    i::Tiling::Optimal,
+                    config.image_usage,
+                    i::ViewCapabilities::empty(),
+                )
+                .unwrap();
 
-                match image.kind {
-                    n::ImageKind::Surface(surface) => {
-                        gl.framebuffer_renderbuffer(
+            match image.kind {
+                n::ImageKind::Surface(surface) => {
+                    gl.framebuffer_renderbuffer(
+                        glow::FRAMEBUFFER,
+                        glow::COLOR_ATTACHMENT0,
+                        glow::RENDERBUFFER,
+                        Some(surface),
+                    );
+                }
+                n::ImageKind::Texture {
+                    texture, target, ..
+                } => {
+                    if self.share.private_caps.framebuffer_texture {
+                        gl.framebuffer_texture(
                             glow::FRAMEBUFFER,
                             glow::COLOR_ATTACHMENT0,
-                            glow::RENDERBUFFER,
-                            Some(surface),
+                            Some(texture),
+                            0,
+                        );
+                    } else {
+                        gl.bind_texture(target, Some(texture));
+                        gl.framebuffer_texture_2d(
+                            glow::FRAMEBUFFER,
+                            glow::COLOR_ATTACHMENT0,
+                            target,
+                            Some(texture),
+                            0,
                         );
                     }
-                    n::ImageKind::Texture {
-                        texture, target, ..
-                    } => {
-                        if self.share.private_caps.framebuffer_texture {
-                            gl.framebuffer_texture(
-                                glow::FRAMEBUFFER,
-                                glow::COLOR_ATTACHMENT0,
-                                Some(texture),
-                                0,
-                            );
-                        } else {
-                            gl.bind_texture(target, Some(texture));
-                            gl.framebuffer_texture_2d(
-                                glow::FRAMEBUFFER,
-                                glow::COLOR_ATTACHMENT0,
-                                target,
-                                Some(texture),
-                                0,
-                            );
-                        }
-                    }
                 }
-
-                images.push(image);
             }
+
+            images.push(image);
         }
 
-        #[cfg(feature = "wgl")]
+        #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
         let swapchain = {
             self.share.instance_context.make_current();
             Swapchain {
@@ -1942,11 +1919,19 @@ impl d::Device<B> for Device {
                 extent: config.extent,
             }
         };
-        #[cfg(feature = "glutin")]
+
+        #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
         let swapchain = Swapchain {
             fbos,
             extent: config.extent,
             context: surface.context.clone(),
+        };
+
+        #[cfg(target_arch = "wasm32")]
+        let swapchain = Swapchain {
+            fbos,
+            extent: config.extent,
+            window: surface.window().clone(),
         };
 
         Ok((swapchain, images))

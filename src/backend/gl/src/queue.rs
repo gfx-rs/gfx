@@ -9,7 +9,7 @@ use glow::Context;
 use smallvec::SmallVec;
 
 use crate::info::LegacyFeatures;
-use crate::{command as com, device, native, state, window};
+use crate::{command as com, device, native, state};
 use crate::{Backend, GlContext, Share};
 
 // State caching system for command queue.
@@ -1027,7 +1027,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    #[cfg(all(not(target_arch = "wasm32"), any(feature = "glutin", feature = "wgl")))]
+    #[cfg(any(feature = "glutin", feature = "wgl", target_arch = "wasm32"))]
     unsafe fn present<'a, W, Is, S, Iw>(
         &mut self,
         swapchains: Is,
@@ -1065,51 +1065,14 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
                 glow::LINEAR,
             );
 
-            #[cfg(feature = "glutin")]
+            #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
             swapchain.borrow().context.swap_buffers().unwrap();
-            #[cfg(feature = "wgl")]
+            #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
             swapchain.borrow().swap_buffers();
         }
 
-        #[cfg(feature = "wgl")]
+        #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
         self.share.instance_context.make_current();
-
-        Ok(None)
-    }
-
-    // TODO: Share most of this implementation with `glutin`
-    #[cfg(target_arch = "wasm32")]
-    unsafe fn present<'a, W, Is, S, Iw>(
-        &mut self,
-        swapchains: Is,
-        _wait_semaphores: Iw,
-    ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError>
-    where
-        W: 'a + Borrow<window::web::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
-        S: 'a + Borrow<native::Semaphore>,
-        Iw: IntoIterator<Item = &'a S>,
-    {
-        let gl = &self.share.context;
-
-        for swapchain in swapchains {
-            let extent = swapchain.0.borrow().extent;
-
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, self.state.fbo);
-            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
-            gl.blit_framebuffer(
-                0,
-                0,
-                extent.width as _,
-                extent.height as _,
-                0,
-                0,
-                extent.width as _,
-                extent.height as _,
-                glow::COLOR_BUFFER_BIT,
-                glow::LINEAR,
-            );
-        }
 
         Ok(None)
     }
