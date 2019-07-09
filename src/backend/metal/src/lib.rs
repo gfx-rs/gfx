@@ -580,7 +580,7 @@ const FUNCTION_SPECIALIZATION_SUPPORT: &[MTLFeatureSet] = &[
 ];
 
 const DEPTH_CLIP_MODE: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily2_v1,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v3,
     MTLFeatureSet::macOS_GPUFamily1_v1,
 ];
