@@ -32,7 +32,7 @@ struct State {
     // Currently set scissor rects.
     num_scissors: usize,
     // Currently bound fbo
-    fbo: Option<native::FrameBuffer>,
+    fbo: Option<native::RawFrameBuffer>,
 }
 
 impl State {

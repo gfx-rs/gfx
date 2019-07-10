@@ -140,7 +140,7 @@ impl hal::Backend for Backend {
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
-    type Framebuffer = Option<native::FrameBuffer>;
+    type Framebuffer = native::FrameBuffer;
 
     type Buffer = native::Buffer;
     type BufferView = native::BufferView;
@@ -234,7 +234,7 @@ const CPU_VISIBLE_HEAP: usize = 1;
 
 /// Memory types in the OpenGL backend are either usable for buffers and are backed by a real OpenGL
 /// buffer, or are used for images and are fake and not backed by any real raw buffer.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 enum MemoryUsage {
     Buffer(buffer::Usage),
     Image,
@@ -471,6 +471,8 @@ impl PhysicalDevice {
         ));
 
         assert!(memory_types.len() <= 64);
+
+        log::info!("Memory types: {:#?}", memory_types);
 
         // create the shared context
         let share = Share {

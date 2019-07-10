@@ -71,7 +71,7 @@ pub struct Swapchain {
     // Extent because the window lies
     pub(crate) extent: Extent2D,
     ///
-    pub(crate) fbos: Vec<native::FrameBuffer>,
+    pub(crate) fbos: Vec<native::RawFrameBuffer>,
 }
 
 impl hal::Swapchain<B> for Swapchain {

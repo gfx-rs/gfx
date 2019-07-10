@@ -43,7 +43,7 @@ impl Window {
 pub struct Swapchain {
     pub(crate) window: Window,
     pub(crate) extent: Extent2D,
-    pub(crate) fbos: Vec<native::FrameBuffer>,
+    pub(crate) fbos: Vec<native::RawFrameBuffer>,
 }
 
 impl hal::Swapchain<B> for Swapchain {
