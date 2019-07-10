@@ -274,7 +274,7 @@ impl hal::Surface<Backend> for Surface {
 
 #[derive(Debug)]
 pub struct Swapchain {
-    pub(crate) fbos: Vec<native::FrameBuffer>,
+    pub(crate) fbos: Vec<native::RawFrameBuffer>,
     pub(crate) context: PresentContext,
     pub(crate) extent: Extent2D,
 }

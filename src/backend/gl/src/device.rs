@@ -628,6 +628,7 @@ impl d::Device<B> for Device {
             .into_iter()
             .map(|subpass| {
                 let subpass = subpass.borrow();
+                assert!(subpass.colors.len() <= self.share.limits.max_color_attachments, "Color attachment limit exceeded");
                 let color_attachments = subpass.colors.iter().map(|&(index, _)| index).collect();
 
                 let depth_stencil = subpass.depth_stencil.map(|ds| ds.0);
@@ -947,7 +948,7 @@ impl d::Device<B> for Device {
         pass: &n::RenderPass,
         attachments: I,
         _extent: i::Extent,
-    ) -> Result<Option<n::FrameBuffer>, d::OutOfMemory>
+    ) -> Result<n::FrameBuffer, d::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<n::ImageView>,
@@ -956,72 +957,52 @@ impl d::Device<B> for Device {
             return Err(d::OutOfMemory::OutOfHostMemory);
         }
 
+        let attachments: Vec<_> = attachments.into_iter().collect();
+
         let gl = &self.share.context;
         let target = glow::DRAW_FRAMEBUFFER;
-        let name = gl.create_framebuffer().unwrap();
-        gl.bind_framebuffer(target, Some(name));
 
-        let mut render_attachments = Vec::with_capacity(pass.attachments.len());
-        let mut color_attachment_index = 0;
-        for attachment in &pass.attachments {
-            if color_attachment_index > self.share.limits.framebuffer_color_samples_count as _ {
+        let fbos = pass.subpasses.iter().map(|subpass| {
+            let name = gl.create_framebuffer().unwrap();
+            gl.bind_framebuffer(target, Some(name));
+
+            for (index, color) in subpass.color_attachments.iter().enumerate() {
+                let color_attachment = glow::COLOR_ATTACHMENT0 + index as u32;
+                assert!(color_attachment <= glow::COLOR_ATTACHMENT31);
+
+                if self.share.private_caps.framebuffer_texture {
+                    Self::bind_target(gl, target, color_attachment, attachments[*color].borrow());
+                } else {
+                    Self::bind_target_compat(gl, target, color_attachment, attachments[*color].borrow());
+                }
+            }
+
+            if let Some(depth_stencil) = subpass.depth_stencil {
+                if self.share.private_caps.framebuffer_texture {
+                    Self::bind_target(gl, target, glow::DEPTH_STENCIL_ATTACHMENT, attachments[depth_stencil].borrow());
+                } else {
+                    Self::bind_target_compat(gl, target, glow::DEPTH_STENCIL_ATTACHMENT, attachments[depth_stencil].borrow());
+                }
+
+            }
+            let _status = gl.check_framebuffer_status(target); //TODO: check status
+
+            if let Err(err) = self.share.check() {
+                //TODO: attachments have been consumed
                 panic!(
-                    "Invalid number of color attachments: {} color_attachment of {}",
-                    color_attachment_index, self.share.limits.framebuffer_color_samples_count
+                    "Error creating FBO: {:?} for {:?}", /* with attachments {:?}"*/
+                    err, pass /*, attachments*/
                 );
             }
 
-            let color_attachment = color_attachment_index + glow::COLOR_ATTACHMENT0;
-            if color_attachment > glow::COLOR_ATTACHMENT31 {
-                panic!("Invalid attachment -- this shouldn't happen!");
-            };
+            Some(name)
+        }).collect();
 
-            match attachment.format {
-                Some(Format::Rgba8Unorm) => {
-                    render_attachments.push(color_attachment);
-                    color_attachment_index += 1;
-                }
-                Some(Format::Bgra8Unorm) => {
-                    render_attachments.push(color_attachment);
-                    color_attachment_index += 1;
-                }
-                Some(Format::Rgba8Srgb) => {
-                    render_attachments.push(color_attachment);
-                    color_attachment_index += 1;
-                }
-                Some(Format::Bgra8Srgb) => {
-                    render_attachments.push(color_attachment);
-                    color_attachment_index += 1;
-                }
-                Some(Format::D32Sfloat) => render_attachments.push(glow::DEPTH_STENCIL_ATTACHMENT),
-                _ => unimplemented!(),
-            }
-        }
-
-        let mut attachments_len = 0;
-        for (&render_attachment, view) in render_attachments.iter().zip(attachments.into_iter()) {
-            attachments_len += 1;
-            if self.share.private_caps.framebuffer_texture {
-                Self::bind_target(gl, target, render_attachment, view.borrow());
-            } else {
-                Self::bind_target_compat(gl, target, render_attachment, view.borrow());
-            }
-        }
-
-        assert!(pass.attachments.len() <= attachments_len);
-
-        let _status = gl.check_framebuffer_status(target); //TODO: check status
         gl.bind_framebuffer(target, None);
 
-        if let Err(err) = self.share.check() {
-            //TODO: attachments have been consumed
-            panic!(
-                "Error creating FBO: {:?} for {:?}", /* with attachments {:?}"*/
-                err, pass /*, attachments*/
-            );
-        }
-
-        Ok(Some(name))
+        Ok(n::FrameBuffer {
+            fbos,
+        })
     }
 
     unsafe fn create_shader_module(
@@ -1778,10 +1759,12 @@ impl d::Device<B> for Device {
         self.share.context.delete_program(pipeline.program);
     }
 
-    unsafe fn destroy_framebuffer(&self, frame_buffer: Option<n::FrameBuffer>) {
+    unsafe fn destroy_framebuffer(&self, frame_buffer: n::FrameBuffer) {
         let gl = &self.share.context;
-        if let Some(f) = frame_buffer {
-            gl.delete_framebuffer(f);
+        for f in frame_buffer.fbos {
+            if let Some(f) = f {
+                gl.delete_framebuffer(f);
+            }
         }
     }
 

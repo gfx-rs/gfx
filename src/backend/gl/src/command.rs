@@ -102,7 +102,7 @@ pub enum Command {
     /// The buffer slice contains a list of `GLenum`.
     DrawBuffers(BufferSlice),
 
-    BindFrameBuffer(FrameBufferTarget, Option<n::FrameBuffer>),
+    BindFrameBuffer(FrameBufferTarget, Option<n::RawFrameBuffer>),
     BindTargetView(FrameBufferTarget, AttachmentPoint, n::ImageView),
     SetDrawColorBuffers(usize),
     SetPatchSize(i32),
@@ -150,16 +150,16 @@ pub type DrawBuffer = u32;
 
 #[derive(Clone, Debug)]
 struct AttachmentClear {
-    subpass_id: Option<pass::SubpassId>,
-    value: Option<command::ClearValueRaw>,
-    stencil_value: Option<pso::StencilValue>,
+    subpass_id: pass::SubpassId,
+    index: u32,
+    value: command::ClearValueRaw,
 }
 
 #[derive(Debug)]
 pub struct RenderPassCache {
     render_pass: n::RenderPass,
-    framebuffer: Option<n::FrameBuffer>,
-    attachment_clears: Vec<AttachmentClear>,
+    framebuffer: n::FrameBuffer,
+    attachment_clears: Vec<Option<AttachmentClear>>,
 }
 
 // Cache current states of the command buffer
@@ -174,7 +174,7 @@ struct Cache {
     // Blend color.
     blend_color: Option<pso::ColorValue>,
     ///
-    framebuffer: Option<(FrameBufferTarget, n::FrameBuffer)>,
+    framebuffer: Option<(FrameBufferTarget, n::RawFrameBuffer)>,
     ///
     // Indicates that invalid commands have been recorded.
     error_state: bool,
@@ -242,7 +242,7 @@ pub struct RawCommandBuffer {
     pub(crate) id: u64,
     individual_reset: bool,
 
-    fbo: Option<n::FrameBuffer>,
+    fbo: Option<n::RawFrameBuffer>,
     /// The framebuffer to use for rendering to the main targets (0 by default).
     ///
     /// Use this to set the framebuffer that will be used for the screen display targets created
@@ -252,7 +252,7 @@ pub struct RawCommandBuffer {
     ///
     /// This framebuffer must exist and be configured correctly (with renderbuffer attachments,
     /// etc.) so that rendering to it can occur immediately.
-    pub display_fb: Option<n::FrameBuffer>,
+    pub display_fb: Option<n::RawFrameBuffer>,
     cache: Cache,
 
     pass_cache: Option<RenderPassCache>,
@@ -264,7 +264,7 @@ pub struct RawCommandBuffer {
 
 impl RawCommandBuffer {
     pub(crate) fn new(
-        fbo: Option<n::FrameBuffer>,
+        fbo: Option<n::RawFrameBuffer>,
         limits: Limits,
         memory: Arc<Mutex<BufferMemory>>,
     ) -> Self {
@@ -433,37 +433,37 @@ impl RawCommandBuffer {
     }
 
     fn begin_subpass(&mut self) {
-        // Split processing and command recording due to borrowchk.
-        let (draw_buffers, clear_cmds) = {
-            let state = self.pass_cache.as_ref().unwrap();
-            let subpass = &state.render_pass.subpasses[self.cur_subpass];
+        let state = self.pass_cache.as_ref().unwrap();
+        let subpass = &state.render_pass.subpasses[self.cur_subpass];
 
-            // See `begin_renderpass_cache` for clearing strategy
+        // See `begin_renderpass_cache` for clearing strategy
 
-            // Bind draw buffers for mapping color output locations with
-            // framebuffer attachments.
-            let draw_buffers = if state.framebuffer.is_none() {
-                // The default framebuffer is created by the driver
-                // We don't have influence on its layout and we treat it as single image.
-                //
-                // TODO: handle case where we don't do double-buffering?
-                vec![glow::BACK_LEFT]
-            } else {
-                subpass
-                    .color_attachments
-                    .iter()
-                    .map(|id| glow::COLOR_ATTACHMENT0 + *id as u32)
-                    .collect::<Vec<_>>()
-            };
-
-            let clear_cmds = state
-                .render_pass
-                .attachments
+        // Bind draw buffers for mapping color output locations with
+        // framebuffer attachments.
+        let draw_buffers = if state.framebuffer.fbos[self.cur_subpass].is_none() {
+            // The default framebuffer is created by the driver
+            // We don't have influence on its layout and we treat it as single image.
+            //
+            // TODO: handle case where we don't do double-buffering?
+            vec![glow::BACK_LEFT]
+        } else {
+            subpass
+                .color_attachments
                 .iter()
-                .zip(state.attachment_clears.iter())
-                .filter_map(|(attachment, clear)| {
+                .enumerate()
+                .map(|(index, _)| glow::COLOR_ATTACHMENT0 + index as u32)
+                .collect::<Vec<_>>()
+        };
+
+        let clear_cmds = state
+            .render_pass
+            .attachments
+            .iter()
+            .zip(state.attachment_clears.iter())
+            .filter_map(|(attachment, clear)| {
+                if let Some(clear) = clear {
                     // Check if the attachment is first used in this subpass
-                    if clear.subpass_id != Some(self.cur_subpass) {
+                    if clear.subpass_id != self.cur_subpass {
                         return None;
                     }
 
@@ -474,40 +474,41 @@ impl RawCommandBuffer {
 
                     // Clear color target
                     if view_format.is_color() {
-                        if let Some(cv) = clear.value {
-                            let channel = view_format.base_format().1;
+                        assert!(clear.index >= glow::COLOR_ATTACHMENT0 && clear.index <= glow::COLOR_ATTACHMENT31);
+                        assert_eq!(attachment.ops.load, pass::AttachmentLoadOp::Clear);
 
-                            let cmd = match channel {
-                                ChannelType::Unorm
-                                | ChannelType::Snorm
-                                | ChannelType::Ufloat
-                                | ChannelType::Sfloat
-                                | ChannelType::Srgb
-                                | ChannelType::Uscaled
-                                | ChannelType::Sscaled => {
-                                    Command::ClearBufferColorF(0, unsafe { cv.color.float32 })
-                                }
-                                ChannelType::Uint => {
-                                    Command::ClearBufferColorU(0, unsafe { cv.color.uint32 })
-                                }
-                                ChannelType::Sint => {
-                                    Command::ClearBufferColorI(0, unsafe { cv.color.int32 })
-                                }
-                            };
+                        let channel = view_format.base_format().1;
 
-                            return Some(cmd);
-                        }
+                        let cmd = match channel {
+                            ChannelType::Unorm
+                            | ChannelType::Snorm
+                            | ChannelType::Ufloat
+                            | ChannelType::Sfloat
+                            | ChannelType::Srgb
+                            | ChannelType::Uscaled
+                            | ChannelType::Sscaled => {
+                                Command::ClearBufferColorF(clear.index - glow::COLOR_ATTACHMENT0, unsafe { clear.value.color.float32 })
+                            }
+                            ChannelType::Uint => {
+                                Command::ClearBufferColorU(clear.index - glow::COLOR_ATTACHMENT0, unsafe { clear.value.color.uint32 })
+                            }
+                            ChannelType::Sint => {
+                                Command::ClearBufferColorI(clear.index - glow::COLOR_ATTACHMENT0, unsafe { clear.value.color.int32 })
+                            }
+                        };
+
+                        return Some(cmd);
                     }
 
                     // Clear depth-stencil target
-                    let depth = if view_format.is_depth() {
-                        clear.value.map(|cv| unsafe { cv.depth_stencil.depth })
+                    let depth = if view_format.is_depth() && attachment.ops.load == pass::AttachmentLoadOp::Clear {
+                        Some(unsafe { clear.value.depth_stencil.depth })
                     } else {
                         None
                     };
 
-                    let stencil = if view_format.is_stencil() {
-                        clear.stencil_value
+                    let stencil = if view_format.is_stencil() && attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                        Some(unsafe { clear.value.depth_stencil.stencil })
                     } else {
                         None
                     };
@@ -515,13 +516,15 @@ impl RawCommandBuffer {
                     if depth.is_some() || stencil.is_some() {
                         return Some(Command::ClearBufferDepthStencil(depth, stencil));
                     }
+                }
+                None
+            })
+            .collect::<Vec<_>>();
 
-                    None
-                })
-                .collect::<Vec<_>>();
-
-            (draw_buffers, clear_cmds)
-        };
+        self.push_cmd(Command::BindFrameBuffer(
+            glow::DRAW_FRAMEBUFFER,
+            state.framebuffer.fbos[self.cur_subpass],
+        ));
 
         // Record commands
         let draw_buffers = self.add(&draw_buffers);
@@ -605,7 +608,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
     unsafe fn begin_render_pass<T>(
         &mut self,
         render_pass: &n::RenderPass,
-        framebuffer: &Option<n::FrameBuffer>,
+        framebuffer: &n::FrameBuffer,
         _render_area: pso::Rect,
         clear_values: T,
         _first_subpass: command::SubpassContents,
@@ -628,41 +631,33 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         //  >= GL 4.5: Invalidate framebuffer attachment when store op is `DONT_CARE`.
 
         // 2./3.
-        self.push_cmd(Command::BindFrameBuffer(
-            glow::DRAW_FRAMEBUFFER,
-            *framebuffer,
-        ));
-
         let mut clear_values_iter = clear_values.into_iter();
         let attachment_clears = render_pass
             .attachments
             .iter()
             .enumerate()
-            .map(|(i, attachment)| {
+            .map(|(id, attachment)| {
                 let cv = if attachment.has_clears() {
-                    Some(clear_values_iter.next().unwrap())
+                    clear_values_iter.next().unwrap()
                 } else {
-                    None
+                    return None;
                 };
-                AttachmentClear {
-                    subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
-                    value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
-                        Some(*cv.as_ref().unwrap().borrow())
-                    } else {
-                        None
-                    },
-                    stencil_value: if attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
-                        Some(cv.unwrap().borrow().depth_stencil.stencil)
-                    } else {
-                        None
-                    },
-                }
+
+                let (subpass, index) = render_pass.subpasses.iter().enumerate().filter_map(|(i, sp)| {
+                    let index = sp.attachment_using(id)?;
+                    Some((i, index))
+                }).next()?;
+                Some(AttachmentClear {
+                    subpass_id: subpass,
+                    index,
+                    value: *cv.borrow(),
+                })
             })
             .collect();
 
         self.pass_cache = Some(RenderPassCache {
             render_pass: render_pass.clone(),
-            framebuffer: *framebuffer,
+            framebuffer: framebuffer.clone(),
             attachment_clears,
         });
 

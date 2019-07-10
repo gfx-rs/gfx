@@ -17,12 +17,18 @@ pub type VertexArray = <GlContext as glow::Context>::VertexArray;
 pub type RawBuffer = <GlContext as glow::Context>::Buffer;
 pub type Shader = <GlContext as glow::Context>::Shader;
 pub type Program = <GlContext as glow::Context>::Program;
-pub type FrameBuffer = <GlContext as glow::Context>::Framebuffer;
 pub type Surface = <GlContext as glow::Context>::Renderbuffer;
 pub type Texture = <GlContext as glow::Context>::Texture;
 pub type Sampler = <GlContext as glow::Context>::Sampler;
 pub type UniformLocation = <GlContext as glow::Context>::UniformLocation;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
+
+pub type RawFrameBuffer = <GlContext as glow::Context>::Framebuffer;
+
+#[derive(Clone, Debug)]
+pub struct FrameBuffer {
+    pub(crate) fbos: Vec<Option<RawFrameBuffer>>,
+}
 
 #[derive(Debug)]
 pub enum Buffer {
@@ -279,13 +285,12 @@ pub struct SubpassDesc {
 
 impl SubpassDesc {
     /// Check if an attachment is used by this sub-pass.
-    pub(crate) fn is_using(&self, at_id: pass::AttachmentId) -> bool {
-        let uses_ds = match self.depth_stencil {
-            Some(ds) => ds == at_id,
-            None => false,
-        };
-        let uses_color = self.color_attachments.iter().any(|id| *id == at_id);
-        uses_color || uses_ds
+    pub(crate) fn attachment_using(&self, at_id: pass::AttachmentId) -> Option<u32> {
+        if self.depth_stencil == Some(at_id) {
+            Some(glow::DEPTH_STENCIL_ATTACHMENT)
+        } else {
+            self.color_attachments.iter().position(|id| *id == at_id).map(|p| glow::COLOR_ATTACHMENT0 + p as u32)
+        }
     }
 }
 

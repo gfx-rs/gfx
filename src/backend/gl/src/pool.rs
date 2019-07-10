@@ -55,7 +55,7 @@ pub enum BufferMemory {
 
 #[derive(Debug)]
 pub struct RawCommandPool {
-    pub(crate) fbo: Option<n::FrameBuffer>,
+    pub(crate) fbo: Option<n::RawFrameBuffer>,
     pub(crate) limits: command::Limits,
     pub(crate) memory: Arc<Mutex<BufferMemory>>,
 }

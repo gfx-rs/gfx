@@ -361,6 +361,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         min_storage_buffer_offset_alignment: get_u64(gl, glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT).unwrap_or(1024),
         framebuffer_color_samples_count: max_samples_mask,
         non_coherent_atom_size: 1,
+        max_color_attachments: get_usize(gl, glow::MAX_COLOR_ATTACHMENTS).unwrap_or(1),
         ..Limits::default()
     };
 
