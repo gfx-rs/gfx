@@ -70,6 +70,7 @@ unsafe impl Sync for Fence {}
 pub enum BindingTypes {
     Images,
     UniformBuffers,
+    StorageBuffers,
 }
 
 #[derive(Clone, Debug)]
@@ -220,7 +221,7 @@ pub(crate) enum DescSetBindings {
 
 #[derive(Clone, Debug)]
 pub struct DescriptorSet {
-    layout: DescriptorSetLayout,
+    pub(crate) layout: DescriptorSetLayout,
     pub(crate) bindings: Arc<Mutex<Vec<DescSetBindings>>>,
 }
 

@@ -1004,16 +1004,17 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         offset,
                         size,
                     } => {
-                        let btype = match btype {
+                        let glow_btype = match btype {
                             n::BindingTypes::UniformBuffers => glow::UNIFORM_BUFFER,
+                            n::BindingTypes::StorageBuffers => glow::SHADER_STORAGE_BUFFER,
                             n::BindingTypes::Images => panic!("Wrong desc set binding"),
                         };
                         for binding in drd
-                            .get_binding(n::BindingTypes::UniformBuffers, set, *binding)
+                            .get_binding(*btype, set, *binding)
                             .unwrap()
                         {
                             self.push_cmd(Command::BindBufferRange(
-                                btype,
+                                glow_btype,
                                 *binding,
                                 *buffer,
                                 *offset as i32,

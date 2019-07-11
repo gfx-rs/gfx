@@ -274,6 +274,13 @@ impl Device {
             &res.uniform_buffers,
             n::BindingTypes::UniformBuffers,
         );
+        self.remap_binding(
+            ast,
+            desc_remap_data,
+            nb_map,
+            &res.storage_buffers,
+            n::BindingTypes::StorageBuffers,
+        );
     }
 
     fn remap_binding(
@@ -294,7 +301,6 @@ impl Device {
             let nbs = desc_remap_data
                 .get_binding(btype, set as _, binding)
                 .unwrap();
-
             for nb in nbs {
                 if self
                     .share
@@ -694,8 +700,15 @@ impl d::Device<B> for Device {
                             binding.binding,
                         );
                     }
+                    StorageBuffer => {
+                        drd.insert_missing_binding_into_spare(
+                            n::BindingTypes::StorageBuffers,
+                            set as _,
+                            binding.binding,
+                        );
+                    }
                     StorageImage | UniformTexelBuffer | UniformBufferDynamic
-                    | StorageTexelBuffer | StorageBufferDynamic | StorageBuffer
+                    | StorageTexelBuffer | StorageBufferDynamic
                     | InputAttachment => unimplemented!(), // 6
                 }
             })
@@ -1516,8 +1529,15 @@ impl d::Device<B> for Device {
                                 as i32;
                         let size = end - start;
 
+                        let ty = set.layout[binding as usize].ty;
+                        let ty = match ty {
+                            pso::DescriptorType::UniformBuffer => n::BindingTypes::UniformBuffers,
+                            pso::DescriptorType::StorageBuffer => n::BindingTypes::StorageBuffers,
+                            _ => panic!("Can't write buffer into descriptor of type {:?}", ty),
+                        };
+
                         bindings.push(n::DescSetBindings::Buffer {
-                            ty: n::BindingTypes::UniformBuffers,
+                            ty,
                             binding,
                             buffer: raw_buffer,
                             offset: offset + start,

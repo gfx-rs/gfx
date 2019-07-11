@@ -373,9 +373,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         limits.max_viewports = get_usize(gl, glow::MAX_VIEWPORTS).unwrap_or(0);
     }
 
-    if false
-        && info.is_supported(&[
-            //TODO: enable when compute is implemented
+    if info.is_supported(&[
             Core(4, 3),
             Ext("GL_ARB_compute_shader"),
         ])
