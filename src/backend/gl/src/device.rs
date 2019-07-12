@@ -998,7 +998,20 @@ impl d::Device<B> for Device {
                 }
 
             }
-            let _status = gl.check_framebuffer_status(target); //TODO: check status
+            
+            let status = gl.check_framebuffer_status(target);
+            match status {
+                glow::FRAMEBUFFER_COMPLETE => {},
+                glow::FRAMEBUFFER_INCOMPLETE_ATTACHMENT => panic!("One of framebuffer attachmet points are incomplete"),
+                glow::FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT => panic!("Framebuffer does not have any image attached"),
+                glow::FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER => panic!("FRAMEBUFFER_INCOMPLETE_DRAW_BUFFER"),
+                glow::FRAMEBUFFER_INCOMPLETE_READ_BUFFER => panic!("FRAMEBUFFER_INCOMPLETE_READ_BUFFER"),
+                glow::FRAMEBUFFER_UNSUPPORTED => panic!("FRAMEBUFFER_UNSUPPORTED"),
+                glow::FRAMEBUFFER_INCOMPLETE_MULTISAMPLE => panic!("FRAMEBUFFER_INCOMPLETE_MULTISAMPLE"),
+                glow::FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS => panic!("FRAMEBUFFER_INCOMPLETE_LAYER_TARGETS"),
+                36057 /*glow::FRAMEBUFFER_INCOMPLETE_DIMENSIONS*/ => panic!("Framebuffer attachements have different dimensions"),
+                code => panic!("Unexpected framebuffer status code {}", code),
+            }
 
             if let Err(err) = self.share.check() {
                 //TODO: attachments have been consumed
@@ -1927,14 +1940,16 @@ impl d::Device<B> for Device {
         let swapchain = Swapchain {
             fbos,
             extent: config.extent,
-            context: surface.context.clone(),
+            context: {
+                surface.context().resize(glutin::dpi::PhysicalSize::new(config.extent.width as f64, config.extent.height as f64));
+                surface.context.clone()
+            },
         };
 
         #[cfg(target_arch = "wasm32")]
         let swapchain = Swapchain {
             fbos,
             extent: config.extent,
-            window: surface.window().clone(),
         };
 
         Ok((swapchain, images))

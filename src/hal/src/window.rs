@@ -173,9 +173,6 @@ pub struct SurfaceCapabilities {
 /// A `Surface` abstracts the surface of a native window, which will be presented
 /// on the display.
 pub trait Surface<B: Backend>: fmt::Debug + Any + Send + Sync {
-    /// Retrieve the surface image kind.
-    fn kind(&self) -> image::Kind;
-
     /// Check if the queue family supports presentation to this surface.
     ///
     /// # Examples

@@ -231,10 +231,6 @@ impl Surface {
 }
 
 impl hal::Surface<Backend> for Surface {
-    fn kind(&self) -> hal::image::Kind {
-        unimplemented!()
-    }
-
     fn compatibility(
         &self,
         physical_device: &PhysicalDevice,

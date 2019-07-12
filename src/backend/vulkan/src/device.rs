@@ -1949,9 +1949,6 @@ impl d::Device<B> for Device {
             None => vk::SwapchainKHR::null(),
         };
 
-        surface.width = config.extent.width;
-        surface.height = config.extent.height;
-
         let info = vk::SwapchainCreateInfoKHR {
             s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
             p_next: ptr::null(),
@@ -1961,8 +1958,8 @@ impl d::Device<B> for Device {
             image_format: conv::map_format(config.format),
             image_color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
             image_extent: vk::Extent2D {
-                width: surface.width,
-                height: surface.height,
+                width: config.extent.width,
+                height: config.extent.height,
             },
             image_array_layers: 1,
             image_usage: conv::map_image_usage(config.image_usage),
@@ -2021,8 +2018,8 @@ impl d::Device<B> for Device {
                 ty: vk::ImageType::TYPE_2D,
                 flags: vk::ImageCreateFlags::empty(),
                 extent: vk::Extent3D {
-                    width: surface.width,
-                    height: surface.height,
+                    width: config.extent.width,
+                    height: config.extent.height,
                     depth: 1,
                 },
             })

@@ -705,11 +705,6 @@ impl hal::Surface<Backend> for Surface {
         }*/
     }
 
-    // TODO: stereo swapchain?
-    fn kind(&self) -> image::Kind {
-        image::Kind::D2(self.width, self.height, 1, 1)
-    }
-
     fn compatibility(
         &self,
         _: &PhysicalDevice,

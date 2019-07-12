@@ -888,10 +888,6 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 #[derive(Debug)]
 pub struct Surface;
 impl hal::Surface<Backend> for Surface {
-    fn kind(&self) -> hal::image::Kind {
-        unimplemented!()
-    }
-
     fn compatibility(
         &self,
         _: &PhysicalDevice,

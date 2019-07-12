@@ -225,12 +225,12 @@ fn main() {
         use gfx_backend_gl::glutin;
         println!("Warding GL:");
         let events_loop = glutin::EventsLoop::new();
-        let window = glutin::ContextBuilder::new()
+        let windowed_context = glutin::ContextBuilder::new()
             .with_gl_profile(glutin::GlProfile::Core)
             .build_windowed(glutin::WindowBuilder::new(), &events_loop)
             .unwrap();
-        let window = unsafe { window.make_current() }.expect("Unable to make window current");
-        let instance = gfx_backend_gl::Surface::from_window(window);
+        let (context, window) = unsafe { windowed_context.make_current().expect("Unable to make window current").split() };
+        let instance = gfx_backend_gl::Surface::from_context(context);
         num_failures += harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "gl-headless")]

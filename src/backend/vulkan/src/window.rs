@@ -7,7 +7,6 @@ use ash::vk;
 
 use crate::hal;
 use crate::hal::format::Format;
-use crate::hal::image::{NumSamples, Size};
 
 #[cfg(feature = "winit")]
 use winit;
@@ -22,9 +21,6 @@ pub struct Surface {
     // For vkDestroySurfaceKHR: Host access to surface must be externally synchronized
     #[derivative(Debug = "ignore")]
     pub(crate) raw: Arc<RawSurface>,
-    pub(crate) width: Size,
-    pub(crate) height: Size,
-    pub(crate) samples: NumSamples,
 }
 
 pub struct RawSurface {
@@ -71,18 +67,7 @@ impl Instance {
                 .expect("XlibSurface::create_xlib_surface() failed")
         };
 
-        let (width, height) = unsafe {
-            use std::mem::zeroed;
-            use x11::xlib::{XGetWindowAttributes, XWindowAttributes};
-            let mut attribs: XWindowAttributes = zeroed();
-            let result = XGetWindowAttributes(dpy as _, window, &mut attribs);
-            if result == 0 {
-                panic!("XGetGeometry failed");
-            }
-            (attribs.width as Size, attribs.height as Size)
-        };
-
-        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
+        self.create_surface_from_vk_surface_khr(surface)
     }
 
     #[cfg(all(
@@ -118,21 +103,7 @@ impl Instance {
                 .expect("XcbSurface::create_xcb_surface() failed")
         };
 
-        let (width, height) = unsafe {
-            use std::mem;
-            use xcb::{xproto, Connection};
-            let conn = Connection::from_raw_conn(connection as _);
-            let geometry = xproto::get_geometry(&conn, window)
-                .get_reply()
-                .expect("xcb_get_geometry failed")
-                .ptr
-                .as_ref()
-                .expect("unexpected NULL XCB geometry");
-            mem::forget(conn); //TODO: use `into_raw_conn`
-            (geometry.width as _, geometry.height as _)
-        };
-
-        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
+        self.create_surface_from_vk_surface_khr(surface)
     }
 
     #[cfg(all(unix, not(target_os = "android")))]
@@ -140,8 +111,6 @@ impl Instance {
         &self,
         display: *mut c_void,
         surface: *mut c_void,
-        width: Size,
-        height: Size,
     ) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -164,15 +133,13 @@ impl Instance {
             unsafe { w_loader.create_wayland_surface(&info, None) }.expect("WaylandSurface failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
+        self.create_surface_from_vk_surface_khr(surface)
     }
 
     #[cfg(target_os = "android")]
     pub fn create_surface_android(
         &self,
         window: *const c_void,
-        width: Size,
-        height: Size,
     ) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -190,7 +157,7 @@ impl Instance {
             unsafe { loader.create_android_surface(&info, None) }.expect("AndroidSurface failed")
         };
 
-        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
+        self.create_surface_from_vk_surface_khr(surface)
     }
 
     #[cfg(windows)]
@@ -219,22 +186,7 @@ impl Instance {
             }
         };
 
-        let (width, height) = unsafe {
-            use std::mem::zeroed;
-            use winapi::shared::windef::RECT;
-            use winapi::um::winuser::GetClientRect;
-
-            let mut rect: RECT = zeroed();
-            if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
-                panic!("GetClientRect failed");
-            }
-            (
-                (rect.right - rect.left) as Size,
-                (rect.bottom - rect.top) as Size,
-            )
-        };
-
-        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
+        self.create_surface_from_vk_surface_khr(surface)
     }
 
     #[cfg(target_os = "macos")]
@@ -294,13 +246,7 @@ impl Instance {
             }
         };
 
-        let (width, height) = {
-            //TODO: this is probably wrong, needs refinement
-            let bounds: CGRect = unsafe { msg_send![view as *mut Object, bounds] };
-            (bounds.size.width as u32, bounds.size.height as u32)
-        };
-
-        self.create_surface_from_vk_surface_khr(surface, width, height, 1)
+        self.create_surface_from_vk_surface_khr(surface)
     }
 
     #[cfg(feature = "winit")]
@@ -319,12 +265,9 @@ impl Instance {
                 if let Some(display) = window.get_wayland_display() {
                     let display: *mut c_void = display as *mut _;
                     let surface: *mut c_void = window.get_wayland_surface().unwrap() as *mut _;
-                    let px = window.get_inner_size().unwrap();
                     return self.create_surface_from_wayland(
                         display,
                         surface,
-                        px.width as _,
-                        px.height as _,
                     );
                 }
             }
@@ -339,13 +282,8 @@ impl Instance {
         #[cfg(target_os = "android")]
         {
             use winit::os::android::WindowExt;
-            let logical_size = window.get_inner_size().unwrap();
-            let width = logical_size.width * window.get_hidpi_factor();
-            let height = logical_size.height * window.get_hidpi_factor();
             return self.create_surface_android(
                 window.get_native_window(),
-                width as _,
-                height as _,
             );
         }
         #[cfg(windows)]
@@ -370,9 +308,6 @@ impl Instance {
     pub fn create_surface_from_vk_surface_khr(
         &self,
         surface: vk::SurfaceKHR,
-        width: Size,
-        height: Size,
-        samples: NumSamples,
     ) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
@@ -388,18 +323,11 @@ impl Instance {
 
         Surface {
             raw,
-            width,
-            height,
-            samples,
         }
     }
 }
 
 impl hal::Surface<Backend> for Surface {
-    fn kind(&self) -> hal::image::Kind {
-        hal::image::Kind::D2(self.width, self.height, 1, self.samples)
-    }
-
     fn compatibility(
         &self,
         physical_device: &PhysicalDevice,
