@@ -440,8 +440,13 @@ impl hal::Instance for Instance {
     type Backend = Backend;
 
     fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
-        let devices = unsafe { self.raw.0.enumerate_physical_devices() }
-            .expect("Unable to enumerate adapters");
+        let devices = match unsafe { self.raw.0.enumerate_physical_devices() } {
+            Ok(devices) => devices,
+            Err(err) => {
+                error!("Could not enumerate physical devices! {}", err);
+                vec![]
+            }
+        };
 
         devices
             .into_iter()
@@ -451,7 +456,7 @@ impl hal::Instance for Instance {
                     name: unsafe {
                         CStr::from_ptr(properties.device_name.as_ptr())
                             .to_str()
-                            .expect("Invalid UTF-8 string")
+                            .unwrap_or("Unknown")
                             .to_owned()
                     },
                     vendor: properties.vendor_id as usize,
