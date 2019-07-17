@@ -894,13 +894,18 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_descriptor_set_sampled_images: limits.max_descriptor_set_sampled_images as _,
             max_descriptor_set_samplers: limits.max_descriptor_set_samplers as _,
             max_descriptor_set_storage_buffers: limits.max_descriptor_set_storage_buffers as _,
-            max_descriptor_set_storage_buffers_dynamic: limits.max_descriptor_set_storage_buffers_dynamic as _,
+            max_descriptor_set_storage_buffers_dynamic: limits
+                .max_descriptor_set_storage_buffers_dynamic
+                as _,
             max_descriptor_set_storage_images: limits.max_descriptor_set_storage_images as _,
             max_descriptor_set_uniform_buffers: limits.max_descriptor_set_uniform_buffers as _,
-            max_descriptor_set_uniform_buffers_dynamic: limits.max_descriptor_set_uniform_buffers_dynamic as _,
+            max_descriptor_set_uniform_buffers_dynamic: limits
+                .max_descriptor_set_uniform_buffers_dynamic
+                as _,
             max_draw_indexed_index_value: limits.max_draw_indexed_index_value,
             max_draw_indirect_count: limits.max_draw_indirect_count,
-            max_fragment_combined_output_resources: limits.max_fragment_combined_output_resources as _,
+            max_fragment_combined_output_resources: limits.max_fragment_combined_output_resources
+                as _,
             max_fragment_dual_source_attachments: limits.max_fragment_dual_src_attachments as _,
             max_fragment_input_components: limits.max_fragment_input_components as _,
             max_fragment_output_attachments: limits.max_fragment_output_attachments as _,
@@ -911,12 +916,20 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_geometry_shader_invocations: limits.max_geometry_shader_invocations as _,
             max_geometry_total_output_components: limits.max_geometry_total_output_components as _,
             max_memory_allocation_count: limits.max_memory_allocation_count as _,
-            max_per_stage_descriptor_input_attachments: limits.max_per_stage_descriptor_input_attachments as _,
-            max_per_stage_descriptor_sampled_images: limits.max_per_stage_descriptor_sampled_images as _,
+            max_per_stage_descriptor_input_attachments: limits
+                .max_per_stage_descriptor_input_attachments
+                as _,
+            max_per_stage_descriptor_sampled_images: limits.max_per_stage_descriptor_sampled_images
+                as _,
             max_per_stage_descriptor_samplers: limits.max_per_stage_descriptor_samplers as _,
-            max_per_stage_descriptor_storage_buffers: limits.max_per_stage_descriptor_storage_buffers as _,
-            max_per_stage_descriptor_storage_images: limits.max_per_stage_descriptor_storage_images as _,
-            max_per_stage_descriptor_uniform_buffers: limits.max_per_stage_descriptor_uniform_buffers as _,
+            max_per_stage_descriptor_storage_buffers: limits
+                .max_per_stage_descriptor_storage_buffers
+                as _,
+            max_per_stage_descriptor_storage_images: limits.max_per_stage_descriptor_storage_images
+                as _,
+            max_per_stage_descriptor_uniform_buffers: limits
+                .max_per_stage_descriptor_uniform_buffers
+                as _,
             max_per_stage_resources: limits.max_per_stage_resources as _,
             max_push_constants_size: limits.max_push_constants_size as _,
             max_sampler_allocation_count: limits.max_sampler_allocation_count as _,
