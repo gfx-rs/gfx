@@ -16,10 +16,10 @@
 //!     let mut events_loop = EventsLoop::new();
 //!     let wb = WindowBuilder::new();
 //!     let glutin_window = ContextBuilder::new().with_vsync(true).build_windowed(wb, &events_loop).unwrap();
-//!     let glutin_window = unsafe { glutin_window.make_current() }.expect("Failed to make the context current");
+//!     let (glutin_context, glutin_window) = unsafe { glutin_window.make_current().expect("Failed to make the context current").split() };
 //!
 //!     // Then use the glutin window to create a gfx surface.
-//!     let surface = Surface::from_window(glutin_window);
+//!     let surface = Surface::from_context(glutin_context);
 //! }
 //! ```
 //!
@@ -67,7 +67,7 @@ fn get_window_extent(window: &glutin::Window) -> image::Extent {
 #[derive(Debug)]
 pub struct Swapchain {
     // Underlying window, required for presentation
-    pub(crate) context: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
+    pub(crate) context: Starc<glutin::RawContext<glutin::PossiblyCurrent>>,
     // Extent because the window lies
     pub(crate) extent: Extent2D,
     ///
@@ -86,26 +86,26 @@ impl hal::Swapchain<B> for Swapchain {
     }
 }
 
-//TODO: if we make `Surface` a `WindowBuilder` instead of `WindowedContext`,
+//TODO: if we make `Surface` a `WindowBuilder` instead of `RawContext`,
 // we could spawn window + GL context when a swapchain is requested
 // and actually respect the swapchain configuration provided by the user.
 #[derive(Clone, Debug)]
 pub struct Surface {
-    pub(crate) context: Starc<glutin::WindowedContext<glutin::PossiblyCurrent>>,
+    pub(crate) context: Starc<glutin::RawContext<glutin::PossiblyCurrent>>,
 }
 
 impl Surface {
-    pub fn from_window(context: glutin::WindowedContext<glutin::PossiblyCurrent>) -> Self {
+    pub fn from_context(context: glutin::RawContext<glutin::PossiblyCurrent>) -> Self {
         Surface {
             context: Starc::new(context),
         }
     }
 
-    pub fn get_context(&self) -> &glutin::WindowedContext<glutin::PossiblyCurrent> {
+    pub fn get_context(&self) -> &glutin::RawContext<glutin::PossiblyCurrent> {
         &*self.context
     }
 
-    pub fn context(&self) -> &glutin::WindowedContext<glutin::PossiblyCurrent> {
+    pub fn context(&self) -> &glutin::RawContext<glutin::PossiblyCurrent> {
         &self.context
     }
 
@@ -125,12 +125,6 @@ impl Surface {
 }
 
 impl hal::Surface<B> for Surface {
-    fn kind(&self) -> hal::image::Kind {
-        let ex = get_window_extent(&self.context.window());
-        let samples = self.context.get_pixel_format().multisampling.unwrap_or(1);
-        hal::image::Kind::D2(ex.width, ex.height, 1, samples as _)
-    }
-
     fn compatibility(
         &self,
         _: &PhysicalDevice,
@@ -139,19 +133,19 @@ impl hal::Surface<B> for Surface {
         Option<Vec<f::Format>>,
         Vec<hal::PresentMode>,
     ) {
-        let ex = get_window_extent(&self.context.window());
-        let extent = hal::window::Extent2D::from(ex);
-
         let caps = hal::SurfaceCapabilities {
             image_count: if self.context.get_pixel_format().double_buffer {
                 2 .. 3
             } else {
                 1 .. 2
             },
-            current_extent: Some(extent),
-            extents: extent .. hal::window::Extent2D {
-                width: ex.width + 1,
-                height: ex.height + 1,
+            current_extent: None,
+            extents: hal::window::Extent2D {
+                width: 4,
+                height: 4,
+            } .. hal::window::Extent2D {
+                width: 4096,
+                height: 4096,
             },
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,

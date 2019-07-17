@@ -116,21 +116,26 @@ fn main() {
         (window, instance, adapters, surface)
     };
     #[cfg(feature = "gl")]
-    let (mut adapters, mut surface) = {
+    let (window, mut adapters, mut surface) = {
         #[cfg(not(target_arch = "wasm32"))]
-        let window = {
+        let (window, surface) = {
             let builder =
                 back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
                     .with_vsync(true);
-            let context = builder.build_windowed(wb, &events_loop).unwrap();
-            unsafe { context.make_current() }.expect("Unable to make context current")
+            let windowed_context = builder.build_windowed(wb, &events_loop).unwrap();
+            let (context, window) = unsafe { windowed_context.make_current().expect("Unable to make context current").split() };
+            let surface = back::Surface::from_context(context);
+            (window, surface)
         };
         #[cfg(target_arch = "wasm32")]
-        let window = { back::Window };
+        let (window, surface) = {
+            let window = back::Window;
+            let surface = back::Surface::from_window(&window);
+            (window, surface)
+        };
 
-        let surface = back::Surface::from_window(window);
         let adapters = surface.enumerate_adapters();
-        (adapters, surface)
+        (window, adapters, surface)
     };
 
     for adapter in &adapters {
@@ -665,7 +670,7 @@ fn main() {
                         #[cfg(feature = "gl")]
                         {
                             let context = surface.get_context();
-                            context.resize(dims.to_physical(context.window().get_hidpi_factor()));
+                            context.resize(dims.to_physical(window.get_hidpi_factor()));
                         }
                         recreate_swapchain = true;
                         resize_dims.width = dims.width as u32;

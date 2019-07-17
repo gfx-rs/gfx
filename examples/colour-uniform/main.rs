@@ -124,12 +124,12 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 
 trait SurfaceTrait {
     #[cfg(feature = "gl")]
-    fn get_window_t(&self) -> &back::glutin::WindowedContext<back::glutin::PossiblyCurrent>;
+    fn get_context_t(&self) -> &back::glutin::RawContext<back::glutin::PossiblyCurrent>;
 }
 
 impl SurfaceTrait for <back::Backend as hal::Backend>::Surface {
     #[cfg(feature = "gl")]
-    fn get_window_t(&self) -> &back::glutin::WindowedContext<back::glutin::PossiblyCurrent> {
+    fn get_context_t(&self) -> &back::glutin::RawContext<back::glutin::PossiblyCurrent> {
         self.get_context()
     }
 }
@@ -405,8 +405,8 @@ impl<B: Backend> RendererState<B> {
                             | winit::WindowEvent::CloseRequested => running = false,
                             winit::WindowEvent::Resized(dims) => {
                                 #[cfg(feature = "gl")]
-                                backend.surface.get_window_t().resize(dims.to_physical(
-                                    backend.surface.get_window_t().window().get_hidpi_factor(),
+                                backend.surface.get_context_t().resize(dims.to_physical(
+                                    backend.window.get_hidpi_factor(),
                                 ));
                                 recreate_swapchain = true;
                             }
@@ -673,13 +673,6 @@ impl WindowState {
 struct BackendState<B: Backend> {
     surface: B::Surface,
     adapter: AdapterState<B>,
-    #[cfg(any(
-        feature = "vulkan",
-        feature = "dx11",
-        feature = "dx12",
-        feature = "metal"
-    ))]
-    #[allow(dead_code)]
     window: winit::Window,
 }
 
@@ -711,22 +704,23 @@ fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend
 
 #[cfg(feature = "gl")]
 fn create_backend(window_state: &mut WindowState) -> (BackendState<back::Backend>, ()) {
-    let window = {
+    let (context, window) = {
         let builder =
             back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
                 .with_vsync(true);
-        let context = builder
+        let windowed_context = builder
             .build_windowed(window_state.wb.take().unwrap(), &window_state.events_loop)
             .unwrap();
-        unsafe { context.make_current() }.expect("Unable to make context current")
+        unsafe { windowed_context.make_current().expect("Unable to make context current").split() }
     };
 
-    let surface = back::Surface::from_window(window);
+    let surface = back::Surface::from_context(context);
     let mut adapters = surface.enumerate_adapters();
     (
         BackendState {
             adapter: AdapterState::new(&mut adapters),
             surface,
+            window,
         },
         (),
     )

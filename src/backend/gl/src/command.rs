@@ -521,10 +521,12 @@ impl RawCommandBuffer {
             })
             .collect::<Vec<_>>();
 
-        self.push_cmd(Command::BindFrameBuffer(
+        let cmd = Command::BindFrameBuffer(
             glow::DRAW_FRAMEBUFFER,
             state.framebuffer.fbos[self.cur_subpass],
-        ));
+        );
+
+        self.push_cmd(cmd);
 
         // Record commands
         let draw_buffers = self.add(&draw_buffers);

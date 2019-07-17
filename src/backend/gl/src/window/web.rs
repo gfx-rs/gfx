@@ -2,13 +2,6 @@ use crate::hal::window::Extent2D;
 use crate::hal::{self, format as f, image, CompositeAlpha};
 use crate::{native, Backend as B, GlContainer, PhysicalDevice, QueueFamily};
 
-fn get_window_extent(window: &Window) -> image::Extent {
-    image::Extent {
-        width: 640 as image::Size,
-        height: 480 as image::Size,
-        depth: 1,
-    }
-}
 
 struct PixelFormat {
     color_bits: u32,
@@ -32,8 +25,16 @@ impl Window {
         }
     }
 
-    pub fn get_hidpi_factor(&self) -> i32 {
-        1
+    pub fn get_window_extent(&self) -> image::Extent {
+        image::Extent {
+            width: 640,
+            height: 480,
+            depth: 1,
+        }
+    }
+
+    pub fn get_hidpi_factor(&self) -> f64 {
+        1.0
     }
 
     pub fn resize<T>(&self, parameter: T) {}
@@ -41,7 +42,6 @@ impl Window {
 
 #[derive(Clone, Debug)]
 pub struct Swapchain {
-    pub(crate) window: Window,
     pub(crate) extent: Extent2D,
     pub(crate) fbos: Vec<native::RawFrameBuffer>,
 }
@@ -59,25 +59,15 @@ impl hal::Swapchain<B> for Swapchain {
 }
 
 #[derive(Copy, Clone, Debug)]
-pub struct Surface {
-    window: Window,
-}
+pub struct Surface;
 
 impl Surface {
-    pub fn from_window(window: Window) -> Self {
-        Surface { window: Window }
-    }
-
-    pub fn get_window(&self) -> &Window {
-        &self.window
-    }
-
-    pub fn window(&self) -> &Window {
-        &self.window
+    pub fn from_window(_window: &Window) -> Self {
+        Surface
     }
 
     fn swapchain_formats(&self) -> Vec<f::Format> {
-        let pixel_format = self.window.get_pixel_format();
+        let pixel_format = Window.get_pixel_format();
         let color_bits = pixel_format.color_bits;
         let alpha_bits = pixel_format.alpha_bits;
         let srgb = pixel_format.srgb;
@@ -92,12 +82,6 @@ impl Surface {
 }
 
 impl hal::Surface<B> for Surface {
-    fn kind(&self) -> hal::image::Kind {
-        let ex = get_window_extent(&self.window);
-        let samples = self.window.get_pixel_format().multisampling.unwrap_or(1);
-        hal::image::Kind::D2(ex.width, ex.height, 1, samples as _)
-    }
-
     fn compatibility(
         &self,
         _: &PhysicalDevice,
@@ -106,11 +90,11 @@ impl hal::Surface<B> for Surface {
         Option<Vec<f::Format>>,
         Vec<hal::PresentMode>,
     ) {
-        let ex = get_window_extent(&self.window);
+        let ex = Window.get_window_extent();
         let extent = hal::window::Extent2D::from(ex);
 
         let caps = hal::SurfaceCapabilities {
-            image_count: if self.window.get_pixel_format().double_buffer {
+            image_count: if Window.get_pixel_format().double_buffer {
                 2 .. 3
             } else {
                 1 .. 2

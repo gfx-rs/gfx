@@ -62,11 +62,6 @@ impl hal::Surface<Backend> for Surface {
         }
     }
 
-    fn kind(&self) -> i::Kind {
-        let (width, height) = self.get_extent();
-        i::Kind::D2(width, height, 1, 1)
-    }
-
     fn compatibility(
         &self,
         _: &PhysicalDevice,
