@@ -1089,9 +1089,9 @@ impl hal::Instance for Instance {
                     min_storage_buffer_offset_alignment: 1, // TODO
                     // TODO: query supported sample count for all framebuffer formats and increase the limit
                     //       if possible.
-                    framebuffer_color_samples_count: 0b101,
-                    framebuffer_depth_samples_count: 0b101,
-                    framebuffer_stencil_samples_count: 0b101,
+                    framebuffer_color_sample_counts: 0b101,
+                    framebuffer_depth_sample_counts: 0b101,
+                    framebuffer_stencil_sample_counts: 0b101,
                     max_color_attachments: d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
                     buffer_image_granularity: 1,
                     non_coherent_atom_size: 1, //TODO: confirm

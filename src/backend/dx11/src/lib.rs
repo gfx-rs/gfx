@@ -383,9 +383,9 @@ impl hal::Instance for Instance {
                 min_texel_buffer_offset_alignment: 1,                                     // TODO
                 min_uniform_buffer_offset_alignment: 16, // TODO: verify
                 min_storage_buffer_offset_alignment: 1,  // TODO
-                framebuffer_color_samples_count: 1,      // TODO
-                framebuffer_depth_samples_count: 1,      // TODO
-                framebuffer_stencil_samples_count: 1,    // TODO
+                framebuffer_color_sample_counts: 1,      // TODO
+                framebuffer_depth_sample_counts: 1,      // TODO
+                framebuffer_stencil_sample_counts: 1,    // TODO
                 max_color_attachments: d3d11::D3D11_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
                 buffer_image_granularity: 1,
                 non_coherent_atom_size: 1, // TODO
