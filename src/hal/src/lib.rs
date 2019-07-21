@@ -378,11 +378,11 @@ pub struct Limits {
     /// The alignment of the start of buffer used as a storage buffer, in bytes, non-zero.
     pub min_storage_buffer_offset_alignment: buffer::Offset,
     /// Number of samples supported for color attachments of framebuffers (floating/fixed point).
-    pub framebuffer_color_samples_count: image::NumSamples,
+    pub framebuffer_color_sample_counts: image::NumSamples,
     /// Number of samples supported for depth attachments of framebuffers.
-    pub framebuffer_depth_samples_count: image::NumSamples,
+    pub framebuffer_depth_sample_counts: image::NumSamples,
     /// Number of samples supported for stencil attachments of framebuffers.
-    pub framebuffer_stencil_samples_count: image::NumSamples,
+    pub framebuffer_stencil_sample_counts: image::NumSamples,
     /// Maximum number of color attachments that can be used by a subpass in a render pass.
     pub max_color_attachments: usize,
     ///

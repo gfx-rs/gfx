@@ -489,9 +489,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             max_vertex_input_binding_stride: 256,   // TODO
             max_vertex_output_components: 16,       // TODO
 
-            framebuffer_color_samples_count: 0b101,   // TODO
-            framebuffer_depth_samples_count: 0b101,   // TODO
-            framebuffer_stencil_samples_count: 0b101, // TODO
+            framebuffer_color_sample_counts: 0b101,   // TODO
+            framebuffer_depth_sample_counts: 0b101,   // TODO
+            framebuffer_stencil_sample_counts: 0b101, // TODO
             max_color_attachments: MAX_COLOR_ATTACHMENTS,
 
             buffer_image_granularity: 1,
