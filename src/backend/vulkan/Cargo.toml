@@ -13,7 +13,7 @@ workspace = "../../.."
 edition = "2018"
 
 [features]
-default = ["winit", "x11"]
+default = []
 use-rtld-next = ["shared_library"]
 
 [lib]

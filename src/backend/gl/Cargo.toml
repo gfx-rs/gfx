@@ -17,7 +17,7 @@ build = "build.rs"
 name = "gfx_backend_gl"
 
 [features]
-default = ["glutin"]
+default = []
 wgl = []
 
 [dependencies]

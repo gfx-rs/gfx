@@ -38,17 +38,19 @@ glsl-to-spirv = { version = "0.1", optional = true }
 [dependencies.gfx-backend-vulkan]
 path = "../../src/backend/vulkan"
 version = "0.2"
+features = ["winit", "x11"]
 optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx12]
 path = "../../src/backend/dx12"
 version = "0.2"
+features = ["winit"]
 optional = true
 
 [target.'cfg(any(target_os = "macos", all(target_os = "ios", target_arch = "aarch64")))'.dependencies.gfx-backend-metal]
 path = "../../src/backend/metal"
 version = "0.2"
-features = ["auto-capture"]
+features = ["winit", "auto-capture"]
 optional = true
 
 [dependencies.gfx-backend-gl]
