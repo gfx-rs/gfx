@@ -998,7 +998,7 @@ impl d::Device<B> for Device {
                 }
 
             }
-            
+
             let status = gl.check_framebuffer_status(target);
             match status {
                 glow::FRAMEBUFFER_COMPLETE => {},
@@ -1892,12 +1892,12 @@ impl d::Device<B> for Device {
                 .unwrap();
 
             match image.kind {
-                n::ImageKind::Surface(surface) => {
+                n::ImageKind::Surface(suf) => {
                     gl.framebuffer_renderbuffer(
                         glow::FRAMEBUFFER,
                         glow::COLOR_ATTACHMENT0,
                         glow::RENDERBUFFER,
-                        Some(surface),
+                        Some(suf),
                     );
                 }
                 n::ImageKind::Texture {
@@ -1950,6 +1950,12 @@ impl d::Device<B> for Device {
         let swapchain = Swapchain {
             fbos,
             extent: config.extent,
+        };
+
+        #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+        let swapchain = Swapchain {
+            extent: { let _ = surface; config.extent },
+            fbos,
         };
 
         Ok((swapchain, images))
