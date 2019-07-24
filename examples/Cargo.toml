@@ -38,16 +38,9 @@ gfx-backend-empty = { path = "../src/backend/empty", version = "0.2" }
 winit = "0.19"
 glsl-to-spirv = "0.1.4"
 
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies.gfx-backend-gl]
+[dependencies.gfx-backend-gl]
 path = "../src/backend/gl"
 version = "0.2"
-default-features = false
-optional = true
-
-[target.'cfg(target_arch = "wasm32")'.dependencies.gfx-backend-gl]
-path = "../src/backend/gl"
-version = "0.2"
-default-features = false
 optional = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
@@ -62,19 +55,23 @@ features = [ "console", "Document", "Element", "HtmlElement", "Node", "Window" ]
 [dependencies.gfx-backend-vulkan]
 path = "../src/backend/vulkan"
 version = "0.2"
+features = ["winit", "x11"]
 optional = true
 
 [target.'cfg(any(target_os = "macos", all(target_os = "ios", target_arch = "aarch64")))'.dependencies.gfx-backend-metal]
 path = "../src/backend/metal"
 version = "0.2"
+features = ["winit"]
 optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx11]
 path = "../src/backend/dx11"
 version = "0.2"
+features = ["winit"]
 optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx12]
 path = "../src/backend/dx12"
 version = "0.2"
+features = ["winit"]
 optional = true

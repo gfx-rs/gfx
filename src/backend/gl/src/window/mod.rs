@@ -5,3 +5,6 @@ pub mod web;
 
 #[cfg(feature = "wgl")]
 pub mod wgl;
+
+#[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+pub mod dummy;

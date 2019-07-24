@@ -13,7 +13,7 @@ workspace = "../../.."
 edition = "2018"
 
 [features]
-default = ["winit"]
+default = []
 auto-capture = []
 signpost = []
 

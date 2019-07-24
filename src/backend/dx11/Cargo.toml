@@ -12,7 +12,7 @@ documentation = "https://docs.rs/gfx-backend-dx11"
 workspace = "../../.."
 
 [features]
-default = ["winit"]
+default = []
 
 [lib]
 name = "gfx_backend_dx11"

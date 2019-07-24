@@ -1027,7 +1027,6 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         }
     }
 
-    #[cfg(any(feature = "glutin", feature = "wgl", target_arch = "wasm32"))]
     unsafe fn present<'a, W, Is, S, Iw>(
         &mut self,
         swapchains: Is,

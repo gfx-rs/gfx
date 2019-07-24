@@ -1,8 +1,4 @@
-use hal::window::Extent2D;
-use hal::{self, format as f, image, CompositeAlpha};
-
 use crate::{native, Backend, GlContainer, PhysicalDevice, QueueFamily};
-use hal::format::Format;
 
 use std::{
     ffi::{CString, OsStr},
@@ -10,6 +6,12 @@ use std::{
     os::{raw::c_void, windows::ffi::OsStrExt},
     ptr,
 };
+
+use hal::window::Extent2D;
+use hal::{self, format as f, image, CompositeAlpha};
+use hal::format::Format;
+
+use lazy_static::lazy_static;
 use winapi::shared::minwindef::*;
 use winapi::shared::windef::*;
 use winapi::um::libloaderapi::*;

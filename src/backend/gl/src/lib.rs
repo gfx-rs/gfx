@@ -10,8 +10,6 @@ extern crate log;
 extern crate gfx_hal as hal;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub extern crate glutin;
-#[macro_use]
-extern crate lazy_static;
 
 use std::cell::Cell;
 use std::fmt;
@@ -36,20 +34,24 @@ mod state;
 mod window;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
-pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
+pub use window::glutin::{config_context, Headless, Surface, Swapchain};
 #[cfg(target_arch = "wasm32")]
-pub use crate::window::web::{Surface, Swapchain, Window};
+pub use window::web::{Surface, Swapchain, Window};
 
 #[cfg(feature = "wgl")]
 pub use window::wgl::Instance;
 #[cfg(feature = "wgl")]
 use window::wgl::{DeviceContext, Surface, Swapchain};
 
+#[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+pub use window::dummy::{Surface, Swapchain};
+
 #[cfg(not(target_arch = "wasm32"))]
 pub use glow::native::Context as GlContext;
 #[cfg(target_arch = "wasm32")]
 pub use glow::web::Context as GlContext;
 use glow::Context;
+
 
 
 pub(crate) struct GlContainer {
@@ -394,7 +396,7 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 #[derive(Debug)]
 pub struct PhysicalDevice(Starc<Share>);
 
-#[cfg(any(feature = "glutin", target_arch = "wasm32"))]
+#[cfg(not(feature = "wgl"))]
 type DeviceContext = ();
 
 impl PhysicalDevice {
