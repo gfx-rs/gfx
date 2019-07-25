@@ -39,3 +39,8 @@ smallvec = "0.6"
 spirv_cross = { version = "0.15", features = ["msl"] }
 parking_lot = "0.6.3"
 storage-map = "0.1.2"
+
+# This forces docs.rs to build the crate on mac, otherwise the build fails
+# and we get no docs at all.
+[package.metadata.docs.rs]
+default-target = "x86_64-apple-darwin"
