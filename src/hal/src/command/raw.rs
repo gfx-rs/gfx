@@ -1,7 +1,7 @@
 use std::any::Any;
 use std::borrow::Borrow;
 use std::fmt;
-use std::ops::Range;
+use std::ops::{Range, RangeBounds};
 
 use super::{
     AttachmentClear,
@@ -155,14 +155,15 @@ pub trait RawCommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     // Should probably be a whole book chapter on synchronization and stuff really.
     /// Inserts a synchronization dependency between pipeline stages
     /// in the command buffer.
-    unsafe fn pipeline_barrier<'a, T>(
+    unsafe fn pipeline_barrier<'a, R, T>(
         &mut self,
         stages: Range<pso::PipelineStage>,
         dependencies: Dependencies,
         barriers: T,
     ) where
+        R: RangeBounds<buffer::Offset>,
         T: IntoIterator,
-        T::Item: Borrow<Barrier<'a, B>>;
+        T::Item: Borrow<Barrier<'a, B, R>>;
 
     /// Fill a buffer with the given `u32` value.
     unsafe fn fill_buffer<R>(&mut self, buffer: &B::Buffer, range: R, data: u32)
@@ -516,7 +517,7 @@ pub trait RawCommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// - `dst_stages` specifies the shader pipeline stages at which execution should wait.
     /// - `barriers` specifies a series of memory barriers to be executed before pipeline execution
     ///   resumes.
-    unsafe fn wait_events<'a, I, J>(
+    unsafe fn wait_events<'a, I, R, J>(
         &mut self,
         events: I,
         stages: Range<pso::PipelineStage>,
@@ -524,8 +525,9 @@ pub trait RawCommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) where
         I: IntoIterator,
         I::Item: Borrow<B::Event>,
+        R: RangeBounds<buffer::Offset>,
         J: IntoIterator,
-        J::Item: Borrow<Barrier<'a, B>>;
+        J::Item: Borrow<Barrier<'a, B, R>>;
 
     /// Begins a query operation.  Queries count operations or record timestamps
     /// resulting from commands that occur between the beginning and end of the query,

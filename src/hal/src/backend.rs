@@ -1,10 +1,12 @@
 //! Functionality only required for backend implementations.
 
+use crate::buffer::Offset;
 use crate::queue::{QueueFamily, Queues};
 use crate::Backend;
 
 use std::collections::HashMap;
 use std::hash::BuildHasherDefault;
+use std::ops::{Bound, Range, RangeBounds};
 
 use fxhash::FxHasher;
 
@@ -48,3 +50,25 @@ impl<B: Backend> Queues<B> {
 
 /// Fast hash map used internally.
 pub type FastHashMap<K, V> = HashMap<K, V, BuildHasherDefault<FxHasher>>;
+
+/// Helper trait that adds methods to `RangeBounds` for buffer ranges
+pub trait Bounds {
+    fn to_range(&self, end: Offset) -> Range<Offset>;
+}
+
+impl<B: RangeBounds<Offset>> Bounds for B {
+    fn to_range(&self, end: Offset) -> Range<Offset> {
+        Range {
+            start: match self.start_bound() {
+                Bound::Included(&v) => v,
+                Bound::Excluded(&v) => v + 1,
+                Bound::Unbounded => 0,
+            },
+            end: match self.end_bound() {
+                Bound::Included(&v) => v + 1,
+                Bound::Excluded(&v) => v,
+                Bound::Unbounded => end,
+            },
+        }
+    }
+}

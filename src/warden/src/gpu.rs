@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
 use std::path::PathBuf;
-use std::{iter, slice};
+use std::{iter, ops::RangeFull, slice};
 
 use crate::hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
 use crate::hal::{DescriptorPool, Device, PhysicalDevice};
@@ -55,10 +55,10 @@ pub struct Buffer<B: hal::Backend> {
 }
 
 impl<B: hal::Backend> Buffer<B> {
-    fn barrier_to(&self, access: b::Access) -> memory::Barrier<B> {
+    fn barrier_to(&self, access: b::Access) -> memory::Barrier<B, RangeFull> {
         memory::Barrier::whole_buffer(&self.handle, self.stable_state .. access)
     }
-    fn barrier_from(&self, access: b::Access) -> memory::Barrier<B> {
+    fn barrier_from(&self, access: b::Access) -> memory::Barrier<B, RangeFull> {
         memory::Barrier::whole_buffer(&self.handle, access .. self.stable_state)
     }
 }
@@ -73,7 +73,7 @@ pub struct Image<B: hal::Backend> {
 }
 
 impl<B: hal::Backend> Image<B> {
-    fn barrier_to(&self, access: i::Access, layout: i::Layout) -> memory::Barrier<B> {
+    fn barrier_to(&self, access: i::Access, layout: i::Layout) -> memory::Barrier<B, RangeFull> {
         memory::Barrier::Image {
             states: self.stable_state .. (access, layout),
             target: &self.handle,
@@ -81,7 +81,7 @@ impl<B: hal::Backend> Image<B> {
             range: self.range.clone(),
         }
     }
-    fn barrier_from(&self, access: i::Access, layout: i::Layout) -> memory::Barrier<B> {
+    fn barrier_from(&self, access: i::Access, layout: i::Layout) -> memory::Barrier<B, RangeFull> {
         memory::Barrier::Image {
             states: (access, layout) .. self.stable_state,
             target: &self.handle,
@@ -379,7 +379,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                 },
                             };
                             unsafe {
-                                init_cmd.pipeline_barrier(
+                                init_cmd.pipeline_barrier::<RangeFull, _>(
                                     pso::PipelineStage::TOP_OF_PIPE
                                         .. pso::PipelineStage::BOTTOM_OF_PIPE,
                                     memory::Dependencies::empty(),
@@ -446,7 +446,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             range: COLOR_RANGE.clone(), //TODO
                         };
                         unsafe {
-                            init_cmd.pipeline_barrier(
+                            init_cmd.pipeline_barrier::<RangeFull, _>(
                                 pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                                 memory::Dependencies::empty(),
                                 &[pre_barrier],
@@ -482,7 +482,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                             range: COLOR_RANGE.clone(), //TODO
                         };
                         unsafe {
-                            init_cmd.pipeline_barrier(
+                            init_cmd.pipeline_barrier::<RangeFull, _>(
                                 pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                                 memory::Dependencies::empty(),
                                 &[post_barrier],
@@ -669,7 +669,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                         .buffers
                                         .get(s)
                                         .expect(&format!("Missing buffer: {}", s));
-                                    hal::pso::Descriptor::Buffer(&buf.handle, None .. None)
+                                    hal::pso::Descriptor::Buffer(&buf.handle, ..)
                                 }),
                                 raw::DescriptorRange::Images(_) => unimplemented!(),
                             },
@@ -1428,7 +1428,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 families: None,
                 range: COLOR_RANGE.clone(), //TODO
             };
-            cmd_buffer.pipeline_barrier(
+            cmd_buffer.pipeline_barrier::<RangeFull, _>(
                 pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                 memory::Dependencies::empty(),
                 &[pre_barrier],
@@ -1464,7 +1464,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 families: None,
                 range: COLOR_RANGE.clone(), //TODO
             };
-            cmd_buffer.pipeline_barrier(
+            cmd_buffer.pipeline_barrier::<RangeFull, _>(
                 pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
                 memory::Dependencies::empty(),
                 &[post_barrier],

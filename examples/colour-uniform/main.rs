@@ -44,6 +44,7 @@ struct Dimensions<T> {
 use std::cell::RefCell;
 use std::io::Cursor;
 use std::mem::size_of;
+use std::ops::{RangeBounds, RangeFull};
 use std::rc::Rc;
 use std::{fs, iter};
 
@@ -1036,7 +1037,7 @@ impl<B: Backend> Uniform<B> {
                 array_offset: 0,
                 descriptors: Some(pso::Descriptor::Buffer(
                     buffer.as_ref().unwrap().get_buffer(),
-                    None .. None,
+                    ..,
                 )),
             }],
             &mut device.borrow_mut().device,
@@ -1107,13 +1108,14 @@ struct DescSetWrite<W> {
 }
 
 impl<B: Backend> DescSet<B> {
-    unsafe fn write_to_state<'a, 'b: 'a, W>(
+    unsafe fn write_to_state<'a, 'b: 'a, R, W>(
         &'b mut self,
         write: Vec<DescSetWrite<W>>,
         device: &mut B::Device,
     ) where
+        R: RangeBounds<buffer::Offset>,
         W: IntoIterator,
-        W::Item: std::borrow::Borrow<pso::Descriptor<'a, B>>,
+        W::Item: std::borrow::Borrow<pso::Descriptor<'a, B, R>>,
     {
         let set = self.set.as_ref().unwrap();
         let write: Vec<_> = write
@@ -1204,7 +1206,7 @@ impl<B: Backend> ImageState<B> {
             .create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
             .expect("Can't create sampler");
 
-        desc.write_to_state(
+        desc.write_to_state::<RangeFull, _>(
             vec![
                 DescSetWrite {
                     binding: 0,
@@ -1235,7 +1237,7 @@ impl<B: Backend> ImageState<B> {
                 range: COLOR_RANGE.clone(),
             };
 
-            cmd_buffer.pipeline_barrier(
+            cmd_buffer.pipeline_barrier::<RangeFull, _>(
                 PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER,
                 m::Dependencies::empty(),
                 &[image_barrier],
@@ -1270,7 +1272,7 @@ impl<B: Backend> ImageState<B> {
                 families: None,
                 range: COLOR_RANGE.clone(),
             };
-            cmd_buffer.pipeline_barrier(
+            cmd_buffer.pipeline_barrier::<RangeFull, _>(
                 PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER,
                 m::Dependencies::empty(),
                 &[image_barrier],

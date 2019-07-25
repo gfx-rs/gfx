@@ -18,9 +18,7 @@
 
 use std::borrow::Borrow;
 use std::fmt;
-use std::ops::Range;
 
-use crate::buffer::Offset;
 use crate::image::Layout;
 use crate::pso::ShaderStageFlags;
 use crate::Backend;
@@ -201,11 +199,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
 /// to the `write_descriptor_sets` method of a `Device`.
 #[allow(missing_docs)]
 #[derive(Debug)]
-pub struct DescriptorSetWrite<'a, B: Backend, WI>
-where
-    WI: IntoIterator,
-    WI::Item: Borrow<Descriptor<'a, B>>,
-{
+pub struct DescriptorSetWrite<'a, B: Backend, WI> {
     pub set: &'a B::DescriptorSet,
     /// *Note*: when there is more descriptors provided than
     /// array elements left in the specified binding starting
@@ -222,11 +216,11 @@ where
 /// [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
 #[allow(missing_docs)]
 #[derive(Clone, Debug)]
-pub enum Descriptor<'a, B: Backend> {
+pub enum Descriptor<'a, B: Backend, R> {
     Sampler(&'a B::Sampler),
     Image(&'a B::ImageView, Layout),
     CombinedImageSampler(&'a B::ImageView, Layout, &'a B::Sampler),
-    Buffer(&'a B::Buffer, Range<Option<Offset>>),
+    Buffer(&'a B::Buffer, R),
     UniformTexelBuffer(&'a B::BufferView),
     StorageTexelBuffer(&'a B::BufferView),
 }

@@ -1,7 +1,7 @@
 //! Types to describe the properties of memory allocated for gfx resources.
 
 use crate::{buffer, image, queue, Backend};
-use std::{mem, ops::Range};
+use std::{mem, ops::{Range, RangeFull}};
 
 /// A trait for plain-old-data types.
 ///
@@ -76,7 +76,7 @@ bitflags!(
 /// type for either buffers or images.
 #[allow(missing_docs)]
 #[derive(Clone, Debug)]
-pub enum Barrier<'a, B: Backend> {
+pub enum Barrier<'a, B: Backend, R> {
     /// Applies the given access flags to all buffers in the range.
     AllBuffers(Range<buffer::Access>),
     /// Applies the given access flags to all images in the range.
@@ -91,7 +91,7 @@ pub enum Barrier<'a, B: Backend> {
         /// Can be `None` to indicate no ownership transfer.
         families: Option<Range<queue::QueueFamilyId>>,
         /// Range of the buffer the barrier applies to.
-        range: Range<Option<u64>>,
+        range: R,
     },
     /// A memory barrier that defines access to (a subset of) an image.
     Image {
@@ -107,14 +107,14 @@ pub enum Barrier<'a, B: Backend> {
     },
 }
 
-impl<'a, B: Backend> Barrier<'a, B> {
+impl<'a, B: Backend> Barrier<'a, B, RangeFull> {
     /// Create a barrier for the whole buffer between the given states.
     pub fn whole_buffer(target: &'a B::Buffer, states: Range<buffer::State>) -> Self {
         Barrier::Buffer {
             states,
             target,
             families: None,
-            range: None .. None,
+            range: ..,
         }
     }
 }

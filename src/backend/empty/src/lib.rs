@@ -23,7 +23,7 @@ use crate::hal::{
     window,
 };
 use std::borrow::Borrow;
-use std::ops::Range;
+use std::ops::{Range, RangeBounds};
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -334,11 +334,12 @@ impl hal::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, _: I)
+    unsafe fn write_descriptor_sets<'a, I, R, J>(&self, _: I)
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
+        R: RangeBounds<buffer::Offset>,
         J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        J::Item: Borrow<pso::Descriptor<'a, Backend, R>>,
     {
         unimplemented!()
     }
@@ -556,14 +557,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn pipeline_barrier<'a, T>(
+    unsafe fn pipeline_barrier<'a, R, T>(
         &mut self,
         _: Range<pso::PipelineStage>,
         _: memory::Dependencies,
         _: T,
     ) where
+        R: RangeBounds<buffer::Offset>,
         T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T::Item: Borrow<memory::Barrier<'a, Backend, R>>,
     {
         unimplemented!()
     }
@@ -807,12 +809,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
+    unsafe fn wait_events<'a, I, R, J>(
+        &mut self, _: I, _: Range<pso::PipelineStage>, _: J
+    )
     where
         I: IntoIterator,
         I::Item: Borrow<()>,
+        R: RangeBounds<buffer::Offset>,
         J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J::Item: Borrow<memory::Barrier<'a, Backend,R >>,
     {
         unimplemented!()
     }

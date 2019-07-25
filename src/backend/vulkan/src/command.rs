@@ -1,16 +1,19 @@
-use ash::version::DeviceV1_0;
-use ash::vk;
-use smallvec::SmallVec;
 use std::borrow::Borrow;
-use std::ops::Range;
+use std::ops::{Range, RangeBounds};
 use std::sync::Arc;
 use std::{mem, ptr};
 
-use crate::hal::format::Aspects;
-use crate::hal::image::{Filter, Layout, SubresourceRange};
-use crate::hal::range::RangeArg;
-use crate::hal::{buffer, command as com, memory, pso, query};
-use crate::hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+use ash::version::DeviceV1_0;
+use ash::vk;
+use smallvec::SmallVec;
+
+use hal::backend::Bounds as _;
+use hal::format::Aspects;
+use hal::image::{Filter, Layout, SubresourceRange};
+use hal::range::RangeArg;
+use hal::{buffer, command as com, memory, pso, query};
+use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
+
 use crate::{conv, native as n};
 use crate::{Backend, RawDevice};
 
@@ -55,10 +58,11 @@ struct BarrierSet {
     image: SmallVec<[vk::ImageMemoryBarrier; 4]>,
 }
 
-fn destructure_barriers<'a, T>(barriers: T) -> BarrierSet
+fn destructure_barriers<'a, R, T>(barriers: T) -> BarrierSet
 where
+    R: RangeBounds<buffer::Offset>,
     T: IntoIterator,
-    T::Item: Borrow<memory::Barrier<'a, Backend>>,
+    T::Item: Borrow<memory::Barrier<'a, Backend, R>>,
 {
     let mut global: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
     let mut buffer: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
@@ -92,6 +96,7 @@ where
                     Some(f) => f.start.0 as u32 .. f.end.0 as u32,
                     None => vk::QUEUE_FAMILY_IGNORED .. vk::QUEUE_FAMILY_IGNORED,
                 };
+                let r = range.to_range(0);
                 buffer.push(vk::BufferMemoryBarrier {
                     s_type: vk::StructureType::BUFFER_MEMORY_BARRIER,
                     p_next: ptr::null(),
@@ -100,10 +105,12 @@ where
                     src_queue_family_index: families.start,
                     dst_queue_family_index: families.end,
                     buffer: target.raw,
-                    offset: range.start.unwrap_or(0),
-                    size: range
-                        .end
-                        .map_or(vk::WHOLE_SIZE, |end| end - range.start.unwrap_or(0)),
+                    offset: r.start,
+                    size: if r.end == 0 {
+                        vk::WHOLE_SIZE
+                    } else {
+                        r.end - r.start
+                    },
                 });
             }
             memory::Barrier::Image {
@@ -274,14 +281,15 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.device.0.cmd_end_render_pass(self.raw);
     }
 
-    unsafe fn pipeline_barrier<'a, T>(
+    unsafe fn pipeline_barrier<'a, R, T>(
         &mut self,
         stages: Range<pso::PipelineStage>,
         dependencies: memory::Dependencies,
         barriers: T,
     ) where
+        R: RangeBounds<buffer::Offset>,
         T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T::Item: Borrow<memory::Barrier<'a, Backend, R>>,
     {
         let BarrierSet {
             global,
@@ -830,7 +838,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         )
     }
 
-    unsafe fn wait_events<'a, I, J>(
+    unsafe fn wait_events<'a, I, R, J>(
         &mut self,
         events: I,
         stages: Range<pso::PipelineStage>,
@@ -838,8 +846,9 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     ) where
         I: IntoIterator,
         I::Item: Borrow<n::Event>,
+        R: RangeBounds<buffer::Offset>,
         J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J::Item: Borrow<memory::Barrier<'a, Backend, R>>,
     {
         let events = events.into_iter().map(|e| e.borrow().0).collect::<Vec<_>>();
 

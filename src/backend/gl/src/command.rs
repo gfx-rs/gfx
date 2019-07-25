@@ -1,16 +1,14 @@
 #![allow(missing_docs)]
 
-use crate::GlContext;
-
-use crate::hal::format::ChannelType;
-use crate::hal::range::RangeArg;
-use crate::hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
+use hal::format::ChannelType;
+use hal::range::RangeArg;
+use hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
 
 use crate::pool::{self, BufferMemory};
-use crate::{native as n, Backend};
+use crate::{native as n, GlContext, Backend};
 
 use std::borrow::Borrow;
-use std::ops::Range;
+use std::ops::{Range, RangeBounds};
 use std::sync::{Arc, Mutex};
 use std::{mem, slice};
 
@@ -584,14 +582,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         }
     }
 
-    unsafe fn pipeline_barrier<'a, T>(
+    unsafe fn pipeline_barrier<'a, R, T>(
         &mut self,
         _stages: Range<hal::pso::PipelineStage>,
         _dependencies: memory::Dependencies,
         _barriers: T,
     ) where
+        R: RangeBounds<buffer::Offset>,
         T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T::Item: Borrow<memory::Barrier<'a, Backend, R>>,
     {
         // TODO
     }
@@ -1345,12 +1344,13 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
+    unsafe fn wait_events<'a, I, R, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
     where
         I: IntoIterator,
         I::Item: Borrow<()>,
+        R: RangeBounds<buffer::Offset>,
         J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J::Item: Borrow<memory::Barrier<'a, Backend, R>>,
     {
         unimplemented!()
     }

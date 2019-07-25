@@ -3,18 +3,19 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use smallvec::SmallVec;
 
-use crate::hal;
-use crate::hal::error::HostExecutionError;
-use crate::hal::memory::Requirements;
-use crate::hal::pool::CommandPoolCreateFlags;
-use crate::hal::pso::VertexInputRate;
-use crate::hal::range::RangeArg;
-use crate::hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
-use crate::hal::{Features, MemoryTypeId, SwapchainConfig};
+use hal;
+use hal::backend::Bounds as _;
+use hal::error::HostExecutionError;
+use hal::memory::Requirements;
+use hal::pool::CommandPoolCreateFlags;
+use hal::pso::VertexInputRate;
+use hal::range::RangeArg;
+use hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
+use hal::{Features, MemoryTypeId, SwapchainConfig};
 
 use std::borrow::Borrow;
 use std::ffi::CString;
-use std::ops::Range;
+use std::ops::{Range, RangeBounds};
 use std::sync::Arc;
 use std::{mem, ptr};
 
@@ -1472,11 +1473,12 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
+    unsafe fn write_descriptor_sets<'a, I, R, J>(&self, write_iter: I)
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
+        R: RangeBounds<buffer::Offset>,
         J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>,
+        J::Item: Borrow<pso::Descriptor<'a, B, R>>,
     {
         let mut raw_writes = Vec::new();
         let mut image_infos = Vec::new();
@@ -1528,13 +1530,14 @@ impl d::Device<B> for Device {
                         });
                     }
                     pso::Descriptor::Buffer(buffer, ref range) => {
-                        let offset = range.start.unwrap_or(0);
+                        let r = range.to_range(0);
                         buffer_infos.push(vk::DescriptorBufferInfo {
                             buffer: buffer.raw,
-                            offset,
-                            range: match range.end {
-                                Some(end) => end - offset,
-                                None => vk::WHOLE_SIZE,
+                            offset: r.start,
+                            range: if r.end == 0 {
+                                vk::WHOLE_SIZE
+                            } else {
+                                r.end - r.start
                             },
                         });
                     }

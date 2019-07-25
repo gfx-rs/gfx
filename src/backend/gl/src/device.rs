@@ -1,19 +1,19 @@
 use std::borrow::Borrow;
 use std::cell::Cell;
-use std::ops::Range;
+use std::ops::{Range, RangeBounds};
 use std::slice;
 use std::sync::{Arc, Mutex, RwLock};
 
 use crate::{GlContainer, GlContext};
 use glow::Context;
 
-use crate::hal::backend::FastHashMap;
-use crate::hal::format::{Format, Swizzle};
-use crate::hal::pool::CommandPoolCreateFlags;
-use crate::hal::queue::QueueFamilyId;
-use crate::hal::range::RangeArg;
-use crate::hal::window::Extent2D;
-use crate::hal::{
+use hal::backend::{Bounds as _, FastHashMap};
+use hal::format::{Format, Swizzle};
+use hal::pool::CommandPoolCreateFlags;
+use hal::queue::QueueFamilyId;
+use hal::range::RangeArg;
+use hal::window::Extent2D;
+use hal::{
     self as c,
     buffer,
     device as d,
@@ -1518,29 +1518,24 @@ impl d::Device<B> for Device {
         Ok(layout.into_iter().map(|l| l.borrow().clone()).collect())
     }
 
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, writes: I)
+    unsafe fn write_descriptor_sets<'a, I, R, J>(&self, writes: I)
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
+        R: RangeBounds<buffer::Offset>,
         J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>,
+        J::Item: Borrow<pso::Descriptor<'a, B, R>>,
     {
         for mut write in writes {
             let set = &mut write.set;
             let mut bindings = set.bindings.lock().unwrap();
             let binding = write.binding;
-            let mut offset = write.array_offset as i32;
+            assert_eq!(write.array_offset, 0);
 
             for descriptor in write.descriptors {
                 match descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
                         let (raw_buffer, buffer_range) = buffer.as_bound();
-                        let start = buffer_range.start as i32 + range.start.unwrap_or(0) as i32;
-                        let end = buffer_range.start as i32
-                            + range
-                                .end
-                                .unwrap_or((buffer_range.end - buffer_range.start) as u64)
-                                as i32;
-                        let size = end - start;
+                        let r = range.to_range(buffer_range.end - buffer_range.start);
 
                         let ty = set.layout[binding as usize].ty;
                         let ty = match ty {
@@ -1553,11 +1548,9 @@ impl d::Device<B> for Device {
                             ty,
                             binding,
                             buffer: raw_buffer,
-                            offset: offset + start,
-                            size,
+                            offset: (buffer_range.start + r.start) as i32,
+                            size: (r.end - r.start) as i32,
                         });
-
-                        offset += size;
                     }
                     pso::Descriptor::CombinedImageSampler(view, _layout, sampler) => {
                         match view {

@@ -151,7 +151,7 @@ fn main() {
             set: &desc_set,
             binding: 0,
             array_offset: 0,
-            descriptors: Some(pso::Descriptor::Buffer(&device_buffer, None .. None)),
+            descriptors: Some(pso::Descriptor::Buffer(&device_buffer, ..)),
         }));
     };
 
@@ -175,13 +175,11 @@ fn main() {
         command_buffer.pipeline_barrier(
             pso::PipelineStage::TRANSFER .. pso::PipelineStage::COMPUTE_SHADER,
             memory::Dependencies::empty(),
-            Some(memory::Barrier::Buffer {
-                states: buffer::Access::TRANSFER_WRITE
+            Some(memory::Barrier::whole_buffer(
+                &device_buffer,
+                buffer::Access::TRANSFER_WRITE
                     .. buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
-                families: None,
-                target: &device_buffer,
-                range: None .. None,
-            }),
+            )),
         );
         command_buffer.bind_compute_pipeline(&pipeline);
         command_buffer.bind_compute_descriptor_sets(&pipeline_layout, 0, &[desc_set], &[]);
@@ -189,13 +187,11 @@ fn main() {
         command_buffer.pipeline_barrier(
             pso::PipelineStage::COMPUTE_SHADER .. pso::PipelineStage::TRANSFER,
             memory::Dependencies::empty(),
-            Some(memory::Barrier::Buffer {
-                states: buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE
+            Some(memory::Barrier::whole_buffer(
+                &device_buffer,
+                buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE
                     .. buffer::Access::TRANSFER_READ,
-                families: None,
-                target: &device_buffer,
-                range: None .. None,
-            }),
+            )),
         );
         command_buffer.copy_buffer(
             &device_buffer,

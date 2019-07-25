@@ -13,7 +13,7 @@
 
 use std::any::Any;
 use std::borrow::Borrow;
-use std::ops::Range;
+use std::ops::{Range, RangeBounds};
 use std::{fmt, iter, mem, slice};
 
 use crate::{buffer, format, image, mapping, pass, pso, query};
@@ -527,11 +527,12 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn destroy_descriptor_set_layout(&self, layout: B::DescriptorSetLayout);
 
     /// Specifying the parameters of a descriptor set write operation
-    unsafe fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
+    unsafe fn write_descriptor_sets<'a, I, R, J>(&self, write_iter: I)
     where
         I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
+        R: RangeBounds<buffer::Offset>,
         J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>;
+        J::Item: Borrow<pso::Descriptor<'a, B, R>>;
 
     /// Structure specifying a copy descriptor set operation
     unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)

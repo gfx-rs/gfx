@@ -1,6 +1,6 @@
 //! `CommandBuffer` methods for transfer operations.
 use std::borrow::Borrow;
-use std::ops::Range;
+use std::ops::{Range, RangeBounds};
 
 use super::{CommandBuffer, Level, RawCommandBuffer, Shot};
 use crate::memory::{Barrier, Dependencies};
@@ -9,6 +9,8 @@ use crate::queue::capability::{Supports, Transfer};
 use crate::range::RangeArg;
 use crate::Backend;
 use crate::{buffer, image};
+
+
 /// Specifies a source region and a destination
 /// region in a buffer for copying.  All values
 /// are in units of bytes.
@@ -61,14 +63,15 @@ pub struct BufferImageCopy {
 
 impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S, L> {
     /// Identical to the `RawCommandBuffer` method of the same name.
-    pub unsafe fn pipeline_barrier<'i, T>(
+    pub unsafe fn pipeline_barrier<'i, R, T>(
         &mut self,
         stages: Range<PipelineStage>,
         dependencies: Dependencies,
         barriers: T,
     ) where
+        R: RangeBounds<buffer::Offset>,
         T: IntoIterator,
-        T::Item: Borrow<Barrier<'i, B>>,
+        T::Item: Borrow<Barrier<'i, B, R>>,
     {
         self.raw.pipeline_barrier(stages, dependencies, barriers)
     }

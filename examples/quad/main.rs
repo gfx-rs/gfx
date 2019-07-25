@@ -51,6 +51,8 @@ use hal::{DescriptorPool, Primitive, SwapchainConfig};
 use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 
 use std::io::Cursor;
+use std::ops::RangeFull;
+
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 const DIMS: Extent2D = Extent2D { width: 1024,height: 768 };
@@ -316,7 +318,7 @@ fn main() {
     .expect("Can't create sampler");
 
     unsafe {
-        device.write_descriptor_sets(vec![
+        device.write_descriptor_sets::<_, RangeFull, _>(vec![
             pso::DescriptorSetWrite {
                 set: &desc_set,
                 binding: 0,
@@ -346,7 +348,7 @@ fn main() {
             range: COLOR_RANGE.clone(),
         };
 
-        cmd_buffer.pipeline_barrier(
+        cmd_buffer.pipeline_barrier::<RangeFull, _>(
             PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER,
             m::Dependencies::empty(),
             &[image_barrier],
@@ -381,7 +383,7 @@ fn main() {
             families: None,
             range: COLOR_RANGE.clone(),
         };
-        cmd_buffer.pipeline_barrier(
+        cmd_buffer.pipeline_barrier::<RangeFull, _>(
             PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER,
             m::Dependencies::empty(),
             &[image_barrier],
