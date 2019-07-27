@@ -321,7 +321,7 @@ fn main() {
                 set: &desc_set,
                 binding: 0,
                 array_offset: 0,
-                descriptors: Some(pso::Descriptor::Image(&image_srv, i::Layout::Undefined)),
+                descriptors: Some(pso::Descriptor::Image(&image_srv, i::Layout::ShaderReadOnlyOptimal)),
             },
             pso::DescriptorSetWrite {
                 set: &desc_set,
