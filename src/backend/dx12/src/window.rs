@@ -74,9 +74,9 @@ impl hal::Surface<Backend> for Surface {
         let extent = hal::window::Extent2D { width, height };
 
         let capabilities = hal::SurfaceCapabilities {
-            image_count: 2 .. 16, // we currently use a flip effect which supports 2..16 buffers
+            image_count: 2 ..= 16, // we currently use a flip effect which supports 2..=16 buffers
             current_extent: Some(extent),
-            extents: extent .. extent,
+            extents: extent ..= extent,
             max_image_layers: 1,
             usage: i::Usage::COLOR_ATTACHMENT | i::Usage::TRANSFER_SRC | i::Usage::TRANSFER_DST,
             composite_alpha: CompositeAlpha::OPAQUE, //TODO

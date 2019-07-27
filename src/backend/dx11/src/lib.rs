@@ -722,9 +722,9 @@ impl hal::Surface<Backend> for Surface {
         // NOTE: some swap effects affect msaa capabilities..
         // TODO: _DISCARD swap effects can only have one image?
         let capabilities = hal::SurfaceCapabilities {
-            image_count: 1 .. 16, // TODO:
+            image_count: 1 ..= 16, // TODO:
             current_extent: Some(extent),
-            extents: extent .. extent,
+            extents: extent ..= extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
             composite_alpha: CompositeAlpha::OPAQUE, //TODO

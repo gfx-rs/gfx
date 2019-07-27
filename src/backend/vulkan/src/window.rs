@@ -373,9 +373,9 @@ impl hal::Surface<Backend> for Surface {
         };
 
         let capabilities = hal::SurfaceCapabilities {
-            image_count: caps.min_image_count .. max_images,
+            image_count: caps.min_image_count ..= max_images,
             current_extent,
-            extents: min_extent .. max_extent,
+            extents: min_extent ..= max_extent,
             max_image_layers: caps.max_image_array_layers as _,
             usage: conv::map_vk_image_usage(caps.supported_usage_flags),
             composite_alpha: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
