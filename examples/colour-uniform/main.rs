@@ -1209,7 +1209,7 @@ impl<B: Backend> ImageState<B> {
                 DescSetWrite {
                     binding: 0,
                     array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Image(&image_view, i::Layout::Undefined)),
+                    descriptors: Some(pso::Descriptor::Image(&image_view, i::Layout::ShaderReadOnlyOptimal)),
                 },
                 DescSetWrite {
                     binding: 1,
