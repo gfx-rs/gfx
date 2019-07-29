@@ -1394,7 +1394,7 @@ impl d::Device<B> for Device {
                 }
                 _ => unimplemented!(),
             };
-            n::ImageKind::Surface(name)
+            n::ImageKind::Surface { surface: name, format: iformat }
         };
 
         let surface_desc = format.base_format().0.desc();
@@ -1457,7 +1457,7 @@ impl d::Device<B> for Device {
         assert_eq!(swizzle, Swizzle::NO);
         //TODO: check format
         match image.kind {
-            n::ImageKind::Surface(surface) => {
+            n::ImageKind::Surface { surface, .. } => {
                 if range.levels.start == 0 && range.layers.start == 0 {
                     Ok(n::ImageView::Surface(surface))
                 } else if level != 0 {
@@ -1812,7 +1812,7 @@ impl d::Device<B> for Device {
     unsafe fn destroy_image(&self, image: n::Image) {
         let gl = &self.share.context;
         match image.kind {
-            n::ImageKind::Surface(rb) => gl.delete_renderbuffer(rb),
+            n::ImageKind::Surface { surface, .. } => gl.delete_renderbuffer(surface),
             n::ImageKind::Texture { texture, .. } => gl.delete_texture(texture),
         }
     }
@@ -1892,12 +1892,12 @@ impl d::Device<B> for Device {
                 .unwrap();
 
             match image.kind {
-                n::ImageKind::Surface(suf) => {
+                n::ImageKind::Surface { surface, .. } => {
                     gl.framebuffer_renderbuffer(
                         glow::FRAMEBUFFER,
                         glow::COLOR_ATTACHMENT0,
                         glow::RENDERBUFFER,
-                        Some(suf),
+                        Some(surface),
                     );
                 }
                 n::ImageKind::Texture {

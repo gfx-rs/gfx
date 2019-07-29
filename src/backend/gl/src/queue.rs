@@ -698,8 +698,60 @@ impl CommandQueue {
             com::Command::CopyImageToTexture(..) => {
                 unimplemented!() //TODO: use FBO
             }
-            com::Command::CopyImageToSurface(..) => {
-                unimplemented!() //TODO: use FBO
+            com::Command::CopyImageToSurface {
+                src_image,
+                dst_surface,
+                dst_format,
+                ref data
+            } => {
+                let gl = &self.share.context;
+
+                if data.src_subresource.aspects != hal::format::Aspects::COLOR
+                    || data.dst_subresource.aspects != hal::format::Aspects::COLOR {
+                        unimplemented!()
+                }
+
+                match src_image {
+                    native::ImageKind::Texture { .. } => {
+                        unimplemented!()
+                    }
+                    native::ImageKind::Surface {
+                        surface: src_surface,
+                        format: src_format
+                    } => {
+                        if src_format != dst_format {
+                            unimplemented!()
+                        }
+
+                        unsafe {
+                            let src_fbo = gl.create_framebuffer().unwrap();
+                            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(src_fbo));
+                            gl.framebuffer_renderbuffer(glow::READ_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::RENDERBUFFER, Some(src_surface));
+
+                            let dst_fbo = gl.create_framebuffer().unwrap();
+                            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(dst_fbo));
+                            gl.framebuffer_renderbuffer(glow::DRAW_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::RENDERBUFFER, Some(dst_surface));
+
+                            gl.blit_framebuffer(
+                                data.src_offset.x,
+                                data.src_offset.y,
+                                data.src_offset.x + data.extent.width as i32,
+                                data.src_offset.y + data.extent.height as i32,
+                                data.dst_offset.x,
+                                data.dst_offset.y,
+                                data.dst_offset.x + data.extent.width as i32,
+                                data.dst_offset.y + data.extent.height as i32,
+                                glow::COLOR_BUFFER_BIT,
+                                glow::NEAREST,
+                            );
+
+                            gl.bind_framebuffer(glow::FRAMEBUFFER, None);
+
+                            gl.delete_framebuffer(src_fbo);
+                            gl.delete_framebuffer(dst_fbo);
+                        }
+                    }
+                }
             }
             com::Command::BindBufferRange(target, index, buffer, offset, size) => unsafe {
                 let gl = &self.share.context;
