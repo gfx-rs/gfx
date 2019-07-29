@@ -550,9 +550,13 @@ impl Device {
         let MipSlice = info.range.levels.start as _;
         let FirstArraySlice = info.range.layers.start as _;
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
-        assert_eq!(info.range.levels.start + 1, info.range.levels.end);
-        assert!(info.range.layers.end <= info.kind.num_layers());
         let is_msaa = info.kind.num_samples() > 1;
+        if info.range.levels.start + 1 != info.range.levels.end {
+            return Err(image::ViewError::Level(info.range.levels.start));
+        }
+        if info.range.layers.end > info.kind.num_layers() {
+            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(info.range.layers)));
+        }
 
         match info.view_kind {
             image::ViewKind::D1 => {
@@ -652,9 +656,13 @@ impl Device {
         let MipSlice = info.range.levels.start as _;
         let FirstArraySlice = info.range.layers.start as _;
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
-        assert_eq!(info.range.levels.start + 1, info.range.levels.end);
-        assert!(info.range.layers.end <= info.kind.num_layers());
         let is_msaa = info.kind.num_samples() > 1;
+        if info.range.levels.start + 1 != info.range.levels.end {
+            return Err(image::ViewError::Level(info.range.levels.start));
+        }
+        if info.range.layers.end > info.kind.num_layers() {
+            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(info.range.layers)));
+        }
 
         match info.view_kind {
             image::ViewKind::D1 => {
@@ -734,7 +742,9 @@ impl Device {
         let FirstArraySlice = info.range.layers.start as _;
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
-        assert!(info.range.layers.end <= info.kind.num_layers());
+        if info.range.layers.end > info.kind.num_layers() {
+            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(info.range.layers.clone())));
+        }
         let is_msaa = info.kind.num_samples() > 1;
         let is_cube = info.caps.contains(image::ViewCapabilities::KIND_CUBE);
 
@@ -873,7 +883,9 @@ impl Device {
         let FirstArraySlice = info.range.layers.start as _;
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
-        assert!(info.range.layers.end <= info.kind.num_layers());
+        if info.range.layers.end > info.kind.num_layers() {
+            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(info.range.layers)));
+        }
         if info.kind.num_samples() > 1 {
             error!("MSAA images can't be viewed as UAV");
             return Err(image::ViewError::Unsupported);
@@ -2313,34 +2325,39 @@ impl d::Device<B> for Device {
             range,
         };
 
+        //Note: we allow RTV/DSV/SRV/UAV views to fail to be created here,
+        // because we don't know if the user will even need to use them.
+
         Ok(r::ImageView {
             resource: image.resource,
             handle_srv: if image
                 .usage
                 .intersects(image::Usage::SAMPLED | image::Usage::INPUT_ATTACHMENT)
             {
-                Some(self.view_image_as_shader_resource(info.clone())?)
+                self.view_image_as_shader_resource(info.clone()).ok()
             } else {
                 None
             },
             handle_rtv: if image.usage.contains(image::Usage::COLOR_ATTACHMENT) {
-                Some(self.view_image_as_render_target(info.clone())?)
+                self.view_image_as_render_target(info.clone()).ok()
             } else {
                 None
             },
             handle_uav: if image.usage.contains(image::Usage::STORAGE) {
-                Some(self.view_image_as_storage(info.clone())?)
+                self.view_image_as_storage(info.clone()).ok()
             } else {
                 None
             },
             handle_dsv: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
-                Some(
-                    self.view_image_as_depth_stencil(ViewInfo {
-                        format: conv::map_format_dsv(format.base_format().0)
-                            .ok_or(image::ViewError::BadFormat(format))?,
-                        ..info
-                    })?,
-                )
+                match conv::map_format_dsv(format.base_format().0) {
+                    Some(dsv_format) => {
+                        self.view_image_as_depth_stencil(ViewInfo {
+                            format: dsv_format,
+                            ..info
+                        }).ok()
+                    }
+                    None => None,
+                }
             } else {
                 None
             },
