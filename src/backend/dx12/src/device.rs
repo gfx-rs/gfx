@@ -1937,7 +1937,7 @@ impl d::Device<B> for Device {
         let buffer = buffer.expect_bound();
         let buffer_features = {
             let idx = format.map(|fmt| fmt as usize).unwrap_or(0);
-            self.format_properties.get(idx).buffer_features
+            self.format_properties.get(idx).properties.buffer_features
         };
         let (format, format_desc) = match format.and_then(conv::map_format) {
             Some(fmt) => (fmt, format.unwrap().surface_desc()),
@@ -2029,17 +2029,20 @@ impl d::Device<B> for Device {
         let block_dim = format_desc.dim;
         let extent = kind.extent();
 
-        let format_properties = self.format_properties.get(format as usize);
+        let format_info = self.format_properties.get(format as usize);
         let (layout, features) = match tiling {
             image::Tiling::Optimal => (
                 d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
-                format_properties.optimal_tiling,
+                format_info.properties.optimal_tiling,
             ),
             image::Tiling::Linear => (
                 d3d12::D3D12_TEXTURE_LAYOUT_ROW_MAJOR,
-                format_properties.linear_tiling,
+                format_info.properties.linear_tiling,
             ),
         };
+        if format_info.sample_count_mask & kind.num_samples() == 0 {
+            return Err(image::CreationError::Samples(kind.num_samples()));
+        }
 
         let desc = d3d12::D3D12_RESOURCE_DESC {
             Dimension: match kind {
@@ -2203,7 +2206,7 @@ impl d::Device<B> for Device {
         //TODO: the clear_Xv is incomplete. We should support clearing images created without XXX_ATTACHMENT usage.
         // for this, we need to check the format and force the `RENDER_TARGET` flag behind the user's back
         // if the format supports being rendered into, allowing us to create clear_Xv
-        let format_properties = self.format_properties.get(image_unbound.format as usize);
+        let format_properties = self.format_properties.get(image_unbound.format as usize).properties;
         let props = match image_unbound.tiling {
             image::Tiling::Optimal => format_properties.optimal_tiling,
             image::Tiling::Linear => format_properties.linear_tiling,
