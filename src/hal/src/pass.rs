@@ -100,6 +100,8 @@ impl Attachment {
 pub type AttachmentId = usize;
 /// Reference to an attachment by index and expected image layout.
 pub type AttachmentRef = (AttachmentId, AttachmentLayout);
+/// An AttachmentId that can be used instead of providing an attachment.
+pub const ATTACHMENT_UNUSED: AttachmentId = !0;
 
 /// Which other subpasses a particular subpass depends on.
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
