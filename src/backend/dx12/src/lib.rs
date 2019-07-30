@@ -293,7 +293,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn format_properties(&self, fmt: Option<f::Format>) -> f::Properties {
         let idx = fmt.map(|fmt| fmt as usize).unwrap_or(0);
-        self.format_properties.get(idx)
+        self.format_properties.get(idx).properties
     }
 
     fn image_format_properties(
@@ -305,13 +305,13 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         conv::map_format(format)?; //filter out unknown formats
+        let format_info = self.format_properties.get(format as usize);
 
         let supported_usage = {
             use hal::image::Usage as U;
-            let format_props = self.format_properties.get(format as usize);
             let props = match tiling {
-                image::Tiling::Optimal => format_props.optimal_tiling,
-                image::Tiling::Linear => format_props.linear_tiling,
+                image::Tiling::Optimal => format_info.properties.optimal_tiling,
+                image::Tiling::Linear => format_info.properties.linear_tiling,
             };
             let mut flags = U::empty();
             // Note: these checks would have been nicer if we had explicit BLIT usage
@@ -369,10 +369,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 },
                 sample_count_mask: if dimensions == 2
                     && !view_caps.contains(image::ViewCapabilities::KIND_CUBE)
-                    && (usage.contains(image::Usage::COLOR_ATTACHMENT)
-                        | usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT))
+                    && !usage.contains(image::Usage::STORAGE)
                 {
-                    0x3F //TODO: use D3D12_FEATURE_DATA_FORMAT_SUPPORT
+                    format_info.sample_count_mask
                 } else {
                     0x1
                 },
@@ -1034,6 +1033,8 @@ impl hal::Instance for Instance {
                     _ => vec![local],
                 }
             };
+            //TODO: find a way to get a tighter bound?
+            let sample_count_mask = 0x3F;
 
             let physical_device = PhysicalDevice {
                 adapter,
@@ -1087,9 +1088,9 @@ impl hal::Instance for Instance {
                     min_storage_buffer_offset_alignment: 1, // TODO
                     // TODO: query supported sample count for all framebuffer formats and increase the limit
                     //       if possible.
-                    framebuffer_color_samples_count: 0b101,
-                    framebuffer_depth_samples_count: 0b101,
-                    framebuffer_stencil_samples_count: 0b101,
+                    framebuffer_color_samples_count: sample_count_mask,
+                    framebuffer_depth_samples_count: sample_count_mask,
+                    framebuffer_stencil_samples_count: sample_count_mask,
                     max_color_attachments: d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as _,
                     buffer_image_granularity: 1,
                     non_coherent_atom_size: 1, //TODO: confirm
@@ -1170,9 +1171,15 @@ fn validate_line_width(width: f32) {
     assert_eq!(width, 1.0);
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+struct FormatInfo {
+    properties: f::Properties,
+    sample_count_mask: u8,
+}
+
 #[derive(Debug)]
 pub struct FormatProperties(
-    Box<[Mutex<Option<f::Properties>>]>,
+    Box<[Mutex<Option<FormatInfo>>]>,
     native::Device,
 );
 
@@ -1187,97 +1194,128 @@ impl Drop for FormatProperties {
 impl FormatProperties {
     fn new(device: native::Device) -> Self {
         let mut buf = Vec::with_capacity(f::NUM_FORMATS);
-        buf.push(Mutex::new(Some(f::Properties::default())));
+        buf.push(Mutex::new(Some(FormatInfo::default())));
         for _ in 1..f::NUM_FORMATS {
             buf.push(Mutex::new(None))
         }
         FormatProperties(buf.into_boxed_slice(), device)
     }
 
-    fn get(&self, idx: usize) -> f::Properties {
+    fn get(&self, idx: usize) -> FormatInfo {
         let mut guard = self.0[idx].lock().unwrap();
-        if let Some(props) = *guard {
-            return props;
+        if let Some(info) = *guard {
+            return info;
         }
-        let mut props = f::Properties::default();
         let format: f::Format = unsafe { mem::transmute(idx as u32) };
-        let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
-            Format: match conv::map_format(format) {
-                Some(format) => format,
-                None => {
-                    *guard = Some(props);
-                    return props;
-                }
-            },
-            Support1: unsafe { mem::zeroed() },
-            Support2: unsafe { mem::zeroed() },
+        let dxgi_format = match conv::map_format(format) {
+            Some(format) => format,
+            None => {
+                let info = FormatInfo::default();
+                *guard = Some(info);
+                return info;
+            }
         };
-        assert_eq!(winerror::S_OK, unsafe {
-            self.1.CheckFeatureSupport(
-                d3d12::D3D12_FEATURE_FORMAT_SUPPORT,
-                &mut data as *mut _ as *mut _,
-                mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
-            )
-        });
-        let can_buffer = 0 != data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BUFFER;
-        let can_image = 0
-            != data.Support1
-                & (d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D
-                    | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D
-                    | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
-                    | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE);
-        let can_linear = can_image && !format.surface_desc().is_compressed();
-        if can_image {
-            props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
-        }
-        if can_linear {
-            props.linear_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
-        }
-        if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER != 0 {
-            props.buffer_features |= f::BufferFeature::VERTEX;
-        }
-        if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE != 0 {
-            props.optimal_tiling |= f::ImageFeature::SAMPLED_LINEAR;
-        }
-        if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET != 0 {
-            props.optimal_tiling |=
-                f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+
+        let properties = {
+            let mut props = f::Properties::default();
+            let mut data = d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT {
+                Format: dxgi_format,
+                Support1: unsafe { mem::zeroed() },
+                Support2: unsafe { mem::zeroed() },
+            };
+            assert_eq!(winerror::S_OK, unsafe {
+                self.1.CheckFeatureSupport(
+                    d3d12::D3D12_FEATURE_FORMAT_SUPPORT,
+                    &mut data as *mut _ as *mut _,
+                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_FORMAT_SUPPORT>() as _,
+                )
+            });
+            let can_buffer = 0 != data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BUFFER;
+            let can_image = 0
+                != data.Support1
+                    & (d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE1D
+                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE2D
+                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURE3D
+                        | d3d12::D3D12_FORMAT_SUPPORT1_TEXTURECUBE);
+            let can_linear = can_image && !format.surface_desc().is_compressed();
+            if can_image {
+                props.optimal_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
+            }
             if can_linear {
-                props.linear_tiling |=
+                props.linear_tiling |= f::ImageFeature::SAMPLED | f::ImageFeature::BLIT_SRC;
+            }
+            if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_IA_VERTEX_BUFFER != 0 {
+                props.buffer_features |= f::BufferFeature::VERTEX;
+            }
+            if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_SAMPLE != 0 {
+                props.optimal_tiling |= f::ImageFeature::SAMPLED_LINEAR;
+            }
+            if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_RENDER_TARGET != 0 {
+                props.optimal_tiling |=
                     f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+                if can_linear {
+                    props.linear_tiling |=
+                        f::ImageFeature::COLOR_ATTACHMENT | f::ImageFeature::BLIT_DST;
+                }
+            }
+            if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BLENDABLE != 0 {
+                props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT_BLEND;
+            }
+            if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL != 0 {
+                props.optimal_tiling |= f::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
+            }
+            if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD != 0 {
+                //TODO: check d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD ?
+                if can_buffer {
+                    props.buffer_features |= f::BufferFeature::UNIFORM_TEXEL;
+                }
+            }
+            if data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_ADD != 0 {
+                //TODO: other atomic flags?
+                if can_buffer {
+                    props.buffer_features |= f::BufferFeature::STORAGE_TEXEL_ATOMIC;
+                }
+                if can_image {
+                    props.optimal_tiling |= f::ImageFeature::STORAGE_ATOMIC;
+                }
+            }
+            if data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE != 0 {
+                if can_buffer {
+                    props.buffer_features |= f::BufferFeature::STORAGE_TEXEL;
+                }
+                if can_image {
+                    props.optimal_tiling |= f::ImageFeature::STORAGE;
+                }
+            }
+            //TODO: blits, linear tiling
+            props
+        };
+
+        let mut sample_count_mask = 0;
+        for i in 0 .. 6 {
+            let mut data = d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS {
+                Format: dxgi_format,
+                SampleCount: 1<<i,
+                Flags: 0,
+                NumQualityLevels: 0,
+            };
+            assert_eq!(winerror::S_OK, unsafe {
+                self.1.CheckFeatureSupport(
+                    d3d12::D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS,
+                    &mut data as *mut _ as *mut _,
+                    mem::size_of::<d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS>() as _,
+                )
+            });
+            if data.NumQualityLevels != 0 {
+                sample_count_mask |= 1<<i;
             }
         }
-        if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_BLENDABLE != 0 {
-            props.optimal_tiling |= f::ImageFeature::COLOR_ATTACHMENT_BLEND;
-        }
-        if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_DEPTH_STENCIL != 0 {
-            props.optimal_tiling |= f::ImageFeature::DEPTH_STENCIL_ATTACHMENT;
-        }
-        if data.Support1 & d3d12::D3D12_FORMAT_SUPPORT1_SHADER_LOAD != 0 {
-            //TODO: check d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_LOAD ?
-            if can_buffer {
-                props.buffer_features |= f::BufferFeature::UNIFORM_TEXEL;
-            }
-        }
-        if data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_ATOMIC_ADD != 0 {
-            //TODO: other atomic flags?
-            if can_buffer {
-                props.buffer_features |= f::BufferFeature::STORAGE_TEXEL_ATOMIC;
-            }
-            if can_image {
-                props.optimal_tiling |= f::ImageFeature::STORAGE_ATOMIC;
-            }
-        }
-        if data.Support2 & d3d12::D3D12_FORMAT_SUPPORT2_UAV_TYPED_STORE != 0 {
-            if can_buffer {
-                props.buffer_features |= f::BufferFeature::STORAGE_TEXEL;
-            }
-            if can_image {
-                props.optimal_tiling |= f::ImageFeature::STORAGE;
-            }
-        }
-        //TODO: blits, linear tiling
-        *guard = Some(props);
-        props
+
+        let info = FormatInfo {
+            properties,
+            sample_count_mask,
+        };
+        *guard = Some(info);
+        info
     }
 }
