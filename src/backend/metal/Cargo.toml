@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-metal"
-version = "0.2.3"
+version = "0.2.4"
 description = "Metal API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
