@@ -16,6 +16,7 @@ use crate::{
     MAX_COLOR_ATTACHMENTS,
 };
 
+use arrayvec::ArrayVec;
 use cocoa::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
@@ -913,12 +914,20 @@ impl hal::Device<Backend> for Device {
             .into_iter()
             .map(|sp| {
                 let sub = sp.borrow();
+                let mut colors: ArrayVec<[_; MAX_COLOR_ATTACHMENTS]> = sub
+                    .colors
+                    .iter()
+                    .map(|&(id, _)| (id, n::SubpassOps::empty(), None))
+                    .collect();
+                for (color, &(resolve_id, _)) in colors.iter_mut().zip(sub.resolves.iter()) {
+                    const ATTACHMENT_UNUSED: usize = !0;
+                    if resolve_id != ATTACHMENT_UNUSED {
+                        color.2 = Some(resolve_id);
+                    }
+                }
+
                 n::Subpass {
-                    colors: sub
-                        .colors
-                        .iter()
-                        .map(|&(id, _)| (id, n::SubpassOps::empty()))
-                        .collect(),
+                    colors,
                     depth_stencil: sub
                         .depth_stencil
                         .map(|&(id, _)| (id, n::SubpassOps::empty())),
@@ -957,7 +966,13 @@ impl hal::Device<Backend> for Device {
         // an attachment receives LOAD flag on a subpass if it's the first sub-pass that uses it
         let mut use_mask = 0u64;
         for sub in subpasses.iter_mut() {
-            for &mut (id, ref mut ops) in sub.colors.iter_mut().chain(sub.depth_stencil.as_mut()) {
+            for &mut (id, ref mut ops, _) in sub.colors.iter_mut() {
+                if use_mask & 1 << id == 0 {
+                    *ops |= n::SubpassOps::LOAD;
+                    use_mask ^= 1 << id;
+                }
+            }
+            if let Some((id, ref mut ops)) = sub.depth_stencil {
                 if use_mask & 1 << id == 0 {
                     *ops |= n::SubpassOps::LOAD;
                     use_mask ^= 1 << id;
@@ -967,9 +982,15 @@ impl hal::Device<Backend> for Device {
         // sprinkle store operations
         // an attachment receives STORE flag on a subpass if it's the last sub-pass that uses it
         for sub in subpasses.iter_mut().rev() {
-            for &mut (id, ref mut ops) in sub.colors.iter_mut().chain(sub.depth_stencil.as_mut()) {
+            for &mut (id, ref mut ops, _) in sub.colors.iter_mut() {
                 if use_mask & 1 << id != 0 {
                     *ops |= n::SubpassOps::STORE;
+                    use_mask ^= 1 << id;
+                }
+            }
+            if let Some((id, ref mut ops)) = sub.depth_stencil {
+                if use_mask & 1 << id == 0 {
+                    *ops |= n::SubpassOps::LOAD;
                     use_mask ^= 1 << id;
                 }
             }
