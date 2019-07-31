@@ -411,6 +411,24 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         buf: &mut B::Buffer,
     ) -> Result<(), BindError>;
 
+    /// Create a dedicated allocation for a buffer.
+    ///
+    /// Returns a memory object that can't be used for binding any resources.
+    unsafe fn allocate_buffer_memory(
+        &self,
+        memory_type: MemoryTypeId,
+        buffer: &mut B::Buffer,
+    ) -> Result<B::Memory, BindError> {
+        let req = self.get_buffer_requirements(buffer);
+        let memory = self.allocate_memory(memory_type, req.size)
+            .map_err(|err| match err {
+                AllocationError::OutOfMemory(oom) => BindError::OutOfMemory(oom),
+                AllocationError::TooManyObjects => BindError::OutOfBounds,
+            })?;
+        self.bind_buffer_memory(&memory, 0, buffer)
+            .map(|()| memory)
+    }
+
     /// Destroy a buffer.
     ///
     /// The buffer shouldn't be destroyed before any submitted command buffer,
@@ -456,6 +474,24 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         offset: u64,
         image: &mut B::Image,
     ) -> Result<(), BindError>;
+
+    /// Create a dedicated allocation for an image.
+    ///
+    /// Returns a memory object that can't be used for binding any resources.
+    unsafe fn allocate_image_memory(
+        &self,
+        memory_type: MemoryTypeId,
+        image: &mut B::Image,
+    ) -> Result<B::Memory, BindError> {
+        let req = self.get_image_requirements(image);
+        let memory = self.allocate_memory(memory_type, req.size)
+            .map_err(|err| match err {
+                AllocationError::OutOfMemory(oom) => BindError::OutOfMemory(oom),
+                AllocationError::TooManyObjects => BindError::OutOfBounds,
+            })?;
+        self.bind_image_memory(&memory, 0, image)
+            .map(|()| memory)
+    }
 
     /// Destroy an image.
     ///
