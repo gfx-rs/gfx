@@ -920,8 +920,7 @@ impl hal::Device<Backend> for Device {
                     .map(|&(id, _)| (id, n::SubpassOps::empty(), None))
                     .collect();
                 for (color, &(resolve_id, _)) in colors.iter_mut().zip(sub.resolves.iter()) {
-                    const ATTACHMENT_UNUSED: usize = !0;
-                    if resolve_id != ATTACHMENT_UNUSED {
+                    if resolve_id != pass::ATTACHMENT_UNUSED {
                         color.2 = Some(resolve_id);
                     }
                 }
