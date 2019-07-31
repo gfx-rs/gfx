@@ -244,12 +244,9 @@ impl hal::Surface<Backend> for Surface {
         let extent = self.get_extent();
 
         let caps = hal::SurfaceCapabilities {
-            image_count: 2 .. 3,
+            image_count: 2 ..= 2,
             current_extent: Some(extent),
-            extents: extent .. hal::window::Extent2D {
-                width: extent.width + 1,
-                height: extent.height + 1,
-            },
+            extents: extent ..= extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
             composite_alpha: CompositeAlpha::OPAQUE, //TODO

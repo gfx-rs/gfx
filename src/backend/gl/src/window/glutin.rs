@@ -135,15 +135,15 @@ impl hal::Surface<B> for Surface {
     ) {
         let caps = hal::SurfaceCapabilities {
             image_count: if self.context.get_pixel_format().double_buffer {
-                2 .. 3
+                2 ..= 2
             } else {
-                1 .. 2
+                1 ..= 1
             },
             current_extent: None,
             extents: hal::window::Extent2D {
                 width: 4,
                 height: 4,
-            } .. hal::window::Extent2D {
+            } ..= hal::window::Extent2D {
                 width: 4096,
                 height: 4096,
             },

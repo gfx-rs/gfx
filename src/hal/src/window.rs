@@ -61,7 +61,7 @@ use std::borrow::Borrow;
 use std::cmp::{max, min};
 use std::fmt;
 use std::iter;
-use std::ops::Range;
+use std::ops::RangeInclusive;
 
 /// Error occurred during swapchain creation.
 #[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
@@ -146,7 +146,7 @@ pub struct SurfaceCapabilities {
     ///
     /// - `image_count.start` must be at least 1.
     /// - `image_count.end` must be larger or equal to `image_count.start`.
-    pub image_count: Range<SwapImageIndex>,
+    pub image_count: RangeInclusive<SwapImageIndex>,
 
     /// Current extent of the surface.
     ///
@@ -156,7 +156,7 @@ pub struct SurfaceCapabilities {
     /// Range of supported extents.
     ///
     /// `current_extent` must be inside this range.
-    pub extents: Range<Extent2D>,
+    pub extents: RangeInclusive<Extent2D>,
 
     /// Maximum number of layers supported for presentable images.
     ///
@@ -311,9 +311,8 @@ impl SwapchainConfig {
         let clamped_extent = match caps.current_extent {
             Some(current) => current,
             None => {
-                let (min_width, max_width) = (caps.extents.start.width, caps.extents.end.width - 1);
-                let (min_height, max_height) =
-                    (caps.extents.start.height, caps.extents.end.height - 1);
+                let (min_width, max_width) = (caps.extents.start().width, caps.extents.end().width);
+                let (min_height, max_height) = (caps.extents.start().height, caps.extents.end().height);
 
                 // clamp the default_extent to within the allowed surface sizes
                 let width = min(max_width, max(default_extent.width, min_width));
@@ -336,7 +335,7 @@ impl SwapchainConfig {
             composite_alpha,
             format,
             extent: clamped_extent,
-            image_count: caps.image_count.start,
+            image_count: *caps.image_count.start(),
             image_layers: 1,
             image_usage: image::Usage::COLOR_ATTACHMENT,
         }

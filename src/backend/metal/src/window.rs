@@ -326,11 +326,11 @@ impl hal::Surface<Backend> for Surface {
             device_caps.os_is_mac || device_caps.has_version_at_least(11, 2);
 
         let image_count = if can_set_maximum_drawables_count {
-            2 .. 4
+            2 ..= 3
         } else {
             // 3 is the default in `CAMetalLayer` documentation
             // iOS 10.3 was tested to use 3 on iphone5s
-            3 .. 4
+            3 ..= 3
         };
 
         let caps = hal::SurfaceCapabilities {
@@ -340,7 +340,7 @@ impl hal::Surface<Backend> for Surface {
             extents: Extent2D {
                 width: 4,
                 height: 4,
-            } .. Extent2D {
+            } ..= Extent2D {
                 width: 4096,
                 height: 4096,
             },
