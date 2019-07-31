@@ -832,7 +832,90 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         if features.fragment_stores_and_atomics != 0 {
             bits |= Features::FRAGMENT_STORES_AND_ATOMICS;
         }
-        //TODO: cover more features
+        if features.shader_tessellation_and_geometry_point_size != 0 {
+            bits |= Features::SHADER_TESSELLATION_AND_GEOMETRY_POINT_SIZE;
+        }
+        if features.shader_image_gather_extended != 0 {
+            bits |= Features::SHADER_IMAGE_GATHER_EXTENDED;
+        }
+        if features.shader_storage_image_extended_formats != 0 {
+            bits |= Features::SHADER_STORAGE_IMAGE_EXTENDED_FORMATS;
+        }
+        if features.shader_storage_image_multisample != 0 {
+            bits |= Features::SHADER_STORAGE_IMAGE_MULTISAMPLE;
+        }
+        if features.shader_storage_image_read_without_format != 0 {
+            bits |= Features::SHADER_STORAGE_IMAGE_READ_WITHOUT_FORMAT;
+        }
+        if features.shader_storage_image_write_without_format != 0 {
+            bits |= Features::SHADER_STORAGE_IMAGE_WRITE_WITHOUT_FORMAT;
+        }
+        if features.shader_uniform_buffer_array_dynamic_indexing != 0 {
+            bits |= Features::SHADER_UNIFORM_BUFFER_ARRAY_DYNAMIC_INDEXING;
+        }
+        if features.shader_sampled_image_array_dynamic_indexing != 0 {
+            bits |= Features::SHADER_SAMPLED_IMAGE_ARRAY_DYNAMIC_INDEXING;
+        }
+        if features.shader_storage_buffer_array_dynamic_indexing != 0 {
+            bits |= Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING;
+        }
+        if features.shader_storage_image_array_dynamic_indexing != 0 {
+            bits |= Features::SHADER_STORAGE_IMAGE_ARRAY_DYNAMIC_INDEXING;
+        }
+        if features.shader_clip_distance != 0 {
+            bits |= Features::SHADER_CLIP_DISTANCE;
+        }
+        if features.shader_cull_distance != 0 {
+            bits |= Features::SHADER_CULL_DISTANCE;
+        }
+        if features.shader_float64 != 0 {
+            bits |= Features::SHADER_FLOAT64;
+        }
+        if features.shader_int64 != 0 {
+            bits |= Features::SHADER_INT64;
+        }
+        if features.shader_int16 != 0 {
+            bits |= Features::SHADER_INT16;
+        }
+        if features.shader_resource_residency != 0 {
+            bits |= Features::SHADER_RESOURCE_RESIDENCY;
+        }
+        if features.shader_resource_min_lod != 0 {
+            bits |= Features::SHADER_RESOURCE_MIN_LOD;
+        }
+        if features.sparse_binding != 0 {
+            bits |= Features::SPARSE_BINDING;
+        }
+        if features.sparse_residency_buffer != 0 {
+            bits |= Features::SPARSE_RESIDENCY_BUFFER;
+        }
+        if features.sparse_residency_image2_d != 0 {
+            bits |= Features::SPARSE_RESIDENCY_IMAGE_2D;
+        }
+        if features.sparse_residency_image3_d != 0 {
+            bits |= Features::SPARSE_RESIDENCY_IMAGE_3D;
+        }
+        if features.sparse_residency2_samples != 0 {
+            bits |= Features::SPARSE_RESIDENCY_2_SAMPLES;
+        }
+        if features.sparse_residency4_samples != 0 {
+            bits |= Features::SPARSE_RESIDENCY_4_SAMPLES;
+        }
+        if features.sparse_residency8_samples != 0 {
+            bits |= Features::SPARSE_RESIDENCY_8_SAMPLES;
+        }
+        if features.sparse_residency16_samples != 0 {
+            bits |= Features::SPARSE_RESIDENCY_16_SAMPLES;
+        }
+        if features.sparse_residency_aliased != 0 {
+            bits |= Features::SPARSE_RESIDENCY_ALIASED;
+        }
+        if features.variable_multisample_rate != 0 {
+            bits |= Features::VARIABLE_MULTISAMPLE_RATE;
+        }
+        if features.inherited_queries != 0 {
+            bits |= Features::INHERITED_QUERIES;
+        }
 
         bits
     }
