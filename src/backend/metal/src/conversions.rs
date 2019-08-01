@@ -25,8 +25,10 @@ impl PrivateCapabilities {
             f::Rg8Srgb if self.format_min_srgb_channels <= 2 => RG8Unorm_sRGB,
             f::Rgba8Srgb if self.format_min_srgb_channels <= 4 => RGBA8Unorm_sRGB,
             f::Bgra8Srgb if self.format_min_srgb_channels <= 4 => BGRA8Unorm_sRGB,
+            f::D16Unorm if self.format_depth16unorm => Depth16Unorm,
             f::D24UnormS8Uint if self.format_depth24_stencil8 => Depth24Unorm_Stencil8,
-            f::D32SfloatS8Uint if self.format_depth32_stencil8_filter => Depth32Float_Stencil8,
+            f::D32Sfloat => Depth32Float,
+            f::D32SfloatS8Uint => Depth32Float_Stencil8,
             f::R8Unorm => R8Unorm,
             f::R8Snorm => R8Snorm,
             f::R8Uint => R8Uint,
@@ -68,8 +70,6 @@ impl PrivateCapabilities {
             f::Rgba32Uint => RGBA32Uint,
             f::Rgba32Sint => RGBA32Sint,
             f::Rgba32Sfloat => RGBA32Float,
-            f::D16Unorm => Depth16Unorm,
-            f::D32Sfloat => Depth32Float,
             f::Bc1RgbaUnorm if self.format_bc => BC1_RGBA,
             f::Bc1RgbaSrgb if self.format_bc => BC1_RGBA_sRGB,
             f::Bc1RgbUnorm if self.format_bc => BC1_RGBA, //TODO?
@@ -878,6 +878,10 @@ impl PrivateCapabilities {
                 optimal_tiling: depth_if | If::SAMPLED_LINEAR,
                 ..Properties::default()
             },
+            Depth32Float if self.format_depth32float_none => Properties {
+                optimal_tiling: depth_if,
+                ..Properties::default()
+            },
             Stencil8 => Properties {
                 ..Properties::default()
             },
@@ -887,6 +891,10 @@ impl PrivateCapabilities {
             },
             Depth32Float_Stencil8 if self.format_depth32_stencil8_filter => Properties {
                 optimal_tiling: depth_if | If::SAMPLED_LINEAR,
+                ..Properties::default()
+            },
+            Depth32Float_Stencil8 if self.format_depth32_stencil8_none => Properties {
+                optimal_tiling: depth_if,
                 ..Properties::default()
             },
             BGR10A2Unorm if self.format_bgr10a2_all => Properties {
