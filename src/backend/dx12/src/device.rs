@@ -255,12 +255,10 @@ impl Device {
         ast: &mut spirv::Ast<hlsl::Target>,
         layout: Option<&r::PipelineLayout>,
     ) -> Result<(), d::ShaderError> {
-        // Patch descriptor sets due to the splitting of descriptor heaps into
-        // SrvCbvUav and sampler heap. Each set will have a new location to match
-        // the layout of the root signatures.
+        // Move the descriptor sets away to yield for the root constants at "space0".
         let space_offset = match layout {
             Some(layout) if !layout.root_constants.is_empty() => 1,
-            _ => 0,
+            _ => return Ok(()),
         };
 
         let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
@@ -1331,11 +1329,13 @@ impl d::Device<B> for Device {
             .collect::<Vec<_>>();
 
         // guarantees that no re-allocation is done, and our pointers are valid
+        info!("Creating a pipeline layout with {} sets and {} root constants", sets.len(), root_constants.len());
         let mut parameters = Vec::with_capacity(root_constants.len() + sets.len() * 2);
 
         for root_constant in root_constants.iter() {
+            debug!("\tRoot constant set={} range {:?}", ROOT_CONSTANT_SPACE, root_constant.range);
             parameters.push(native::descriptor::RootParameter::constants(
-                native::descriptor::ShaderVisibility::All, // TODO
+                conv::map_shader_visibility(root_constant.stages),
                 native::descriptor::Binding {
                     register: root_constant.range.start as _,
                     space: ROOT_CONSTANT_SPACE,
@@ -1346,6 +1346,7 @@ impl d::Device<B> for Device {
 
         // Offest of `spaceN` for descriptor tables. Root constants will be in
         // `space0`.
+        // This has to match `patch_spirv_resources` logic.
         let table_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
 
         // Collect the whole number of bindings we will create upfront.
@@ -1375,40 +1376,45 @@ impl d::Device<B> for Device {
             let set = set.borrow();
             let mut table_type = r::SetTableTypes::empty();
 
-            let range_base = ranges.len();
+            for bind in set.bindings.iter() {
+                debug!("\tRange {:?} at set={}", bind, table_space_offset + i);
+            }
+            //TODO: split between sampler and non-sampler tables
+            let visibility = conv::map_shader_visibility(
+                set.bindings
+                    .iter()
+                    .fold(pso::ShaderStageFlags::empty(), |u, bind| u | bind.stage_flags)
+            );
+
+            let mut range_base = ranges.len();
             ranges.extend(
                 set.bindings
                     .iter()
-                    .filter(|bind| bind.ty != pso::DescriptorType::Sampler)
-                    .map(|bind| {
-                        conv::map_descriptor_range(bind, (table_space_offset + i) as u32, false)
+                    .filter_map(|bind| {
+                        conv::map_descriptor_range(bind, (table_space_offset + i) as u32)
                     }),
             );
 
             if ranges.len() > range_base {
                 parameters.push(native::descriptor::RootParameter::descriptor_table(
-                    native::descriptor::ShaderVisibility::All, // TODO
+                    visibility,
                     &ranges[range_base..],
                 ));
                 table_type |= r::SRV_CBV_UAV;
             }
 
-            let range_base = ranges.len();
+            range_base = ranges.len();
             ranges.extend(
                 set.bindings
                     .iter()
-                    .filter(|bind| {
-                        bind.ty == pso::DescriptorType::Sampler
-                            || bind.ty == pso::DescriptorType::CombinedImageSampler
-                    })
-                    .map(|bind| {
-                        conv::map_descriptor_range(bind, (table_space_offset + i) as u32, true)
+                    .filter_map(|bind| {
+                        conv::map_sampler_descriptor_range(bind, (table_space_offset + i) as u32)
                     }),
             );
 
             if ranges.len() > range_base {
                 parameters.push(native::descriptor::RootParameter::descriptor_table(
-                    native::descriptor::ShaderVisibility::All, // TODO
+                    visibility,
                     &ranges[range_base..],
                 ));
                 table_type |= r::SAMPLERS;
@@ -1452,7 +1458,7 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn get_pipeline_cache_data(&self, cache: &()) -> Result<Vec<u8>, d::OutOfMemory> {
+    unsafe fn get_pipeline_cache_data(&self, _cache: &()) -> Result<Vec<u8>, d::OutOfMemory> {
         //empty
         Ok(Vec::new())
     }
