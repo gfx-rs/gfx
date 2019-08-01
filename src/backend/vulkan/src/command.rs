@@ -83,7 +83,8 @@ where
                 });
             }
             memory::Barrier::Buffer {
-                ref states,
+                src_access,
+                dst_access,
                 target,
                 ref range,
                 ref families,
@@ -95,8 +96,8 @@ where
                 buffer.push(vk::BufferMemoryBarrier {
                     s_type: vk::StructureType::BUFFER_MEMORY_BARRIER,
                     p_next: ptr::null(),
-                    src_access_mask: conv::map_buffer_access(states.start),
-                    dst_access_mask: conv::map_buffer_access(states.end),
+                    src_access_mask: conv::map_buffer_access(src_access),
+                    dst_access_mask: conv::map_buffer_access(dst_access),
                     src_queue_family_index: families.start,
                     dst_queue_family_index: families.end,
                     buffer: target.raw,
@@ -107,7 +108,10 @@ where
                 });
             }
             memory::Barrier::Image {
-                ref states,
+                src_access,
+                dst_access,
+                src_layout,
+                dst_layout,
                 target,
                 ref range,
                 ref families,
@@ -120,10 +124,10 @@ where
                 image.push(vk::ImageMemoryBarrier {
                     s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
                     p_next: ptr::null(),
-                    src_access_mask: conv::map_image_access(states.start.0),
-                    dst_access_mask: conv::map_image_access(states.end.0),
-                    old_layout: conv::map_image_layout(states.start.1),
-                    new_layout: conv::map_image_layout(states.end.1),
+                    src_access_mask: conv::map_image_access(src_access),
+                    dst_access_mask: conv::map_image_access(dst_access),
+                    old_layout: conv::map_image_layout(src_layout),
+                    new_layout: conv::map_image_layout(dst_layout),
                     src_queue_family_index: families.start,
                     dst_queue_family_index: families.end,
                     image: target.raw,
@@ -276,7 +280,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn pipeline_barrier<'a, T>(
         &mut self,
-        stages: Range<pso::PipelineStage>,
+        src_stage: pso::PipelineStage,
+        dst_stage: pso::PipelineStage,
         dependencies: memory::Dependencies,
         barriers: T,
     ) where
@@ -291,8 +296,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
         self.device.0.cmd_pipeline_barrier(
             self.raw, // commandBuffer
-            conv::map_pipeline_stage(stages.start),
-            conv::map_pipeline_stage(stages.end),
+            conv::map_pipeline_stage(src_stage),
+            conv::map_pipeline_stage(dst_stage),
             mem::transmute(dependencies),
             &global,
             &buffer,
@@ -833,7 +838,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     unsafe fn wait_events<'a, I, J>(
         &mut self,
         events: I,
-        stages: Range<pso::PipelineStage>,
+        src_stage: pso::PipelineStage,
+        dst_stage: pso::PipelineStage,
         barriers: J,
     ) where
         I: IntoIterator,
@@ -852,8 +858,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.device.0.cmd_wait_events(
             self.raw,
             &events,
-            vk::PipelineStageFlags::from_raw(stages.start.bits()),
-            vk::PipelineStageFlags::from_raw(stages.end.bits()),
+            vk::PipelineStageFlags::from_raw(src_stage.bits()),
+            vk::PipelineStageFlags::from_raw(dst_stage.bits()),
             &global,
             &buffer,
             &image,

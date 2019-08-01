@@ -1169,7 +1169,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn pipeline_barrier<'a, T>(
         &mut self,
-        _stages: Range<pso::PipelineStage>,
+        _src_stage: pso::PipelineStage,
+        _dst_stage: pso::PipelineStage,
         _dependencies: memory::Dependencies,
         barriers: T,
     ) where
@@ -1196,7 +1197,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     raw_barriers.push(bar);
                 }
                 memory::Barrier::Buffer {
-                    ref states,
+                    src_access,
+                    dst_access,
                     target,
                     ref families,
                     ref range,
@@ -1207,8 +1209,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             unimplemented!("Queue family resource ownership transitions are not implemented for DX12 (attempted transition from queue family {} to {}", f.start.0, f.end.0);
                         }
                     }
-                    let state_src = conv::map_buffer_resource_state(states.start);
-                    let state_dst = conv::map_buffer_resource_state(states.end);
+                    let state_src = conv::map_buffer_resource_state(src_access);
+                    let state_dst = conv::map_buffer_resource_state(dst_access);
 
                     if state_src == state_dst {
                         continue;
@@ -1225,7 +1227,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     raw_barriers.push(bar);
                 }
                 memory::Barrier::Image {
-                    ref states,
+                    src_access,
+                    dst_access,
+                    src_layout,
+                    dst_layout,
                     target,
                     ref families,
                     ref range,
@@ -1237,8 +1242,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                         }
                     }
                     let _ = range; //TODO: use subresource range
-                    let state_src = conv::map_image_resource_state(states.start.0, states.start.1);
-                    let state_dst = conv::map_image_resource_state(states.end.0, states.end.1);
+                    let state_src = conv::map_image_resource_state(src_access, src_layout);
+                    let state_dst = conv::map_image_resource_state(dst_access, src_layout);
 
                     if state_src == state_dst {
                         continue;
@@ -2404,7 +2409,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
+    unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: pso::PipelineStage, _: pso::PipelineStage, _: J)
     where
         I: IntoIterator,
         I::Item: Borrow<()>,

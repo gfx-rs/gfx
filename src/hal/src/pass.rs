@@ -1,7 +1,6 @@
 //! RenderPass handling.
 
 use crate::{format::Format, image, pso::PipelineStage, Backend};
-use std::ops::Range;
 
 /// Specifies the operation which will be applied at the beginning of a subpass.
 #[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
@@ -84,8 +83,10 @@ pub struct Attachment {
     /// Load and store operations of the stencil aspect, if any
     #[cfg_attr(feature = "serde", serde(default = "AttachmentOps::whatever"))]
     pub stencil_ops: AttachmentOps,
-    /// Initial and final image layouts of the renderpass.
-    pub layouts: Range<AttachmentLayout>,
+    /// Initial image layout of the renderpass.
+    pub initial_layout: AttachmentLayout,
+    /// Final image layouts of the renderpass.
+    pub final_layout: AttachmentLayout,
 }
 
 impl Attachment {
@@ -124,12 +125,18 @@ pub enum SubpassRef {
 #[derive(Clone, Debug, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubpassDependency {
-    /// Other subpasses this one depends on.
-    pub passes: Range<SubpassRef>,
-    /// Other pipeline stages this subpass depends on.
-    pub stages: Range<PipelineStage>,
-    /// Resource accesses this subpass depends on.
-    pub accesses: Range<image::Access>,
+    /// Source subpass this one depends on.
+    pub src_subpass: SubpassRef,
+    /// Destination subpass this one depends on.
+    pub dst_subpass: SubpassRef,
+    /// Source pipeline stage this subpass depends on.
+    pub src_stage: PipelineStage,
+    /// Destination pipeline stage this subpass depends on.
+    pub dst_stage: PipelineStage,
+    /// Resource source access this subpass depends on.
+    pub src_access: image::Access,
+    /// Resource destination access this subpass depends on.
+    pub dst_access: image::Access,
 }
 
 /// Description of a subpass for renderpass creation.

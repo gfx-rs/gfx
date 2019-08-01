@@ -122,8 +122,8 @@ impl d::Device<B> for Device {
                     store_op: conv::map_attachment_store_op(attachment.ops.store),
                     stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
                     stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
-                    initial_layout: conv::map_image_layout(attachment.layouts.start),
-                    final_layout: conv::map_image_layout(attachment.layouts.end),
+                    initial_layout: conv::map_image_layout(attachment.initial_layout),
+                    final_layout: conv::map_image_layout(attachment.final_layout),
                 }
             })
             .collect::<Vec<_>>();
@@ -197,12 +197,12 @@ impl d::Device<B> for Device {
                 let dependency = dependency.borrow();
                 // TODO: checks
                 vk::SubpassDependency {
-                    src_subpass: map_subpass_ref(dependency.passes.start),
-                    dst_subpass: map_subpass_ref(dependency.passes.end),
-                    src_stage_mask: conv::map_pipeline_stage(dependency.stages.start),
-                    dst_stage_mask: conv::map_pipeline_stage(dependency.stages.end),
-                    src_access_mask: conv::map_image_access(dependency.accesses.start),
-                    dst_access_mask: conv::map_image_access(dependency.accesses.end),
+                    src_subpass: map_subpass_ref(dependency.src_subpass),
+                    dst_subpass: map_subpass_ref(dependency.dst_subpass),
+                    src_stage_mask: conv::map_pipeline_stage(dependency.src_stage),
+                    dst_stage_mask: conv::map_pipeline_stage(dependency.dst_stage),
+                    src_access_mask: conv::map_image_access(dependency.src_access),
+                    dst_access_mask: conv::map_image_access(dependency.dst_access),
                     dependency_flags: vk::DependencyFlags::empty(), // TODO
                 }
             })

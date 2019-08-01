@@ -12,7 +12,8 @@
 					format: Some(Rgba8Unorm),
 					samples: 1,
 					ops: (load: Clear, store: Store),
-					layouts: (start: General, end: General),
+					initial_layout: General,
+					final_layout: General,
 				),
 			},
 			subpasses: {

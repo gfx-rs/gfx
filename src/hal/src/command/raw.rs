@@ -157,7 +157,8 @@ pub trait RawCommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// in the command buffer.
     unsafe fn pipeline_barrier<'a, T>(
         &mut self,
-        stages: Range<pso::PipelineStage>,
+        src_stage: pso::PipelineStage,
+        dst_stage: pso::PipelineStage,
         dependencies: Dependencies,
         barriers: T,
     ) where
@@ -512,14 +513,15 @@ pub trait RawCommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Waits at some shader stage(s) until all events have been signalled.
     ///
-    /// - `src_stages` specifies the shader pipeline stages in which the events were signalled.
-    /// - `dst_stages` specifies the shader pipeline stages at which execution should wait.
+    /// - `src_stage` specifies the shader pipeline stages in which the events were signalled.
+    /// - `dst_stage` specifies the shader pipeline stages at which execution should wait.
     /// - `barriers` specifies a series of memory barriers to be executed before pipeline execution
     ///   resumes.
     unsafe fn wait_events<'a, I, J>(
         &mut self,
         events: I,
-        stages: Range<pso::PipelineStage>,
+        src_stage: pso::PipelineStage,
+        dst_stage: pso::PipelineStage,
         barriers: J,
     ) where
         I: IntoIterator,

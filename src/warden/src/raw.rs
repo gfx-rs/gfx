@@ -20,9 +20,12 @@ pub struct Subpass {
 
 #[derive(Debug, Deserialize)]
 pub struct SubpassDependency {
-    pub passes: Range<String>,
-    pub stages: Range<hal::pso::PipelineStage>,
-    pub accesses: Range<hal::image::Access>,
+    pub src_subpass: String,
+    pub dst_subpass: String,
+    pub src_stage: hal::pso::PipelineStage,
+    pub dst_stage: hal::pso::PipelineStage,
+    pub src_access: hal::image::Access,
+    pub dst_access: hal::image::Access,
 }
 
 #[derive(Debug, Deserialize)]

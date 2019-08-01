@@ -339,15 +339,18 @@ fn main() {
         cmd_buffer.begin();
 
         let image_barrier = m::Barrier::Image {
-            states: (i::Access::empty(), i::Layout::Undefined)
-                .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+            src_access: i::Access::empty(),
+            dst_access: i::Access::TRANSFER_WRITE,
+            src_layout: i::Layout::Undefined,
+            dst_layout: i::Layout::TransferDstOptimal,
             target: &image_logo,
             families: None,
             range: COLOR_RANGE.clone(),
         };
 
         cmd_buffer.pipeline_barrier(
-            PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER,
+            PipelineStage::TOP_OF_PIPE,
+            PipelineStage::TRANSFER,
             m::Dependencies::empty(),
             &[image_barrier],
         );
@@ -375,14 +378,17 @@ fn main() {
         );
 
         let image_barrier = m::Barrier::Image {
-            states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
-                .. (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
+            src_access: i::Access::TRANSFER_WRITE,
+            dst_access: i::Access::SHADER_READ,
+            src_layout: i::Layout::TransferDstOptimal,
+            dst_layout: i::Layout::ShaderReadOnlyOptimal,
             target: &image_logo,
             families: None,
             range: COLOR_RANGE.clone(),
         };
         cmd_buffer.pipeline_barrier(
-            PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER,
+            PipelineStage::TRANSFER,
+            PipelineStage::FRAGMENT_SHADER,
             m::Dependencies::empty(),
             &[image_barrier],
         );
@@ -427,7 +433,8 @@ fn main() {
                 pass::AttachmentStoreOp::Store,
             ),
             stencil_ops: pass::AttachmentOps::DONT_CARE,
-            layouts: i::Layout::Undefined .. i::Layout::Present,
+            initial_layout: i::Layout::Undefined,
+            final_layout: i::Layout::Present,
         };
 
         let subpass = pass::SubpassDesc {
@@ -439,11 +446,12 @@ fn main() {
         };
 
         let dependency = pass::SubpassDependency {
-            passes: pass::SubpassRef::External .. pass::SubpassRef::Pass(0),
-            stages: PipelineStage::COLOR_ATTACHMENT_OUTPUT
-                .. PipelineStage::COLOR_ATTACHMENT_OUTPUT,
-            accesses: i::Access::empty()
-                .. (i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
+            src_subpass: pass::SubpassRef::External,
+            dst_subpass: pass::SubpassRef::Pass(0),
+            src_stage: PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+            dst_stage: PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+            src_access: i::Access::empty(),
+            dst_access: i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE,
         };
 
         unsafe { device.create_render_pass(&[attachment], &[subpass], &[dependency]) }

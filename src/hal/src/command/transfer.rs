@@ -1,6 +1,5 @@
 //! `CommandBuffer` methods for transfer operations.
 use std::borrow::Borrow;
-use std::ops::Range;
 
 use super::{CommandBuffer, Level, RawCommandBuffer, Shot};
 use crate::memory::{Barrier, Dependencies};
@@ -63,14 +62,15 @@ impl<B: Backend, C: Supports<Transfer>, S: Shot, L: Level> CommandBuffer<B, C, S
     /// Identical to the `RawCommandBuffer` method of the same name.
     pub unsafe fn pipeline_barrier<'i, T>(
         &mut self,
-        stages: Range<PipelineStage>,
+        src_stage: PipelineStage,
+        dst_stage: PipelineStage,
         dependencies: Dependencies,
         barriers: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<Barrier<'i, B>>,
     {
-        self.raw.pipeline_barrier(stages, dependencies, barriers)
+        self.raw.pipeline_barrier(src_stage, dst_stage, dependencies, barriers)
     }
 
     /// Identical to the `RawCommandBuffer` method of the same name.

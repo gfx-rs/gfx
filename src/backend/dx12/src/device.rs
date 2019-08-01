@@ -1144,7 +1144,7 @@ impl d::Device<B> for Device {
                 },
                 last_state: conv::map_image_resource_state(
                     image::Access::empty(),
-                    att.layouts.start,
+                    att.initial_layout,
                 ),
                 barrier_start_index: 0,
             })
@@ -1187,9 +1187,9 @@ impl d::Device<B> for Device {
         for dep in &dependencies {
             let dep = dep.borrow();
             //Note: self-dependencies are ignored
-            if dep.passes.start != dep.passes.end && dep.passes.start != pass::SubpassRef::External
+            if dep.src_subpass != dep.dst_subpass && dep.src_subpass != pass::SubpassRef::External
             {
-                if let pass::SubpassRef::Pass(sid) = dep.passes.end {
+                if let pass::SubpassRef::Pass(sid) = dep.dst_subpass {
                     deps_left[sid] += 1;
                 }
             }
@@ -1205,10 +1205,10 @@ impl d::Device<B> for Device {
             deps_left[sid] = !0; // mark as done
             for dep in &dependencies {
                 let dep = dep.borrow();
-                if dep.passes.start != dep.passes.end
-                    && dep.passes.start == pass::SubpassRef::Pass(sid)
+                if dep.src_subpass != dep.dst_subpass
+                    && dep.src_subpass == pass::SubpassRef::Pass(sid)
                 {
-                    if let pass::SubpassRef::Pass(other) = dep.passes.end {
+                    if let pass::SubpassRef::Pass(other) = dep.dst_subpass {
                         deps_left[other] -= 1;
                     }
                 }
@@ -1277,7 +1277,7 @@ impl d::Device<B> for Device {
 
         // take care of the post-pass transitions at the end of the renderpass.
         for (att_id, (ai, att)) in att_infos.iter().zip(attachments.iter()).enumerate() {
-            let state_dst = conv::map_image_resource_state(image::Access::empty(), att.layouts.end);
+            let state_dst = conv::map_image_resource_state(image::Access::empty(), att.final_layout);
             if state_dst == ai.last_state {
                 continue;
             }

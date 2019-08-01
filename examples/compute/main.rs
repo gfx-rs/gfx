@@ -173,11 +173,12 @@ fn main() {
             }],
         );
         command_buffer.pipeline_barrier(
-            pso::PipelineStage::TRANSFER .. pso::PipelineStage::COMPUTE_SHADER,
+            pso::PipelineStage::TRANSFER,
+            pso::PipelineStage::COMPUTE_SHADER,
             memory::Dependencies::empty(),
             Some(memory::Barrier::Buffer {
-                states: buffer::Access::TRANSFER_WRITE
-                    .. buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
+                src_access: buffer::Access::TRANSFER_WRITE,
+                dst_access: buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
                 families: None,
                 target: &device_buffer,
                 range: None .. None,
@@ -187,11 +188,12 @@ fn main() {
         command_buffer.bind_compute_descriptor_sets(&pipeline_layout, 0, &[desc_set], &[]);
         command_buffer.dispatch([numbers.len() as u32, 1, 1]);
         command_buffer.pipeline_barrier(
-            pso::PipelineStage::COMPUTE_SHADER .. pso::PipelineStage::TRANSFER,
+            pso::PipelineStage::COMPUTE_SHADER,
+            pso::PipelineStage::TRANSFER,
             memory::Dependencies::empty(),
             Some(memory::Barrier::Buffer {
-                states: buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE
-                    .. buffer::Access::TRANSFER_READ,
+                src_access: buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
+                dst_access: buffer::Access::TRANSFER_READ,
                 families: None,
                 target: &device_buffer,
                 range: None .. None,

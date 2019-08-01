@@ -11,9 +11,6 @@ use crate::{device, format, Backend, IndexType};
 /// An offset inside a buffer, in bytes.
 pub type Offset = u64;
 
-/// Buffer state.
-pub type State = Access;
-
 /// Error creating a buffer.
 #[derive(Fail, Debug, Clone, PartialEq, Eq)]
 pub enum CreationError {

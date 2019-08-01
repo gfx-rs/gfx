@@ -2522,7 +2522,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn pipeline_barrier<'a, T>(
         &mut self,
-        _stages: Range<pso::PipelineStage>,
+        _src_stage: pso::PipelineStage,
+        _dst_stage: pso::PipelineStage,
         _dependencies: memory::Dependencies,
         _barriers: T,
     ) where
@@ -4399,7 +4400,8 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     unsafe fn wait_events<'a, I, J>(
         &mut self,
         events: I,
-        stages: Range<pso::PipelineStage>,
+        src_stage: pso::PipelineStage,
+        dst_stage: pso::PipelineStage,
         barriers: J,
     ) where
         I: IntoIterator,
@@ -4425,7 +4427,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         if need_barrier {
-            self.pipeline_barrier(stages, memory::Dependencies::empty(), barriers);
+            self.pipeline_barrier(src_stage, dst_stage, memory::Dependencies::empty(), barriers);
         }
     }
 

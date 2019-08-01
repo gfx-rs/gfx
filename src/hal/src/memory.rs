@@ -83,8 +83,10 @@ pub enum Barrier<'a, B: Backend> {
     AllImages(Range<image::Access>),
     /// A memory barrier that defines access to a buffer.
     Buffer {
-        /// The access flags controlling the buffer.
-        states: Range<buffer::State>,
+        /// The source access flags controlling the buffer.
+        src_access: buffer::Access,
+        /// The destination access flags controlling the buffer.
+        dst_access: buffer::Access,
         /// The buffer the barrier controls.
         target: &'a B::Buffer,
         /// The source and destination Queue family IDs, for a [queue family ownership transfer](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#synchronization-queue-transfers)
@@ -95,8 +97,14 @@ pub enum Barrier<'a, B: Backend> {
     },
     /// A memory barrier that defines access to (a subset of) an image.
     Image {
-        /// The access flags controlling the image.
-        states: Range<image::State>,
+        /// The source access flags controlling the image.
+        src_access: image::Access,
+        /// The destination access flags controlling the image.
+        dst_access: image::Access,
+        /// The source layout controlling the image.
+        src_layout: image::Layout,
+        /// The destination layout controlling the image.
+        dst_layout: image::Layout,
         /// The image the barrier controls.
         target: &'a B::Image,
         /// The source and destination Queue family IDs, for a [queue family ownership transfer](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#synchronization-queue-transfers)
@@ -109,9 +117,10 @@ pub enum Barrier<'a, B: Backend> {
 
 impl<'a, B: Backend> Barrier<'a, B> {
     /// Create a barrier for the whole buffer between the given states.
-    pub fn whole_buffer(target: &'a B::Buffer, states: Range<buffer::State>) -> Self {
+    pub fn whole_buffer(target: &'a B::Buffer, src_access: buffer::Access, dst_access: buffer::Access) -> Self {
         Barrier::Buffer {
-            states,
+            src_access,
+            dst_access,
             target,
             families: None,
             range: None .. None,
