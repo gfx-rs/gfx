@@ -565,9 +565,13 @@ impl CommandBuffer {
         let framebuffer = &state.framebuffer;
         let subpass = &state.render_pass.subpasses[self.cur_subpass];
 
-        for (i, resolve_attachment) in subpass.resolve_attachments.iter().enumerate() {
-            let (dst_attachment, _) = *resolve_attachment;
-            let (src_attachment, _) = subpass.color_attachments[i];
+        for (&(src_attachment, _), &(dst_attachment, _)) in subpass.color_attachments
+            .iter()
+            .zip(subpass.resolve_attachments.iter())
+        {
+            if dst_attachment == pass::ATTACHMENT_UNUSED {
+                continue
+            }
 
             let resolve_src = state.framebuffer.attachments[src_attachment];
             let resolve_dst = state.framebuffer.attachments[dst_attachment];

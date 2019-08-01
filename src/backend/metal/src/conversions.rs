@@ -928,6 +928,15 @@ pub fn map_store_operation(operation: pass::AttachmentStoreOp) -> MTLStoreAction
     }
 }
 
+pub fn map_resolved_store_operation(operation: pass::AttachmentStoreOp) -> MTLStoreAction {
+    use self::pass::AttachmentStoreOp::*;
+
+    match operation {
+        Store => MTLStoreAction::StoreAndMultisampleResolve,
+        DontCare => MTLStoreAction::MultisampleResolve,
+    }
+}
+
 pub fn map_write_mask(mask: pso::ColorMask) -> MTLColorWriteMask {
     let mut mtl_mask = MTLColorWriteMask::empty();
 
