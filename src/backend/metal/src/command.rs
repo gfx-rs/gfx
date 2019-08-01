@@ -3221,7 +3221,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     descriptor.set_render_target_array_length(framebuffer.extent.depth as _);
                 }
 
-                for (i, &(at_id, op_flags)) in subpass.colors.iter().enumerate() {
+                for (i, &(at_id, op_flags, resolve_id)) in subpass.colors.iter().enumerate() {
                     let rat = &render_pass.attachments[at_id];
                     let texture = &framebuffer.attachments[at_id];
                     let desc = descriptor.color_attachments().object_at(i as _).unwrap();
@@ -3237,7 +3237,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             desc.set_clear_color(channel.interpret(raw));
                         }
                     }
-                    if op_flags.contains(native::SubpassOps::STORE) {
+                    if let Some(id) = resolve_id {
+                        let resolve = &framebuffer.attachments[id];
+                        desc.set_resolve_texture(Some(resolve));
+                        //Note: the selection of levels and slices is already handled by `ImageView`
+                        desc.set_store_action(conv::map_resolved_store_operation(rat.ops.store));
+                    } else if op_flags.contains(native::SubpassOps::STORE) {
                         desc.set_store_action(conv::map_store_operation(rat.ops.store));
                     }
                 }
