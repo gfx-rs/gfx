@@ -760,9 +760,7 @@ impl hal::Instance for Instance {
             if winerror::SUCCEEDED(hr) {
                 // It's okay to decrement the refcount here because we
                 // have another reference to the factory already owned by `self`.
-                unsafe {
-                    f6.destroy();
-                }
+                f6.destroy();
                 (true, f6)
             } else {
                 (false, native::WeakPtr::null())

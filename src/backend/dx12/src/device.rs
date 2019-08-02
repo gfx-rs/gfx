@@ -19,7 +19,7 @@ use hal::range::RangeArg;
 use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
 
 use native::command_list::IndirectArgument;
-use native::descriptor;
+use descriptor;
 use native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
 
 use pool::{CommandPoolAllocator, RawCommandPool};
@@ -436,6 +436,7 @@ impl Device {
                 }
 
                 Self::patch_spirv_resources(&mut ast, Some(layout))?;
+
                 let shader_model = hlsl::ShaderModel::V5_1;
                 let shader_code = Self::translate_spirv(&mut ast, shader_model, layout, stage)?;
                 debug!("SPIRV-Cross generated shader:\n{}", shader_code);
@@ -1336,9 +1337,9 @@ impl d::Device<B> for Device {
 
         for root_constant in root_constants.iter() {
             debug!("\tRoot constant set={} range {:?}", ROOT_CONSTANT_SPACE, root_constant.range);
-            parameters.push(native::descriptor::RootParameter::constants(
+            parameters.push(descriptor::RootParameter::constants(
                 conv::map_shader_visibility(root_constant.stages),
-                native::descriptor::Binding {
+                descriptor::Binding {
                     register: root_constant.range.start as _,
                     space: ROOT_CONSTANT_SPACE,
                 },
@@ -1358,16 +1359,21 @@ impl d::Device<B> for Device {
             .iter()
             .map(|desc_set| {
                 let mut sum = 0;
-                let bindings = &desc_set.borrow().bindings;
-
-                for binding in bindings {
-                    sum += if binding.ty == pso::DescriptorType::CombinedImageSampler {
-                        2
-                    } else {
-                        1
-                    };
+                for binding in desc_set.borrow().bindings.iter() {
+                    let content = conv::DescriptorContent::from(binding.ty);
+                    if content.contains(conv::DescriptorContent::CBV) {
+                        sum += 1;
+                    }
+                    if content.contains(conv::DescriptorContent::SRV) {
+                        sum += 1;
+                    }
+                    if content.contains(conv::DescriptorContent::UAV) {
+                        sum += 1;
+                    }
+                    if content.contains(conv::DescriptorContent::SAMPLER) {
+                        sum += 1;
+                    }
                 }
-
                 sum
             })
             .sum();
@@ -1376,10 +1382,11 @@ impl d::Device<B> for Device {
 
         for (i, set) in sets.iter().enumerate() {
             let set = set.borrow();
+            let space = (table_space_offset + i) as u32;
             let mut table_type = r::SetTableTypes::empty();
 
             for bind in set.bindings.iter() {
-                debug!("\tRange {:?} at set={}", bind, table_space_offset + i);
+                debug!("\tRange {:?} at space={}", bind, space);
             }
             //TODO: split between sampler and non-sampler tables
             let visibility = conv::map_shader_visibility(
@@ -1388,17 +1395,33 @@ impl d::Device<B> for Device {
                     .fold(pso::ShaderStageFlags::empty(), |u, bind| u | bind.stage_flags)
             );
 
-            let mut range_base = ranges.len();
-            ranges.extend(
-                set.bindings
-                    .iter()
-                    .filter_map(|bind| {
-                        conv::map_descriptor_range(bind, (table_space_offset + i) as u32)
-                    }),
-            );
+            let describe = |bind: &pso::DescriptorSetLayoutBinding, ty| {
+                descriptor::DescriptorRange::new(
+                    ty,
+                    bind.count as _,
+                    descriptor::Binding {
+                        register: bind.binding as _,
+                        space,
+                    },
+                    d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                )
+            };
 
+            let mut range_base = ranges.len();
+            for bind in set.bindings.iter() {
+                let content = conv::DescriptorContent::from(bind.ty);
+                if content.contains(conv::DescriptorContent::CBV) {
+                    ranges.push(describe(bind, descriptor::DescriptorRangeType::CBV));
+                }
+                if content.contains(conv::DescriptorContent::SRV) {
+                    ranges.push(describe(bind, descriptor::DescriptorRangeType::SRV));
+                }
+                if content.contains(conv::DescriptorContent::UAV) {
+                    ranges.push(describe(bind, descriptor::DescriptorRangeType::UAV));
+                }
+            }
             if ranges.len() > range_base {
-                parameters.push(native::descriptor::RootParameter::descriptor_table(
+                parameters.push(descriptor::RootParameter::descriptor_table(
                     visibility,
                     &ranges[range_base ..],
                 ));
@@ -1406,16 +1429,14 @@ impl d::Device<B> for Device {
             }
 
             range_base = ranges.len();
-            ranges.extend(
-                set.bindings
-                    .iter()
-                    .filter_map(|bind| {
-                        conv::map_sampler_descriptor_range(bind, (table_space_offset + i) as u32)
-                    }),
-            );
-
+            for bind in set.bindings.iter() {
+                let content = conv::DescriptorContent::from(bind.ty);
+                if content.contains(conv::DescriptorContent::SAMPLER) {
+                    ranges.push(describe(bind, descriptor::DescriptorRangeType::Sampler));
+                }
+            }
             if ranges.len() > range_base {
-                parameters.push(native::descriptor::RootParameter::descriptor_table(
+                parameters.push(descriptor::RootParameter::descriptor_table(
                     visibility,
                     &ranges[range_base ..],
                 ));
@@ -1430,10 +1451,10 @@ impl d::Device<B> for Device {
 
         // TODO: error handling
         let ((signature_raw, error), _hr) = native::RootSignature::serialize(
-            native::descriptor::RootSignatureVersion::V1_0,
+            descriptor::RootSignatureVersion::V1_0,
             &parameters,
             &[],
-            native::descriptor::RootSignatureFlags::ALLOW_IA_INPUT_LAYOUT,
+            descriptor::RootSignatureFlags::ALLOW_IA_INPUT_LAYOUT,
         );
 
         if !error.is_null() {
@@ -2132,7 +2153,7 @@ impl d::Device<B> for Device {
     ) -> image::SubresourceFootprint {
         let mut num_rows = 0;
         let mut total_bytes = 0;
-        let desc = match image {
+        let _desc = match image {
             r::Image::Bound(i) => i.descriptor,
             r::Image::Unbound(i) => i.desc,
         };

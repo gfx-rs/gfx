@@ -10,10 +10,9 @@ use winapi::um::d3d12::*;
 use winapi::um::d3dcommon::*;
 
 use hal::format::{Format, ImageFeature, SurfaceType, Swizzle};
-use hal::pso::DescriptorSetLayoutBinding;
 use hal::{buffer, image, pso, Primitive};
 
-use native::descriptor::{Binding, DescriptorRange, DescriptorRangeType, ShaderVisibility};
+use native::descriptor::ShaderVisibility;
 
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
@@ -542,51 +541,44 @@ pub fn map_image_resource_state(
     state
 }
 
-pub fn map_descriptor_range(
-    bind: &DescriptorSetLayoutBinding,
-    register_space: u32,
-) -> Option<DescriptorRange> {
-    Some(DescriptorRange::new(
-        match bind.ty {
-            pso::DescriptorType::Sampler => return None,
-            pso::DescriptorType::SampledImage
-            | pso::DescriptorType::CombinedImageSampler
-            | pso::DescriptorType::InputAttachment
-            | pso::DescriptorType::UniformTexelBuffer => DescriptorRangeType::SRV,
-            pso::DescriptorType::StorageBuffer
-            | pso::DescriptorType::StorageBufferDynamic
-            | pso::DescriptorType::StorageTexelBuffer
-            | pso::DescriptorType::StorageImage => DescriptorRangeType::UAV,
-            pso::DescriptorType::UniformBuffer | pso::DescriptorType::UniformBufferDynamic => {
-                DescriptorRangeType::CBV
-            }
-        },
-        bind.count as _,
-        Binding {
-            register: bind.binding as _,
-            space: register_space,
-        },
-        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
-    ))
+bitflags! {
+    /// A set of D3D12 descriptor types that need to be associated
+    /// with a single gfx-hal `DescriptorType`.
+    pub struct DescriptorContent: u8 {
+        const CBV = 0x1;
+        const SRV = 0x2;
+        const UAV = 0x4;
+        const SAMPLER = 0x8;
+    }
 }
 
-pub fn map_sampler_descriptor_range(
-    bind: &DescriptorSetLayoutBinding,
-    register_space: u32,
-) -> Option<DescriptorRange> {
-    Some(DescriptorRange::new(
-        match bind.ty {
-            pso::DescriptorType::Sampler |
-            pso::DescriptorType::CombinedImageSampler => DescriptorRangeType::Sampler,
-            _ => return None,
-        },
-        bind.count as _,
-        Binding {
-            register: bind.binding as _,
-            space: register_space,
-        },
-        D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
-    ))
+impl From<pso::DescriptorType> for DescriptorContent {
+    fn from(ty: pso::DescriptorType) -> Self {
+        use hal::pso::DescriptorType as Dt;
+        match ty {
+            Dt::Sampler => {
+                DescriptorContent::SAMPLER
+            }
+            Dt::CombinedImageSampler => {
+                DescriptorContent::SRV | DescriptorContent::SAMPLER
+            }
+            Dt::SampledImage |
+            Dt::InputAttachment |
+            Dt::UniformTexelBuffer => {
+                DescriptorContent::SRV
+            }
+            Dt::StorageImage |
+            Dt::StorageBuffer |
+            Dt::StorageBufferDynamic |
+            Dt::StorageTexelBuffer => {
+                DescriptorContent::SRV | DescriptorContent::UAV
+            }
+            Dt::UniformBuffer |
+            Dt::UniformBufferDynamic => {
+                DescriptorContent::CBV
+            }
+        }
+    }
 }
 
 pub fn map_shader_visibility(flags: pso::ShaderStageFlags) -> ShaderVisibility {
