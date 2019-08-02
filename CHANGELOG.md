@@ -1,5 +1,17 @@
 # Change Log
 
+### backend-dx12-0.2.4 (02-08-2019)
+  - optimize shader visibility of descriptors
+
+### backend-dx12-0.2.3, backend-metal-0.2.4 (01-08-2019)
+  - fix exposed MSAA capabilities and resolves
+
+### backend-dx12-0.2.2 (29-07-2019)
+  - fix image view creation panics
+
+### backend-backend-metal-0.2.3 (10-07-2019)
+  - fixed depth clip mode support, updates spirv-cross
+
 ### backend-dx11-0.2.1, backend-dx12-0.2.1, backend-metal-0.2.2, backend-empty-0.2.1 (28-06-2019)
   - `Debug` implementations for `Instance`
 
