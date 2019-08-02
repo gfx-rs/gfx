@@ -405,6 +405,18 @@ impl Device {
         let cmd_queue = self.shared.queue.lock();
 
         unsafe {
+            // On iOS, unless the user supplies a view with a CAMetalLayer, we
+            // create one as a sublayer. However, when the view changes size,
+            // its sublayers are not automatically resized, and we must resize
+            // it here. The drawable size and the layer size don't correlate
+            #[cfg(target_os = "ios")] {
+                if let Some(view) = surface.inner.view {
+                    let main_layer: *mut Object = msg_send![view.as_ptr(), layer];
+                    let bounds: CGRect = msg_send![main_layer, bounds];
+                    msg_send![render_layer, setFrame: bounds];
+                }
+            }
+
             let device_raw = self.shared.device.lock().as_ptr();
             msg_send![render_layer, setDevice: device_raw];
             msg_send![render_layer, setPixelFormat: mtl_format];

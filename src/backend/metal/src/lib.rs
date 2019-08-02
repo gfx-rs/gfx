@@ -282,28 +282,22 @@ impl Instance {
             // If the main layer is not a CAMetalLayer, we create a CAMetalLayer sublayer and use it instead.
             // Unlike on macOS, we cannot replace the main view as UIView does not allow it (when NSView does).
             let new_layer: CAMetalLayer = msg_send![class, new];
-            let bounds: CGRect = msg_send![view, bounds];
-            msg_send![new_layer, setBounds: bounds];
 
-            let frame: CGRect = msg_send![view, frame];
-            msg_send![new_layer, setFrame: frame];
+            let bounds: CGRect = msg_send![main_layer, bounds];
+            msg_send![new_layer, setFrame: bounds];
 
             msg_send![main_layer, addSublayer: new_layer];
             new_layer
         };
 
         let window: cocoa::base::id = msg_send![view, window];
-        if window.is_null() {
-            panic!("surface is not attached to a window");
-        }
+        if !window.is_null() {
+            let screen: cocoa::base::id = msg_send![window, screen];
+            assert!(!screen.is_null(), "window is not attached to a screen");
 
-        let screen: cocoa::base::id = msg_send![window, screen];
-        if screen.is_null() {
-            panic!("window is not attached to a screen");
+            let scale_factor: CGFloat = msg_send![screen, nativeScale];
+            msg_send![view, setContentScaleFactor: scale_factor];
         }
-
-        let scale_factor: CGFloat = msg_send![screen, nativeScale];
-        msg_send![view, setContentScaleFactor: scale_factor];
 
         msg_send![view, retain];
         window::SurfaceInner::new(NonNull::new(view), render_layer)
