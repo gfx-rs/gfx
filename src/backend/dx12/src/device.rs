@@ -1360,17 +1360,17 @@ impl d::Device<B> for Device {
             .map(|desc_set| {
                 let mut sum = 0;
                 for binding in desc_set.borrow().bindings.iter() {
-                    let content = conv::DescriptorContent::from(binding.ty);
-                    if content.contains(conv::DescriptorContent::CBV) {
+                    let content = r::DescriptorContent::from(binding.ty);
+                    if content.contains(r::DescriptorContent::CBV) {
                         sum += 1;
                     }
-                    if content.contains(conv::DescriptorContent::SRV) {
+                    if content.contains(r::DescriptorContent::SRV) {
                         sum += 1;
                     }
-                    if content.contains(conv::DescriptorContent::UAV) {
+                    if content.contains(r::DescriptorContent::UAV) {
                         sum += 1;
                     }
-                    if content.contains(conv::DescriptorContent::SAMPLER) {
+                    if content.contains(r::DescriptorContent::SAMPLER) {
                         sum += 1;
                     }
                 }
@@ -1409,14 +1409,14 @@ impl d::Device<B> for Device {
 
             let mut range_base = ranges.len();
             for bind in set.bindings.iter() {
-                let content = conv::DescriptorContent::from(bind.ty);
-                if content.contains(conv::DescriptorContent::CBV) {
+                let content = r::DescriptorContent::from(bind.ty);
+                if content.contains(r::DescriptorContent::CBV) {
                     ranges.push(describe(bind, descriptor::DescriptorRangeType::CBV));
                 }
-                if content.contains(conv::DescriptorContent::SRV) {
+                if content.contains(r::DescriptorContent::SRV) {
                     ranges.push(describe(bind, descriptor::DescriptorRangeType::SRV));
                 }
-                if content.contains(conv::DescriptorContent::UAV) {
+                if content.contains(r::DescriptorContent::UAV) {
                     ranges.push(describe(bind, descriptor::DescriptorRangeType::UAV));
                 }
             }
@@ -1430,8 +1430,8 @@ impl d::Device<B> for Device {
 
             range_base = ranges.len();
             for bind in set.bindings.iter() {
-                let content = conv::DescriptorContent::from(bind.ty);
-                if content.contains(conv::DescriptorContent::SAMPLER) {
+                let content = r::DescriptorContent::from(bind.ty);
+                if content.contains(r::DescriptorContent::SAMPLER) {
                     ranges.push(describe(bind, descriptor::DescriptorRangeType::Sampler));
                 }
             }
@@ -2567,6 +2567,11 @@ impl d::Device<B> for Device {
                     bind_info = &write.set.binding_infos[target_binding];
                     offset = 0;
                 }
+                let mut src_cbv = None;
+                let mut src_srv = None;
+                let mut src_uav = None;
+                let mut src_sampler = None;
+
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
                         let buffer = buffer.expect_bound();
@@ -2578,16 +2583,48 @@ impl d::Device<B> for Device {
                                 max_size as _,
                             ));
                         }
-                        let heap = descriptor_update_pools.last_mut().unwrap();
-                        let handle = heap.alloc_handle();
-                        if heap.is_full() {
-                            // pool is full, move to the next one
-                            update_pool_index += 1;
-                        }
+                        let mut heap = descriptor_update_pools.last_mut().unwrap();
                         let start = range.start.unwrap_or(0);
                         let end = range.end.unwrap_or(buffer.requirements.size as _);
 
-                        if bind_info.is_uav {
+                        if bind_info.content.intersects(r::DescriptorContent::CBV) {
+                            // Making the size field of buffer requirements for uniform
+                            // buffers a multiple of 256 and setting the required offset
+                            // alignment to 256 allows us to patch the size here.
+                            // We can always enforce the size to be aligned to 256 for
+                            // CBVs without going out-of-bounds.
+                            let size = ((end - start) + 255) & !255;
+                            let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
+                                BufferLocation: (*buffer.resource).GetGPUVirtualAddress() + start,
+                                SizeInBytes: size as _,
+                            };
+                            let handle = heap.alloc_handle();
+                            self.raw.CreateConstantBufferView(&desc, handle);
+                            src_cbv = Some(handle);
+                        }
+                        if bind_info.content.contains(r::DescriptorContent::SRV) {
+                            assert_eq!((end - start) % 4, 0);
+                            let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                                Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+                                Shader4ComponentMapping: IDENTITY_MAPPING,
+                                ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
+                                u: mem::zeroed(),
+                            };
+                            *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
+                                FirstElement: start as _,
+                                NumElements: ((end - start) / 4) as _,
+                                StructureByteStride: 0,
+                                Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
+                            };
+                            let handle = heap.alloc_handle();
+                            self.raw.CreateShaderResourceView(
+                                buffer.resource.as_mut_ptr(),
+                                &desc,
+                                handle,
+                            );
+                            src_srv = Some(handle);
+                        }
+                        if bind_info.content.contains(r::DescriptorContent::UAV) {
                             assert_eq!((end - start) % 4, 0);
                             let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                                 Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
@@ -2601,74 +2638,98 @@ impl d::Device<B> for Device {
                                 CounterOffsetInBytes: 0,
                                 Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
                             };
+                            if heap.is_full() {
+                                // pool is full, move to the next one
+                                update_pool_index += 1;
+                                let max_size = 1u64 << 12; //arbitrary
+                                descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
+                                    self.raw,
+                                    descriptor::HeapType::CbvSrvUav,
+                                    max_size as _,
+                                ));
+                                heap = descriptor_update_pools.last_mut().unwrap();
+                            }
+                            let handle = heap.alloc_handle();
                             self.raw.CreateUnorderedAccessView(
                                 buffer.resource.as_mut_ptr(),
                                 ptr::null_mut(),
                                 &desc,
                                 handle,
                             );
-                        } else {
-                            // Making the size field of buffer requirements for uniform
-                            // buffers a multiple of 256 and setting the required offset
-                            // alignment to 256 allows us to patch the size here.
-                            // We can always enforce the size to be aligned to 256 for
-                            // CBVs without going out-of-bounds.
-                            let size = ((end - start) + 255) & !255;
-                            let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
-                                BufferLocation: (*buffer.resource).GetGPUVirtualAddress() + start,
-                                SizeInBytes: size as _,
-                            };
-                            self.raw.CreateConstantBufferView(&desc, handle);
+                            src_uav = Some(handle);
                         }
 
-                        src_views.push(handle);
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                        num_views.push(1);
+                        if heap.is_full() {
+                            // pool is full, move to the next one
+                            update_pool_index += 1;
+                        }
                     }
                     pso::Descriptor::Image(image, _layout) => {
-                        let handle = if bind_info.is_uav {
-                            image.handle_uav.unwrap()
-                        } else {
-                            image.handle_srv.unwrap()
-                        };
-                        src_views.push(handle);
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                        num_views.push(1);
+                        if bind_info.content.contains(r::DescriptorContent::SRV) {
+                            src_srv = image.handle_srv;
+                        }
+                        if bind_info.content.contains(r::DescriptorContent::UAV) {
+                            src_uav = image.handle_uav;
+                        }
                     }
                     pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
-                        src_views.push(image.handle_srv.unwrap());
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                        num_views.push(1);
-                        src_samplers.push(sampler.handle);
-                        dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
-                        num_samplers.push(1);
+                        src_srv = image.handle_srv;
+                        src_sampler = Some(sampler.handle);
                     }
                     pso::Descriptor::Sampler(sampler) => {
-                        src_samplers.push(sampler.handle);
-                        dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
-                        num_samplers.push(1);
+                        src_sampler = Some(sampler.handle);
                     }
                     pso::Descriptor::UniformTexelBuffer(buffer_view) => {
                         let handle = buffer_view.handle_srv;
-                        if handle.ptr != 0 {
-                            src_views.push(handle);
-                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                            num_views.push(1);
-                        } else {
+                        src_srv = Some(handle);
+                        if handle.ptr == 0 {
                             error!("SRV handle of the uniform texel buffer is zero (not supported by specified format).");
                         }
                     }
                     pso::Descriptor::StorageTexelBuffer(buffer_view) => {
-                        let handle = buffer_view.handle_uav;
-                        if handle.ptr != 0 {
-                            src_views.push(handle);
-                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                            num_views.push(1);
-                        } else {
-                            error!("UAV handle of the storage texel buffer is zero (not supported by specified format).");
+                        if bind_info.content.contains(r::DescriptorContent::SRV) {
+                            let handle = buffer_view.handle_srv;
+                            src_srv = Some(handle);
+                            if handle.ptr == 0 {
+                                error!("SRV handle of the storage texel buffer is zero (not supported by specified format).");
+                            }
+                        }
+                        if bind_info.content.contains(r::DescriptorContent::UAV) {
+                            let handle = buffer_view.handle_uav;
+                            src_uav = Some(handle);
+                            if handle.ptr == 0 {
+                                error!("UAV handle of the storage texel buffer is zero (not supported by specified format).");
+                            }
                         }
                     }
                 }
+
+                if let Some(handle) = src_cbv {
+                    src_views.push(handle);
+                    dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                    num_views.push(1);
+                }
+                if let Some(handle) = src_srv {
+                    src_views.push(handle);
+                    dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                    num_views.push(1);
+                }
+                if let Some(handle) = src_uav {
+                    let uav_offset = if bind_info.content.contains(r::DescriptorContent::SRV) {
+                        bind_info.count + offset
+                    } else {
+                        offset
+                    };
+                    src_views.push(handle);
+                    dst_views.push(bind_info.view_range.as_ref().unwrap().at(uav_offset));
+                    num_views.push(1);
+                }
+                if let Some(handle) = src_sampler {
+                    src_samplers.push(handle);
+                    dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
+                    num_samplers.push(1);
+                }
+
                 offset += 1;
             }
         }
@@ -2726,6 +2787,12 @@ impl d::Device<B> for Device {
                 src_views.push(src_range.at(copy.src_array_offset as _));
                 dst_views.push(dst_range.at(copy.dst_array_offset as _));
                 num_views.push(copy.count as u32);
+
+                if (src_info.content & dst_info.content).contains(r::DescriptorContent::SRV | r::DescriptorContent::UAV) {
+                    src_views.push(src_range.at(src_range.count + copy.src_array_offset as u64));
+                    dst_views.push(dst_range.at(dst_range.count + copy.dst_array_offset as u64));
+                    num_views.push(copy.count as u32);
+                }
             }
             if let (Some(src_range), Some(dst_range)) = (
                 src_info.sampler_range.as_ref(),
@@ -2944,15 +3011,15 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    unsafe fn get_event_status(&self, event: &()) -> Result<bool, d::OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, d::OomOrDeviceLost> {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn set_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 

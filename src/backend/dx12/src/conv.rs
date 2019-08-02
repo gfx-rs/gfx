@@ -541,46 +541,6 @@ pub fn map_image_resource_state(
     state
 }
 
-bitflags! {
-    /// A set of D3D12 descriptor types that need to be associated
-    /// with a single gfx-hal `DescriptorType`.
-    pub struct DescriptorContent: u8 {
-        const CBV = 0x1;
-        const SRV = 0x2;
-        const UAV = 0x4;
-        const SAMPLER = 0x8;
-    }
-}
-
-impl From<pso::DescriptorType> for DescriptorContent {
-    fn from(ty: pso::DescriptorType) -> Self {
-        use hal::pso::DescriptorType as Dt;
-        match ty {
-            Dt::Sampler => {
-                DescriptorContent::SAMPLER
-            }
-            Dt::CombinedImageSampler => {
-                DescriptorContent::SRV | DescriptorContent::SAMPLER
-            }
-            Dt::SampledImage |
-            Dt::InputAttachment |
-            Dt::UniformTexelBuffer => {
-                DescriptorContent::SRV
-            }
-            Dt::StorageImage |
-            Dt::StorageBuffer |
-            Dt::StorageBufferDynamic |
-            Dt::StorageTexelBuffer => {
-                DescriptorContent::SRV | DescriptorContent::UAV
-            }
-            Dt::UniformBuffer |
-            Dt::UniformBufferDynamic => {
-                DescriptorContent::CBV
-            }
-        }
-    }
-}
-
 pub fn map_shader_visibility(flags: pso::ShaderStageFlags) -> ShaderVisibility {
     use hal::pso::ShaderStageFlags as Ssf;
 
