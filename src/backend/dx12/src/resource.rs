@@ -587,22 +587,25 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         let mut first_gpu_sampler = None;
         let mut first_gpu_view = None;
 
+        info!("allocate_set");
         for binding in &layout.bindings {
             while binding_infos.len() <= binding.binding as usize {
                 binding_infos.push(DescriptorBindingInfo::default());
             }
             let content = DescriptorContent::from(binding.ty);
+            debug!("\tbinding {:?} with content {:?}", binding, content);
             binding_infos[binding.binding as usize] = DescriptorBindingInfo {
                 count: binding.count as _,
                 view_range: if content.intersects(DescriptorContent::VIEW) {
-                    let handle_count = if content.contains(DescriptorContent::SRV | DescriptorContent::UAV) {
+                    let count = if content.contains(DescriptorContent::SRV | DescriptorContent::UAV) {
                         2 * binding.count as u64
                     } else {
                         binding.count as u64
                     };
+                    debug!("\tview handles: {}", count);
                     let handle = self
                         .heap_srv_cbv_uav
-                        .alloc_handles(handle_count)
+                        .alloc_handles(count)
                         .ok_or(pso::AllocationError::OutOfPoolMemory)?;
                     if first_gpu_view.is_none() {
                         first_gpu_view = Some(handle.gpu);
@@ -610,16 +613,18 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                     Some(DescriptorRange {
                         handle,
                         ty: binding.ty,
-                        count: binding.count as u64,
+                        count,
                         handle_size: self.heap_srv_cbv_uav.handle_size,
                     })
                 } else {
                     None
                 },
                 sampler_range: if content.intersects(DescriptorContent::SAMPLER) {
+                    let count = binding.count as u64;
+                    debug!("\tsampler handles: {}", count);
                     let handle = self
                         .heap_sampler
-                        .alloc_handles(binding.count as u64)
+                        .alloc_handles(count)
                         .ok_or(pso::AllocationError::OutOfPoolMemory)?;
                     if first_gpu_sampler.is_none() {
                         first_gpu_sampler = Some(handle.gpu);
@@ -627,7 +632,7 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                     Some(DescriptorRange {
                         handle,
                         ty: binding.ty,
-                        count: binding.count as _,
+                        count,
                         handle_size: self.heap_sampler.handle_size,
                     })
                 } else {

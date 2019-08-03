@@ -1361,18 +1361,7 @@ impl d::Device<B> for Device {
                 let mut sum = 0;
                 for binding in desc_set.borrow().bindings.iter() {
                     let content = r::DescriptorContent::from(binding.ty);
-                    if content.contains(r::DescriptorContent::CBV) {
-                        sum += 1;
-                    }
-                    if content.contains(r::DescriptorContent::SRV) {
-                        sum += 1;
-                    }
-                    if content.contains(r::DescriptorContent::UAV) {
-                        sum += 1;
-                    }
-                    if content.contains(r::DescriptorContent::SAMPLER) {
-                        sum += 1;
-                    }
+                    sum += content.bits().count_ones() as usize;
                 }
                 sum
             })
@@ -2461,20 +2450,25 @@ impl d::Device<B> for Device {
             .map(|desc| *desc.borrow())
             .collect::<Vec<_>>();
 
+        info!("create_descriptor_pool with {} max sets", max_sets);
         for desc in &descriptor_pools {
-            match desc.ty {
-                pso::DescriptorType::Sampler => {
-                    num_samplers += desc.count;
-                }
-                pso::DescriptorType::CombinedImageSampler => {
-                    num_samplers += desc.count;
-                    num_srv_cbv_uav += desc.count;
-                }
-                _ => {
-                    num_srv_cbv_uav += desc.count;
-                }
+            let content = r::DescriptorContent::from(desc.ty);
+            debug!("\tcontent {:?}", content);
+            if content.contains(r::DescriptorContent::CBV) {
+                num_srv_cbv_uav += desc.count;
+            }
+            if content.contains(r::DescriptorContent::SRV) {
+                num_srv_cbv_uav += desc.count;
+            }
+            if content.contains(r::DescriptorContent::UAV) {
+                num_srv_cbv_uav += desc.count;
+            }
+            if content.contains(r::DescriptorContent::SAMPLER) {
+                num_samplers += desc.count;
             }
         }
+
+        info!("total {} views and {} samplers", num_srv_cbv_uav, num_samplers);
 
         let heap_srv_cbv_uav = {
             let mut heap_srv_cbv_uav = self.heap_srv_cbv_uav.lock().unwrap();
@@ -2554,11 +2548,13 @@ impl d::Device<B> for Device {
         let mut src_views = Vec::new();
         let mut num_samplers = Vec::new();
         let mut num_views = Vec::new();
+        debug!("write_descriptor_sets");
 
         for write in write_iter {
             let mut offset = write.array_offset as u64;
             let mut target_binding = write.binding as usize;
             let mut bind_info = &write.set.binding_infos[target_binding];
+            debug!("\t{:?} binding {} array offset {}", bind_info, target_binding, offset);
             for descriptor in write.descriptors {
                 // spill over the writes onto the next binding
                 while offset >= bind_info.count {
@@ -2659,6 +2655,7 @@ impl d::Device<B> for Device {
                             src_uav = Some(handle);
                         }
 
+                        // always leave this block of code prepared
                         if heap.is_full() {
                             // pool is full, move to the next one
                             update_pool_index += 1;
@@ -2705,11 +2702,13 @@ impl d::Device<B> for Device {
                 }
 
                 if let Some(handle) = src_cbv {
+                    trace!("\tcbv offset {}", offset);
                     src_views.push(handle);
                     dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
                     num_views.push(1);
                 }
                 if let Some(handle) = src_srv {
+                    trace!("\tsrv offset {}", offset);
                     src_views.push(handle);
                     dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
                     num_views.push(1);
@@ -2720,11 +2719,13 @@ impl d::Device<B> for Device {
                     } else {
                         offset
                     };
+                    trace!("\tuav offset {}", uav_offset);
                     src_views.push(handle);
                     dst_views.push(bind_info.view_range.as_ref().unwrap().at(uav_offset));
                     num_views.push(1);
                 }
                 if let Some(handle) = src_sampler {
+                    trace!("\tsampler offset {}", offset);
                     src_samplers.push(handle);
                     dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
                     num_samplers.push(1);
@@ -2789,8 +2790,10 @@ impl d::Device<B> for Device {
                 num_views.push(copy.count as u32);
 
                 if (src_info.content & dst_info.content).contains(r::DescriptorContent::SRV | r::DescriptorContent::UAV) {
-                    src_views.push(src_range.at(src_range.count + copy.src_array_offset as u64));
-                    dst_views.push(dst_range.at(dst_range.count + copy.dst_array_offset as u64));
+                    assert!(src_info.count as usize + copy.src_array_offset + copy.count <= src_range.count as usize);
+                    assert!(dst_info.count as usize + copy.dst_array_offset + copy.count <= dst_range.count as usize);
+                    src_views.push(src_range.at(src_info.count + copy.src_array_offset as u64));
+                    dst_views.push(dst_range.at(dst_info.count + copy.dst_array_offset as u64));
                     num_views.push(copy.count as u32);
                 }
             }
@@ -3140,7 +3143,7 @@ impl d::Device<B> for Device {
         semaphore.raw.destroy();
     }
 
-    unsafe fn destroy_event(&self, event: ()) {
+    unsafe fn destroy_event(&self, _event: ()) {
         unimplemented!()
     }
 
