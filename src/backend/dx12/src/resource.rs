@@ -5,8 +5,11 @@ use winapi::um::d3d12;
 use hal::{buffer, format, image, memory, pass, pso, DescriptorPool as HalDescriptorPool};
 use native::{self, query};
 use range_alloc::RangeAllocator;
-use root_constants::RootConstant;
-use {Backend, MAX_VERTEX_BUFFERS};
+
+use crate::{
+    root_constants::RootConstant,
+    Backend, MAX_VERTEX_BUFFERS,
+};
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -389,6 +392,48 @@ pub struct Memory {
 unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
 
+bitflags! {
+    /// A set of D3D12 descriptor types that need to be associated
+    /// with a single gfx-hal `DescriptorType`.
+    #[derive(Default)]
+    pub struct DescriptorContent: u8 {
+        const CBV = 0x1;
+        const SRV = 0x2;
+        const UAV = 0x4;
+        const SAMPLER = 0x8;
+        const VIEW = 0x7;
+    }
+}
+
+impl From<pso::DescriptorType> for DescriptorContent {
+    fn from(ty: pso::DescriptorType) -> Self {
+        use hal::pso::DescriptorType as Dt;
+        match ty {
+            Dt::Sampler => {
+                DescriptorContent::SAMPLER
+            }
+            Dt::CombinedImageSampler => {
+                DescriptorContent::SRV | DescriptorContent::SAMPLER
+            }
+            Dt::SampledImage |
+            Dt::InputAttachment |
+            Dt::UniformTexelBuffer => {
+                DescriptorContent::SRV
+            }
+            Dt::StorageImage |
+            Dt::StorageBuffer |
+            Dt::StorageBufferDynamic |
+            Dt::StorageTexelBuffer => {
+                DescriptorContent::SRV | DescriptorContent::UAV
+            }
+            Dt::UniformBuffer |
+            Dt::UniformBufferDynamic => {
+                DescriptorContent::CBV
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct DescriptorRange {
     pub(crate) handle: DualHandle,
@@ -410,7 +455,7 @@ pub struct DescriptorBindingInfo {
     pub(crate) count: u64,
     pub(crate) view_range: Option<DescriptorRange>,
     pub(crate) sampler_range: Option<DescriptorRange>,
-    pub(crate) is_uav: bool,
+    pub(crate) content: DescriptorContent,
 }
 
 #[derive(Derivative)]
@@ -542,21 +587,25 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         let mut first_gpu_sampler = None;
         let mut first_gpu_view = None;
 
+        info!("allocate_set");
         for binding in &layout.bindings {
-            let HeapProperties {
-                has_view,
-                has_sampler,
-                is_uav,
-            } = HeapProperties::from(binding.ty);
             while binding_infos.len() <= binding.binding as usize {
                 binding_infos.push(DescriptorBindingInfo::default());
             }
+            let content = DescriptorContent::from(binding.ty);
+            debug!("\tbinding {:?} with content {:?}", binding, content);
             binding_infos[binding.binding as usize] = DescriptorBindingInfo {
                 count: binding.count as _,
-                view_range: if has_view {
+                view_range: if content.intersects(DescriptorContent::VIEW) {
+                    let count = if content.contains(DescriptorContent::SRV | DescriptorContent::UAV) {
+                        2 * binding.count as u64
+                    } else {
+                        binding.count as u64
+                    };
+                    debug!("\tview handles: {}", count);
                     let handle = self
                         .heap_srv_cbv_uav
-                        .alloc_handles(binding.count as u64)
+                        .alloc_handles(count)
                         .ok_or(pso::AllocationError::OutOfPoolMemory)?;
                     if first_gpu_view.is_none() {
                         first_gpu_view = Some(handle.gpu);
@@ -564,16 +613,18 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                     Some(DescriptorRange {
                         handle,
                         ty: binding.ty,
-                        count: binding.count as _,
+                        count,
                         handle_size: self.heap_srv_cbv_uav.handle_size,
                     })
                 } else {
                     None
                 },
-                sampler_range: if has_sampler {
+                sampler_range: if content.intersects(DescriptorContent::SAMPLER) {
+                    let count = binding.count as u64;
+                    debug!("\tsampler handles: {}", count);
                     let handle = self
                         .heap_sampler
-                        .alloc_handles(binding.count as u64)
+                        .alloc_handles(count)
                         .ok_or(pso::AllocationError::OutOfPoolMemory)?;
                     if first_gpu_sampler.is_none() {
                         first_gpu_sampler = Some(handle.gpu);
@@ -581,13 +632,13 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
                     Some(DescriptorRange {
                         handle,
                         ty: binding.ty,
-                        count: binding.count as _,
+                        count,
                         handle_size: self.heap_sampler.handle_size,
                     })
                 } else {
                     None
                 },
-                is_uav,
+                content,
             };
         }
 
@@ -607,12 +658,12 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
         for descriptor_set in descriptor_sets {
             for binding_info in &descriptor_set.binding_infos {
                 if let Some(ref view_range) = binding_info.view_range {
-                    if HeapProperties::from(view_range.ty).has_view {
+                    if binding_info.content.intersects(DescriptorContent::VIEW) {
                         self.heap_srv_cbv_uav.free_handles(view_range.handle);
                     }
                 }
                 if let Some(ref sampler_range) = binding_info.sampler_range {
-                    if HeapProperties::from(sampler_range.ty).has_sampler {
+                    if binding_info.content.intersects(DescriptorContent::SAMPLER) {
                         self.heap_sampler.free_handles(sampler_range.handle);
                     }
                 }
@@ -623,39 +674,6 @@ impl HalDescriptorPool<Backend> for DescriptorPool {
     unsafe fn reset(&mut self) {
         self.heap_srv_cbv_uav.clear();
         self.heap_sampler.clear();
-    }
-}
-
-struct HeapProperties {
-    has_view: bool,
-    has_sampler: bool,
-    is_uav: bool,
-}
-
-impl HeapProperties {
-    pub fn new(has_view: bool, has_sampler: bool, is_uav: bool) -> Self {
-        HeapProperties {
-            has_view,
-            has_sampler,
-            is_uav,
-        }
-    }
-
-    /// Returns DescriptorType properties for DX12.
-    fn from(ty: pso::DescriptorType) -> HeapProperties {
-        match ty {
-            pso::DescriptorType::Sampler => HeapProperties::new(false, true, false),
-            pso::DescriptorType::CombinedImageSampler => HeapProperties::new(true, true, false),
-            pso::DescriptorType::InputAttachment
-            | pso::DescriptorType::SampledImage
-            | pso::DescriptorType::UniformTexelBuffer
-            | pso::DescriptorType::UniformBufferDynamic
-            | pso::DescriptorType::UniformBuffer => HeapProperties::new(true, false, false),
-            pso::DescriptorType::StorageImage
-            | pso::DescriptorType::StorageTexelBuffer
-            | pso::DescriptorType::StorageBufferDynamic
-            | pso::DescriptorType::StorageBuffer => HeapProperties::new(true, false, true),
-        }
     }
 }
 

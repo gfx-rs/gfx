@@ -1199,7 +1199,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     ref states,
                     target,
                     ref families,
-                    ref range,
+                    ..
                 } => {
                     // TODO: Implement queue family ownership transitions for dx12
                     if let Some(f) = families {
@@ -1631,7 +1631,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                 MaxDepth: 1.0,
             };
 
-            let mut list = instances.entry(key).or_insert(Vec::new());
+            let list = instances.entry(key).or_insert(Vec::new());
 
             for i in 0 .. num_layers {
                 let src_layer = r.src_subresource.layers.start + i;
@@ -1726,7 +1726,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
         // post barriers
         for bar in &mut barriers {
-            let mut transition = bar.u.Transition_mut();
+            let transition = bar.u.Transition_mut();
             mem::swap(&mut transition.StateBefore, &mut transition.StateAfter);
         }
         self.raw
@@ -1982,7 +1982,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn fill_buffer<R>(&mut self, buffer: &r::Buffer, range: R, data: u32)
+    unsafe fn fill_buffer<R>(&mut self, buffer: &r::Buffer, range: R, _data: u32)
     where
         R: RangeArg<buffer::Offset>,
     {

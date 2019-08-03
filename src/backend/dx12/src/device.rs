@@ -19,7 +19,7 @@ use hal::range::RangeArg;
 use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
 
 use native::command_list::IndirectArgument;
-use native::descriptor;
+use descriptor;
 use native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
 
 use pool::{CommandPoolAllocator, RawCommandPool};
@@ -436,6 +436,7 @@ impl Device {
                 }
 
                 Self::patch_spirv_resources(&mut ast, Some(layout))?;
+
                 let shader_model = hlsl::ShaderModel::V5_1;
                 let shader_code = Self::translate_spirv(&mut ast, shader_model, layout, stage)?;
                 debug!("SPIRV-Cross generated shader:\n{}", shader_code);
@@ -1336,9 +1337,9 @@ impl d::Device<B> for Device {
 
         for root_constant in root_constants.iter() {
             debug!("\tRoot constant set={} range {:?}", ROOT_CONSTANT_SPACE, root_constant.range);
-            parameters.push(native::descriptor::RootParameter::constants(
+            parameters.push(descriptor::RootParameter::constants(
                 conv::map_shader_visibility(root_constant.stages),
-                native::descriptor::Binding {
+                descriptor::Binding {
                     register: root_constant.range.start as _,
                     space: ROOT_CONSTANT_SPACE,
                 },
@@ -1358,16 +1359,10 @@ impl d::Device<B> for Device {
             .iter()
             .map(|desc_set| {
                 let mut sum = 0;
-                let bindings = &desc_set.borrow().bindings;
-
-                for binding in bindings {
-                    sum += if binding.ty == pso::DescriptorType::CombinedImageSampler {
-                        2
-                    } else {
-                        1
-                    };
+                for binding in desc_set.borrow().bindings.iter() {
+                    let content = r::DescriptorContent::from(binding.ty);
+                    sum += content.bits().count_ones() as usize;
                 }
-
                 sum
             })
             .sum();
@@ -1376,10 +1371,11 @@ impl d::Device<B> for Device {
 
         for (i, set) in sets.iter().enumerate() {
             let set = set.borrow();
+            let space = (table_space_offset + i) as u32;
             let mut table_type = r::SetTableTypes::empty();
 
             for bind in set.bindings.iter() {
-                debug!("\tRange {:?} at set={}", bind, table_space_offset + i);
+                debug!("\tRange {:?} at space={}", bind, space);
             }
             //TODO: split between sampler and non-sampler tables
             let visibility = conv::map_shader_visibility(
@@ -1388,17 +1384,33 @@ impl d::Device<B> for Device {
                     .fold(pso::ShaderStageFlags::empty(), |u, bind| u | bind.stage_flags)
             );
 
-            let mut range_base = ranges.len();
-            ranges.extend(
-                set.bindings
-                    .iter()
-                    .filter_map(|bind| {
-                        conv::map_descriptor_range(bind, (table_space_offset + i) as u32)
-                    }),
-            );
+            let describe = |bind: &pso::DescriptorSetLayoutBinding, ty| {
+                descriptor::DescriptorRange::new(
+                    ty,
+                    bind.count as _,
+                    descriptor::Binding {
+                        register: bind.binding as _,
+                        space,
+                    },
+                    d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                )
+            };
 
+            let mut range_base = ranges.len();
+            for bind in set.bindings.iter() {
+                let content = r::DescriptorContent::from(bind.ty);
+                if content.contains(r::DescriptorContent::CBV) {
+                    ranges.push(describe(bind, descriptor::DescriptorRangeType::CBV));
+                }
+                if content.contains(r::DescriptorContent::SRV) {
+                    ranges.push(describe(bind, descriptor::DescriptorRangeType::SRV));
+                }
+                if content.contains(r::DescriptorContent::UAV) {
+                    ranges.push(describe(bind, descriptor::DescriptorRangeType::UAV));
+                }
+            }
             if ranges.len() > range_base {
-                parameters.push(native::descriptor::RootParameter::descriptor_table(
+                parameters.push(descriptor::RootParameter::descriptor_table(
                     visibility,
                     &ranges[range_base ..],
                 ));
@@ -1406,16 +1418,14 @@ impl d::Device<B> for Device {
             }
 
             range_base = ranges.len();
-            ranges.extend(
-                set.bindings
-                    .iter()
-                    .filter_map(|bind| {
-                        conv::map_sampler_descriptor_range(bind, (table_space_offset + i) as u32)
-                    }),
-            );
-
+            for bind in set.bindings.iter() {
+                let content = r::DescriptorContent::from(bind.ty);
+                if content.contains(r::DescriptorContent::SAMPLER) {
+                    ranges.push(describe(bind, descriptor::DescriptorRangeType::Sampler));
+                }
+            }
             if ranges.len() > range_base {
-                parameters.push(native::descriptor::RootParameter::descriptor_table(
+                parameters.push(descriptor::RootParameter::descriptor_table(
                     visibility,
                     &ranges[range_base ..],
                 ));
@@ -1430,10 +1440,10 @@ impl d::Device<B> for Device {
 
         // TODO: error handling
         let ((signature_raw, error), _hr) = native::RootSignature::serialize(
-            native::descriptor::RootSignatureVersion::V1_0,
+            descriptor::RootSignatureVersion::V1_0,
             &parameters,
             &[],
-            native::descriptor::RootSignatureFlags::ALLOW_IA_INPUT_LAYOUT,
+            descriptor::RootSignatureFlags::ALLOW_IA_INPUT_LAYOUT,
         );
 
         if !error.is_null() {
@@ -2132,7 +2142,7 @@ impl d::Device<B> for Device {
     ) -> image::SubresourceFootprint {
         let mut num_rows = 0;
         let mut total_bytes = 0;
-        let desc = match image {
+        let _desc = match image {
             r::Image::Bound(i) => i.descriptor,
             r::Image::Unbound(i) => i.desc,
         };
@@ -2440,20 +2450,25 @@ impl d::Device<B> for Device {
             .map(|desc| *desc.borrow())
             .collect::<Vec<_>>();
 
+        info!("create_descriptor_pool with {} max sets", max_sets);
         for desc in &descriptor_pools {
-            match desc.ty {
-                pso::DescriptorType::Sampler => {
-                    num_samplers += desc.count;
-                }
-                pso::DescriptorType::CombinedImageSampler => {
-                    num_samplers += desc.count;
-                    num_srv_cbv_uav += desc.count;
-                }
-                _ => {
-                    num_srv_cbv_uav += desc.count;
-                }
+            let content = r::DescriptorContent::from(desc.ty);
+            debug!("\tcontent {:?}", content);
+            if content.contains(r::DescriptorContent::CBV) {
+                num_srv_cbv_uav += desc.count;
+            }
+            if content.contains(r::DescriptorContent::SRV) {
+                num_srv_cbv_uav += desc.count;
+            }
+            if content.contains(r::DescriptorContent::UAV) {
+                num_srv_cbv_uav += desc.count;
+            }
+            if content.contains(r::DescriptorContent::SAMPLER) {
+                num_samplers += desc.count;
             }
         }
+
+        info!("total {} views and {} samplers", num_srv_cbv_uav, num_samplers);
 
         let heap_srv_cbv_uav = {
             let mut heap_srv_cbv_uav = self.heap_srv_cbv_uav.lock().unwrap();
@@ -2533,11 +2548,13 @@ impl d::Device<B> for Device {
         let mut src_views = Vec::new();
         let mut num_samplers = Vec::new();
         let mut num_views = Vec::new();
+        debug!("write_descriptor_sets");
 
         for write in write_iter {
             let mut offset = write.array_offset as u64;
             let mut target_binding = write.binding as usize;
             let mut bind_info = &write.set.binding_infos[target_binding];
+            debug!("\t{:?} binding {} array offset {}", bind_info, target_binding, offset);
             for descriptor in write.descriptors {
                 // spill over the writes onto the next binding
                 while offset >= bind_info.count {
@@ -2546,6 +2563,11 @@ impl d::Device<B> for Device {
                     bind_info = &write.set.binding_infos[target_binding];
                     offset = 0;
                 }
+                let mut src_cbv = None;
+                let mut src_srv = None;
+                let mut src_uav = None;
+                let mut src_sampler = None;
+
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
                         let buffer = buffer.expect_bound();
@@ -2557,16 +2579,48 @@ impl d::Device<B> for Device {
                                 max_size as _,
                             ));
                         }
-                        let heap = descriptor_update_pools.last_mut().unwrap();
-                        let handle = heap.alloc_handle();
-                        if heap.is_full() {
-                            // pool is full, move to the next one
-                            update_pool_index += 1;
-                        }
+                        let mut heap = descriptor_update_pools.last_mut().unwrap();
                         let start = range.start.unwrap_or(0);
                         let end = range.end.unwrap_or(buffer.requirements.size as _);
 
-                        if bind_info.is_uav {
+                        if bind_info.content.intersects(r::DescriptorContent::CBV) {
+                            // Making the size field of buffer requirements for uniform
+                            // buffers a multiple of 256 and setting the required offset
+                            // alignment to 256 allows us to patch the size here.
+                            // We can always enforce the size to be aligned to 256 for
+                            // CBVs without going out-of-bounds.
+                            let size = ((end - start) + 255) & !255;
+                            let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
+                                BufferLocation: (*buffer.resource).GetGPUVirtualAddress() + start,
+                                SizeInBytes: size as _,
+                            };
+                            let handle = heap.alloc_handle();
+                            self.raw.CreateConstantBufferView(&desc, handle);
+                            src_cbv = Some(handle);
+                        }
+                        if bind_info.content.contains(r::DescriptorContent::SRV) {
+                            assert_eq!((end - start) % 4, 0);
+                            let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                                Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+                                Shader4ComponentMapping: IDENTITY_MAPPING,
+                                ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
+                                u: mem::zeroed(),
+                            };
+                            *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
+                                FirstElement: start as _,
+                                NumElements: ((end - start) / 4) as _,
+                                StructureByteStride: 0,
+                                Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
+                            };
+                            let handle = heap.alloc_handle();
+                            self.raw.CreateShaderResourceView(
+                                buffer.resource.as_mut_ptr(),
+                                &desc,
+                                handle,
+                            );
+                            src_srv = Some(handle);
+                        }
+                        if bind_info.content.contains(r::DescriptorContent::UAV) {
                             assert_eq!((end - start) % 4, 0);
                             let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                                 Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
@@ -2580,74 +2634,103 @@ impl d::Device<B> for Device {
                                 CounterOffsetInBytes: 0,
                                 Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
                             };
+                            if heap.is_full() {
+                                // pool is full, move to the next one
+                                update_pool_index += 1;
+                                let max_size = 1u64 << 12; //arbitrary
+                                descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
+                                    self.raw,
+                                    descriptor::HeapType::CbvSrvUav,
+                                    max_size as _,
+                                ));
+                                heap = descriptor_update_pools.last_mut().unwrap();
+                            }
+                            let handle = heap.alloc_handle();
                             self.raw.CreateUnorderedAccessView(
                                 buffer.resource.as_mut_ptr(),
                                 ptr::null_mut(),
                                 &desc,
                                 handle,
                             );
-                        } else {
-                            // Making the size field of buffer requirements for uniform
-                            // buffers a multiple of 256 and setting the required offset
-                            // alignment to 256 allows us to patch the size here.
-                            // We can always enforce the size to be aligned to 256 for
-                            // CBVs without going out-of-bounds.
-                            let size = ((end - start) + 255) & !255;
-                            let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
-                                BufferLocation: (*buffer.resource).GetGPUVirtualAddress() + start,
-                                SizeInBytes: size as _,
-                            };
-                            self.raw.CreateConstantBufferView(&desc, handle);
+                            src_uav = Some(handle);
                         }
 
-                        src_views.push(handle);
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                        num_views.push(1);
+                        // always leave this block of code prepared
+                        if heap.is_full() {
+                            // pool is full, move to the next one
+                            update_pool_index += 1;
+                        }
                     }
                     pso::Descriptor::Image(image, _layout) => {
-                        let handle = if bind_info.is_uav {
-                            image.handle_uav.unwrap()
-                        } else {
-                            image.handle_srv.unwrap()
-                        };
-                        src_views.push(handle);
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                        num_views.push(1);
+                        if bind_info.content.contains(r::DescriptorContent::SRV) {
+                            src_srv = image.handle_srv;
+                        }
+                        if bind_info.content.contains(r::DescriptorContent::UAV) {
+                            src_uav = image.handle_uav;
+                        }
                     }
                     pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
-                        src_views.push(image.handle_srv.unwrap());
-                        dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                        num_views.push(1);
-                        src_samplers.push(sampler.handle);
-                        dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
-                        num_samplers.push(1);
+                        src_srv = image.handle_srv;
+                        src_sampler = Some(sampler.handle);
                     }
                     pso::Descriptor::Sampler(sampler) => {
-                        src_samplers.push(sampler.handle);
-                        dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
-                        num_samplers.push(1);
+                        src_sampler = Some(sampler.handle);
                     }
                     pso::Descriptor::UniformTexelBuffer(buffer_view) => {
                         let handle = buffer_view.handle_srv;
-                        if handle.ptr != 0 {
-                            src_views.push(handle);
-                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                            num_views.push(1);
-                        } else {
+                        src_srv = Some(handle);
+                        if handle.ptr == 0 {
                             error!("SRV handle of the uniform texel buffer is zero (not supported by specified format).");
                         }
                     }
                     pso::Descriptor::StorageTexelBuffer(buffer_view) => {
-                        let handle = buffer_view.handle_uav;
-                        if handle.ptr != 0 {
-                            src_views.push(handle);
-                            dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
-                            num_views.push(1);
-                        } else {
-                            error!("UAV handle of the storage texel buffer is zero (not supported by specified format).");
+                        if bind_info.content.contains(r::DescriptorContent::SRV) {
+                            let handle = buffer_view.handle_srv;
+                            src_srv = Some(handle);
+                            if handle.ptr == 0 {
+                                error!("SRV handle of the storage texel buffer is zero (not supported by specified format).");
+                            }
+                        }
+                        if bind_info.content.contains(r::DescriptorContent::UAV) {
+                            let handle = buffer_view.handle_uav;
+                            src_uav = Some(handle);
+                            if handle.ptr == 0 {
+                                error!("UAV handle of the storage texel buffer is zero (not supported by specified format).");
+                            }
                         }
                     }
                 }
+
+                if let Some(handle) = src_cbv {
+                    trace!("\tcbv offset {}", offset);
+                    src_views.push(handle);
+                    dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                    num_views.push(1);
+                }
+                if let Some(handle) = src_srv {
+                    trace!("\tsrv offset {}", offset);
+                    src_views.push(handle);
+                    dst_views.push(bind_info.view_range.as_ref().unwrap().at(offset));
+                    num_views.push(1);
+                }
+                if let Some(handle) = src_uav {
+                    let uav_offset = if bind_info.content.contains(r::DescriptorContent::SRV) {
+                        bind_info.count + offset
+                    } else {
+                        offset
+                    };
+                    trace!("\tuav offset {}", uav_offset);
+                    src_views.push(handle);
+                    dst_views.push(bind_info.view_range.as_ref().unwrap().at(uav_offset));
+                    num_views.push(1);
+                }
+                if let Some(handle) = src_sampler {
+                    trace!("\tsampler offset {}", offset);
+                    src_samplers.push(handle);
+                    dst_samplers.push(bind_info.sampler_range.as_ref().unwrap().at(offset));
+                    num_samplers.push(1);
+                }
+
                 offset += 1;
             }
         }
@@ -2705,6 +2788,14 @@ impl d::Device<B> for Device {
                 src_views.push(src_range.at(copy.src_array_offset as _));
                 dst_views.push(dst_range.at(copy.dst_array_offset as _));
                 num_views.push(copy.count as u32);
+
+                if (src_info.content & dst_info.content).contains(r::DescriptorContent::SRV | r::DescriptorContent::UAV) {
+                    assert!(src_info.count as usize + copy.src_array_offset + copy.count <= src_range.count as usize);
+                    assert!(dst_info.count as usize + copy.dst_array_offset + copy.count <= dst_range.count as usize);
+                    src_views.push(src_range.at(src_info.count + copy.src_array_offset as u64));
+                    dst_views.push(dst_range.at(dst_info.count + copy.dst_array_offset as u64));
+                    num_views.push(copy.count as u32);
+                }
             }
             if let (Some(src_range), Some(dst_range)) = (
                 src_info.sampler_range.as_ref(),
@@ -2923,15 +3014,15 @@ impl d::Device<B> for Device {
         unimplemented!()
     }
 
-    unsafe fn get_event_status(&self, event: &()) -> Result<bool, d::OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, d::OomOrDeviceLost> {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn set_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, event: &()) -> Result<(), d::OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &()) -> Result<(), d::OutOfMemory> {
         unimplemented!()
     }
 
@@ -3052,7 +3143,7 @@ impl d::Device<B> for Device {
         semaphore.raw.destroy();
     }
 
-    unsafe fn destroy_event(&self, event: ()) {
+    unsafe fn destroy_event(&self, _event: ()) {
         unimplemented!()
     }
 
