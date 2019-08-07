@@ -229,7 +229,6 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                 let el_name = convert_str(var_desc.Name);
                 debug!("\t\tElement at {}\t= '{}'", var_desc.StartOffset, el_name);
                 if vtype_desc.Class == d3dcommon::D3D_SVC_STRUCT {
-                    let stride = var_desc.Size / vtype_desc.Elements;
                     for j in 0 .. vtype_desc.Members {
                         let member = unsafe {
                             (*vtype).GetMemberTypeByIndex(j)
@@ -247,15 +246,20 @@ pub fn populate_info(info: &mut s::ProgramInfo, stage: s::Stage,
                         debug!("\t\t\tMember at {}\t= '{}'", mem_desc.Offset, mem_name);
                         let btype = map_base_type(mem_desc.Type);
                         let container = map_container(&mem_desc);
-                        for k in 0 .. vtype_desc.Elements {
-                            let offset = var_desc.StartOffset + k * stride + mem_desc.Offset;
-                            elements.push(s::ConstVar {
-                                name: format!("{}[{}].{}", el_name, k, mem_name),
-                                location: offset as s::Location,
-                                count: mem_desc.Elements as usize,
-                                base_type: btype,
-                                container: container,
-                            })
+
+                        // Handle if the variable type is an array of elements.
+                        if vtype_desc.Elements > 0 {
+                            let stride = var_desc.Size / vtype_desc.Elements;
+                            for k in 0 .. vtype_desc.Elements {
+                                let offset = var_desc.StartOffset + k * stride + mem_desc.Offset;
+                                elements.push(s::ConstVar {
+                                    name: format!("{}[{}].{}", el_name, k, mem_name),
+                                    location: offset as s::Location,
+                                    count: mem_desc.Elements as usize,
+                                    base_type: btype,
+                                    container: container,
+                                })
+                            }
                         }
                     }
                 } else {
