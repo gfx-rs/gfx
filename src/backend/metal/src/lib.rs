@@ -284,9 +284,9 @@ impl Instance {
             let new_layer: CAMetalLayer = msg_send![class, new];
 
             let bounds: CGRect = msg_send![main_layer, bounds];
-            msg_send![new_layer, setFrame: bounds];
+            let () = msg_send![new_layer, setFrame: bounds];
 
-            msg_send![main_layer, addSublayer: new_layer];
+            let () = msg_send![main_layer, addSublayer: new_layer];
             new_layer
         };
 
@@ -296,10 +296,10 @@ impl Instance {
             assert!(!screen.is_null(), "window is not attached to a screen");
 
             let scale_factor: CGFloat = msg_send![screen, nativeScale];
-            msg_send![view, setContentScaleFactor: scale_factor];
+            let () = msg_send![view, setContentScaleFactor: scale_factor];
         }
 
-        msg_send![view, retain];
+        let _: *mut c_void = msg_send![view, retain];
         window::SurfaceInner::new(NonNull::new(view), render_layer)
     }
 
@@ -329,19 +329,19 @@ impl Instance {
             existing
         } else {
             let layer: CAMetalLayer = msg_send![class, new];
-            msg_send![view, setLayer: layer];
+            let () = msg_send![view, setLayer: layer];
             let bounds: CGRect = msg_send![view, bounds];
-            msg_send![layer, setBounds: bounds];
+            let () = msg_send![layer, setBounds: bounds];
 
             let window: cocoa::base::id = msg_send![view, window];
             if !window.is_null() {
                 let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
-                msg_send![layer, setContentsScale: scale_factor];
+                let() = msg_send![layer, setContentsScale: scale_factor];
             }
             layer
         };
 
-        msg_send![view, retain];
+        let _: *mut c_void = msg_send![view, retain];
         window::SurfaceInner::new(NonNull::new(view), render_layer)
     }
 
@@ -349,7 +349,7 @@ impl Instance {
         let class = class!(CAMetalLayer);
         let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
         assert_eq!(proper_kind, YES);
-        msg_send![layer, retain];
+        let _: *mut c_void = msg_send![layer, retain];
         window::SurfaceInner::new(None, layer)
     }
 
