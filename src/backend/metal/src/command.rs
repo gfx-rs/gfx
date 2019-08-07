@@ -2213,7 +2213,7 @@ impl RawCommandQueue<Backend> for CommandQueue {
                     self.record_empty(cmd_buffer);
                     cmd_buffer
                 });
-                msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
+                let () = msg_send![cmd_buffer, addCompletedHandler: block.deref() as *const _];
                 blocker.submit_impl(cmd_buffer);
 
                 if let Some(fence) = fence {

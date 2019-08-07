@@ -59,7 +59,7 @@ impl Drop for SurfaceInner {
             None => *self.render_layer.lock(),
         };
         unsafe {
-            msg_send![object, release];
+            let () = msg_send![object, release];
         }
     }
 }
@@ -413,24 +413,24 @@ impl Device {
                 if let Some(view) = surface.inner.view {
                     let main_layer: *mut Object = msg_send![view.as_ptr(), layer];
                     let bounds: CGRect = msg_send![main_layer, bounds];
-                    msg_send![render_layer, setFrame: bounds];
+                    let () = msg_send![render_layer, setFrame: bounds];
                 }
             }
 
             let device_raw = self.shared.device.lock().as_ptr();
-            msg_send![render_layer, setDevice: device_raw];
-            msg_send![render_layer, setPixelFormat: mtl_format];
-            msg_send![render_layer, setFramebufferOnly: framebuffer_only];
+            let () = msg_send![render_layer, setDevice: device_raw];
+            let () = msg_send![render_layer, setPixelFormat: mtl_format];
+            let () = msg_send![render_layer, setFramebufferOnly: framebuffer_only];
 
             // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
-            msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
+            let () = msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
 
-            msg_send![render_layer, setDrawableSize: drawable_size];
+            let () = msg_send![render_layer, setDrawableSize: drawable_size];
             if can_set_next_drawable_timeout {
-                msg_send![render_layer, setAllowsNextDrawableTimeout:false];
+                let () = msg_send![render_layer, setAllowsNextDrawableTimeout:false];
             }
             if can_set_display_sync {
-                msg_send![render_layer, setDisplaySyncEnabled: display_sync];
+                let () = msg_send![render_layer, setDisplaySyncEnabled: display_sync];
             }
         };
 
