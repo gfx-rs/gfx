@@ -215,14 +215,6 @@ pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
     }
 }
 
-pub fn map_polygon_mode(rm: pso::PolygonMode) -> (vk::PolygonMode, f32) {
-    match rm {
-        pso::PolygonMode::Point => (vk::PolygonMode::POINT, 1.0),
-        pso::PolygonMode::Line(w) => (vk::PolygonMode::LINE, w),
-        pso::PolygonMode::Fill => (vk::PolygonMode::FILL, 1.0),
-    }
-}
-
 pub fn map_cull_face(cf: pso::Face) -> vk::CullModeFlags {
     match cf {
         pso::Face::NONE => vk::CullModeFlags::NONE,
@@ -273,18 +265,9 @@ pub fn map_stencil_side(side: &pso::StencilFace) -> vk::StencilOpState {
         pass_op: map_stencil_op(side.op_pass),
         depth_fail_op: map_stencil_op(side.op_depth_fail),
         compare_op: map_comparison(side.fun),
-        compare_mask: match side.mask_read {
-            pso::State::Static(mr) => mr,
-            pso::State::Dynamic => !0,
-        },
-        write_mask: match side.mask_write {
-            pso::State::Static(mw) => mw,
-            pso::State::Dynamic => !0,
-        },
-        reference: match side.reference {
-            pso::State::Static(r) => r,
-            pso::State::Dynamic => 0,
-        },
+        compare_mask: !0,
+        write_mask: !0,
+        reference: 0,
     }
 }
 

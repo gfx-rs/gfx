@@ -77,7 +77,7 @@ pub enum Command {
         rasterizer: pso::Rasterizer,
     },
     BindDepth {
-        depth: pso::DepthTest,
+        depth: Option<pso::DepthTest>,
     },
     SetViewports {
         first_viewport: u32,

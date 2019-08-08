@@ -216,7 +216,9 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
                 D3D12_FILL_MODE_WIREFRAME
             }
             Line(width) => {
-                validate_line_width(width);
+                if let pso::State::Static(w) = width {
+                    validate_line_width(w);
+                }
                 D3D12_FILL_MODE_WIREFRAME
             }
             Fill => D3D12_FILL_MODE_SOLID,
@@ -302,12 +304,12 @@ pub fn map_render_targets(
     };
     let mut targets = [dummy_target; 8];
 
-    for (target, &pso::ColorBlendDesc(mask, blend)) in targets.iter_mut().zip(color_targets.iter())
+    for (target, color_desc) in targets.iter_mut().zip(color_targets.iter())
     {
-        target.RenderTargetWriteMask = mask.bits() as UINT8;
-        if let pso::BlendState::On { color, alpha } = blend {
-            let (color_op, color_src, color_dst) = map_blend_op(color);
-            let (alpha_op, alpha_src, alpha_dst) = map_blend_op(alpha);
+        target.RenderTargetWriteMask = color_desc.mask.bits() as UINT8;
+        if let Some(ref blend) = color_desc.blend {
+            let (color_op, color_src, color_dst) = map_blend_op(blend.color);
+            let (alpha_op, alpha_src, alpha_dst) = map_blend_op(blend.alpha);
             target.BlendEnable = TRUE;
             target.BlendOp = color_op;
             target.SrcBlend = color_src;
@@ -323,30 +325,29 @@ pub fn map_render_targets(
 
 pub fn map_depth_stencil(dsi: &pso::DepthStencilDesc) -> D3D12_DEPTH_STENCIL_DESC {
     let (depth_on, depth_write, depth_func) = match dsi.depth {
-        pso::DepthTest::On { fun, write } => (TRUE, write, map_comparison(fun)),
-        pso::DepthTest::Off => unsafe { mem::zeroed() },
+        Some(ref depth) => (TRUE, depth.write, map_comparison(depth.fun)),
+        None => unsafe { mem::zeroed() },
     };
 
     let (stencil_on, front, back, read_mask, write_mask) = match dsi.stencil {
-        pso::StencilTest::On {
-            ref front,
-            ref back,
-        } => {
-            if front.mask_read != back.mask_read || front.mask_write != back.mask_write {
+        Some(ref stencil) => {
+            let read_masks = stencil.read_masks.static_or(pso::Sided::new(!0));
+            let write_masks = stencil.write_masks.static_or(pso::Sided::new(!0));
+            if read_masks.front != read_masks.back || write_masks.front != write_masks.back {
                 error!(
-                    "Different masks on stencil front ({:?}) and back ({:?}) are not supported",
-                    front, back
+                    "Different sides are specified for read ({:?} and write ({:?}) stencil masks",
+                    read_masks, write_masks
                 );
             }
             (
                 TRUE,
-                map_stencil_side(front),
-                map_stencil_side(back),
-                front.mask_read,
-                front.mask_write,
+                map_stencil_side(&stencil.faces.front),
+                map_stencil_side(&stencil.faces.back),
+                read_masks.front,
+                write_masks.front,
             )
         }
-        pso::StencilTest::Off => unsafe { mem::zeroed() },
+        None => unsafe { mem::zeroed() },
     };
 
     D3D12_DEPTH_STENCIL_DESC {
@@ -358,14 +359,8 @@ pub fn map_depth_stencil(dsi: &pso::DepthStencilDesc) -> D3D12_DEPTH_STENCIL_DES
         },
         DepthFunc: depth_func,
         StencilEnable: stencil_on,
-        StencilReadMask: match read_mask {
-            pso::State::Static(rm) => rm as _,
-            pso::State::Dynamic => !0,
-        },
-        StencilWriteMask: match write_mask {
-            pso::State::Static(wm) => wm as _,
-            pso::State::Dynamic => !0,
-        },
+        StencilReadMask: read_mask as _,
+        StencilWriteMask: write_mask as _,
         FrontFace: front,
         BackFace: back,
     }

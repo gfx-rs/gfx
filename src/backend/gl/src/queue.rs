@@ -915,7 +915,9 @@ impl CommandQueue {
                 let (gl_draw, gl_offset) = match rasterizer.polygon_mode {
                     Point => (glow::POINT, glow::POLYGON_OFFSET_POINT),
                     Line(width) => {
-                        unsafe { gl.line_width(width) };
+                        if let hal::pso::State::Static(w) = width {
+                            unsafe { gl.line_width(w) };
+                        }
                         (glow::LINE, glow::POLYGON_OFFSET_LINE)
                     }
                     Fill => (glow::FILL, glow::POLYGON_OFFSET_FILL),
@@ -945,10 +947,10 @@ impl CommandQueue {
                 let gl = &self.share.context;
 
                 match depth {
-                    hal::pso::DepthTest::On { fun, write } => unsafe {
+                    Some(depth) => unsafe {
                         gl.enable(glow::DEPTH_TEST);
 
-                        let cmp = match fun {
+                        let cmp = match depth.fun {
                             Never => glow::NEVER,
                             Less => glow::LESS,
                             LessEqual => glow::LEQUAL,
@@ -960,9 +962,9 @@ impl CommandQueue {
                         };
 
                         gl.depth_func(cmp);
-                        gl.depth_mask(write as _);
+                        gl.depth_mask(depth.write as _);
                     },
-                    hal::pso::DepthTest::Off => unsafe {
+                    None => unsafe {
                         gl.disable(glow::DEPTH_TEST);
                     },
                 }

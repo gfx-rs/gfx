@@ -590,10 +590,10 @@ fn main() {
                 &pipeline_layout,
                 subpass,
             );
-            pipeline_desc.blender.targets.push(pso::ColorBlendDesc(
-                pso::ColorMask::ALL,
-                pso::BlendState::ALPHA,
-            ));
+            pipeline_desc.blender.targets.push(pso::ColorBlendDesc {
+                mask: pso::ColorMask::ALL,
+                blend: Some(pso::BlendState::ALPHA),
+            });
             pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
                 binding: 0,
                 stride: std::mem::size_of::<Vertex>() as u32,

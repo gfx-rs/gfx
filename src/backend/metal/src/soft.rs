@@ -65,7 +65,7 @@ pub enum RenderCommand<R: Resources> {
     SetBlendColor(hal::pso::ColorValue),
     SetDepthBias(hal::pso::DepthBias),
     SetDepthStencilState(R::DepthStencil),
-    SetStencilReferenceValues(hal::pso::StencilValue, hal::pso::StencilValue),
+    SetStencilReferenceValues(hal::pso::Sided<hal::pso::StencilValue>),
     SetRasterizerState(RasterizerState),
     SetVisibilityResult(metal::MTLVisibilityResultMode, hal::buffer::Offset),
     BindBuffer {
@@ -217,7 +217,7 @@ impl Own {
             SetBlendColor(color) => SetBlendColor(color),
             SetDepthBias(bias) => SetDepthBias(bias),
             SetDepthStencilState(state) => SetDepthStencilState(state.to_owned()),
-            SetStencilReferenceValues(front, back) => SetStencilReferenceValues(front, back),
+            SetStencilReferenceValues(sided) => SetStencilReferenceValues(sided),
             SetRasterizerState(ref state) => SetRasterizerState(state.clone()),
             SetVisibilityResult(mode, offset) => SetVisibilityResult(mode, offset),
             BindBuffer {

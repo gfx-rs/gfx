@@ -8,8 +8,8 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::{iter, slice};
 
-use crate::hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
-use crate::hal::{DescriptorPool, Device, PhysicalDevice};
+use hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
+use hal::{DescriptorPool, Device, PhysicalDevice};
 
 use crate::raw;
 

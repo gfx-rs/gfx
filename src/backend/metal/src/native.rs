@@ -245,13 +245,10 @@ impl Default for RasterizerState {
 }
 
 #[derive(Debug)]
-pub struct StencilState<T> {
-    pub front_reference: T,
-    pub back_reference: T,
-    pub front_read_mask: T,
-    pub back_read_mask: T,
-    pub front_write_mask: T,
-    pub back_write_mask: T,
+pub struct StencilState<T: Clone> {
+    pub reference_values: pso::Sided<T>,
+    pub read_masks: pso::Sided<T>,
+    pub write_masks: pso::Sided<T>,
 }
 
 pub type VertexBufferVec = Vec<(pso::VertexBufferDesc, pso::ElemOffset)>;

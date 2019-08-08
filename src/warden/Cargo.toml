@@ -12,6 +12,7 @@ documentation = "https://docs.rs/gfx-render"
 categories = ["rendering::graphics-api"]
 workspace = "../.."
 edition = "2018"
+publish = false
 
 [lib]
 name = "gfx_warden"
@@ -20,6 +21,7 @@ name = "gfx_warden"
 default = ["glsl-to-spirv"]
 vulkan = ["gfx-backend-vulkan"]
 dx12 = ["gfx-backend-dx12"]
+dx11 = ["gfx-backend-dx11"]
 metal = ["gfx-backend-metal"]
 gl = ["gfx-backend-gl"]
 gl-headless = ["gfx-backend-gl"] # "glsl-to-spirv"
@@ -28,7 +30,7 @@ gl-headless = ["gfx-backend-gl"] # "glsl-to-spirv"
 
 [dependencies]
 failure = "0.1"
-gfx-hal = { path = "../hal", version = "0.2", features = ["serde"] }
+hal = { path = "../hal", version = "0.2", package = "gfx-hal", features = ["serde"] }
 log = "0.4"
 ron = "0.5"
 serde = { version = "1", features = ["serde_derive"] }
@@ -43,6 +45,12 @@ optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx12]
 path = "../../src/backend/dx12"
+version = "0.2"
+features = ["winit"]
+optional = true
+
+[target.'cfg(windows)'.dependencies.gfx-backend-dx11]
+path = "../../src/backend/dx11"
 version = "0.2"
 features = ["winit"]
 optional = true

@@ -1205,8 +1205,11 @@ pub fn map_polygon_mode(mode: pso::PolygonMode) -> MTLTriangleFillMode {
             MTLTriangleFillMode::Lines
         }
         pso::PolygonMode::Line(width) => {
-            if width != 1.0 {
-                warn!("Unsupported line width: {:?}", width);
+            match width {
+                pso::State::Static(w) if w != 1.0 => {
+                    warn!("Unsupported line width: {:?}", w);
+                }
+                _ => {}
             }
             MTLTriangleFillMode::Lines
         }

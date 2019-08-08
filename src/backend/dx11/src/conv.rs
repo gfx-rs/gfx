@@ -3,23 +3,21 @@ use hal::image::{Anisotropic, Filter, WrapMode};
 use hal::pso::{
     BlendDesc,
     BlendOp,
-    BlendState,
     ColorBlendDesc,
     Comparison,
     DepthBias,
     DepthStencilDesc,
-    DepthTest,
     Face,
     Factor,
     FrontFace,
     PolygonMode,
     Rasterizer,
     Rect,
+    Sided,
     Stage,
     State,
     StencilFace,
     StencilOp,
-    StencilTest,
     StencilValue,
     Viewport,
 };
@@ -624,13 +622,13 @@ fn map_blend_targets(
 ) -> [D3D11_RENDER_TARGET_BLEND_DESC; 8] {
     let mut targets: [D3D11_RENDER_TARGET_BLEND_DESC; 8] = [unsafe { mem::zeroed() }; 8];
 
-    for (mut target, &ColorBlendDesc(mask, blend)) in
+    for (mut target, color_desc) in
         targets.iter_mut().zip(render_target_blends.iter())
     {
-        target.RenderTargetWriteMask = mask.bits() as _;
-        if let BlendState::On { color, alpha } = blend {
-            let (color_op, color_src, color_dst) = map_blend_op(color);
-            let (alpha_op, alpha_src, alpha_dst) = map_alpha_blend_op(alpha);
+        target.RenderTargetWriteMask = color_desc.mask.bits() as _;
+        if let Some(ref blend) = color_desc.blend {
+            let (color_op, color_src, color_dst) = map_blend_op(blend.color);
+            let (alpha_op, alpha_src, alpha_dst) = map_alpha_blend_op(blend.alpha);
             target.BlendEnable = TRUE;
             target.BlendOp = color_op;
             target.SrcBlend = color_src;
@@ -692,32 +690,41 @@ pub(crate) fn map_depth_stencil_desc(
     desc: &DepthStencilDesc,
 ) -> (D3D11_DEPTH_STENCIL_DESC, State<StencilValue>) {
     let (depth_on, depth_write, depth_func) = match desc.depth {
-        DepthTest::On { fun, write } => (TRUE, write, map_comparison(fun)),
-        DepthTest::Off => unsafe { mem::zeroed() },
+        Some(ref depth) => (TRUE, depth.write, map_comparison(depth.fun)),
+        None => unsafe { mem::zeroed() },
     };
 
     let (stencil_on, front, back, read_mask, write_mask, stencil_ref) = match desc.stencil {
-        StencilTest::On {
-            ref front,
-            ref back,
-        } => {
+        Some(ref stencil) => {
+            let read_masks = stencil.read_masks.static_or(Sided::new(!0));
+            let write_masks = stencil.read_masks.static_or(Sided::new(!0));
+            let reference_value = match stencil.reference_values {
+                State::Static(ref values) => {
+                    if values.front != values.back {
+                        error!("Different reference values for front ({}) and back ({}) of the stencil",
+                            values.front, values.back);
+                    }
+                    State::Static(values.front)
+                }
+                State::Dynamic => State::Dynamic,
+            };
             // TODO: cascade to create_pipeline
-            if front.mask_read != back.mask_read || front.mask_write != back.mask_write {
+            if read_masks.front != read_masks.back || write_masks.front != write_masks.back {
                 error!(
-                    "Different masks on stencil front ({:?}) and back ({:?}) are not supported",
-                    front, back
+                    "Different sides are specified for read ({:?} and write ({:?}) stencil masks",
+                    read_masks, write_masks
                 );
             }
             (
                 TRUE,
-                map_stencil_side(front),
-                map_stencil_side(back),
-                front.mask_read,
-                front.mask_write,
-                front.reference,
+                map_stencil_side(&stencil.faces.front),
+                map_stencil_side(&stencil.faces.back),
+                read_masks.front,
+                write_masks.front,
+                reference_value,
             )
         }
-        StencilTest::Off => unsafe { mem::zeroed() },
+        None => unsafe { mem::zeroed() },
     };
 
     (
@@ -730,14 +737,8 @@ pub(crate) fn map_depth_stencil_desc(
             },
             DepthFunc: depth_func,
             StencilEnable: stencil_on,
-            StencilReadMask: match read_mask {
-                State::Static(rm) => rm as _,
-                State::Dynamic => !0,
-            },
-            StencilWriteMask: match write_mask {
-                State::Static(wm) => wm as _,
-                State::Dynamic => !0,
-            },
+            StencilReadMask: read_mask as _,
+            StencilWriteMask: write_mask as _,
             FrontFace: front,
             BackFace: back,
         },
