@@ -1,5 +1,30 @@
 # Change Log
 
+## hal-0.3.0 (08-08-2019)
+  - graphics pipeline state refactor
+  - no `winit` feature by default
+  - events support
+  - more device limits are exposed
+  - Vulkan: fixed swapchain ranges, stencil dynamic states
+  - DX12: "readonly" storage support
+  - Metal: argument buffer support, real immutable samplers
+  - GL: compute shaders, new memory model, WebGL support, lots of other goodies
+
+### backend-dx12-0.2.4 (02-08-2019)
+  - optimize shader visibility of descriptors
+
+### backend-dx12-0.2.3, backend-metal-0.2.4 (01-08-2019)
+  - fix exposed MSAA capabilities and resolves
+
+### backend-dx12-0.2.2 (29-07-2019)
+  - fix image view creation panics
+
+### backend-backend-metal-0.2.3 (10-07-2019)
+  - fixed depth clip mode support, updates spirv-cross
+
+### backend-dx11-0.2.1, backend-dx12-0.2.1, backend-metal-0.2.2, backend-empty-0.2.1 (28-06-2019)
+  - `Debug` implementations for `Instance`
+
 ### backend-vulkan-0.2.2 (14-06-2019)
   - allow building on macOS for Vulkan Portability
 
