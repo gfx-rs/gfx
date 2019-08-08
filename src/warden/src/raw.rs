@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::ops::Range;
 
-use crate::hal;
+use hal;
 
 #[derive(Debug, Deserialize)]
 pub struct AttachmentRef(pub String, pub hal::pass::AttachmentLayout);

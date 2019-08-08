@@ -1,4 +1,4 @@
-use std::{ffi, mem, ptr, slice};
+use std::{ffi, ptr, slice};
 
 use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 

@@ -129,26 +129,26 @@ impl BlendOp {
 /// which operations to use for color and alpha channels.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum BlendState {
-    /// Enabled blending
-    On {
-        /// The blend operation to use for the color channels.
-        color: BlendOp,
-        /// The blend operation to use for the alpha channel.
-        alpha: BlendOp,
-    },
-    /// Disabled blending
-    Off,
+pub struct BlendState {
+    /// The blend operation to use for the color channels.
+    pub color: BlendOp,
+    /// The blend operation to use for the alpha channel.
+    pub alpha: BlendOp,
 }
 
 impl BlendState {
-    /// Additive blending
-    pub const ADD: Self = BlendState::On {
+    /// Replace the color.
+    pub const REPLACE: Self = BlendState {
+        color: BlendOp::REPLACE,
+        alpha: BlendOp::REPLACE,
+    };
+    /// Additive blending.
+    pub const ADD: Self = BlendState {
         color: BlendOp::ADD,
         alpha: BlendOp::ADD,
     };
-    /// Multiplicative blending
-    pub const MULTIPLY: Self = BlendState::On {
+    /// Multiplicative blending.
+    pub const MULTIPLY: Self = BlendState {
         color: BlendOp::Add {
             src: Factor::Zero,
             dst: Factor::SrcColor,
@@ -159,70 +159,62 @@ impl BlendState {
         },
     };
     /// Alpha blending.
-    pub const ALPHA: Self = BlendState::On {
+    pub const ALPHA: Self = BlendState {
         color: BlendOp::ALPHA,
         alpha: BlendOp::PREMULTIPLIED_ALPHA,
     };
     /// Pre-multiplied alpha blending.
-    pub const PREMULTIPLIED_ALPHA: Self = BlendState::On {
+    pub const PREMULTIPLIED_ALPHA: Self = BlendState {
         color: BlendOp::PREMULTIPLIED_ALPHA,
         alpha: BlendOp::PREMULTIPLIED_ALPHA,
     };
 }
 
-impl Default for BlendState {
-    fn default() -> Self {
-        BlendState::Off
-    }
-}
-
 /// PSO color target descriptor.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct ColorBlendDesc(pub ColorMask, pub BlendState);
+pub struct ColorBlendDesc {
+    /// Color write mask.
+    pub mask: ColorMask,
+    /// Blend state, if enabled.
+    pub blend: Option<BlendState>,
+}
 
 impl ColorBlendDesc {
     /// Empty blend descriptor just writes out the color without blending.
-    pub const EMPTY: Self = ColorBlendDesc(ColorMask::ALL, BlendState::Off);
+    // this can be used because `Default::default()` isn't a const function...
+    pub const EMPTY: Self = ColorBlendDesc {
+        mask: ColorMask::ALL,
+        blend: None,
+    };
 }
 
 /// Depth test state.
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum DepthTest {
-    /// Enabled depth testing.
-    On {
-        /// Comparison function to use.
-        fun: Comparison,
-        /// Specify whether to write to the depth buffer or not.
-        write: bool,
-    },
-    /// Disabled depth testing.
-    Off,
-}
-
-impl Default for DepthTest {
-    fn default() -> Self {
-        DepthTest::Off
-    }
+pub struct DepthTest {
+    /// Comparison function to use.
+    pub fun: Comparison,
+    /// Specify whether to write to the depth buffer or not.
+    pub write: bool,
 }
 
 impl DepthTest {
     /// A depth test that always fails.
-    pub const FAIL: Self = DepthTest::On {
+    pub const FAIL: Self = DepthTest {
         fun: Comparison::Never,
         write: false,
     };
     /// A depth test that always succeeds but doesn't
     /// write to the depth buffer
     // DOC TODO: Not a terribly helpful description there...
-    pub const PASS_TEST: Self = DepthTest::On {
+    pub const PASS_TEST: Self = DepthTest {
         fun: Comparison::Always,
         write: false,
     };
     /// A depth test that always succeeds and writes its result
     /// to the depth buffer.
-    pub const PASS_WRITE: Self = DepthTest::On {
+    pub const PASS_WRITE: Self = DepthTest {
         fun: Comparison::Always,
         write: true,
     };
@@ -257,54 +249,77 @@ pub enum StencilOp {
 pub struct StencilFace {
     /// Comparison function to use to determine if the stencil test passes.
     pub fun: Comparison,
-    /// A mask that is ANDd with both the stencil buffer value and the reference value when they
-    /// are read before doing the stencil test.
-    pub mask_read: State<StencilValue>,
-    /// A mask that is ANDd with the stencil value before writing to the stencil buffer.
-    pub mask_write: State<StencilValue>,
     /// What operation to do if the stencil test fails.
     pub op_fail: StencilOp,
     /// What operation to do if the stencil test passes but the depth test fails.
     pub op_depth_fail: StencilOp,
     /// What operation to do if both the depth and stencil test pass.
     pub op_pass: StencilOp,
-    /// The reference value used for stencil tests.
-    pub reference: State<StencilValue>,
 }
 
 impl Default for StencilFace {
     fn default() -> StencilFace {
         StencilFace {
             fun: Comparison::Never,
-            mask_read: State::Static(!0),
-            mask_write: State::Static(!0),
             op_fail: StencilOp::Keep,
             op_depth_fail: StencilOp::Keep,
             op_pass: StencilOp::Keep,
-            reference: State::Static(0),
         }
     }
 }
+
+/// A generic struct holding the properties of two sides of a polygon.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Sided<T> {
+    /// Information about the front face.
+    pub front: T,
+    /// Information about the back face.
+    pub back: T,
+}
+
+impl<T: Copy> Sided<T> {
+    /// Create a new `Sided` structure with both `front` and `back` holding
+    /// the same value.
+    pub fn new(value: T) -> Self {
+        Sided {
+            front: value,
+            back: value,
+        }
+    }
+}
+
+/// Pair of stencil values that could be either baked into a graphics pipeline
+/// or provided dynamically.
+pub type StencilValues = State<Sided<StencilValue>>;
 
 /// Defines a stencil test. Stencil testing is an operation
 /// performed to cull fragments;
 /// the new fragment is tested against the value held in the
 /// stencil buffer, and if the test fails the fragment is
 /// discarded.
-#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum StencilTest {
-    On {
-        front: StencilFace,
-        back: StencilFace,
-    },
-    Off,
+pub struct StencilTest {
+    /// Operations for stencil faces.
+    pub faces: Sided<StencilFace>,
+    /// Masks that are ANDd with both the stencil buffer value and the reference value when they
+    /// are read before doing the stencil test.
+    pub read_masks: StencilValues,
+    /// Mask that are ANDd with the stencil value before writing to the stencil buffer.
+    pub write_masks: StencilValues,
+    /// The reference values used for stencil tests.
+    pub reference_values: StencilValues,
 }
 
 impl Default for StencilTest {
     fn default() -> Self {
-        StencilTest::Off
+        StencilTest {
+            faces: Sided::default(),
+            read_masks: State::Static(Sided::new(!0)),
+            write_masks: State::Static(Sided::new(!0)),
+            reference_values: State::Static(Sided::new(0)),
+        }
     }
 }
 
@@ -313,11 +328,22 @@ impl Default for StencilTest {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct DepthStencilDesc {
     /// Optional depth testing/writing.
-    pub depth: DepthTest,
+    pub depth: Option<DepthTest>,
     /// Enable depth bounds testing.
     pub depth_bounds: bool,
     /// Stencil test/write.
-    pub stencil: StencilTest,
+    pub stencil: Option<StencilTest>,
+}
+
+impl DepthStencilDesc {
+    /// Returns true if the descriptor assumes the depth attachment.
+    pub fn uses_depth(&self) -> bool {
+        self.depth.is_some() || self.depth_bounds
+    }
+    /// Returns true if the descriptor assumes the stencil attachment.
+    pub fn uses_stencil(&self) -> bool {
+        self.stencil.is_some()
+    }
 }
 
 bitflags!(

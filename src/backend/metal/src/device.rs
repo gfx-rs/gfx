@@ -1406,7 +1406,7 @@ impl hal::Device<Backend> for Device {
             .targets
             .iter()
             .chain(iter::repeat(&pso::ColorBlendDesc::EMPTY));
-        for (i, (&(mtl_format, _), &pso::ColorBlendDesc(mask, ref blend))) in subpass
+        for (i, (&(mtl_format, _), color_desc)) in subpass
             .target_formats
             .colors
             .iter()
@@ -1419,12 +1419,12 @@ impl hal::Device<Backend> for Device {
                 .expect("too many color attachments");
 
             desc.set_pixel_format(mtl_format);
-            desc.set_write_mask(conv::map_write_mask(mask));
+            desc.set_write_mask(conv::map_write_mask(color_desc.mask));
 
-            if let pso::BlendState::On { color, alpha } = *blend {
+            if let Some(ref blend) = color_desc.blend {
                 desc.set_blending_enabled(true);
-                let (color_op, color_src, color_dst) = conv::map_blend_op(color);
-                let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_op(alpha);
+                let (color_op, color_src, color_dst) = conv::map_blend_op(blend.color);
+                let (alpha_op, alpha_src, alpha_dst) = conv::map_blend_op(blend.alpha);
 
                 desc.set_rgb_blend_operation(color_op);
                 desc.set_source_rgb_blend_factor(color_src);

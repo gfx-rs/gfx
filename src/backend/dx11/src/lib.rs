@@ -163,15 +163,12 @@ impl Instance {
 fn get_features(
     _device: ComPtr<d3d11::ID3D11Device>,
     _feature_level: d3dcommon::D3D_FEATURE_LEVEL,
-) -> hal::Features {
-    use hal::Features;
-
+) -> Features {
     let features = Features::ROBUST_BUFFER_ACCESS
         | Features::FULL_DRAW_INDEX_U32
         | Features::FORMAT_BC
         | Features::INSTANCE_RATE
         | Features::SAMPLER_MIP_LOD_BIAS;
-
     features
 }
 

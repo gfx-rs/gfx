@@ -9,7 +9,7 @@
             kind: D2(1, 1, 1, 1),
             num_levels: 1,
             format: Rgba32Uint,
-            usage: (bits: 0x14), //COLOR_ATTACHMENT | SAMPLED (temporary for GL)
+            usage: (bits: 0x15), //COLOR_ATTACHMENT | TRANSFER_SRC (for reading back) | SAMPLED (temporary for GL)
         ),
         "pass": RenderPass(
             attachments: {
@@ -93,7 +93,7 @@
                 alpha_coverage: false,
                 logic_op: None,
                 targets: [
-                    ((bits: 15), Off),
+                    (mask: (bits: 15), blend: None),
                 ],
             ),
             layout: "pipe-layout",
@@ -140,7 +140,7 @@
                 alpha_coverage: false,
                 logic_op: None,
                 targets: [
-                    ((bits: 15), Off),
+                    (mask: (bits: 15), blend: None),
                 ],
             ),
             layout: "pipe-layout",

@@ -2,28 +2,16 @@
     not(any(
         feature = "vulkan",
         feature = "dx12",
+        feature = "dx11",
         feature = "metal",
         feature = "gl"
     )),
     allow(dead_code)
 )]
 
-extern crate gfx_hal as hal;
 extern crate gfx_warden as warden;
-extern crate ron;
 #[macro_use]
 extern crate serde;
-
-#[cfg(feature = "env_logger")]
-extern crate env_logger;
-#[cfg(feature = "dx12")]
-extern crate gfx_backend_dx12;
-#[cfg(any(feature = "gl", feature = "gl-headless"))]
-extern crate gfx_backend_gl;
-#[cfg(feature = "metal")]
-extern crate gfx_backend_metal;
-#[cfg(feature = "vulkan")]
-extern crate gfx_backend_vulkan;
 
 use std::collections::HashMap;
 use std::fs::File;
@@ -92,7 +80,7 @@ impl Harness {
     }
 
     fn run<I: hal::Instance>(&self, instance: I, _disabilities: Disabilities) -> usize {
-        use crate::hal::PhysicalDevice;
+        use hal::PhysicalDevice as _;
 
         let mut results = TestResults {
             pass: 0,
@@ -207,6 +195,12 @@ fn main() {
     {
         println!("Warding DX12:");
         let instance = gfx_backend_dx12::Instance::create("warden", 1);
+        num_failures += harness.run(instance, Disabilities::default());
+    }
+    #[cfg(feature = "dx11")]
+    {
+        println!("Warding DX11:");
+        let instance = gfx_backend_dx11::Instance::create("warden", 1);
         num_failures += harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "metal")]
