@@ -10,10 +10,12 @@
 //!
 //! fn main() {
 //!     use gfx_backend_gl::Surface;
-//!     use glutin::{EventsLoop, WindowBuilder, ContextBuilder, WindowedContext};
+//!     use glutin::{ContextBuilder, WindowedContext};
+//!     use glutin::window::WindowBuilder;
+//!     use glutin::event_loop::EventLoop;
 //!
 //!     // First create a window using glutin.
-//!     let mut events_loop = EventsLoop::new();
+//!     let mut events_loop = EventLoop::new();
 //!     let wb = WindowBuilder::new();
 //!     let glutin_window = ContextBuilder::new().with_vsync(true).build_windowed(wb, &events_loop).unwrap();
 //!     let (glutin_context, glutin_window) = unsafe { glutin_window.make_current().expect("Failed to make the context current").split() };
@@ -32,10 +34,11 @@
 //!
 //! use gfx_hal::Instance;
 //! use gfx_backend_gl::Headless;
-//! use glutin::{Context, ContextBuilder, EventsLoop};
+//! use glutin::{Context, ContextBuilder};
+//! use glutin::event_loop::EventLoop;
 //!
 //! fn main() {
-//!     let events_loop = EventsLoop::new();
+//!     let events_loop = EventLoop::new();
 //!     let context = ContextBuilder::new().build_headless(&events_loop, glutin::dpi::PhysicalSize::new(0.0, 0.0))
 //!         .expect("Failed to build headless context");
 //!     let context = unsafe { context.make_current() }.expect("Failed to make the context current");
@@ -52,11 +55,10 @@ use glow::Context;
 
 use glutin;
 
-fn get_window_extent(window: &glutin::Window) -> image::Extent {
+fn get_window_extent(window: &glutin::window::Window) -> image::Extent {
     let px = window
-        .get_inner_size()
-        .unwrap()
-        .to_physical(window.get_hidpi_factor());
+        .inner_size()
+        .to_physical(window.hidpi_factor());
     image::Extent {
         width: px.width as image::Size,
         height: px.height as image::Size,

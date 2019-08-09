@@ -30,8 +30,9 @@ spirv_cross = { version = "0.14.0", features = ["glsl"] }
 lazy_static = "1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-glutin = { version = "0.21", optional = true }
-winit = { version = "0.19", optional = true }
+#glutin = { version = "0.22.0-alpha1", optional = true }
+glutin = { git = "https://github.com/rust-windowing/glutin", rev = "3b7e5f8adbd8c831e7f6af4a44a9a5896e6c2112", optional = true }
+winit = { version = "0.20.0-alpha2", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3.6"

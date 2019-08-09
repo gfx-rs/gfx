@@ -732,7 +732,7 @@ impl Instance {
     /// TODO: Update portability to make this more flexible
     #[cfg(target_os = "linux")]
     pub fn create(_: &str, _: u32) -> Instance {
-        use glutin::os::unix::HeadlessContextExt;
+        use glutin::platform::unix::HeadlessContextExt;
         let size = glutin::dpi::PhysicalSize::from((800, 600));
         let builder = glutin::ContextBuilder::new().with_hardware_acceleration(Some(false));
         let context: glutin::Context<glutin::NotCurrent> =
