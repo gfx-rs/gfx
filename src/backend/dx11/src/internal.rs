@@ -1214,13 +1214,7 @@ impl Internal {
                         Ct::Sint => self.ps_partial_clear_int.as_raw(),
                         _ => self.ps_partial_clear_float.as_raw(),
                     };
-                    unsafe {
-                        context.PSSetShader(
-                            shader,
-                            ptr::null_mut(),
-                            0,
-                        )
-                    };
+                    unsafe { context.PSSetShader(shader, ptr::null_mut(), 0) };
 
                     for clear_rect in &clear_rects {
                         let viewport = conv::map_viewport(&Viewport {

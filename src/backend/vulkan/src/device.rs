@@ -9,9 +9,9 @@ use hal::{
     pool::CommandPoolCreateFlags,
     pso::VertexInputRate,
     range::RangeArg,
+    window::SwapchainConfig,
     {buffer, device as d, format, image, mapping, pass, pso, query, queue},
     {Features, MemoryTypeId},
-    window::SwapchainConfig,
 };
 
 use std::borrow::Borrow;
@@ -42,9 +42,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(memory) => Ok(n::Memory { raw: memory }),
             Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => Err(d::AllocationError::TooManyObjects),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1078,9 +1076,7 @@ impl d::Device<B> for Device {
 
         match module {
             Ok(raw) => Ok(n::ShaderModule { raw }),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1138,7 +1134,11 @@ impl d::Device<B> for Device {
                     vk::BorderColor::FLOAT_TRANSPARENT_BLACK
                 }
             },
-            unnormalized_coordinates: if sampler_info.normalized { vk::FALSE } else { vk::TRUE },
+            unnormalized_coordinates: if sampler_info.normalized {
+                vk::FALSE
+            } else {
+                vk::TRUE
+            },
         };
 
         let result = self.raw.0.create_sampler(&info, None);
@@ -1146,9 +1146,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(sampler) => Ok(n::Sampler(sampler)),
             Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => Err(d::AllocationError::TooManyObjects),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1177,9 +1175,7 @@ impl d::Device<B> for Device {
 
         match result {
             Ok(raw) => Ok(n::Buffer { raw }),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1210,9 +1206,7 @@ impl d::Device<B> for Device {
 
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1241,9 +1235,7 @@ impl d::Device<B> for Device {
 
         match result {
             Ok(raw) => Ok(n::BufferView { raw }),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1297,9 +1289,7 @@ impl d::Device<B> for Device {
                 flags,
                 extent,
             }),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1345,9 +1335,7 @@ impl d::Device<B> for Device {
 
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1388,9 +1376,7 @@ impl d::Device<B> for Device {
                 view,
                 range,
             }),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1436,9 +1422,7 @@ impl d::Device<B> for Device {
                 device: self.raw.clone(),
                 set_free_vec: Vec::new(),
             }),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1504,9 +1488,7 @@ impl d::Device<B> for Device {
                 raw: layout,
                 bindings,
             }),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1668,9 +1650,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(ptr) => Ok(ptr as *mut _),
             Err(vk::Result::ERROR_MEMORY_MAP_FAILED) => Err(mapping::Error::MappingFailed),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1693,9 +1673,7 @@ impl d::Device<B> for Device {
 
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1717,9 +1695,7 @@ impl d::Device<B> for Device {
 
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1738,9 +1714,7 @@ impl d::Device<B> for Device {
 
         match result {
             Ok(semaphore) => Ok(n::Semaphore(semaphore)),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1763,9 +1737,7 @@ impl d::Device<B> for Device {
 
         match result {
             Ok(fence) => Ok(n::Fence(fence)),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1786,9 +1758,7 @@ impl d::Device<B> for Device {
 
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1819,9 +1789,7 @@ impl d::Device<B> for Device {
             Ok(()) => Ok(true),
             Err(vk::Result::TIMEOUT) => Ok(false),
             Err(vk::Result::ERROR_DEVICE_LOST) => Err(d::DeviceLost.into()),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1849,9 +1817,7 @@ impl d::Device<B> for Device {
         let result = unsafe { self.raw.0.create_event(&info, None) };
         match result {
             Ok(e) => Ok(n::Event(e)),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1863,9 +1829,7 @@ impl d::Device<B> for Device {
         let result = self.raw.0.get_event_status(event.0);
         match result {
             Ok(b) => Ok(b),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1878,9 +1842,7 @@ impl d::Device<B> for Device {
         let result = self.raw.0.set_event(event.0);
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1892,9 +1854,7 @@ impl d::Device<B> for Device {
         let result = self.raw.0.reset_event(event.0);
         match result {
             Ok(()) => Ok(()),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }
@@ -1939,9 +1899,7 @@ impl d::Device<B> for Device {
 
         match result {
             Ok(pool) => Ok(n::QueryPool(pool)),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(d::OutOfMemory::OutOfHostMemory.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(d::OutOfMemory::OutOfDeviceMemory.into())
             }

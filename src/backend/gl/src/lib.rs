@@ -17,10 +17,7 @@ use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 
-use crate::hal::{
-    adapter, buffer, error, image, memory, pso,
-    queue as q,
-};
+use crate::hal::{adapter, buffer, error, image, memory, pso, queue as q};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -53,7 +50,6 @@ pub use glow::native::Context as GlContext;
 #[cfg(target_arch = "wasm32")]
 pub use glow::web::Context as GlContext;
 use glow::Context;
-
 
 
 pub(crate) struct GlContainer {

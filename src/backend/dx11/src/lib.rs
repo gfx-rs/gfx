@@ -27,12 +27,17 @@ use hal::{
     memory,
     pass,
     pso,
-    range::RangeArg,
     query,
     queue,
+    range::RangeArg,
     window,
+    DrawCount,
+    IndexCount,
+    InstanceCount,
     Limits,
-    DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount,
+    VertexCount,
+    VertexOffset,
+    WorkGroupCount,
 };
 
 use range_alloc::RangeAllocator;
@@ -160,11 +165,11 @@ fn get_features(
     _device: ComPtr<d3d11::ID3D11Device>,
     _feature_level: d3dcommon::D3D_FEATURE_LEVEL,
 ) -> hal::Features {
-    hal::Features::ROBUST_BUFFER_ACCESS |
-    hal::Features::FULL_DRAW_INDEX_U32 |
-    hal::Features::FORMAT_BC |
-    hal::Features::INSTANCE_RATE |
-    hal::Features::SAMPLER_MIP_LOD_BIAS
+    hal::Features::ROBUST_BUFFER_ACCESS
+        | hal::Features::FULL_DRAW_INDEX_U32
+        | hal::Features::FORMAT_BC
+        | hal::Features::INSTANCE_RATE
+        | hal::Features::SAMPLER_MIP_LOD_BIAS
 }
 
 fn get_format_properties(
@@ -553,7 +558,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             })
             .collect();
 
-        Ok(adapter::Gpu { device, queue_groups })
+        Ok(adapter::Gpu {
+            device,
+            queue_groups,
+        })
     }
 
     fn format_properties(&self, fmt: Option<format::Format>) -> format::Properties {

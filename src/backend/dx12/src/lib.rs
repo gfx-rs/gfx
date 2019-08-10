@@ -25,7 +25,7 @@ mod window;
 
 use descriptors_cpu::DescriptorCpuPool;
 use hal::pso::PipelineStage;
-use hal::{adapter, error, format as f, image, memory, queue as q, Features, Limits,};
+use hal::{adapter, error, format as f, image, memory, queue as q, Features, Limits};
 
 use winapi::shared::minwindef::TRUE;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_6, winerror};
@@ -163,8 +163,7 @@ impl QueueFamily {
 
         let queue_type = self.queue_type();
         match queue_type {
-            q::QueueType::General |
-            q::QueueType::Graphics => CmdListType::Direct,
+            q::QueueType::General | q::QueueType::Graphics => CmdListType::Direct,
             q::QueueType::Compute => CmdListType::Compute,
             q::QueueType::Transfer => CmdListType::Copy,
         }
@@ -1177,10 +1176,7 @@ struct FormatInfo {
 }
 
 #[derive(Debug)]
-pub struct FormatProperties(
-    Box<[Mutex<Option<FormatInfo>>]>,
-    native::Device,
-);
+pub struct FormatProperties(Box<[Mutex<Option<FormatInfo>>]>, native::Device);
 
 impl Drop for FormatProperties {
     fn drop(&mut self) {
@@ -1294,7 +1290,7 @@ impl FormatProperties {
         for i in 0 .. 6 {
             let mut data = d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS {
                 Format: dxgi_format,
-                SampleCount: 1<<i,
+                SampleCount: 1 << i,
                 Flags: 0,
                 NumQualityLevels: 0,
             };
@@ -1306,7 +1302,7 @@ impl FormatProperties {
                 )
             });
             if data.NumQualityLevels != 0 {
-                sample_count_mask |= 1<<i;
+                sample_count_mask |= 1 << i;
             }
         }
 

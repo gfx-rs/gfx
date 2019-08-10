@@ -1,5 +1,5 @@
-use hal::{adapter::Adapter, format as f, image, window};
 use crate::{native, Backend as B, GlContainer, PhysicalDevice, QueueFamily};
+use hal::{adapter::Adapter, format as f, image, window};
 
 
 struct PixelFormat {

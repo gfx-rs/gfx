@@ -6,11 +6,7 @@ use crate::{
     QueueFamily,
 };
 
-use hal::{
-    format,
-    image,
-    window as w,
-};
+use hal::{format, image, window as w};
 
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::{CGRect, CGSize};
@@ -407,7 +403,8 @@ impl Device {
             // create one as a sublayer. However, when the view changes size,
             // its sublayers are not automatically resized, and we must resize
             // it here. The drawable size and the layer size don't correlate
-            #[cfg(target_os = "ios")] {
+            #[cfg(target_os = "ios")]
+            {
                 if let Some(view) = surface.inner.view {
                     let main_layer: *mut Object = msg_send![view.as_ptr(), layer];
                     let bounds: CGRect = msg_send![main_layer, bounds];

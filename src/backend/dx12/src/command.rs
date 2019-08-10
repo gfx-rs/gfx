@@ -565,12 +565,13 @@ impl CommandBuffer {
         let framebuffer = &state.framebuffer;
         let subpass = &state.render_pass.subpasses[self.cur_subpass];
 
-        for (&(src_attachment, _), &(dst_attachment, _)) in subpass.color_attachments
+        for (&(src_attachment, _), &(dst_attachment, _)) in subpass
+            .color_attachments
             .iter()
             .zip(subpass.resolve_attachments.iter())
         {
             if dst_attachment == pass::ATTACHMENT_UNUSED {
-                continue
+                continue;
             }
 
             let resolve_src = state.framebuffer.attachments[src_attachment];
@@ -1335,7 +1336,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 }
                 if sub.aspects.contains(Aspects::STENCIL) {
                     let dsv = image.clear_sv[layer as usize];
-                    self.clear_depth_stencil_view(dsv, None, Some(value.depth_stencil.stencil as _), &[]);
+                    self.clear_depth_stencil_view(
+                        dsv,
+                        None,
+                        Some(value.depth_stencil.stencil as _),
+                        &[],
+                    );
                 }
             }
         }

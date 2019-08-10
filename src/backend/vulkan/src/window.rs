@@ -5,10 +5,7 @@ use std::sync::Arc;
 use ash::extensions::khr;
 use ash::vk;
 
-use hal::{
-    format::Format,
-    window as w,
-};
+use hal::{format::Format, window as w};
 
 #[cfg(feature = "winit")]
 use winit;
@@ -139,10 +136,7 @@ impl Instance {
     }
 
     #[cfg(target_os = "android")]
-    pub fn create_surface_android(
-        &self,
-        window: *const c_void,
-    ) -> Surface {
+    pub fn create_surface_android(&self, window: *const c_void) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
@@ -267,10 +261,7 @@ impl Instance {
                 if let Some(display) = window.wayland_display() {
                     let display: *mut c_void = display as *mut _;
                     let surface: *mut c_void = window.wayland_surface().unwrap() as *mut _;
-                    return self.create_surface_from_wayland(
-                        display,
-                        surface,
-                    );
+                    return self.create_surface_from_wayland(display, surface);
                 }
             }
             if self.extensions.contains(&khr::XlibSurface::name()) {
@@ -284,9 +275,7 @@ impl Instance {
         #[cfg(target_os = "android")]
         {
             use winit::platform::android::WindowExtAndroid;
-            return self.create_surface_android(
-                window.get_native_window(),
-            );
+            return self.create_surface_android(window.get_native_window());
         }
         #[cfg(windows)]
         {
@@ -307,10 +296,7 @@ impl Instance {
         panic!("No suitable WSI enabled!");
     }
 
-    pub fn create_surface_from_vk_surface_khr(
-        &self,
-        surface: vk::SurfaceKHR,
-    ) -> Surface {
+    pub fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
@@ -323,9 +309,7 @@ impl Instance {
             instance: self.raw.clone(),
         });
 
-        Surface {
-            raw,
-        }
+        Surface { raw }
     }
 }
 

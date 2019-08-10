@@ -8,16 +8,11 @@
 
 pub mod family;
 
-use std::{
-    any::Any,
-    borrow::Borrow,
-    fmt,
-    iter,
-};
 use crate::error::HostExecutionError;
 use crate::pso;
 use crate::window::{PresentError, Suboptimal, SwapImageIndex};
 use crate::Backend;
+use std::{any::Any, borrow::Borrow, fmt, iter};
 
 pub use self::family::{QueueFamily, QueueFamilyId, QueueGroup};
 
@@ -39,18 +34,14 @@ impl QueueType {
     /// Returns true if the queue supports graphics operations.
     pub fn supports_graphics(&self) -> bool {
         match *self {
-            QueueType::General |
-            QueueType::Graphics => true,
-            QueueType::Compute |
-            QueueType::Transfer => false,
+            QueueType::General | QueueType::Graphics => true,
+            QueueType::Compute | QueueType::Transfer => false,
         }
     }
     /// Returns true if the queue supports compute operations.
     pub fn supports_compute(&self) -> bool {
         match *self {
-            QueueType::General |
-            QueueType::Graphics |
-            QueueType::Compute => true,
+            QueueType::General | QueueType::Graphics | QueueType::Compute => true,
             QueueType::Transfer => false,
         }
     }
@@ -138,7 +129,7 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     where
         Self: Sized,
         W: 'a + Borrow<B::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>
+        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
     {
         self.present::<_, _, B::Semaphore, _>(swapchains, iter::empty())
     }

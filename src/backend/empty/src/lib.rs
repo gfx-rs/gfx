@@ -580,13 +580,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn clear_image<T>(
-        &mut self,
-        _: &(),
-        _: image::Layout,
-        _: command::ClearValue,
-        _: T,
-    ) where
+    unsafe fn clear_image<T>(&mut self, _: &(), _: image::Layout, _: command::ClearValue, _: T)
+    where
         T: IntoIterator,
         T::Item: Borrow<image::SubresourceRange>,
     {

@@ -120,10 +120,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Begins recording a primary command buffer
     /// (that has no inheritance information).
-    unsafe fn begin_primary(
-        &mut self,
-        flags: CommandBufferFlags,
-    ) {
+    unsafe fn begin_primary(&mut self, flags: CommandBufferFlags) {
         self.begin(flags, CommandBufferInheritanceInfo::default());
     }
 

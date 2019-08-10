@@ -4,10 +4,10 @@ use smallvec::SmallVec;
 use std::ptr;
 use std::sync::Arc;
 
-use hal::{command, pool};
 use crate::command::CommandBuffer;
 use crate::conv;
 use crate::{Backend, RawDevice};
+use hal::{command, pool};
 
 #[derive(Debug)]
 pub struct RawCommandPool {

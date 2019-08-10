@@ -142,7 +142,7 @@ impl DepthStencilStates {
             depth_bounds: false,
             stencil: Some(pso::StencilTest {
                 faces: pso::Sided::new(face),
-                .. pso::StencilTest::default()
+                ..pso::StencilTest::default()
             }),
         };
         let write_all = pso::DepthStencilDesc {
@@ -153,7 +153,7 @@ impl DepthStencilStates {
             depth_bounds: false,
             stencil: Some(pso::StencilTest {
                 faces: pso::Sided::new(face),
-                .. pso::StencilTest::default()
+                ..pso::StencilTest::default()
             }),
         };
 
@@ -206,7 +206,9 @@ impl DepthStencilStates {
     }
 
     fn create_stencil(
-        face: &pso::StencilFace, read_mask: pso::StencilValue, write_mask: pso::StencilValue
+        face: &pso::StencilFace,
+        read_mask: pso::StencilValue,
+        write_mask: pso::StencilValue,
     ) -> metal::StencilDescriptor {
         let desc = metal::StencilDescriptor::new();
         desc.set_stencil_compare_function(conv::map_compare_function(face.fun));
@@ -230,12 +232,12 @@ impl DepthStencilStates {
                 pso::State::Static(value) => value,
                 pso::State::Dynamic => return None,
             };
-            let front_desc = Self::create_stencil(&stencil.faces.front, read_masks.front, write_masks.front);
+            let front_desc =
+                Self::create_stencil(&stencil.faces.front, read_masks.front, write_masks.front);
             raw.set_front_face_stencil(Some(&front_desc));
-            let back_desc = if
-                stencil.faces.front == stencil.faces.back &&
-                read_masks.front == read_masks.back &&
-                write_masks.front == write_masks.back
+            let back_desc = if stencil.faces.front == stencil.faces.back
+                && read_masks.front == read_masks.back
+                && write_masks.front == write_masks.back
             {
                 front_desc
             } else {

@@ -40,7 +40,6 @@ pub mod backend;
 /// Prelude module re-exports all the traits necessary to use gfx-hal.
 pub mod prelude {
     pub use crate::{
-        Instance as _,
         adapter::PhysicalDevice as _,
         command::CommandBuffer as _,
         device::Device as _,
@@ -48,6 +47,7 @@ pub mod prelude {
         pso::DescriptorPool as _,
         queue::{CommandQueue as _, QueueFamily as _},
         window::{Surface as _, Swapchain as _},
+        Instance as _,
     };
 }
 

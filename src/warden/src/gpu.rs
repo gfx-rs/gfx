@@ -10,8 +10,15 @@ use std::{iter, slice};
 
 use hal::{
     self,
-    adapter, buffer as b, command as c, format as f, image as i, memory, pso, queue,
+    adapter,
+    buffer as b,
+    command as c,
+    format as f,
+    image as i,
+    memory,
     prelude::*,
+    pso,
+    queue,
 };
 
 use crate::raw;

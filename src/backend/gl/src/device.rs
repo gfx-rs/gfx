@@ -8,19 +8,19 @@ use glow::Context;
 
 use hal::{
     self as c,
+    backend::FastHashMap,
     buffer,
     device as d,
     error,
+    format::{Format, Swizzle},
     image as i,
     mapping,
     memory,
     pass,
+    pool::CommandPoolCreateFlags,
     pso,
     query,
     queue,
-    backend::FastHashMap,
-    format::{Format, Swizzle},
-    pool::CommandPoolCreateFlags,
     range::RangeArg,
     window::{Extent2D, SwapchainConfig},
 };
@@ -28,11 +28,19 @@ use hal::{
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
 use crate::{
-    conv, native as n, state,
-    Backend as B, MemoryUsage, Share, Starc, Surface, Swapchain,
-    GlContainer, GlContext,
+    conv,
     info::LegacyFeatures,
-    pool::{BufferMemory, OwnedBuffer, CommandPool},
+    native as n,
+    pool::{BufferMemory, CommandPool, OwnedBuffer},
+    state,
+    Backend as B,
+    GlContainer,
+    GlContext,
+    MemoryUsage,
+    Share,
+    Starc,
+    Surface,
+    Swapchain,
 };
 
 /// Emit error during shader module creation. Used if we don't expect an error
@@ -636,7 +644,10 @@ impl d::Device<B> for Device {
             .into_iter()
             .map(|subpass| {
                 let subpass = subpass.borrow();
-                assert!(subpass.colors.len() <= self.share.limits.max_color_attachments, "Color attachment limit exceeded");
+                assert!(
+                    subpass.colors.len() <= self.share.limits.max_color_attachments,
+                    "Color attachment limit exceeded"
+                );
                 let color_attachments = subpass.colors.iter().map(|&(index, _)| index).collect();
 
                 let depth_stencil = subpass.depth_stencil.map(|ds| ds.0);
@@ -710,8 +721,7 @@ impl d::Device<B> for Device {
                         );
                     }
                     StorageImage | UniformTexelBuffer | UniformBufferDynamic
-                    | StorageTexelBuffer | StorageBufferDynamic
-                    | InputAttachment => unimplemented!(), // 6
+                    | StorageTexelBuffer | StorageBufferDynamic | InputAttachment => unimplemented!(), // 6
                 }
             })
         });
@@ -1028,9 +1038,7 @@ impl d::Device<B> for Device {
 
         gl.bind_framebuffer(target, None);
 
-        Ok(n::FrameBuffer {
-            fbos,
-        })
+        Ok(n::FrameBuffer { fbos })
     }
 
     unsafe fn create_shader_module(
@@ -1396,7 +1404,10 @@ impl d::Device<B> for Device {
                 }
                 _ => unimplemented!(),
             };
-            n::ImageKind::Surface { surface: name, format: iformat }
+            n::ImageKind::Surface {
+                surface: name,
+                format: iformat,
+            }
         };
 
         let surface_desc = format.base_format().0.desc();
@@ -1943,7 +1954,10 @@ impl d::Device<B> for Device {
             fbos,
             extent: config.extent,
             context: {
-                surface.context().resize(glutin::dpi::PhysicalSize::new(config.extent.width as f64, config.extent.height as f64));
+                surface.context().resize(glutin::dpi::PhysicalSize::new(
+                    config.extent.width as f64,
+                    config.extent.height as f64,
+                ));
                 surface.context.clone()
             },
         };
@@ -1956,7 +1970,10 @@ impl d::Device<B> for Device {
 
         #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
         let swapchain = Swapchain {
-            extent: { let _ = surface; config.extent },
+            extent: {
+                let _ = surface;
+                config.extent
+            },
             fbos,
         };
 

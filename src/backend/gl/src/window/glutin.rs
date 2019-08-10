@@ -47,15 +47,13 @@
 //! }
 //! ```
 
-use hal::{adapter::Adapter, format as f, image, window};
 use crate::{native, Backend as B, GlContainer, PhysicalDevice, QueueFamily, Starc};
+use hal::{adapter::Adapter, format as f, image, window};
 
 use glutin;
 
 fn get_window_extent(window: &glutin::window::Window) -> image::Extent {
-    let px = window
-        .inner_size()
-        .to_physical(window.hidpi_factor());
+    let px = window.inner_size().to_physical(window.hidpi_factor());
     image::Extent {
         width: px.width as image::Size,
         height: px.height as image::Size,

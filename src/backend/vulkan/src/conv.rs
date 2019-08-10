@@ -1,10 +1,18 @@
 use ash::vk;
 
 use hal::{
+    buffer,
+    command,
+    format,
+    image,
+    pass,
+    pso,
+    query,
     range::RangeArg,
-    buffer, command, format, image, pass, pso, query,
     window::{CompositeAlpha, PresentMode},
-    Features, IndexType, Primitive,
+    Features,
+    IndexType,
+    Primitive,
 };
 
 use crate::native as n;

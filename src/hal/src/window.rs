@@ -311,7 +311,8 @@ impl SwapchainConfig {
             Some(current) => current,
             None => {
                 let (min_width, max_width) = (caps.extents.start().width, caps.extents.end().width);
-                let (min_height, max_height) = (caps.extents.start().height, caps.extents.end().height);
+                let (min_height, max_height) =
+                    (caps.extents.start().height, caps.extents.end().height);
 
                 // clamp the default_extent to within the allowed surface sizes
                 let width = min(max_width, max(default_extent.width, min_width));

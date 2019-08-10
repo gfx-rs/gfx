@@ -795,7 +795,7 @@ impl Device {
 
         if let Some(fun) = info.comparison {
             if !caps.mutable_comparison_samplers {
-                return None
+                return None;
             }
             descriptor.set_compare_function(conv::map_compare_function(fun));
         }
@@ -844,8 +844,9 @@ impl Device {
                 image::Filter::Linear => msl::SamplerFilter::Linear,
             },
             mip_filter: match info.min_filter {
-                image::Filter::Nearest if info.lod_range.end < image::Lod::from(0.5) =>
-                    msl::SamplerMipFilter::None,
+                image::Filter::Nearest if info.lod_range.end < image::Lod::from(0.5) => {
+                    msl::SamplerMipFilter::None
+                }
                 image::Filter::Nearest => msl::SamplerMipFilter::Nearest,
                 image::Filter::Linear => msl::SamplerMipFilter::Linear,
             },
@@ -863,7 +864,7 @@ impl Device {
                 other => {
                     error!("Border color 0x{:X} is not supported", other);
                     msl::SamplerBorderColor::TransparentBlack
-                },
+                }
             },
             lod_clamp_min: lods.start.into(),
             lod_clamp_max: lods.end.into(),
@@ -2090,7 +2091,8 @@ impl hal::device::Device<Backend> for Device {
                     {
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
-                                debug_assert!(!bindings[&write.binding].content
+                                debug_assert!(!bindings[&write.binding]
+                                    .content
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
                                 encoder.set_sampler_state(sampler.raw.as_ref().unwrap(), arg_index);
                                 arg_index += 1;

@@ -32,9 +32,7 @@ impl ClearValue {
             ClearValue::Color(ref color) => hal::command::ClearValue {
                 color: color.to_raw(),
             },
-            ClearValue::DepthStencil(ds) => hal::command::ClearValue {
-                depth_stencil: ds,
-            },
+            ClearValue::DepthStencil(ds) => hal::command::ClearValue { depth_stencil: ds },
         }
     }
 }

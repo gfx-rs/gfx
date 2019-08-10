@@ -2295,7 +2295,11 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
     }
 }
 
-fn assign_sides(this: &mut pso::Sided<pso::StencilValue>, faces: pso::Face, value: pso::StencilValue) {
+fn assign_sides(
+    this: &mut pso::Sided<pso::StencilValue>,
+    faces: pso::Face,
+    value: pso::StencilValue,
+) {
     if faces.contains(pso::Face::FRONT) {
         this.front = value;
     }
@@ -3318,7 +3322,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
         assign_sides(&mut self.state.stencil.reference_values, faces, value);
-        let com = soft::RenderCommand::SetStencilReferenceValues(self.state.stencil.reference_values);
+        let com =
+            soft::RenderCommand::SetStencilReferenceValues(self.state.stencil.reference_values);
         self.inner.borrow_mut().sink().pre_render().issue(com);
     }
 
@@ -3496,8 +3501,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_render();
 
-        if let Some(ref stencil) = pipeline.depth_stencil_desc.stencil
-        {
+        if let Some(ref stencil) = pipeline.depth_stencil_desc.stencil {
             if let pso::State::Static(value) = stencil.read_masks {
                 self.state.stencil.read_masks = value;
             }

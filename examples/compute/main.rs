@@ -20,11 +20,7 @@ extern crate gfx_hal as hal;
 
 use std::str::FromStr;
 
-use hal::{
-    buffer, command, memory, pool, pso,
-    adapter::MemoryType,
-    prelude::*,
-};
+use hal::{adapter::MemoryType, buffer, command, memory, pool, prelude::*, pso};
 
 use std::fs;
 
@@ -60,12 +56,14 @@ fn main() {
         .expect("Failed to find a GPU with compute support!");
 
     let memory_properties = adapter.physical_device.memory_properties();
-    let family = adapter.queue_families
+    let family = adapter
+        .queue_families
         .iter()
         .find(|family| family.queue_type().supports_compute())
         .unwrap();
     let mut gpu = unsafe {
-        adapter.physical_device
+        adapter
+            .physical_device
             .open(&[(family, &[1.0])], hal::Features::empty())
             .unwrap()
     };
@@ -165,10 +163,9 @@ fn main() {
         }));
     };
 
-    let mut command_pool = unsafe {
-        device.create_command_pool(family.id(), pool::CommandPoolCreateFlags::empty())
-    }
-    .expect("Can't create command pool");
+    let mut command_pool =
+        unsafe { device.create_command_pool(family.id(), pool::CommandPoolCreateFlags::empty()) }
+            .expect("Can't create command pool");
     let fence = device.create_fence(false).unwrap();
     let mut command_buffer = command_pool.allocate_one(command::Level::Primary);
     unsafe {

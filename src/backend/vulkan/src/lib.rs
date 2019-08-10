@@ -48,15 +48,17 @@ use ash::{Entry, LoadingError};
 
 use hal::{
     adapter,
+    device::{DeviceLost, OutOfMemory, SurfaceLost},
+    error::{DeviceCreationError, HostExecutionError},
     format,
     image,
     memory,
-    queue,
-    device::{DeviceLost, OutOfMemory, SurfaceLost},
-    error::{DeviceCreationError, HostExecutionError},
     pso::PipelineStage,
+    queue,
     window::{PresentError, Suboptimal, SwapImageIndex},
-    Features, Limits, PatchSize,
+    Features,
+    Limits,
+    PatchSize,
 };
 
 use std::borrow::{Borrow, Cow};
@@ -463,8 +465,12 @@ impl hal::Instance for Instance {
                     device: properties.device_id as usize,
                     device_type: match properties.device_type {
                         ash::vk::PhysicalDeviceType::OTHER => adapter::DeviceType::Other,
-                        ash::vk::PhysicalDeviceType::INTEGRATED_GPU => adapter::DeviceType::IntegratedGpu,
-                        ash::vk::PhysicalDeviceType::DISCRETE_GPU => adapter::DeviceType::DiscreteGpu,
+                        ash::vk::PhysicalDeviceType::INTEGRATED_GPU => {
+                            adapter::DeviceType::IntegratedGpu
+                        }
+                        ash::vk::PhysicalDeviceType::DISCRETE_GPU => {
+                            adapter::DeviceType::DiscreteGpu
+                        }
                         ash::vk::PhysicalDeviceType::VIRTUAL_GPU => adapter::DeviceType::VirtualGpu,
                         ash::vk::PhysicalDeviceType::CPU => adapter::DeviceType::Cpu,
                         _ => adapter::DeviceType::Other,
@@ -596,7 +602,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let queue_groups = families
             .into_iter()
             .map(|&(family, ref priorities)| {
-                let mut family_raw = queue::QueueGroup::new(queue::QueueFamilyId(family.index as usize));
+                let mut family_raw =
+                    queue::QueueGroup::new(queue::QueueFamilyId(family.index as usize));
                 for id in 0 .. priorities.len() {
                     let queue_raw = device_arc.0.get_device_queue(family.index, id as _);
                     family_raw.add_queue(CommandQueue {

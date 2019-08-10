@@ -223,7 +223,12 @@ fn main() {
             .with_gl_profile(glutin::GlProfile::Core)
             .build_windowed(glutin::window::WindowBuilder::new(), &events_loop)
             .unwrap();
-        let (context, window) = unsafe { windowed_context.make_current().expect("Unable to make window current").split() };
+        let (context, window) = unsafe {
+            windowed_context
+                .make_current()
+                .expect("Unable to make window current")
+                .split()
+        };
         let instance = gfx_backend_gl::Surface::from_context(context);
         num_failures += harness.run(instance, Disabilities::default());
     }

@@ -6,16 +6,22 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::{mem, ptr};
 
+use crate::{conv, native as n, Backend, RawDevice};
 use hal::{
-    buffer, command as com, memory, pso, query,
+    buffer,
+    command as com,
     format::Aspects,
     image::{Filter, Layout, SubresourceRange},
+    memory,
+    pso,
+    query,
     range::RangeArg,
-    DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount,
-};
-use crate::{
-    conv, native as n,
-    Backend, RawDevice,
+    DrawCount,
+    IndexCount,
+    InstanceCount,
+    VertexCount,
+    VertexOffset,
+    WorkGroupCount,
 };
 
 #[derive(Debug)]

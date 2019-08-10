@@ -6,10 +6,7 @@ use hal::{buffer, format, image, memory, pass, pso};
 use native::{self, query};
 use range_alloc::RangeAllocator;
 
-use crate::{
-    root_constants::RootConstant,
-    Backend, MAX_VERTEX_BUFFERS,
-};
+use crate::{root_constants::RootConstant, Backend, MAX_VERTEX_BUFFERS};
 
 use std::collections::BTreeMap;
 use std::ops::Range;
@@ -409,27 +406,16 @@ impl From<pso::DescriptorType> for DescriptorContent {
     fn from(ty: pso::DescriptorType) -> Self {
         use hal::pso::DescriptorType as Dt;
         match ty {
-            Dt::Sampler => {
-                DescriptorContent::SAMPLER
-            }
-            Dt::CombinedImageSampler => {
-                DescriptorContent::SRV | DescriptorContent::SAMPLER
-            }
-            Dt::SampledImage |
-            Dt::InputAttachment |
-            Dt::UniformTexelBuffer => {
+            Dt::Sampler => DescriptorContent::SAMPLER,
+            Dt::CombinedImageSampler => DescriptorContent::SRV | DescriptorContent::SAMPLER,
+            Dt::SampledImage | Dt::InputAttachment | Dt::UniformTexelBuffer => {
                 DescriptorContent::SRV
             }
-            Dt::StorageImage |
-            Dt::StorageBuffer |
-            Dt::StorageBufferDynamic |
-            Dt::StorageTexelBuffer => {
-                DescriptorContent::SRV | DescriptorContent::UAV
-            }
-            Dt::UniformBuffer |
-            Dt::UniformBufferDynamic => {
-                DescriptorContent::CBV
-            }
+            Dt::StorageImage
+            | Dt::StorageBuffer
+            | Dt::StorageBufferDynamic
+            | Dt::StorageTexelBuffer => DescriptorContent::SRV | DescriptorContent::UAV,
+            Dt::UniformBuffer | Dt::UniformBufferDynamic => DescriptorContent::CBV,
         }
     }
 }
@@ -597,7 +583,8 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
             binding_infos[binding.binding as usize] = DescriptorBindingInfo {
                 count: binding.count as _,
                 view_range: if content.intersects(DescriptorContent::VIEW) {
-                    let count = if content.contains(DescriptorContent::SRV | DescriptorContent::UAV) {
+                    let count = if content.contains(DescriptorContent::SRV | DescriptorContent::UAV)
+                    {
                         2 * binding.count as u64
                     } else {
                         binding.count as u64

@@ -1,5 +1,5 @@
+use crate::{native, Backend, PhysicalDevice, QueueFamily};
 use hal::window;
-use crate::{Backend, PhysicalDevice, QueueFamily, native};
 
 #[derive(Debug)]
 pub struct Surface;

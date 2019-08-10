@@ -48,7 +48,6 @@ use std::rc::Rc;
 use std::{fs, iter};
 
 use hal::{
-    Backend,
     adapter::{Adapter, MemoryType},
     buffer,
     command,
@@ -59,8 +58,9 @@ use hal::{
     pool,
     prelude::*,
     pso,
-    window as w,
     queue::{QueueGroup, Submission},
+    window as w,
+    Backend,
 };
 
 pub type ColorFormat = f::Rgba8Srgb;
@@ -265,10 +265,7 @@ impl<B: Backend> RendererState<B> {
 
         image.wait_for_transfer_completion();
 
-        device
-            .borrow()
-            .device
-            .destroy_command_pool(staging_pool);
+        device.borrow().device.destroy_command_pool(staging_pool);
 
         let mut swapchain = Some(SwapchainState::new(&mut backend, Rc::clone(&device)));
 
@@ -447,8 +444,7 @@ impl<B: Backend> RendererState<B> {
                 signal_semaphores: iter::once(&*image_present),
             };
 
-            self.device.borrow_mut().queues.queues[0]
-                .submit(submission, Some(framebuffer_fence));
+            self.device.borrow_mut().queues.queues[0].submit(submission, Some(framebuffer_fence));
             command_buffers.push(cmd_buffer);
 
             // present frame
@@ -473,36 +469,16 @@ impl<B: Backend> RendererState<B> {
 
     fn input(&mut self, kc: winit::event::VirtualKeyCode) {
         match kc {
-            winit::event::VirtualKeyCode::Key0 => {
-                self.cur_value = self.cur_value * 10 + 0
-            }
-            winit::event::VirtualKeyCode::Key1 => {
-                self.cur_value = self.cur_value * 10 + 1
-            }
-            winit::event::VirtualKeyCode::Key2 => {
-                self.cur_value = self.cur_value * 10 + 2
-            }
-            winit::event::VirtualKeyCode::Key3 => {
-                self.cur_value = self.cur_value * 10 + 3
-            }
-            winit::event::VirtualKeyCode::Key4 => {
-                self.cur_value = self.cur_value * 10 + 4
-            }
-            winit::event::VirtualKeyCode::Key5 => {
-                self.cur_value = self.cur_value * 10 + 5
-            }
-            winit::event::VirtualKeyCode::Key6 => {
-                self.cur_value = self.cur_value * 10 + 6
-            }
-            winit::event::VirtualKeyCode::Key7 => {
-                self.cur_value = self.cur_value * 10 + 7
-            }
-            winit::event::VirtualKeyCode::Key8 => {
-                self.cur_value = self.cur_value * 10 + 8
-            }
-            winit::event::VirtualKeyCode::Key9 => {
-                self.cur_value = self.cur_value * 10 + 9
-            }
+            winit::event::VirtualKeyCode::Key0 => self.cur_value = self.cur_value * 10 + 0,
+            winit::event::VirtualKeyCode::Key1 => self.cur_value = self.cur_value * 10 + 1,
+            winit::event::VirtualKeyCode::Key2 => self.cur_value = self.cur_value * 10 + 2,
+            winit::event::VirtualKeyCode::Key3 => self.cur_value = self.cur_value * 10 + 3,
+            winit::event::VirtualKeyCode::Key4 => self.cur_value = self.cur_value * 10 + 4,
+            winit::event::VirtualKeyCode::Key5 => self.cur_value = self.cur_value * 10 + 5,
+            winit::event::VirtualKeyCode::Key6 => self.cur_value = self.cur_value * 10 + 6,
+            winit::event::VirtualKeyCode::Key7 => self.cur_value = self.cur_value * 10 + 7,
+            winit::event::VirtualKeyCode::Key8 => self.cur_value = self.cur_value * 10 + 8,
+            winit::event::VirtualKeyCode::Key9 => self.cur_value = self.cur_value * 10 + 9,
             winit::event::VirtualKeyCode::R => {
                 self.cur_value = 0;
                 self.cur_color = Color::Red
@@ -541,9 +517,7 @@ impl<B: Backend> RendererState<B> {
                     Color::Green => self.bg_color[1] = self.cur_value as f32 / 255.0,
                     Color::Blue => self.bg_color[2] = self.cur_value as f32 / 255.0,
                     Color::Alpha => {
-                        error!(
-                            "Alpha is not valid for the background."
-                        );
+                        error!("Alpha is not valid for the background.");
                         return;
                     }
                 }
@@ -591,10 +565,11 @@ struct BackendState<B: Backend> {
     feature = "dx12",
     feature = "metal"
 ))]
-fn create_backend(wb: winit::window::WindowBuilder, event_loop: &winit::event_loop::EventLoop<()>) -> (BackendState<back::Backend>, back::Instance) {
-    let window = wb
-        .build(event_loop)
-        .unwrap();
+fn create_backend(
+    wb: winit::window::WindowBuilder,
+    event_loop: &winit::event_loop::EventLoop<()>,
+) -> (BackendState<back::Backend>, back::Instance) {
+    let window = wb.build(event_loop).unwrap();
     let instance = back::Instance::create("gfx-rs colour-uniform", 1);
     let surface = instance.create_surface(&window);
     let mut adapters = instance.enumerate_adapters();
@@ -609,15 +584,21 @@ fn create_backend(wb: winit::window::WindowBuilder, event_loop: &winit::event_lo
 }
 
 #[cfg(feature = "gl")]
-fn create_backend(wb: winit::window::WindowBuilder, event_loop: &winit::event_loop::EventLoop<()>) -> (BackendState<back::Backend>, ()) {
+fn create_backend(
+    wb: winit::window::WindowBuilder,
+    event_loop: &winit::event_loop::EventLoop<()>,
+) -> (BackendState<back::Backend>, ()) {
     let (context, window) = {
         let builder =
             back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
                 .with_vsync(true);
-        let windowed_context = builder
-            .build_windowed(wb, event_loop)
-            .unwrap();
-        unsafe { windowed_context.make_current().expect("Unable to make context current").split() }
+        let windowed_context = builder.build_windowed(wb, event_loop).unwrap();
+        unsafe {
+            windowed_context
+                .make_current()
+                .expect("Unable to make context current")
+                .split()
+        }
     };
 
     let surface = back::Surface::from_context(context);
@@ -670,15 +651,16 @@ struct DeviceState<B: Backend> {
 
 impl<B: Backend> DeviceState<B> {
     fn new(adapter: Adapter<B>, surface: &B::Surface) -> Self {
-        let family = adapter.queue_families
+        let family = adapter
+            .queue_families
             .iter()
             .find(|family| {
-                surface.supports_queue_family(family) &&
-                family.queue_type().supports_graphics()
+                surface.supports_queue_family(family) && family.queue_type().supports_graphics()
             })
             .unwrap();
         let mut gpu = unsafe {
-            adapter.physical_device
+            adapter
+                .physical_device
                 .open(&[(family, &[1.0])], hal::Features::empty())
                 .unwrap()
         };
@@ -1124,7 +1106,10 @@ impl<B: Backend> ImageState<B> {
                 DescSetWrite {
                     binding: 0,
                     array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Image(&image_view, i::Layout::ShaderReadOnlyOptimal)),
+                    descriptors: Some(pso::Descriptor::Image(
+                        &image_view,
+                        i::Layout::ShaderReadOnlyOptimal,
+                    )),
                 },
                 DescSetWrite {
                     binding: 1,
@@ -1648,7 +1633,8 @@ fn main() {
         *control_flow = winit::event_loop::ControlFlow::Wait;
 
         match event {
-            winit::event::Event::WindowEvent { event, .. } => {
+            winit::event::Event::WindowEvent { event, .. } =>
+            {
                 #[allow(unused_variables)]
                 match event {
                     winit::event::WindowEvent::KeyboardInput {
@@ -1659,13 +1645,16 @@ fn main() {
                             },
                         ..
                     }
-                    | winit::event::WindowEvent::CloseRequested =>
-                        *control_flow = winit::event_loop::ControlFlow::Exit,
+                    | winit::event::WindowEvent::CloseRequested => {
+                        *control_flow = winit::event_loop::ControlFlow::Exit
+                    }
                     winit::event::WindowEvent::Resized(dims) => {
                         #[cfg(feature = "gl")]
-                        renderer_state.backend.surface.get_context_t().resize(dims.to_physical(
-                            renderer_state.backend.window.hidpi_factor(),
-                        ));
+                        renderer_state
+                            .backend
+                            .surface
+                            .get_context_t()
+                            .resize(dims.to_physical(renderer_state.backend.window.hidpi_factor()));
                         println!("RESIZE EVENT");
                         renderer_state.recreate_swapchain = true;
                     }
@@ -1707,5 +1696,7 @@ fn main() {
     feature = "gl"
 )))]
 fn main() {
-    println!("You need to enable the native API feature (vulkan/metal) in order to run the example");
+    println!(
+        "You need to enable the native API feature (vulkan/metal) in order to run the example"
+    );
 }

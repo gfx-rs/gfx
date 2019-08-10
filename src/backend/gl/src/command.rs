@@ -140,7 +140,7 @@ pub enum Command {
         src_image: n::ImageKind,
         dst_surface: n::Surface,
         dst_format: n::TextureFormat,
-        data: command::ImageCopy
+        data: command::ImageCopy,
     },
 
     BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
@@ -479,7 +479,10 @@ impl CommandBuffer {
 
                     // Clear color target
                     if view_format.is_color() {
-                        assert!(clear.index >= glow::COLOR_ATTACHMENT0 && clear.index <= glow::COLOR_ATTACHMENT31);
+                        assert!(
+                            clear.index >= glow::COLOR_ATTACHMENT0
+                                && clear.index <= glow::COLOR_ATTACHMENT31
+                        );
                         assert_eq!(attachment.ops.load, pass::AttachmentLoadOp::Clear);
 
                         let channel = view_format.base_format().1;
@@ -492,28 +495,32 @@ impl CommandBuffer {
                             | ChannelType::Sfloat
                             | ChannelType::Srgb
                             | ChannelType::Uscaled
-                            | ChannelType::Sscaled => {
-                                Command::ClearBufferColorF(index, unsafe { clear.value.color.float32 })
-                            }
-                            ChannelType::Uint => {
-                                Command::ClearBufferColorU(index, unsafe { clear.value.color.uint32 })
-                            }
-                            ChannelType::Sint => {
-                                Command::ClearBufferColorI(index, unsafe { clear.value.color.sint32 })
-                            }
+                            | ChannelType::Sscaled => Command::ClearBufferColorF(index, unsafe {
+                                clear.value.color.float32
+                            }),
+                            ChannelType::Uint => Command::ClearBufferColorU(index, unsafe {
+                                clear.value.color.uint32
+                            }),
+                            ChannelType::Sint => Command::ClearBufferColorI(index, unsafe {
+                                clear.value.color.sint32
+                            }),
                         };
 
                         return Some(cmd);
                     }
 
                     // Clear depth-stencil target
-                    let depth = if view_format.is_depth() && attachment.ops.load == pass::AttachmentLoadOp::Clear {
+                    let depth = if view_format.is_depth()
+                        && attachment.ops.load == pass::AttachmentLoadOp::Clear
+                    {
                         Some(unsafe { clear.value.depth_stencil.depth })
                     } else {
                         None
                     };
 
-                    let stencil = if view_format.is_stencil() && attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                    let stencil = if view_format.is_stencil()
+                        && attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear
+                    {
                         Some(unsafe { clear.value.depth_stencil.stencil })
                     } else {
                         None
@@ -651,10 +658,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     return None;
                 };
 
-                let (subpass, index) = render_pass.subpasses.iter().enumerate().filter_map(|(i, sp)| {
-                    let index = sp.attachment_using(id)?;
-                    Some((i, index))
-                }).next()?;
+                let (subpass, index) = render_pass
+                    .subpasses
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, sp)| {
+                        let index = sp.attachment_using(id)?;
+                        Some((i, index))
+                    })
+                    .next()?;
                 Some(AttachmentClear {
                     subpass_id: subpass,
                     index,
@@ -1017,10 +1029,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                             n::BindingTypes::StorageBuffers => glow::SHADER_STORAGE_BUFFER,
                             n::BindingTypes::Images => panic!("Wrong desc set binding"),
                         };
-                        for binding in drd
-                            .get_binding(*btype, set, *binding)
-                            .unwrap()
-                        {
+                        for binding in drd.get_binding(*btype, set, *binding).unwrap() {
                             self.push_cmd(Command::BindBufferRange(
                                 glow_btype,
                                 *binding,
@@ -1166,7 +1175,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     src_image: src.kind,
                     dst_surface: surface,
                     dst_format: format,
-                    data: r
+                    data: r,
                 },
                 n::ImageKind::Texture {
                     texture, target, ..
@@ -1197,8 +1206,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             let mut r = region.borrow().clone();
             r.buffer_offset += src_range.start;
             let cmd = match dst.kind {
-                n::ImageKind::Surface { surface, .. } =>
-                    Command::CopyBufferToSurface(src_raw, surface, r),
+                n::ImageKind::Surface { surface, .. } => {
+                    Command::CopyBufferToSurface(src_raw, surface, r)
+                }
                 n::ImageKind::Texture {
                     texture,
                     target,
@@ -1238,8 +1248,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             let mut r = region.borrow().clone();
             r.buffer_offset += dst_range.start;
             let cmd = match src.kind {
-                n::ImageKind::Surface { surface, .. } =>
-                    Command::CopySurfaceToBuffer(surface, dst_raw, r),
+                n::ImageKind::Surface { surface, .. } => {
+                    Command::CopySurfaceToBuffer(surface, dst_raw, r)
+                }
                 n::ImageKind::Texture {
                     texture,
                     target,
