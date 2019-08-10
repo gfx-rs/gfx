@@ -18,7 +18,6 @@ use crate::{
 };
 
 use hal::{
-    self,
     backend::FastHashMap,
     buffer,
     command as com,
@@ -27,17 +26,14 @@ use hal::{
     image::{Extent, Filter, Layout, Level, SubresourceRange},
     memory,
     pass::AttachmentLoadOp,
-    pool,
     pso,
     query,
-    queue::{RawCommandQueue, Submission},
     range::RangeArg,
-    window::{PresentError, Suboptimal},
+    window::{PresentError, Suboptimal, SwapImageIndex},
     DrawCount,
     IndexCount,
     IndexType,
     InstanceCount,
-    SwapImageIndex,
     VertexCount,
     VertexOffset,
     WorkGroupCount,
@@ -256,7 +252,7 @@ unsafe impl Sync for CommandBuffer {}
 struct Temp {
     clear_vertices: Vec<ClearVertex>,
     blit_vertices: FastHashMap<(Aspects, Level), Vec<BlitVertex>>,
-    clear_values: Vec<Option<com::ClearValueRaw>>,
+    clear_values: Vec<Option<com::ClearValue>>,
 }
 
 type VertexBufferMaybeVec = Vec<Option<(pso::VertexBufferDesc, pso::ElemOffset)>>;
@@ -1377,7 +1373,7 @@ pub struct IndexBuffer<B> {
 #[derive(Debug)]
 pub struct CommandBufferInner {
     sink: Option<CommandSink>,
-    level: com::RawLevel,
+    level: com::Level,
     backup_journal: Option<Journal>,
     #[cfg(feature = "dispatch")]
     backup_capacity: Option<Capacity>,
@@ -2016,14 +2012,14 @@ impl CommandQueue {
     }
 }
 
-impl RawCommandQueue<Backend> for CommandQueue {
+impl hal::queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        Submission {
+        hal::queue::Submission {
             command_buffers,
             wait_semaphores,
             signal_semaphores,
-        }: Submission<Ic, Iw, Is>,
+        }: hal::queue::Submission<Ic, Iw, Is>,
         fence: Option<&native::Fence>,
     ) where
         T: 'a + Borrow<CommandBuffer>,
@@ -2308,7 +2304,7 @@ fn assign_sides(this: &mut pso::Sided<pso::StencilValue>, faces: pso::Face, valu
     }
 }
 
-impl pool::RawCommandPool<Backend> for CommandPool {
+impl hal::pool::CommandPool<Backend> for CommandPool {
     unsafe fn reset(&mut self, release_resources: bool) {
         for cmd_buffer in &self.allocated {
             cmd_buffer
@@ -2317,7 +2313,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate_one(&mut self, level: com::RawLevel) -> CommandBuffer {
+    fn allocate_one(&mut self, level: com::Level) -> CommandBuffer {
         //TODO: fail with OOM if we allocate more actual command buffers
         // than our mega-queue supports.
         let inner = Arc::new(RefCell::new(CommandBufferInner {
@@ -2386,7 +2382,7 @@ impl pool::RawCommandPool<Backend> for CommandPool {
     where
         I: IntoIterator<Item = CommandBuffer>,
     {
-        use self::hal::command::RawCommandBuffer;
+        use hal::command::CommandBuffer as _;
         for mut cmd_buf in cmd_buffers {
             cmd_buf.reset(true);
             match self
@@ -2417,7 +2413,7 @@ impl CommandBuffer {
     }
 }
 
-impl com::RawCommandBuffer<Backend> for CommandBuffer {
+impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         flags: com::CommandBufferFlags,
@@ -2426,7 +2422,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         self.reset(false);
 
         let mut inner = self.inner.borrow_mut();
-        let can_immediate = inner.level == com::RawLevel::Primary
+        let can_immediate = inner.level == com::Level::Primary
             && flags.contains(com::CommandBufferFlags::ONE_TIME_SUBMIT);
         let sink = match self.pool_shared.borrow_mut().online_recording {
             OnlineRecording::Immediate if can_immediate => {
@@ -2624,8 +2620,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         image: &native::Image,
         _layout: Layout,
-        color: com::ClearColorRaw,
-        depth_stencil: com::ClearDepthStencilRaw,
+        value: com::ClearValue,
         subresource_ranges: T,
     ) where
         T: IntoIterator,
@@ -2637,7 +2632,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             ..
         } = *self.inner.borrow_mut();
 
-        let clear_color = image.shader_channel.interpret(color);
+        let clear_color = image.shader_channel.interpret(value.color);
         let base_extent = image.kind.extent();
         let is_layered = !self.shared.disabilities.broken_layered_clear_image;
 
@@ -2710,7 +2705,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             attachment.set_store_action(metal::MTLStoreAction::Store);
                             if sub.aspects.contains(Aspects::DEPTH) {
                                 attachment.set_load_action(metal::MTLLoadAction::Clear);
-                                attachment.set_clear_depth(depth_stencil.depth as _);
+                                attachment.set_clear_depth(value.depth_stencil.depth as _);
                             } else {
                                 attachment.set_load_action(metal::MTLLoadAction::Load);
                             }
@@ -2728,7 +2723,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             attachment.set_store_action(metal::MTLStoreAction::Store);
                             if sub.aspects.contains(Aspects::STENCIL) {
                                 attachment.set_load_action(metal::MTLLoadAction::Clear);
-                                attachment.set_clear_stencil(depth_stencil.stencil);
+                                attachment.set_clear_stencil(value.depth_stencil.stencil);
                             } else {
                                 attachment.set_load_action(metal::MTLLoadAction::Load);
                             }
@@ -2823,13 +2818,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     //Note: technically we should be able to derive the Channel from the
                     // `value` variant, but this is blocked by the portability that is
                     // always passing the attachment clears as `ClearColor::Sfloat` atm.
-                    raw_value = com::ClearColorRaw::from(value);
+                    raw_value = com::ClearColor::from(value);
                     let com = soft::RenderCommand::BindBufferData {
                         stage: pso::Stage::Fragment,
                         index: 0,
                         words: slice::from_raw_parts(
                             raw_value.float32.as_ptr() as *const u32,
-                            mem::size_of::<com::ClearColorRaw>() / WORD_SIZE,
+                            mem::size_of::<com::ClearColor>() / WORD_SIZE,
                         ),
                     };
                     (com, Some((index as u8, channel)))
@@ -3346,7 +3341,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         first_subpass_contents: com::SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<com::ClearValueRaw>,
+        T::Item: Borrow<com::ClearValue>,
     {
         // fill out temporary clear values per attachment
         self.temp

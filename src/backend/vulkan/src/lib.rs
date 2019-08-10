@@ -46,18 +46,18 @@ use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::{Entry, LoadingError};
 
-use crate::hal::adapter::DeviceType;
-use crate::hal::device::{DeviceLost, OutOfMemory, SurfaceLost};
-use crate::hal::error::{DeviceCreationError, HostExecutionError};
-use crate::hal::pso::PipelineStage;
-use crate::hal::{
+use hal::{
+    adapter,
     format,
     image,
     memory,
     queue,
-    window::{PresentError, Suboptimal},
+    device::{DeviceLost, OutOfMemory, SurfaceLost},
+    error::{DeviceCreationError, HostExecutionError},
+    pso::PipelineStage,
+    window::{PresentError, Suboptimal, SwapImageIndex},
+    Features, Limits, PatchSize,
 };
-use crate::hal::{Features, Limits, PatchSize, QueueType, SwapImageIndex};
 
 use std::borrow::{Borrow, Cow};
 use std::ffi::{CStr, CString};
@@ -162,18 +162,18 @@ pub struct Instance {
     pub extensions: Vec<&'static CStr>,
 }
 
-fn map_queue_type(flags: vk::QueueFlags) -> QueueType {
+fn map_queue_type(flags: vk::QueueFlags) -> queue::QueueType {
     if flags.contains(vk::QueueFlags::GRAPHICS | vk::QueueFlags::COMPUTE) {
         // TRANSFER_BIT optional
-        QueueType::General
+        queue::QueueType::General
     } else if flags.contains(vk::QueueFlags::GRAPHICS) {
         // TRANSFER_BIT optional
-        QueueType::Graphics
+        queue::QueueType::Graphics
     } else if flags.contains(vk::QueueFlags::COMPUTE) {
         // TRANSFER_BIT optional
-        QueueType::Compute
+        queue::QueueType::Compute
     } else if flags.contains(vk::QueueFlags::TRANSFER) {
-        QueueType::Transfer
+        queue::QueueType::Transfer
     } else {
         // TODO: present only queues?
         unimplemented!()
@@ -439,7 +439,7 @@ impl Instance {
 impl hal::Instance for Instance {
     type Backend = Backend;
 
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         let devices = match unsafe { self.raw.0.enumerate_physical_devices() } {
             Ok(devices) => devices,
             Err(err) => {
@@ -452,7 +452,7 @@ impl hal::Instance for Instance {
             .into_iter()
             .map(|device| {
                 let properties = unsafe { self.raw.0.get_physical_device_properties(device) };
-                let info = hal::AdapterInfo {
+                let info = adapter::AdapterInfo {
                     name: unsafe {
                         CStr::from_ptr(properties.device_name.as_ptr())
                             .to_str()
@@ -462,12 +462,12 @@ impl hal::Instance for Instance {
                     vendor: properties.vendor_id as usize,
                     device: properties.device_id as usize,
                     device_type: match properties.device_type {
-                        ash::vk::PhysicalDeviceType::OTHER => DeviceType::Other,
-                        ash::vk::PhysicalDeviceType::INTEGRATED_GPU => DeviceType::IntegratedGpu,
-                        ash::vk::PhysicalDeviceType::DISCRETE_GPU => DeviceType::DiscreteGpu,
-                        ash::vk::PhysicalDeviceType::VIRTUAL_GPU => DeviceType::VirtualGpu,
-                        ash::vk::PhysicalDeviceType::CPU => DeviceType::Cpu,
-                        _ => DeviceType::Other,
+                        ash::vk::PhysicalDeviceType::OTHER => adapter::DeviceType::Other,
+                        ash::vk::PhysicalDeviceType::INTEGRATED_GPU => adapter::DeviceType::IntegratedGpu,
+                        ash::vk::PhysicalDeviceType::DISCRETE_GPU => adapter::DeviceType::DiscreteGpu,
+                        ash::vk::PhysicalDeviceType::VIRTUAL_GPU => adapter::DeviceType::VirtualGpu,
+                        ash::vk::PhysicalDeviceType::CPU => adapter::DeviceType::Cpu,
+                        _ => adapter::DeviceType::Other,
                     },
                 };
                 let physical_device = PhysicalDevice {
@@ -489,7 +489,7 @@ impl hal::Instance for Instance {
                         .collect()
                 };
 
-                hal::Adapter {
+                adapter::Adapter {
                     info,
                     physical_device,
                     queue_families,
@@ -506,8 +506,8 @@ pub struct QueueFamily {
     index: u32,
 }
 
-impl hal::queue::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> QueueType {
+impl queue::QueueFamily for QueueFamily {
+    fn queue_type(&self) -> queue::QueueType {
         map_queue_type(self.properties.queue_flags)
     }
     fn max_queues(&self) -> usize {
@@ -527,12 +527,12 @@ pub struct PhysicalDevice {
     properties: vk::PhysicalDeviceProperties,
 }
 
-impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
-        families: &[(&QueueFamily, &[hal::QueuePriority])],
+        families: &[(&QueueFamily, &[queue::QueuePriority])],
         requested_features: Features,
-    ) -> Result<hal::Gpu<Backend>, DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, DeviceCreationError> {
         let family_infos = families
             .iter()
             .map(|&(family, priorities)| vk::DeviceQueueCreateInfo {
@@ -593,13 +593,12 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         };
 
         let device_arc = device.raw.clone();
-        let queues = families
+        let queue_groups = families
             .into_iter()
             .map(|&(family, ref priorities)| {
-                let family_index = family.index;
-                let mut family_raw = hal::backend::RawQueueGroup::new(family.clone());
+                let mut family_raw = queue::QueueGroup::new(queue::QueueFamilyId(family.index as usize));
                 for id in 0 .. priorities.len() {
-                    let queue_raw = device_arc.0.get_device_queue(family_index, id as _);
+                    let queue_raw = device_arc.0.get_device_queue(family.index, id as _);
                     family_raw.add_queue(CommandQueue {
                         raw: Arc::new(queue_raw),
                         device: device_arc.clone(),
@@ -610,9 +609,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             })
             .collect();
 
-        Ok(hal::Gpu {
+        Ok(adapter::Gpu {
             device,
-            queues: queue::Queues::new(queues),
+            queue_groups,
         })
     }
 
@@ -675,7 +674,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         }
     }
 
-    fn memory_properties(&self) -> hal::MemoryProperties {
+    fn memory_properties(&self) -> adapter::MemoryProperties {
         let mem_properties = unsafe {
             self.instance
                 .0
@@ -724,14 +723,14 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                     type_flags |= Properties::LAZILY_ALLOCATED;
                 }
 
-                hal::MemoryType {
+                adapter::MemoryType {
                     properties: type_flags,
                     heap_index: mem.heap_index as usize,
                 }
             })
             .collect();
 
-        hal::MemoryProperties {
+        adapter::MemoryProperties {
             memory_heaps,
             memory_types,
         }
@@ -1106,10 +1105,10 @@ pub struct CommandQueue {
     swapchain_fn: vk::KhrSwapchainFn,
 }
 
-impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
+impl queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        submission: hal::queue::Submission<Ic, Iw, Is>,
+        submission: queue::Submission<Ic, Iw, Is>,
         fence: Option<&native::Fence>,
     ) where
         T: 'a + Borrow<command::CommandBuffer>,

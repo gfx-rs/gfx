@@ -2,7 +2,7 @@ use crate::{conversions as conv, PrivateCapabilities};
 
 use hal::{
     backend::FastHashMap,
-    command::ClearColorRaw,
+    command::ClearColor,
     format::{Aspects, ChannelType},
     image::Filter,
     pso,
@@ -53,7 +53,7 @@ impl From<ChannelType> for Channel {
 }
 
 impl Channel {
-    pub fn interpret(self, raw: ClearColorRaw) -> metal::MTLClearColor {
+    pub fn interpret(self, raw: ClearColor) -> metal::MTLClearColor {
         unsafe {
             match self {
                 Channel::Float => metal::MTLClearColor::new(
@@ -63,10 +63,10 @@ impl Channel {
                     raw.float32[3] as _,
                 ),
                 Channel::Int => metal::MTLClearColor::new(
-                    raw.int32[0] as _,
-                    raw.int32[1] as _,
-                    raw.int32[2] as _,
-                    raw.int32[3] as _,
+                    raw.sint32[0] as _,
+                    raw.sint32[1] as _,
+                    raw.sint32[2] as _,
+                    raw.sint32[3] as _,
                 ),
                 Channel::Uint => metal::MTLClearColor::new(
                     raw.uint32[0] as _,

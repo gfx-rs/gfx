@@ -10,23 +10,8 @@ use std::any::Any;
 use std::fmt;
 
 use crate::error::DeviceCreationError;
-use crate::queue::{Capability, QueueGroup};
-use crate::{format, image, memory, Backend, Features, Gpu, Limits};
-
-/// Scheduling hint for devices about the priority of a queue.  Values range from `0.0` (low) to
-/// `1.0` (high).
-pub type QueuePriority = f32;
-
-/// A strongly-typed index to a particular `MemoryType`.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct MemoryTypeId(pub usize);
-
-impl From<usize> for MemoryTypeId {
-    fn from(id: usize) -> Self {
-        MemoryTypeId(id)
-    }
-}
+use crate::queue::{QueueGroup, QueuePriority};
+use crate::{format, image, memory, Backend, Features, Limits};
 
 /// A description for a single chunk of memory in a heap.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -50,6 +35,18 @@ pub struct MemoryProperties {
     pub memory_heaps: Vec<u64>,
 }
 
+/// Represents a combination of a logical device and the
+/// hardware queues it provides.
+///
+/// This structure is typically created using an `Adapter`.
+#[derive(Debug)]
+pub struct Gpu<B: Backend> {
+    /// Logical device for a given backend.
+    pub device: B::Device,
+    /// The command queues that the device provides.
+    pub queue_groups: Vec<QueueGroup<B>>,
+}
+
 /// Represents a physical device (such as a GPU) capable of supporting the given backend.
 pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Create a new logical device with the requested features. If `requested_features` is
@@ -66,7 +63,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// # extern crate gfx_backend_empty as empty;
     /// # extern crate gfx_hal;
     /// # fn main() {
-    /// use gfx_hal::{PhysicalDevice, Features};
+    /// use gfx_hal::{adapter::PhysicalDevice, Features};
     ///
     /// # let physical_device: empty::PhysicalDevice = return;
     /// # let family: empty::QueueFamily = return;
@@ -153,53 +150,4 @@ pub struct Adapter<B: Backend> {
     pub physical_device: B::PhysicalDevice,
     /// Queue families supported by this adapter.
     pub queue_families: Vec<B::QueueFamily>,
-}
-
-impl<B: Backend> Adapter<B> {
-    /// Open the physical device with `count` queues from some active queue family. The family is
-    /// the first that both provides the capability `C`, supports at least `count` queues, and for
-    /// which `selector` returns true.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_hal as hal;
-    /// use hal::General;
-    /// # fn main() {
-    ///
-    /// # let mut adapter: hal::Adapter<empty::Backend> = return;
-    /// let (device, queues) = adapter.open_with::<_, General>(1, |_| true).unwrap();
-    /// # }
-    /// ```
-    ///
-    /// # Return
-    ///
-    /// Returns the same errors as `open` and `InitializationFailed` if no suitable
-    /// queue family could be found.
-    pub fn open_with<F, C>(
-        &self,
-        count: usize,
-        selector: F,
-    ) -> Result<(B::Device, QueueGroup<B, C>), DeviceCreationError>
-    where
-        F: Fn(&B::QueueFamily) -> bool,
-        C: Capability,
-    {
-        use crate::queue::QueueFamily;
-
-        let requested_family = self.queue_families.iter().find(|family| {
-            C::supported_by(family.queue_type()) && selector(family) && count <= family.max_queues()
-        });
-
-        let priorities = vec![1.0; count];
-        let (id, families) = match requested_family {
-            Some(family) => (family.id(), [(family, priorities.as_slice())]),
-            _ => return Err(DeviceCreationError::InitializationFailed),
-        };
-
-        let Gpu { device, mut queues } =
-            unsafe { self.physical_device.open(&families, Features::empty()) }?;
-        Ok((device, queues.take(id).unwrap()))
-    }
 }

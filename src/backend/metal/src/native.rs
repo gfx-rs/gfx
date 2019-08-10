@@ -17,7 +17,6 @@ use hal::{
     pass::{Attachment, AttachmentId},
     pso,
     range::RangeArg,
-    DescriptorPool as HalDescriptorPool,
     MemoryTypeId,
 };
 use range_alloc::RangeAllocator;
@@ -532,7 +531,7 @@ impl DescriptorPool {
     }
 }
 
-impl HalDescriptorPool<Backend> for DescriptorPool {
+impl pso::DescriptorPool<Backend> for DescriptorPool {
     unsafe fn allocate_set(
         &mut self,
         set_layout: &DescriptorSetLayout,

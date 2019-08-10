@@ -8,7 +8,6 @@
     allow(dead_code, unused_extern_crates, unused_imports)
 )]
 
-extern crate env_logger;
 #[cfg(feature = "dx11")]
 extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "dx12")]
@@ -21,10 +20,11 @@ extern crate gfx_hal as hal;
 
 use std::str::FromStr;
 
-use hal::{buffer, command, memory, pool, pso};
-use hal::{Backend, Compute, DescriptorPool, Device, Instance, PhysicalDevice, QueueFamily};
-
-extern crate glsl_to_spirv;
+use hal::{
+    buffer, command, memory, pool, pso,
+    adapter::MemoryType,
+    prelude::*,
+};
 
 use std::fs;
 
@@ -55,16 +55,26 @@ fn main() {
         .find(|a| {
             a.queue_families
                 .iter()
-                .any(|family| family.supports_compute())
+                .any(|family| family.queue_type().supports_compute())
         })
         .expect("Failed to find a GPU with compute support!");
 
     let memory_properties = adapter.physical_device.memory_properties();
-    let (device, mut queue_group) = adapter.open_with::<_, Compute>(1, |_family| true).unwrap();
+    let family = adapter.queue_families
+        .iter()
+        .find(|family| family.queue_type().supports_compute())
+        .unwrap();
+    let mut gpu = unsafe {
+        adapter.physical_device
+            .open(&[(family, &[1.0])], hal::Features::empty())
+            .unwrap()
+    };
+    let device = &gpu.device;
+    let queue_group = gpu.queue_groups.first_mut().unwrap();
 
     let glsl = fs::read_to_string("compute/shader/collatz.comp").unwrap();
     let file = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Compute).unwrap();
-    let spirv: Vec<u32> = hal::read_spirv(file).unwrap();
+    let spirv: Vec<u32> = pso::read_spirv(file).unwrap();
     let shader = unsafe { device.create_shader_module(&spirv) }.unwrap();
 
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {
@@ -156,13 +166,13 @@ fn main() {
     };
 
     let mut command_pool = unsafe {
-        device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
+        device.create_command_pool(family.id(), pool::CommandPoolCreateFlags::empty())
     }
     .expect("Can't create command pool");
     let fence = device.create_fence(false).unwrap();
-    let mut command_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
+    let mut command_buffer = command_pool.allocate_one(command::Level::Primary);
     unsafe {
-        command_buffer.begin();
+        command_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
         command_buffer.copy_buffer(
             &staging_buffer,
             &device_buffer,
@@ -229,7 +239,7 @@ fn main() {
     }
 
     unsafe {
-        device.destroy_command_pool(command_pool.into_raw());
+        device.destroy_command_pool(command_pool);
         device.destroy_descriptor_pool(desc_pool);
         device.destroy_descriptor_set_layout(set_layout);
         device.destroy_shader_module(shader);
@@ -243,9 +253,9 @@ fn main() {
     }
 }
 
-unsafe fn create_buffer<B: Backend>(
+unsafe fn create_buffer<B: hal::Backend>(
     device: &B::Device,
-    memory_types: &[hal::MemoryType],
+    memory_types: &[MemoryType],
     properties: memory::Properties,
     usage: buffer::Usage,
     stride: u64,

@@ -14,7 +14,7 @@ use hal::format::Aspects;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::VertexInputRate;
-use hal::queue::{QueueFamilyId, RawCommandQueue};
+use hal::queue::{QueueFamilyId, CommandQueue as _};
 use hal::range::RangeArg;
 use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
 
@@ -22,7 +22,7 @@ use native::command_list::IndirectArgument;
 use descriptor;
 use native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
 
-use pool::{CommandPoolAllocator, RawCommandPool};
+use pool::{CommandPoolAllocator, CommandPool};
 use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
 use {
@@ -1067,7 +1067,7 @@ impl d::Device<B> for Device {
         &self,
         family: QueueFamilyId,
         create_flags: CommandPoolCreateFlags,
-    ) -> Result<RawCommandPool, d::OutOfMemory> {
+    ) -> Result<CommandPool, d::OutOfMemory> {
         let list_type = QUEUE_FAMILIES[family.0].native_type();
 
         let allocator = if create_flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
@@ -1084,7 +1084,7 @@ impl d::Device<B> for Device {
             CommandPoolAllocator::Shared(command_allocator)
         };
 
-        Ok(RawCommandPool {
+        Ok(CommandPool {
             allocator,
             device: self.raw,
             list_type,
@@ -1093,7 +1093,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    unsafe fn destroy_command_pool(&self, pool: RawCommandPool) {
+    unsafe fn destroy_command_pool(&self, pool: CommandPool) {
         pool.destroy();
     }
 
@@ -3150,7 +3150,7 @@ impl d::Device<B> for Device {
     unsafe fn create_swapchain(
         &self,
         surface: &mut w::Surface,
-        config: hal::SwapchainConfig,
+        config: hal::window::SwapchainConfig,
         old_swapchain: Option<w::Swapchain>,
     ) -> Result<(w::Swapchain, Vec<r::Image>), hal::window::CreationError> {
         if let Some(old_swapchain) = old_swapchain {

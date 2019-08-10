@@ -2,7 +2,7 @@ use winapi::shared::dxgiformat::DXGI_FORMAT;
 use winapi::shared::minwindef::UINT;
 use winapi::um::d3d12;
 
-use hal::{buffer, format, image, memory, pass, pso, DescriptorPool as HalDescriptorPool};
+use hal::{buffer, format, image, memory, pass, pso};
 use native::{self, query};
 use range_alloc::RangeAllocator;
 
@@ -578,7 +578,7 @@ pub struct DescriptorPool {
 unsafe impl Send for DescriptorPool {}
 unsafe impl Sync for DescriptorPool {}
 
-impl HalDescriptorPool<Backend> for DescriptorPool {
+impl pso::DescriptorPool<Backend> for DescriptorPool {
     unsafe fn allocate_set(
         &mut self,
         layout: &DescriptorSetLayout,

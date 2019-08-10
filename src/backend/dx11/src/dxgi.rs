@@ -1,5 +1,4 @@
-use hal::adapter::DeviceType;
-use hal::AdapterInfo;
+use hal::adapter::{AdapterInfo, DeviceType};
 
 use winapi::shared::guiddef::GUID;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_5, winerror};

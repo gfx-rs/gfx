@@ -32,10 +32,6 @@ pub fn wasm_main() {
     main();
 }
 
-use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
-use hal::pass::Subpass;
-use hal::pso::{PipelineStage, ShaderStageFlags, VertexInputRate};
-use hal::queue::Submission;
 use hal::{
     buffer,
     command,
@@ -45,16 +41,19 @@ use hal::{
     pass,
     pool,
     pso,
-    window::Extent2D,
+    window,
+    format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle},
+    pass::Subpass,
+    prelude::*,
+    pso::{PipelineStage, ShaderStageFlags, VertexInputRate},
+    queue::{QueueGroup, Submission},
 };
-use hal::{DescriptorPool, Primitive, SwapchainConfig};
-use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 
 use std::io::Cursor;
 use std::mem::ManuallyDrop;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
-const DIMS: Extent2D = Extent2D { width: 1024, height: 768 };
+const DIMS: window::Extent2D = window::Extent2D { width: 1024, height: 768 };
 
 const ENTRY_NAME: &str = "main";
 
@@ -175,7 +174,7 @@ fn main() {
                             let context = renderer.surface.get_context();
                             context.resize(dims.to_physical(window.hidpi_factor()));
                         }
-                        let dimensions = Extent2D {
+                        let dimensions = window::Extent2D {
                             width: dims.width as u32,
                             height: dims.height as u32,
                         };
@@ -195,13 +194,13 @@ fn main() {
 
 struct Renderer<B: hal::Backend> {
     device: B::Device,
-    queue_group: hal::QueueGroup<B, hal::Graphics>,
+    queue_group: QueueGroup<B>,
     desc_pool: ManuallyDrop<B::DescriptorPool>,
     surface: B::Surface,
     adapter: hal::adapter::Adapter<B>,
     format: hal::format::Format,
     swap_chain: Option<B::Swapchain>,
-    dimensions: Extent2D,
+    dimensions: window::Extent2D,
     framebuffers: Vec<B::Framebuffer>,
     frame_images: Vec<(B::Image, B::ImageView)>,
     viewport: hal::pso::Viewport,
@@ -214,8 +213,8 @@ struct Renderer<B: hal::Backend> {
     image_acquire_semaphores: Vec<B::Semaphore>,
     free_acquire_semaphore: Option<B::Semaphore>,
     submission_complete_fences: Vec<B::Fence>,
-    cmd_pools: Vec<hal::CommandPool<B, hal::Graphics>>,
-    cmd_buffers: Vec<hal::command::CommandBuffer<B, hal::Graphics, hal::command::MultiShot>>,
+    cmd_pools: Vec<B::CommandPool>,
+    cmd_buffers: Vec<B::CommandBuffer>,
     vertex_buffer: ManuallyDrop<B::Buffer>,
     image_upload_buffer: ManuallyDrop<B::Buffer>,
     image_logo: ManuallyDrop<B::Image>,
@@ -234,12 +233,26 @@ impl<B> Renderer<B> where B: hal::Backend {
         let limits = adapter.physical_device.limits();
 
         // Build a new device and associated command queues
-        let (device, mut queue_group) = adapter
-            .open_with::<_, hal::Graphics>(1, |family| surface.supports_queue_family(family))
+        let family = adapter.queue_families
+            .iter()
+            .find(|family| {
+                surface.supports_queue_family(family) &&
+                family.queue_type().supports_graphics()
+            })
             .unwrap();
+        let mut gpu = unsafe {
+            adapter.physical_device
+                .open(&[(family, &[1.0])], hal::Features::empty())
+                .unwrap()
+        };
+        let mut queue_group = gpu.queue_groups.pop().unwrap();
+        let device = gpu.device;
 
         let mut command_pool = unsafe {
-            device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
+            device.create_command_pool(
+                queue_group.family,
+                pool::CommandPoolCreateFlags::empty(),
+            )
         }
         .expect("Can't create command pool");
 
@@ -294,10 +307,13 @@ impl<B> Renderer<B> where B: hal::Backend {
         let buffer_len = QUAD.len() as u64 * buffer_stride;
 
         assert_ne!(buffer_len, 0);
-        let mut vertex_buffer =
-            ManuallyDrop::new(unsafe { device.create_buffer(buffer_len, buffer::Usage::VERTEX) }.unwrap());
+        let mut vertex_buffer =ManuallyDrop::new(unsafe {
+            device.create_buffer(buffer_len, buffer::Usage::VERTEX)
+        }.unwrap());
 
-        let buffer_req = unsafe { device.get_buffer_requirements(&vertex_buffer) };
+        let buffer_req = unsafe {
+            device.get_buffer_requirements(&vertex_buffer)
+        };
 
         let upload_type = memory_types
             .iter()
@@ -312,7 +328,9 @@ impl<B> Renderer<B> where B: hal::Backend {
             .unwrap()
             .into();
 
-        let buffer_memory = ManuallyDrop::new(unsafe { device.allocate_memory(upload_type, buffer_req.size) }.unwrap());
+        let buffer_memory = ManuallyDrop::new(unsafe {
+            device.allocate_memory(upload_type, buffer_req.size)
+        }.unwrap());
 
         unsafe { device.bind_buffer_memory(&buffer_memory, 0, &mut vertex_buffer) }.unwrap();
 
@@ -422,8 +440,8 @@ impl<B> Renderer<B> where B: hal::Backend {
         // copy buffer to texture
         let mut copy_fence = device.create_fence(false).expect("Could not create fence");
         unsafe {
-            let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
-            cmd_buffer.begin();
+            let mut cmd_buffer = command_pool.allocate_one(command::Level::Primary);
+            cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::empty(), i::Layout::Undefined)
@@ -497,7 +515,7 @@ impl<B> Renderer<B> where B: hal::Backend {
                 .unwrap_or(formats[0])
         });
 
-        let swap_config = SwapchainConfig::from_caps(&caps, format, DIMS);
+        let swap_config = window::SwapchainConfig::from_caps(&caps, format, DIMS);
         println!("{:?}", swap_config);
         let extent = swap_config.extent.to_extent();
 
@@ -597,7 +615,7 @@ impl<B> Renderer<B> where B: hal::Backend {
             unsafe {
                 cmd_pools.push(
                     device
-                        .create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
+                        .create_command_pool(queue_group.family, pool::CommandPoolCreateFlags::empty())
                         .expect("Can't create command pool"),
                 );
             }
@@ -622,7 +640,7 @@ impl<B> Renderer<B> where B: hal::Backend {
                     .create_fence(true)
                     .expect("Could not create semaphore"),
             );
-            cmd_buffers.push(cmd_pools[i].acquire_command_buffer::<command::MultiShot>());
+            cmd_buffers.push(cmd_pools[i].allocate_one(command::Level::Primary));
         }
 
         let pipeline_layout = ManuallyDrop::new(unsafe {
@@ -635,12 +653,12 @@ impl<B> Renderer<B> where B: hal::Backend {
         let pipeline = {
             let vs_module = {
                 let spirv =
-                    hal::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..])).unwrap();
+                    pso::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..])).unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
             let fs_module = {
                 let spirv =
-                    hal::read_spirv(Cursor::new(&include_bytes!("./data/quad.frag.spv")[..])).unwrap();
+                    pso::read_spirv(Cursor::new(&include_bytes!("./data/quad.frag.spv")[..])).unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
 
@@ -673,7 +691,7 @@ impl<B> Renderer<B> where B: hal::Backend {
 
                 let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
                     shader_entries,
-                    Primitive::TriangleList,
+                    hal::Primitive::TriangleList,
                     pso::Rasterizer::FILL,
                     &*pipeline_layout,
                     subpass,
@@ -729,7 +747,7 @@ impl<B> Renderer<B> where B: hal::Backend {
             depth: 0.0 .. 1.0,
         };
 
-        let dimensions = Extent2D {
+        let dimensions = window::Extent2D {
             width: 0,
             height: 0,
         };
@@ -778,7 +796,7 @@ impl<B> Renderer<B> where B: hal::Backend {
         // Verify that previous format still exists so we may reuse it.
         assert!(formats.iter().any(|fs| fs.contains(&self.format)));
 
-        let swap_config = SwapchainConfig::from_caps(&caps, self.format, self.dimensions);
+        let swap_config = window::SwapchainConfig::from_caps(&caps, self.format, self.dimensions);
         println!("{:?}", swap_config);
         let extent = swap_config.extent.to_extent();
 
@@ -873,7 +891,7 @@ impl<B> Renderer<B> where B: hal::Backend {
         // Rendering
         let cmd_buffer = &mut self.cmd_buffers[frame_idx];
         unsafe {
-            cmd_buffer.begin(false);
+            cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
             cmd_buffer.set_scissors(0, &[self.viewport.rect]);
@@ -881,18 +899,18 @@ impl<B> Renderer<B> where B: hal::Backend {
             cmd_buffer.bind_vertex_buffers(0, Some((&*self.vertex_buffer, 0)));
             cmd_buffer.bind_graphics_descriptor_sets(&self.pipeline_layout, 0, Some(&self.desc_set), &[]);
 
-            {
-                let mut encoder = cmd_buffer.begin_render_pass_inline(
-                    &self.render_pass,
-                    &self.framebuffers[swap_image],
-                    self.viewport.rect,
-                    &[command::ClearValue::Color(command::ClearColor::Sfloat([
-                        0.8, 0.8, 0.8, 1.0,
-                    ]))],
-                );
-                encoder.draw(0 .. 6, 0 .. 1);
-            }
-
+            cmd_buffer.begin_render_pass(
+                &self.render_pass,
+                &self.framebuffers[swap_image],
+                self.viewport.rect,
+                &[command::ClearValue {
+                    color: command::ClearColor {
+                        float32: [0.8, 0.8, 0.8, 1.0],
+                    },
+                }],
+                command::SubpassContents::Inline,
+            );
+            cmd_buffer.draw(0 .. 6, 0 .. 1);
             cmd_buffer.finish();
 
             let submission = Submission {
@@ -908,7 +926,7 @@ impl<B> Renderer<B> where B: hal::Backend {
             // present frame
             if let Err(_) = self.swap_chain.as_ref().unwrap().present(
                 &mut self.queue_group.queues[0],
-                swap_image as hal::SwapImageIndex,
+                swap_image as window::SwapImageIndex,
                 Some(&self.submission_complete_semaphores[frame_idx]),
             ) {
                 self.recreate_swapchain();
@@ -936,7 +954,7 @@ impl<B> Drop for Renderer<B> where B: hal::Backend {
             self.device.destroy_sampler(ManuallyDrop::into_inner(std::ptr::read(&self.sampler)));
             self.device.destroy_semaphore(self.free_acquire_semaphore.take().unwrap());
             for p in self.cmd_pools.drain(..) {
-                self.device.destroy_command_pool(p.into_raw());
+                self.device.destroy_command_pool(p);
             }
             for s in self.image_acquire_semaphores.drain(..) {
                 self.device.destroy_semaphore(s);

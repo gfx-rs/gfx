@@ -48,37 +48,25 @@ use std::rc::Rc;
 use std::{fs, iter};
 
 use hal::{
+    Backend,
+    adapter::{Adapter, MemoryType},
     buffer,
     command,
-    format as f,
+    format::{self as f, AsFormat},
     image as i,
     memory as m,
     pass,
     pool,
+    prelude::*,
     pso,
-    window::Extent2D,
-    Adapter,
-    Backend,
-    DescriptorPool,
-    Device,
-    Instance,
-    Limits,
-    MemoryType,
-    PhysicalDevice,
-    Primitive,
-    QueueGroup,
-    Surface,
-    Swapchain,
-    SwapchainConfig,
+    window as w,
+    queue::{QueueGroup, Submission},
 };
 
-use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
-use hal::pass::Subpass;
-use hal::pso::{PipelineStage, ShaderStageFlags, VertexInputRate};
-use hal::queue::Submission;
+pub type ColorFormat = f::Rgba8Srgb;
 
 const ENTRY_NAME: &str = "main";
-const DIMS: Extent2D = Extent2D {
+const DIMS: w::Extent2D = w::Extent2D {
     width: 1024,
     height: 768,
 };
@@ -127,7 +115,7 @@ trait SurfaceTrait {
     fn get_context_t(&self) -> &back::glutin::RawContext<back::glutin::PossiblyCurrent>;
 }
 
-impl SurfaceTrait for <back::Backend as hal::Backend>::Surface {
+impl SurfaceTrait for <back::Backend as Backend>::Surface {
     #[cfg(feature = "gl")]
     fn get_context_t(&self) -> &back::glutin::RawContext<back::glutin::PossiblyCurrent> {
         self.get_context()
@@ -176,14 +164,14 @@ impl<B: Backend> RendererState<B> {
                     binding: 0,
                     ty: pso::DescriptorType::SampledImage,
                     count: 1,
-                    stage_flags: ShaderStageFlags::FRAGMENT,
+                    stage_flags: pso::ShaderStageFlags::FRAGMENT,
                     immutable_samplers: false,
                 },
                 pso::DescriptorSetLayoutBinding {
                     binding: 1,
                     ty: pso::DescriptorType::Sampler,
                     count: 1,
-                    stage_flags: ShaderStageFlags::FRAGMENT,
+                    stage_flags: pso::ShaderStageFlags::FRAGMENT,
                     immutable_samplers: false,
                 },
             ],
@@ -195,7 +183,7 @@ impl<B: Backend> RendererState<B> {
                 binding: 0,
                 ty: pso::DescriptorType::UniformBuffer,
                 count: 1,
-                stage_flags: ShaderStageFlags::FRAGMENT,
+                stage_flags: pso::ShaderStageFlags::FRAGMENT,
                 immutable_samplers: false,
             }],
         );
@@ -245,13 +233,13 @@ impl<B: Backend> RendererState<B> {
         let mut staging_pool = device
             .borrow()
             .device
-            .create_command_pool_typed(
-                &device.borrow().queues,
+            .create_command_pool(
+                device.borrow().queues.family,
                 pool::CommandPoolCreateFlags::empty(),
             )
             .expect("Can't create staging command pool");
 
-        let image = ImageState::new::<hal::Graphics>(
+        let image = ImageState::new(
             image_desc,
             &img,
             &backend.adapter,
@@ -280,7 +268,7 @@ impl<B: Backend> RendererState<B> {
         device
             .borrow()
             .device
-            .destroy_command_pool(staging_pool.into_raw());
+            .destroy_command_pool(staging_pool);
 
         let mut swapchain = Some(SwapchainState::new(&mut backend, Rc::clone(&device)));
 
@@ -375,7 +363,7 @@ impl<B: Backend> RendererState<B> {
 
         let sem_index = self.framebuffer.next_acq_pre_pair_index();
 
-        let frame: hal::SwapImageIndex = unsafe {
+        let frame: w::SwapImageIndex = unsafe {
             let (acquire_semaphore, _) = self
                 .framebuffer
                 .get_frame_data(None, Some(sem_index))
@@ -421,9 +409,9 @@ impl<B: Backend> RendererState<B> {
             // Rendering
             let mut cmd_buffer = match command_buffers.pop() {
                 Some(cmd_buffer) => cmd_buffer,
-                None => command_pool.acquire_command_buffer(),
+                None => command_pool.allocate_one(command::Level::Primary),
             };
-            cmd_buffer.begin();
+            cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
             cmd_buffer.set_scissors(0, &[self.viewport.rect]);
@@ -439,20 +427,23 @@ impl<B: Backend> RendererState<B> {
                 &[],
             ); //TODO
 
-            {
-                let mut encoder = cmd_buffer.begin_render_pass_inline(
-                    self.render_pass.render_pass.as_ref().unwrap(),
-                    framebuffer,
-                    self.viewport.rect,
-                    &[command::ClearValue::Color(command::ClearColor::Sfloat(self.bg_color))],
-                );
-                encoder.draw(0 .. 6, 0 .. 1);
-            }
+            cmd_buffer.begin_render_pass(
+                self.render_pass.render_pass.as_ref().unwrap(),
+                framebuffer,
+                self.viewport.rect,
+                &[command::ClearValue {
+                    color: command::ClearColor {
+                        float32: self.bg_color,
+                    },
+                }],
+                command::SubpassContents::Inline,
+            );
+            cmd_buffer.draw(0 .. 6, 0 .. 1);
             cmd_buffer.finish();
 
             let submission = Submission {
                 command_buffers: iter::once(&cmd_buffer),
-                wait_semaphores: iter::once((&*image_acquired, PipelineStage::BOTTOM_OF_PIPE)),
+                wait_semaphores: iter::once((&*image_acquired, pso::PipelineStage::BOTTOM_OF_PIPE)),
                 signal_semaphores: iter::once(&*image_present),
             };
 
@@ -644,7 +635,7 @@ fn create_backend(wb: winit::window::WindowBuilder, event_loop: &winit::event_lo
 struct AdapterState<B: Backend> {
     adapter: Option<Adapter<B>>,
     memory_types: Vec<MemoryType>,
-    limits: Limits,
+    limits: hal::Limits,
 }
 
 impl<B: Backend> AdapterState<B> {
@@ -674,18 +665,27 @@ impl<B: Backend> AdapterState<B> {
 struct DeviceState<B: Backend> {
     device: B::Device,
     physical_device: B::PhysicalDevice,
-    queues: QueueGroup<B, hal::Graphics>,
+    queues: QueueGroup<B>,
 }
 
 impl<B: Backend> DeviceState<B> {
     fn new(adapter: Adapter<B>, surface: &B::Surface) -> Self {
-        let (device, queues) = adapter
-            .open_with::<_, hal::Graphics>(1, |family| surface.supports_queue_family(family))
+        let family = adapter.queue_families
+            .iter()
+            .find(|family| {
+                surface.supports_queue_family(family) &&
+                family.queue_type().supports_graphics()
+            })
             .unwrap();
+        let mut gpu = unsafe {
+            adapter.physical_device
+                .open(&[(family, &[1.0])], hal::Features::empty())
+                .unwrap()
+        };
 
         DeviceState {
-            device,
-            queues,
+            device: gpu.device,
+            queues: gpu.queue_groups.pop().unwrap(),
             physical_device: adapter.physical_device,
         }
     }
@@ -720,8 +720,8 @@ impl<B: Backend> RenderPassState<B> {
 
             let dependency = pass::SubpassDependency {
                 passes: pass::SubpassRef::External .. pass::SubpassRef::Pass(0),
-                stages: PipelineStage::COLOR_ATTACHMENT_OUTPUT
-                    .. PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                stages: pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT
+                    .. pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                 accesses: i::Access::empty()
                     .. (i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
             };
@@ -1059,13 +1059,13 @@ struct ImageState<B: Backend> {
 }
 
 impl<B: Backend> ImageState<B> {
-    unsafe fn new<T: hal::Supports<hal::Transfer>>(
+    unsafe fn new(
         mut desc: DescSet<B>,
-        img: &::image::ImageBuffer<::image::Rgba<u8>, Vec<u8>>,
+        img: &image::ImageBuffer<::image::Rgba<u8>, Vec<u8>>,
         adapter: &AdapterState<B>,
         usage: buffer::Usage,
         device_state: &mut DeviceState<B>,
-        staging_pool: &mut hal::CommandPool<B, hal::Graphics>,
+        staging_pool: &mut B::CommandPool,
     ) -> Self {
         let (buffer, dims, row_pitch, stride) = BufferState::new_texture(
             Rc::clone(&desc.layout.device),
@@ -1110,7 +1110,7 @@ impl<B: Backend> ImageState<B> {
                 &image,
                 i::ViewKind::D2,
                 ColorFormat::SELF,
-                Swizzle::NO,
+                f::Swizzle::NO,
                 COLOR_RANGE.clone(),
             )
             .unwrap();
@@ -1139,8 +1139,8 @@ impl<B: Backend> ImageState<B> {
 
         // copy buffer to texture
         {
-            let mut cmd_buffer = staging_pool.acquire_command_buffer::<command::OneShot>();
-            cmd_buffer.begin();
+            let mut cmd_buffer = staging_pool.allocate_one(command::Level::Primary);
+            cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::empty(), i::Layout::Undefined)
@@ -1151,7 +1151,7 @@ impl<B: Backend> ImageState<B> {
             };
 
             cmd_buffer.pipeline_barrier(
-                PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER,
+                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
                 m::Dependencies::empty(),
                 &[image_barrier],
             );
@@ -1186,7 +1186,7 @@ impl<B: Backend> ImageState<B> {
                 range: COLOR_RANGE.clone(),
             };
             cmd_buffer.pipeline_barrier(
-                PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER,
+                pso::PipelineStage::TRANSFER .. pso::PipelineStage::FRAGMENT_SHADER,
                 m::Dependencies::empty(),
                 &[image_barrier],
             );
@@ -1269,14 +1269,14 @@ impl<B: Backend> PipelineState<B> {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.vert").unwrap();
                 let file =
                     glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex).unwrap();
-                let spirv: Vec<u32> = hal::read_spirv(file).unwrap();
+                let spirv: Vec<u32> = pso::read_spirv(file).unwrap();
                 device.create_shader_module(&spirv).unwrap()
             };
             let fs_module = {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.frag").unwrap();
                 let file =
                     glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment).unwrap();
-                let spirv: Vec<u32> = hal::read_spirv(file).unwrap();
+                let spirv: Vec<u32> = pso::read_spirv(file).unwrap();
                 device.create_shader_module(&spirv).unwrap()
             };
 
@@ -1302,14 +1302,14 @@ impl<B: Backend> PipelineState<B> {
                     fragment: Some(fs_entry),
                 };
 
-                let subpass = Subpass {
+                let subpass = pass::Subpass {
                     index: 0,
                     main_pass: render_pass,
                 };
 
                 let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
                     shader_entries,
-                    Primitive::TriangleList,
+                    hal::Primitive::TriangleList,
                     pso::Rasterizer::FILL,
                     &pipeline_layout,
                     subpass,
@@ -1321,7 +1321,7 @@ impl<B: Backend> PipelineState<B> {
                 pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
                     binding: 0,
                     stride: size_of::<Vertex>() as u32,
-                    rate: VertexInputRate::Vertex,
+                    rate: pso::VertexInputRate::Vertex,
                 });
 
                 pipeline_desc.attributes.push(pso::AttributeDesc {
@@ -1385,13 +1385,13 @@ impl<B: Backend> SwapchainState<B> {
         let format = formats.map_or(f::Format::Rgba8Srgb, |formats| {
             formats
                 .iter()
-                .find(|format| format.base_format().1 == ChannelType::Srgb)
+                .find(|format| format.base_format().1 == f::ChannelType::Srgb)
                 .map(|format| *format)
                 .unwrap_or(formats[0])
         });
 
         println!("Surface format: {:?}", format);
-        let swap_config = SwapchainConfig::from_caps(&caps, format, DIMS);
+        let swap_config = w::SwapchainConfig::from_caps(&caps, format, DIMS);
         let extent = swap_config.extent.to_extent();
         let (swapchain, backbuffer) = device
             .borrow()
@@ -1424,8 +1424,8 @@ impl<B: Backend> Drop for SwapchainState<B> {
 struct FramebufferState<B: Backend> {
     framebuffers: Option<Vec<B::Framebuffer>>,
     framebuffer_fences: Option<Vec<B::Fence>>,
-    command_pools: Option<Vec<hal::CommandPool<B, hal::Graphics>>>,
-    command_buffer_lists: Vec<Vec<hal::command::CommandBuffer<B, hal::Graphics>>>,
+    command_pools: Option<Vec<B::CommandPool>>,
+    command_buffer_lists: Vec<Vec<B::CommandBuffer>>,
     frame_images: Option<Vec<(B::Image, B::ImageView)>>,
     acquire_semaphores: Option<Vec<B::Semaphore>>,
     present_semaphores: Option<Vec<B::Semaphore>>,
@@ -1458,7 +1458,7 @@ impl<B: Backend> FramebufferState<B> {
                             &image,
                             i::ViewKind::D2,
                             swapchain.format,
-                            Swizzle::NO,
+                            f::Swizzle::NO,
                             COLOR_RANGE.clone(),
                         )
                         .unwrap();
@@ -1489,7 +1489,7 @@ impl<B: Backend> FramebufferState<B> {
         };
 
         let mut fences: Vec<B::Fence> = vec![];
-        let mut command_pools: Vec<hal::CommandPool<B, hal::Graphics>> = vec![];
+        let mut command_pools: Vec<_> = vec![];
         let mut command_buffer_lists = Vec::new();
         let mut acquire_semaphores: Vec<B::Semaphore> = vec![];
         let mut present_semaphores: Vec<B::Semaphore> = vec![];
@@ -1500,8 +1500,8 @@ impl<B: Backend> FramebufferState<B> {
                 device
                     .borrow()
                     .device
-                    .create_command_pool_typed(
-                        &device.borrow().queues,
+                    .create_command_pool(
+                        device.borrow().queues.family,
                         pool::CommandPoolCreateFlags::empty(),
                     )
                     .expect("Can't create command pool"),
@@ -1543,8 +1543,8 @@ impl<B: Backend> FramebufferState<B> {
         Option<(
             &mut B::Fence,
             &mut B::Framebuffer,
-            &mut hal::CommandPool<B, hal::Graphics>,
-            &mut Vec<hal::command::CommandBuffer<B, hal::Graphics>>,
+            &mut B::CommandPool,
+            &mut Vec<B::CommandBuffer>,
         )>,
         Option<(&mut B::Semaphore, &mut B::Semaphore)>,
     ) {
@@ -1589,7 +1589,7 @@ impl<B: Backend> Drop for FramebufferState<B> {
                 .zip(self.command_buffer_lists.drain(..))
             {
                 command_pool.free(comamnd_buffer_list);
-                device.destroy_command_pool(command_pool.into_raw());
+                device.destroy_command_pool(command_pool);
             }
 
             for acquire_semaphore in self.acquire_semaphores.take().unwrap() {

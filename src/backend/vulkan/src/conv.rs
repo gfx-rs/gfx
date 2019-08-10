@@ -1,8 +1,11 @@
 use ash::vk;
 
-use crate::hal::range::RangeArg;
-use crate::hal::{buffer, command, format, image, pass, pso, query};
-use crate::hal::{CompositeAlpha, Features, IndexType, PresentMode, Primitive};
+use hal::{
+    range::RangeArg,
+    buffer, command, format, image, pass, pso, query,
+    window::{CompositeAlpha, PresentMode},
+    Features, IndexType, Primitive,
+};
 
 use crate::native as n;
 use std::borrow::Borrow;
@@ -71,14 +74,6 @@ pub fn map_image_layout(layout: image::Layout) -> vk::ImageLayout {
 
 pub fn map_image_aspects(aspects: format::Aspects) -> vk::ImageAspectFlags {
     vk::ImageAspectFlags::from_raw(aspects.bits() as u32)
-}
-
-pub fn map_clear_color(value: command::ClearColor) -> vk::ClearColorValue {
-    match value {
-        command::ClearColor::Sfloat(v) => vk::ClearColorValue { float32: v },
-        command::ClearColor::Sint(v) => vk::ClearColorValue { int32: v },
-        command::ClearColor::Uint(v) => vk::ClearColorValue { uint32: v },
-    }
 }
 
 pub fn map_offset(offset: image::Offset) -> vk::Offset3D {
@@ -474,10 +469,10 @@ pub fn map_command_buffer_flags(flags: command::CommandBufferFlags) -> vk::Comma
     vk::CommandBufferUsageFlags::from_raw(flags.bits())
 }
 
-pub fn map_command_buffer_level(level: command::RawLevel) -> vk::CommandBufferLevel {
+pub fn map_command_buffer_level(level: command::Level) -> vk::CommandBufferLevel {
     match level {
-        command::RawLevel::Primary => vk::CommandBufferLevel::PRIMARY,
-        command::RawLevel::Secondary => vk::CommandBufferLevel::SECONDARY,
+        command::Level::Primary => vk::CommandBufferLevel::PRIMARY,
+        command::Level::Secondary => vk::CommandBufferLevel::SECONDARY,
     }
 }
 

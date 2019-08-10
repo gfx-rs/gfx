@@ -3,14 +3,16 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use smallvec::SmallVec;
 
-use crate::hal;
-use crate::hal::error::HostExecutionError;
-use crate::hal::memory::Requirements;
-use crate::hal::pool::CommandPoolCreateFlags;
-use crate::hal::pso::VertexInputRate;
-use crate::hal::range::RangeArg;
-use crate::hal::{buffer, device as d, format, image, mapping, pass, pso, query, queue};
-use crate::hal::{Features, MemoryTypeId, SwapchainConfig};
+use hal::{
+    error::HostExecutionError,
+    memory::Requirements,
+    pool::CommandPoolCreateFlags,
+    pso::VertexInputRate,
+    range::RangeArg,
+    {buffer, device as d, format, image, mapping, pass, pso, query, queue},
+    {Features, MemoryTypeId},
+    window::SwapchainConfig,
+};
 
 use std::borrow::Borrow;
 use std::ffi::CString;

@@ -6,13 +6,17 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::{mem, ptr};
 
-use crate::hal::format::Aspects;
-use crate::hal::image::{Filter, Layout, SubresourceRange};
-use crate::hal::range::RangeArg;
-use crate::hal::{buffer, command as com, memory, pso, query};
-use crate::hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
-use crate::{conv, native as n};
-use crate::{Backend, RawDevice};
+use hal::{
+    buffer, command as com, memory, pso, query,
+    format::Aspects,
+    image::{Filter, Layout, SubresourceRange},
+    range::RangeArg,
+    DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount,
+};
+use crate::{
+    conv, native as n,
+    Backend, RawDevice,
+};
 
 #[derive(Debug)]
 pub struct CommandBuffer {
@@ -171,7 +175,7 @@ impl CommandBuffer {
     }
 }
 
-impl com::RawCommandBuffer<Backend> for CommandBuffer {
+impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         flags: com::CommandBufferFlags,
@@ -229,7 +233,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         first_subpass: com::SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<com::ClearValueRaw>,
+        T::Item: Borrow<com::ClearValue>,
     {
         let render_area = conv::map_rect(&render_area);
 
@@ -320,8 +324,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         image: &n::Image,
         layout: Layout,
-        color: com::ClearColorRaw,
-        depth_stencil: com::ClearDepthStencilRaw,
+        value: com::ClearValue,
         subresource_ranges: T,
     ) where
         T: IntoIterator,
@@ -349,10 +352,10 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         }
 
         // Vulkan and HAL share same memory layout
-        let color_value = mem::transmute(color);
+        let color_value = mem::transmute(value.color);
         let depth_stencil_value = vk::ClearDepthStencilValue {
-            depth: depth_stencil.depth,
-            stencil: depth_stencil.stencil,
+            depth: value.depth_stencil.depth,
+            stencil: value.depth_stencil.stencil,
         };
 
         if !color_ranges.is_empty() {
@@ -389,7 +392,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     aspect_mask: vk::ImageAspectFlags::COLOR,
                     color_attachment: index as _,
                     clear_value: vk::ClearValue {
-                        color: conv::map_clear_color(value),
+                        color: mem::transmute(value),
                     },
                 },
                 com::AttachmentClear::DepthStencil { depth, stencil } => vk::ClearAttachment {

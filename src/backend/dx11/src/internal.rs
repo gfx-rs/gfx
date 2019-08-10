@@ -672,43 +672,17 @@ impl Internal {
     fn update_clear_color(
         &mut self,
         context: &ComPtr<d3d11::ID3D11DeviceContext>,
-        clear: command::ClearColor,
+        value: command::ClearColor,
     ) {
-        match clear {
-            command::ClearColor::Sfloat(value) => {
-                unsafe {
-                    ptr::copy(
-                        &PartialClearInfo {
-                            data: mem::transmute(value),
-                        },
-                        self.map(context) as *mut _,
-                        1,
-                    )
-                };
-            }
-            command::ClearColor::Uint(value) => {
-                unsafe {
-                    ptr::copy(
-                        &PartialClearInfo {
-                            data: mem::transmute(value),
-                        },
-                        self.map(context) as *mut _,
-                        1,
-                    )
-                };
-            }
-            command::ClearColor::Sint(value) => {
-                unsafe {
-                    ptr::copy(
-                        &PartialClearInfo {
-                            data: mem::transmute(value),
-                        },
-                        self.map(context) as *mut _,
-                        1,
-                    )
-                };
-            }
-        }
+        unsafe {
+            ptr::copy(
+                &PartialClearInfo {
+                    data: mem::transmute(value),
+                },
+                self.map(context) as *mut _,
+                1,
+            )
+        };
 
         self.unmap(context);
     }
@@ -1196,6 +1170,7 @@ impl Internal {
         U: IntoIterator,
         U::Item: Borrow<pso::ClearRect>,
     {
+        use hal::format::ChannelType as Ct;
         let _scope = debug_scope!(context, "ClearAttachments");
 
         let clear_rects: SmallVec<[pso::ClearRect; 8]> = rects
@@ -1234,29 +1209,18 @@ impl Internal {
                         );
                     }
 
-                    match value {
-                        command::ClearColor::Sfloat(_) => unsafe {
-                            context.PSSetShader(
-                                self.ps_partial_clear_float.as_raw(),
-                                ptr::null_mut(),
-                                0,
-                            );
-                        },
-                        command::ClearColor::Uint(_) => unsafe {
-                            context.PSSetShader(
-                                self.ps_partial_clear_uint.as_raw(),
-                                ptr::null_mut(),
-                                0,
-                            );
-                        },
-                        command::ClearColor::Sint(_) => unsafe {
-                            context.PSSetShader(
-                                self.ps_partial_clear_int.as_raw(),
-                                ptr::null_mut(),
-                                0,
-                            );
-                        },
-                    }
+                    let shader = match attachment.format.base_format().1 {
+                        Ct::Uint => self.ps_partial_clear_uint.as_raw(),
+                        Ct::Sint => self.ps_partial_clear_int.as_raw(),
+                        _ => self.ps_partial_clear_float.as_raw(),
+                    };
+                    unsafe {
+                        context.PSSetShader(
+                            shader,
+                            ptr::null_mut(),
+                            0,
+                        )
+                    };
 
                     for clear_rect in &clear_rects {
                         let viewport = conv::map_viewport(&Viewport {

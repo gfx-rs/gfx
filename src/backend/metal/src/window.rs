@@ -9,9 +9,7 @@ use crate::{
 use hal::{
     format,
     image,
-    window::{Extent2D, Suboptimal},
-    CompositeAlpha,
-    SwapchainConfig,
+    window as w,
 };
 
 use core_graphics::base::CGFloat;
@@ -133,7 +131,7 @@ impl SurfaceInner {
         })
     }
 
-    fn dimensions(&self) -> Extent2D {
+    fn dimensions(&self) -> w::Extent2D {
         let (size, scale): (CGSize, CGFloat) = match self.view {
             Some(view) if !cfg!(target_os = "macos") => unsafe {
                 let bounds: CGRect = msg_send![view.as_ptr(), bounds];
@@ -158,7 +156,7 @@ impl SurfaceInner {
                 (bounds.size, contents_scale)
             },
         };
-        Extent2D {
+        w::Extent2D {
             width: (size.width * scale) as u32,
             height: (size.height * scale) as u32,
         }
@@ -206,7 +204,7 @@ pub enum AcquireMode {
 pub struct Swapchain {
     frames: Arc<Vec<Frame>>,
     surface: Arc<SurfaceInner>,
-    extent: Extent2D,
+    extent: w::Extent2D,
     last_frame: usize,
     pub acquire_mode: AcquireMode,
 }
@@ -228,7 +226,7 @@ impl Swapchain {
 
     /// Returns the drawable for the specified swapchain image index,
     /// marks the index as free for future use.
-    pub(crate) fn take_drawable(&self, index: hal::SwapImageIndex) -> Result<metal::Drawable, ()> {
+    pub(crate) fn take_drawable(&self, index: w::SwapImageIndex) -> Result<metal::Drawable, ()> {
         let mut frame = self.frames[index as usize].inner.lock();
         assert!(!frame.available && frame.linked);
         frame.signpost = None;
@@ -252,7 +250,7 @@ impl Swapchain {
 pub struct SwapchainImage {
     frames: Arc<Vec<Frame>>,
     surface: Arc<SurfaceInner>,
-    index: hal::SwapImageIndex,
+    index: w::SwapImageIndex,
 }
 
 impl SwapchainImage {
@@ -299,7 +297,7 @@ impl SwapchainImage {
     }
 }
 
-impl hal::Surface<Backend> for Surface {
+impl w::Surface<Backend> for Surface {
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         // we only expose one family atm, so it's compatible
         true
@@ -309,9 +307,9 @@ impl hal::Surface<Backend> for Surface {
         &self,
         device: &PhysicalDevice,
     ) -> (
-        hal::SurfaceCapabilities,
+        w::SurfaceCapabilities,
         Option<Vec<format::Format>>,
-        Vec<hal::PresentMode>,
+        Vec<w::PresentMode>,
     ) {
         let current_extent = if self.main_thread_id == thread::current().id() {
             Some(self.inner.dimensions())
@@ -333,14 +331,14 @@ impl hal::Surface<Backend> for Surface {
             3 ..= 3
         };
 
-        let caps = hal::SurfaceCapabilities {
+        let caps = w::SurfaceCapabilities {
             //Note: this is hardcoded in `CAMetalLayer` documentation
             image_count,
             current_extent,
-            extents: Extent2D {
+            extents: w::Extent2D {
                 width: 4,
                 height: 4,
-            } ..= Extent2D {
+            } ..= w::Extent2D {
                 width: 4096,
                 height: 4096,
             },
@@ -349,7 +347,7 @@ impl hal::Surface<Backend> for Surface {
                 | image::Usage::SAMPLED
                 | image::Usage::TRANSFER_SRC
                 | image::Usage::TRANSFER_DST,
-            composite_alpha: CompositeAlpha::OPAQUE, //TODO
+            composite_alpha: w::CompositeAlpha::OPAQUE, //TODO
         };
 
         let formats = vec![
@@ -362,9 +360,9 @@ impl hal::Surface<Backend> for Surface {
             device_caps.os_is_mac && device_caps.has_version_at_least(10, 13);
 
         let present_modes = if can_set_display_sync {
-            vec![hal::PresentMode::Fifo, hal::PresentMode::Immediate]
+            vec![w::PresentMode::Fifo, w::PresentMode::Immediate]
         } else {
-            vec![hal::PresentMode::Fifo]
+            vec![w::PresentMode::Fifo]
         };
 
         (caps, Some(formats), present_modes)
@@ -375,7 +373,7 @@ impl Device {
     pub(crate) fn build_swapchain(
         &self,
         surface: &mut Surface,
-        config: SwapchainConfig,
+        config: w::SwapchainConfig,
         old_swapchain: Option<Swapchain>,
     ) -> (Swapchain, Vec<native::Image>) {
         info!("build_swapchain {:?}", config);
@@ -392,7 +390,7 @@ impl Device {
         let render_layer = *render_layer_borrow;
         let format_desc = config.format.surface_desc();
         let framebuffer_only = config.image_usage == image::Usage::COLOR_ATTACHMENT;
-        let display_sync = config.present_mode != hal::PresentMode::Immediate;
+        let display_sync = config.present_mode != w::PresentMode::Immediate;
         let is_mac = caps.os_is_mac;
         let can_set_next_drawable_timeout = if is_mac {
             caps.has_version_at_least(10, 13)
@@ -518,13 +516,13 @@ impl Device {
     }
 }
 
-impl hal::Swapchain<Backend> for Swapchain {
+impl w::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
         semaphore: Option<&native::Semaphore>,
         fence: Option<&native::Fence>,
-    ) -> Result<(hal::SwapImageIndex, Option<Suboptimal>), hal::AcquireError> {
+    ) -> Result<(w::SwapImageIndex, Option<w::Suboptimal>), w::AcquireError> {
         self.last_frame += 1;
 
         //TODO: figure out a proper story of HiDPI
@@ -571,7 +569,7 @@ impl hal::Swapchain<Backend> for Swapchain {
                 let pair = self
                     .surface
                     .next_frame(&self.frames)
-                    .map_err(|_| hal::AcquireError::OutOfDate)?;
+                    .map_err(|_| w::AcquireError::OutOfDate)?;
 
                 if let Some(fence) = fence {
                     fence.0.replace(native::FenceInner::Idle { signaled: true });
@@ -583,11 +581,11 @@ impl hal::Swapchain<Backend> for Swapchain {
                     Some(frame) => frame.inner.lock(),
                     None => {
                         warn!("No frame is available");
-                        return Err(hal::AcquireError::OutOfDate);
+                        return Err(w::AcquireError::OutOfDate);
                     }
                 };
                 if !frame.linked {
-                    return Err(hal::AcquireError::OutOfDate);
+                    return Err(w::AcquireError::OutOfDate);
                 }
 
                 if let Some(semaphore) = semaphore {

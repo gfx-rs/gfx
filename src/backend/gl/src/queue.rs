@@ -2,15 +2,16 @@ use crate::Starc;
 use std::borrow::Borrow;
 use std::{mem, slice};
 
-use crate::hal;
-use crate::hal::error;
+use hal::error;
 
 use glow::Context;
 use smallvec::SmallVec;
 
-use crate::info::LegacyFeatures;
-use crate::{command as com, device, native, state};
-use crate::{Backend, GlContext, Share};
+use crate::{
+    command as com, device, native, state,
+    Backend, GlContext, Share,
+    info::LegacyFeatures,
+};
 
 // State caching system for command queue.
 //
@@ -1028,13 +1029,13 @@ impl CommandQueue {
     }
 }
 
-impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
+impl hal::queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         submit_info: hal::queue::Submission<Ic, Iw, Is>,
         fence: Option<&native::Fence>,
     ) where
-        T: 'a + Borrow<com::RawCommandBuffer>,
+        T: 'a + Borrow<com::CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
         S: 'a + Borrow<native::Semaphore>,
         Iw: IntoIterator<Item = (&'a S, hal::pso::PipelineStage)>,
@@ -1088,7 +1089,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError>
     where
         W: 'a + Borrow<crate::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
+        Is: IntoIterator<Item = (&'a W, hal::window::SwapImageIndex)>,
         S: 'a + Borrow<native::Semaphore>,
         Iw: IntoIterator<Item = &'a S>,
     {

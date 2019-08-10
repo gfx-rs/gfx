@@ -157,7 +157,7 @@ pub type DrawBuffer = u32;
 struct AttachmentClear {
     subpass_id: pass::SubpassId,
     index: u32,
-    value: command::ClearValueRaw,
+    value: command::ClearValue,
 }
 
 #[derive(Debug)]
@@ -239,7 +239,7 @@ impl From<hal::Limits> for Limits {
 /// If you want to display your rendered results to a framebuffer created externally, see the
 /// `display_fb` field.
 #[derive(Debug)]
-pub struct RawCommandBuffer {
+pub struct CommandBuffer {
     pub(crate) memory: Arc<Mutex<BufferMemory>>,
     pub(crate) buf: BufferSlice,
     // Buffer id for the owning command pool.
@@ -267,7 +267,7 @@ pub struct RawCommandBuffer {
     active_attribs: usize,
 }
 
-impl RawCommandBuffer {
+impl CommandBuffer {
     pub(crate) fn new(
         fbo: Option<n::RawFrameBuffer>,
         limits: Limits,
@@ -293,7 +293,7 @@ impl RawCommandBuffer {
             }
         };
 
-        RawCommandBuffer {
+        CommandBuffer {
             memory,
             buf: BufferSlice::new(),
             id,
@@ -483,6 +483,7 @@ impl RawCommandBuffer {
                         assert_eq!(attachment.ops.load, pass::AttachmentLoadOp::Clear);
 
                         let channel = view_format.base_format().1;
+                        let index = clear.index - glow::COLOR_ATTACHMENT0;
 
                         let cmd = match channel {
                             ChannelType::Unorm
@@ -492,13 +493,13 @@ impl RawCommandBuffer {
                             | ChannelType::Srgb
                             | ChannelType::Uscaled
                             | ChannelType::Sscaled => {
-                                Command::ClearBufferColorF(clear.index - glow::COLOR_ATTACHMENT0, unsafe { clear.value.color.float32 })
+                                Command::ClearBufferColorF(index, unsafe { clear.value.color.float32 })
                             }
                             ChannelType::Uint => {
-                                Command::ClearBufferColorU(clear.index - glow::COLOR_ATTACHMENT0, unsafe { clear.value.color.uint32 })
+                                Command::ClearBufferColorU(index, unsafe { clear.value.color.uint32 })
                             }
                             ChannelType::Sint => {
-                                Command::ClearBufferColorI(clear.index - glow::COLOR_ATTACHMENT0, unsafe { clear.value.color.int32 })
+                                Command::ClearBufferColorI(index, unsafe { clear.value.color.sint32 })
                             }
                         };
 
@@ -543,11 +544,11 @@ impl RawCommandBuffer {
     }
 }
 
-impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
+impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
-        _flags: hal::command::CommandBufferFlags,
-        _inheritance_info: hal::command::CommandBufferInheritanceInfo<Backend>,
+        _flags: command::CommandBufferFlags,
+        _inheritance_info: command::CommandBufferInheritanceInfo<Backend>,
     ) {
         // TODO: Implement flags!
         if self.individual_reset {
@@ -591,7 +592,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     unsafe fn pipeline_barrier<'a, T>(
         &mut self,
-        _stages: Range<hal::pso::PipelineStage>,
+        _stages: Range<pso::PipelineStage>,
         _dependencies: memory::Dependencies,
         _barriers: T,
     ) where
@@ -621,7 +622,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _first_subpass: command::SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<command::ClearValueRaw>,
+        T::Item: Borrow<command::ClearValue>,
     {
         // TODO: load ops: clearing strategy
         //  1.  < GL 3.0 / GL ES 2.0: glClear, only single color attachment?
@@ -685,8 +686,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         image: &n::Image,
         _: image::Layout,
-        color: command::ClearColorRaw,
-        _depth_stencil: command::ClearDepthStencilRaw,
+        value: command::ClearValue,
         _subresource_ranges: T,
     ) where
         T: IntoIterator,
@@ -696,6 +696,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         //  1.  < GL 3.0 / GL ES 3.0: glClear
         //  2.  < GL 4.4: glClearBuffer
         //  3. >= GL 4.4: glClearTexSubImage
+        let color = value.color;
 
         match self.fbo {
             Some(fbo) => {
@@ -728,7 +729,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         self.push_cmd(Command::ClearBufferColorF(0, color.float32))
                     }
                     ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, color.uint32)),
-                    ChannelType::Sint => self.push_cmd(Command::ClearBufferColorI(0, color.int32)),
+                    ChannelType::Sint => self.push_cmd(Command::ClearBufferColorI(0, color.sint32)),
                 }
             }
             None => {
@@ -1435,7 +1436,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     unsafe fn execute_commands<'a, T, I>(&mut self, _buffers: I)
     where
-        T: 'a + Borrow<RawCommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
         I: IntoIterator<Item = &'a T>,
     {
         unimplemented!()

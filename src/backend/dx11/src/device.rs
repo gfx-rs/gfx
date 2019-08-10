@@ -1,7 +1,8 @@
-use hal;
+use hal::adapter::MemoryProperties;
 use hal::pso::VertexInputRate;
 use hal::queue::QueueFamilyId;
 use hal::range::RangeArg;
+use hal::window::SwapchainConfig;
 use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query};
 
 use winapi::shared::dxgi::{IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD};
@@ -72,7 +73,7 @@ pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
     #[derivative(Debug = "ignore")]
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
-    memory_properties: hal::MemoryProperties,
+    memory_properties: MemoryProperties,
     memory_heap_flags: [MemoryHeapFlags; 3],
     pub(crate) internal: internal::Internal,
 }
@@ -98,7 +99,7 @@ impl Device {
     pub fn new(
         device: ComPtr<d3d11::ID3D11Device>,
         context: ComPtr<d3d11::ID3D11DeviceContext>,
-        memory_properties: hal::MemoryProperties,
+        memory_properties: MemoryProperties,
     ) -> Self {
         Device {
             raw: device.clone(),
@@ -695,7 +696,7 @@ impl Device {
     }
 }
 
-impl hal::Device<Backend> for Device {
+impl device::Device<Backend> for Device {
     unsafe fn allocate_memory(
         &self,
         mem_type: hal::MemoryTypeId,
@@ -2471,7 +2472,7 @@ impl hal::Device<Backend> for Device {
     unsafe fn create_swapchain(
         &self,
         surface: &mut Surface,
-        config: hal::SwapchainConfig,
+        config: SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
     ) -> Result<(Swapchain, Vec<Image>), hal::window::CreationError> {
         // TODO: use IDXGIFactory2 for >=11.1

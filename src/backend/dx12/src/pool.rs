@@ -15,7 +15,7 @@ pub enum CommandPoolAllocator {
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct RawCommandPool {
+pub struct CommandPool {
     pub(crate) allocator: CommandPoolAllocator,
     pub(crate) device: native::Device,
 
@@ -25,7 +25,7 @@ pub struct RawCommandPool {
     pub(crate) create_flags: pool::CommandPoolCreateFlags,
 }
 
-impl RawCommandPool {
+impl CommandPool {
     fn create_command_list(&mut self) -> (native::GraphicsCommandList, native::CommandAllocator) {
         let command_allocator = match self.allocator {
             CommandPoolAllocator::Shared(ref allocator) => allocator.clone(),
@@ -77,10 +77,10 @@ impl RawCommandPool {
     }
 }
 
-unsafe impl Send for RawCommandPool {}
-unsafe impl Sync for RawCommandPool {}
+unsafe impl Send for CommandPool {}
+unsafe impl Sync for CommandPool {}
 
-impl pool::RawCommandPool<Backend> for RawCommandPool {
+impl pool::CommandPool<Backend> for CommandPool {
     unsafe fn reset(&mut self, _release_resources: bool) {
         match self.allocator {
             CommandPoolAllocator::Shared(ref allocator) => {
@@ -94,9 +94,9 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn allocate_one(&mut self, level: command::RawLevel) -> CommandBuffer {
+    fn allocate_one(&mut self, level: command::Level) -> CommandBuffer {
         // TODO: Implement secondary buffers
-        assert_eq!(level, command::RawLevel::Primary);
+        assert_eq!(level, command::Level::Primary);
         let (command_list, command_allocator) = self.create_command_list();
         CommandBuffer::new(
             command_list,

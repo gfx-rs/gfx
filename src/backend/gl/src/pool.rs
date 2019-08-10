@@ -1,8 +1,7 @@
-use crate::command::{self, Command, RawCommandBuffer};
-use crate::hal::backend::FastHashMap;
-use crate::hal::{self, pool};
+use crate::command::{self, Command, CommandBuffer};
 use crate::native as n;
 use crate::Backend;
+use hal::backend::FastHashMap;
 
 use std::sync::{Arc, Mutex};
 
@@ -54,13 +53,13 @@ pub enum BufferMemory {
 }
 
 #[derive(Debug)]
-pub struct RawCommandPool {
+pub struct CommandPool {
     pub(crate) fbo: Option<n::RawFrameBuffer>,
     pub(crate) limits: command::Limits,
     pub(crate) memory: Arc<Mutex<BufferMemory>>,
 }
 
-impl pool::RawCommandPool<Backend> for RawCommandPool {
+impl hal::pool::CommandPool<Backend> for CommandPool {
     unsafe fn reset(&mut self, _release_resources: bool) {
         let mut memory = self
             .memory
@@ -81,14 +80,14 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         }
     }
 
-    fn allocate_one(&mut self, _level: hal::command::RawLevel) -> RawCommandBuffer {
+    fn allocate_one(&mut self, _level: hal::command::Level) -> CommandBuffer {
         // TODO: Implement secondary buffers
-        RawCommandBuffer::new(self.fbo, self.limits, self.memory.clone())
+        CommandBuffer::new(self.fbo, self.limits, self.memory.clone())
     }
 
     unsafe fn free<I>(&mut self, buffers: I)
     where
-        I: IntoIterator<Item = RawCommandBuffer>,
+        I: IntoIterator<Item = CommandBuffer>,
     {
         let mut memory = self
             .memory

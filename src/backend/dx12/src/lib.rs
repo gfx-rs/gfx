@@ -24,10 +24,8 @@ mod root_constants;
 mod window;
 
 use descriptors_cpu::DescriptorCpuPool;
-use hal::adapter::DeviceType;
 use hal::pso::PipelineStage;
-use hal::queue::{QueueFamilyId, Queues};
-use hal::{error, format as f, image, memory, Features, Limits, QueueType, SwapImageIndex};
+use hal::{adapter, error, format as f, image, memory, queue as q, Features, Limits,};
 
 use winapi::shared::minwindef::TRUE;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_6, winerror};
@@ -128,15 +126,15 @@ pub enum QueueFamily {
     // It's basically a normal 3D queue but D3D12 swapchain creation requires an
     // associated queue, which we don't know on `create_swapchain`.
     Present,
-    Normal(QueueType),
+    Normal(q::QueueType),
 }
 
 const MAX_QUEUES: usize = 16; // infinite, to be fair
 
-impl hal::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> QueueType {
+impl q::QueueFamily for QueueFamily {
+    fn queue_type(&self) -> q::QueueType {
         match *self {
-            QueueFamily::Present => QueueType::General,
+            QueueFamily::Present => q::QueueType::General,
             QueueFamily::Normal(ty) => ty,
         }
     }
@@ -146,13 +144,13 @@ impl hal::QueueFamily for QueueFamily {
             QueueFamily::Normal(_) => MAX_QUEUES,
         }
     }
-    fn id(&self) -> QueueFamilyId {
+    fn id(&self) -> q::QueueFamilyId {
         // This must match the order exposed by `QUEUE_FAMILIES`
-        QueueFamilyId(match *self {
+        q::QueueFamilyId(match *self {
             QueueFamily::Present => 0,
-            QueueFamily::Normal(QueueType::General) => 1,
-            QueueFamily::Normal(QueueType::Compute) => 2,
-            QueueFamily::Normal(QueueType::Transfer) => 3,
+            QueueFamily::Normal(q::QueueType::General) => 1,
+            QueueFamily::Normal(q::QueueType::Compute) => 2,
+            QueueFamily::Normal(q::QueueType::Transfer) => 3,
             _ => unreachable!(),
         })
     }
@@ -160,23 +158,24 @@ impl hal::QueueFamily for QueueFamily {
 
 impl QueueFamily {
     fn native_type(&self) -> native::command_list::CmdListType {
-        use hal::QueueFamily;
+        use hal::queue::QueueFamily as _;
         use native::command_list::CmdListType;
 
         let queue_type = self.queue_type();
         match queue_type {
-            QueueType::General | QueueType::Graphics => CmdListType::Direct,
-            QueueType::Compute => CmdListType::Compute,
-            QueueType::Transfer => CmdListType::Copy,
+            q::QueueType::General |
+            q::QueueType::Graphics => CmdListType::Direct,
+            q::QueueType::Compute => CmdListType::Compute,
+            q::QueueType::Transfer => CmdListType::Copy,
         }
     }
 }
 
 static QUEUE_FAMILIES: [QueueFamily; 4] = [
     QueueFamily::Present,
-    QueueFamily::Normal(QueueType::General),
-    QueueFamily::Normal(QueueType::Compute),
-    QueueFamily::Normal(QueueType::Transfer),
+    QueueFamily::Normal(q::QueueType::General),
+    QueueFamily::Normal(q::QueueType::Compute),
+    QueueFamily::Normal(q::QueueType::Transfer),
 ];
 
 #[derive(Derivative)]
@@ -190,7 +189,7 @@ pub struct PhysicalDevice {
     format_properties: Arc<FormatProperties>,
     private_caps: Capabilities,
     heap_properties: &'static [HeapProperties; NUM_HEAP_PROPERTIES],
-    memory_properties: hal::MemoryProperties,
+    memory_properties: adapter::MemoryProperties,
     // Indicates that there is currently an active logical device.
     // Opening the same adapter multiple times will return the same D3D12Device again.
     is_open: Arc<Mutex<bool>>,
@@ -199,12 +198,12 @@ pub struct PhysicalDevice {
 unsafe impl Send for PhysicalDevice {}
 unsafe impl Sync for PhysicalDevice {}
 
-impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
-        families: &[(&QueueFamily, &[hal::QueuePriority])],
+        families: &[(&QueueFamily, &[q::QueuePriority])],
         requested_features: Features,
-    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, error::DeviceCreationError> {
         let lock = self.is_open.try_lock();
         let mut open_guard = match lock {
             Ok(inner) => inner,
@@ -237,7 +236,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let queue_groups = families
             .into_iter()
             .map(|&(&family, priorities)| {
-                let mut group = hal::backend::RawQueueGroup::new(family);
+                use hal::queue::QueueFamily as _;
+                let mut group = q::QueueGroup::new(family.id());
 
                 let create_idle_event = || native::Event::create(true, false);
 
@@ -285,9 +285,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
         *open_guard = true;
 
-        Ok(hal::Gpu {
+        Ok(adapter::Gpu {
             device,
-            queues: Queues::new(queue_groups),
+            queue_groups,
         })
     }
 
@@ -394,7 +394,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         })
     }
 
-    fn memory_properties(&self) -> hal::MemoryProperties {
+    fn memory_properties(&self) -> adapter::MemoryProperties {
         self.memory_properties.clone()
     }
 
@@ -426,10 +426,10 @@ impl CommandQueue {
 unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
-impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
+impl q::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        submission: hal::queue::Submission<Ic, Iw, Is>,
+        submission: q::Submission<Ic, Iw, Is>,
         fence: Option<&resource::Fence>,
     ) where
         T: 'a + Borrow<command::CommandBuffer>,
@@ -464,7 +464,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError>
     where
         W: 'a + Borrow<window::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
+        Is: IntoIterator<Item = (&'a W, hal::window::SwapImageIndex)>,
         S: 'a + Borrow<resource::Semaphore>,
         Iw: IntoIterator<Item = &'a S>,
     {
@@ -751,7 +751,7 @@ impl Instance {
 impl hal::Instance for Instance {
     type Backend = Backend;
 
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         use self::memory::Properties;
 
         // Try to use high performance order by default (returns None on Windows < 1803)
@@ -835,14 +835,14 @@ impl hal::Instance for Instance {
                 name.to_string_lossy().into_owned()
             };
 
-            let info = hal::AdapterInfo {
+            let info = adapter::AdapterInfo {
                 name: device_name,
                 vendor: desc.VendorId as usize,
                 device: desc.DeviceId as usize,
                 device_type: if (desc.Flags & dxgi::DXGI_ADAPTER_FLAG_SOFTWARE) != 0 {
-                    DeviceType::VirtualGpu
+                    adapter::DeviceType::VirtualGpu
                 } else {
-                    DeviceType::DiscreteGpu
+                    adapter::DeviceType::DiscreteGpu
                 },
             };
 
@@ -895,21 +895,21 @@ impl hal::Instance for Instance {
             };
 
             // https://msdn.microsoft.com/en-us/library/windows/desktop/dn788678(v=vs.85).aspx
-            let base_memory_types: [hal::MemoryType; NUM_HEAP_PROPERTIES] =
+            let base_memory_types: [adapter::MemoryType; NUM_HEAP_PROPERTIES] =
                 match memory_architecture {
                     MemoryArchitecture::NUMA => [
                         // DEFAULT
-                        hal::MemoryType {
+                        adapter::MemoryType {
                             properties: Properties::DEVICE_LOCAL,
                             heap_index: 0,
                         },
                         // UPLOAD
-                        hal::MemoryType {
+                        adapter::MemoryType {
                             properties: Properties::CPU_VISIBLE | Properties::COHERENT,
                             heap_index: 1,
                         },
                         // READBACK
-                        hal::MemoryType {
+                        adapter::MemoryType {
                             properties: Properties::CPU_VISIBLE
                                 | Properties::COHERENT
                                 | Properties::CPU_CACHED,
@@ -918,19 +918,19 @@ impl hal::Instance for Instance {
                     ],
                     MemoryArchitecture::UMA => [
                         // DEFAULT
-                        hal::MemoryType {
+                        adapter::MemoryType {
                             properties: Properties::DEVICE_LOCAL,
                             heap_index: 0,
                         },
                         // UPLOAD
-                        hal::MemoryType {
+                        adapter::MemoryType {
                             properties: Properties::DEVICE_LOCAL
                                 | Properties::CPU_VISIBLE
                                 | Properties::COHERENT,
                             heap_index: 0,
                         },
                         // READBACK
-                        hal::MemoryType {
+                        adapter::MemoryType {
                             properties: Properties::DEVICE_LOCAL
                                 | Properties::CPU_VISIBLE
                                 | Properties::COHERENT
@@ -940,12 +940,12 @@ impl hal::Instance for Instance {
                     ],
                     MemoryArchitecture::CacheCoherentUMA => [
                         // DEFAULT
-                        hal::MemoryType {
+                        adapter::MemoryType {
                             properties: Properties::DEVICE_LOCAL,
                             heap_index: 0,
                         },
                         // UPLOAD
-                        hal::MemoryType {
+                        adapter::MemoryType {
                             properties: Properties::DEVICE_LOCAL
                                 | Properties::CPU_VISIBLE
                                 | Properties::COHERENT
@@ -953,7 +953,7 @@ impl hal::Instance for Instance {
                             heap_index: 0,
                         },
                         // READBACK
-                        hal::MemoryType {
+                        adapter::MemoryType {
                             properties: Properties::DEVICE_LOCAL
                                 | Properties::CPU_VISIBLE
                                 | Properties::COHERENT
@@ -1104,7 +1104,7 @@ impl hal::Instance for Instance {
                     memory_architecture,
                 },
                 heap_properties,
-                memory_properties: hal::MemoryProperties {
+                memory_properties: adapter::MemoryProperties {
                     memory_types,
                     memory_heaps,
                 },
@@ -1113,7 +1113,7 @@ impl hal::Instance for Instance {
 
             let queue_families = QUEUE_FAMILIES.to_vec();
 
-            adapters.push(hal::Adapter {
+            adapters.push(adapter::Adapter {
                 info,
                 physical_device,
                 queue_families,
@@ -1137,7 +1137,7 @@ impl hal::Backend for Backend {
     type CommandBuffer = command::CommandBuffer;
 
     type Memory = resource::Memory;
-    type CommandPool = pool::RawCommandPool;
+    type CommandPool = pool::CommandPool;
 
     type ShaderModule = resource::ShaderModule;
     type RenderPass = resource::RenderPass;
