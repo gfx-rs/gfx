@@ -357,8 +357,13 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         optimal_buffer_copy_offset_alignment: 1,
         optimal_buffer_copy_pitch_alignment: 1,
         min_texel_buffer_offset_alignment: 1,
-        min_uniform_buffer_offset_alignment: get_u64(gl, glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT).unwrap_or(1024),
-        min_storage_buffer_offset_alignment: get_u64(gl, glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT).unwrap_or(1024),
+        min_uniform_buffer_offset_alignment: get_u64(gl, glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT)
+            .unwrap_or(1024),
+        min_storage_buffer_offset_alignment: get_u64(
+            gl,
+            glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT,
+        )
+        .unwrap_or(1024),
         framebuffer_color_sample_counts: max_samples_mask,
         non_coherent_atom_size: 1,
         max_color_attachments: get_usize(gl, glow::MAX_COLOR_ATTACHMENTS).unwrap_or(1),
@@ -373,11 +378,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         limits.max_viewports = get_usize(gl, glow::MAX_VIEWPORTS).unwrap_or(0);
     }
 
-    if info.is_supported(&[
-            Core(4, 3),
-            Ext("GL_ARB_compute_shader"),
-        ])
-    {
+    if info.is_supported(&[Core(4, 3), Ext("GL_ARB_compute_shader")]) {
         for (i, (count, size)) in limits
             .max_compute_work_group_count
             .iter_mut()

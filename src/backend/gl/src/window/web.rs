@@ -1,6 +1,5 @@
-use crate::hal::window::Extent2D;
-use crate::hal::{self, format as f, image, CompositeAlpha};
 use crate::{native, Backend as B, GlContainer, PhysicalDevice, QueueFamily};
+use hal::{adapter::Adapter, format as f, image, window};
 
 
 struct PixelFormat {
@@ -42,17 +41,17 @@ impl Window {
 
 #[derive(Clone, Debug)]
 pub struct Swapchain {
-    pub(crate) extent: Extent2D,
+    pub(crate) extent: window::Extent2D,
     pub(crate) fbos: Vec<native::RawFrameBuffer>,
 }
 
-impl hal::Swapchain<B> for Swapchain {
+impl window::Swapchain<B> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
         _semaphore: Option<&native::Semaphore>,
         _fence: Option<&native::Fence>,
-    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
+    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
         // TODO: sync
         Ok((0, None))
     }
@@ -81,19 +80,19 @@ impl Surface {
     }
 }
 
-impl hal::Surface<B> for Surface {
+impl window::Surface<B> for Surface {
     fn compatibility(
         &self,
         _: &PhysicalDevice,
     ) -> (
-        hal::SurfaceCapabilities,
+        window::SurfaceCapabilities,
         Option<Vec<f::Format>>,
-        Vec<hal::PresentMode>,
+        Vec<window::PresentMode>,
     ) {
         let ex = Window.get_window_extent();
-        let extent = hal::window::Extent2D::from(ex);
+        let extent = window::Extent2D::from(ex);
 
-        let caps = hal::SurfaceCapabilities {
+        let caps = window::SurfaceCapabilities {
             image_count: if Window.get_pixel_format().double_buffer {
                 2 ..= 2
             } else {
@@ -103,10 +102,10 @@ impl hal::Surface<B> for Surface {
             extents: extent ..= extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
-            composite_alpha: CompositeAlpha::OPAQUE, //TODO
+            composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
         };
         let present_modes = vec![
-            hal::PresentMode::Fifo, //TODO
+            window::PresentMode::Fifo, //TODO
         ];
 
         (caps, Some(self.swapchain_formats()), present_modes)
@@ -119,7 +118,7 @@ impl hal::Surface<B> for Surface {
 
 impl hal::Instance for Surface {
     type Backend = B;
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
+    fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
         let adapter = PhysicalDevice::new_adapter((), GlContainer::from_new_canvas()); // TODO: Move to `self` like native/window
         vec![adapter]
     }

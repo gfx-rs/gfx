@@ -25,12 +25,11 @@
 //! # extern crate gfx_backend_empty as empty;
 //! # extern crate gfx_hal;
 //! # fn main() {
-//! use gfx_hal::Device;
-//! # use gfx_hal::{CommandQueue, Graphics, Swapchain};
+//! # use gfx_hal::prelude::*;
 //!
 //! # let mut swapchain: empty::Swapchain = return;
 //! # let device: empty::Device = return;
-//! # let mut present_queue: CommandQueue<empty::Backend, Graphics> = return;
+//! # let mut present_queue: empty::CommandQueue = return;
 //! # unsafe {
 //! let acquisition_semaphore = device.create_semaphore().unwrap();
 //! let render_semaphore = device.create_semaphore().unwrap();
@@ -53,7 +52,7 @@
 use crate::device;
 use crate::format::Format;
 use crate::image;
-use crate::queue::{Capability, CommandQueue};
+use crate::queue::CommandQueue;
 use crate::Backend;
 
 use std::any::Any;
@@ -258,7 +257,7 @@ bitflags!(
 /// ```no_run
 /// # extern crate gfx_hal;
 /// # fn main() {
-/// # use gfx_hal::{SwapchainConfig};
+/// # use gfx_hal::window::SwapchainConfig;
 /// # use gfx_hal::format::Format;
 /// let config = SwapchainConfig::new(100, 100, Format::Bgra8Unorm, 2);
 /// # }
@@ -312,7 +311,8 @@ impl SwapchainConfig {
             Some(current) => current,
             None => {
                 let (min_width, max_width) = (caps.extents.start().width, caps.extents.end().width);
-                let (min_height, max_height) = (caps.extents.start().height, caps.extents.end().height);
+                let (min_height, max_height) =
+                    (caps.extents.start().height, caps.extents.end().height);
 
                 // clamp the default_extent to within the allowed surface sizes
                 let width = min(max_width, max(default_extent.width, min_width));
@@ -450,15 +450,14 @@ pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// ```no_run
     ///
     /// ```
-    unsafe fn present<'a, C, S, Iw>(
+    unsafe fn present<'a, S, Iw>(
         &'a self,
-        present_queue: &mut CommandQueue<B, C>,
+        present_queue: &mut B::CommandQueue,
         image_index: SwapImageIndex,
         wait_semaphores: Iw,
     ) -> Result<Option<Suboptimal>, PresentError>
     where
         Self: 'a + Sized + Borrow<B::Swapchain>,
-        C: Capability,
         S: 'a + Borrow<B::Semaphore>,
         Iw: IntoIterator<Item = &'a S>,
     {
@@ -466,15 +465,14 @@ pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
     }
 
     /// Present one acquired image without any semaphore synchronization.
-    unsafe fn present_without_semaphores<'a, C>(
+    unsafe fn present_without_semaphores<'a>(
         &'a self,
-        present_queue: &mut CommandQueue<B, C>,
+        present_queue: &mut B::CommandQueue,
         image_index: SwapImageIndex,
     ) -> Result<Option<Suboptimal>, PresentError>
     where
         Self: 'a + Sized + Borrow<B::Swapchain>,
-        C: Capability,
     {
-        self.present::<_, B::Semaphore, _>(present_queue, image_index, iter::empty())
+        self.present::<B::Semaphore, _>(present_queue, image_index, iter::empty())
     }
 }

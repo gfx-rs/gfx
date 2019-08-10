@@ -21,6 +21,7 @@ use cocoa::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use hal::{
+    adapter,
     backend::FastHashMap,
     buffer,
     device::{AllocationError, BindError, DeviceLost, OomOrDeviceLost, OutOfMemory, ShaderError},
@@ -35,7 +36,7 @@ use hal::{
     pso,
     pso::VertexInputRate,
     query,
-    queue::{QueueFamilyId, Queues},
+    queue::{QueueFamilyId, QueueGroup, QueuePriority},
     range::RangeArg,
     window,
 };
@@ -169,7 +170,7 @@ impl VisibilityShared {
 #[derive(Clone, Debug)]
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
-    memory_types: Vec<hal::MemoryType>,
+    memory_types: Vec<adapter::MemoryType>,
     features: hal::Features,
     pub online_recording: OnlineRecording,
 }
@@ -214,7 +215,7 @@ impl MemoryTypes {
 #[derive(Debug)]
 pub struct PhysicalDevice {
     pub(crate) shared: Arc<Shared>,
-    memory_types: Vec<hal::MemoryType>,
+    memory_types: Vec<adapter::MemoryType>,
 }
 unsafe impl Send for PhysicalDevice {}
 unsafe impl Sync for PhysicalDevice {}
@@ -223,22 +224,22 @@ impl PhysicalDevice {
     pub(crate) fn new(shared: Arc<Shared>) -> Self {
         let memory_types = if shared.private_caps.os_is_mac {
             vec![
-                hal::MemoryType {
+                adapter::MemoryType {
                     // PRIVATE
                     properties: Properties::DEVICE_LOCAL,
                     heap_index: 0,
                 },
-                hal::MemoryType {
+                adapter::MemoryType {
                     // SHARED
                     properties: Properties::CPU_VISIBLE | Properties::COHERENT,
                     heap_index: 1,
                 },
-                hal::MemoryType {
+                adapter::MemoryType {
                     // MANAGED_UPLOAD
                     properties: Properties::DEVICE_LOCAL | Properties::CPU_VISIBLE,
                     heap_index: 1,
                 },
-                hal::MemoryType {
+                adapter::MemoryType {
                     // MANAGED_DOWNLOAD
                     properties: Properties::DEVICE_LOCAL
                         | Properties::CPU_VISIBLE
@@ -248,12 +249,12 @@ impl PhysicalDevice {
             ]
         } else {
             vec![
-                hal::MemoryType {
+                adapter::MemoryType {
                     // PRIVATE
                     properties: Properties::DEVICE_LOCAL,
                     heap_index: 0,
                 },
-                hal::MemoryType {
+                adapter::MemoryType {
                     // SHARED
                     properties: Properties::CPU_VISIBLE | Properties::COHERENT,
                     heap_index: 1,
@@ -275,12 +276,14 @@ impl PhysicalDevice {
     }
 }
 
-impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
-        families: &[(&QueueFamily, &[hal::QueuePriority])],
+        families: &[(&QueueFamily, &[QueuePriority])],
         requested_features: hal::Features,
-    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, error::DeviceCreationError> {
+        use hal::queue::QueueFamily as _;
+
         // TODO: Query supported features by feature set rather than hard coding in the supported
         // features. https://developer.apple.com/metal/Metal-Feature-Set-Tables.pdf
         if !self.features().contains(requested_features) {
@@ -291,10 +294,6 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             return Err(error::DeviceCreationError::MissingFeature);
         }
 
-        // TODO: Handle opening a physical device multiple times
-        assert_eq!(families.len(), 1);
-        assert_eq!(families[0].1.len(), 1);
-        let family = *families[0].0;
         let device = self.shared.device.lock();
 
         if cfg!(feature = "auto-capture") {
@@ -307,7 +306,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             default_capture_scope.begin_scope();
         }
 
-        let mut queue_group = hal::backend::RawQueueGroup::new(family);
+        assert_eq!(families.len(), 1);
+        assert_eq!(families[0].1.len(), 1);
+        let mut queue_group = QueueGroup::new(families[0].0.id());
         for _ in 0 .. self.shared.private_caps.exposed_queues {
             queue_group.add_queue(command::CommandQueue::new(self.shared.clone()));
         }
@@ -319,9 +320,9 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             online_recording: OnlineRecording::default(),
         };
 
-        Ok(hal::Gpu {
+        Ok(adapter::Gpu {
             device,
-            queues: Queues::new(vec![queue_group]),
+            queue_groups: vec![queue_group],
         })
     }
 
@@ -399,8 +400,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             })
     }
 
-    fn memory_properties(&self) -> hal::MemoryProperties {
-        hal::MemoryProperties {
+    fn memory_properties(&self) -> adapter::MemoryProperties {
+        adapter::MemoryProperties {
             memory_heaps: vec![
                 !0, //TODO: private memory limits
                 self.shared.private_caps.max_buffer_size,
@@ -794,7 +795,7 @@ impl Device {
 
         if let Some(fun) = info.comparison {
             if !caps.mutable_comparison_samplers {
-                return None
+                return None;
             }
             descriptor.set_compare_function(conv::map_compare_function(fun));
         }
@@ -843,8 +844,9 @@ impl Device {
                 image::Filter::Linear => msl::SamplerFilter::Linear,
             },
             mip_filter: match info.min_filter {
-                image::Filter::Nearest if info.lod_range.end < image::Lod::from(0.5) =>
-                    msl::SamplerMipFilter::None,
+                image::Filter::Nearest if info.lod_range.end < image::Lod::from(0.5) => {
+                    msl::SamplerMipFilter::None
+                }
                 image::Filter::Nearest => msl::SamplerMipFilter::Nearest,
                 image::Filter::Linear => msl::SamplerMipFilter::Linear,
             },
@@ -862,7 +864,7 @@ impl Device {
                 other => {
                     error!("Border color 0x{:X} is not supported", other);
                     msl::SamplerBorderColor::TransparentBlack
-                },
+                }
             },
             lod_clamp_min: lods.start.into(),
             lod_clamp_max: lods.end.into(),
@@ -874,7 +876,7 @@ impl Device {
     }
 }
 
-impl hal::Device<Backend> for Device {
+impl hal::device::Device<Backend> for Device {
     unsafe fn create_command_pool(
         &self,
         _family: QueueFamilyId,
@@ -887,7 +889,7 @@ impl hal::Device<Backend> for Device {
     }
 
     unsafe fn destroy_command_pool(&self, mut pool: command::CommandPool) {
-        use hal::pool::RawCommandPool;
+        use hal::pool::CommandPool as _;
         pool.reset(false);
     }
 
@@ -2089,7 +2091,8 @@ impl hal::Device<Backend> for Device {
                     {
                         match *descriptor.borrow() {
                             pso::Descriptor::Sampler(sampler) => {
-                                debug_assert!(!bindings[&write.binding].content
+                                debug_assert!(!bindings[&write.binding]
+                                    .content
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER));
                                 encoder.set_sampler_state(sampler.raw.as_ref().unwrap(), arg_index);
                                 arg_index += 1;
@@ -2909,7 +2912,7 @@ impl hal::Device<Backend> for Device {
     unsafe fn create_swapchain(
         &self,
         surface: &mut Surface,
-        config: hal::SwapchainConfig,
+        config: window::SwapchainConfig,
         old_swapchain: Option<Swapchain>,
     ) -> Result<(Swapchain, Vec<n::Image>), window::CreationError> {
         Ok(self.build_swapchain(surface, config, old_swapchain))

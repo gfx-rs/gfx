@@ -7,6 +7,7 @@ extern crate winit;
 
 use crate::hal::range::RangeArg;
 use crate::hal::{
+    adapter,
     buffer,
     command,
     device,
@@ -36,11 +37,11 @@ impl hal::Backend for Backend {
     type Swapchain = Swapchain;
 
     type QueueFamily = QueueFamily;
-    type CommandQueue = RawCommandQueue;
-    type CommandBuffer = RawCommandBuffer;
+    type CommandQueue = CommandQueue;
+    type CommandBuffer = CommandBuffer;
 
     type Memory = ();
-    type CommandPool = RawCommandPool;
+    type CommandPool = CommandPool;
 
     type ShaderModule = ();
     type RenderPass = ();
@@ -69,12 +70,12 @@ impl hal::Backend for Backend {
 /// Dummy physical device.
 #[derive(Debug)]
 pub struct PhysicalDevice;
-impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
-        _: &[(&QueueFamily, &[hal::QueuePriority])],
+        _: &[(&QueueFamily, &[queue::QueuePriority])],
         _: hal::Features,
-    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, error::DeviceCreationError> {
         unimplemented!()
     }
 
@@ -93,7 +94,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         unimplemented!()
     }
 
-    fn memory_properties(&self) -> hal::MemoryProperties {
+    fn memory_properties(&self) -> adapter::MemoryProperties {
         unimplemented!()
     }
 
@@ -108,14 +109,14 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 
 /// Dummy command queue doing nothing.
 #[derive(Debug)]
-pub struct RawCommandQueue;
-impl queue::RawCommandQueue<Backend> for RawCommandQueue {
+pub struct CommandQueue;
+impl queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         _: queue::Submission<Ic, Iw, Is>,
         _: Option<&()>,
     ) where
-        T: 'a + Borrow<RawCommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
         S: 'a + Borrow<()>,
         Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
@@ -131,7 +132,7 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
     ) -> Result<Option<window::Suboptimal>, window::PresentError>
     where
         W: 'a + Borrow<Swapchain>,
-        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
+        Is: IntoIterator<Item = (&'a W, window::SwapImageIndex)>,
         S: 'a + Borrow<()>,
         Iw: IntoIterator<Item = &'a S>,
     {
@@ -146,16 +147,16 @@ impl queue::RawCommandQueue<Backend> for RawCommandQueue {
 /// Dummy device doing nothing.
 #[derive(Debug)]
 pub struct Device;
-impl hal::Device<Backend> for Device {
+impl device::Device<Backend> for Device {
     unsafe fn create_command_pool(
         &self,
         _: queue::QueueFamilyId,
         _: pool::CommandPoolCreateFlags,
-    ) -> Result<RawCommandPool, device::OutOfMemory> {
+    ) -> Result<CommandPool, device::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn destroy_command_pool(&self, _: RawCommandPool) {
+    unsafe fn destroy_command_pool(&self, _: CommandPool) {
         unimplemented!()
     }
 
@@ -491,7 +492,7 @@ impl hal::Device<Backend> for Device {
     unsafe fn create_swapchain(
         &self,
         _: &mut Surface,
-        _: hal::SwapchainConfig,
+        _: window::SwapchainConfig,
         _: Option<Swapchain>,
     ) -> Result<(Swapchain, Vec<()>), hal::window::CreationError> {
         unimplemented!()
@@ -509,7 +510,7 @@ impl hal::Device<Backend> for Device {
 #[derive(Debug)]
 pub struct QueueFamily;
 impl queue::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> hal::QueueType {
+    fn queue_type(&self) -> queue::QueueType {
         unimplemented!()
     }
     fn max_queues(&self) -> usize {
@@ -522,15 +523,15 @@ impl queue::QueueFamily for QueueFamily {
 
 /// Dummy raw command pool.
 #[derive(Debug)]
-pub struct RawCommandPool;
-impl pool::RawCommandPool<Backend> for RawCommandPool {
+pub struct CommandPool;
+impl pool::CommandPool<Backend> for CommandPool {
     unsafe fn reset(&mut self, _: bool) {
         unimplemented!()
     }
 
     unsafe fn free<I>(&mut self, _: I)
     where
-        I: IntoIterator<Item = RawCommandBuffer>,
+        I: IntoIterator<Item = CommandBuffer>,
     {
         unimplemented!()
     }
@@ -538,8 +539,8 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
 
 /// Dummy command buffer, which ignores all the calls.
 #[derive(Debug)]
-pub struct RawCommandBuffer;
-impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
+pub struct CommandBuffer;
+impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         _: command::CommandBufferFlags,
@@ -579,14 +580,8 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn clear_image<T>(
-        &mut self,
-        _: &(),
-        _: image::Layout,
-        _: command::ClearColorRaw,
-        _: command::ClearDepthStencilRaw,
-        _: T,
-    ) where
+    unsafe fn clear_image<T>(&mut self, _: &(), _: image::Layout, _: command::ClearValue, _: T)
+    where
         T: IntoIterator,
         T::Item: Borrow<image::SubresourceRange>,
     {
@@ -691,7 +686,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _: command::SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<command::ClearValueRaw>,
+        T::Item: Borrow<command::ClearValue>,
     {
         unimplemented!()
     }
@@ -861,7 +856,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     unsafe fn execute_commands<'a, T, I>(&mut self, _: I)
     where
-        T: 'a + Borrow<RawCommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
         I: IntoIterator<Item = &'a T>,
     {
         unimplemented!()
@@ -887,14 +882,14 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 /// Dummy surface.
 #[derive(Debug)]
 pub struct Surface;
-impl hal::Surface<Backend> for Surface {
+impl window::Surface<Backend> for Surface {
     fn compatibility(
         &self,
         _: &PhysicalDevice,
     ) -> (
-        hal::SurfaceCapabilities,
+        window::SurfaceCapabilities,
         Option<Vec<format::Format>>,
-        Vec<hal::PresentMode>,
+        Vec<window::PresentMode>,
     ) {
         unimplemented!()
     }
@@ -907,13 +902,13 @@ impl hal::Surface<Backend> for Surface {
 /// Dummy swapchain.
 #[derive(Debug)]
 pub struct Swapchain;
-impl hal::Swapchain<Backend> for Swapchain {
+impl window::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _: u64,
         _: Option<&()>,
         _: Option<&()>,
-    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
+    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
         unimplemented!()
     }
 }
@@ -935,7 +930,7 @@ impl Instance {
 
 impl hal::Instance for Instance {
     type Backend = Backend;
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         vec![]
     }
 }

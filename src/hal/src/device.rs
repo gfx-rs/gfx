@@ -21,9 +21,9 @@ use crate::{Backend, MemoryTypeId};
 
 use crate::error::HostExecutionError;
 use crate::memory::Requirements;
-use crate::pool::{CommandPool, CommandPoolCreateFlags};
+use crate::pool::CommandPoolCreateFlags;
 use crate::pso::DescriptorPoolCreateFlags;
-use crate::queue::{QueueFamilyId, QueueGroup};
+use crate::queue::QueueFamilyId;
 use crate::range::RangeArg;
 use crate::window::{self, SwapchainConfig};
 
@@ -198,16 +198,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         family: QueueFamilyId,
         create_flags: CommandPoolCreateFlags,
     ) -> Result<B::CommandPool, OutOfMemory>;
-
-    /// Create a strongly typed command pool wrapper.
-    unsafe fn create_command_pool_typed<C>(
-        &self,
-        group: &QueueGroup<B, C>,
-        flags: CommandPoolCreateFlags,
-    ) -> Result<CommandPool<B, C>, OutOfMemory> {
-        let raw = self.create_command_pool(group.family(), flags)?;
-        Ok(CommandPool::new(raw))
-    }
 
     /// Destroy a command pool.
     unsafe fn destroy_command_pool(&self, pool: B::CommandPool);
@@ -788,9 +778,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// # extern crate gfx_backend_empty as empty;
     /// # extern crate gfx_hal;
     /// # fn main() {
-    /// use gfx_hal::{Device, SwapchainConfig};
-    /// use gfx_hal::format::Format;
-    /// # use gfx_hal::{CommandQueue, Graphics};
+    /// use gfx_hal::{prelude::*, format::Format, window::SwapchainConfig};
     ///
     /// # let mut surface: empty::Surface = return;
     /// # let device: empty::Device = return;

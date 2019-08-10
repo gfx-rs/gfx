@@ -40,11 +40,7 @@ fn map_operation(op: pso::StencilOp) -> u32 {
     }
 }
 
-pub(crate) fn bind_stencil(
-    gl: &GlContainer,
-    stencil: &Option<pso::StencilTest>,
-    cull: pso::Face,
-) {
+pub(crate) fn bind_stencil(gl: &GlContainer, stencil: &Option<pso::StencilTest>, cull: pso::Face) {
     fn bind_side(
         gl: &GlContainer,
         face: u32,
@@ -68,7 +64,13 @@ pub(crate) fn bind_stencil(
             let read_masks = stencil.read_masks.static_or(pso::Sided::new(!0));
             let ref_values = stencil.reference_values.static_or(pso::Sided::new(0));
             if !cull.contains(pso::Face::FRONT) {
-                bind_side(gl, glow::FRONT, &stencil.faces.front, read_masks.front, ref_values.front);
+                bind_side(
+                    gl,
+                    glow::FRONT,
+                    &stencil.faces.front,
+                    read_masks.front,
+                    ref_values.front,
+                );
                 if let pso::State::Static(values) = stencil.write_masks {
                     unsafe {
                         gl.stencil_mask_separate(glow::FRONT, values.front);
@@ -76,7 +78,13 @@ pub(crate) fn bind_stencil(
                 }
             }
             if !cull.contains(pso::Face::BACK) {
-                bind_side(gl, glow::BACK, &stencil.faces.back, read_masks.back, ref_values.back);
+                bind_side(
+                    gl,
+                    glow::BACK,
+                    &stencil.faces.back,
+                    read_masks.back,
+                    ref_values.back,
+                );
                 if let pso::State::Static(values) = stencil.write_masks {
                     unsafe {
                         gl.stencil_mask_separate(glow::FRONT, values.back);

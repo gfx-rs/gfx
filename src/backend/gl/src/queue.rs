@@ -2,15 +2,21 @@ use crate::Starc;
 use std::borrow::Borrow;
 use std::{mem, slice};
 
-use crate::hal;
-use crate::hal::error;
+use hal::error;
 
 use glow::Context;
 use smallvec::SmallVec;
 
-use crate::info::LegacyFeatures;
-use crate::{command as com, device, native, state};
-use crate::{Backend, GlContext, Share};
+use crate::{
+    command as com,
+    device,
+    info::LegacyFeatures,
+    native,
+    state,
+    Backend,
+    GlContext,
+    Share,
+};
 
 // State caching system for command queue.
 //
@@ -702,22 +708,21 @@ impl CommandQueue {
                 src_image,
                 dst_surface,
                 dst_format,
-                ref data
+                ref data,
             } => {
                 let gl = &self.share.context;
 
                 if data.src_subresource.aspects != hal::format::Aspects::COLOR
-                    || data.dst_subresource.aspects != hal::format::Aspects::COLOR {
-                        unimplemented!()
+                    || data.dst_subresource.aspects != hal::format::Aspects::COLOR
+                {
+                    unimplemented!()
                 }
 
                 match src_image {
-                    native::ImageKind::Texture { .. } => {
-                        unimplemented!()
-                    }
+                    native::ImageKind::Texture { .. } => unimplemented!(),
                     native::ImageKind::Surface {
                         surface: src_surface,
-                        format: src_format
+                        format: src_format,
                     } => {
                         if src_format != dst_format {
                             unimplemented!()
@@ -726,11 +731,21 @@ impl CommandQueue {
                         unsafe {
                             let src_fbo = gl.create_framebuffer().unwrap();
                             gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(src_fbo));
-                            gl.framebuffer_renderbuffer(glow::READ_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::RENDERBUFFER, Some(src_surface));
+                            gl.framebuffer_renderbuffer(
+                                glow::READ_FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                glow::RENDERBUFFER,
+                                Some(src_surface),
+                            );
 
                             let dst_fbo = gl.create_framebuffer().unwrap();
                             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, Some(dst_fbo));
-                            gl.framebuffer_renderbuffer(glow::DRAW_FRAMEBUFFER, glow::COLOR_ATTACHMENT0, glow::RENDERBUFFER, Some(dst_surface));
+                            gl.framebuffer_renderbuffer(
+                                glow::DRAW_FRAMEBUFFER,
+                                glow::COLOR_ATTACHMENT0,
+                                glow::RENDERBUFFER,
+                                Some(dst_surface),
+                            );
 
                             gl.blit_framebuffer(
                                 data.src_offset.x,
@@ -1028,13 +1043,13 @@ impl CommandQueue {
     }
 }
 
-impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
+impl hal::queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         submit_info: hal::queue::Submission<Ic, Iw, Is>,
         fence: Option<&native::Fence>,
     ) where
-        T: 'a + Borrow<com::RawCommandBuffer>,
+        T: 'a + Borrow<com::CommandBuffer>,
         Ic: IntoIterator<Item = &'a T>,
         S: 'a + Borrow<native::Semaphore>,
         Iw: IntoIterator<Item = (&'a S, hal::pso::PipelineStage)>,
@@ -1066,14 +1081,12 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
 
         if let Some(fence) = fence {
             if self.share.private_caps.sync {
-                fence.0.set(native::FenceInner::Pending(
-                    Some(
-                        self.share
-                            .context
-                            .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
-                            .unwrap(),
-                    )
-                ));
+                fence.0.set(native::FenceInner::Pending(Some(
+                    self.share
+                        .context
+                        .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
+                        .unwrap(),
+                )));
             } else {
                 self.share.context.flush();
                 fence.0.set(native::FenceInner::Idle { signaled: true });
@@ -1088,7 +1101,7 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError>
     where
         W: 'a + Borrow<crate::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
+        Is: IntoIterator<Item = (&'a W, hal::window::SwapImageIndex)>,
         S: 'a + Borrow<native::Semaphore>,
         Iw: IntoIterator<Item = &'a S>,
     {

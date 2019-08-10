@@ -622,9 +622,7 @@ fn map_blend_targets(
 ) -> [D3D11_RENDER_TARGET_BLEND_DESC; 8] {
     let mut targets: [D3D11_RENDER_TARGET_BLEND_DESC; 8] = [unsafe { mem::zeroed() }; 8];
 
-    for (mut target, color_desc) in
-        targets.iter_mut().zip(render_target_blends.iter())
-    {
+    for (mut target, color_desc) in targets.iter_mut().zip(render_target_blends.iter()) {
         target.RenderTargetWriteMask = color_desc.mask.bits() as _;
         if let Some(ref blend) = color_desc.blend {
             let (color_op, color_src, color_dst) = map_blend_op(blend.color);

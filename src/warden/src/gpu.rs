@@ -8,8 +8,18 @@ use std::io::Read;
 use std::path::PathBuf;
 use std::{iter, slice};
 
-use hal::{self, buffer as b, command as c, format as f, image as i, memory, pso};
-use hal::{DescriptorPool, Device, PhysicalDevice};
+use hal::{
+    self,
+    adapter,
+    buffer as b,
+    command as c,
+    format as f,
+    image as i,
+    memory,
+    prelude::*,
+    pso,
+    queue,
+};
 
 use crate::raw;
 
@@ -113,17 +123,17 @@ pub struct Resources<B: hal::Backend> {
     pub compute_pipelines: HashMap<String, (String, B::ComputePipeline)>,
 }
 
-pub struct Job<B: hal::Backend, C> {
-    submission: c::CommandBuffer<B, C, c::MultiShot, c::Primary>,
+pub struct Job<B: hal::Backend> {
+    submission: B::CommandBuffer,
 }
 
-pub struct Scene<B: hal::Backend, C> {
+pub struct Scene<B: hal::Backend> {
     pub resources: Resources<B>,
-    pub jobs: HashMap<String, Job<B, C>>,
-    init_submit: c::CommandBuffer<B, C, c::MultiShot, c::Primary>,
+    pub jobs: HashMap<String, Job<B>>,
+    init_submit: B::CommandBuffer,
     device: B::Device,
-    queue_group: hal::QueueGroup<B, C>,
-    command_pool: Option<hal::CommandPool<B, C>>,
+    queue_group: queue::QueueGroup<B>,
+    command_pool: Option<B::CommandPool>,
     upload_buffers: HashMap<String, (B::Buffer, B::Memory)>,
     download_type: hal::MemoryTypeId,
     limits: hal::Limits,
@@ -137,9 +147,9 @@ fn align(x: u64, y: u64) -> u64 {
     }
 }
 
-impl<B: hal::Backend> Scene<B, hal::General> {
+impl<B: hal::Backend> Scene<B> {
     pub fn new(
-        adapter: hal::Adapter<B>,
+        adapter: adapter::Adapter<B>,
         raw: &raw::Scene,
         data_path: PathBuf,
     ) -> Result<Self, Error> {
@@ -148,7 +158,14 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let limits = adapter.physical_device.limits();
 
         // initialize graphics
-        let (device, queue_group) = adapter.open_with(1, |_| true)?;
+        let mut gpu = unsafe {
+            adapter.physical_device.open(
+                &[(&adapter.queue_families[0], &[1.0])],
+                hal::Features::empty(),
+            )?
+        };
+        let device = gpu.device;
+        let queue_group = gpu.queue_groups.pop().unwrap();
 
         let upload_type: hal::MemoryTypeId = memory_types
             .iter()
@@ -172,9 +189,11 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         info!("download memory: {:?}", &download_type);
 
         let mut command_pool = unsafe {
-            device
-                .create_command_pool_typed(&queue_group, hal::pool::CommandPoolCreateFlags::empty())
-        }?;
+            device.create_command_pool(
+                queue_group.family,
+                hal::pool::CommandPoolCreateFlags::empty(),
+            )?
+        };
 
         // create resources
         let mut resources = Resources::<B> {
@@ -192,9 +211,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
             compute_pipelines: HashMap::new(),
         };
         let mut upload_buffers = HashMap::new();
-        let mut init_cmd = command_pool.acquire_command_buffer::<c::MultiShot>();
+        let mut init_cmd = command_pool.allocate_one(c::Level::Primary);
         unsafe {
-            init_cmd.begin(false);
+            init_cmd.begin_primary(c::CommandBufferFlags::SIMULTANEOUS_USE);
         }
         // Pass[1]: images, buffers, passes, descriptor set layouts/pools
         for (name, resource) in &raw.resources {
@@ -582,7 +601,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         "comp" => transpile(base_file, glsl_to_spirv::ShaderType::Compute),
                         other => panic!("Unknown shader extension: {}", other),
                     };
-                    let spirv = hal::read_spirv(file).unwrap();
+                    let spirv = pso::read_spirv(file).unwrap();
                     let module = unsafe { device.create_shader_module(&spirv) }.unwrap();
                     resources.shaders.insert(name.clone(), module);
                 }
@@ -816,9 +835,9 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         let mut jobs = HashMap::new();
         for (name, job) in &raw.jobs {
             use crate::raw::TransferCommand as Tc;
-            let mut command_buf = command_pool.acquire_command_buffer::<c::MultiShot>();
+            let mut command_buf = command_pool.allocate_one(c::Level::Primary);
             unsafe {
-                command_buf.begin(false);
+                command_buf.begin_primary(c::CommandBufferFlags::empty());
             }
             match *job {
                 raw::Job::Transfer(ref command) => match *command {
@@ -988,8 +1007,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                     },
                     Tc::ClearImage {
                         ref image,
-                        color,
-                        depth_stencil,
+                        ref value,
                         ref ranges,
                     } => unsafe {
                         let img = resources
@@ -1007,8 +1025,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         command_buf.clear_image(
                             &img.handle,
                             i::Layout::TransferDstOptimal,
-                            color,
-                            depth_stencil,
+                            value.to_raw(),
                             ranges,
                         );
                         command_buf.pipeline_barrier(
@@ -1107,10 +1124,15 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                         w: extent.width as _,
                         h: extent.height as _,
                     };
-                    let mut encoder =
-                        command_buf.begin_render_pass_inline(&rp.handle, fb, rect, clear_values);
-                    encoder.set_scissors(0, Some(rect));
-                    encoder.set_viewports(
+                    command_buf.begin_render_pass(
+                        &rp.handle,
+                        fb,
+                        rect,
+                        clear_values.iter().map(|cv| cv.to_raw()),
+                        c::SubpassContents::Inline,
+                    );
+                    command_buf.set_scissors(0, Some(rect));
+                    command_buf.set_viewports(
                         0,
                         Some(pso::Viewport {
                             rect,
@@ -1120,7 +1142,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
 
                     for subpass in &rp.subpasses {
                         if Some(subpass) != rp.subpasses.first() {
-                            encoder = encoder.next_subpass_inline();
+                            command_buf.next_subpass(c::SubpassContents::Inline);
                         }
                         for command in &pass.1[subpass].commands {
                             use crate::raw::DrawCommand as Dc;
@@ -1139,7 +1161,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                         offset,
                                         index_type,
                                     };
-                                    encoder.bind_index_buffer(view);
+                                    command_buf.bind_index_buffer(view);
                                 }
                                 Dc::BindVertexBuffers(ref buffers) => {
                                     let buffers_raw = buffers.iter().map(|&(ref name, offset)| {
@@ -1150,21 +1172,21 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                             .handle;
                                         (buf, offset)
                                     });
-                                    encoder.bind_vertex_buffers(0, buffers_raw);
+                                    command_buf.bind_vertex_buffers(0, buffers_raw);
                                 }
                                 Dc::BindPipeline(ref name) => {
                                     let pso = resources
                                         .graphics_pipelines
                                         .get(name)
                                         .expect(&format!("Missing graphics pipeline: {}", name));
-                                    encoder.bind_graphics_pipeline(pso);
+                                    command_buf.bind_graphics_pipeline(pso);
                                 }
                                 Dc::BindDescriptorSets {
                                     ref layout,
                                     first,
                                     ref sets,
                                 } => {
-                                    encoder.bind_graphics_descriptor_sets(
+                                    command_buf.bind_graphics_descriptor_sets(
                                         resources.pipeline_layouts.get(layout).expect(&format!(
                                             "Missing pipeline layout: {}",
                                             layout
@@ -1183,24 +1205,24 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                                     ref vertices,
                                     ref instances,
                                 } => {
-                                    encoder.draw(vertices.clone(), instances.clone());
+                                    command_buf.draw(vertices.clone(), instances.clone());
                                 }
                                 Dc::DrawIndexed {
                                     ref indices,
                                     base_vertex,
                                     ref instances,
                                 } => {
-                                    encoder.draw_indexed(
+                                    command_buf.draw_indexed(
                                         indices.clone(),
                                         base_vertex,
                                         instances.clone(),
                                     );
                                 }
                                 Dc::SetViewports(ref viewports) => {
-                                    encoder.set_viewports(0, viewports);
+                                    command_buf.set_viewports(0, viewports);
                                 }
                                 Dc::SetScissors(ref scissors) => {
-                                    encoder.set_scissors(0, scissors);
+                                    command_buf.set_scissors(0, scissors);
                                 }
                             }
                         }
@@ -1257,7 +1279,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
     }
 }
 
-impl<B: hal::Backend> Scene<B, hal::General> {
+impl<B: hal::Backend> Scene<B> {
     pub fn run<'a, I>(&mut self, job_names: I)
     where
         I: IntoIterator<Item = &'a str>,
@@ -1306,15 +1328,15 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         .unwrap();
 
         let mut command_pool = unsafe {
-            self.device.create_command_pool_typed(
-                &self.queue_group,
+            self.device.create_command_pool(
+                self.queue_group.family,
                 hal::pool::CommandPoolCreateFlags::empty(),
             )
         }
         .expect("Can't create command pool");
-        let mut cmd_buffer = command_pool.acquire_command_buffer::<c::OneShot>();
+        let mut cmd_buffer = command_pool.allocate_one(c::Level::Primary);
         unsafe {
-            cmd_buffer.begin();
+            cmd_buffer.begin_primary(c::CommandBufferFlags::ONE_TIME_SUBMIT);
             let pre_barrier = memory::Barrier::whole_buffer(
                 &buffer.handle,
                 buffer.stable_state .. b::Access::TRANSFER_READ,
@@ -1353,7 +1375,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 .submit_without_semaphores(iter::once(&cmd_buffer), Some(&copy_fence));
             self.device.wait_for_fence(&copy_fence, !0).unwrap();
             self.device.destroy_fence(copy_fence);
-            self.device.destroy_command_pool(command_pool.into_raw());
+            self.device.destroy_command_pool(command_pool);
         }
 
         let mapping = unsafe { self.device.map_memory(&down_memory, 0 .. down_size) }.unwrap();
@@ -1412,15 +1434,15 @@ impl<B: hal::Backend> Scene<B, hal::General> {
         .unwrap();
 
         let mut command_pool = unsafe {
-            self.device.create_command_pool_typed(
-                &self.queue_group,
+            self.device.create_command_pool(
+                self.queue_group.family,
                 hal::pool::CommandPoolCreateFlags::empty(),
             )
         }
         .expect("Can't create command pool");
-        let mut cmd_buffer = command_pool.acquire_command_buffer::<c::OneShot>();
+        let mut cmd_buffer = command_pool.allocate_one(c::Level::Primary);
         unsafe {
-            cmd_buffer.begin();
+            cmd_buffer.begin_primary(c::CommandBufferFlags::ONE_TIME_SUBMIT);
             let pre_barrier = memory::Barrier::Image {
                 states: image.stable_state
                     .. (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
@@ -1481,7 +1503,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
                 .submit_without_semaphores(iter::once(&cmd_buffer), Some(&copy_fence));
             self.device.wait_for_fence(&copy_fence, !0).unwrap();
             self.device.destroy_fence(copy_fence);
-            self.device.destroy_command_pool(command_pool.into_raw());
+            self.device.destroy_command_pool(command_pool);
         }
 
         let mapping = unsafe { self.device.map_memory(&down_memory, 0 .. down_size) }.unwrap();
@@ -1497,7 +1519,7 @@ impl<B: hal::Backend> Scene<B, hal::General> {
     }
 }
 
-impl<B: hal::Backend, C> Drop for Scene<B, C> {
+impl<B: hal::Backend> Drop for Scene<B> {
     fn drop(&mut self) {
         unsafe {
             for (_, (buffer, memory)) in self.upload_buffers.drain() {
@@ -1507,7 +1529,7 @@ impl<B: hal::Backend, C> Drop for Scene<B, C> {
             //TODO: free those properly
             let _ = &self.queue_group;
             self.device
-                .destroy_command_pool(self.command_pool.take().unwrap().into_raw());
+                .destroy_command_pool(self.command_pool.take().unwrap());
         }
     }
 }

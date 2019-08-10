@@ -2,7 +2,7 @@ use crate::{conversions as conv, PrivateCapabilities};
 
 use hal::{
     backend::FastHashMap,
-    command::ClearColorRaw,
+    command::ClearColor,
     format::{Aspects, ChannelType},
     image::Filter,
     pso,
@@ -53,7 +53,7 @@ impl From<ChannelType> for Channel {
 }
 
 impl Channel {
-    pub fn interpret(self, raw: ClearColorRaw) -> metal::MTLClearColor {
+    pub fn interpret(self, raw: ClearColor) -> metal::MTLClearColor {
         unsafe {
             match self {
                 Channel::Float => metal::MTLClearColor::new(
@@ -63,10 +63,10 @@ impl Channel {
                     raw.float32[3] as _,
                 ),
                 Channel::Int => metal::MTLClearColor::new(
-                    raw.int32[0] as _,
-                    raw.int32[1] as _,
-                    raw.int32[2] as _,
-                    raw.int32[3] as _,
+                    raw.sint32[0] as _,
+                    raw.sint32[1] as _,
+                    raw.sint32[2] as _,
+                    raw.sint32[3] as _,
                 ),
                 Channel::Uint => metal::MTLClearColor::new(
                     raw.uint32[0] as _,
@@ -142,7 +142,7 @@ impl DepthStencilStates {
             depth_bounds: false,
             stencil: Some(pso::StencilTest {
                 faces: pso::Sided::new(face),
-                .. pso::StencilTest::default()
+                ..pso::StencilTest::default()
             }),
         };
         let write_all = pso::DepthStencilDesc {
@@ -153,7 +153,7 @@ impl DepthStencilStates {
             depth_bounds: false,
             stencil: Some(pso::StencilTest {
                 faces: pso::Sided::new(face),
-                .. pso::StencilTest::default()
+                ..pso::StencilTest::default()
             }),
         };
 
@@ -206,7 +206,9 @@ impl DepthStencilStates {
     }
 
     fn create_stencil(
-        face: &pso::StencilFace, read_mask: pso::StencilValue, write_mask: pso::StencilValue
+        face: &pso::StencilFace,
+        read_mask: pso::StencilValue,
+        write_mask: pso::StencilValue,
     ) -> metal::StencilDescriptor {
         let desc = metal::StencilDescriptor::new();
         desc.set_stencil_compare_function(conv::map_compare_function(face.fun));
@@ -230,12 +232,12 @@ impl DepthStencilStates {
                 pso::State::Static(value) => value,
                 pso::State::Dynamic => return None,
             };
-            let front_desc = Self::create_stencil(&stencil.faces.front, read_masks.front, write_masks.front);
+            let front_desc =
+                Self::create_stencil(&stencil.faces.front, read_masks.front, write_masks.front);
             raw.set_front_face_stencil(Some(&front_desc));
-            let back_desc = if
-                stencil.faces.front == stencil.faces.back &&
-                read_masks.front == read_masks.back &&
-                write_masks.front == write_masks.back
+            let back_desc = if stencil.faces.front == stencil.faces.back
+                && read_masks.front == read_masks.back
+                && write_masks.front == write_masks.back
             {
                 front_desc
             } else {

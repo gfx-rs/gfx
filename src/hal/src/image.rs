@@ -8,10 +8,7 @@ use crate::{
     format,
     pso::{Comparison, Rect},
 };
-use std::{
-    i16,
-    ops::Range,
-};
+use std::{i16, ops::Range};
 
 /// Dimension size.
 pub type Size = u32;

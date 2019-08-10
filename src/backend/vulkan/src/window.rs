@@ -5,8 +5,7 @@ use std::sync::Arc;
 use ash::extensions::khr;
 use ash::vk;
 
-use crate::hal;
-use crate::hal::format::Format;
+use hal::{format::Format, window as w};
 
 #[cfg(feature = "winit")]
 use winit;
@@ -137,10 +136,7 @@ impl Instance {
     }
 
     #[cfg(target_os = "android")]
-    pub fn create_surface_android(
-        &self,
-        window: *const c_void,
-    ) -> Surface {
+    pub fn create_surface_android(&self, window: *const c_void) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
@@ -265,10 +261,7 @@ impl Instance {
                 if let Some(display) = window.wayland_display() {
                     let display: *mut c_void = display as *mut _;
                     let surface: *mut c_void = window.wayland_surface().unwrap() as *mut _;
-                    return self.create_surface_from_wayland(
-                        display,
-                        surface,
-                    );
+                    return self.create_surface_from_wayland(display, surface);
                 }
             }
             if self.extensions.contains(&khr::XlibSurface::name()) {
@@ -282,9 +275,7 @@ impl Instance {
         #[cfg(target_os = "android")]
         {
             use winit::platform::android::WindowExtAndroid;
-            return self.create_surface_android(
-                window.get_native_window(),
-            );
+            return self.create_surface_android(window.get_native_window());
         }
         #[cfg(windows)]
         {
@@ -305,10 +296,7 @@ impl Instance {
         panic!("No suitable WSI enabled!");
     }
 
-    pub fn create_surface_from_vk_surface_khr(
-        &self,
-        surface: vk::SurfaceKHR,
-    ) -> Surface {
+    pub fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR) -> Surface {
         let entry = VK_ENTRY
             .as_ref()
             .expect("Unable to load Vulkan entry points");
@@ -321,20 +309,18 @@ impl Instance {
             instance: self.raw.clone(),
         });
 
-        Surface {
-            raw,
-        }
+        Surface { raw }
     }
 }
 
-impl hal::Surface<Backend> for Surface {
+impl w::Surface<Backend> for Surface {
     fn compatibility(
         &self,
         physical_device: &PhysicalDevice,
     ) -> (
-        hal::SurfaceCapabilities,
+        w::SurfaceCapabilities,
         Option<Vec<Format>>,
-        Vec<hal::PresentMode>,
+        Vec<w::PresentMode>,
     ) {
         // Capabilities
         let caps = unsafe {
@@ -354,7 +340,7 @@ impl hal::Surface<Backend> for Surface {
         // `0xFFFFFFFF` indicates that the extent depends on the created swapchain.
         let current_extent = if caps.current_extent.width != !0 && caps.current_extent.height != !0
         {
-            Some(hal::window::Extent2D {
+            Some(w::Extent2D {
                 width: caps.current_extent.width,
                 height: caps.current_extent.height,
             })
@@ -362,17 +348,17 @@ impl hal::Surface<Backend> for Surface {
             None
         };
 
-        let min_extent = hal::window::Extent2D {
+        let min_extent = w::Extent2D {
             width: caps.min_image_extent.width,
             height: caps.min_image_extent.height,
         };
 
-        let max_extent = hal::window::Extent2D {
+        let max_extent = w::Extent2D {
             width: caps.max_image_extent.width,
             height: caps.max_image_extent.height,
         };
 
-        let capabilities = hal::SurfaceCapabilities {
+        let capabilities = w::SurfaceCapabilities {
             image_count: caps.min_image_count ..= max_images,
             current_extent,
             extents: min_extent ..= max_extent,
@@ -435,13 +421,13 @@ pub struct Swapchain {
     pub(crate) functor: khr::Swapchain,
 }
 
-impl hal::Swapchain<Backend> for Swapchain {
+impl w::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         timeout_ns: u64,
         semaphore: Option<&native::Semaphore>,
         fence: Option<&native::Fence>,
-    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
+    ) -> Result<(w::SwapImageIndex, Option<w::Suboptimal>), w::AcquireError> {
         let semaphore = semaphore.map_or(vk::Semaphore::null(), |s| s.0);
         let fence = fence.map_or(vk::Fence::null(), |f| f.0);
 
@@ -453,25 +439,25 @@ impl hal::Swapchain<Backend> for Swapchain {
         match index {
             Ok((i, suboptimal)) => {
                 if suboptimal {
-                    Ok((i, Some(hal::window::Suboptimal)))
+                    Ok((i, Some(w::Suboptimal)))
                 } else {
                     Ok((i, None))
                 }
             }
-            Err(vk::Result::NOT_READY) => Err(hal::AcquireError::NotReady),
-            Err(vk::Result::TIMEOUT) => Err(hal::AcquireError::Timeout),
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(hal::AcquireError::OutOfDate),
+            Err(vk::Result::NOT_READY) => Err(w::AcquireError::NotReady),
+            Err(vk::Result::TIMEOUT) => Err(w::AcquireError::Timeout),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(w::AcquireError::OutOfDate),
             Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
-                Err(hal::AcquireError::SurfaceLost(hal::device::SurfaceLost))
+                Err(w::AcquireError::SurfaceLost(hal::device::SurfaceLost))
             }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(hal::AcquireError::OutOfMemory(
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(w::AcquireError::OutOfMemory(
                 hal::device::OutOfMemory::OutOfHostMemory,
             )),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(hal::AcquireError::OutOfMemory(
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(w::AcquireError::OutOfMemory(
                 hal::device::OutOfMemory::OutOfDeviceMemory,
             )),
             Err(vk::Result::ERROR_DEVICE_LOST) => {
-                Err(hal::AcquireError::DeviceLost(hal::device::DeviceLost))
+                Err(w::AcquireError::DeviceLost(hal::device::DeviceLost))
             }
             _ => panic!("Failed to acquire image."),
         }

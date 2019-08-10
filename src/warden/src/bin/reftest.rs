@@ -80,7 +80,7 @@ impl Harness {
     }
 
     fn run<I: hal::Instance>(&self, instance: I, _disabilities: Disabilities) -> usize {
-        use hal::PhysicalDevice as _;
+        use hal::adapter::PhysicalDevice as _;
 
         let mut results = TestResults {
             pass: 0,
@@ -108,7 +108,7 @@ impl Harness {
                 }
             }
 
-            let mut scene = warden::gpu::Scene::<I::Backend, _>::new(
+            let mut scene = warden::gpu::Scene::<I::Backend>::new(
                 adapter,
                 &tg.scene,
                 self.base_path.join("data"),
@@ -223,7 +223,12 @@ fn main() {
             .with_gl_profile(glutin::GlProfile::Core)
             .build_windowed(glutin::window::WindowBuilder::new(), &events_loop)
             .unwrap();
-        let (context, window) = unsafe { windowed_context.make_current().expect("Unable to make window current").split() };
+        let (context, window) = unsafe {
+            windowed_context
+                .make_current()
+                .expect("Unable to make window current")
+                .split()
+        };
         let instance = gfx_backend_gl::Surface::from_context(context);
         num_failures += harness.run(instance, Disabilities::default());
     }

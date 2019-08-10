@@ -14,15 +14,15 @@ use hal::format::Aspects;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
 use hal::pso::VertexInputRate;
-use hal::queue::{QueueFamilyId, RawCommandQueue};
+use hal::queue::{CommandQueue as _, QueueFamilyId};
 use hal::range::RangeArg;
 use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
 
-use native::command_list::IndirectArgument;
 use descriptor;
+use native::command_list::IndirectArgument;
 use native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
 
-use pool::{CommandPoolAllocator, RawCommandPool};
+use pool::{CommandPool, CommandPoolAllocator};
 use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
 use {
@@ -556,7 +556,9 @@ impl Device {
             return Err(image::ViewError::Level(info.range.levels.start));
         }
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(info.range.layers)));
+            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(
+                info.range.layers,
+            )));
         }
 
         match info.view_kind {
@@ -662,7 +664,9 @@ impl Device {
             return Err(image::ViewError::Level(info.range.levels.start));
         }
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(info.range.layers)));
+            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(
+                info.range.layers,
+            )));
         }
 
         match info.view_kind {
@@ -706,9 +710,7 @@ impl Device {
                     ArraySize,
                 }
             }
-            image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => {
-                unimplemented!()
-            }
+            image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => unimplemented!(),
         };
 
         unsafe {
@@ -744,7 +746,9 @@ impl Device {
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(info.range.layers.clone())));
+            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(
+                info.range.layers.clone(),
+            )));
         }
         let is_msaa = info.kind.num_samples() > 1;
         let is_cube = info.caps.contains(image::ViewCapabilities::KIND_CUBE);
@@ -885,7 +889,9 @@ impl Device {
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(info.range.layers)));
+            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(
+                info.range.layers,
+            )));
         }
         if info.kind.num_samples() > 1 {
             error!("MSAA images can't be viewed as UAV");
@@ -1067,7 +1073,7 @@ impl d::Device<B> for Device {
         &self,
         family: QueueFamilyId,
         create_flags: CommandPoolCreateFlags,
-    ) -> Result<RawCommandPool, d::OutOfMemory> {
+    ) -> Result<CommandPool, d::OutOfMemory> {
         let list_type = QUEUE_FAMILIES[family.0].native_type();
 
         let allocator = if create_flags.contains(CommandPoolCreateFlags::RESET_INDIVIDUAL) {
@@ -1084,7 +1090,7 @@ impl d::Device<B> for Device {
             CommandPoolAllocator::Shared(command_allocator)
         };
 
-        Ok(RawCommandPool {
+        Ok(CommandPool {
             allocator,
             device: self.raw,
             list_type,
@@ -1093,7 +1099,7 @@ impl d::Device<B> for Device {
         })
     }
 
-    unsafe fn destroy_command_pool(&self, pool: RawCommandPool) {
+    unsafe fn destroy_command_pool(&self, pool: CommandPool) {
         pool.destroy();
     }
 
@@ -1332,11 +1338,18 @@ impl d::Device<B> for Device {
             .collect::<Vec<_>>();
 
         // guarantees that no re-allocation is done, and our pointers are valid
-        info!("Creating a pipeline layout with {} sets and {} root constants", sets.len(), root_constants.len());
+        info!(
+            "Creating a pipeline layout with {} sets and {} root constants",
+            sets.len(),
+            root_constants.len()
+        );
         let mut parameters = Vec::with_capacity(root_constants.len() + sets.len() * 2);
 
         for root_constant in root_constants.iter() {
-            debug!("\tRoot constant set={} range {:?}", ROOT_CONSTANT_SPACE, root_constant.range);
+            debug!(
+                "\tRoot constant set={} range {:?}",
+                ROOT_CONSTANT_SPACE, root_constant.range
+            );
             parameters.push(descriptor::RootParameter::constants(
                 conv::map_shader_visibility(root_constant.stages),
                 descriptor::Binding {
@@ -1381,7 +1394,9 @@ impl d::Device<B> for Device {
             let visibility = conv::map_shader_visibility(
                 set.bindings
                     .iter()
-                    .fold(pso::ShaderStageFlags::empty(), |u, bind| u | bind.stage_flags)
+                    .fold(pso::ShaderStageFlags::empty(), |u, bind| {
+                        u | bind.stage_flags
+                    }),
             );
 
             let describe = |bind: &pso::DescriptorSetLayoutBinding, ty| {
@@ -2228,7 +2243,10 @@ impl d::Device<B> for Device {
         //TODO: the clear_Xv is incomplete. We should support clearing images created without XXX_ATTACHMENT usage.
         // for this, we need to check the format and force the `RENDER_TARGET` flag behind the user's back
         // if the format supports being rendered into, allowing us to create clear_Xv
-        let format_properties = self.format_properties.get(image_unbound.format as usize).properties;
+        let format_properties = self
+            .format_properties
+            .get(image_unbound.format as usize)
+            .properties;
         let props = match image_unbound.tiling {
             image::Tiling::Optimal => format_properties.optimal_tiling,
             image::Tiling::Linear => format_properties.linear_tiling,
@@ -2375,12 +2393,12 @@ impl d::Device<B> for Device {
             },
             handle_dsv: if image.usage.contains(image::Usage::DEPTH_STENCIL_ATTACHMENT) {
                 match conv::map_format_dsv(format.base_format().0) {
-                    Some(dsv_format) => {
-                        self.view_image_as_depth_stencil(ViewInfo {
+                    Some(dsv_format) => self
+                        .view_image_as_depth_stencil(ViewInfo {
                             format: dsv_format,
                             ..info
-                        }).ok()
-                    }
+                        })
+                        .ok(),
                     None => None,
                 }
             } else {
@@ -2468,7 +2486,10 @@ impl d::Device<B> for Device {
             }
         }
 
-        info!("total {} views and {} samplers", num_srv_cbv_uav, num_samplers);
+        info!(
+            "total {} views and {} samplers",
+            num_srv_cbv_uav, num_samplers
+        );
 
         let heap_srv_cbv_uav = {
             let mut heap_srv_cbv_uav = self.heap_srv_cbv_uav.lock().unwrap();
@@ -2554,7 +2575,10 @@ impl d::Device<B> for Device {
             let mut offset = write.array_offset as u64;
             let mut target_binding = write.binding as usize;
             let mut bind_info = &write.set.binding_infos[target_binding];
-            debug!("\t{:?} binding {} array offset {}", bind_info, target_binding, offset);
+            debug!(
+                "\t{:?} binding {} array offset {}",
+                bind_info, target_binding, offset
+            );
             for descriptor in write.descriptors {
                 // spill over the writes onto the next binding
                 while offset >= bind_info.count {
@@ -2789,9 +2813,17 @@ impl d::Device<B> for Device {
                 dst_views.push(dst_range.at(copy.dst_array_offset as _));
                 num_views.push(copy.count as u32);
 
-                if (src_info.content & dst_info.content).contains(r::DescriptorContent::SRV | r::DescriptorContent::UAV) {
-                    assert!(src_info.count as usize + copy.src_array_offset + copy.count <= src_range.count as usize);
-                    assert!(dst_info.count as usize + copy.dst_array_offset + copy.count <= dst_range.count as usize);
+                if (src_info.content & dst_info.content)
+                    .contains(r::DescriptorContent::SRV | r::DescriptorContent::UAV)
+                {
+                    assert!(
+                        src_info.count as usize + copy.src_array_offset + copy.count
+                            <= src_range.count as usize
+                    );
+                    assert!(
+                        dst_info.count as usize + copy.dst_array_offset + copy.count
+                            <= dst_range.count as usize
+                    );
                     src_views.push(src_range.at(src_info.count + copy.src_array_offset as u64));
                     dst_views.push(dst_range.at(dst_info.count + copy.dst_array_offset as u64));
                     num_views.push(copy.count as u32);
@@ -3150,7 +3182,7 @@ impl d::Device<B> for Device {
     unsafe fn create_swapchain(
         &self,
         surface: &mut w::Surface,
-        config: hal::SwapchainConfig,
+        config: hal::window::SwapchainConfig,
         old_swapchain: Option<w::Swapchain>,
     ) -> Result<(w::Swapchain, Vec<r::Image>), hal::window::CreationError> {
         if let Some(old_swapchain) = old_swapchain {
@@ -3308,7 +3340,6 @@ impl d::Device<B> for Device {
         Ok(())
     }
 }
-
 
 #[test]
 fn test_identity_mapping() {

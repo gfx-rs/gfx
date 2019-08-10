@@ -4,6 +4,40 @@ use std::ops::Range;
 use hal;
 
 #[derive(Debug, Deserialize)]
+pub enum ClearColor {
+    Float([f32; 4]),
+    Uint([u32; 4]),
+    Sint([i32; 4]),
+}
+
+impl ClearColor {
+    pub fn to_raw(&self) -> hal::command::ClearColor {
+        match *self {
+            ClearColor::Float(array) => hal::command::ClearColor { float32: array },
+            ClearColor::Uint(array) => hal::command::ClearColor { uint32: array },
+            ClearColor::Sint(array) => hal::command::ClearColor { sint32: array },
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
+pub enum ClearValue {
+    Color(ClearColor),
+    DepthStencil(hal::command::ClearDepthStencil),
+}
+
+impl ClearValue {
+    pub fn to_raw(&self) -> hal::command::ClearValue {
+        match *self {
+            ClearValue::Color(ref color) => hal::command::ClearValue {
+                color: color.to_raw(),
+            },
+            ClearValue::DepthStencil(ds) => hal::command::ClearValue { depth_stencil: ds },
+        }
+    }
+}
+
+#[derive(Debug, Deserialize)]
 pub struct AttachmentRef(pub String, pub hal::pass::AttachmentLayout);
 
 #[derive(Debug, Deserialize)]
@@ -141,8 +175,7 @@ pub enum TransferCommand {
     },
     ClearImage {
         image: String,
-        color: hal::command::ClearColor,
-        depth_stencil: hal::command::ClearDepthStencil,
+        value: ClearValue,
         ranges: Vec<hal::image::SubresourceRange>,
     },
     BlitImage {
@@ -207,7 +240,7 @@ pub enum Job {
     Transfer(TransferCommand),
     Graphics {
         framebuffer: String,
-        clear_values: Vec<hal::command::ClearValue>,
+        clear_values: Vec<ClearValue>,
         pass: (String, HashMap<String, DrawPass>),
     },
     Compute {

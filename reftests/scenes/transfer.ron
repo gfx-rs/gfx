@@ -143,8 +143,7 @@
 		"clear-image": Transfer(
 			ClearImage(
 				image: "image.output",
-				color: Sfloat((0.501, 0.501, 0.501, 0.501)),
-				depth_stencil: (0.0, 0),
+				value: Color(Float((0.501, 0.501, 0.501, 0.501))),
 				ranges: [
 					(
 						aspects: (bits: 0x1), //COLOR

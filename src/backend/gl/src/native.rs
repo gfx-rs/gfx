@@ -183,7 +183,7 @@ pub struct Image {
 pub enum ImageKind {
     Surface {
         surface: Surface,
-        format: TextureFormat
+        format: TextureFormat,
     },
     Texture {
         texture: Texture,
@@ -293,7 +293,10 @@ impl SubpassDesc {
         if self.depth_stencil == Some(at_id) {
             Some(glow::DEPTH_STENCIL_ATTACHMENT)
         } else {
-            self.color_attachments.iter().position(|id| *id == at_id).map(|p| glow::COLOR_ATTACHMENT0 + p as u32)
+            self.color_attachments
+                .iter()
+                .position(|id| *id == at_id)
+                .map(|p| glow::COLOR_ATTACHMENT0 + p as u32)
         }
     }
 }

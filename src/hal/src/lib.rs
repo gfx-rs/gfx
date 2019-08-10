@@ -8,9 +8,6 @@ extern crate bitflags;
 #[macro_use]
 extern crate failure;
 
-#[cfg(feature = "mint")]
-extern crate mint;
-
 #[cfg(feature = "serde")]
 #[macro_use]
 extern crate serde;
@@ -19,44 +16,6 @@ use std::any::Any;
 use std::error::Error;
 use std::fmt;
 use std::hash::Hash;
-
-//TODO: reconsider what is publicly exported
-
-pub use self::adapter::{
-    Adapter,
-    AdapterInfo,
-    MemoryProperties,
-    MemoryType,
-    MemoryTypeId,
-    PhysicalDevice,
-    QueuePriority,
-};
-pub use self::device::Device;
-pub use self::pool::CommandPool;
-pub use self::pso::{read_spirv, DescriptorPool};
-pub use self::queue::{
-    Capability,
-    CommandQueue,
-    Compute,
-    General,
-    Graphics,
-    QueueFamily,
-    QueueGroup,
-    QueueType,
-    Submission,
-    Supports,
-    Transfer,
-};
-pub use self::window::{
-    AcquireError,
-    CompositeAlpha,
-    PresentMode,
-    Surface,
-    SurfaceCapabilities,
-    SwapImageIndex,
-    Swapchain,
-    SwapchainConfig,
-};
 
 pub mod adapter;
 pub mod buffer;
@@ -77,6 +36,20 @@ pub mod window;
 
 #[doc(hidden)]
 pub mod backend;
+
+/// Prelude module re-exports all the traits necessary to use gfx-hal.
+pub mod prelude {
+    pub use crate::{
+        adapter::PhysicalDevice as _,
+        command::CommandBuffer as _,
+        device::Device as _,
+        pool::CommandPool as _,
+        pso::DescriptorPool as _,
+        queue::{CommandQueue as _, QueueFamily as _},
+        window::{Surface as _, Swapchain as _},
+        Instance as _,
+    };
+}
 
 /// Draw vertex count.
 pub type VertexCount = u32;
@@ -482,7 +455,18 @@ pub trait Instance: Any + Send + Sync {
     /// Associated backend type of this instance.
     type Backend: Backend;
     /// Return all available adapters.
-    fn enumerate_adapters(&self) -> Vec<Adapter<Self::Backend>>;
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Self::Backend>>;
+}
+
+/// A strongly-typed index to a particular `MemoryType`.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct MemoryTypeId(pub usize);
+
+impl From<usize> for MemoryTypeId {
+    fn from(id: usize) -> Self {
+        MemoryTypeId(id)
+    }
 }
 
 /// The `Backend` trait wraps together all the types needed
@@ -491,22 +475,22 @@ pub trait Instance: Any + Send + Sync {
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send + Sync {
     //type Instance:          Instance<Self>;
-    type PhysicalDevice: PhysicalDevice<Self>;
-    type Device: Device<Self>;
+    type PhysicalDevice: adapter::PhysicalDevice<Self>;
+    type Device: device::Device<Self>;
 
-    type Surface: Surface<Self>;
-    type Swapchain: Swapchain<Self>;
+    type Surface: window::Surface<Self>;
+    type Swapchain: window::Swapchain<Self>;
 
-    type QueueFamily: QueueFamily;
-    type CommandQueue: queue::RawCommandQueue<Self>;
-    type CommandBuffer: command::RawCommandBuffer<Self>;
+    type QueueFamily: queue::QueueFamily;
+    type CommandQueue: queue::CommandQueue<Self>;
+    type CommandBuffer: command::CommandBuffer<Self>;
 
     type ShaderModule: fmt::Debug + Any + Send + Sync;
     type RenderPass: fmt::Debug + Any + Send + Sync;
     type Framebuffer: fmt::Debug + Any + Send + Sync;
 
     type Memory: fmt::Debug + Any + Send + Sync;
-    type CommandPool: pool::RawCommandPool<Self>;
+    type CommandPool: pool::CommandPool<Self>;
 
     type Buffer: fmt::Debug + Any + Send + Sync;
     type BufferView: fmt::Debug + Any + Send + Sync;
@@ -547,15 +531,3 @@ impl Error for SubmissionError {
 
 /// Submission result for DX11 backend.  Currently mostly unused.
 pub type SubmissionResult<T> = Result<T, SubmissionError>;
-
-/// Represents a combination of a logical device and the
-/// hardware queues it provides.
-///
-/// This structure is typically created using an `Adapter`.
-#[derive(Debug)]
-pub struct Gpu<B: Backend> {
-    /// Logical device for a given backend.
-    pub device: B::Device,
-    /// The command queues that the device provides.
-    pub queues: queue::Queues<B>,
-}

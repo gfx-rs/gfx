@@ -70,7 +70,7 @@ fn up_align(x: u32, alignment: u32) -> u32 {
 #[derive(Clone, Debug)]
 struct AttachmentClear {
     subpass_id: Option<pass::SubpassId>,
-    value: Option<com::ClearValueRaw>,
+    value: Option<com::ClearValue>,
     stencil_value: Option<u32>,
 }
 
@@ -565,12 +565,13 @@ impl CommandBuffer {
         let framebuffer = &state.framebuffer;
         let subpass = &state.render_pass.subpasses[self.cur_subpass];
 
-        for (&(src_attachment, _), &(dst_attachment, _)) in subpass.color_attachments
+        for (&(src_attachment, _), &(dst_attachment, _)) in subpass
+            .color_attachments
             .iter()
             .zip(subpass.resolve_attachments.iter())
         {
             if dst_attachment == pass::ATTACHMENT_UNUSED {
-                continue
+                continue;
             }
 
             let resolve_src = state.framebuffer.attachments[src_attachment];
@@ -605,7 +606,7 @@ impl CommandBuffer {
     fn clear_render_target_view(
         &self,
         rtv: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
-        color: com::ClearColorRaw,
+        color: com::ClearColor,
         rects: &[d3d12::D3D12_RECT],
     ) {
         let num_rects = rects.len() as _;
@@ -1053,7 +1054,7 @@ impl CommandBuffer {
     }
 }
 
-impl com::RawCommandBuffer<Backend> for CommandBuffer {
+impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         _flags: com::CommandBufferFlags,
@@ -1095,7 +1096,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         _first_subpass: com::SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<com::ClearValueRaw>,
+        T::Item: Borrow<com::ClearValue>,
     {
         assert_eq!(framebuffer.attachments.len(), render_pass.attachments.len());
         // Make sure that no subpass works with Present as intermediate layout.
@@ -1314,8 +1315,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         image: &r::Image,
         _: image::Layout,
-        color: com::ClearColorRaw,
-        depth_stencil: com::ClearDepthStencilRaw,
+        value: com::ClearValue,
         subresource_ranges: T,
     ) where
         T: IntoIterator,
@@ -1328,15 +1328,20 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             for layer in sub.layers.clone() {
                 if sub.aspects.contains(Aspects::COLOR) {
                     let rtv = image.clear_cv[layer as usize];
-                    self.clear_render_target_view(rtv, color, &[]);
+                    self.clear_render_target_view(rtv, value.color, &[]);
                 }
                 if sub.aspects.contains(Aspects::DEPTH) {
                     let dsv = image.clear_dv[layer as usize];
-                    self.clear_depth_stencil_view(dsv, Some(depth_stencil.depth), None, &[]);
+                    self.clear_depth_stencil_view(dsv, Some(value.depth_stencil.depth), None, &[]);
                 }
                 if sub.aspects.contains(Aspects::STENCIL) {
                     let dsv = image.clear_sv[layer as usize];
-                    self.clear_depth_stencil_view(dsv, None, Some(depth_stencil.stencil as _), &[]);
+                    self.clear_depth_stencil_view(
+                        dsv,
+                        None,
+                        Some(value.depth_stencil.stencil as _),
+                        &[],
+                    );
                 }
             }
         }

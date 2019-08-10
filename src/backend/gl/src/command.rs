@@ -140,7 +140,7 @@ pub enum Command {
         src_image: n::ImageKind,
         dst_surface: n::Surface,
         dst_format: n::TextureFormat,
-        data: command::ImageCopy
+        data: command::ImageCopy,
     },
 
     BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
@@ -157,7 +157,7 @@ pub type DrawBuffer = u32;
 struct AttachmentClear {
     subpass_id: pass::SubpassId,
     index: u32,
-    value: command::ClearValueRaw,
+    value: command::ClearValue,
 }
 
 #[derive(Debug)]
@@ -239,7 +239,7 @@ impl From<hal::Limits> for Limits {
 /// If you want to display your rendered results to a framebuffer created externally, see the
 /// `display_fb` field.
 #[derive(Debug)]
-pub struct RawCommandBuffer {
+pub struct CommandBuffer {
     pub(crate) memory: Arc<Mutex<BufferMemory>>,
     pub(crate) buf: BufferSlice,
     // Buffer id for the owning command pool.
@@ -267,7 +267,7 @@ pub struct RawCommandBuffer {
     active_attribs: usize,
 }
 
-impl RawCommandBuffer {
+impl CommandBuffer {
     pub(crate) fn new(
         fbo: Option<n::RawFrameBuffer>,
         limits: Limits,
@@ -293,7 +293,7 @@ impl RawCommandBuffer {
             }
         };
 
-        RawCommandBuffer {
+        CommandBuffer {
             memory,
             buf: BufferSlice::new(),
             id,
@@ -479,10 +479,14 @@ impl RawCommandBuffer {
 
                     // Clear color target
                     if view_format.is_color() {
-                        assert!(clear.index >= glow::COLOR_ATTACHMENT0 && clear.index <= glow::COLOR_ATTACHMENT31);
+                        assert!(
+                            clear.index >= glow::COLOR_ATTACHMENT0
+                                && clear.index <= glow::COLOR_ATTACHMENT31
+                        );
                         assert_eq!(attachment.ops.load, pass::AttachmentLoadOp::Clear);
 
                         let channel = view_format.base_format().1;
+                        let index = clear.index - glow::COLOR_ATTACHMENT0;
 
                         let cmd = match channel {
                             ChannelType::Unorm
@@ -491,28 +495,32 @@ impl RawCommandBuffer {
                             | ChannelType::Sfloat
                             | ChannelType::Srgb
                             | ChannelType::Uscaled
-                            | ChannelType::Sscaled => {
-                                Command::ClearBufferColorF(clear.index - glow::COLOR_ATTACHMENT0, unsafe { clear.value.color.float32 })
-                            }
-                            ChannelType::Uint => {
-                                Command::ClearBufferColorU(clear.index - glow::COLOR_ATTACHMENT0, unsafe { clear.value.color.uint32 })
-                            }
-                            ChannelType::Sint => {
-                                Command::ClearBufferColorI(clear.index - glow::COLOR_ATTACHMENT0, unsafe { clear.value.color.int32 })
-                            }
+                            | ChannelType::Sscaled => Command::ClearBufferColorF(index, unsafe {
+                                clear.value.color.float32
+                            }),
+                            ChannelType::Uint => Command::ClearBufferColorU(index, unsafe {
+                                clear.value.color.uint32
+                            }),
+                            ChannelType::Sint => Command::ClearBufferColorI(index, unsafe {
+                                clear.value.color.sint32
+                            }),
                         };
 
                         return Some(cmd);
                     }
 
                     // Clear depth-stencil target
-                    let depth = if view_format.is_depth() && attachment.ops.load == pass::AttachmentLoadOp::Clear {
+                    let depth = if view_format.is_depth()
+                        && attachment.ops.load == pass::AttachmentLoadOp::Clear
+                    {
                         Some(unsafe { clear.value.depth_stencil.depth })
                     } else {
                         None
                     };
 
-                    let stencil = if view_format.is_stencil() && attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear {
+                    let stencil = if view_format.is_stencil()
+                        && attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear
+                    {
                         Some(unsafe { clear.value.depth_stencil.stencil })
                     } else {
                         None
@@ -543,11 +551,11 @@ impl RawCommandBuffer {
     }
 }
 
-impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
+impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
-        _flags: hal::command::CommandBufferFlags,
-        _inheritance_info: hal::command::CommandBufferInheritanceInfo<Backend>,
+        _flags: command::CommandBufferFlags,
+        _inheritance_info: command::CommandBufferInheritanceInfo<Backend>,
     ) {
         // TODO: Implement flags!
         if self.individual_reset {
@@ -591,7 +599,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     unsafe fn pipeline_barrier<'a, T>(
         &mut self,
-        _stages: Range<hal::pso::PipelineStage>,
+        _stages: Range<pso::PipelineStage>,
         _dependencies: memory::Dependencies,
         _barriers: T,
     ) where
@@ -621,7 +629,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         _first_subpass: command::SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<command::ClearValueRaw>,
+        T::Item: Borrow<command::ClearValue>,
     {
         // TODO: load ops: clearing strategy
         //  1.  < GL 3.0 / GL ES 2.0: glClear, only single color attachment?
@@ -650,10 +658,15 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                     return None;
                 };
 
-                let (subpass, index) = render_pass.subpasses.iter().enumerate().filter_map(|(i, sp)| {
-                    let index = sp.attachment_using(id)?;
-                    Some((i, index))
-                }).next()?;
+                let (subpass, index) = render_pass
+                    .subpasses
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, sp)| {
+                        let index = sp.attachment_using(id)?;
+                        Some((i, index))
+                    })
+                    .next()?;
                 Some(AttachmentClear {
                     subpass_id: subpass,
                     index,
@@ -685,8 +698,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         &mut self,
         image: &n::Image,
         _: image::Layout,
-        color: command::ClearColorRaw,
-        _depth_stencil: command::ClearDepthStencilRaw,
+        value: command::ClearValue,
         _subresource_ranges: T,
     ) where
         T: IntoIterator,
@@ -696,6 +708,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
         //  1.  < GL 3.0 / GL ES 3.0: glClear
         //  2.  < GL 4.4: glClearBuffer
         //  3. >= GL 4.4: glClearTexSubImage
+        let color = value.color;
 
         match self.fbo {
             Some(fbo) => {
@@ -728,7 +741,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                         self.push_cmd(Command::ClearBufferColorF(0, color.float32))
                     }
                     ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, color.uint32)),
-                    ChannelType::Sint => self.push_cmd(Command::ClearBufferColorI(0, color.int32)),
+                    ChannelType::Sint => self.push_cmd(Command::ClearBufferColorI(0, color.sint32)),
                 }
             }
             None => {
@@ -1016,10 +1029,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                             n::BindingTypes::StorageBuffers => glow::SHADER_STORAGE_BUFFER,
                             n::BindingTypes::Images => panic!("Wrong desc set binding"),
                         };
-                        for binding in drd
-                            .get_binding(*btype, set, *binding)
-                            .unwrap()
-                        {
+                        for binding in drd.get_binding(*btype, set, *binding).unwrap() {
                             self.push_cmd(Command::BindBufferRange(
                                 glow_btype,
                                 *binding,
@@ -1165,7 +1175,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
                     src_image: src.kind,
                     dst_surface: surface,
                     dst_format: format,
-                    data: r
+                    data: r,
                 },
                 n::ImageKind::Texture {
                     texture, target, ..
@@ -1196,8 +1206,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             let mut r = region.borrow().clone();
             r.buffer_offset += src_range.start;
             let cmd = match dst.kind {
-                n::ImageKind::Surface { surface, .. } =>
-                    Command::CopyBufferToSurface(src_raw, surface, r),
+                n::ImageKind::Surface { surface, .. } => {
+                    Command::CopyBufferToSurface(src_raw, surface, r)
+                }
                 n::ImageKind::Texture {
                     texture,
                     target,
@@ -1237,8 +1248,9 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
             let mut r = region.borrow().clone();
             r.buffer_offset += dst_range.start;
             let cmd = match src.kind {
-                n::ImageKind::Surface { surface, .. } =>
-                    Command::CopySurfaceToBuffer(surface, dst_raw, r),
+                n::ImageKind::Surface { surface, .. } => {
+                    Command::CopySurfaceToBuffer(surface, dst_raw, r)
+                }
                 n::ImageKind::Texture {
                     texture,
                     target,
@@ -1435,7 +1447,7 @@ impl command::RawCommandBuffer<Backend> for RawCommandBuffer {
 
     unsafe fn execute_commands<'a, T, I>(&mut self, _buffers: I)
     where
-        T: 'a + Borrow<RawCommandBuffer>,
+        T: 'a + Borrow<CommandBuffer>,
         I: IntoIterator<Item = &'a T>,
     {
         unimplemented!()

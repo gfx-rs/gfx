@@ -17,12 +17,8 @@ extern crate winapi;
 extern crate winit;
 extern crate wio;
 
-use hal::backend::RawQueueGroup;
-use hal::command::{ClearColor, ClearColorRaw};
-use hal::format::ChannelType;
-use hal::queue::{QueueFamilyId, Queues};
-use hal::range::RangeArg;
 use hal::{
+    adapter,
     buffer,
     command,
     error,
@@ -32,12 +28,17 @@ use hal::{
     pass,
     pso,
     query,
-    CompositeAlpha,
-    Features,
+    queue,
+    range::RangeArg,
+    window,
+    DrawCount,
+    IndexCount,
+    InstanceCount,
     Limits,
-    QueueType,
+    VertexCount,
+    VertexOffset,
+    WorkGroupCount,
 };
-use hal::{DrawCount, IndexCount, InstanceCount, VertexCount, VertexOffset, WorkGroupCount};
 
 use range_alloc::RangeAllocator;
 
@@ -163,13 +164,12 @@ impl Instance {
 fn get_features(
     _device: ComPtr<d3d11::ID3D11Device>,
     _feature_level: d3dcommon::D3D_FEATURE_LEVEL,
-) -> Features {
-    let features = Features::ROBUST_BUFFER_ACCESS
-        | Features::FULL_DRAW_INDEX_U32
-        | Features::FORMAT_BC
-        | Features::INSTANCE_RATE
-        | Features::SAMPLER_MIP_LOD_BIAS;
-    features
+) -> hal::Features {
+    hal::Features::ROBUST_BUFFER_ACCESS
+        | hal::Features::FULL_DRAW_INDEX_U32
+        | hal::Features::FORMAT_BC
+        | hal::Features::INSTANCE_RATE
+        | hal::Features::SAMPLER_MIP_LOD_BIAS
 }
 
 fn get_format_properties(
@@ -282,7 +282,7 @@ fn get_format_properties(
 impl hal::Instance for Instance {
     type Backend = Backend;
 
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         let mut adapters = Vec::new();
         let mut idx = 0;
 
@@ -323,19 +323,19 @@ impl hal::Instance for Instance {
                 )
             };
 
-            let memory_properties = hal::MemoryProperties {
+            let memory_properties = adapter::MemoryProperties {
                 memory_types: vec![
-                    hal::MemoryType {
+                    adapter::MemoryType {
                         properties: Properties::DEVICE_LOCAL,
                         heap_index: 0,
                     },
-                    hal::MemoryType {
+                    adapter::MemoryType {
                         properties: Properties::CPU_VISIBLE
                             | Properties::COHERENT
                             | Properties::CPU_CACHED,
                         heap_index: 1,
                     },
-                    hal::MemoryType {
+                    adapter::MemoryType {
                         properties: Properties::CPU_VISIBLE | Properties::CPU_CACHED,
                         heap_index: 1,
                     },
@@ -406,7 +406,7 @@ impl hal::Instance for Instance {
 
             info!("{:#?}", info);
 
-            adapters.push(hal::Adapter {
+            adapters.push(adapter::Adapter {
                 info,
                 physical_device,
                 queue_families: vec![QueueFamily],
@@ -424,7 +424,7 @@ pub struct PhysicalDevice {
     adapter: ComPtr<IDXGIAdapter>,
     features: hal::Features,
     limits: hal::Limits,
-    memory_properties: hal::MemoryProperties,
+    memory_properties: adapter::MemoryProperties,
     #[derivative(Debug = "ignore")]
     format_properties: [format::Properties; format::NUM_FORMATS],
 }
@@ -491,12 +491,12 @@ fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL
 }
 
 // TODO: PhysicalDevice
-impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
-        families: &[(&QueueFamily, &[hal::QueuePriority])],
+        families: &[(&QueueFamily, &[queue::QueuePriority])],
         requested_features: hal::Features,
-    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, error::DeviceCreationError> {
         let (device, cxt) = {
             if !self.features().contains(requested_features) {
                 return Err(error::DeviceCreationError::MissingFeature);
@@ -543,24 +543,25 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         let device = device::Device::new(device, cxt, self.memory_properties.clone());
 
         // TODO: deferred context => 1 cxt/queue?
-        let queues = Queues::new(
-            families
-                .into_iter()
-                .map(|&(family, prio)| {
-                    assert_eq!(prio.len(), 1);
-                    let mut group = RawQueueGroup::new(family.clone());
+        let queue_groups = families
+            .into_iter()
+            .map(|&(family, prio)| {
+                assert_eq!(prio.len(), 1);
+                let mut group = queue::QueueGroup::new(queue::QueueFamilyId(0));
 
-                    // TODO: multiple queues?
-                    let queue = CommandQueue {
-                        context: device.context.clone(),
-                    };
-                    group.add_queue(queue);
-                    group
-                })
-                .collect(),
-        );
+                // TODO: multiple queues?
+                let queue = CommandQueue {
+                    context: device.context.clone(),
+                };
+                group.add_queue(queue);
+                group
+            })
+            .collect();
 
-        Ok(hal::Gpu { device, queues })
+        Ok(adapter::Gpu {
+            device,
+            queue_groups,
+        })
     }
 
     fn format_properties(&self, fmt: Option<format::Format>) -> format::Properties {
@@ -667,11 +668,11 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         })
     }
 
-    fn memory_properties(&self) -> hal::MemoryProperties {
+    fn memory_properties(&self) -> adapter::MemoryProperties {
         self.memory_properties.clone()
     }
 
-    fn features(&self) -> Features {
+    fn features(&self) -> hal::Features {
         self.features
     }
 
@@ -693,7 +694,7 @@ pub struct Surface {
 unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
 
-impl hal::Surface<Backend> for Surface {
+impl window::Surface<Backend> for Surface {
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         true
         /*match queue_family {
@@ -706,11 +707,11 @@ impl hal::Surface<Backend> for Surface {
         &self,
         _: &PhysicalDevice,
     ) -> (
-        hal::SurfaceCapabilities,
+        window::SurfaceCapabilities,
         Option<Vec<format::Format>>,
-        Vec<hal::PresentMode>,
+        Vec<window::PresentMode>,
     ) {
-        let extent = hal::window::Extent2D {
+        let extent = window::Extent2D {
             width: self.width,
             height: self.height,
         };
@@ -718,13 +719,13 @@ impl hal::Surface<Backend> for Surface {
         // TODO: flip swap effects require dx11.1/windows8
         // NOTE: some swap effects affect msaa capabilities..
         // TODO: _DISCARD swap effects can only have one image?
-        let capabilities = hal::SurfaceCapabilities {
+        let capabilities = window::SurfaceCapabilities {
             image_count: 1 ..= 16, // TODO:
             current_extent: Some(extent),
             extents: extent ..= extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
-            composite_alpha: CompositeAlpha::OPAQUE, //TODO
+            composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
         };
 
         let formats = vec![
@@ -737,7 +738,7 @@ impl hal::Surface<Backend> for Surface {
         ];
 
         let present_modes = vec![
-            hal::PresentMode::Fifo, //TODO
+            window::PresentMode::Fifo, //TODO
         ];
 
         (capabilities, Some(formats), present_modes)
@@ -754,13 +755,13 @@ pub struct Swapchain {
 unsafe impl Send for Swapchain {}
 unsafe impl Sync for Swapchain {}
 
-impl hal::Swapchain<Backend> for Swapchain {
+impl window::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
         _semaphore: Option<&Semaphore>,
         _fence: Option<&Fence>,
-    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
+    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
         // TODO: non-`_DISCARD` swap effects have more than one buffer, `FLIP`
         //       effects are dxgi 1.3 (w10+?) in which case there is
         //       `GetCurrentBackBufferIndex()` on the swapchain
@@ -771,15 +772,15 @@ impl hal::Swapchain<Backend> for Swapchain {
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily;
 
-impl hal::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> QueueType {
-        QueueType::General
+impl queue::QueueFamily for QueueFamily {
+    fn queue_type(&self) -> queue::QueueType {
+        queue::QueueType::General
     }
     fn max_queues(&self) -> usize {
         1
     }
-    fn id(&self) -> QueueFamilyId {
-        QueueFamilyId(0)
+    fn id(&self) -> queue::QueueFamilyId {
+        queue::QueueFamilyId(0)
     }
 }
 
@@ -793,10 +794,10 @@ pub struct CommandQueue {
 unsafe impl Send for CommandQueue {}
 unsafe impl Sync for CommandQueue {}
 
-impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
+impl queue::CommandQueue<Backend> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
-        submission: hal::queue::Submission<Ic, Iw, Is>,
+        submission: queue::Submission<Ic, Iw, Is>,
         fence: Option<&Fence>,
     ) where
         T: 'a + Borrow<CommandBuffer>,
@@ -842,10 +843,10 @@ impl hal::queue::RawCommandQueue<Backend> for CommandQueue {
         &mut self,
         swapchains: Is,
         _wait_semaphores: Iw,
-    ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError>
+    ) -> Result<Option<window::Suboptimal>, window::PresentError>
     where
         W: 'a + Borrow<Swapchain>,
-        Is: IntoIterator<Item = (&'a W, hal::SwapImageIndex)>,
+        Is: IntoIterator<Item = (&'a W, window::SwapImageIndex)>,
         S: 'a + Borrow<Semaphore>,
         Iw: IntoIterator<Item = &'a S>,
     {
@@ -1437,7 +1438,7 @@ impl CommandBuffer {
     }
 }
 
-impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
+impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         _flags: command::CommandBufferFlags,
@@ -1472,7 +1473,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         _first_subpass: command::SubpassContents,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<command::ClearValueRaw>,
+        T::Item: Borrow<command::ClearValue>,
     {
         use pass::AttachmentLoadOp as Alo;
 
@@ -1482,28 +1483,11 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         for (idx, attachment) in render_pass.attachments.iter().enumerate() {
             //let attachment = render_pass.attachments[attachment_ref];
             let format = attachment.format.unwrap();
-            let channel_type = format.base_format().1;
-
-            fn typed_clear_color(ty: ChannelType, raw_clear: ClearColorRaw) -> ClearColor {
-                match ty {
-                    ChannelType::Unorm
-                    | ChannelType::Snorm
-                    | ChannelType::Ufloat
-                    | ChannelType::Sfloat
-                    | ChannelType::Uscaled
-                    | ChannelType::Sscaled
-                    | ChannelType::Srgb => ClearColor::Sfloat(unsafe { raw_clear.float32 }),
-
-                    ChannelType::Uint => ClearColor::Uint(unsafe { raw_clear.uint32 }),
-
-                    ChannelType::Sint => ClearColor::Sint(unsafe { raw_clear.int32 }),
-                }
-            }
 
             let subpass_id = render_pass.subpasses.iter().position(|sp| sp.is_using(idx));
 
             if attachment.has_clears() {
-                let raw_clear_value = *clear_iter.next().unwrap().borrow();
+                let value = *clear_iter.next().unwrap().borrow();
 
                 match (attachment.ops.load, attachment.stencil_ops.load) {
                     (Alo::Clear, Alo::Clear) if format.is_depth() => {
@@ -1511,8 +1495,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             subpass_id,
                             attachment_id: idx,
                             raw: command::AttachmentClear::DepthStencil {
-                                depth: Some(unsafe { raw_clear_value.depth_stencil.depth }),
-                                stencil: Some(unsafe { raw_clear_value.depth_stencil.stencil }),
+                                depth: Some(value.depth_stencil.depth),
+                                stencil: Some(value.depth_stencil.stencil),
                             },
                         });
                     }
@@ -1522,9 +1506,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             attachment_id: idx,
                             raw: command::AttachmentClear::Color {
                                 index: idx,
-                                value: typed_clear_color(channel_type, unsafe {
-                                    raw_clear_value.color
-                                }),
+                                value: value.color,
                             },
                         });
 
@@ -1533,7 +1515,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             attachment_id: idx,
                             raw: command::AttachmentClear::DepthStencil {
                                 depth: None,
-                                stencil: Some(unsafe { raw_clear_value.depth_stencil.stencil }),
+                                stencil: Some(value.depth_stencil.stencil),
                             },
                         });
                     }
@@ -1542,7 +1524,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             subpass_id,
                             attachment_id: idx,
                             raw: command::AttachmentClear::DepthStencil {
-                                depth: Some(unsafe { raw_clear_value.depth_stencil.depth }),
+                                depth: Some(value.depth_stencil.depth),
                                 stencil: None,
                             },
                         });
@@ -1553,9 +1535,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             attachment_id: idx,
                             raw: command::AttachmentClear::Color {
                                 index: idx,
-                                value: typed_clear_color(channel_type, unsafe {
-                                    raw_clear_value.color
-                                }),
+                                value: value.color,
                             },
                         });
                     }
@@ -1565,7 +1545,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             attachment_id: idx,
                             raw: command::AttachmentClear::DepthStencil {
                                 depth: None,
-                                stencil: Some(unsafe { raw_clear_value.depth_stencil.stencil }),
+                                stencil: Some(value.depth_stencil.stencil),
                             },
                         });
                     }
@@ -1621,8 +1601,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
         &mut self,
         image: &Image,
         _: image::Layout,
-        color: command::ClearColorRaw,
-        depth_stencil: command::ClearDepthStencilRaw,
+        value: command::ClearValue,
         subresource_ranges: T,
     ) where
         T: IntoIterator,
@@ -1638,7 +1617,7 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                         unsafe {
                             self.context.ClearRenderTargetView(
                                 image.get_rtv(level, layer).unwrap().as_raw(),
-                                &color.float32,
+                                &value.color.float32,
                             );
                         }
                     }
@@ -1661,8 +1640,8 @@ impl hal::command::RawCommandBuffer<Backend> for CommandBuffer {
                             self.context.ClearDepthStencilView(
                                 image.get_dsv(level, layer).unwrap().as_raw(),
                                 depth_stencil_flags,
-                                depth_stencil.depth,
-                                depth_stencil.stencil as _,
+                                value.depth_stencil.depth,
+                                value.depth_stencil.stencil as _,
                             );
                         }
                     }
@@ -2406,7 +2385,7 @@ unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
 
 impl Memory {
-    pub fn resolve<R: hal::range::RangeArg<u64>>(&self, range: &R) -> Range<u64> {
+    pub fn resolve<R: RangeArg<u64>>(&self, range: &R) -> Range<u64> {
         *range.start().unwrap_or(&0) .. *range.end().unwrap_or(&self.size)
     }
 
@@ -2503,12 +2482,12 @@ pub struct CommandPool {
 unsafe impl Send for CommandPool {}
 unsafe impl Sync for CommandPool {}
 
-impl hal::pool::RawCommandPool<Backend> for CommandPool {
+impl hal::pool::CommandPool<Backend> for CommandPool {
     unsafe fn reset(&mut self, _release_resources: bool) {
         //unimplemented!()
     }
 
-    fn allocate_one(&mut self, _level: command::RawLevel) -> CommandBuffer {
+    fn allocate_one(&mut self, _level: command::Level) -> CommandBuffer {
         CommandBuffer::create_deferred(self.device.clone(), self.internal.clone())
     }
 
@@ -2985,7 +2964,7 @@ impl DescriptorPool {
     }
 }
 
-impl hal::DescriptorPool<Backend> for DescriptorPool {
+impl pso::DescriptorPool<Backend> for DescriptorPool {
     unsafe fn allocate_set(
         &mut self,
         layout: &DescriptorSetLayout,

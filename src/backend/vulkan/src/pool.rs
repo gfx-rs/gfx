@@ -6,8 +6,8 @@ use std::sync::Arc;
 
 use crate::command::CommandBuffer;
 use crate::conv;
-use crate::hal::{command, pool};
 use crate::{Backend, RawDevice};
+use hal::{command, pool};
 
 #[derive(Debug)]
 pub struct RawCommandPool {
@@ -15,7 +15,7 @@ pub struct RawCommandPool {
     pub(crate) device: Arc<RawDevice>,
 }
 
-impl pool::RawCommandPool<Backend> for RawCommandPool {
+impl pool::CommandPool<Backend> for RawCommandPool {
     unsafe fn reset(&mut self, release_resources: bool) {
         let flags = if release_resources {
             vk::CommandPoolResetFlags::RELEASE_RESOURCES
@@ -26,7 +26,7 @@ impl pool::RawCommandPool<Backend> for RawCommandPool {
         assert_eq!(Ok(()), self.device.0.reset_command_pool(self.raw, flags));
     }
 
-    fn allocate_vec(&mut self, num: usize, level: command::RawLevel) -> Vec<CommandBuffer> {
+    fn allocate_vec(&mut self, num: usize, level: command::Level) -> Vec<CommandBuffer> {
         let info = vk::CommandBufferAllocateInfo {
             s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
             p_next: ptr::null(),

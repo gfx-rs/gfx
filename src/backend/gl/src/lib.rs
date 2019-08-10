@@ -17,8 +17,7 @@ use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 
-use crate::hal::queue::{QueueFamilyId, Queues};
-use crate::hal::{buffer, error, image, memory, pso};
+use crate::hal::{adapter, buffer, error, image, memory, pso, queue as q};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -51,7 +50,6 @@ pub use glow::native::Context as GlContext;
 #[cfg(target_arch = "wasm32")]
 pub use glow::web::Context as GlContext;
 use glow::Context;
-
 
 
 pub(crate) struct GlContainer {
@@ -135,10 +133,10 @@ impl hal::Backend for Backend {
 
     type QueueFamily = QueueFamily;
     type CommandQueue = queue::CommandQueue;
-    type CommandBuffer = command::RawCommandBuffer;
+    type CommandBuffer = command::CommandBuffer;
 
     type Memory = native::Memory;
-    type CommandPool = pool::RawCommandPool;
+    type CommandPool = pool::CommandPool;
 
     type ShaderModule = native::ShaderModule;
     type RenderPass = native::RenderPass;
@@ -258,7 +256,7 @@ struct Share {
     private_caps: info::PrivateCaps,
     // Indicates if there is an active logical device.
     open: Cell<bool>,
-    memory_types: Vec<(hal::MemoryType, MemoryUsage)>,
+    memory_types: Vec<(adapter::MemoryType, MemoryUsage)>,
 }
 
 impl Share {
@@ -401,7 +399,7 @@ type DeviceContext = ();
 
 impl PhysicalDevice {
     #[allow(unused)]
-    fn new_adapter(instance_context: DeviceContext, gl: GlContainer) -> hal::Adapter<Backend> {
+    fn new_adapter(instance_context: DeviceContext, gl: GlContainer) -> adapter::Adapter<Backend> {
         // query information
         let (info, features, legacy_features, limits, private_caps) = info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
@@ -420,7 +418,7 @@ impl PhysicalDevice {
 
         let mut memory_types = Vec::new();
 
-        let mut add_memory_type = |memory_type: hal::MemoryType| {
+        let mut add_memory_type = |memory_type: adapter::MemoryType| {
             if private_caps.index_buffer_role_change {
                 // If `index_buffer_role_change` is true, we can use a buffer for any role
                 memory_types.push((memory_type, MemoryUsage::Buffer(buffer::Usage::all())));
@@ -439,33 +437,33 @@ impl PhysicalDevice {
         // Mimicking vulkan, memory types with more flags should come before those with fewer flags
         if private_caps.map && private_caps.buffer_storage {
             // Coherent memory is only available if we have `glBufferStorage`
-            add_memory_type(hal::MemoryType {
+            add_memory_type(adapter::MemoryType {
                 properties: memory::Properties::CPU_VISIBLE
                     | memory::Properties::CPU_CACHED
                     | memory::Properties::COHERENT,
                 heap_index: CPU_VISIBLE_HEAP,
             });
-            add_memory_type(hal::MemoryType {
+            add_memory_type(adapter::MemoryType {
                 properties: memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT,
                 heap_index: CPU_VISIBLE_HEAP,
             });
         }
 
         if private_caps.map || private_caps.emulate_map {
-            add_memory_type(hal::MemoryType {
+            add_memory_type(adapter::MemoryType {
                 properties: memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED,
                 heap_index: CPU_VISIBLE_HEAP,
             });
         }
 
-        add_memory_type(hal::MemoryType {
+        add_memory_type(adapter::MemoryType {
             properties: memory::Properties::DEVICE_LOCAL,
             heap_index: DEVICE_LOCAL_HEAP,
         });
 
         // There is always a single device-local memory type for images
         memory_types.push((
-            hal::MemoryType {
+            adapter::MemoryType {
                 properties: memory::Properties::DEVICE_LOCAL,
                 heap_index: DEVICE_LOCAL_HEAP,
             },
@@ -553,8 +551,8 @@ impl PhysicalDevice {
             0
         };
 
-        hal::Adapter {
-            info: hal::AdapterInfo {
+        adapter::Adapter {
+            info: adapter::AdapterInfo {
                 name,
                 vendor: vendor_id,
                 device: 0,
@@ -571,12 +569,12 @@ impl PhysicalDevice {
     }
 }
 
-impl hal::PhysicalDevice<Backend> for PhysicalDevice {
+impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
-        families: &[(&QueueFamily, &[hal::QueuePriority])],
+        families: &[(&QueueFamily, &[q::QueuePriority])],
         requested_features: hal::Features,
-    ) -> Result<hal::Gpu<Backend>, error::DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, error::DeviceCreationError> {
         // Can't have multiple logical devices at the same time
         // as they would share the same context.
         if self.0.open.get() {
@@ -622,20 +620,18 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
             panic!("Error opening adapter: {:?}", err);
         }
 
-        Ok(hal::Gpu {
+        Ok(adapter::Gpu {
             device: Device::new(self.0.clone()),
-            queues: Queues::new(
-                families
-                    .into_iter()
-                    .map(|&(proto_family, priorities)| {
-                        assert_eq!(priorities.len(), 1);
-                        let mut family = hal::backend::RawQueueGroup::new(proto_family.clone());
-                        let queue = queue::CommandQueue::new(&self.0, vao);
-                        family.add_queue(queue);
-                        family
-                    })
-                    .collect(),
-            ),
+            queue_groups: families
+                .into_iter()
+                .map(|&(_family, priorities)| {
+                    assert_eq!(priorities.len(), 1);
+                    let mut family = q::QueueGroup::new(q::QueueFamilyId(0));
+                    let queue = queue::CommandQueue::new(&self.0, vao);
+                    family.add_queue(queue);
+                    family
+                })
+                .collect(),
         })
     }
 
@@ -672,8 +668,8 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
         })
     }
 
-    fn memory_properties(&self) -> hal::MemoryProperties {
-        hal::MemoryProperties {
+    fn memory_properties(&self) -> adapter::MemoryProperties {
+        adapter::MemoryProperties {
             memory_types: self
                 .0
                 .memory_types
@@ -697,15 +693,15 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily;
 
-impl hal::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> hal::QueueType {
-        hal::QueueType::General
+impl q::QueueFamily for QueueFamily {
+    fn queue_type(&self) -> q::QueueType {
+        q::QueueType::General
     }
     fn max_queues(&self) -> usize {
         1
     }
-    fn id(&self) -> QueueFamilyId {
-        QueueFamilyId(0)
+    fn id(&self) -> q::QueueFamilyId {
+        q::QueueFamilyId(0)
     }
 }
 
@@ -719,7 +715,7 @@ pub enum Instance {
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 impl hal::Instance for Instance {
     type Backend = Backend;
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         match self {
             Instance::Headless(instance) => instance.enumerate_adapters(),
             Instance::Surface(instance) => instance.enumerate_adapters(),

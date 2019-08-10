@@ -368,13 +368,13 @@ macro_rules! spec_const_list {
 /// # Examples
 /// ```no_run
 /// let mut file = std::fs::File::open("/path/to/shader.spv").unwrap();
-/// let words = gfx_hal::read_spirv(&mut file).unwrap();
+/// let words = gfx_hal::pso::read_spirv(&mut file).unwrap();
 /// ```
 /// ```
 /// const SPIRV: &[u8] = &[
 ///     0x03, 0x02, 0x23, 0x07, // ...
 /// ];
-/// let words = gfx_hal::read_spirv(std::io::Cursor::new(&SPIRV[..])).unwrap();
+/// let words = gfx_hal::pso::read_spirv(std::io::Cursor::new(&SPIRV[..])).unwrap();
 /// ```
 pub fn read_spirv<R: io::Read + io::Seek>(mut x: R) -> io::Result<Vec<u32>> {
     let size = x.seek(io::SeekFrom::End(0))?;

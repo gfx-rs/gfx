@@ -14,7 +14,6 @@ use hal::{buffer, image, pso, Primitive};
 
 use native::descriptor::ShaderVisibility;
 
-
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::Format::*;
 
@@ -304,8 +303,7 @@ pub fn map_render_targets(
     };
     let mut targets = [dummy_target; 8];
 
-    for (target, color_desc) in targets.iter_mut().zip(color_targets.iter())
-    {
+    for (target, color_desc) in targets.iter_mut().zip(color_targets.iter()) {
         target.RenderTargetWriteMask = color_desc.mask.bits() as UINT8;
         if let Some(ref blend) = color_desc.blend {
             let (color_op, color_src, color_dst) = map_blend_op(blend.color);

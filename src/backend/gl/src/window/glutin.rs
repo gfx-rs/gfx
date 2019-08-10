@@ -47,18 +47,13 @@
 //! }
 //! ```
 
-use crate::hal::window::Extent2D;
-use crate::hal::{self, format as f, image, memory, CompositeAlpha};
-use crate::{native, Backend as B, Device, GlContainer, PhysicalDevice, QueueFamily, Starc};
-
-use glow::Context;
+use crate::{native, Backend as B, GlContainer, PhysicalDevice, QueueFamily, Starc};
+use hal::{adapter::Adapter, format as f, image, window};
 
 use glutin;
 
 fn get_window_extent(window: &glutin::window::Window) -> image::Extent {
-    let px = window
-        .inner_size()
-        .to_physical(window.hidpi_factor());
+    let px = window.inner_size().to_physical(window.hidpi_factor());
     image::Extent {
         width: px.width as image::Size,
         height: px.height as image::Size,
@@ -71,18 +66,18 @@ pub struct Swapchain {
     // Underlying window, required for presentation
     pub(crate) context: Starc<glutin::RawContext<glutin::PossiblyCurrent>>,
     // Extent because the window lies
-    pub(crate) extent: Extent2D,
+    pub(crate) extent: window::Extent2D,
     ///
     pub(crate) fbos: Vec<native::RawFrameBuffer>,
 }
 
-impl hal::Swapchain<B> for Swapchain {
+impl window::Swapchain<B> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
         _semaphore: Option<&native::Semaphore>,
         _fence: Option<&native::Fence>,
-    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
+    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
         // TODO: sync
         Ok((0, None))
     }
@@ -126,35 +121,35 @@ impl Surface {
     }
 }
 
-impl hal::Surface<B> for Surface {
+impl window::Surface<B> for Surface {
     fn compatibility(
         &self,
         _: &PhysicalDevice,
     ) -> (
-        hal::SurfaceCapabilities,
+        window::SurfaceCapabilities,
         Option<Vec<f::Format>>,
-        Vec<hal::PresentMode>,
+        Vec<window::PresentMode>,
     ) {
-        let caps = hal::SurfaceCapabilities {
+        let caps = window::SurfaceCapabilities {
             image_count: if self.context.get_pixel_format().double_buffer {
                 2 ..= 2
             } else {
                 1 ..= 1
             },
             current_extent: None,
-            extents: hal::window::Extent2D {
+            extents: window::Extent2D {
                 width: 4,
                 height: 4,
-            } ..= hal::window::Extent2D {
+            } ..= window::Extent2D {
                 width: 4096,
                 height: 4096,
             },
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
-            composite_alpha: CompositeAlpha::OPAQUE, //TODO
+            composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
         };
         let present_modes = vec![
-            hal::PresentMode::Fifo, //TODO
+            window::PresentMode::Fifo, //TODO
         ];
 
         (caps, Some(self.swapchain_formats()), present_modes)
@@ -167,7 +162,7 @@ impl hal::Surface<B> for Surface {
 
 impl hal::Instance for Surface {
     type Backend = B;
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
+    fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
         let adapter = PhysicalDevice::new_adapter(
             (),
             GlContainer::from_fn_proc(|s| self.context.get_proc_address(s) as *const _),
@@ -208,7 +203,7 @@ impl Headless {
 
 impl hal::Instance for Headless {
     type Backend = B;
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<B>> {
+    fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
         let adapter = PhysicalDevice::new_adapter(
             (),
             GlContainer::from_fn_proc(|s| self.0.get_proc_address(s) as *const _),

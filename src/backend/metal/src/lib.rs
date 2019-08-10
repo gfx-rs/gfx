@@ -58,11 +58,12 @@ extern crate objc;
 #[macro_use]
 extern crate log;
 
-use hal;
-use hal::queue::QueueFamilyId;
+use hal::{
+    adapter::{Adapter, AdapterInfo, DeviceType},
+    queue::{QueueFamilyId, QueueType},
+};
 use range_alloc::RangeAllocator;
 
-use cocoa;
 use cocoa::foundation::NSInteger;
 use core_graphics::base::CGFloat;
 use core_graphics::geometry::CGRect;
@@ -126,9 +127,9 @@ const MAX_BOUND_DESCRIPTOR_SETS: usize = 8;
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily {}
 
-impl hal::QueueFamily for QueueFamily {
-    fn queue_type(&self) -> hal::QueueType {
-        hal::QueueType::General
+impl hal::queue::QueueFamily for QueueFamily {
+    fn queue_type(&self) -> QueueType {
+        QueueType::General
     }
     fn max_queues(&self) -> usize {
         1
@@ -211,23 +212,23 @@ pub struct Instance {
 impl hal::Instance for Instance {
     type Backend = Backend;
 
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+    fn enumerate_adapters(&self) -> Vec<Adapter<Backend>> {
         let devices = metal::Device::all();
-        let mut adapters: Vec<hal::Adapter<Backend>> = devices
+        let mut adapters: Vec<Adapter<Backend>> = devices
             .into_iter()
             .map(|dev| {
                 let name = dev.name().into();
                 let shared = Shared::new(dev, &self.experiments);
                 let physical_device = device::PhysicalDevice::new(Arc::new(shared));
-                hal::Adapter {
-                    info: hal::AdapterInfo {
+                Adapter {
+                    info: AdapterInfo {
                         name,
                         vendor: 0,
                         device: 0,
                         device_type: if physical_device.shared.private_caps.low_power {
-                            hal::adapter::DeviceType::IntegratedGpu
+                            DeviceType::IntegratedGpu
                         } else {
-                            hal::adapter::DeviceType::DiscreteGpu
+                            DeviceType::DiscreteGpu
                         },
                     },
                     physical_device,
@@ -336,7 +337,7 @@ impl Instance {
             let window: cocoa::base::id = msg_send![view, window];
             if !window.is_null() {
                 let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
-                let() = msg_send![layer, setContentsScale: scale_factor];
+                let () = msg_send![layer, setContentsScale: scale_factor];
             }
             layer
         };
@@ -716,7 +717,10 @@ impl PrivateCapabilities {
             argument_buffers: experiments.argument_buffers
                 && Self::supports_any(&device, ARGUMENT_BUFFER_SUPPORT),
             shared_textures: !os_is_mac,
-            mutable_comparison_samplers: Self::supports_any(&device, MUTABLE_COMPARISON_SAMPLER_SUPPORT),
+            mutable_comparison_samplers: Self::supports_any(
+                &device,
+                MUTABLE_COMPARISON_SAMPLER_SUPPORT,
+            ),
             base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
             dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
             low_power: !os_is_mac || device.is_low_power(),

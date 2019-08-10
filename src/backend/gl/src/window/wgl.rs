@@ -7,9 +7,7 @@ use std::{
     ptr,
 };
 
-use hal::window::Extent2D;
-use hal::{self, format as f, image, CompositeAlpha};
-use hal::format::Format;
+use hal::{adapter::Adapter, format as f, image, window};
 
 use lazy_static::lazy_static;
 use winapi::shared::minwindef::*;
@@ -195,7 +193,7 @@ impl Instance {
 impl hal::Instance for Instance {
     type Backend = Backend;
 
-    fn enumerate_adapters(&self) -> Vec<hal::Adapter<Backend>> {
+    fn enumerate_adapters(&self) -> Vec<Adapter<Backend>> {
         let gl_container = GlContainer::from_fn_proc(|s| unsafe {
             let sym = CString::new(s.as_bytes()).unwrap();
             let addr = wgl_sys::GetProcAddress(sym.as_ptr()) as *const ();
@@ -220,39 +218,39 @@ unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
 
 impl Surface {
-    fn get_extent(&self) -> hal::window::Extent2D {
+    fn get_extent(&self) -> window::Extent2D {
         let mut rect: RECT = unsafe { mem::uninitialized() };
         unsafe {
             GetClientRect(self.hwnd, &mut rect);
         }
-        hal::window::Extent2D {
+        window::Extent2D {
             width: (rect.right - rect.left) as _,
             height: (rect.bottom - rect.top) as _,
         }
     }
 }
 
-impl hal::Surface<Backend> for Surface {
+impl window::Surface<Backend> for Surface {
     fn compatibility(
         &self,
         physical_device: &PhysicalDevice,
     ) -> (
-        hal::SurfaceCapabilities,
-        Option<Vec<Format>>,
-        Vec<hal::PresentMode>,
+        window::SurfaceCapabilities,
+        Option<Vec<f::Format>>,
+        Vec<window::PresentMode>,
     ) {
         let extent = self.get_extent();
 
-        let caps = hal::SurfaceCapabilities {
+        let caps = window::SurfaceCapabilities {
             image_count: 2 ..= 2,
             current_extent: Some(extent),
             extents: extent ..= extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
-            composite_alpha: CompositeAlpha::OPAQUE, //TODO
+            composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
         };
         let present_modes = vec![
-            hal::PresentMode::Fifo, //TODO
+            window::PresentMode::Fifo, //TODO
         ];
 
         (
@@ -271,7 +269,7 @@ impl hal::Surface<Backend> for Surface {
 pub struct Swapchain {
     pub(crate) fbos: Vec<native::RawFrameBuffer>,
     pub(crate) context: PresentContext,
-    pub(crate) extent: Extent2D,
+    pub(crate) extent: window::Extent2D,
 }
 impl Swapchain {
     pub(crate) fn make_current(&self) {
@@ -283,13 +281,13 @@ impl Swapchain {
     }
 }
 
-impl hal::Swapchain<Backend> for Swapchain {
+impl window::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
         _semaphore: Option<&native::Semaphore>,
         _fence: Option<&native::Fence>,
-    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
+    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
         Ok((0, None)) // TODO
     }
 }

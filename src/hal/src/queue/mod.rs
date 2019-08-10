@@ -6,23 +6,15 @@
 //! There are different types of queues, which can only handle associated command buffers.
 //! `CommandQueue<B, C>` has the capability defined by `C`: graphics, compute and transfer.
 
-pub mod capability;
 pub mod family;
 
-use std::any::Any;
-use std::borrow::Borrow;
-use std::fmt;
-use std::iter;
-use std::marker::PhantomData;
-
-use crate::command::{Primary, Submittable};
 use crate::error::HostExecutionError;
 use crate::pso;
 use crate::window::{PresentError, Suboptimal, SwapImageIndex};
 use crate::Backend;
+use std::{any::Any, borrow::Borrow, fmt, iter};
 
-pub use self::capability::{Capability, Compute, General, Graphics, Supports, Transfer};
-pub use self::family::{QueueFamily, QueueFamilyId, QueueGroup, Queues};
+pub use self::family::{QueueFamily, QueueFamilyId, QueueGroup};
 
 /// The type of the queue, an enum encompassing `queue::Capability`
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -38,6 +30,31 @@ pub enum QueueType {
     Transfer,
 }
 
+impl QueueType {
+    /// Returns true if the queue supports graphics operations.
+    pub fn supports_graphics(&self) -> bool {
+        match *self {
+            QueueType::General | QueueType::Graphics => true,
+            QueueType::Compute | QueueType::Transfer => false,
+        }
+    }
+    /// Returns true if the queue supports compute operations.
+    pub fn supports_compute(&self) -> bool {
+        match *self {
+            QueueType::General | QueueType::Graphics | QueueType::Compute => true,
+            QueueType::Transfer => false,
+        }
+    }
+    /// Returns true if the queue supports transfer operations.
+    pub fn supports_transfer(&self) -> bool {
+        true
+    }
+}
+
+/// Scheduling hint for devices about the priority of a queue.  Values range from `0.0` (low) to
+/// `1.0` (high).
+pub type QueuePriority = f32;
+
 /// Submission information for a command queue.
 #[derive(Debug)]
 pub struct Submission<Ic, Iw, Is> {
@@ -51,7 +68,7 @@ pub struct Submission<Ic, Iw, Is> {
 
 /// `RawCommandQueue` are abstractions to the internal GPU execution engines.
 /// Commands are executed on the the device by submitting command buffers to queues.
-pub trait RawCommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
+pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Submit command buffers to queue for execution.
     /// `fence` must be in unsignalled state, and will be signalled after all command buffers in the submission have
     /// finished execution.
@@ -70,6 +87,23 @@ pub trait RawCommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
         Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
         Is: IntoIterator<Item = &'a S>;
 
+    /// Simplified version of `submit` that doesn't expect any semaphores.
+    unsafe fn submit_without_semaphores<'a, T, Ic>(
+        &mut self,
+        command_buffers: Ic,
+        fence: Option<&B::Fence>,
+    ) where
+        T: 'a + Borrow<B::CommandBuffer>,
+        Ic: IntoIterator<Item = &'a T>,
+    {
+        let submission = Submission {
+            command_buffers,
+            wait_semaphores: iter::empty(),
+            signal_semaphores: iter::empty(),
+        };
+        self.submit::<_, _, B::Semaphore, _, _>(submission, fence)
+    }
+
     /// Presents the result of the queue to the given swapchains, after waiting on all the
     /// semaphores given in `wait_semaphores`. A given swapchain must not appear in this
     /// list more than once.
@@ -87,101 +121,19 @@ pub trait RawCommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
         S: 'a + Borrow<B::Semaphore>,
         Iw: IntoIterator<Item = &'a S>;
 
-    /// Wait for the queue to idle.
-    fn wait_idle(&self) -> Result<(), HostExecutionError>;
-}
-
-/// Stronger-typed and safer `CommandQueue` wraps around `RawCommandQueue`.
-#[derive(Debug)]
-pub struct CommandQueue<B: Backend, C>(B::CommandQueue, PhantomData<C>);
-
-impl<B: Backend, C: Capability> CommandQueue<B, C> {
-    /// Create typed command queue from raw.
-    ///
-    /// # Safety
-    ///
-    /// `<C as Capability>::supported_by(queue_type)` must return true
-    /// for `queue_type` being the type this `raw` queue.
-    pub unsafe fn new(raw: B::CommandQueue) -> Self {
-        CommandQueue(raw, PhantomData)
-    }
-
-    /// Get a reference to the raw command queue
-    pub fn as_raw(&self) -> &B::CommandQueue {
-        &self.0
-    }
-
-    /// Get a mutable reference to the raw command queue
-    pub unsafe fn as_raw_mut(&mut self) -> &mut B::CommandQueue {
-        &mut self.0
-    }
-
-    /// Downgrade a typed command queue to untyped one.
-    pub fn into_raw(self) -> B::CommandQueue {
-        self.0
-    }
-
-    /// Submit command buffers to queue for execution.
-    /// `fence` must be in unsignalled state, and will be signalled after all command buffers in the submission have
-    /// finished execution.
-    pub unsafe fn submit<'a, T, Ic, S, Iw, Is>(
-        &mut self,
-        submission: Submission<Ic, Iw, Is>,
-        fence: Option<&B::Fence>,
-    ) where
-        T: 'a + Submittable<B, C, Primary>,
-        Ic: IntoIterator<Item = &'a T>,
-        S: 'a + Borrow<B::Semaphore>,
-        Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
-        Is: IntoIterator<Item = &'a S>,
-    {
-        self.0.submit(submission, fence)
-    }
-
-    /// Submit command buffers without any semaphore waits or signals.
-    pub unsafe fn submit_without_semaphores<'a, T, I>(
-        &mut self,
-        command_buffers: I,
-        fence: Option<&B::Fence>,
-    ) where
-        T: 'a + Submittable<B, C, Primary>,
-        I: IntoIterator<Item = &'a T>,
-    {
-        let submission = Submission {
-            command_buffers,
-            wait_semaphores: iter::empty(),
-            signal_semaphores: iter::empty(),
-        };
-        self.submit::<_, _, B::Semaphore, _, _>(submission, fence)
-    }
-
-    /// Presents the result of the queue to the given swapchains, after waiting on all the
-    /// semaphores given in `wait_semaphores`. A given swapchain must not appear in this
-    /// list more than once.
-    pub unsafe fn present<'a, W, Is, S, Iw>(
+    /// Simplified version of `present` that doesn't expect any semaphores.
+    unsafe fn present_without_semaphores<'a, W, Is>(
         &mut self,
         swapchains: Is,
-        wait_semaphores: Iw,
     ) -> Result<Option<Suboptimal>, PresentError>
     where
+        Self: Sized,
         W: 'a + Borrow<B::Swapchain>,
         Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
-        S: 'a + Borrow<B::Semaphore>,
-        Iw: IntoIterator<Item = &'a S>,
     {
-        self.0.present(swapchains, wait_semaphores)
+        self.present::<_, _, B::Semaphore, _>(swapchains, iter::empty())
     }
 
     /// Wait for the queue to idle.
-    pub fn wait_idle(&self) -> Result<(), HostExecutionError> {
-        self.0.wait_idle()
-    }
-
-    /// Downgrade a command queue to a lesser capability type.
-    pub unsafe fn downgrade<D>(&mut self) -> &mut CommandQueue<B, D>
-    where
-        C: Supports<D>,
-    {
-        ::std::mem::transmute(self)
-    }
+    fn wait_idle(&self) -> Result<(), HostExecutionError>;
 }

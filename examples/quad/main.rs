@@ -32,29 +32,28 @@ pub fn wasm_main() {
     main();
 }
 
-use hal::format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle};
-use hal::pass::Subpass;
-use hal::pso::{PipelineStage, ShaderStageFlags, VertexInputRate};
-use hal::queue::Submission;
 use hal::{
     buffer,
     command,
     format as f,
+    format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle},
     image as i,
     memory as m,
     pass,
+    pass::Subpass,
     pool,
+    prelude::*,
     pso,
-    window::Extent2D,
+    pso::{PipelineStage, ShaderStageFlags, VertexInputRate},
+    queue::{QueueGroup, Submission},
+    window,
 };
-use hal::{DescriptorPool, Primitive, SwapchainConfig};
-use hal::{Device, Instance, PhysicalDevice, Surface, Swapchain};
 
 use std::io::Cursor;
 use std::mem::ManuallyDrop;
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
-const DIMS: Extent2D = Extent2D { width: 1024, height: 768 };
+const DIMS: window::Extent2D = window::Extent2D { width: 1024, height: 768 };
 
 const ENTRY_NAME: &str = "main";
 
@@ -124,7 +123,12 @@ fn main() {
                 back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
                     .with_vsync(true);
             let windowed_context = builder.build_windowed(wb, &event_loop).unwrap();
-            let (context, window) = unsafe { windowed_context.make_current().expect("Unable to make context current").split() };
+            let (context, window) = unsafe {
+                windowed_context
+                    .make_current()
+                    .expect("Unable to make context current")
+                    .split()
+            };
             let surface = back::Surface::from_context(context);
             (window, surface)
         };
@@ -157,51 +161,51 @@ fn main() {
         *control_flow = winit::event_loop::ControlFlow::Wait;
 
         match event {
-            winit::event::Event::WindowEvent { event, .. } => {
-                match event {
-                    winit::event::WindowEvent::CloseRequested => *control_flow = winit::event_loop::ControlFlow::Exit,
-                    winit::event::WindowEvent::KeyboardInput {
-                        input:
-                            winit::event::KeyboardInput {
-                                virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
-                                ..
-                            },
-                        ..
-                    } => *control_flow = winit::event_loop::ControlFlow::Exit,
-                    winit::event::WindowEvent::Resized(dims) => {
-                        println!("resized to {:?}", dims);
-                        #[cfg(feature = "gl")]
-                        {
-                            let context = renderer.surface.get_context();
-                            context.resize(dims.to_physical(window.hidpi_factor()));
-                        }
-                        let dimensions = Extent2D {
-                            width: dims.width as u32,
-                            height: dims.height as u32,
-                        };
-                        renderer.dimensions = dimensions;
-                        renderer.recreate_swapchain();
-                    }
-                    _ => { }
+            winit::event::Event::WindowEvent { event, .. } => match event {
+                winit::event::WindowEvent::CloseRequested => {
+                    *control_flow = winit::event_loop::ControlFlow::Exit
                 }
-            }
+                winit::event::WindowEvent::KeyboardInput {
+                    input:
+                        winit::event::KeyboardInput {
+                            virtual_keycode: Some(winit::event::VirtualKeyCode::Escape),
+                            ..
+                        },
+                    ..
+                } => *control_flow = winit::event_loop::ControlFlow::Exit,
+                winit::event::WindowEvent::Resized(dims) => {
+                    println!("resized to {:?}", dims);
+                    #[cfg(feature = "gl")]
+                    {
+                        let context = renderer.surface.get_context();
+                        context.resize(dims.to_physical(window.hidpi_factor()));
+                    }
+                    let dimensions = window::Extent2D {
+                        width: dims.width as u32,
+                        height: dims.height as u32,
+                    };
+                    renderer.dimensions = dimensions;
+                    renderer.recreate_swapchain();
+                }
+                _ => {}
+            },
             winit::event::Event::EventsCleared => {
                 renderer.render();
             }
-            _ => { }
+            _ => {}
         }
     });
 }
 
 struct Renderer<B: hal::Backend> {
     device: B::Device,
-    queue_group: hal::QueueGroup<B, hal::Graphics>,
+    queue_group: QueueGroup<B>,
     desc_pool: ManuallyDrop<B::DescriptorPool>,
     surface: B::Surface,
     adapter: hal::adapter::Adapter<B>,
     format: hal::format::Format,
     swap_chain: Option<B::Swapchain>,
-    dimensions: Extent2D,
+    dimensions: window::Extent2D,
     framebuffers: Vec<B::Framebuffer>,
     frame_images: Vec<(B::Image, B::ImageView)>,
     viewport: hal::pso::Viewport,
@@ -214,8 +218,8 @@ struct Renderer<B: hal::Backend> {
     image_acquire_semaphores: Vec<B::Semaphore>,
     free_acquire_semaphore: Option<B::Semaphore>,
     submission_complete_fences: Vec<B::Fence>,
-    cmd_pools: Vec<hal::CommandPool<B, hal::Graphics>>,
-    cmd_buffers: Vec<hal::command::CommandBuffer<B, hal::Graphics, hal::command::MultiShot>>,
+    cmd_pools: Vec<B::CommandPool>,
+    cmd_buffers: Vec<B::CommandBuffer>,
     vertex_buffer: ManuallyDrop<B::Buffer>,
     image_upload_buffer: ManuallyDrop<B::Buffer>,
     image_logo: ManuallyDrop<B::Image>,
@@ -228,63 +232,82 @@ struct Renderer<B: hal::Backend> {
     frame: u64,
 }
 
-impl<B> Renderer<B> where B: hal::Backend {
+impl<B> Renderer<B>
+where
+    B: hal::Backend,
+{
     fn new(mut surface: B::Surface, mut adapter: hal::adapter::Adapter<B>) -> Renderer<B> {
         let memory_types = adapter.physical_device.memory_properties().memory_types;
         let limits = adapter.physical_device.limits();
 
         // Build a new device and associated command queues
-        let (device, mut queue_group) = adapter
-            .open_with::<_, hal::Graphics>(1, |family| surface.supports_queue_family(family))
+        let family = adapter
+            .queue_families
+            .iter()
+            .find(|family| {
+                surface.supports_queue_family(family) && family.queue_type().supports_graphics()
+            })
             .unwrap();
+        let mut gpu = unsafe {
+            adapter
+                .physical_device
+                .open(&[(family, &[1.0])], hal::Features::empty())
+                .unwrap()
+        };
+        let mut queue_group = gpu.queue_groups.pop().unwrap();
+        let device = gpu.device;
 
         let mut command_pool = unsafe {
-            device.create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
+            device.create_command_pool(queue_group.family, pool::CommandPoolCreateFlags::empty())
         }
         .expect("Can't create command pool");
 
         // Setup renderpass and pipeline
-        let set_layout = ManuallyDrop::new(unsafe {
-            device.create_descriptor_set_layout(
-                &[
-                    pso::DescriptorSetLayoutBinding {
-                        binding: 0,
-                        ty: pso::DescriptorType::SampledImage,
-                        count: 1,
-                        stage_flags: ShaderStageFlags::FRAGMENT,
-                        immutable_samplers: false,
-                    },
-                    pso::DescriptorSetLayoutBinding {
-                        binding: 1,
-                        ty: pso::DescriptorType::Sampler,
-                        count: 1,
-                        stage_flags: ShaderStageFlags::FRAGMENT,
-                        immutable_samplers: false,
-                    },
-                ],
-                &[],
-            )
-        }
-        .expect("Can't create descriptor set layout"));
+        let set_layout = ManuallyDrop::new(
+            unsafe {
+                device.create_descriptor_set_layout(
+                    &[
+                        pso::DescriptorSetLayoutBinding {
+                            binding: 0,
+                            ty: pso::DescriptorType::SampledImage,
+                            count: 1,
+                            stage_flags: ShaderStageFlags::FRAGMENT,
+                            immutable_samplers: false,
+                        },
+                        pso::DescriptorSetLayoutBinding {
+                            binding: 1,
+                            ty: pso::DescriptorType::Sampler,
+                            count: 1,
+                            stage_flags: ShaderStageFlags::FRAGMENT,
+                            immutable_samplers: false,
+                        },
+                    ],
+                    &[],
+                )
+            }
+            .expect("Can't create descriptor set layout"),
+        );
 
         // Descriptors
-        let mut desc_pool = ManuallyDrop::new(unsafe {
-            device.create_descriptor_pool(
-                1, // sets
-                &[
-                    pso::DescriptorRangeDesc {
-                        ty: pso::DescriptorType::SampledImage,
-                        count: 1,
-                    },
-                    pso::DescriptorRangeDesc {
-                        ty: pso::DescriptorType::Sampler,
-                        count: 1,
-                    },
-                ],
-                pso::DescriptorPoolCreateFlags::empty(),
-            )
-        }
-        .expect("Can't create descriptor pool"));
+        let mut desc_pool = ManuallyDrop::new(
+            unsafe {
+                device.create_descriptor_pool(
+                    1, // sets
+                    &[
+                        pso::DescriptorRangeDesc {
+                            ty: pso::DescriptorType::SampledImage,
+                            count: 1,
+                        },
+                        pso::DescriptorRangeDesc {
+                            ty: pso::DescriptorType::Sampler,
+                            count: 1,
+                        },
+                    ],
+                    pso::DescriptorPoolCreateFlags::empty(),
+                )
+            }
+            .expect("Can't create descriptor pool"),
+        );
         let desc_set = unsafe { desc_pool.allocate_set(&set_layout) }.unwrap();
 
         // Buffer allocations
@@ -294,8 +317,9 @@ impl<B> Renderer<B> where B: hal::Backend {
         let buffer_len = QUAD.len() as u64 * buffer_stride;
 
         assert_ne!(buffer_len, 0);
-        let mut vertex_buffer =
-            ManuallyDrop::new(unsafe { device.create_buffer(buffer_len, buffer::Usage::VERTEX) }.unwrap());
+        let mut vertex_buffer = ManuallyDrop::new(
+            unsafe { device.create_buffer(buffer_len, buffer::Usage::VERTEX) }.unwrap(),
+        );
 
         let buffer_req = unsafe { device.get_buffer_requirements(&vertex_buffer) };
 
@@ -312,7 +336,9 @@ impl<B> Renderer<B> where B: hal::Backend {
             .unwrap()
             .into();
 
-        let buffer_memory = ManuallyDrop::new(unsafe { device.allocate_memory(upload_type, buffer_req.size) }.unwrap());
+        let buffer_memory = ManuallyDrop::new(
+            unsafe { device.allocate_memory(upload_type, buffer_req.size) }.unwrap(),
+        );
 
         unsafe { device.bind_buffer_memory(&buffer_memory, 0, &mut vertex_buffer) }.unwrap();
 
@@ -338,11 +364,13 @@ impl<B> Renderer<B> where B: hal::Backend {
         let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
         let upload_size = (height * row_pitch) as u64;
 
-        let mut image_upload_buffer =
-            ManuallyDrop::new(unsafe { device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC) }.unwrap());
+        let mut image_upload_buffer = ManuallyDrop::new(
+            unsafe { device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC) }.unwrap(),
+        );
         let image_mem_reqs = unsafe { device.get_buffer_requirements(&image_upload_buffer) };
-        let image_upload_memory =
-            ManuallyDrop::new(unsafe { device.allocate_memory(upload_type, image_mem_reqs.size) }.unwrap());
+        let image_upload_memory = ManuallyDrop::new(
+            unsafe { device.allocate_memory(upload_type, image_mem_reqs.size) }.unwrap(),
+        );
 
         unsafe { device.bind_buffer_memory(&image_upload_memory, 0, &mut image_upload_buffer) }
             .unwrap();
@@ -353,25 +381,27 @@ impl<B> Renderer<B> where B: hal::Backend {
                 .acquire_mapping_writer::<u8>(&image_upload_memory, 0 .. image_mem_reqs.size)
                 .unwrap();
             for y in 0 .. height as usize {
-                let row = &(*img)
-                    [y * (width as usize) * image_stride .. (y + 1) * (width as usize) * image_stride];
+                let row = &(*img)[y * (width as usize) * image_stride
+                    .. (y + 1) * (width as usize) * image_stride];
                 let dest_base = y * row_pitch as usize;
                 data[dest_base .. dest_base + row.len()].copy_from_slice(row);
             }
             device.release_mapping_writer(data).unwrap();
         }
 
-        let mut image_logo = ManuallyDrop::new(unsafe {
-            device.create_image(
-                kind,
-                1,
-                ColorFormat::SELF,
-                i::Tiling::Optimal,
-                i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
-                i::ViewCapabilities::empty(),
-            )
-        }
-        .unwrap());
+        let mut image_logo = ManuallyDrop::new(
+            unsafe {
+                device.create_image(
+                    kind,
+                    1,
+                    ColorFormat::SELF,
+                    i::Tiling::Optimal,
+                    i::Usage::TRANSFER_DST | i::Usage::SAMPLED,
+                    i::ViewCapabilities::empty(),
+                )
+            }
+            .unwrap(),
+        );
         let image_req = unsafe { device.get_image_requirements(&image_logo) };
 
         let device_type = memory_types
@@ -383,24 +413,30 @@ impl<B> Renderer<B> where B: hal::Backend {
             })
             .unwrap()
             .into();
-        let image_memory = ManuallyDrop::new(unsafe { device.allocate_memory(device_type, image_req.size) }.unwrap());
+        let image_memory = ManuallyDrop::new(
+            unsafe { device.allocate_memory(device_type, image_req.size) }.unwrap(),
+        );
 
         unsafe { device.bind_image_memory(&image_memory, 0, &mut image_logo) }.unwrap();
-        let image_srv = ManuallyDrop::new(unsafe {
-            device.create_image_view(
-                &image_logo,
-                i::ViewKind::D2,
-                ColorFormat::SELF,
-                Swizzle::NO,
-                COLOR_RANGE.clone(),
-            )
-        }
-        .unwrap());
+        let image_srv = ManuallyDrop::new(
+            unsafe {
+                device.create_image_view(
+                    &image_logo,
+                    i::ViewKind::D2,
+                    ColorFormat::SELF,
+                    Swizzle::NO,
+                    COLOR_RANGE.clone(),
+                )
+            }
+            .unwrap(),
+        );
 
-        let sampler = ManuallyDrop::new(unsafe {
-            device.create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
-        }
-        .expect("Can't create sampler"));;
+        let sampler = ManuallyDrop::new(
+            unsafe {
+                device.create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
+            }
+            .expect("Can't create sampler"),
+        );;
 
         unsafe {
             device.write_descriptor_sets(vec![
@@ -422,8 +458,8 @@ impl<B> Renderer<B> where B: hal::Backend {
         // copy buffer to texture
         let mut copy_fence = device.create_fence(false).expect("Could not create fence");
         unsafe {
-            let mut cmd_buffer = command_pool.acquire_command_buffer::<command::OneShot>();
-            cmd_buffer.begin();
+            let mut cmd_buffer = command_pool.allocate_one(command::Level::Primary);
+            cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::empty(), i::Layout::Undefined)
@@ -476,7 +512,8 @@ impl<B> Renderer<B> where B: hal::Backend {
 
             cmd_buffer.finish();
 
-            queue_group.queues[0].submit_without_semaphores(Some(&cmd_buffer), Some(&mut copy_fence));
+            queue_group.queues[0]
+                .submit_without_semaphores(Some(&cmd_buffer), Some(&mut copy_fence));
 
             device
                 .wait_for_fence(&copy_fence, !0)
@@ -497,7 +534,7 @@ impl<B> Renderer<B> where B: hal::Backend {
                 .unwrap_or(formats[0])
         });
 
-        let swap_config = SwapchainConfig::from_caps(&caps, format, DIMS);
+        let swap_config = window::SwapchainConfig::from_caps(&caps, format, DIMS);
         println!("{:?}", swap_config);
         let extent = swap_config.extent.to_extent();
 
@@ -534,8 +571,10 @@ impl<B> Renderer<B> where B: hal::Backend {
                     .. (i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
             };
 
-            ManuallyDrop::new(unsafe { device.create_render_pass(&[attachment], &[subpass], &[dependency]) }
-                .expect("Can't create render pass"))
+            ManuallyDrop::new(
+                unsafe { device.create_render_pass(&[attachment], &[subpass], &[dependency]) }
+                    .expect("Can't create render pass"),
+            )
         };
 
         let (frame_images, framebuffers) = {
@@ -573,9 +612,11 @@ impl<B> Renderer<B> where B: hal::Backend {
         // plus one extra which we can guarantee is unused at any given time by swapping it out with the ones
         // in the rest of the queue.
         let mut image_acquire_semaphores = Vec::with_capacity(frame_images.len());
-        let free_acquire_semaphore = Option::Some(device
-            .create_semaphore()
-            .expect("Could not create semaphore"));
+        let free_acquire_semaphore = Option::Some(
+            device
+                .create_semaphore()
+                .expect("Could not create semaphore"),
+        );
 
         // The number of the rest of the resources is based on the frames in flight.
         let mut submission_complete_semaphores = Vec::with_capacity(frames_in_flight);
@@ -597,7 +638,10 @@ impl<B> Renderer<B> where B: hal::Backend {
             unsafe {
                 cmd_pools.push(
                     device
-                        .create_command_pool_typed(&queue_group, pool::CommandPoolCreateFlags::empty())
+                        .create_command_pool(
+                            queue_group.family,
+                            pool::CommandPoolCreateFlags::empty(),
+                        )
                         .expect("Can't create command pool"),
                 );
             }
@@ -622,25 +666,28 @@ impl<B> Renderer<B> where B: hal::Backend {
                     .create_fence(true)
                     .expect("Could not create semaphore"),
             );
-            cmd_buffers.push(cmd_pools[i].acquire_command_buffer::<command::MultiShot>());
+            cmd_buffers.push(cmd_pools[i].allocate_one(command::Level::Primary));
         }
 
-        let pipeline_layout = ManuallyDrop::new(unsafe {
-            device.create_pipeline_layout(
-                std::iter::once(&*set_layout),
-                &[(pso::ShaderStageFlags::VERTEX, 0 .. 8)],
-            )
-        }
-        .expect("Can't create pipeline layout"));
+        let pipeline_layout = ManuallyDrop::new(
+            unsafe {
+                device.create_pipeline_layout(
+                    std::iter::once(&*set_layout),
+                    &[(pso::ShaderStageFlags::VERTEX, 0 .. 8)],
+                )
+            }
+            .expect("Can't create pipeline layout"),
+        );
         let pipeline = {
             let vs_module = {
-                let spirv =
-                    hal::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..])).unwrap();
+                let spirv = pso::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..]))
+                    .unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
             let fs_module = {
                 let spirv =
-                    hal::read_spirv(Cursor::new(&include_bytes!("./data/quad.frag.spv")[..])).unwrap();
+                    pso::read_spirv(Cursor::new(&include_bytes!("./data/quad.frag.spv")[..]))
+                        .unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
 
@@ -673,7 +720,7 @@ impl<B> Renderer<B> where B: hal::Backend {
 
                 let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
                     shader_entries,
-                    Primitive::TriangleList,
+                    hal::Primitive::TriangleList,
                     pso::Rasterizer::FILL,
                     &*pipeline_layout,
                     subpass,
@@ -729,7 +776,7 @@ impl<B> Renderer<B> where B: hal::Backend {
             depth: 0.0 .. 1.0,
         };
 
-        let dimensions = Extent2D {
+        let dimensions = window::Extent2D {
             width: 0,
             height: 0,
         };
@@ -773,18 +820,21 @@ impl<B> Renderer<B> where B: hal::Backend {
     fn recreate_swapchain(&mut self) {
         self.device.wait_idle().unwrap();
 
-        let (caps, formats, _present_modes) =
-            self.surface.compatibility(&mut self.adapter.physical_device);
+        let (caps, formats, _present_modes) = self
+            .surface
+            .compatibility(&mut self.adapter.physical_device);
         // Verify that previous format still exists so we may reuse it.
         assert!(formats.iter().any(|fs| fs.contains(&self.format)));
 
-        let swap_config = SwapchainConfig::from_caps(&caps, self.format, self.dimensions);
+        let swap_config = window::SwapchainConfig::from_caps(&caps, self.format, self.dimensions);
         println!("{:?}", swap_config);
         let extent = swap_config.extent.to_extent();
 
-        let (new_swap_chain, new_backbuffer) =
-            unsafe { self.device.create_swapchain(&mut self.surface, swap_config, self.swap_chain.take()) }
-                .expect("Can't create swapchain");
+        let (new_swap_chain, new_backbuffer) = unsafe {
+            self.device
+                .create_swapchain(&mut self.surface, swap_config, self.swap_chain.take())
+        }
+        .expect("Can't create swapchain");
 
         unsafe {
             // Clean up the old framebuffers and images
@@ -802,7 +852,8 @@ impl<B> Renderer<B> where B: hal::Backend {
             let pairs = new_backbuffer
                 .into_iter()
                 .map(|image| unsafe {
-                    let rtv = self.device
+                    let rtv = self
+                        .device
                         .create_image_view(
                             &image,
                             i::ViewKind::D2,
@@ -835,7 +886,11 @@ impl<B> Renderer<B> where B: hal::Backend {
         // Use guaranteed unused acquire semaphore to get the index of the next frame we will render to
         // by using acquire_image
         let swap_image = unsafe {
-            match self.swap_chain.as_mut().unwrap().acquire_image(!0, self.free_acquire_semaphore.as_ref(), None) {
+            match self.swap_chain.as_mut().unwrap().acquire_image(
+                !0,
+                self.free_acquire_semaphore.as_ref(),
+                None,
+            ) {
                 Ok((i, _)) => i as usize,
                 Err(_) => {
                     self.recreate_swapchain();
@@ -873,26 +928,31 @@ impl<B> Renderer<B> where B: hal::Backend {
         // Rendering
         let cmd_buffer = &mut self.cmd_buffers[frame_idx];
         unsafe {
-            cmd_buffer.begin(false);
+            cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
             cmd_buffer.set_scissors(0, &[self.viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(&self.pipeline);
             cmd_buffer.bind_vertex_buffers(0, Some((&*self.vertex_buffer, 0)));
-            cmd_buffer.bind_graphics_descriptor_sets(&self.pipeline_layout, 0, Some(&self.desc_set), &[]);
+            cmd_buffer.bind_graphics_descriptor_sets(
+                &self.pipeline_layout,
+                0,
+                Some(&self.desc_set),
+                &[],
+            );
 
-            {
-                let mut encoder = cmd_buffer.begin_render_pass_inline(
-                    &self.render_pass,
-                    &self.framebuffers[swap_image],
-                    self.viewport.rect,
-                    &[command::ClearValue::Color(command::ClearColor::Sfloat([
-                        0.8, 0.8, 0.8, 1.0,
-                    ]))],
-                );
-                encoder.draw(0 .. 6, 0 .. 1);
-            }
-
+            cmd_buffer.begin_render_pass(
+                &self.render_pass,
+                &self.framebuffers[swap_image],
+                self.viewport.rect,
+                &[command::ClearValue {
+                    color: command::ClearColor {
+                        float32: [0.8, 0.8, 0.8, 1.0],
+                    },
+                }],
+                command::SubpassContents::Inline,
+            );
+            cmd_buffer.draw(0 .. 6, 0 .. 1);
             cmd_buffer.finish();
 
             let submission = Submission {
@@ -903,16 +963,19 @@ impl<B> Renderer<B> where B: hal::Backend {
                 )),
                 signal_semaphores: Some(&self.submission_complete_semaphores[frame_idx]),
             };
-            self.queue_group.queues[0].submit(submission, Some(&self.submission_complete_fences[frame_idx]));
+            self.queue_group.queues[0].submit(
+                submission,
+                Some(&self.submission_complete_fences[frame_idx]),
+            );
 
             // present frame
             if let Err(_) = self.swap_chain.as_ref().unwrap().present(
                 &mut self.queue_group.queues[0],
-                swap_image as hal::SwapImageIndex,
+                swap_image as window::SwapImageIndex,
                 Some(&self.submission_complete_semaphores[frame_idx]),
             ) {
                 self.recreate_swapchain();
-                return
+                return;
             }
         }
 
@@ -921,22 +984,39 @@ impl<B> Renderer<B> where B: hal::Backend {
     }
 }
 
-impl<B> Drop for Renderer<B> where B: hal::Backend {
+impl<B> Drop for Renderer<B>
+where
+    B: hal::Backend,
+{
     fn drop(&mut self) {
         self.device.wait_idle().unwrap();
         unsafe {
             // TODO: When ManuallyDrop::take (soon to be renamed to ManuallyDrop::read) is stabilized we should use that instead.
-            self.device.destroy_descriptor_pool(ManuallyDrop::into_inner(std::ptr::read(&self.desc_pool)));
-            self.device.destroy_descriptor_set_layout(ManuallyDrop::into_inner(std::ptr::read(&self.set_layout)));
+            self.device
+                .destroy_descriptor_pool(ManuallyDrop::into_inner(std::ptr::read(&self.desc_pool)));
+            self.device
+                .destroy_descriptor_set_layout(ManuallyDrop::into_inner(std::ptr::read(
+                    &self.set_layout,
+                )));
 
-            self.device.destroy_buffer(ManuallyDrop::into_inner(std::ptr::read(&self.vertex_buffer)));
-            self.device.destroy_buffer(ManuallyDrop::into_inner(std::ptr::read(&self.image_upload_buffer)));
-            self.device.destroy_image(ManuallyDrop::into_inner(std::ptr::read(&self.image_logo)));
-            self.device.destroy_image_view(ManuallyDrop::into_inner(std::ptr::read(&self.image_srv)));
-            self.device.destroy_sampler(ManuallyDrop::into_inner(std::ptr::read(&self.sampler)));
-            self.device.destroy_semaphore(self.free_acquire_semaphore.take().unwrap());
+            self.device
+                .destroy_buffer(ManuallyDrop::into_inner(std::ptr::read(
+                    &self.vertex_buffer,
+                )));
+            self.device
+                .destroy_buffer(ManuallyDrop::into_inner(std::ptr::read(
+                    &self.image_upload_buffer,
+                )));
+            self.device
+                .destroy_image(ManuallyDrop::into_inner(std::ptr::read(&self.image_logo)));
+            self.device
+                .destroy_image_view(ManuallyDrop::into_inner(std::ptr::read(&self.image_srv)));
+            self.device
+                .destroy_sampler(ManuallyDrop::into_inner(std::ptr::read(&self.sampler)));
+            self.device
+                .destroy_semaphore(self.free_acquire_semaphore.take().unwrap());
             for p in self.cmd_pools.drain(..) {
-                self.device.destroy_command_pool(p.into_raw());
+                self.device.destroy_command_pool(p);
             }
             for s in self.image_acquire_semaphores.drain(..) {
                 self.device.destroy_semaphore(s);
@@ -947,12 +1027,26 @@ impl<B> Drop for Renderer<B> where B: hal::Backend {
             for f in self.submission_complete_fences.drain(..) {
                 self.device.destroy_fence(f);
             }
-            self.device.destroy_render_pass(ManuallyDrop::into_inner(std::ptr::read(&self.render_pass)));
-            self.device.free_memory(ManuallyDrop::into_inner(std::ptr::read(&self.buffer_memory)));
-            self.device.free_memory(ManuallyDrop::into_inner(std::ptr::read(&self.image_memory)));
-            self.device.free_memory(ManuallyDrop::into_inner(std::ptr::read(&self.image_upload_memory)));
-            self.device.destroy_graphics_pipeline(ManuallyDrop::into_inner(std::ptr::read(&self.pipeline)));
-            self.device.destroy_pipeline_layout(ManuallyDrop::into_inner(std::ptr::read(&self.pipeline_layout)));
+            self.device
+                .destroy_render_pass(ManuallyDrop::into_inner(std::ptr::read(&self.render_pass)));
+            self.device
+                .free_memory(ManuallyDrop::into_inner(std::ptr::read(
+                    &self.buffer_memory,
+                )));
+            self.device
+                .free_memory(ManuallyDrop::into_inner(std::ptr::read(&self.image_memory)));
+            self.device
+                .free_memory(ManuallyDrop::into_inner(std::ptr::read(
+                    &self.image_upload_memory,
+                )));
+            self.device
+                .destroy_graphics_pipeline(ManuallyDrop::into_inner(std::ptr::read(
+                    &self.pipeline,
+                )));
+            self.device
+                .destroy_pipeline_layout(ManuallyDrop::into_inner(std::ptr::read(
+                    &self.pipeline_layout,
+                )));
             for framebuffer in self.framebuffers.drain(..) {
                 self.device.destroy_framebuffer(framebuffer);
             }
@@ -960,7 +1054,8 @@ impl<B> Drop for Renderer<B> where B: hal::Backend {
                 self.device.destroy_image_view(rtv);
             }
 
-            self.device.destroy_swapchain(self.swap_chain.take().unwrap());
+            self.device
+                .destroy_swapchain(self.swap_chain.take().unwrap());
         }
         println!("DROPPED!");
     }

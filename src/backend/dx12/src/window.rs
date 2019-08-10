@@ -8,7 +8,7 @@ use winapi::shared::dxgi1_4;
 use winapi::shared::windef::{HWND, RECT};
 use winapi::um::winuser::GetClientRect;
 
-use hal::{self, format as f, image as i, CompositeAlpha};
+use hal::{format as f, image as i, window as w};
 use {native, resource as r, Backend, Instance, PhysicalDevice, QueueFamily};
 
 use std::os::raw::c_void;
@@ -54,7 +54,7 @@ impl Surface {
     }
 }
 
-impl hal::Surface<Backend> for Surface {
+impl w::Surface<Backend> for Surface {
     fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
         match queue_family {
             &QueueFamily::Present => true,
@@ -66,20 +66,20 @@ impl hal::Surface<Backend> for Surface {
         &self,
         _: &PhysicalDevice,
     ) -> (
-        hal::SurfaceCapabilities,
+        w::SurfaceCapabilities,
         Option<Vec<f::Format>>,
-        Vec<hal::PresentMode>,
+        Vec<w::PresentMode>,
     ) {
         let (width, height) = self.get_extent();
-        let extent = hal::window::Extent2D { width, height };
+        let extent = w::Extent2D { width, height };
 
-        let capabilities = hal::SurfaceCapabilities {
+        let capabilities = w::SurfaceCapabilities {
             image_count: 2 ..= 16, // we currently use a flip effect which supports 2..=16 buffers
             current_extent: Some(extent),
             extents: extent ..= extent,
             max_image_layers: 1,
             usage: i::Usage::COLOR_ATTACHMENT | i::Usage::TRANSFER_SRC | i::Usage::TRANSFER_DST,
-            composite_alpha: CompositeAlpha::OPAQUE, //TODO
+            composite_alpha: w::CompositeAlpha::OPAQUE, //TODO
         };
 
         // Sticking to FLIP swap effects for the moment.
@@ -95,7 +95,7 @@ impl hal::Surface<Backend> for Surface {
         ];
 
         let present_modes = vec![
-            hal::PresentMode::Fifo, //TODO
+            w::PresentMode::Fifo, //TODO
         ];
 
         (capabilities, Some(formats), present_modes)
@@ -114,13 +114,13 @@ pub struct Swapchain {
     pub(crate) resources: Vec<native::Resource>,
 }
 
-impl hal::Swapchain<Backend> for Swapchain {
+impl w::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timout_ns: u64,
         _semaphore: Option<&r::Semaphore>,
         _fence: Option<&r::Fence>,
-    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
+    ) -> Result<(w::SwapImageIndex, Option<w::Suboptimal>), w::AcquireError> {
         // TODO: sync
 
         if false {

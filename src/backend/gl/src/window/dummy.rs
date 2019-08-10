@@ -1,16 +1,17 @@
-use crate::{Backend, PhysicalDevice, QueueFamily, native};
+use crate::{native, Backend, PhysicalDevice, QueueFamily};
+use hal::window;
 
 #[derive(Debug)]
 pub struct Surface;
 
-impl hal::Surface<Backend> for Surface {
+impl window::Surface<Backend> for Surface {
     fn compatibility(
         &self,
         _: &PhysicalDevice,
     ) -> (
-        hal::SurfaceCapabilities,
+        window::SurfaceCapabilities,
         Option<Vec<hal::format::Format>>,
-        Vec<hal::PresentMode>,
+        Vec<window::PresentMode>,
     ) {
         unimplemented!()
     }
@@ -22,17 +23,17 @@ impl hal::Surface<Backend> for Surface {
 
 #[derive(Debug)]
 pub struct Swapchain {
-    pub(crate) extent: hal::window::Extent2D,
+    pub(crate) extent: window::Extent2D,
     pub(crate) fbos: Vec<native::RawFrameBuffer>,
 }
 
-impl hal::Swapchain<Backend> for Swapchain {
+impl window::Swapchain<Backend> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _: u64,
         _: Option<&native::Semaphore>,
         _: Option<&native::Fence>,
-    ) -> Result<(hal::SwapImageIndex, Option<hal::window::Suboptimal>), hal::AcquireError> {
+    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
         unimplemented!()
     }
 }
