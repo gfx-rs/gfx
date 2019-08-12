@@ -1,6 +1,6 @@
 #![allow(dead_code)] //TODO: remove
 
-use crate::hal::{pso, ColorSlot};
+use hal::{pso, ColorSlot};
 use crate::{GlContainer, Share};
 use glow::Context;
 use smallvec::SmallVec;
@@ -13,7 +13,7 @@ pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {
 }
 
 pub fn map_comparison(cmp: pso::Comparison) -> u32 {
-    use crate::hal::pso::Comparison::*;
+    use hal::pso::Comparison::*;
     match cmp {
         Never => glow::NEVER,
         Less => glow::LESS,
@@ -27,7 +27,7 @@ pub fn map_comparison(cmp: pso::Comparison) -> u32 {
 }
 
 fn map_operation(op: pso::StencilOp) -> u32 {
-    use crate::hal::pso::StencilOp::*;
+    use hal::pso::StencilOp::*;
     match op {
         Keep => glow::KEEP,
         Zero => glow::ZERO,
@@ -99,7 +99,7 @@ pub(crate) fn bind_stencil(gl: &GlContainer, stencil: &Option<pso::StencilTest>,
 }
 
 fn map_factor(factor: pso::Factor) -> u32 {
-    use crate::hal::pso::Factor::*;
+    use hal::pso::Factor::*;
     match factor {
         Zero => glow::ZERO,
         One => glow::ONE,
@@ -138,7 +138,7 @@ fn map_blend_op(operation: pso::BlendOp) -> (u32, u32, u32) {
 }
 
 pub(crate) fn set_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
-    use crate::hal::pso::ColorMask as Cm;
+    use hal::pso::ColorMask as Cm;
 
     match desc.blend {
         Some(ref blend) => unsafe {
@@ -164,7 +164,7 @@ pub(crate) fn set_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
 }
 
 pub(crate) fn set_blend_slot(share: &Share, slot: ColorSlot, desc: &pso::ColorBlendDesc) {
-    use crate::hal::pso::ColorMask as Cm;
+    use hal::pso::ColorMask as Cm;
 
     let gl = &share.context;
     if !share.private_caps.draw_buffers || !share.private_caps.per_draw_buffer_blending {

@@ -4,41 +4,14 @@
 extern crate log;
 #[macro_use]
 extern crate ash;
-extern crate byteorder;
 #[macro_use]
 extern crate derivative;
-extern crate gfx_hal as hal;
 #[macro_use]
 extern crate lazy_static;
-#[cfg(feature = "use-rtld-next")]
-extern crate shared_library;
-extern crate smallvec;
 
-#[cfg(target_os = "macos")]
-extern crate core_graphics;
 #[cfg(target_os = "macos")]
 #[macro_use]
 extern crate objc;
-
-#[cfg(windows)]
-extern crate winapi;
-#[cfg(feature = "winit")]
-extern crate winit;
-#[cfg(all(
-    feature = "x11",
-    unix,
-    not(target_os = "android"),
-    not(target_os = "macos")
-))]
-extern crate x11;
-#[cfg(all(
-    feature = "xcb",
-    unix,
-    not(target_os = "android"),
-    not(target_os = "macos")
-))]
-extern crate xcb;
-
 
 use ash::extensions::{self, ext::DebugUtils};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
@@ -1201,6 +1174,55 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         };
 
         match self.swapchain_fn.queue_present_khr(*self.raw, &info) {
+            vk::Result::SUCCESS => Ok(None),
+            vk::Result::SUBOPTIMAL_KHR => Ok(Some(Suboptimal)),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                Err(PresentError::OutOfMemory(OutOfMemory::OutOfHostMemory))
+            }
+            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+                Err(PresentError::OutOfMemory(OutOfMemory::OutOfDeviceMemory))
+            }
+            vk::Result::ERROR_DEVICE_LOST => Err(PresentError::DeviceLost(DeviceLost)),
+            vk::Result::ERROR_OUT_OF_DATE_KHR => Err(PresentError::OutOfDate),
+            vk::Result::ERROR_SURFACE_LOST_KHR => Err(PresentError::SurfaceLost(SurfaceLost)),
+            _ => panic!("Failed to present frame"),
+        }
+    }
+
+    unsafe fn present_surface(
+        &mut self,
+        surface: &mut window::Surface,
+        image: window::SurfaceImage,
+        wait_semaphore: Option<&native::Semaphore>,
+    ) -> Result<Option<Suboptimal>, PresentError> {
+        let ssc = surface.swapchain.as_ref().unwrap();
+        let submit_info = vk::SubmitInfo {
+            s_type: vk::StructureType::SUBMIT_INFO,
+            p_next: ptr::null(),
+            wait_semaphore_count: 0,
+            p_wait_semaphores: wait_semaphore.map_or(ptr::null(), |s| &s.0 as *const _),
+            p_wait_dst_stage_mask: &vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+            command_buffer_count: 0,
+            p_command_buffers: ptr::null(),
+            signal_semaphore_count: 1,
+            p_signal_semaphores: &ssc.semaphore.0,
+        };
+        self.device.0
+            .queue_submit(*self.raw, &[submit_info], vk::Fence::null())
+            .unwrap();
+
+        let present_info = vk::PresentInfoKHR {
+            s_type: vk::StructureType::PRESENT_INFO_KHR,
+            p_next: ptr::null(),
+            wait_semaphore_count: 1,
+            p_wait_semaphores: &ssc.semaphore.0,
+            swapchain_count: 1,
+            p_swapchains: &ssc.swapchain.raw,
+            p_image_indices: &image.index,
+            p_results: ptr::null_mut(),
+        };
+
+        match self.swapchain_fn.queue_present_khr(*self.raw, &present_info) {
             vk::Result::SUCCESS => Ok(None),
             vk::Result::SUBOPTIMAL_KHR => Ok(Some(Suboptimal)),
             vk::Result::ERROR_OUT_OF_HOST_MEMORY => {

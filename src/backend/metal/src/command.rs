@@ -2289,6 +2289,27 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
+    unsafe fn present_surface(
+        &mut self,
+        _surface: &mut window::Surface,
+        image: window::SurfaceImage,
+        wait_semaphore: Option<&native::Semaphore>,
+    ) -> Result<Option<Suboptimal>, PresentError> {
+        self.wait(wait_semaphore);
+
+        let queue = self.shared.queue.lock();
+        let drawable = image.into_drawable();
+        autoreleasepool(|| {
+            let command_buffer = queue.raw.new_command_buffer();
+            command_buffer.set_label("present");
+            self.record_empty(command_buffer);
+
+            command_buffer.present_drawable(&drawable);
+            command_buffer.commit();
+        });
+        Ok(None)
+    }
+
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         QueueInner::wait_idle(&self.shared.queue);
         Ok(())
@@ -3379,7 +3400,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
                 for (i, &(at_id, op_flags, resolve_id)) in subpass.colors.iter().enumerate() {
                     let rat = &render_pass.attachments[at_id];
-                    let texture = &framebuffer.attachments[at_id];
+                    let texture = framebuffer.attachments[at_id].as_ref();
                     let desc = descriptor.color_attachments().object_at(i as _).unwrap();
 
                     combined_aspects |= Aspects::COLOR;
@@ -3405,7 +3426,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
                 if let Some((at_id, op_flags)) = subpass.depth_stencil {
                     let rat = &render_pass.attachments[at_id];
-                    let texture = &framebuffer.attachments[at_id];
+                    let texture = framebuffer.attachments[at_id].as_ref();
                     let aspects = rat.format.unwrap().surface_desc().aspects;
                     combined_aspects |= aspects;
 

@@ -1,5 +1,8 @@
-use crate::{native, Backend as B, GlContainer, PhysicalDevice, QueueFamily};
+use crate::{conv, device::Device, native, Backend as B, GlContainer, PhysicalDevice, QueueFamily};
 use hal::{adapter::Adapter, format as f, image, window};
+use arrayvec::ArrayVec;
+use glow::Context as _;
+use std::iter;
 
 
 struct PixelFormat {
@@ -42,7 +45,7 @@ impl Window {
 #[derive(Clone, Debug)]
 pub struct Swapchain {
     pub(crate) extent: window::Extent2D,
-    pub(crate) fbos: Vec<native::RawFrameBuffer>,
+    pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,
 }
 
 impl window::Swapchain<B> for Swapchain {
@@ -57,12 +60,18 @@ impl window::Swapchain<B> for Swapchain {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct Surface;
+#[derive(Clone, Debug)]
+pub struct Surface {
+    pub(crate) swapchain: Option<Swapchain>,
+    renderbuffer: Option<native::Renderbuffer>,
+}
 
 impl Surface {
     pub fn from_window(_window: &Window) -> Self {
-        Surface
+        Surface {
+            swapchain: None,
+            renderbuffer: None,
+        }
     }
 
     fn swapchain_formats(&self) -> Vec<f::Format> {
@@ -113,6 +122,71 @@ impl window::Surface<B> for Surface {
 
     fn supports_queue_family(&self, _: &QueueFamily) -> bool {
         true
+    }
+}
+
+impl window::PresentationSurface<B> for Surface {
+    type SwapchainImage = native::ImageView;
+
+    unsafe fn configure_swapchain(
+        &mut self, device: &Device, config: window::SwapchainConfig
+    ) -> Result<(), window::CreationError> {
+
+        let gl = &device.share.context;
+
+        if let Some(old) = self.swapchain.take() {
+            for fbo in old.fbos {
+                gl.delete_framebuffer(fbo);
+            }
+        }
+
+        if self.renderbuffer.is_none() {
+            self.renderbuffer = Some(gl.create_renderbuffer().unwrap());
+        }
+
+        let desc = conv::describe_format(config.format).unwrap();
+        gl.bind_renderbuffer(glow::RENDERBUFFER, self.renderbuffer);
+        gl.renderbuffer_storage(
+            glow::RENDERBUFFER,
+            desc.tex_internal,
+            config.extent.width as i32,
+            config.extent.height as i32,
+        );
+
+        let fbo = gl.create_framebuffer().unwrap();
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(fbo));
+        gl.framebuffer_renderbuffer(
+            glow::READ_FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::RENDERBUFFER,
+            self.renderbuffer,
+        );
+        self.swapchain = Some(Swapchain {
+            extent: config.extent,
+            fbos: iter::once(fbo).collect(),
+        });
+
+        Ok(())
+    }
+
+    unsafe fn unconfigure_swapchain(&mut self, device: &Device) {
+        let gl = &device.share.context;
+        if let Some(old) = self.swapchain.take() {
+            for fbo in old.fbos {
+                gl.delete_framebuffer(fbo);
+            }
+        }
+        if let Some(rbo) = self.renderbuffer.take() {
+            gl.delete_renderbuffer(rbo);
+        }
+    }
+
+    unsafe fn acquire_image(
+        &mut self,
+        _timeout_ns: u64,
+    ) -> Result<(Self::SwapchainImage, Option<window::Suboptimal>), window::AcquireError> {
+        let image = native::ImageView::Renderbuffer(self.renderbuffer.unwrap());
+        Ok((image, None))
     }
 }
 

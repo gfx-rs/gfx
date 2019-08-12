@@ -1651,7 +1651,7 @@ impl hal::device::Device<Backend> for Device {
             extent,
             attachments: attachments
                 .into_iter()
-                .map(|at| at.borrow().raw.clone())
+                .map(|at| at.borrow().texture.clone())
                 .collect(),
         })
     }
@@ -2031,11 +2031,11 @@ impl hal::device::Device<Backend> for Device {
                                 data.samplers[counters.samplers as usize] =
                                     Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref()));
                             }
-                            pso::Descriptor::Image(tex, il) => {
+                            pso::Descriptor::Image(view, il) => {
                                 data.textures[counters.textures as usize] =
-                                    Some((AsNative::from(tex.raw.as_ref()), il));
+                                    Some((AsNative::from(view.texture.as_ref()), il));
                             }
-                            pso::Descriptor::CombinedImageSampler(tex, il, sam) => {
+                            pso::Descriptor::CombinedImageSampler(view, il, sam) => {
                                 if !layout
                                     .content
                                     .contains(n::DescriptorContent::IMMUTABLE_SAMPLER)
@@ -2044,7 +2044,7 @@ impl hal::device::Device<Backend> for Device {
                                         Some(AsNative::from(sam.raw.as_ref().unwrap().as_ref()));
                                 }
                                 data.textures[counters.textures as usize] =
-                                    Some((AsNative::from(tex.raw.as_ref()), il));
+                                    Some((AsNative::from(view.texture.as_ref()), il));
                             }
                             pso::Descriptor::UniformTexelBuffer(view)
                             | pso::Descriptor::StorageTexelBuffer(view) => {
@@ -2098,8 +2098,9 @@ impl hal::device::Device<Backend> for Device {
                                 arg_index += 1;
                             }
                             pso::Descriptor::Image(image, _layout) => {
-                                encoder.set_texture(&image.raw, arg_index);
-                                data.ptr = (&**image.raw).as_ptr();
+                                let tex_ref = image.texture.as_ref();
+                                encoder.set_texture(tex_ref, arg_index);
+                                data.ptr = (&**tex_ref).as_ptr();
                                 arg_index += 1;
                             }
                             pso::Descriptor::CombinedImageSampler(image, _il, sampler) => {
@@ -2121,8 +2122,9 @@ impl hal::device::Device<Backend> for Device {
                                         arg_index + binding.count as NSUInteger,
                                     );
                                 }
-                                encoder.set_texture(&image.raw, arg_index);
-                                data.ptr = (&**image.raw).as_ptr();
+                                let tex_ref = image.texture.as_ref();
+                                encoder.set_texture(tex_ref, arg_index);
+                                data.ptr = (&**tex_ref).as_ptr();
                             }
                             pso::Descriptor::UniformTexelBuffer(view)
                             | pso::Descriptor::StorageTexelBuffer(view) => {
@@ -2670,7 +2672,7 @@ impl hal::device::Device<Backend> for Device {
             conv::map_texture_type(kind)
         };
 
-        let view = if mtl_format == image.mtl_format
+        let texture = if mtl_format == image.mtl_format
             && mtl_type == image.mtl_type
             && swizzle == format::Swizzle::NO
             && range == full_range
@@ -2694,7 +2696,7 @@ impl hal::device::Device<Backend> for Device {
         };
 
         Ok(n::ImageView {
-            raw: view,
+            texture,
             mtl_format,
         })
     }

@@ -10,7 +10,7 @@ pub mod family;
 
 use crate::error::HostExecutionError;
 use crate::pso;
-use crate::window::{PresentError, Suboptimal, SwapImageIndex};
+use crate::window::{PresentError, PresentationSurface, Suboptimal, SwapImageIndex};
 use crate::Backend;
 use std::{any::Any, borrow::Borrow, fmt, iter};
 
@@ -133,6 +133,14 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     {
         self.present::<_, _, B::Semaphore, _>(swapchains, iter::empty())
     }
+
+    /// Present the a
+    unsafe fn present_surface(
+        &mut self,
+        surface: &mut B::Surface,
+        image: <B::Surface as PresentationSurface<B>>::SwapchainImage,
+        wait_semaphore: Option<&B::Semaphore>,
+    ) -> Result<Option<Suboptimal>, PresentError>;
 
     /// Wait for the queue to idle.
     fn wait_idle(&self) -> Result<(), HostExecutionError>;

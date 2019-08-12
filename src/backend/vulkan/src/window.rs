@@ -1,17 +1,75 @@
-use std::os::raw::c_void;
-use std::ptr;
-use std::sync::Arc;
+use std::{
+    borrow::Borrow,
+    hash,
+    os::raw::c_void,
+    ptr,
+    sync::{Arc, Mutex},
+    time::Instant,
+};
 
-use ash::extensions::khr;
-use ash::vk;
-
+use ash::{
+    extensions::khr,
+    version::DeviceV1_0 as _,
+    vk,
+};
 use hal::{format::Format, window as w};
-
-#[cfg(feature = "winit")]
-use winit;
+use smallvec::SmallVec;
 
 use crate::{conv, native};
-use crate::{Backend, Instance, PhysicalDevice, QueueFamily, RawInstance, VK_ENTRY};
+use crate::{Backend, Instance, Device, PhysicalDevice, QueueFamily, RawDevice, RawInstance, VK_ENTRY};
+
+
+#[derive(Debug, Default)]
+pub struct FramebufferCache {
+    // We expect exactly one framebuffer per frame, but can support more.
+    pub framebuffers: SmallVec<[vk::Framebuffer; 1]>,
+}
+
+#[derive(Debug, Default)]
+pub struct FramebufferCachePtr(pub Arc<Mutex<FramebufferCache>>);
+
+impl hash::Hash for FramebufferCachePtr {
+    fn hash<H: hash::Hasher>(&self, hasher: &mut H) {
+        (self.0.as_ref() as *const Mutex<FramebufferCache>).hash(hasher)
+    }
+}
+impl PartialEq for FramebufferCachePtr {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+}
+impl Eq for FramebufferCachePtr {}
+
+#[derive(Debug)]
+struct SurfaceFrame {
+    image: vk::Image,
+    view: vk::ImageView,
+    framebuffers: FramebufferCachePtr,
+}
+
+#[derive(Debug)]
+pub struct SurfaceSwapchain {
+    pub(crate) swapchain: Swapchain,
+    device: Arc<RawDevice>,
+    fence: native::Fence,
+    pub(crate) semaphore: native::Semaphore,
+    frames: Vec<SurfaceFrame>,
+}
+
+impl SurfaceSwapchain {
+    unsafe fn release_resources(self, device: &ash::Device) -> Swapchain {
+        let _ = device.device_wait_idle();
+        device.destroy_fence(self.fence.0, None);
+        device.destroy_semaphore(self.semaphore.0, None);
+        for frame in self.frames {
+            device.destroy_image_view(frame.view, None);
+            for framebuffer in frame.framebuffers.0.lock().unwrap().framebuffers.drain() {
+                device.destroy_framebuffer(framebuffer, None);
+            }
+        }
+        self.swapchain
+    }
+}
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -20,6 +78,8 @@ pub struct Surface {
     // For vkDestroySurfaceKHR: Host access to surface must be externally synchronized
     #[derivative(Debug = "ignore")]
     pub(crate) raw: Arc<RawSurface>,
+
+    pub(crate) swapchain: Option<SurfaceSwapchain>,
 }
 
 pub struct RawSurface {
@@ -309,7 +369,10 @@ impl Instance {
             instance: self.raw.clone(),
         });
 
-        Surface { raw }
+        Surface {
+            raw,
+            swapchain: None,
+        }
     }
 }
 
@@ -413,6 +476,132 @@ impl w::Surface<Backend> for Surface {
     }
 }
 
+#[derive(Debug)]
+pub struct SurfaceImage {
+    pub(crate) index: w::SwapImageIndex,
+    view: native::ImageView,
+}
+
+impl Borrow<native::ImageView> for SurfaceImage {
+    fn borrow(&self) -> &native::ImageView {
+        &self.view
+    }
+}
+
+impl w::PresentationSurface<Backend> for Surface {
+    type SwapchainImage = SurfaceImage;
+
+    unsafe fn configure_swapchain(
+        &mut self, device: &Device, config: w::SwapchainConfig
+    ) -> Result<(), w::CreationError> {
+        use hal::device::Device as _;
+
+        let format = config.format;
+        let old = self.swapchain
+            .take()
+            .map(|ssc| ssc.release_resources(&device.raw.0));
+
+        let (swapchain, images) = device.create_swapchain(self, config, old)?;
+
+        self.swapchain = Some(SurfaceSwapchain {
+            swapchain,
+            device: Arc::clone(&device.raw),
+            fence: device.create_fence(false).unwrap(),
+            semaphore: device.create_semaphore().unwrap(),
+            frames: images
+                .iter()
+                .map(|image| {
+                    let view = device
+                        .create_image_view(
+                            image,
+                            hal::image::ViewKind::D2,
+                            format,
+                            hal::format::Swizzle::NO,
+                            hal::image::SubresourceRange {
+                                aspects: hal::format::Aspects::COLOR,
+                                layers: 0 .. 1,
+                                levels: 0 .. 1,
+                            },
+                        )
+                        .unwrap();
+                    SurfaceFrame {
+                        image: view.image,
+                        view: view.view,
+                        framebuffers: Default::default(),
+                    }
+                })
+                .collect(),
+        });
+
+        Ok(())
+    }
+
+    unsafe fn unconfigure_swapchain(&mut self, device: &Device) {
+        if let Some(ssc) = self.swapchain.take() {
+            let swapchain = ssc.release_resources(&device.raw.0);
+            swapchain.functor.destroy_swapchain(swapchain.raw, None);
+        }
+    }
+
+    unsafe fn acquire_image(
+        &mut self,
+        mut timeout_ns: u64,
+    ) -> Result<(Self::SwapchainImage, Option<w::Suboptimal>), w::AcquireError> {
+        use hal::window::Swapchain as _;
+
+        let ssc = self.swapchain.as_mut().unwrap();
+        let moment = Instant::now();
+        let (index, suboptimal) = ssc.swapchain.acquire_image(timeout_ns, None, Some(&ssc.fence))?;
+        timeout_ns -= moment.elapsed().as_nanos() as u64;
+        let fences = &[ssc.fence.0];
+
+        match ssc.device.0.wait_for_fences(fences, true, timeout_ns) {
+            Ok(()) => {
+                ssc.device.0.reset_fences(fences).unwrap();
+                let frame = &ssc.frames[index as usize];
+                // We have just waited for the frame to be fully available on CPU.
+                // All the associated framebuffers are expected to be destroyed by now.
+                for framebuffer in frame.framebuffers.0.lock().unwrap().framebuffers.drain() {
+                    ssc.device.0.destroy_framebuffer(framebuffer, None);
+                }
+                let image = Self::SwapchainImage {
+                    index,
+                    view: native::ImageView {
+                        image: frame.image,
+                        view: frame.view,
+                        range: hal::image::SubresourceRange {
+                            aspects: hal::format::Aspects::COLOR,
+                            layers: 0 .. 1,
+                            levels: 0 .. 1,
+                        },
+                        owner: native::ImageViewOwner::Surface(
+                            FramebufferCachePtr(Arc::clone(&frame.framebuffers.0))
+                        ),
+                    },
+                };
+                Ok((image, suboptimal))
+            },
+            Err(vk::Result::NOT_READY) => Err(w::AcquireError::NotReady),
+            Err(vk::Result::TIMEOUT) => Err(w::AcquireError::Timeout),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(w::AcquireError::OutOfDate),
+            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
+                Err(w::AcquireError::SurfaceLost(hal::device::SurfaceLost))
+            }
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(w::AcquireError::OutOfMemory(
+                hal::device::OutOfMemory::OutOfHostMemory,
+            )),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(w::AcquireError::OutOfMemory(
+                hal::device::OutOfMemory::OutOfDeviceMemory,
+            )),
+            Err(vk::Result::ERROR_DEVICE_LOST) => {
+                Err(w::AcquireError::DeviceLost(hal::device::DeviceLost))
+            }
+            _ => unreachable!(),
+        }
+    }
+}
+
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Swapchain {
@@ -437,13 +626,8 @@ impl w::Swapchain<Backend> for Swapchain {
             .acquire_next_image(self.raw, timeout_ns, semaphore, fence);
 
         match index {
-            Ok((i, suboptimal)) => {
-                if suboptimal {
-                    Ok((i, Some(w::Suboptimal)))
-                } else {
-                    Ok((i, None))
-                }
-            }
+            Ok((i, true)) => Ok((i, Some(w::Suboptimal))),
+            Ok((i, false)) => Ok((i, None)),
             Err(vk::Result::NOT_READY) => Err(w::AcquireError::NotReady),
             Err(vk::Result::TIMEOUT) => Err(w::AcquireError::Timeout),
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(w::AcquireError::OutOfDate),

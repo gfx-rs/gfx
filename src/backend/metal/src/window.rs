@@ -4,6 +4,7 @@ use crate::{
     native,
     Backend,
     QueueFamily,
+    Shared,
 };
 
 use hal::{format, image, window as w};
@@ -16,6 +17,7 @@ use objc::rc::autoreleasepool;
 use objc::runtime::Object;
 use parking_lot::{Mutex, MutexGuard};
 
+use std::borrow::Borrow;
 use std::ptr::NonNull;
 use std::sync::Arc;
 use std::thread;
@@ -32,6 +34,7 @@ const SIGNPOST_ID: u32 = 0x100;
 #[derive(Debug)]
 pub struct Surface {
     inner: Arc<SurfaceInner>,
+    swapchain_format: metal::MTLPixelFormat,
     main_thread_id: thread::ThreadId,
 }
 
@@ -77,8 +80,63 @@ impl SurfaceInner {
         self.enable_signposts = enable_signposts;
         Surface {
             inner: Arc::new(self),
+            swapchain_format: metal::MTLPixelFormat::Invalid,
             main_thread_id: thread::current().id(),
         }
+    }
+
+    fn configure(&self, shared: &Shared, config: &w::SwapchainConfig) -> metal::MTLPixelFormat {
+        info!("build swapchain {:?}", config);
+
+        let caps = &shared.private_caps;
+        let mtl_format = caps
+            .map_format(config.format)
+            .expect("unsupported backbuffer format");
+
+        let render_layer_borrow = self.render_layer.lock();
+        let render_layer = *render_layer_borrow;
+        let framebuffer_only = config.image_usage == image::Usage::COLOR_ATTACHMENT;
+        let display_sync = config.present_mode != w::PresentMode::Immediate;
+        let is_mac = caps.os_is_mac;
+        let can_set_next_drawable_timeout = if is_mac {
+            caps.has_version_at_least(10, 13)
+        } else {
+            caps.has_version_at_least(11, 0)
+        };
+        let can_set_display_sync = is_mac && caps.has_version_at_least(10, 13);
+        let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
+
+        let device_raw = shared.device.lock().as_ptr();
+        unsafe {
+            // On iOS, unless the user supplies a view with a CAMetalLayer, we
+            // create one as a sublayer. However, when the view changes size,
+            // its sublayers are not automatically resized, and we must resize
+            // it here. The drawable size and the layer size don't correlate
+            #[cfg(target_os = "ios")]
+            {
+                if let Some(view) = self.view {
+                    let main_layer: *mut Object = msg_send![view.as_ptr(), layer];
+                    let bounds: CGRect = msg_send![main_layer, bounds];
+                    let () = msg_send![render_layer, setFrame: bounds];
+                }
+            }
+            let () = msg_send![render_layer, setDevice: device_raw];
+            let () = msg_send![render_layer, setPixelFormat: mtl_format];
+            let () = msg_send![render_layer, setFramebufferOnly: framebuffer_only];
+
+            // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
+            let () = msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
+
+            let () = msg_send![render_layer, setDrawableSize: drawable_size];
+            if can_set_next_drawable_timeout {
+                let () = msg_send![render_layer, setAllowsNextDrawableTimeout:false];
+            }
+            if can_set_display_sync {
+                let () = msg_send![render_layer, setDisplaySyncEnabled: display_sync];
+            }
+        };
+
+        mtl_format
     }
 
     fn next_frame<'a>(
@@ -293,6 +351,27 @@ impl SwapchainImage {
     }
 }
 
+#[derive(Debug)]
+pub struct SurfaceImage {
+    view: native::ImageView,
+    drawable: metal::Drawable,
+}
+
+unsafe impl Send for SurfaceImage {}
+unsafe impl Sync for SurfaceImage {}
+
+impl SurfaceImage {
+    pub(crate) fn into_drawable(self) -> metal::Drawable {
+        self.drawable
+    }
+}
+
+impl Borrow<native::ImageView> for SurfaceImage {
+    fn borrow(&self) -> &native::ImageView {
+        &self.view
+    }
+}
+
 impl w::Surface<Backend> for Surface {
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         // we only expose one family atm, so it's compatible
@@ -365,6 +444,44 @@ impl w::Surface<Backend> for Surface {
     }
 }
 
+impl w::PresentationSurface<Backend> for Surface {
+    type SwapchainImage = SurfaceImage;
+
+    unsafe fn configure_swapchain(
+        &mut self, device: &Device, config: w::SwapchainConfig
+    ) -> Result<(), w::CreationError> {
+        assert!(image::Usage::COLOR_ATTACHMENT.contains(config.image_usage));
+        self.swapchain_format = self.inner.configure(&device.shared, &config);
+        Ok(())
+    }
+
+    unsafe fn unconfigure_swapchain(&mut self, _device: &Device) {
+        self.swapchain_format = metal::MTLPixelFormat::Invalid;
+    }
+
+    unsafe fn acquire_image(
+        &mut self,
+        _timeout_ns: u64, //TODO: use the timeout
+    ) -> Result<(Self::SwapchainImage, Option<w::Suboptimal>), w::AcquireError> {
+        let render_layer_borrow = self.inner.render_layer.lock();
+        let (drawable, texture) = autoreleasepool(|| {
+            let drawable: &metal::DrawableRef = msg_send![*render_layer_borrow, nextDrawable];
+            assert!(!drawable.as_ptr().is_null());
+            let texture: &metal::TextureRef = msg_send![drawable, texture];
+            (drawable.to_owned(), texture.to_owned())
+        });
+
+        let image = SurfaceImage {
+            view: native::ImageView {
+                texture,
+                mtl_format: self.swapchain_format,
+            },
+            drawable,
+        };
+        Ok((image, None))
+    }
+}
+
 impl Device {
     pub(crate) fn build_swapchain(
         &self,
@@ -372,69 +489,22 @@ impl Device {
         config: w::SwapchainConfig,
         old_swapchain: Option<Swapchain>,
     ) -> (Swapchain, Vec<native::Image>) {
-        info!("build_swapchain {:?}", config);
         if let Some(ref sc) = old_swapchain {
             sc.clear_drawables();
         }
 
-        let caps = &self.shared.private_caps;
-        let mtl_format = caps
-            .map_format(config.format)
-            .expect("unsupported backbuffer format");
-
-        let render_layer_borrow = surface.inner.render_layer.lock();
-        let render_layer = *render_layer_borrow;
-        let format_desc = config.format.surface_desc();
-        let framebuffer_only = config.image_usage == image::Usage::COLOR_ATTACHMENT;
-        let display_sync = config.present_mode != w::PresentMode::Immediate;
-        let is_mac = caps.os_is_mac;
-        let can_set_next_drawable_timeout = if is_mac {
-            caps.has_version_at_least(10, 13)
-        } else {
-            caps.has_version_at_least(11, 0)
-        };
-        let can_set_display_sync = is_mac && caps.has_version_at_least(10, 13);
-        let drawable_size = CGSize::new(config.extent.width as f64, config.extent.height as f64);
+        let mtl_format = surface.inner.configure(&self.shared, &config);
 
         let cmd_queue = self.shared.queue.lock();
-
-        unsafe {
-            // On iOS, unless the user supplies a view with a CAMetalLayer, we
-            // create one as a sublayer. However, when the view changes size,
-            // its sublayers are not automatically resized, and we must resize
-            // it here. The drawable size and the layer size don't correlate
-            #[cfg(target_os = "ios")]
-            {
-                if let Some(view) = surface.inner.view {
-                    let main_layer: *mut Object = msg_send![view.as_ptr(), layer];
-                    let bounds: CGRect = msg_send![main_layer, bounds];
-                    let () = msg_send![render_layer, setFrame: bounds];
-                }
-            }
-
-            let device_raw = self.shared.device.lock().as_ptr();
-            let () = msg_send![render_layer, setDevice: device_raw];
-            let () = msg_send![render_layer, setPixelFormat: mtl_format];
-            let () = msg_send![render_layer, setFramebufferOnly: framebuffer_only];
-
-            // this gets ignored on iOS for certain OS/device combinations (iphone5s iOS 10.3)
-            let () = msg_send![render_layer, setMaximumDrawableCount: config.image_count as u64];
-
-            let () = msg_send![render_layer, setDrawableSize: drawable_size];
-            if can_set_next_drawable_timeout {
-                let () = msg_send![render_layer, setAllowsNextDrawableTimeout:false];
-            }
-            if can_set_display_sync {
-                let () = msg_send![render_layer, setDisplaySyncEnabled: display_sync];
-            }
-        };
+        let format_desc = config.format.surface_desc();
+        let render_layer_borrow = surface.inner.render_layer.lock();
 
         let frames = (0 .. config.image_count)
             .map(|index| {
                 autoreleasepool(|| {
                     // for the drawable & texture
                     let (drawable, texture) = unsafe {
-                        let drawable: &metal::DrawableRef = msg_send![render_layer, nextDrawable];
+                        let drawable: &metal::DrawableRef = msg_send![*render_layer_borrow, nextDrawable];
                         assert!(!drawable.as_ptr().is_null());
                         let texture: &metal::TextureRef = msg_send![drawable, texture];
                         (drawable, texture)

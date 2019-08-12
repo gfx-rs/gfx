@@ -47,19 +47,15 @@
 //! }
 //! ```
 
-use crate::{native, Backend as B, GlContainer, PhysicalDevice, QueueFamily, Starc};
+use crate::{conv, native, Backend as B, Device, GlContainer, PhysicalDevice, QueueFamily, Starc};
 use hal::{adapter::Adapter, format as f, image, window};
 
+use arrayvec::ArrayVec;
+use glow::Context as _;
 use glutin;
 
-fn get_window_extent(window: &glutin::window::Window) -> image::Extent {
-    let px = window.inner_size().to_physical(window.hidpi_factor());
-    image::Extent {
-        width: px.width as image::Size,
-        height: px.height as image::Size,
-        depth: 1,
-    }
-}
+use std::iter;
+
 
 #[derive(Debug)]
 pub struct Swapchain {
@@ -68,7 +64,7 @@ pub struct Swapchain {
     // Extent because the window lies
     pub(crate) extent: window::Extent2D,
     ///
-    pub(crate) fbos: Vec<native::RawFrameBuffer>,
+    pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,
 }
 
 impl window::Swapchain<B> for Swapchain {
@@ -86,20 +82,20 @@ impl window::Swapchain<B> for Swapchain {
 //TODO: if we make `Surface` a `WindowBuilder` instead of `RawContext`,
 // we could spawn window + GL context when a swapchain is requested
 // and actually respect the swapchain configuration provided by the user.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Surface {
     pub(crate) context: Starc<glutin::RawContext<glutin::PossiblyCurrent>>,
+    pub(crate) swapchain: Option<Swapchain>,
+    renderbuffer: Option<native::Renderbuffer>,
 }
 
 impl Surface {
     pub fn from_context(context: glutin::RawContext<glutin::PossiblyCurrent>) -> Self {
         Surface {
+            renderbuffer: None,
+            swapchain: None,
             context: Starc::new(context),
         }
-    }
-
-    pub fn get_context(&self) -> &glutin::RawContext<glutin::PossiblyCurrent> {
-        &*self.context
     }
 
     pub fn context(&self) -> &glutin::RawContext<glutin::PossiblyCurrent> {
@@ -118,6 +114,72 @@ impl Surface {
             (24, 8, false) => vec![f::Format::Rgba8Unorm, f::Format::Bgra8Unorm],
             _ => vec![],
         }
+    }
+}
+
+impl window::PresentationSurface<B> for Surface {
+    type SwapchainImage = native::ImageView;
+
+    unsafe fn configure_swapchain(
+        &mut self, device: &Device, config: window::SwapchainConfig
+    ) -> Result<(), window::CreationError> {
+
+        let gl = &device.share.context;
+
+        if let Some(old) = self.swapchain.take() {
+            for fbo in old.fbos {
+                gl.delete_framebuffer(fbo);
+            }
+        }
+
+        if self.renderbuffer.is_none() {
+            self.renderbuffer = Some(gl.create_renderbuffer().unwrap());
+        }
+
+        let desc = conv::describe_format(config.format).unwrap();
+        gl.bind_renderbuffer(glow::RENDERBUFFER, self.renderbuffer);
+        gl.renderbuffer_storage(
+            glow::RENDERBUFFER,
+            desc.tex_internal,
+            config.extent.width as i32,
+            config.extent.height as i32,
+        );
+
+        let fbo = gl.create_framebuffer().unwrap();
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(fbo));
+        gl.framebuffer_renderbuffer(
+            glow::READ_FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::RENDERBUFFER,
+            self.renderbuffer,
+        );
+        self.swapchain = Some(Swapchain {
+            context: self.context.clone(),
+            extent: config.extent,
+            fbos: iter::once(fbo).collect(),
+        });
+
+        Ok(())
+    }
+
+    unsafe fn unconfigure_swapchain(&mut self, device: &Device) {
+        let gl = &device.share.context;
+        if let Some(old) = self.swapchain.take() {
+            for fbo in old.fbos {
+                gl.delete_framebuffer(fbo);
+            }
+        }
+        if let Some(rbo) = self.renderbuffer.take() {
+            gl.delete_renderbuffer(rbo);
+        }
+    }
+
+    unsafe fn acquire_image(
+        &mut self,
+        _timeout_ns: u64,
+    ) -> Result<(Self::SwapchainImage, Option<window::Suboptimal>), window::AcquireError> {
+        let image = native::ImageView::Renderbuffer(self.renderbuffer.unwrap());
+        Ok((image, None))
     }
 }
 

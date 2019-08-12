@@ -102,6 +102,16 @@ pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     Some(format)
 }
 
+pub fn map_format_nosrgb(format: Format) -> Option<DXGI_FORMAT> {
+    // NOTE: DXGI doesn't allow sRGB format on the swapchain, but
+    //       creating RTV of swapchain buffers with sRGB works
+    match format {
+        Format::Bgra8Srgb => Some(DXGI_FORMAT_B8G8R8A8_UNORM),
+        Format::Rgba8Srgb => Some(DXGI_FORMAT_R8G8B8A8_UNORM),
+        _ => map_format(format),
+    }
+}
+
 pub fn map_swizzle(swizzle: Swizzle) -> UINT {
     use hal::format::Component::*;
 

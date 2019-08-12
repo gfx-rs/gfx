@@ -1,5 +1,5 @@
-use crate::hal::format::Format;
-use crate::hal::{image as i, Primitive};
+use hal::format::Format;
+use hal::{image as i, Primitive};
 use crate::native::VertexAttribFunction;
 
 /*
@@ -18,7 +18,7 @@ pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
 }*/
 
 pub fn filter_to_gl(mag: i::Filter, min: i::Filter, mip: i::Filter) -> (u32, u32) {
-    use crate::hal::image::Filter::*;
+    use hal::image::Filter::*;
 
     let mag_filter = match mag {
         Nearest => glow::NEAREST,
@@ -59,42 +59,73 @@ pub fn primitive_to_gl_primitive(primitive: Primitive) -> u32 {
     }
 }
 
-pub fn format_to_gl_format(format: Format) -> Option<(i32, u32, VertexAttribFunction)> {
-    use crate::hal::format::Format::*;
+pub struct FormatDescription {
+    pub tex_internal: u32,
+    pub tex_external: u32,
+    pub data_type: u32,
+    pub num_components: u8,
+    pub va_fun: VertexAttribFunction,
+}
+
+impl FormatDescription {
+    fn new(
+        tex_internal: u32,
+        tex_external: u32,
+        data_type: u32,
+        num_components: u8,
+        va_fun: VertexAttribFunction,
+    ) -> Self {
+        FormatDescription { tex_internal, tex_external, data_type, num_components, va_fun }
+    }
+}
+
+pub fn describe_format(format: Format) -> Option<FormatDescription> {
+    use hal::format::Format::*;
     use crate::native::VertexAttribFunction::*;
     let _ = Double; //mark as used
-                    // TODO: Add more formats and error handling for `None`
-    let format = match format {
-        R8Uint => (1, glow::UNSIGNED_BYTE, Integer),
-        R8Sint => (1, glow::BYTE, Integer),
-        Rg8Uint => (2, glow::UNSIGNED_BYTE, Integer),
-        Rg8Sint => (2, glow::BYTE, Integer),
-        Rgba8Uint => (4, glow::UNSIGNED_BYTE, Integer),
-        Rgba8Sint => (4, glow::BYTE, Integer),
-        R16Uint => (1, glow::UNSIGNED_SHORT, Integer),
-        R16Sint => (1, glow::SHORT, Integer),
-        R16Sfloat => (1, glow::HALF_FLOAT, Float),
-        Rg16Uint => (2, glow::UNSIGNED_SHORT, Integer),
-        Rg16Sint => (2, glow::SHORT, Integer),
-        Rg16Sfloat => (2, glow::HALF_FLOAT, Float),
-        Rgba16Uint => (4, glow::UNSIGNED_SHORT, Integer),
-        Rgba16Sint => (4, glow::SHORT, Integer),
-        Rgba16Sfloat => (4, glow::HALF_FLOAT, Float),
-        R32Uint => (1, glow::UNSIGNED_INT, Integer),
-        R32Sint => (1, glow::INT, Integer),
-        R32Sfloat => (1, glow::FLOAT, Float),
-        Rg32Uint => (2, glow::UNSIGNED_INT, Integer),
-        Rg32Sint => (2, glow::INT, Integer),
-        Rg32Sfloat => (2, glow::FLOAT, Float),
-        Rgb32Uint => (3, glow::UNSIGNED_INT, Integer),
-        Rgb32Sint => (3, glow::INT, Integer),
-        Rgb32Sfloat => (3, glow::FLOAT, Float),
-        Rgba32Uint => (4, glow::UNSIGNED_INT, Integer),
-        Rgba32Sint => (4, glow::INT, Integer),
-        Rgba32Sfloat => (4, glow::FLOAT, Float),
+
+    // TODO: Add more formats and error handling for `None`
+    Some(match format {
+        R8Uint => FormatDescription::new(glow::R8UI, glow::RED_INTEGER, glow::UNSIGNED_BYTE, 1, Integer),
+        R8Sint => FormatDescription::new(glow::R8I, glow::RED_INTEGER, glow::BYTE, 1, Integer),
+        R8Unorm => FormatDescription::new(glow::R8, glow::RED, glow::UNSIGNED_BYTE, 1, Float),
+        Rg8Uint => FormatDescription::new(glow::RG8UI, glow::RG_INTEGER, glow::UNSIGNED_BYTE, 2, Integer),
+        Rg8Sint => FormatDescription::new(glow::RG8I, glow::RG_INTEGER, glow::BYTE, 2, Integer),
+        Rgba8Uint => FormatDescription::new(glow::RGBA8UI, glow::RGBA_INTEGER, glow::UNSIGNED_BYTE, 4, Integer),
+        Rgba8Sint => FormatDescription::new(glow::RGBA8I, glow::RGBA_INTEGER, glow::BYTE, 4, Integer),
+        Rgba8Unorm => FormatDescription::new(glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE, 4, Float),
+        Rgba8Srgb => FormatDescription::new(glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE, 4, Float),
+        Bgra8Unorm => FormatDescription::new(glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE, 4, Float),
+        Bgra8Srgb => FormatDescription::new(glow::SRGB8_ALPHA8, glow::BGRA, glow::UNSIGNED_BYTE, 4, Float),
+        R16Uint => FormatDescription::new(glow::R16UI, glow::RED_INTEGER, glow::UNSIGNED_SHORT, 1, Integer),
+        R16Sint => FormatDescription::new(glow::R16I, glow::RED_INTEGER, glow::SHORT, 1, Integer),
+        R16Sfloat => FormatDescription::new(glow::R16, glow::RED, glow::HALF_FLOAT, 1, Float),
+        Rg16Uint => FormatDescription::new(glow::RG16UI, glow::RG_INTEGER, glow::UNSIGNED_SHORT, 2, Integer),
+        Rg16Sint => FormatDescription::new(glow::RG16I, glow::RG_INTEGER, glow::SHORT, 2, Integer),
+        Rg16Sfloat => FormatDescription::new(glow::RG16, glow::RG, glow::HALF_FLOAT, 2, Float),
+        Rgba16Uint => FormatDescription::new(glow::RGBA16UI, glow::RGBA_INTEGER, glow::UNSIGNED_SHORT, 4, Integer),
+        Rgba16Sint => FormatDescription::new(glow::RGBA16I, glow::RGBA_INTEGER, glow::SHORT, 4, Integer),
+        Rgba16Sfloat => FormatDescription::new(glow::RGBA16, glow::RGBA, glow::HALF_FLOAT, 4, Float),
+        R32Uint => FormatDescription::new(glow::R32UI, glow::RED_INTEGER, glow::UNSIGNED_INT, 1, Integer),
+        R32Sint => FormatDescription::new(glow::R32I, glow::RED_INTEGER, glow::INT, 1, Integer),
+        R32Sfloat => FormatDescription::new(glow::R32F, glow::RED, glow::FLOAT, 1, Float),
+        Rg32Uint => FormatDescription::new(glow::RG32UI, glow::RG_INTEGER, glow::UNSIGNED_INT, 2, Integer),
+        Rg32Sint => FormatDescription::new(glow::R32I, glow::RG_INTEGER, glow::INT, 2, Integer),
+        Rg32Sfloat => FormatDescription::new(glow::RG32F, glow::RG, glow::FLOAT, 2, Float),
+        Rgb32Uint => FormatDescription::new(glow::RGB32UI, glow::RGB_INTEGER, glow::UNSIGNED_INT, 3, Integer),
+        Rgb32Sint => FormatDescription::new(glow::RGB32I, glow::RGB_INTEGER, glow::INT, 3, Integer),
+        Rgb32Sfloat => FormatDescription::new(glow::RGB32F, glow::RGB, glow::FLOAT, 3, Float),
+        Rgba32Uint => FormatDescription::new(glow::RGBA32UI, glow::RGBA_INTEGER, glow::UNSIGNED_INT, 4, Integer),
+        Rgba32Sint => FormatDescription::new(glow::RGBA32I, glow::RGBA_INTEGER, glow::INT, 4, Integer),
+        Rgba32Sfloat => FormatDescription::new(glow::RGBA32F, glow::RGBA, glow::FLOAT, 4, Float),
+        D32Sfloat => FormatDescription::new(
+            glow::DEPTH32F_STENCIL8,
+            glow::DEPTH_STENCIL,
+            glow::FLOAT_32_UNSIGNED_INT_24_8_REV,
+            1,
+            Float,
+        ),
 
         _ => return None,
-    };
-
-    Some(format)
+    })
 }

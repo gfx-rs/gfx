@@ -2,9 +2,9 @@ use std::cell::Cell;
 use std::ops::Range;
 use std::sync::{Arc, Mutex, RwLock};
 
-use crate::hal::backend::FastHashMap;
-use crate::hal::memory::{Properties, Requirements};
-use crate::hal::{buffer, format, image as i, pass, pso};
+use hal::backend::FastHashMap;
+use hal::memory::{Properties, Requirements};
+use hal::{buffer, format, image as i, pass, pso};
 
 use crate::{Backend, GlContext};
 
@@ -17,7 +17,7 @@ pub type VertexArray = <GlContext as glow::Context>::VertexArray;
 pub type RawBuffer = <GlContext as glow::Context>::Buffer;
 pub type Shader = <GlContext as glow::Context>::Shader;
 pub type Program = <GlContext as glow::Context>::Program;
-pub type Surface = <GlContext as glow::Context>::Renderbuffer;
+pub type Renderbuffer = <GlContext as glow::Context>::Renderbuffer;
 pub type Texture = <GlContext as glow::Context>::Texture;
 pub type Sampler = <GlContext as glow::Context>::Sampler;
 pub type UniformLocation = <GlContext as glow::Context>::UniformLocation;
@@ -181,8 +181,8 @@ pub struct Image {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ImageKind {
-    Surface {
-        surface: Surface,
+    Renderbuffer {
+        renderbuffer: Renderbuffer,
         format: TextureFormat,
     },
     Texture {
@@ -203,7 +203,7 @@ pub enum FatSampler {
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
 pub enum ImageView {
-    Surface(Surface),
+    Renderbuffer(Renderbuffer),
     Texture(Texture, TextureTarget, i::Level),
     TextureLayer(Texture, TextureTarget, i::Level, i::Layer),
 }

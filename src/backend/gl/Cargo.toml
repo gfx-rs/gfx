@@ -21,6 +21,7 @@ default = []
 wgl = []
 
 [dependencies]
+arrayvec = "0.4"
 bitflags = "1"
 log = { version = "0.4" }
 gfx-hal = { path = "../../hal", version = "0.3" }
@@ -59,7 +60,7 @@ features = [
 ]
 
 [target.'cfg(windows)'.dependencies]
-winapi = { version = "0.3" }
+winapi = { version = "0.3", features = ["libloaderapi", "windef", "wingdi", "winuser"] }
 
 [build-dependencies]
 gl_generator = "0.11"

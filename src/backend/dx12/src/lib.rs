@@ -475,6 +475,16 @@ impl q::CommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
+    unsafe fn present_surface(
+        &mut self,
+        surface: &mut window::Surface,
+        _image: resource::ImageView,
+        _wait_semaphore: Option<&resource::Semaphore>,
+    ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError> {
+        surface.present();
+        Ok(None)
+    }
+
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
         self.raw.signal(self.idle_fence, 1);
         assert_eq!(

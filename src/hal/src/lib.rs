@@ -46,7 +46,7 @@ pub mod prelude {
         pool::CommandPool as _,
         pso::DescriptorPool as _,
         queue::{CommandQueue as _, QueueFamily as _},
-        window::{Surface as _, Swapchain as _},
+        window::{PresentationSurface as _, Surface as _, Swapchain as _},
         Instance as _,
     };
 }
@@ -478,7 +478,7 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type PhysicalDevice: adapter::PhysicalDevice<Self>;
     type Device: device::Device<Self>;
 
-    type Surface: window::Surface<Self>;
+    type Surface: window::PresentationSurface<Self>;
     type Swapchain: window::Swapchain<Self>;
 
     type QueueFamily: queue::QueueFamily;

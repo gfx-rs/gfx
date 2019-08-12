@@ -118,7 +118,7 @@ trait SurfaceTrait {
 impl SurfaceTrait for <back::Backend as Backend>::Surface {
     #[cfg(feature = "gl")]
     fn get_context_t(&self) -> &back::glutin::RawContext<back::glutin::PossiblyCurrent> {
-        self.get_context()
+        self.context()
     }
 }
 

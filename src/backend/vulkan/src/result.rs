@@ -1,6 +1,6 @@
 use ash::vk;
 
-use crate::hal::error::{DeviceCreationError, HostExecutionError};
+use hal::error::{DeviceCreationError, HostExecutionError};
 
 // Generic error codes from Vulkan
 #[derive(Debug)]
