@@ -519,7 +519,11 @@ impl d::Device<B> for Device {
                     p_next: ptr::null(),
                     flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
                     topology: conv::map_topology(desc.input_assembler.primitive),
-                    primitive_restart_enable: vk::FALSE,
+                    primitive_restart_enable: match desc.input_assembler.primitive_restart {
+                        pso::PrimitiveRestart::U16|pso::PrimitiveRestart::U32 => vk::TRUE,
+                        pso::PrimitiveRestart::Disabled => vk::FALSE
+                    }
+
                 });
 
                 let depth_bias = match desc.rasterizer.depth_bias {
