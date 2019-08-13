@@ -911,7 +911,9 @@ impl window::PresentationSurface<Backend> for Surface {
     type SwapchainImage = ();
 
     unsafe fn configure_swapchain(
-        &mut self, _: &Device, _: window::SwapchainConfig
+        &mut self,
+        _: &Device,
+        _: window::SwapchainConfig,
     ) -> Result<(), window::CreationError> {
         unimplemented!()
     }

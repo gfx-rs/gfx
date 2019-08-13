@@ -110,10 +110,7 @@ fn main() {
     let wb = winit::window::WindowBuilder::new()
         .with_min_inner_size(winit::dpi::LogicalSize::new(1.0, 1.0))
         .with_inner_size(winit::dpi::LogicalSize::from_physical(
-            winit::dpi::PhysicalSize::new(
-                DIMS.width as _,
-                DIMS.height as _,
-            ),
+            winit::dpi::PhysicalSize::new(DIMS.width as _, DIMS.height as _),
             dpi,
         ))
         .with_title("quad".to_string());
@@ -449,7 +446,10 @@ where
                     set: &desc_set,
                     binding: 0,
                     array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Image(&*image_srv, i::Layout::ShaderReadOnlyOptimal)),
+                    descriptors: Some(pso::Descriptor::Image(
+                        &*image_srv,
+                        i::Layout::ShaderReadOnlyOptimal,
+                    )),
                 },
                 pso::DescriptorSetWrite {
                     set: &desc_set,
@@ -543,7 +543,8 @@ where
         println!("{:?}", swap_config);
         let extent = swap_config.extent;
         unsafe {
-            surface.configure_swapchain(&device, swap_config)
+            surface
+                .configure_swapchain(&device, swap_config)
                 .expect("Can't configure swapchain");
         };
 
@@ -778,7 +779,8 @@ where
         let extent = swap_config.extent.to_extent();
 
         unsafe {
-            self.surface.configure_swapchain(&self.device, swap_config)
+            self.surface
+                .configure_swapchain(&self.device, swap_config)
                 .expect("Can't create swapchain");
         }
 
@@ -798,15 +800,17 @@ where
         };
 
         let framebuffer = unsafe {
-            self.device.create_framebuffer(
-                &self.render_pass,
-                iter::once(surface_image.borrow()),
-                i::Extent {
-                    width: self.dimensions.width,
-                    height: self.dimensions.height,
-                    depth: 1,
-                },
-            ).unwrap()
+            self.device
+                .create_framebuffer(
+                    &self.render_pass,
+                    iter::once(surface_image.borrow()),
+                    i::Extent {
+                        width: self.dimensions.width,
+                        height: self.dimensions.height,
+                        depth: 1,
+                    },
+                )
+                .unwrap()
         };
 
         // Compute index into our resource ring buffers based on the frame number
@@ -906,9 +910,7 @@ where
                 )));
 
             self.device
-                .destroy_buffer(ManuallyDrop::into_inner(ptr::read(
-                    &self.vertex_buffer,
-                )));
+                .destroy_buffer(ManuallyDrop::into_inner(ptr::read(&self.vertex_buffer)));
             self.device
                 .destroy_buffer(ManuallyDrop::into_inner(ptr::read(
                     &self.image_upload_buffer,
@@ -931,19 +933,14 @@ where
             self.device
                 .destroy_render_pass(ManuallyDrop::into_inner(ptr::read(&self.render_pass)));
             self.device
-                .free_memory(ManuallyDrop::into_inner(ptr::read(
-                    &self.buffer_memory,
-                )));
+                .free_memory(ManuallyDrop::into_inner(ptr::read(&self.buffer_memory)));
             self.device
                 .free_memory(ManuallyDrop::into_inner(ptr::read(&self.image_memory)));
+            self.device.free_memory(ManuallyDrop::into_inner(ptr::read(
+                &self.image_upload_memory,
+            )));
             self.device
-                .free_memory(ManuallyDrop::into_inner(ptr::read(
-                    &self.image_upload_memory,
-                )));
-            self.device
-                .destroy_graphics_pipeline(ManuallyDrop::into_inner(ptr::read(
-                    &self.pipeline,
-                )));
+                .destroy_graphics_pipeline(ManuallyDrop::into_inner(ptr::read(&self.pipeline)));
             self.device
                 .destroy_pipeline_layout(ManuallyDrop::into_inner(ptr::read(
                     &self.pipeline_layout,

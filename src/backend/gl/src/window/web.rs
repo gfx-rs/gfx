@@ -1,7 +1,7 @@
 use crate::{conv, device::Device, native, Backend as B, GlContainer, PhysicalDevice, QueueFamily};
-use hal::{adapter::Adapter, format as f, image, window};
 use arrayvec::ArrayVec;
 use glow::Context as _;
+use hal::{adapter::Adapter, format as f, image, window};
 use std::iter;
 
 
@@ -129,9 +129,10 @@ impl window::PresentationSurface<B> for Surface {
     type SwapchainImage = native::ImageView;
 
     unsafe fn configure_swapchain(
-        &mut self, device: &Device, config: window::SwapchainConfig
+        &mut self,
+        device: &Device,
+        config: window::SwapchainConfig,
     ) -> Result<(), window::CreationError> {
-
         let gl = &device.share.context;
 
         if let Some(old) = self.swapchain.take() {

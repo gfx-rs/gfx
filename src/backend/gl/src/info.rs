@@ -1,5 +1,5 @@
-use hal::{Features, Limits};
 use crate::{Error, GlContainer};
+use hal::{Features, Limits};
 use std::collections::HashSet;
 use std::{fmt, str};
 

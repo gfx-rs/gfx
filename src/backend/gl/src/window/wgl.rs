@@ -270,7 +270,9 @@ impl window::PresentationSurface<Backend> for Surface {
     type SwapchainImage = native::ImageView;
 
     unsafe fn configure_swapchain(
-        &mut self, device: &Device, config: window::SwapchainConfig
+        &mut self,
+        device: &Device,
+        config: window::SwapchainConfig,
     ) -> Result<(), window::CreationError> {
         let gl = &device.share.context;
 
@@ -281,9 +283,7 @@ impl window::PresentationSurface<Backend> for Surface {
                 }
                 old.context
             }
-            None => {
-                PresentContext::new(self, &device.share.instance_context)
-            }
+            None => PresentContext::new(self, &device.share.instance_context),
         };
         context.make_current();
 

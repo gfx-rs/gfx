@@ -42,13 +42,13 @@ use hal::{
 
 use range_alloc::RangeAllocator;
 
-use winapi::Interface as _;
-use winapi::shared::{dxgiformat, winerror};
 use winapi::shared::dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain};
 use winapi::shared::minwindef::{FALSE, UINT};
 use winapi::shared::windef::{HWND, RECT};
+use winapi::shared::{dxgiformat, winerror};
 use winapi::um::winuser::GetClientRect;
 use winapi::um::{d3d11, d3dcommon};
+use winapi::Interface as _;
 
 use wio::com::ComPtr;
 
@@ -704,7 +704,10 @@ impl window::Surface<Backend> for Surface {
     ) {
         let current_extent = unsafe {
             let mut rect: RECT = mem::zeroed();
-            assert_ne!(0, GetClientRect(self.wnd_handle as *mut _, &mut rect as *mut RECT));
+            assert_ne!(
+                0,
+                GetClientRect(self.wnd_handle as *mut _, &mut rect as *mut RECT)
+            );
             Some(window::Extent2D {
                 width: (rect.right - rect.left) as u32,
                 height: (rect.bottom - rect.top) as u32,
@@ -717,8 +720,13 @@ impl window::Surface<Backend> for Surface {
         let capabilities = window::SurfaceCapabilities {
             image_count: 1 ..= 16, // TODO:
             current_extent,
-            extents: window::Extent2D { width: 16, height: 16 } ..=
-                window::Extent2D { width: 4096, height: 4096 },
+            extents: window::Extent2D {
+                width: 16,
+                height: 16,
+            } ..= window::Extent2D {
+                width: 4096,
+                height: 4096,
+            },
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
             composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
@@ -745,7 +753,9 @@ impl window::PresentationSurface<Backend> for Surface {
     type SwapchainImage = ImageView;
 
     unsafe fn configure_swapchain(
-        &mut self, device: &device::Device, config: window::SwapchainConfig
+        &mut self,
+        device: &device::Device,
+        config: window::SwapchainConfig,
     ) -> Result<(), window::CreationError> {
         assert!(image::Usage::COLOR_ATTACHMENT.contains(config.image_usage));
 
@@ -771,11 +781,8 @@ impl window::PresentationSurface<Backend> for Surface {
                 present.swapchain
             }
             None => {
-                let (swapchain, _) = device.create_swapchain_impl(
-                    &config,
-                    self.wnd_handle,
-                    self.factory.clone(),
-                )?;
+                let (swapchain, _) =
+                    device.create_swapchain_impl(&config, self.wnd_handle, self.factory.clone())?;
                 swapchain
             }
         };
@@ -958,7 +965,12 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         _image: ImageView,
         _wait_semaphore: Option<&Semaphore>,
     ) -> Result<Option<window::Suboptimal>, window::PresentError> {
-        surface.presentation.as_ref().unwrap().swapchain.Present(1, 0);
+        surface
+            .presentation
+            .as_ref()
+            .unwrap()
+            .swapchain
+            .Present(1, 0);
         Ok(None)
     }
 
@@ -1560,7 +1572,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn finish(&mut self) {
         let mut list = ptr::null_mut();
-        let hr = self.context
+        let hr = self
+            .context
             .FinishCommandList(FALSE, &mut list as *mut *mut _ as *mut *mut _);
         assert_eq!(hr, winerror::S_OK);
 

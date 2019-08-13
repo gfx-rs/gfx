@@ -175,7 +175,8 @@ impl SurfaceCapabilities {
             Some(current) => current,
             None => {
                 let (min_width, max_width) = (self.extents.start().width, self.extents.end().width);
-                let (min_height, max_height) = (self.extents.start().height, self.extents.end().height);
+                let (min_height, max_height) =
+                    (self.extents.start().height, self.extents.end().height);
 
                 // clamp the default_extent to within the allowed surface sizes
                 let width = min(max_width, max(default_extent.width, min_width));
@@ -219,7 +220,9 @@ pub trait PresentationSurface<B: Backend>: Surface<B> {
 
     /// Set up the swapchain associated with the surface to have the given format.
     unsafe fn configure_swapchain(
-        &mut self, device: &B::Device, config: SwapchainConfig
+        &mut self,
+        device: &B::Device,
+        config: SwapchainConfig,
     ) -> Result<(), CreationError>;
 
     /// Remove the associated swapchain from this surface.
@@ -241,7 +244,8 @@ pub trait PresentationSurface<B: Backend>: Surface<B> {
     ///
     /// ```
     unsafe fn acquire_image(
-        &mut self, timeout_ns: u64,
+        &mut self,
+        timeout_ns: u64,
     ) -> Result<(Self::SwapchainImage, Option<Suboptimal>), AcquireError>;
 }
 

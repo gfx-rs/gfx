@@ -9,7 +9,7 @@ use winapi::shared::{
     windef::{HWND, RECT},
     winerror,
 };
-use winapi::um::{winuser::GetClientRect};
+use winapi::um::winuser::GetClientRect;
 
 use hal::{device::Device as _, format as f, image as i, window as w};
 use {conv, native, resource as r, Backend, Device, Instance, PhysicalDevice, QueueFamily};
@@ -53,7 +53,12 @@ unsafe impl Sync for Surface {}
 
 impl Surface {
     pub(crate) unsafe fn present(&self) {
-        self.presentation.as_ref().unwrap().swapchain.inner.Present(1, 0);
+        self.presentation
+            .as_ref()
+            .unwrap()
+            .swapchain
+            .inner
+            .Present(1, 0);
     }
 }
 
@@ -87,8 +92,13 @@ impl w::Surface<Backend> for Surface {
         let capabilities = w::SurfaceCapabilities {
             image_count: 2 ..= 16, // we currently use a flip effect which supports 2..=16 buffers
             current_extent,
-            extents: w::Extent2D { width: 16, height: 16 } ..=
-                w::Extent2D { width: 4096, height: 4096 },
+            extents: w::Extent2D {
+                width: 16,
+                height: 16,
+            } ..= w::Extent2D {
+                width: 4096,
+                height: 4096,
+            },
             max_image_layers: 1,
             usage: i::Usage::COLOR_ATTACHMENT | i::Usage::TRANSFER_SRC | i::Usage::TRANSFER_DST,
             composite_alpha: w::CompositeAlpha::OPAQUE, //TODO
@@ -118,7 +128,9 @@ impl w::PresentationSurface<Backend> for Surface {
     type SwapchainImage = r::ImageView;
 
     unsafe fn configure_swapchain(
-        &mut self, device: &Device, config: w::SwapchainConfig
+        &mut self,
+        device: &Device,
+        config: w::SwapchainConfig,
     ) -> Result<(), w::CreationError> {
         assert!(i::Usage::COLOR_ATTACHMENT.contains(config.image_usage));
 
@@ -146,11 +158,8 @@ impl w::PresentationSurface<Backend> for Surface {
                 inner
             }
             None => {
-                let (swapchain, _) = device.create_swapchain_impl(
-                    &config,
-                    self.wnd_handle,
-                    self.factory.clone(),
-                )?;
+                let (swapchain, _) =
+                    device.create_swapchain_impl(&config, self.wnd_handle, self.factory.clone())?;
                 swapchain
             }
         };
@@ -207,9 +216,7 @@ pub struct Swapchain {
 }
 
 impl Swapchain {
-    pub(crate) unsafe fn release_resources(
-        self
-    ) -> native::WeakPtr<dxgi1_4::IDXGISwapChain3> {
+    pub(crate) unsafe fn release_resources(self) -> native::WeakPtr<dxgi1_4::IDXGISwapChain3> {
         for resource in &self.resources {
             resource.destroy();
         }

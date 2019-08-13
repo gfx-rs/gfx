@@ -1,16 +1,7 @@
-use crate::{Backend, RawDevice, window::FramebufferCachePtr};
-use hal::{
-    image::SubresourceRange,
-    pso,
-};
-use ash::{
-    version::DeviceV1_0,
-    vk,
-};
-use std::{
-    borrow::Borrow,
-    sync::Arc,
-};
+use crate::{window::FramebufferCachePtr, Backend, RawDevice};
+use ash::{version::DeviceV1_0, vk};
+use hal::{image::SubresourceRange, pso};
+use std::{borrow::Borrow, sync::Arc};
 
 #[derive(Debug, Hash)]
 pub struct Semaphore(pub vk::Semaphore);

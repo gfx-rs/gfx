@@ -121,9 +121,10 @@ impl window::PresentationSurface<B> for Surface {
     type SwapchainImage = native::ImageView;
 
     unsafe fn configure_swapchain(
-        &mut self, device: &Device, config: window::SwapchainConfig
+        &mut self,
+        device: &Device,
+        config: window::SwapchainConfig,
     ) -> Result<(), window::CreationError> {
-
         let gl = &device.share.context;
 
         if let Some(old) = self.swapchain.take() {

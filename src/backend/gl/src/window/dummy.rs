@@ -1,4 +1,4 @@
-use crate::{native, Device, Backend, PhysicalDevice, QueueFamily};
+use crate::{native, Backend, Device, PhysicalDevice, QueueFamily};
 use arrayvec::ArrayVec;
 use hal::window;
 
@@ -28,7 +28,9 @@ impl window::PresentationSurface<Backend> for Surface {
     type SwapchainImage = native::ImageView;
 
     unsafe fn configure_swapchain(
-        &mut self, _: &Device, _: window::SwapchainConfig
+        &mut self,
+        _: &Device,
+        _: window::SwapchainConfig,
     ) -> Result<(), window::CreationError> {
         unimplemented!()
     }

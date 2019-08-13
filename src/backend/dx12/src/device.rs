@@ -16,7 +16,20 @@ use hal::pool::CommandPoolCreateFlags;
 use hal::pso::VertexInputRate;
 use hal::queue::{CommandQueue as _, QueueFamilyId};
 use hal::range::RangeArg;
-use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query, window as w};
+use hal::{
+    self,
+    buffer,
+    device as d,
+    error,
+    format,
+    image,
+    mapping,
+    memory,
+    pass,
+    pso,
+    query,
+    window as w,
+};
 
 use descriptor;
 use native::command_list::IndirectArgument;
@@ -975,7 +988,13 @@ impl Device {
         config: &w::SwapchainConfig,
         window_handle: windef::HWND,
         factory: native::WeakPtr<dxgi1_4::IDXGIFactory4>,
-    ) -> Result<(native::WeakPtr<dxgi1_4::IDXGISwapChain3>, dxgiformat::DXGI_FORMAT), w::CreationError> {
+    ) -> Result<
+        (
+            native::WeakPtr<dxgi1_4::IDXGISwapChain3>,
+            dxgiformat::DXGI_FORMAT,
+        ),
+        w::CreationError,
+    > {
         let mut swap_chain1 = native::WeakPtr::<dxgi1_2::IDXGISwapChain1>::null();
 
         //TODO: proper error type?
@@ -1031,7 +1050,7 @@ impl Device {
         let rtv_desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
             Format: conv::map_format(config.format).unwrap(),
             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
-            .. unsafe { mem::zeroed() }
+            ..unsafe { mem::zeroed() }
         };
         let rtv_heap = Device::create_descriptor_heap_impl(
             self.raw,
@@ -1044,12 +1063,9 @@ impl Device {
         for (i, res) in resources.iter_mut().enumerate() {
             let rtv_handle = rtv_heap.at(i as _, 0).cpu;
             unsafe {
-                inner.GetBuffer(
-                    i as _,
-                    &d3d12::ID3D12Resource::uuidof(),
-                    res.mut_void(),
-                );
-                self.raw.CreateRenderTargetView(res.as_mut_ptr(), &rtv_desc, rtv_handle);
+                inner.GetBuffer(i as _, &d3d12::ID3D12Resource::uuidof(), res.mut_void());
+                self.raw
+                    .CreateRenderTargetView(res.as_mut_ptr(), &rtv_desc, rtv_handle);
             }
         }
 
@@ -3281,9 +3297,8 @@ impl d::Device<B> for Device {
             self.destroy_swapchain(old_swapchain);
         }
 
-        let (swap_chain3, non_srgb_format) = self.create_swapchain_impl(
-            &config, surface.wnd_handle, surface.factory
-        )?;
+        let (swap_chain3, non_srgb_format) =
+            self.create_swapchain_impl(&config, surface.wnd_handle, surface.factory)?;
 
         let swapchain = self.wrap_swapchain(swap_chain3, &config);
 

@@ -1207,7 +1207,8 @@ impl queue::CommandQueue<Backend> for CommandQueue {
             signal_semaphore_count: 1,
             p_signal_semaphores: &ssc.semaphore.0,
         };
-        self.device.0
+        self.device
+            .0
             .queue_submit(*self.raw, &[submit_info], vk::Fence::null())
             .unwrap();
 
@@ -1222,7 +1223,10 @@ impl queue::CommandQueue<Backend> for CommandQueue {
             p_results: ptr::null_mut(),
         };
 
-        match self.swapchain_fn.queue_present_khr(*self.raw, &present_info) {
+        match self
+            .swapchain_fn
+            .queue_present_khr(*self.raw, &present_info)
+        {
             vk::Result::SUCCESS => Ok(None),
             vk::Result::SUBOPTIMAL_KHR => Ok(Some(Suboptimal)),
             vk::Result::ERROR_OUT_OF_HOST_MEMORY => {

@@ -4,7 +4,12 @@ use hal::queue::QueueFamilyId;
 use hal::range::RangeArg;
 use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query, window};
 
-use winapi::shared::dxgi::{IDXGIFactory, IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD};
+use winapi::shared::dxgi::{
+    IDXGIFactory,
+    IDXGISwapChain,
+    DXGI_SWAP_CHAIN_DESC,
+    DXGI_SWAP_EFFECT_DISCARD,
+};
 use winapi::shared::minwindef::TRUE;
 use winapi::shared::windef::HWND;
 use winapi::shared::{dxgiformat, dxgitype, winerror};
@@ -2533,11 +2538,8 @@ impl device::Device<Backend> for Device {
         config: window::SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
     ) -> Result<(Swapchain, Vec<Image>), window::CreationError> {
-        let (dxgi_swapchain, non_srgb_format) = self.create_swapchain_impl(
-            &config,
-            surface.wnd_handle,
-            surface.factory.clone(),
-        )?;
+        let (dxgi_swapchain, non_srgb_format) =
+            self.create_swapchain_impl(&config, surface.wnd_handle, surface.factory.clone())?;
 
         let resource = {
             let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
@@ -2553,9 +2555,8 @@ impl device::Device<Backend> for Device {
         };
 
         let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
-        let decomposed = conv::DecomposedDxgiFormat::from_dxgi_format(
-            conv::map_format(config.format).unwrap()
-        );
+        let decomposed =
+            conv::DecomposedDxgiFormat::from_dxgi_format(conv::map_format(config.format).unwrap());
 
         let mut view_info = ViewInfo {
             resource,
@@ -2611,12 +2612,7 @@ impl device::Device<Backend> for Device {
             })
             .collect();
 
-        Ok((
-            Swapchain {
-                dxgi_swapchain,
-            },
-            images,
-        ))
+        Ok((Swapchain { dxgi_swapchain }, images))
     }
 
     unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {

@@ -448,7 +448,9 @@ impl w::PresentationSurface<Backend> for Surface {
     type SwapchainImage = SurfaceImage;
 
     unsafe fn configure_swapchain(
-        &mut self, device: &Device, config: w::SwapchainConfig
+        &mut self,
+        device: &Device,
+        config: w::SwapchainConfig,
     ) -> Result<(), w::CreationError> {
         assert!(image::Usage::COLOR_ATTACHMENT.contains(config.image_usage));
         self.swapchain_format = self.inner.configure(&device.shared, &config);
@@ -504,7 +506,8 @@ impl Device {
                 autoreleasepool(|| {
                     // for the drawable & texture
                     let (drawable, texture) = unsafe {
-                        let drawable: &metal::DrawableRef = msg_send![*render_layer_borrow, nextDrawable];
+                        let drawable: &metal::DrawableRef =
+                            msg_send![*render_layer_borrow, nextDrawable];
                         assert!(!drawable.as_ptr().is_null());
                         let texture: &metal::TextureRef = msg_send![drawable, texture];
                         (drawable, texture)

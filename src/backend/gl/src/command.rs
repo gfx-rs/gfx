@@ -715,7 +715,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 // TODO: reset color mask
                 // 2. ClearBuffer
                 let view = match image.kind {
-                    n::ImageKind::Renderbuffer { renderbuffer, .. } => n::ImageView::Renderbuffer(renderbuffer),
+                    n::ImageKind::Renderbuffer { renderbuffer, .. } => {
+                        n::ImageView::Renderbuffer(renderbuffer)
+                    }
                     n::ImageKind::Texture {
                         texture, target, ..
                     } => {
@@ -1171,7 +1173,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         for region in regions {
             let r = region.borrow().clone();
             let cmd = match dst.kind {
-                n::ImageKind::Renderbuffer { renderbuffer, format } => Command::CopyImageToRenderbuffer {
+                n::ImageKind::Renderbuffer {
+                    renderbuffer,
+                    format,
+                } => Command::CopyImageToRenderbuffer {
                     src_image: src.kind,
                     dst_renderbuffer: renderbuffer,
                     dst_format: format,

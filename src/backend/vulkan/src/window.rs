@@ -7,16 +7,21 @@ use std::{
     time::Instant,
 };
 
-use ash::{
-    extensions::khr,
-    version::DeviceV1_0 as _,
-    vk,
-};
+use ash::{extensions::khr, version::DeviceV1_0 as _, vk};
 use hal::{format::Format, window as w};
 use smallvec::SmallVec;
 
 use crate::{conv, native};
-use crate::{Backend, Instance, Device, PhysicalDevice, QueueFamily, RawDevice, RawInstance, VK_ENTRY};
+use crate::{
+    Backend,
+    Device,
+    Instance,
+    PhysicalDevice,
+    QueueFamily,
+    RawDevice,
+    RawInstance,
+    VK_ENTRY,
+};
 
 
 #[derive(Debug, Default)]
@@ -492,12 +497,15 @@ impl w::PresentationSurface<Backend> for Surface {
     type SwapchainImage = SurfaceImage;
 
     unsafe fn configure_swapchain(
-        &mut self, device: &Device, config: w::SwapchainConfig
+        &mut self,
+        device: &Device,
+        config: w::SwapchainConfig,
     ) -> Result<(), w::CreationError> {
         use hal::device::Device as _;
 
         let format = config.format;
-        let old = self.swapchain
+        let old = self
+            .swapchain
             .take()
             .map(|ssc| ssc.release_resources(&device.raw.0));
 
@@ -551,7 +559,9 @@ impl w::PresentationSurface<Backend> for Surface {
 
         let ssc = self.swapchain.as_mut().unwrap();
         let moment = Instant::now();
-        let (index, suboptimal) = ssc.swapchain.acquire_image(timeout_ns, None, Some(&ssc.fence))?;
+        let (index, suboptimal) =
+            ssc.swapchain
+                .acquire_image(timeout_ns, None, Some(&ssc.fence))?;
         timeout_ns -= moment.elapsed().as_nanos() as u64;
         let fences = &[ssc.fence.0];
 
@@ -574,13 +584,13 @@ impl w::PresentationSurface<Backend> for Surface {
                             layers: 0 .. 1,
                             levels: 0 .. 1,
                         },
-                        owner: native::ImageViewOwner::Surface(
-                            FramebufferCachePtr(Arc::clone(&frame.framebuffers.0))
-                        ),
+                        owner: native::ImageViewOwner::Surface(FramebufferCachePtr(Arc::clone(
+                            &frame.framebuffers.0,
+                        ))),
                     },
                 };
                 Ok((image, suboptimal))
-            },
+            }
             Err(vk::Result::NOT_READY) => Err(w::AcquireError::NotReady),
             Err(vk::Result::TIMEOUT) => Err(w::AcquireError::Timeout),
             Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(w::AcquireError::OutOfDate),

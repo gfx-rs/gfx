@@ -1,8 +1,8 @@
 #![allow(dead_code)] //TODO: remove
 
-use hal::{pso, ColorSlot};
 use crate::{GlContainer, Share};
 use glow::Context;
+use hal::{pso, ColorSlot};
 use smallvec::SmallVec;
 
 pub(crate) fn bind_draw_color_buffers(gl: &GlContainer, num: usize) {

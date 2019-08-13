@@ -16,8 +16,8 @@ use crate::{
     GlContext,
     Share,
     Starc,
-    Swapchain,
     Surface,
+    Swapchain,
 };
 
 // State caching system for command queue.
@@ -166,7 +166,12 @@ impl CommandQueue {
         let gl = &self.share.context;
         match view {
             &native::ImageView::Renderbuffer(renderbuffer) => unsafe {
-                gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(renderbuffer));
+                gl.framebuffer_renderbuffer(
+                    point,
+                    attachment,
+                    glow::RENDERBUFFER,
+                    Some(renderbuffer),
+                );
             },
             &native::ImageView::Texture(texture, _, level) => unsafe {
                 gl.framebuffer_texture(point, attachment, Some(texture), level as i32);
@@ -211,10 +216,7 @@ impl CommandQueue {
         swapchain.make_current();
 
         unsafe {
-            gl.bind_framebuffer(
-                glow::READ_FRAMEBUFFER,
-                Some(swapchain.fbos[index as usize]),
-            );
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.fbos[index as usize]));
             gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
             gl.blit_framebuffer(
                 0,
@@ -1156,7 +1158,10 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         _image: native::ImageView,
         _wait_semaphore: Option<&native::Semaphore>,
     ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError> {
-        let swapchain = surface.swapchain.as_ref().expect("No swapchain is configured!");
+        let swapchain = surface
+            .swapchain
+            .as_ref()
+            .expect("No swapchain is configured!");
         self.present_by_copy(swapchain, 0);
 
         #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
