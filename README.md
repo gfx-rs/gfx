@@ -99,9 +99,9 @@ The gfx-rs git repository contains a number of examples.
 Those examples are automatically downloaded if you clone the gfx directory:
 
 	$ cd <my_dir>
-	$ git clone https://github.com/gfx-rs/gfx
+	$ git clone https://github.com/gfx-rs/gfx --branch pre-ll
 
-where `<my_dir>` is a directory name of your choice. Once gfx is downloaded you can build any of the gfx examples.
+where `<my_dir>` is a directory name of your choice. Please note that gfx is currently undergoing a major re-write in the master branch, and thus explicitly specifying the branch is required to get the code published on crates.io. Once gfx is downloaded you can build any of the gfx examples.
 The examples are listed in the `<my_dir>/gfx/Cargo.toml` file.
 For example try:
 
