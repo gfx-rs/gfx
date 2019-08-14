@@ -42,13 +42,13 @@ use hal::{
 
 use range_alloc::RangeAllocator;
 
-use winapi::shared::{dxgiformat, winerror};
-
 use winapi::shared::dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain};
 use winapi::shared::minwindef::{FALSE, UINT};
 use winapi::shared::windef::{HWND, RECT};
+use winapi::shared::{dxgiformat, winerror};
 use winapi::um::winuser::GetClientRect;
 use winapi::um::{d3d11, d3dcommon};
+use winapi::Interface as _;
 
 use wio::com::ComPtr;
 
@@ -135,22 +135,10 @@ impl Instance {
     }
 
     pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
-        let (width, height) = unsafe {
-            let mut rect: RECT = mem::zeroed();
-            if GetClientRect(hwnd as *mut _, &mut rect as *mut RECT) == 0 {
-                panic!("GetClientRect failed");
-            }
-            (
-                (rect.right - rect.left) as u32,
-                (rect.bottom - rect.top) as u32,
-            )
-        };
-
         Surface {
             factory: self.factory.clone(),
             wnd_handle: hwnd as *mut _,
-            width: width,
-            height: height,
+            presentation: None,
         }
     }
 
@@ -681,14 +669,21 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 }
 
+struct Presentation {
+    swapchain: ComPtr<IDXGISwapChain>,
+    view: ComPtr<d3d11::ID3D11RenderTargetView>,
+    format: format::Format,
+    size: window::Extent2D,
+}
+
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct Surface {
     #[derivative(Debug = "ignore")]
     pub(crate) factory: ComPtr<IDXGIFactory>,
     wnd_handle: HWND,
-    width: u32,
-    height: u32,
+    #[derivative(Debug = "ignore")]
+    presentation: Option<Presentation>,
 }
 
 unsafe impl Send for Surface {}
@@ -697,10 +692,6 @@ unsafe impl Sync for Surface {}
 impl window::Surface<Backend> for Surface {
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         true
-        /*match queue_family {
-            &QueueFamily::Present => true,
-            _ => false
-        }*/
     }
 
     fn compatibility(
@@ -711,9 +702,16 @@ impl window::Surface<Backend> for Surface {
         Option<Vec<format::Format>>,
         Vec<window::PresentMode>,
     ) {
-        let extent = window::Extent2D {
-            width: self.width,
-            height: self.height,
+        let current_extent = unsafe {
+            let mut rect: RECT = mem::zeroed();
+            assert_ne!(
+                0,
+                GetClientRect(self.wnd_handle as *mut _, &mut rect as *mut RECT)
+            );
+            Some(window::Extent2D {
+                width: (rect.right - rect.left) as u32,
+                height: (rect.bottom - rect.top) as u32,
+            })
         };
 
         // TODO: flip swap effects require dx11.1/windows8
@@ -721,8 +719,14 @@ impl window::Surface<Backend> for Surface {
         // TODO: _DISCARD swap effects can only have one image?
         let capabilities = window::SurfaceCapabilities {
             image_count: 1 ..= 16, // TODO:
-            current_extent: Some(extent),
-            extents: extent ..= extent,
+            current_extent,
+            extents: window::Extent2D {
+                width: 16,
+                height: 16,
+            } ..= window::Extent2D {
+                width: 4096,
+                height: 4096,
+            },
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
             composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
@@ -744,6 +748,104 @@ impl window::Surface<Backend> for Surface {
         (capabilities, Some(formats), present_modes)
     }
 }
+
+impl window::PresentationSurface<Backend> for Surface {
+    type SwapchainImage = ImageView;
+
+    unsafe fn configure_swapchain(
+        &mut self,
+        device: &device::Device,
+        config: window::SwapchainConfig,
+    ) -> Result<(), window::CreationError> {
+        assert!(image::Usage::COLOR_ATTACHMENT.contains(config.image_usage));
+
+        let swapchain = match self.presentation.take() {
+            Some(present) => {
+                if present.format == config.format && present.size == config.extent {
+                    self.presentation = Some(present);
+                    return Ok(());
+                }
+                let non_srgb_format = conv::map_format_nosrgb(config.format).unwrap();
+                drop(present.view);
+                let result = present.swapchain.ResizeBuffers(
+                    config.image_count,
+                    config.extent.width,
+                    config.extent.height,
+                    non_srgb_format,
+                    0,
+                );
+                if result != winerror::S_OK {
+                    error!("ResizeBuffers failed with 0x{:x}", result as u32);
+                    return Err(window::CreationError::WindowInUse(hal::device::WindowInUse));
+                }
+                present.swapchain
+            }
+            None => {
+                let (swapchain, _) =
+                    device.create_swapchain_impl(&config, self.wnd_handle, self.factory.clone())?;
+                swapchain
+            }
+        };
+
+        let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
+        assert_eq!(
+            winerror::S_OK,
+            swapchain.GetBuffer(
+                0 as _,
+                &d3d11::ID3D11Resource::uuidof(),
+                &mut resource as *mut *mut _ as *mut *mut _,
+            )
+        );
+
+        let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
+        let format = conv::map_format(config.format).unwrap();
+        let decomposed = conv::DecomposedDxgiFormat::from_dxgi_format(format);
+
+        let view_info = ViewInfo {
+            resource,
+            kind,
+            caps: image::ViewCapabilities::empty(),
+            view_kind: image::ViewKind::D2,
+            format: decomposed.rtv.unwrap(),
+            range: image::SubresourceRange {
+                aspects: format::Aspects::COLOR,
+                levels: 0 .. 1,
+                layers: 0 .. 1,
+            },
+        };
+        let view = device.view_image_as_render_target(&view_info).unwrap();
+
+        (*resource).Release();
+
+        self.presentation = Some(Presentation {
+            swapchain,
+            view,
+            format: config.format,
+            size: config.extent,
+        });
+        Ok(())
+    }
+
+    unsafe fn unconfigure_swapchain(&mut self, _device: &device::Device) {
+        self.presentation = None;
+    }
+
+    unsafe fn acquire_image(
+        &mut self,
+        _timeout_ns: u64, //TODO: use the timeout
+    ) -> Result<(ImageView, Option<window::Suboptimal>), window::AcquireError> {
+        let present = self.presentation.as_ref().unwrap();
+        let image_view = ImageView {
+            format: present.format,
+            rtv_handle: Some(present.view.clone()),
+            dsv_handle: None,
+            srv_handle: None,
+            uav_handle: None,
+        };
+        Ok((image_view, None))
+    }
+}
+
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -851,11 +953,24 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         Iw: IntoIterator<Item = &'a S>,
     {
         for (swapchain, _idx) in swapchains {
-            unsafe {
-                swapchain.borrow().dxgi_swapchain.Present(1, 0);
-            }
+            swapchain.borrow().dxgi_swapchain.Present(1, 0);
         }
 
+        Ok(None)
+    }
+
+    unsafe fn present_surface(
+        &mut self,
+        surface: &mut Surface,
+        _image: ImageView,
+        _wait_semaphore: Option<&Semaphore>,
+    ) -> Result<Option<window::Suboptimal>, window::PresentError> {
+        surface
+            .presentation
+            .as_ref()
+            .unwrap()
+            .swapchain
+            .Present(1, 0);
         Ok(None)
     }
 
@@ -1236,7 +1351,7 @@ pub struct CommandBuffer {
     #[derivative(Debug = "ignore")]
     context: ComPtr<d3d11::ID3D11DeviceContext>,
     #[derivative(Debug = "ignore")]
-    list: Option<ComPtr<d3d11::ID3D11CommandList>>,
+    list: RefCell<Option<ComPtr<d3d11::ID3D11CommandList>>>,
 
     // since coherent memory needs to be synchronized at submission, we need to gather up all
     // coherent resources that are used in the command buffer and flush/invalidate them accordingly
@@ -1248,6 +1363,8 @@ pub struct CommandBuffer {
     render_pass_cache: Option<RenderPassCache>,
 
     cache: CommandBufferState,
+
+    one_time_submit: bool,
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -1263,16 +1380,21 @@ impl CommandBuffer {
         CommandBuffer {
             internal,
             context: unsafe { ComPtr::from_raw(context) },
-            list: None,
+            list: RefCell::new(None),
             flush_coherent_memory: Vec::new(),
             invalidate_coherent_memory: Vec::new(),
             render_pass_cache: None,
             cache: CommandBufferState::new(),
+            one_time_submit: false,
         }
     }
 
     fn as_raw_list(&self) -> ComPtr<d3d11::ID3D11CommandList> {
-        self.list.clone().unwrap().clone()
+        if self.one_time_submit {
+            self.list.replace(None).unwrap()
+        } else {
+            self.list.borrow().clone().unwrap()
+        }
     }
 
     unsafe fn bind_vertex_descriptor(
@@ -1441,23 +1563,21 @@ impl CommandBuffer {
 impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn begin(
         &mut self,
-        _flags: command::CommandBufferFlags,
+        flags: command::CommandBufferFlags,
         _info: command::CommandBufferInheritanceInfo<Backend>,
     ) {
+        self.one_time_submit = flags.contains(command::CommandBufferFlags::ONE_TIME_SUBMIT);
         self.reset();
     }
 
     unsafe fn finish(&mut self) {
-        // TODO:
-
         let mut list = ptr::null_mut();
-        let hr = unsafe {
-            self.context
-                .FinishCommandList(FALSE, &mut list as *mut *mut _ as *mut *mut _)
-        };
+        let hr = self
+            .context
+            .FinishCommandList(FALSE, &mut list as *mut *mut _ as *mut *mut _);
         assert_eq!(hr, winerror::S_OK);
 
-        self.list = Some(unsafe { ComPtr::from_raw(list) });
+        self.list.replace(Some(ComPtr::from_raw(list)));
     }
 
     unsafe fn reset(&mut self, _release_resources: bool) {
@@ -1576,10 +1696,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn end_render_pass(&mut self) {
-        unsafe {
-            self.context
-                .OMSetRenderTargets(8, [ptr::null_mut(); 8].as_ptr(), ptr::null_mut());
-        }
+        self.context
+            .OMSetRenderTargets(8, [ptr::null_mut(); 8].as_ptr(), ptr::null_mut());
 
         self.render_pass_cache = None;
     }

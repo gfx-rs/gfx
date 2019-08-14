@@ -169,8 +169,26 @@ pub struct SurfaceCapabilities {
     pub composite_alpha: CompositeAlpha,
 }
 
-/// A `Surface` abstracts the surface of a native window, which will be presented
-/// on the display.
+impl SurfaceCapabilities {
+    fn clamped_extent(&self, default_extent: Extent2D) -> Extent2D {
+        match self.current_extent {
+            Some(current) => current,
+            None => {
+                let (min_width, max_width) = (self.extents.start().width, self.extents.end().width);
+                let (min_height, max_height) =
+                    (self.extents.start().height, self.extents.end().height);
+
+                // clamp the default_extent to within the allowed surface sizes
+                let width = min(max_width, max(default_extent.width, min_width));
+                let height = min(max_height, max(default_extent.height, min_height));
+
+                Extent2D { width, height }
+            }
+        }
+    }
+}
+
+/// A `Surface` abstracts the surface of a native window.
 pub trait Surface<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Check if the queue family supports presentation to this surface.
     ///
@@ -192,6 +210,43 @@ pub trait Surface<B: Backend>: fmt::Debug + Any + Send + Sync {
         &self,
         physical_device: &B::PhysicalDevice,
     ) -> (SurfaceCapabilities, Option<Vec<Format>>, Vec<PresentMode>);
+}
+
+/// A surface trait that exposes the ability to present images on the
+/// associtated swap chain.
+pub trait PresentationSurface<B: Backend>: Surface<B> {
+    /// An opaque type wrapping the swapchain image.
+    type SwapchainImage: Borrow<B::ImageView> + fmt::Debug + Send + Sync;
+
+    /// Set up the swapchain associated with the surface to have the given format.
+    unsafe fn configure_swapchain(
+        &mut self,
+        device: &B::Device,
+        config: SwapchainConfig,
+    ) -> Result<(), CreationError>;
+
+    /// Remove the associated swapchain from this surface.
+    ///
+    /// This has to be done before the surface is dropped.
+    unsafe fn unconfigure_swapchain(&mut self, device: &B::Device);
+
+    /// Acquire a new swapchain image for rendering.
+    ///
+    /// May fail according to one of the reasons indicated in `AcquireError` enum.
+    ///
+    /// # Synchronization
+    ///
+    /// The acquired image is available to render. No synchronization is required.
+    ///
+    /// # Examples
+    ///
+    /// ```no_run
+    ///
+    /// ```
+    unsafe fn acquire_image(
+        &mut self,
+        timeout_ns: u64,
+    ) -> Result<(Self::SwapchainImage, Option<Suboptimal>), AcquireError>;
 }
 
 /// Index of an image in the swapchain.
@@ -307,21 +362,6 @@ impl SwapchainConfig {
     /// returned from a physical device query. If the surface does not
     /// specify a current size, default_extent is clamped and used instead.
     pub fn from_caps(caps: &SurfaceCapabilities, format: Format, default_extent: Extent2D) -> Self {
-        let clamped_extent = match caps.current_extent {
-            Some(current) => current,
-            None => {
-                let (min_width, max_width) = (caps.extents.start().width, caps.extents.end().width);
-                let (min_height, max_height) =
-                    (caps.extents.start().height, caps.extents.end().height);
-
-                // clamp the default_extent to within the allowed surface sizes
-                let width = min(max_width, max(default_extent.width, min_width));
-                let height = min(max_height, max(default_extent.height, min_height));
-
-                Extent2D { width, height }
-            }
-        };
-
         let composite_alpha = if caps.composite_alpha.contains(CompositeAlpha::INHERIT) {
             CompositeAlpha::INHERIT
         } else if caps.composite_alpha.contains(CompositeAlpha::OPAQUE) {
@@ -334,7 +374,7 @@ impl SwapchainConfig {
             present_mode: PresentMode::Fifo,
             composite_alpha,
             format,
-            extent: clamped_extent,
+            extent: caps.clamped_extent(default_extent),
             image_count: *caps.image_count.start(),
             image_layers: 1,
             image_usage: image::Usage::COLOR_ATTACHMENT,

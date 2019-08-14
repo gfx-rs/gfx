@@ -49,8 +49,13 @@ use hal::{
     window,
 };
 
-use std::io::Cursor;
-use std::mem::ManuallyDrop;
+use std::{
+    borrow::Borrow,
+    io::Cursor,
+    iter,
+    mem::{self, ManuallyDrop},
+    ptr,
+};
 
 #[cfg_attr(rustfmt, rustfmt_skip)]
 const DIMS: window::Extent2D = window::Extent2D { width: 1024, height: 768 };
@@ -99,11 +104,14 @@ fn main() {
     let event_loop = winit::event_loop::EventLoop::new();
 
     #[cfg(not(target_arch = "wasm32"))]
+    let dpi = event_loop.primary_monitor().hidpi_factor();
+
+    #[cfg(not(target_arch = "wasm32"))]
     let wb = winit::window::WindowBuilder::new()
         .with_min_inner_size(winit::dpi::LogicalSize::new(1.0, 1.0))
-        .with_inner_size(winit::dpi::LogicalSize::new(
-            DIMS.width as _,
-            DIMS.height as _,
+        .with_inner_size(winit::dpi::LogicalSize::from_physical(
+            winit::dpi::PhysicalSize::new(DIMS.width as _, DIMS.height as _),
+            dpi,
         ))
         .with_title("quad".to_string());
     // instantiate backend
@@ -177,14 +185,13 @@ fn main() {
                     println!("resized to {:?}", dims);
                     #[cfg(feature = "gl")]
                     {
-                        let context = renderer.surface.get_context();
+                        let context = renderer.surface.context();
                         context.resize(dims.to_physical(window.hidpi_factor()));
                     }
-                    let dimensions = window::Extent2D {
-                        width: dims.width as u32,
-                        height: dims.height as u32,
+                    renderer.dimensions = window::Extent2D {
+                        width: (dims.width * dpi) as u32,
+                        height: (dims.height * dpi) as u32,
                     };
-                    renderer.dimensions = dimensions;
                     renderer.recreate_swapchain();
                 }
                 _ => {}
@@ -204,10 +211,7 @@ struct Renderer<B: hal::Backend> {
     surface: B::Surface,
     adapter: hal::adapter::Adapter<B>,
     format: hal::format::Format,
-    swap_chain: Option<B::Swapchain>,
     dimensions: window::Extent2D,
-    framebuffers: Vec<B::Framebuffer>,
-    frame_images: Vec<(B::Image, B::ImageView)>,
     viewport: hal::pso::Viewport,
     render_pass: ManuallyDrop<B::RenderPass>,
     pipeline: ManuallyDrop<B::GraphicsPipeline>,
@@ -215,8 +219,6 @@ struct Renderer<B: hal::Backend> {
     desc_set: B::DescriptorSet,
     set_layout: ManuallyDrop<B::DescriptorSetLayout>,
     submission_complete_semaphores: Vec<B::Semaphore>,
-    image_acquire_semaphores: Vec<B::Semaphore>,
-    free_acquire_semaphore: Option<B::Semaphore>,
     submission_complete_fences: Vec<B::Fence>,
     cmd_pools: Vec<B::CommandPool>,
     cmd_buffers: Vec<B::CommandBuffer>,
@@ -313,7 +315,7 @@ where
         // Buffer allocations
         println!("Memory types: {:?}", memory_types);
 
-        let buffer_stride = std::mem::size_of::<Vertex>() as u64;
+        let buffer_stride = mem::size_of::<Vertex>() as u64;
         let buffer_len = QUAD.len() as u64 * buffer_stride;
 
         assert_ne!(buffer_len, 0);
@@ -444,7 +446,10 @@ where
                     set: &desc_set,
                     binding: 0,
                     array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Image(&*image_srv, i::Layout::Undefined)),
+                    descriptors: Some(pso::Descriptor::Image(
+                        &*image_srv,
+                        i::Layout::ShaderReadOnlyOptimal,
+                    )),
                 },
                 pso::DescriptorSetWrite {
                     set: &desc_set,
@@ -536,12 +541,12 @@ where
 
         let swap_config = window::SwapchainConfig::from_caps(&caps, format, DIMS);
         println!("{:?}", swap_config);
-        let extent = swap_config.extent.to_extent();
-
-        let (swap_chain, backbuffer) =
-            unsafe { device.create_swapchain(&mut surface, swap_config, None) }
-                .expect("Can't create swapchain");
-        let swap_chain = Some(swap_chain);
+        let extent = swap_config.extent;
+        unsafe {
+            surface
+                .configure_swapchain(&device, swap_config)
+                .expect("Can't configure swapchain");
+        };
 
         let render_pass = {
             let attachment = pass::Attachment {
@@ -577,46 +582,9 @@ where
             )
         };
 
-        let (frame_images, framebuffers) = {
-            let pairs = backbuffer
-                .into_iter()
-                .map(|image| unsafe {
-                    let rtv = device
-                        .create_image_view(
-                            &image,
-                            i::ViewKind::D2,
-                            format,
-                            Swizzle::NO,
-                            COLOR_RANGE.clone(),
-                        )
-                        .unwrap();
-                    (image, rtv)
-                })
-                .collect::<Vec<_>>();
-            let fbos = pairs
-                .iter()
-                .map(|&(_, ref rtv)| unsafe {
-                    device
-                        .create_framebuffer(&render_pass, Some(rtv), extent)
-                        .unwrap()
-                })
-                .collect::<Vec<_>>();
-            (pairs, fbos)
-        };
-
         // Define maximum number of frames we want to be able to be "in flight" (being computed
         // simultaneously) at once
         let frames_in_flight = 3;
-
-        // Number of image acquisition semaphores is based on the number of swapchain images, not frames in flight,
-        // plus one extra which we can guarantee is unused at any given time by swapping it out with the ones
-        // in the rest of the queue.
-        let mut image_acquire_semaphores = Vec::with_capacity(frame_images.len());
-        let free_acquire_semaphore = Option::Some(
-            device
-                .create_semaphore()
-                .expect("Could not create semaphore"),
-        );
 
         // The number of the rest of the resources is based on the frames in flight.
         let mut submission_complete_semaphores = Vec::with_capacity(frames_in_flight);
@@ -647,14 +615,6 @@ where
             }
         }
 
-        for _ in 0 .. frame_images.len() {
-            image_acquire_semaphores.push(
-                device
-                    .create_semaphore()
-                    .expect("Could not create semaphore"),
-            );
-        }
-
         for i in 0 .. frames_in_flight {
             submission_complete_semaphores.push(
                 device
@@ -672,7 +632,7 @@ where
         let pipeline_layout = ManuallyDrop::new(
             unsafe {
                 device.create_pipeline_layout(
-                    std::iter::once(&*set_layout),
+                    iter::once(&*set_layout),
                     &[(pso::ShaderStageFlags::VERTEX, 0 .. 8)],
                 )
             }
@@ -731,7 +691,7 @@ where
                 });
                 pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
                     binding: 0,
-                    stride: std::mem::size_of::<Vertex>() as u32,
+                    stride: mem::size_of::<Vertex>() as u32,
                     rate: VertexInputRate::Vertex,
                 });
 
@@ -776,11 +736,6 @@ where
             depth: 0.0 .. 1.0,
         };
 
-        let dimensions = window::Extent2D {
-            width: 0,
-            height: 0,
-        };
-
         Renderer {
             device,
             queue_group,
@@ -788,10 +743,7 @@ where
             surface,
             adapter,
             format,
-            dimensions,
-            swap_chain,
-            framebuffers,
-            frame_images,
+            dimensions: DIMS,
             viewport,
             render_pass,
             pipeline,
@@ -799,8 +751,6 @@ where
             desc_set,
             set_layout,
             submission_complete_semaphores,
-            image_acquire_semaphores,
-            free_acquire_semaphore,
             submission_complete_fences,
             cmd_pools,
             cmd_buffers,
@@ -818,8 +768,6 @@ where
     }
 
     fn recreate_swapchain(&mut self) {
-        self.device.wait_idle().unwrap();
-
         let (caps, formats, _present_modes) = self
             .surface
             .compatibility(&mut self.adapter.physical_device);
@@ -830,68 +778,20 @@ where
         println!("{:?}", swap_config);
         let extent = swap_config.extent.to_extent();
 
-        let (new_swap_chain, new_backbuffer) = unsafe {
-            self.device
-                .create_swapchain(&mut self.surface, swap_config, self.swap_chain.take())
-        }
-        .expect("Can't create swapchain");
-
         unsafe {
-            // Clean up the old framebuffers and images
-            for framebuffer in self.framebuffers.drain(..) {
-                self.device.destroy_framebuffer(framebuffer);
-            }
-            for (_, rtv) in self.frame_images.drain(..) {
-                self.device.destroy_image_view(rtv);
-            }
+            self.surface
+                .configure_swapchain(&self.device, swap_config)
+                .expect("Can't create swapchain");
         }
 
-        self.swap_chain = Some(new_swap_chain);
-
-        let (new_frame_images, new_framebuffers) = {
-            let pairs = new_backbuffer
-                .into_iter()
-                .map(|image| unsafe {
-                    let rtv = self
-                        .device
-                        .create_image_view(
-                            &image,
-                            i::ViewKind::D2,
-                            self.format,
-                            Swizzle::NO,
-                            COLOR_RANGE.clone(),
-                        )
-                        .unwrap();
-                    (image, rtv)
-                })
-                .collect::<Vec<_>>();
-            let fbos = pairs
-                .iter()
-                .map(|&(_, ref rtv)| unsafe {
-                    self.device
-                        .create_framebuffer(&self.render_pass, Some(rtv), extent)
-                        .unwrap()
-                })
-                .collect();
-            (pairs, fbos)
-        };
-
-        self.framebuffers = new_framebuffers;
-        self.frame_images = new_frame_images;
         self.viewport.rect.w = extent.width as _;
         self.viewport.rect.h = extent.height as _;
     }
 
     fn render(&mut self) {
-        // Use guaranteed unused acquire semaphore to get the index of the next frame we will render to
-        // by using acquire_image
-        let swap_image = unsafe {
-            match self.swap_chain.as_mut().unwrap().acquire_image(
-                !0,
-                self.free_acquire_semaphore.as_ref(),
-                None,
-            ) {
-                Ok((i, _)) => i as usize,
+        let surface_image = unsafe {
+            match self.surface.acquire_image(!0) {
+                Ok((image, _)) => image,
                 Err(_) => {
                     self.recreate_swapchain();
                     return;
@@ -899,11 +799,19 @@ where
             }
         };
 
-        // Swap the acquire semaphore with the one previously associated with the image we are acquiring
-        core::mem::swap(
-            self.free_acquire_semaphore.as_mut().unwrap(),
-            &mut self.image_acquire_semaphores[swap_image],
-        );
+        let framebuffer = unsafe {
+            self.device
+                .create_framebuffer(
+                    &self.render_pass,
+                    iter::once(surface_image.borrow()),
+                    i::Extent {
+                        width: self.dimensions.width,
+                        height: self.dimensions.height,
+                        depth: 1,
+                    },
+                )
+                .unwrap()
+        };
 
         // Compute index into our resource ring buffers based on the frame number
         // and number of frames in flight. Pay close attention to where this index is needed
@@ -916,11 +824,12 @@ where
         // updated with a CPU->GPU data copy are not in use by the GPU, so we can perform those updates.
         // In this case there are none to be done, however.
         unsafe {
+            let fence = &self.submission_complete_fences[frame_idx];
             self.device
-                .wait_for_fence(&self.submission_complete_fences[frame_idx], !0)
+                .wait_for_fence(fence, !0)
                 .expect("Failed to wait for fence");
             self.device
-                .reset_fence(&self.submission_complete_fences[frame_idx])
+                .reset_fence(fence)
                 .expect("Failed to reset fence");
             self.cmd_pools[frame_idx].reset(false);
         }
@@ -933,17 +842,17 @@ where
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
             cmd_buffer.set_scissors(0, &[self.viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(&self.pipeline);
-            cmd_buffer.bind_vertex_buffers(0, Some((&*self.vertex_buffer, 0)));
+            cmd_buffer.bind_vertex_buffers(0, iter::once((&*self.vertex_buffer, 0)));
             cmd_buffer.bind_graphics_descriptor_sets(
                 &self.pipeline_layout,
                 0,
-                Some(&self.desc_set),
+                iter::once(&self.desc_set),
                 &[],
             );
 
             cmd_buffer.begin_render_pass(
                 &self.render_pass,
-                &self.framebuffers[swap_image],
+                &framebuffer,
                 self.viewport.rect,
                 &[command::ClearValue {
                     color: command::ClearColor {
@@ -953,15 +862,13 @@ where
                 command::SubpassContents::Inline,
             );
             cmd_buffer.draw(0 .. 6, 0 .. 1);
+            cmd_buffer.end_render_pass();
             cmd_buffer.finish();
 
             let submission = Submission {
-                command_buffers: Some(&*cmd_buffer),
-                wait_semaphores: Some((
-                    &self.image_acquire_semaphores[swap_image],
-                    PipelineStage::COLOR_ATTACHMENT_OUTPUT,
-                )),
-                signal_semaphores: Some(&self.submission_complete_semaphores[frame_idx]),
+                command_buffers: iter::once(&*cmd_buffer),
+                wait_semaphores: None,
+                signal_semaphores: iter::once(&self.submission_complete_semaphores[frame_idx]),
             };
             self.queue_group.queues[0].submit(
                 submission,
@@ -969,13 +876,16 @@ where
             );
 
             // present frame
-            if let Err(_) = self.swap_chain.as_ref().unwrap().present(
-                &mut self.queue_group.queues[0],
-                swap_image as window::SwapImageIndex,
+            let result = self.queue_group.queues[0].present_surface(
+                &mut self.surface,
+                surface_image,
                 Some(&self.submission_complete_semaphores[frame_idx]),
-            ) {
+            );
+
+            self.device.destroy_framebuffer(framebuffer);
+
+            if result.is_err() {
                 self.recreate_swapchain();
-                return;
             }
         }
 
@@ -993,33 +903,26 @@ where
         unsafe {
             // TODO: When ManuallyDrop::take (soon to be renamed to ManuallyDrop::read) is stabilized we should use that instead.
             self.device
-                .destroy_descriptor_pool(ManuallyDrop::into_inner(std::ptr::read(&self.desc_pool)));
+                .destroy_descriptor_pool(ManuallyDrop::into_inner(ptr::read(&self.desc_pool)));
             self.device
-                .destroy_descriptor_set_layout(ManuallyDrop::into_inner(std::ptr::read(
+                .destroy_descriptor_set_layout(ManuallyDrop::into_inner(ptr::read(
                     &self.set_layout,
                 )));
 
             self.device
-                .destroy_buffer(ManuallyDrop::into_inner(std::ptr::read(
-                    &self.vertex_buffer,
-                )));
+                .destroy_buffer(ManuallyDrop::into_inner(ptr::read(&self.vertex_buffer)));
             self.device
-                .destroy_buffer(ManuallyDrop::into_inner(std::ptr::read(
+                .destroy_buffer(ManuallyDrop::into_inner(ptr::read(
                     &self.image_upload_buffer,
                 )));
             self.device
-                .destroy_image(ManuallyDrop::into_inner(std::ptr::read(&self.image_logo)));
+                .destroy_image(ManuallyDrop::into_inner(ptr::read(&self.image_logo)));
             self.device
-                .destroy_image_view(ManuallyDrop::into_inner(std::ptr::read(&self.image_srv)));
+                .destroy_image_view(ManuallyDrop::into_inner(ptr::read(&self.image_srv)));
             self.device
-                .destroy_sampler(ManuallyDrop::into_inner(std::ptr::read(&self.sampler)));
-            self.device
-                .destroy_semaphore(self.free_acquire_semaphore.take().unwrap());
+                .destroy_sampler(ManuallyDrop::into_inner(ptr::read(&self.sampler)));
             for p in self.cmd_pools.drain(..) {
                 self.device.destroy_command_pool(p);
-            }
-            for s in self.image_acquire_semaphores.drain(..) {
-                self.device.destroy_semaphore(s);
             }
             for s in self.submission_complete_semaphores.drain(..) {
                 self.device.destroy_semaphore(s);
@@ -1028,34 +931,20 @@ where
                 self.device.destroy_fence(f);
             }
             self.device
-                .destroy_render_pass(ManuallyDrop::into_inner(std::ptr::read(&self.render_pass)));
+                .destroy_render_pass(ManuallyDrop::into_inner(ptr::read(&self.render_pass)));
             self.device
-                .free_memory(ManuallyDrop::into_inner(std::ptr::read(
-                    &self.buffer_memory,
-                )));
+                .free_memory(ManuallyDrop::into_inner(ptr::read(&self.buffer_memory)));
             self.device
-                .free_memory(ManuallyDrop::into_inner(std::ptr::read(&self.image_memory)));
+                .free_memory(ManuallyDrop::into_inner(ptr::read(&self.image_memory)));
+            self.device.free_memory(ManuallyDrop::into_inner(ptr::read(
+                &self.image_upload_memory,
+            )));
             self.device
-                .free_memory(ManuallyDrop::into_inner(std::ptr::read(
-                    &self.image_upload_memory,
-                )));
+                .destroy_graphics_pipeline(ManuallyDrop::into_inner(ptr::read(&self.pipeline)));
             self.device
-                .destroy_graphics_pipeline(ManuallyDrop::into_inner(std::ptr::read(
-                    &self.pipeline,
-                )));
-            self.device
-                .destroy_pipeline_layout(ManuallyDrop::into_inner(std::ptr::read(
+                .destroy_pipeline_layout(ManuallyDrop::into_inner(ptr::read(
                     &self.pipeline_layout,
                 )));
-            for framebuffer in self.framebuffers.drain(..) {
-                self.device.destroy_framebuffer(framebuffer);
-            }
-            for (_, rtv) in self.frame_images.drain(..) {
-                self.device.destroy_image_view(rtv);
-            }
-
-            self.device
-                .destroy_swapchain(self.swap_chain.take().unwrap());
         }
         println!("DROPPED!");
     }

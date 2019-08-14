@@ -4,7 +4,7 @@ use std::ops::Range;
 use std::slice;
 use std::sync::{Arc, Mutex, RwLock};
 
-use glow::Context;
+use glow::Context as _;
 
 use hal::{
     self as c,
@@ -25,6 +25,7 @@ use hal::{
     window::{Extent2D, SwapchainConfig},
 };
 
+use arrayvec::ArrayVec;
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
 use crate::{
@@ -125,8 +126,8 @@ impl Device {
 
     fn bind_target_compat(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
         match *view {
-            n::ImageView::Surface(surface) => unsafe {
-                gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(surface));
+            n::ImageView::Renderbuffer(rb) => unsafe {
+                gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(rb));
             },
             n::ImageView::Texture(texture, textype, level) => unsafe {
                 gl.bind_texture(textype, Some(texture));
@@ -148,8 +149,8 @@ impl Device {
 
     fn bind_target(gl: &GlContainer, point: u32, attachment: u32, view: &n::ImageView) {
         match *view {
-            n::ImageView::Surface(surface) => unsafe {
-                gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(surface));
+            n::ImageView::Renderbuffer(rb) => unsafe {
+                gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(rb));
             },
             n::ImageView::Texture(texture, _, level) => unsafe {
                 gl.framebuffer_texture(point, attachment, Some(texture), level as _);
@@ -892,15 +893,14 @@ impl d::Device<B> for Device {
                 .attributes
                 .iter()
                 .map(|&a| {
-                    let (size, format, vertex_attrib_fn) =
-                        conv::format_to_gl_format(a.element.format).unwrap();
+                    let fd = conv::describe_format(a.element.format).unwrap();
                     n::AttributeDesc {
                         location: a.location,
                         offset: a.element.offset,
                         binding: a.binding,
-                        size,
-                        format,
-                        vertex_attrib_fn,
+                        size: fd.num_components as _,
+                        format: fd.data_type,
+                        vertex_attrib_fn: fd.va_fun,
                     }
                 })
                 .collect(),
@@ -982,7 +982,11 @@ impl d::Device<B> for Device {
             return Err(d::OutOfMemory::OutOfHostMemory);
         }
 
-        let attachments: Vec<_> = attachments.into_iter().collect();
+        let attachments: Vec<_> = attachments
+            .into_iter()
+            .map(|at| at.borrow().clone())
+            .collect();
+        debug!("create_framebuffer {:?}", attachments);
 
         let gl = &self.share.context;
         let target = glow::DRAW_FRAMEBUFFER;
@@ -991,22 +995,22 @@ impl d::Device<B> for Device {
             let name = gl.create_framebuffer().unwrap();
             gl.bind_framebuffer(target, Some(name));
 
-            for (index, color) in subpass.color_attachments.iter().enumerate() {
+            for (index, &color) in subpass.color_attachments.iter().enumerate() {
                 let color_attachment = glow::COLOR_ATTACHMENT0 + index as u32;
                 assert!(color_attachment <= glow::COLOR_ATTACHMENT31);
 
                 if self.share.private_caps.framebuffer_texture {
-                    Self::bind_target(gl, target, color_attachment, attachments[*color].borrow());
+                    Self::bind_target(gl, target, color_attachment, &attachments[color]);
                 } else {
-                    Self::bind_target_compat(gl, target, color_attachment, attachments[*color].borrow());
+                    Self::bind_target_compat(gl, target, color_attachment, &attachments[color]);
                 }
             }
 
             if let Some(depth_stencil) = subpass.depth_stencil {
                 if self.share.private_caps.framebuffer_texture {
-                    Self::bind_target(gl, target, glow::DEPTH_STENCIL_ATTACHMENT, attachments[depth_stencil].borrow());
+                    Self::bind_target(gl, target, glow::DEPTH_STENCIL_ATTACHMENT, &attachments[depth_stencil]);
                 } else {
-                    Self::bind_target_compat(gl, target, glow::DEPTH_STENCIL_ATTACHMENT, attachments[depth_stencil].borrow());
+                    Self::bind_target_compat(gl, target, glow::DEPTH_STENCIL_ATTACHMENT, &attachments[depth_stencil]);
                 }
 
             }
@@ -1287,20 +1291,7 @@ impl d::Device<B> for Device {
     ) -> Result<n::Image, i::CreationError> {
         let gl = &self.share.context;
 
-        let (int_format, iformat, itype) = match format {
-            Format::Rgba8Unorm => (glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE),
-            Format::Bgra8Unorm => (glow::RGBA8, glow::BGRA, glow::UNSIGNED_BYTE),
-            Format::Rgba8Srgb => (glow::SRGB8_ALPHA8, glow::RGBA, glow::UNSIGNED_BYTE),
-            Format::Bgra8Srgb => (glow::SRGB8_ALPHA8, glow::BGRA, glow::UNSIGNED_BYTE),
-            Format::R8Unorm => (glow::R8, glow::RED, glow::UNSIGNED_BYTE),
-            Format::D32Sfloat => (
-                glow::DEPTH32F_STENCIL8,
-                glow::DEPTH_STENCIL,
-                glow::FLOAT_32_UNSIGNED_INT_24_8_REV,
-            ),
-            _ => unimplemented!(),
-        };
-
+        let desc = conv::describe_format(format).unwrap();
         let channel = format.base_format().1;
 
         let image = if num_levels > 1
@@ -1308,14 +1299,14 @@ impl d::Device<B> for Device {
             || usage.contains(i::Usage::SAMPLED)
         {
             let name = gl.create_texture().unwrap();
-            match kind {
+            let target = match kind {
                 i::Kind::D2(w, h, 1, 1) => {
                     gl.bind_texture(glow::TEXTURE_2D, Some(name));
                     if self.share.private_caps.image_storage {
                         gl.tex_storage_2d(
                             glow::TEXTURE_2D,
                             num_levels as _,
-                            int_format,
+                            desc.tex_internal,
                             w as _,
                             h as _,
                         );
@@ -1331,24 +1322,19 @@ impl d::Device<B> for Device {
                             gl.tex_image_2d(
                                 glow::TEXTURE_2D,
                                 i as _,
-                                int_format as _,
+                                desc.tex_internal as i32,
                                 w as _,
                                 h as _,
                                 0,
-                                iformat,
-                                itype,
+                                desc.tex_external,
+                                desc.data_type,
                                 None,
                             );
                             w = std::cmp::max(w / 2, 1);
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
-                    n::ImageKind::Texture {
-                        texture: name,
-                        target: glow::TEXTURE_2D,
-                        format: iformat,
-                        pixel_type: itype,
-                    }
+                    glow::TEXTURE_2D
                 }
                 i::Kind::D2(w, h, l, 1) => {
                     gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(name));
@@ -1356,7 +1342,7 @@ impl d::Device<B> for Device {
                         gl.tex_storage_3d(
                             glow::TEXTURE_2D_ARRAY,
                             num_levels as _,
-                            int_format,
+                            desc.tex_internal,
                             w as _,
                             h as _,
                             l as _,
@@ -1373,40 +1359,41 @@ impl d::Device<B> for Device {
                             gl.tex_image_3d(
                                 glow::TEXTURE_2D_ARRAY,
                                 i as _,
-                                int_format as _,
+                                desc.tex_internal as i32,
                                 w as _,
                                 h as _,
                                 l as _,
                                 0,
-                                iformat,
-                                itype,
+                                desc.tex_external,
+                                desc.data_type,
                                 None,
                             );
                             w = std::cmp::max(w / 2, 1);
                             h = std::cmp::max(h / 2, 1);
                         }
                     }
-                    n::ImageKind::Texture {
-                        texture: name,
-                        target: glow::TEXTURE_2D_ARRAY,
-                        format: iformat,
-                        pixel_type: itype,
-                    }
+                    glow::TEXTURE_2D_ARRAY
                 }
                 _ => unimplemented!(),
+            };
+            n::ImageKind::Texture {
+                texture: name,
+                target,
+                format: desc.tex_external,
+                pixel_type: desc.data_type,
             }
         } else {
             let name = gl.create_renderbuffer().unwrap();
             match kind {
                 i::Kind::D2(w, h, 1, 1) => {
                     gl.bind_renderbuffer(glow::RENDERBUFFER, Some(name));
-                    gl.renderbuffer_storage(glow::RENDERBUFFER, int_format, w as _, h as _);
+                    gl.renderbuffer_storage(glow::RENDERBUFFER, desc.tex_internal, w as _, h as _);
                 }
                 _ => unimplemented!(),
             };
-            n::ImageKind::Surface {
-                surface: name,
-                format: iformat,
+            n::ImageKind::Renderbuffer {
+                renderbuffer: name,
+                format: desc.tex_external,
             }
         };
 
@@ -1470,9 +1457,9 @@ impl d::Device<B> for Device {
         assert_eq!(swizzle, Swizzle::NO);
         //TODO: check format
         match image.kind {
-            n::ImageKind::Surface { surface, .. } => {
+            n::ImageKind::Renderbuffer { renderbuffer, .. } => {
                 if range.levels.start == 0 && range.layers.start == 0 {
-                    Ok(n::ImageView::Surface(surface))
+                    Ok(n::ImageView::Renderbuffer(renderbuffer))
                 } else if level != 0 {
                     Err(i::ViewError::Level(level)) //TODO
                 } else {
@@ -1578,7 +1565,7 @@ impl d::Device<B> for Device {
                             | n::ImageView::TextureLayer(tex, textype, _, _) => {
                                 bindings.push(n::DescSetBindings::Texture(binding, *tex, *textype))
                             }
-                            n::ImageView::Surface(_) => unimplemented!(),
+                            n::ImageView::Renderbuffer(_) => unimplemented!(),
                         }
                         match sampler {
                             n::FatSampler::Sampler(sampler) => {
@@ -1593,7 +1580,7 @@ impl d::Device<B> for Device {
                         | n::ImageView::TextureLayer(tex, textype, _, _) => {
                             bindings.push(n::DescSetBindings::Texture(binding, *tex, *textype))
                         }
-                        n::ImageView::Surface(_) => panic!(
+                        n::ImageView::Renderbuffer(_) => panic!(
                             "Texture was created with only render target usage which is invalid."
                         ),
                     },
@@ -1825,7 +1812,7 @@ impl d::Device<B> for Device {
     unsafe fn destroy_image(&self, image: n::Image) {
         let gl = &self.share.context;
         match image.kind {
-            n::ImageKind::Surface { surface, .. } => gl.delete_renderbuffer(surface),
+            n::ImageKind::Renderbuffer { renderbuffer, .. } => gl.delete_renderbuffer(renderbuffer),
             n::ImageKind::Texture { texture, .. } => gl.delete_texture(texture),
         }
     }
@@ -1884,7 +1871,7 @@ impl d::Device<B> for Device {
             context
         };
 
-        let mut fbos = Vec::new();
+        let mut fbos = ArrayVec::new();
         let mut images = Vec::new();
 
         for _ in 0 .. config.image_count {
@@ -1905,12 +1892,12 @@ impl d::Device<B> for Device {
                 .unwrap();
 
             match image.kind {
-                n::ImageKind::Surface { surface, .. } => {
+                n::ImageKind::Renderbuffer { renderbuffer, .. } => {
                     gl.framebuffer_renderbuffer(
                         glow::FRAMEBUFFER,
                         glow::COLOR_ATTACHMENT0,
                         glow::RENDERBUFFER,
-                        Some(surface),
+                        Some(renderbuffer),
                     );
                 }
                 n::ImageKind::Texture {

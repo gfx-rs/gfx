@@ -17,7 +17,7 @@ use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 
-use crate::hal::{adapter, buffer, error, image, memory, pso, queue as q};
+use hal::{adapter, buffer, error, image, memory, pso, queue as q};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -33,7 +33,7 @@ mod state;
 mod window;
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
-pub use window::glutin::{config_context, Headless, Surface, Swapchain};
+pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
 #[cfg(target_arch = "wasm32")]
 pub use window::web::{Surface, Swapchain, Window};
 

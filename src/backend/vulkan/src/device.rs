@@ -584,7 +584,7 @@ impl d::Device<B> for Device {
                     line_width,
                 });
 
-                use crate::hal::Primitive::PatchList;
+                use hal::Primitive::PatchList;
                 if let PatchList(patch_control_points) = desc.input_assembler.primitive {
                     info_tessellation_states.push(vk::PipelineTessellationStateCreateInfo {
                         s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
@@ -1037,18 +1037,26 @@ impl d::Device<B> for Device {
         T: IntoIterator,
         T::Item: Borrow<n::ImageView>,
     {
-        let attachments_raw = attachments
-            .into_iter()
-            .map(|attachment| attachment.borrow().view)
-            .collect::<SmallVec<[_; 4]>>();
+        let mut framebuffers_ptr = None;
+        let mut raw_attachments = SmallVec::<[_; 4]>::new();
+        for attachment in attachments {
+            let at = attachment.borrow();
+            raw_attachments.push(at.view);
+            match at.owner {
+                n::ImageViewOwner::User => {}
+                n::ImageViewOwner::Surface(ref fbo_ptr) => {
+                    framebuffers_ptr = Some(Arc::clone(&fbo_ptr.0));
+                }
+            }
+        }
 
         let info = vk::FramebufferCreateInfo {
             s_type: vk::StructureType::FRAMEBUFFER_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::FramebufferCreateFlags::empty(),
             render_pass: renderpass.raw,
-            attachment_count: attachments_raw.len() as u32,
-            p_attachments: attachments_raw.as_ptr(),
+            attachment_count: raw_attachments.len() as u32,
+            p_attachments: raw_attachments.as_ptr(),
             width: extent.width,
             height: extent.height,
             layers: extent.depth,
@@ -1057,7 +1065,16 @@ impl d::Device<B> for Device {
         let result = self.raw.0.create_framebuffer(&info, None);
 
         match result {
-            Ok(raw) => Ok(n::Framebuffer { raw }),
+            Ok(raw) => Ok(n::Framebuffer {
+                raw,
+                owned: match framebuffers_ptr {
+                    Some(fbo_ptr) => {
+                        fbo_ptr.lock().unwrap().framebuffers.push(raw);
+                        false
+                    }
+                    None => true,
+                },
+            }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::OutOfDeviceMemory),
             _ => unreachable!(),
@@ -1094,7 +1111,7 @@ impl d::Device<B> for Device {
         &self,
         sampler_info: image::SamplerInfo,
     ) -> Result<n::Sampler, d::AllocationError> {
-        use crate::hal::pso::Comparison;
+        use hal::pso::Comparison;
 
         let (anisotropy_enable, max_anisotropy) = match sampler_info.anisotropic {
             image::Anisotropic::Off => (vk::FALSE, 1.0),
@@ -1379,6 +1396,7 @@ impl d::Device<B> for Device {
                 image: image.raw,
                 view,
                 range,
+                owner: n::ImageViewOwner::User,
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::OutOfHostMemory.into()),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
@@ -2061,7 +2079,9 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_framebuffer(&self, fb: n::Framebuffer) {
-        self.raw.0.destroy_framebuffer(fb.raw, None);
+        if fb.owned {
+            self.raw.0.destroy_framebuffer(fb.raw, None);
+        }
     }
 
     unsafe fn destroy_buffer(&self, buffer: n::Buffer) {
@@ -2077,7 +2097,14 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_image_view(&self, view: n::ImageView) {
-        self.raw.0.destroy_image_view(view.view, None);
+        match view.owner {
+            n::ImageViewOwner::User => {
+                self.raw.0.destroy_image_view(view.view, None);
+            }
+            n::ImageViewOwner::Surface(_fbo_cache) => {
+                //TODO: mark as deleted?
+            }
+        }
     }
 
     unsafe fn destroy_sampler(&self, sampler: n::Sampler) {

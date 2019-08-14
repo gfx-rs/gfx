@@ -5,8 +5,8 @@ extern crate gfx_hal as hal;
 #[cfg(feature = "winit")]
 extern crate winit;
 
-use crate::hal::range::RangeArg;
-use crate::hal::{
+use hal::range::RangeArg;
+use hal::{
     adapter,
     buffer,
     command,
@@ -136,6 +136,15 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         S: 'a + Borrow<()>,
         Iw: IntoIterator<Item = &'a S>,
     {
+        unimplemented!()
+    }
+
+    unsafe fn present_surface(
+        &mut self,
+        _surface: &mut Surface,
+        _image: (),
+        _wait_semaphore: Option<&()>,
+    ) -> Result<Option<window::Suboptimal>, window::PresentError> {
         unimplemented!()
     }
 
@@ -895,6 +904,28 @@ impl window::Surface<Backend> for Surface {
     }
 
     fn supports_queue_family(&self, _: &QueueFamily) -> bool {
+        unimplemented!()
+    }
+}
+impl window::PresentationSurface<Backend> for Surface {
+    type SwapchainImage = ();
+
+    unsafe fn configure_swapchain(
+        &mut self,
+        _: &Device,
+        _: window::SwapchainConfig,
+    ) -> Result<(), window::CreationError> {
+        unimplemented!()
+    }
+
+    unsafe fn unconfigure_swapchain(&mut self, _: &Device) {
+        unimplemented!()
+    }
+
+    unsafe fn acquire_image(
+        &mut self,
+        _: u64,
+    ) -> Result<((), Option<window::Suboptimal>), window::AcquireError> {
         unimplemented!()
     }
 }

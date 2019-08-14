@@ -2,14 +2,19 @@ use hal::adapter::MemoryProperties;
 use hal::pso::VertexInputRate;
 use hal::queue::QueueFamilyId;
 use hal::range::RangeArg;
-use hal::window::SwapchainConfig;
-use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query};
+use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query, window};
 
-use winapi::shared::dxgi::{IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD};
+use winapi::shared::dxgi::{
+    IDXGIFactory,
+    IDXGISwapChain,
+    DXGI_SWAP_CHAIN_DESC,
+    DXGI_SWAP_EFFECT_DISCARD,
+};
 use winapi::shared::minwindef::TRUE;
+use winapi::shared::windef::HWND;
 use winapi::shared::{dxgiformat, dxgitype, winerror};
 use winapi::um::{d3d11, d3d11sdklayers, d3dcommon};
-use winapi::Interface;
+use winapi::Interface as _;
 
 use wio::com::ComPtr;
 
@@ -582,7 +587,7 @@ impl Device {
         }
     }
 
-    fn view_image_as_render_target(
+    pub(crate) fn view_image_as_render_target(
         &self,
         info: &ViewInfo,
     ) -> Result<ComPtr<d3d11::ID3D11RenderTargetView>, image::ViewError> {
@@ -693,6 +698,64 @@ impl Device {
         } else {
             Err(image::ViewError::Unsupported)
         }
+    }
+
+    pub(crate) fn create_swapchain_impl(
+        &self,
+        config: &window::SwapchainConfig,
+        window_handle: HWND,
+        factory: ComPtr<IDXGIFactory>,
+    ) -> Result<(ComPtr<IDXGISwapChain>, dxgiformat::DXGI_FORMAT), window::CreationError> {
+        // TODO: use IDXGIFactory2 for >=11.1
+        // TODO: this function should be able to fail (Result)?
+
+        debug!("{:#?}", config);
+        let non_srgb_format = conv::map_format_nosrgb(config.format).unwrap();
+
+        let mut desc = DXGI_SWAP_CHAIN_DESC {
+            BufferDesc: dxgitype::DXGI_MODE_DESC {
+                Width: config.extent.width,
+                Height: config.extent.height,
+                // TODO: should this grab max value of all monitor hz? vsync
+                //       will clamp to current monitor anyways?
+                RefreshRate: dxgitype::DXGI_RATIONAL {
+                    Numerator: 1,
+                    Denominator: 60,
+                },
+                Format: non_srgb_format,
+                ScanlineOrdering: dxgitype::DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
+                Scaling: dxgitype::DXGI_MODE_SCALING_UNSPECIFIED,
+            },
+            // TODO: msaa on backbuffer?
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT
+                | dxgitype::DXGI_USAGE_SHADER_INPUT,
+            BufferCount: config.image_count,
+            OutputWindow: window_handle,
+            // TODO:
+            Windowed: TRUE,
+            // TODO:
+            SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
+            Flags: 0,
+        };
+
+        let dxgi_swapchain = {
+            let mut swapchain: *mut IDXGISwapChain = ptr::null_mut();
+            let hr = unsafe {
+                factory.CreateSwapChain(
+                    self.raw.as_raw() as *mut _,
+                    &mut desc as *mut _,
+                    &mut swapchain as *mut *mut _ as *mut *mut _,
+                )
+            };
+            assert_eq!(hr, winerror::S_OK);
+
+            unsafe { ComPtr::from_raw(swapchain) }
+        };
+        Ok((dxgi_swapchain, non_srgb_format))
     }
 }
 
@@ -2472,93 +2535,31 @@ impl device::Device<Backend> for Device {
     unsafe fn create_swapchain(
         &self,
         surface: &mut Surface,
-        config: SwapchainConfig,
+        config: window::SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<Image>), hal::window::CreationError> {
-        // TODO: use IDXGIFactory2 for >=11.1
-        // TODO: this function should be able to fail (Result)?
-
-        use conv::map_format;
-
-        debug!("{:#?}", config);
-
-        let (non_srgb_format, format) = {
-            // NOTE: DXGI doesn't allow sRGB format on the swapchain, but
-            //       creating RTV of swapchain buffers with sRGB works
-            let format = match config.format {
-                format::Format::Bgra8Srgb => format::Format::Bgra8Unorm,
-                format::Format::Rgba8Srgb => format::Format::Rgba8Unorm,
-                format => format,
-            };
-
-            (
-                map_format(format).unwrap(),
-                map_format(config.format).unwrap(),
-            )
-        };
-        let decomposed = conv::DecomposedDxgiFormat::from_dxgi_format(format);
-
-        let mut desc = DXGI_SWAP_CHAIN_DESC {
-            BufferDesc: dxgitype::DXGI_MODE_DESC {
-                Width: surface.width,
-                Height: surface.height,
-                // TODO: should this grab max value of all monitor hz? vsync
-                //       will clamp to current monitor anyways?
-                RefreshRate: dxgitype::DXGI_RATIONAL {
-                    Numerator: 1,
-                    Denominator: 60,
-                },
-                Format: non_srgb_format,
-                ScanlineOrdering: dxgitype::DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED,
-                Scaling: dxgitype::DXGI_MODE_SCALING_UNSPECIFIED,
-            },
-            // TODO: msaa on backbuffer?
-            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
-                Count: 1,
-                Quality: 0,
-            },
-            BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT
-                | dxgitype::DXGI_USAGE_SHADER_INPUT,
-            BufferCount: config.image_count,
-            OutputWindow: surface.wnd_handle,
-            // TODO:
-            Windowed: TRUE,
-            // TODO:
-            SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
-            Flags: 0,
-        };
-        let swapchain = {
-            let mut swapchain: *mut IDXGISwapChain = ptr::null_mut();
-            let hr = unsafe {
-                surface.factory.CreateSwapChain(
-                    self.raw.as_raw() as *mut _,
-                    &mut desc as *mut _,
-                    &mut swapchain as *mut *mut _ as *mut *mut _,
-                )
-            };
-            assert_eq!(hr, winerror::S_OK);
-
-            unsafe { ComPtr::from_raw(swapchain) }
-        };
+    ) -> Result<(Swapchain, Vec<Image>), window::CreationError> {
+        let (dxgi_swapchain, non_srgb_format) =
+            self.create_swapchain_impl(&config, surface.wnd_handle, surface.factory.clone())?;
 
         let resource = {
             let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
-
-            let hr = unsafe {
-                swapchain.GetBuffer(
+            assert_eq!(
+                winerror::S_OK,
+                dxgi_swapchain.GetBuffer(
                     0 as _,
                     &d3d11::ID3D11Resource::uuidof(),
                     &mut resource as *mut *mut _ as *mut *mut _,
                 )
-            };
-            assert_eq!(hr, winerror::S_OK);
+            );
             resource
         };
 
-        let kind = image::Kind::D2(surface.width, surface.height, 1, 1);
+        let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
+        let decomposed =
+            conv::DecomposedDxgiFormat::from_dxgi_format(conv::map_format(config.format).unwrap());
 
         let mut view_info = ViewInfo {
-            resource: resource,
+            resource,
             kind,
             caps: image::ViewCapabilities::empty(),
             view_kind: image::ViewKind::D2,
@@ -2611,12 +2612,7 @@ impl device::Device<Backend> for Device {
             })
             .collect();
 
-        Ok((
-            Swapchain {
-                dxgi_swapchain: swapchain,
-            },
-            images,
-        ))
+        Ok((Swapchain { dxgi_swapchain }, images))
     }
 
     unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {

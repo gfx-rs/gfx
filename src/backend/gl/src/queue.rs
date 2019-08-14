@@ -1,4 +1,3 @@
-use crate::Starc;
 use std::borrow::Borrow;
 use std::{mem, slice};
 
@@ -16,6 +15,9 @@ use crate::{
     Backend,
     GlContext,
     Share,
+    Starc,
+    Surface,
+    Swapchain,
 };
 
 // State caching system for command queue.
@@ -163,8 +165,13 @@ impl CommandQueue {
     fn bind_target(&mut self, point: u32, attachment: u32, view: &native::ImageView) {
         let gl = &self.share.context;
         match view {
-            &native::ImageView::Surface(surface) => unsafe {
-                gl.framebuffer_renderbuffer(point, attachment, glow::RENDERBUFFER, Some(surface));
+            &native::ImageView::Renderbuffer(renderbuffer) => unsafe {
+                gl.framebuffer_renderbuffer(
+                    point,
+                    attachment,
+                    glow::RENDERBUFFER,
+                    Some(renderbuffer),
+                );
             },
             &native::ImageView::Texture(texture, _, level) => unsafe {
                 gl.framebuffer_texture(point, attachment, Some(texture), level as i32);
@@ -199,6 +206,36 @@ impl CommandQueue {
     fn get_raw(data: &[u8], ptr: com::BufferSlice) -> &[u8] {
         assert!(data.len() >= (ptr.offset + ptr.size) as usize);
         &data[ptr.offset as usize .. (ptr.offset + ptr.size) as usize]
+    }
+
+    fn present_by_copy(&self, swapchain: &Swapchain, index: hal::window::SwapImageIndex) {
+        let gl = &self.share.context;
+        let extent = swapchain.extent;
+
+        #[cfg(feature = "wgl")]
+        swapchain.make_current();
+
+        unsafe {
+            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.fbos[index as usize]));
+            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+            gl.blit_framebuffer(
+                0,
+                0,
+                extent.width as _,
+                extent.height as _,
+                0,
+                0,
+                extent.width as _,
+                extent.height as _,
+                glow::COLOR_BUFFER_BIT,
+                glow::LINEAR,
+            );
+        }
+
+        #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
+        swapchain.context.swap_buffers().unwrap();
+        #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
+        swapchain.swap_buffers();
     }
 
     // Reset the state to match our _expected_ state before executing
@@ -666,7 +703,7 @@ impl CommandQueue {
 
                 gl.bind_buffer(glow::PIXEL_UNPACK_BUFFER, None);
             },
-            com::Command::CopyBufferToSurface(..) => {
+            com::Command::CopyBufferToRenderbuffer(..) => {
                 unimplemented!() //TODO: use FBO
             }
             com::Command::CopyTextureToBuffer {
@@ -698,15 +735,15 @@ impl CommandQueue {
                 );
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
             },
-            com::Command::CopySurfaceToBuffer(..) => {
+            com::Command::CopyRenderbufferToBuffer(..) => {
                 unimplemented!() //TODO: use FBO
             }
             com::Command::CopyImageToTexture(..) => {
                 unimplemented!() //TODO: use FBO
             }
-            com::Command::CopyImageToSurface {
+            com::Command::CopyImageToRenderbuffer {
                 src_image,
-                dst_surface,
+                dst_renderbuffer,
                 dst_format,
                 ref data,
             } => {
@@ -720,8 +757,8 @@ impl CommandQueue {
 
                 match src_image {
                     native::ImageKind::Texture { .. } => unimplemented!(),
-                    native::ImageKind::Surface {
-                        surface: src_surface,
+                    native::ImageKind::Renderbuffer {
+                        renderbuffer: src_renderbuffer,
                         format: src_format,
                     } => {
                         if src_format != dst_format {
@@ -735,7 +772,7 @@ impl CommandQueue {
                                 glow::READ_FRAMEBUFFER,
                                 glow::COLOR_ATTACHMENT0,
                                 glow::RENDERBUFFER,
-                                Some(src_surface),
+                                Some(src_renderbuffer),
                             );
 
                             let dst_fbo = gl.create_framebuffer().unwrap();
@@ -744,7 +781,7 @@ impl CommandQueue {
                                 glow::DRAW_FRAMEBUFFER,
                                 glow::COLOR_ATTACHMENT0,
                                 glow::RENDERBUFFER,
-                                Some(dst_surface),
+                                Some(dst_renderbuffer),
                             );
 
                             gl.blit_framebuffer(
@@ -900,8 +937,8 @@ impl CommandQueue {
                 }
             }
             com::Command::BindRasterizer { rasterizer } => {
-                use crate::hal::pso::FrontFace::*;
-                use crate::hal::pso::PolygonMode::*;
+                use hal::pso::FrontFace::*;
+                use hal::pso::PolygonMode::*;
 
                 let gl = &self.share.context;
 
@@ -957,7 +994,7 @@ impl CommandQueue {
                 }
             }
             com::Command::BindDepth { depth } => {
-                use crate::hal::pso::Comparison::*;
+                use hal::pso::Comparison::*;
 
                 let gl = &self.share.context;
 
@@ -1105,37 +1142,27 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         S: 'a + Borrow<native::Semaphore>,
         Iw: IntoIterator<Item = &'a S>,
     {
-        let gl = &self.share.context;
-
         for (swapchain, index) in swapchains {
-            let extent = swapchain.borrow().extent;
-
-            #[cfg(feature = "wgl")]
-            swapchain.borrow().make_current();
-
-            gl.bind_framebuffer(
-                glow::READ_FRAMEBUFFER,
-                Some(swapchain.borrow().fbos[index as usize]),
-            );
-            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
-            gl.blit_framebuffer(
-                0,
-                0,
-                extent.width as _,
-                extent.height as _,
-                0,
-                0,
-                extent.width as _,
-                extent.height as _,
-                glow::COLOR_BUFFER_BIT,
-                glow::LINEAR,
-            );
-
-            #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
-            swapchain.borrow().context.swap_buffers().unwrap();
-            #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
-            swapchain.borrow().swap_buffers();
+            self.present_by_copy(swapchain.borrow(), index);
         }
+
+        #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
+        self.share.instance_context.make_current();
+
+        Ok(None)
+    }
+
+    unsafe fn present_surface(
+        &mut self,
+        surface: &mut Surface,
+        _image: native::ImageView,
+        _wait_semaphore: Option<&native::Semaphore>,
+    ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError> {
+        let swapchain = surface
+            .swapchain
+            .as_ref()
+            .expect("No swapchain is configured!");
+        self.present_by_copy(swapchain, 0);
 
         #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
         self.share.instance_context.make_current();

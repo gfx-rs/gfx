@@ -1,10 +1,7 @@
-use crate::hal::image::SubresourceRange;
-use crate::hal::pso;
-use crate::{Backend, RawDevice};
-use ash::version::DeviceV1_0;
-use ash::vk;
-use std::borrow::Borrow;
-use std::sync::Arc;
+use crate::{window::FramebufferCachePtr, Backend, RawDevice};
+use ash::{version::DeviceV1_0, vk};
+use hal::{image::SubresourceRange, pso};
+use std::{borrow::Borrow, sync::Arc};
 
 #[derive(Debug, Hash)]
 pub struct Semaphore(pub vk::Semaphore);
@@ -48,10 +45,17 @@ pub struct Image {
 }
 
 #[derive(Debug, Hash, PartialEq, Eq)]
+pub enum ImageViewOwner {
+    User,
+    Surface(FramebufferCachePtr),
+}
+
+#[derive(Debug, Hash, PartialEq, Eq)]
 pub struct ImageView {
     pub(crate) image: vk::Image,
     pub(crate) view: vk::ImageView,
     pub(crate) range: SubresourceRange,
+    pub(crate) owner: ImageViewOwner,
 }
 
 #[derive(Debug, Hash)]
@@ -66,6 +70,7 @@ pub struct RenderPass {
 #[derive(Debug, Hash)]
 pub struct Framebuffer {
     pub(crate) raw: vk::Framebuffer,
+    pub(crate) owned: bool,
 }
 
 #[derive(Debug)]

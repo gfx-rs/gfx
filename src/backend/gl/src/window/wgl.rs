@@ -1,14 +1,17 @@
-use crate::{native, Backend, GlContainer, PhysicalDevice, QueueFamily};
+use crate::{conv, device::Device, native, Backend, GlContainer, PhysicalDevice, QueueFamily};
 
 use std::{
     ffi::{CString, OsStr},
+    iter,
     mem,
     os::{raw::c_void, windows::ffi::OsStrExt},
     ptr,
 };
 
+use glow::Context as _;
 use hal::{adapter::Adapter, format as f, image, window};
 
+use arrayvec::ArrayVec;
 use lazy_static::lazy_static;
 use winapi::shared::minwindef::*;
 use winapi::shared::windef::*;
@@ -178,6 +181,8 @@ impl Instance {
     pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
         Surface {
             hwnd: hwnd as *mut _,
+            swapchain: None,
+            renderbuffer: None,
         }
     }
 
@@ -211,24 +216,13 @@ impl hal::Instance for Instance {
 #[derive(Debug)]
 pub struct Surface {
     pub(crate) hwnd: HWND,
+    pub(crate) swapchain: Option<Swapchain>,
+    renderbuffer: Option<native::Renderbuffer>,
 }
 
 // TODO: high -msiglreith
 unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
-
-impl Surface {
-    fn get_extent(&self) -> window::Extent2D {
-        let mut rect: RECT = unsafe { mem::uninitialized() };
-        unsafe {
-            GetClientRect(self.hwnd, &mut rect);
-        }
-        window::Extent2D {
-            width: (rect.right - rect.left) as _,
-            height: (rect.bottom - rect.top) as _,
-        }
-    }
-}
 
 impl window::Surface<Backend> for Surface {
     fn compatibility(
@@ -239,7 +233,14 @@ impl window::Surface<Backend> for Surface {
         Option<Vec<f::Format>>,
         Vec<window::PresentMode>,
     ) {
-        let extent = self.get_extent();
+        let extent = unsafe {
+            let mut rect: RECT = mem::zeroed();
+            GetClientRect(self.hwnd, &mut rect);
+            window::Extent2D {
+                width: (rect.right - rect.left) as _,
+                height: (rect.bottom - rect.top) as _,
+            }
+        };
 
         let caps = window::SurfaceCapabilities {
             image_count: 2 ..= 2,
@@ -265,9 +266,82 @@ impl window::Surface<Backend> for Surface {
     }
 }
 
+impl window::PresentationSurface<Backend> for Surface {
+    type SwapchainImage = native::ImageView;
+
+    unsafe fn configure_swapchain(
+        &mut self,
+        device: &Device,
+        config: window::SwapchainConfig,
+    ) -> Result<(), window::CreationError> {
+        let gl = &device.share.context;
+
+        let context = match self.swapchain.take() {
+            Some(old) => {
+                for fbo in old.fbos {
+                    gl.delete_framebuffer(fbo);
+                }
+                old.context
+            }
+            None => PresentContext::new(self, &device.share.instance_context),
+        };
+        context.make_current();
+
+        if self.renderbuffer.is_none() {
+            self.renderbuffer = Some(gl.create_renderbuffer().unwrap());
+        }
+
+        let desc = conv::describe_format(config.format).unwrap();
+        gl.bind_renderbuffer(glow::RENDERBUFFER, self.renderbuffer);
+        gl.renderbuffer_storage(
+            glow::RENDERBUFFER,
+            desc.tex_internal,
+            config.extent.width as i32,
+            config.extent.height as i32,
+        );
+
+        let fbo = gl.create_framebuffer().unwrap();
+        gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(fbo));
+        gl.framebuffer_renderbuffer(
+            glow::READ_FRAMEBUFFER,
+            glow::COLOR_ATTACHMENT0,
+            glow::RENDERBUFFER,
+            self.renderbuffer,
+        );
+        self.swapchain = Some(Swapchain {
+            context,
+            extent: config.extent,
+            fbos: iter::once(fbo).collect(),
+        });
+
+        Ok(())
+    }
+
+    unsafe fn unconfigure_swapchain(&mut self, device: &Device) {
+        let gl = &device.share.context;
+        if let Some(old) = self.swapchain.take() {
+            for fbo in old.fbos {
+                gl.delete_framebuffer(fbo);
+            }
+        }
+        if let Some(rbo) = self.renderbuffer.take() {
+            gl.delete_renderbuffer(rbo);
+        }
+    }
+
+    unsafe fn acquire_image(
+        &mut self,
+        _timeout_ns: u64,
+    ) -> Result<(Self::SwapchainImage, Option<window::Suboptimal>), window::AcquireError> {
+        let image = native::ImageView::Renderbuffer(self.renderbuffer.unwrap());
+        Ok((image, None))
+    }
+}
+
+
 #[derive(Debug)]
 pub struct Swapchain {
-    pub(crate) fbos: Vec<native::RawFrameBuffer>,
+    pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,
     pub(crate) context: PresentContext,
     pub(crate) extent: window::Extent2D,
 }

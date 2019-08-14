@@ -98,9 +98,6 @@ pub struct RenderPass {
     pub(crate) subpasses: Vec<Subpass>,
 }
 
-unsafe impl Send for RenderPass {}
-unsafe impl Sync for RenderPass {}
-
 #[derive(Debug)]
 pub struct Framebuffer {
     pub(crate) extent: image::Extent,
@@ -109,6 +106,7 @@ pub struct Framebuffer {
 
 unsafe impl Send for Framebuffer {}
 unsafe impl Sync for Framebuffer {}
+
 
 #[derive(Clone, Debug)]
 pub struct ResourceData<T> {
@@ -388,7 +386,7 @@ unsafe impl Sync for BufferView {}
 
 #[derive(Debug)]
 pub struct ImageView {
-    pub(crate) raw: metal::Texture,
+    pub(crate) texture: metal::Texture,
     pub(crate) mtl_format: metal::MTLPixelFormat,
 }
 

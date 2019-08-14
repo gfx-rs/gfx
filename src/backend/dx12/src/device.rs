@@ -6,7 +6,7 @@ use std::{ffi, mem, ptr, slice};
 use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 
 use winapi::shared::minwindef::{FALSE, TRUE, UINT};
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
+use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winerror};
 use winapi::um::{d3d12, d3dcompiler, synchapi, winbase, winnt};
 use winapi::Interface;
 
@@ -16,7 +16,20 @@ use hal::pool::CommandPoolCreateFlags;
 use hal::pso::VertexInputRate;
 use hal::queue::{CommandQueue as _, QueueFamilyId};
 use hal::range::RangeArg;
-use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass, pso, query};
+use hal::{
+    self,
+    buffer,
+    device as d,
+    error,
+    format,
+    image,
+    mapping,
+    memory,
+    pass,
+    pso,
+    query,
+    window as w,
+};
 
 use descriptor;
 use native::command_list::IndirectArgument;
@@ -31,7 +44,7 @@ use {
     native,
     resource as r,
     root_constants,
-    window as w,
+    window::{Surface, Swapchain},
     Backend as B,
     Device,
     MemoryGroup,
@@ -968,6 +981,101 @@ impl Device {
             )
         });
         handle
+    }
+
+    pub(crate) fn create_swapchain_impl(
+        &self,
+        config: &w::SwapchainConfig,
+        window_handle: windef::HWND,
+        factory: native::WeakPtr<dxgi1_4::IDXGIFactory4>,
+    ) -> Result<
+        (
+            native::WeakPtr<dxgi1_4::IDXGISwapChain3>,
+            dxgiformat::DXGI_FORMAT,
+        ),
+        w::CreationError,
+    > {
+        let mut swap_chain1 = native::WeakPtr::<dxgi1_2::IDXGISwapChain1>::null();
+
+        //TODO: proper error type?
+        let non_srgb_format = conv::map_format_nosrgb(config.format).unwrap();
+
+        // TODO: double-check values
+        let desc = dxgi1_2::DXGI_SWAP_CHAIN_DESC1 {
+            AlphaMode: dxgi1_2::DXGI_ALPHA_MODE_IGNORE,
+            BufferCount: config.image_count,
+            Width: config.extent.width,
+            Height: config.extent.height,
+            Format: non_srgb_format,
+            Flags: 0,
+            BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
+            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                Count: 1,
+                Quality: 0,
+            },
+            Scaling: dxgi1_2::DXGI_SCALING_STRETCH,
+            Stereo: FALSE,
+            SwapEffect: dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
+        };
+
+        unsafe {
+            let hr = factory.CreateSwapChainForHwnd(
+                self.present_queue.as_mut_ptr() as *mut _,
+                window_handle,
+                &desc,
+                ptr::null(),
+                ptr::null_mut(),
+                swap_chain1.mut_void() as *mut *mut _,
+            );
+
+            if !winerror::SUCCEEDED(hr) {
+                error!("error on swapchain creation 0x{:x}", hr);
+            }
+
+            let (swap_chain3, hr3) = swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>();
+            if !winerror::SUCCEEDED(hr3) {
+                error!("error on swapchain cast 0x{:x}", hr3);
+            }
+
+            swap_chain1.destroy();
+            Ok((swap_chain3, non_srgb_format))
+        }
+    }
+
+    pub(crate) fn wrap_swapchain(
+        &self,
+        inner: native::WeakPtr<dxgi1_4::IDXGISwapChain3>,
+        config: &w::SwapchainConfig,
+    ) -> Swapchain {
+        let rtv_desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
+            Format: conv::map_format(config.format).unwrap(),
+            ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
+            ..unsafe { mem::zeroed() }
+        };
+        let rtv_heap = Device::create_descriptor_heap_impl(
+            self.raw,
+            descriptor::HeapType::Rtv,
+            false,
+            config.image_count as _,
+        );
+
+        let mut resources = vec![native::Resource::null(); config.image_count as usize];
+        for (i, res) in resources.iter_mut().enumerate() {
+            let rtv_handle = rtv_heap.at(i as _, 0).cpu;
+            unsafe {
+                inner.GetBuffer(i as _, &d3d12::ID3D12Resource::uuidof(), res.mut_void());
+                self.raw
+                    .CreateRenderTargetView(res.as_mut_ptr(), &rtv_desc, rtv_handle);
+            }
+        }
+
+        Swapchain {
+            inner,
+            next_frame: 0,
+            frame_queue: VecDeque::new(),
+            rtv_heap,
+            resources,
+        }
     }
 }
 
@@ -3181,156 +3289,72 @@ impl d::Device<B> for Device {
 
     unsafe fn create_swapchain(
         &self,
-        surface: &mut w::Surface,
-        config: hal::window::SwapchainConfig,
-        old_swapchain: Option<w::Swapchain>,
-    ) -> Result<(w::Swapchain, Vec<r::Image>), hal::window::CreationError> {
+        surface: &mut Surface,
+        config: w::SwapchainConfig,
+        old_swapchain: Option<Swapchain>,
+    ) -> Result<(Swapchain, Vec<r::Image>), w::CreationError> {
         if let Some(old_swapchain) = old_swapchain {
             self.destroy_swapchain(old_swapchain);
         }
 
-        let mut swap_chain1 = native::WeakPtr::<dxgi1_2::IDXGISwapChain1>::null();
+        let (swap_chain3, non_srgb_format) =
+            self.create_swapchain_impl(&config, surface.wnd_handle, surface.factory)?;
 
-        let format = match config.format {
-            // Apparently, swap chain doesn't like sRGB, but the RTV can still have some:
-            // https://www.gamedev.net/forums/topic/670546-d3d12srgb-buffer-format-for-swap-chain/
-            // [15716] DXGI ERROR: IDXGIFactory::CreateSwapchain: Flip model swapchains
-            //                     (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL and DXGI_SWAP_EFFECT_FLIP_DISCARD) only support the following Formats:
-            //                     (DXGI_FORMAT_R16G16B16A16_FLOAT, DXGI_FORMAT_B8G8R8A8_UNORM, DXGI_FORMAT_R8G8B8A8_UNORM, DXGI_FORMAT_R10G10B10A2_UNORM),
-            //                     assuming the underlying Device does as well.
-            format::Format::Bgra8Srgb => format::Format::Bgra8Unorm,
-            format::Format::Rgba8Srgb => format::Format::Rgba8Unorm,
-            format => format,
-        };
+        let swapchain = self.wrap_swapchain(swap_chain3, &config);
 
-        let format = conv::map_format(format).unwrap(); // TODO: error handling
+        let mut images = Vec::with_capacity(config.image_count as usize);
+        for (i, &resource) in swapchain.resources.iter().enumerate() {
+            let rtv_handle = swapchain.rtv_heap.at(i as _, 0).cpu;
+            let surface_type = config.format.base_format().0;
+            let format_desc = surface_type.desc();
 
-        let rtv_desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
-            Format: conv::map_format(config.format).unwrap(),
-            ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
-            ..mem::zeroed()
-        };
-        let rtv_heap = Device::create_descriptor_heap_impl(
-            self.raw,
-            descriptor::HeapType::Rtv,
-            false,
-            config.image_count as _,
-        );
+            let bytes_per_block = (format_desc.bits / 8) as _;
+            let block_dim = format_desc.dim;
+            let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
 
-        // TODO: double-check values
-        let desc = dxgi1_2::DXGI_SWAP_CHAIN_DESC1 {
-            AlphaMode: dxgi1_2::DXGI_ALPHA_MODE_IGNORE,
-            BufferCount: config.image_count,
-            Width: config.extent.width,
-            Height: config.extent.height,
-            Format: format,
-            Flags: 0,
-            BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
-            SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
-                Count: 1,
-                Quality: 0,
-            },
-            Scaling: dxgi1_2::DXGI_SCALING_STRETCH,
-            Stereo: FALSE,
-            SwapEffect: dxgi::DXGI_SWAP_EFFECT_FLIP_DISCARD,
-        };
-
-        // TODO
-        let hr = surface.factory.CreateSwapChainForHwnd(
-            self.present_queue.as_mut_ptr() as *mut _,
-            surface.wnd_handle,
-            &desc,
-            ptr::null(),
-            ptr::null_mut(),
-            swap_chain1.mut_void() as *mut *mut _,
-        );
-
-        if !winerror::SUCCEEDED(hr) {
-            error!("error on swapchain creation 0x{:x}", hr);
-        }
-
-        let (swap_chain3, hr3) = swap_chain1.cast::<dxgi1_4::IDXGISwapChain3>();
-        if !winerror::SUCCEEDED(hr3) {
-            error!("error on swapchain cast 0x{:x}", hr3);
-        }
-
-        swap_chain1.destroy();
-
-        // Get backbuffer images
-        let mut resources: Vec<native::Resource> = Vec::new();
-        let images = (0 .. config.image_count)
-            .map(|i| {
-                let mut resource = native::Resource::null();
-                swap_chain3.GetBuffer(
-                    i as _,
-                    &d3d12::ID3D12Resource::uuidof(),
-                    resource.mut_void(),
-                );
-
-                let rtv_handle = rtv_heap.at(i as _, 0).cpu;
-                self.raw
-                    .CreateRenderTargetView(resource.as_mut_ptr(), &rtv_desc, rtv_handle);
-                resources.push(resource);
-
-                let surface_type = config.format.base_format().0;
-                let format_desc = surface_type.desc();
-
-                let bytes_per_block = (format_desc.bits / 8) as _;
-                let block_dim = format_desc.dim;
-                let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
-
-                r::Image::Bound(r::ImageBound {
-                    resource,
-                    place: r::Place::SwapChain,
-                    surface_type,
-                    kind,
-                    usage: config.image_usage,
-                    default_view_format: Some(format),
-                    view_caps: image::ViewCapabilities::empty(),
-                    descriptor: d3d12::D3D12_RESOURCE_DESC {
-                        Dimension: d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-                        Alignment: 0,
-                        Width: config.extent.width as _,
-                        Height: config.extent.height as _,
-                        DepthOrArraySize: 1,
-                        MipLevels: 1,
-                        Format: format,
-                        SampleDesc: desc.SampleDesc.clone(),
-                        Layout: d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
-                        Flags: 0,
+            images.push(r::Image::Bound(r::ImageBound {
+                resource,
+                place: r::Place::SwapChain,
+                surface_type,
+                kind,
+                usage: config.image_usage,
+                default_view_format: Some(non_srgb_format),
+                view_caps: image::ViewCapabilities::empty(),
+                descriptor: d3d12::D3D12_RESOURCE_DESC {
+                    Dimension: d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
+                    Alignment: 0,
+                    Width: config.extent.width as _,
+                    Height: config.extent.height as _,
+                    DepthOrArraySize: 1,
+                    MipLevels: 1,
+                    Format: non_srgb_format,
+                    SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
+                        Count: 1,
+                        Quality: 0,
                     },
-                    bytes_per_block,
-                    block_dim,
-                    clear_cv: vec![rtv_handle],
-                    clear_dv: Vec::new(),
-                    clear_sv: Vec::new(),
-                    // Dummy values, image is already bound
-                    requirements: memory::Requirements {
-                        alignment: 1,
-                        size: 1,
-                        type_mask: MEM_TYPE_MASK,
-                    },
-                })
-            })
-            .collect();
-
-        let swapchain = w::Swapchain {
-            inner: swap_chain3,
-            next_frame: 0,
-            frame_queue: VecDeque::new(),
-            rtv_heap,
-            resources,
-        };
+                    Layout: d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
+                    Flags: 0,
+                },
+                bytes_per_block,
+                block_dim,
+                clear_cv: vec![rtv_handle],
+                clear_dv: Vec::new(),
+                clear_sv: Vec::new(),
+                // Dummy values, image is already bound
+                requirements: memory::Requirements {
+                    alignment: 1,
+                    size: 1,
+                    type_mask: MEM_TYPE_MASK,
+                },
+            }));
+        }
 
         Ok((swapchain, images))
     }
 
-    unsafe fn destroy_swapchain(&self, swapchain: w::Swapchain) {
-        for resource in &swapchain.resources {
-            resource.destroy();
-        }
-        swapchain.inner.destroy();
-        swapchain.rtv_heap.destroy();
+    unsafe fn destroy_swapchain(&self, swapchain: Swapchain) {
+        let inner = swapchain.release_resources();
+        inner.destroy();
     }
 
     fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
