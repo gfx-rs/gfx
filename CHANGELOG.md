@@ -1,5 +1,9 @@
 # Change Log
 
+## hal-0.4.0 (TODO)
+  - all strongly typed HAL wrappers are removed
+  - alternative swapchain model built into `Surface`
+
 ## hal-0.3.0 (08-08-2019)
   - graphics pipeline state refactor
   - no `winit` feature by default
