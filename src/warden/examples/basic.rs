@@ -13,7 +13,7 @@ use ron::de::Deserializer;
 use serde::de::Deserialize;
 
 fn main() {
-    let base_path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../reftests",));
+    let base_path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../work",));
 
     let raw_scene = {
         let mut raw_data = Vec::new();

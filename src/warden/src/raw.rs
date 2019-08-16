@@ -102,6 +102,9 @@ pub enum Resource {
         swizzle: hal::format::Swizzle,
         range: hal::image::SubresourceRange,
     },
+    Sampler {
+        info: hal::image::SamplerInfo,
+    },
     RenderPass {
         attachments: HashMap<String, hal::pass::Attachment>,
         subpasses: HashMap<String, Subpass>,
@@ -195,7 +198,8 @@ pub enum TransferCommand {
 #[derive(Clone, Debug, Deserialize)]
 pub enum DescriptorRange {
     Buffers(Vec<String>),
-    Images(Vec<String>),
+    Images(Vec<(String, hal::image::Layout)>),
+    Samplers(Vec<String>),
 }
 
 fn default_instance_range() -> Range<hal::InstanceCount> {
@@ -237,7 +241,9 @@ pub struct DrawPass {
 
 #[derive(Debug, Deserialize)]
 pub enum Job {
-    Transfer(TransferCommand),
+    Transfer {
+        commands: Vec<TransferCommand>,
+    },
     Graphics {
         framebuffer: String,
         clear_values: Vec<ClearValue>,

@@ -29,7 +29,6 @@ enum Expectation {
 struct Test {
     features: hal::Features,
     jobs: Vec<String>,
-    expect: Expectation,
 }
 
 type Suite = HashMap<String, HashMap<String, Test>>;
@@ -38,13 +37,6 @@ struct TestGroup {
     name: String,
     scene: warden::raw::Scene,
     tests: HashMap<String, Test>,
-}
-
-#[derive(Debug)]
-struct TestResults {
-    pass: usize,
-    skip: usize,
-    fail: usize,
 }
 
 #[derive(Default)]
@@ -60,7 +52,7 @@ impl Harness {
         let base_path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../work"));
         println!("Parsing test suite '{}'...", suite_name);
 
-        let suite_path = base_path.join("reftests").join(suite_name).with_extension("ron");
+        let suite_path = base_path.join("benches").join(suite_name).with_extension("ron");
         let suite = File::open(&suite_path)
             .map_err(de::Error::from)
             .and_then(de::from_reader::<_, Suite>)
@@ -71,7 +63,7 @@ impl Harness {
                 let scene = File::open(path)
                     .map_err(de::Error::from)
                     .and_then(de::from_reader)
-                    .expect(&format!("failed to open/parse the scene '{:?}'", name));
+                    .expect("failed to open/parse the scene");
                 TestGroup { name, scene, tests }
             })
             .collect();
@@ -79,14 +71,9 @@ impl Harness {
         Harness { base_path, suite }
     }
 
-    fn run<I: hal::Instance>(&self, instance: I, _disabilities: Disabilities) -> usize {
+    fn run<I: hal::Instance>(&self, instance: I, _disabilities: Disabilities) {
         use hal::adapter::PhysicalDevice as _;
 
-        let mut results = TestResults {
-            pass: 0,
-            skip: 0,
-            fail: 0,
-        };
         for tg in &self.suite {
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
@@ -103,7 +90,6 @@ impl Harness {
                 });
                 if !all_spirv {
                     println!("\t\tskipped {} tests (GLSL shaders)", tg.tests.len());
-                    results.skip += tg.tests.len();
                     continue;
                 }
             }
@@ -122,7 +108,6 @@ impl Harness {
                         "\tskipped (features missing: {:?})",
                         test.features - features
                     );
-                    results.skip += 1;
                 }
                 let mut max_compute_work_groups = [0; 3];
                 for job_name in &test.jobs {
@@ -138,48 +123,27 @@ impl Harness {
                     || max_compute_work_groups[2] > limits.max_compute_work_group_size[2]
                 {
                     println!("\tskipped (compute {:?})", max_compute_work_groups);
-                    results.skip += 1;
                     continue;
                 }
 
                 scene.run(test.jobs.iter());
-
-                print!("\tran: ");
-                let (guard, row, data) = match test.expect {
-                    Expectation::Buffer(ref buffer, ref data) => {
-                        (scene.fetch_buffer(buffer), 0, data)
-                    }
-                    Expectation::ImageRow(ref image, row, ref data) => {
-                        (scene.fetch_image(image), row, data)
-                    }
-                };
-
-                if data.as_slice() == guard.row(row) {
-                    println!("PASS");
-                    results.pass += 1;
-                } else {
-                    println!("FAIL {:?}", guard.row(row));
-                    results.fail += 1;
-                }
+                let time = scene.measure_time();
+                println!(" {} mcs", time / 1000);
             }
         }
-
-        println!("\t{:?}", results);
-        results.fail
     }
 }
 
 fn main() {
-    use std::{env, process};
+    use std::env;
 
     #[cfg(feature = "env_logger")]
     env_logger::init();
-    let mut num_failures = 0;
 
     let suite_name = match env::args().nth(1) {
         Some(name) => name,
         None => {
-            println!("Call with the argument of the reftest suite name");
+            println!("Call with the argument of the bench suite name");
             return;
         }
     };
@@ -187,27 +151,27 @@ fn main() {
     let harness = Harness::new(&suite_name);
     #[cfg(feature = "vulkan")]
     {
-        println!("Testing Vulkan:");
+        println!("Benching Vulkan:");
         let instance = gfx_backend_vulkan::Instance::create("warden", 1);
-        num_failures += harness.run(instance, Disabilities::default());
+        harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "dx12")]
     {
-        println!("Testing DX12:");
+        println!("Benching DX12:");
         let instance = gfx_backend_dx12::Instance::create("warden", 1);
-        num_failures += harness.run(instance, Disabilities::default());
+        harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "dx11")]
     {
-        println!("Testing DX11:");
+        println!("Benching DX11:");
         let instance = gfx_backend_dx11::Instance::create("warden", 1);
-        num_failures += harness.run(instance, Disabilities::default());
+        harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "metal")]
     {
-        println!("Testing Metal:");
+        println!("Benching Metal:");
         let instance = gfx_backend_metal::Instance::create("warden", 1);
-        num_failures += harness.run(
+        harness.run(
             instance,
             Disabilities {
                 ..Disabilities::default()
@@ -217,7 +181,7 @@ fn main() {
     #[cfg(feature = "gl")]
     {
         use gfx_backend_gl::glutin;
-        println!("Testing GL:");
+        println!("Benching GL:");
         let events_loop = glutin::event_loop::EventLoop::new();
         let windowed_context = glutin::ContextBuilder::new()
             .with_gl_profile(glutin::GlProfile::Core)
@@ -230,21 +194,29 @@ fn main() {
                 .split()
         };
         let instance = gfx_backend_gl::Surface::from_context(context);
-        num_failures += harness.run(instance, Disabilities::default());
+        harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "gl-headless")]
     {
         use gfx_backend_gl::glutin;
-        println!("Testing GL headless:");
+        println!("Benching GL headless:");
         let events_loop = glutin::event_loop::EventLoop::new();
         let context = glutin::ContextBuilder::new()
             .build_headless(&events_loop, glutin::dpi::PhysicalSize::new(0.0, 0.0))
             .unwrap();
         let context = unsafe { context.make_current() }.expect("Unable to make context current");
         let instance = gfx_backend_gl::Headless::from_context(context);
-        num_failures += harness.run(instance, Disabilities::default());
+        harness.run(instance, Disabilities::default());
     }
-    let _ = harness;
-    num_failures += 0; // mark as mutated
-    process::exit(num_failures as _);
+    #[cfg(not(any(
+        feature = "vulkan",
+        feature = "dx12",
+        feature = "dx11",
+        feature = "metal",
+        feature = "gl"
+    )))]
+    {
+        println!("No backend selected!");
+        let _ = harness;
+    }
 }
