@@ -318,7 +318,7 @@ impl Instance {
             .enumerate_instance_layer_properties()
             .expect("Unable to enumerate instance layers");
 
-        // Check our xtensions against the available extensions
+        // Check our extensions against the available extensions
         let extensions = SURFACE_EXTENSIONS
             .iter()
             .chain(EXTENSIONS.iter())

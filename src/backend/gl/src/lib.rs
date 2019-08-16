@@ -582,7 +582,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
         self.0.open.set(true);
 
-        // TODO: Check for support in the LeagcyFeatures struct too
+        // TODO: Check for support in the LegacyFeatures struct too
         if !self.features().contains(requested_features) {
             return Err(error::DeviceCreationError::MissingFeature);
         }
@@ -592,7 +592,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         #[cfg(not(target_arch = "wasm32"))]
         {
-            if cfg!(debug_assertions) {
+            if cfg!(debug_assertions) && gl.supports_debug() {
                 gl.enable(glow::DEBUG_OUTPUT);
                 gl.debug_message_callback(debug_message_callback);
             }
