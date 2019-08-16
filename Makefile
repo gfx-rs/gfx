@@ -70,7 +70,7 @@ doc:
 reftests:
 	cd src/warden && cargo run --bin reftest --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- local #TODO: gl
 benches:
-	cd src/warden && cargo run --bin bench --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- blit
+	cd src/warden && cargo run --release --bin bench --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- blit
 
 reftests-ci:
 	cd src/warden && cargo test --features "gl"

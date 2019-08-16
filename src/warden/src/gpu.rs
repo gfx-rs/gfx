@@ -73,9 +73,13 @@ impl<B: hal::Backend> Buffer<B> {
     fn barrier_from(&self, access: b::Access) -> memory::Barrier<B> {
         memory::Barrier::whole_buffer(&self.handle, access .. self.stable_state)
     }
-    fn barrier<T>(&self, entry: Entry<T, b::State>, access: b::Access) -> memory::Barrier<B> {
+    fn barrier<T>(&self, entry: Entry<T, b::State>, access: b::Access) -> Option<memory::Barrier<B>> {
         let from = mem::replace(entry.or_insert(self.stable_state), access);
-        memory::Barrier::whole_buffer(&self.handle, from .. access)
+        if from != access {
+            Some(memory::Barrier::whole_buffer(&self.handle, from .. access))
+        } else {
+            None
+        }
     }
 }
 
@@ -105,13 +109,19 @@ impl<B: hal::Backend> Image<B> {
             range: self.range.clone(),
         }
     }
-    fn barrier<T>(&self, entry: Entry<T, i::State>, access: i::Access, layout: i::Layout) -> memory::Barrier<B> {
+    fn barrier<T>(
+        &self, entry: Entry<T, i::State>, access: i::Access, layout: i::Layout
+    ) -> Option<memory::Barrier<B>> {
         let from = mem::replace(entry.or_insert(self.stable_state), (access, layout));
-        memory::Barrier::Image {
-            states: from .. (access, layout),
-            target: &self.handle,
-            families: None,
-            range: self.range.clone(),
+        if from != (access, layout) {
+            Some(memory::Barrier::Image {
+                states: from .. (access, layout),
+                target: &self.handle,
+                families: None,
+                range: self.range.clone(),
+            })
+        } else {
+            None
         }
     }
 }
@@ -968,10 +978,10 @@ impl<B: hal::Backend> Scene<B> {
                                 command_buf.pipeline_barrier(
                                     src_stage .. pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
-                                    vec![
-                                        sb.barrier(buffers.entry(src), b::State::TRANSFER_READ),
-                                        db.barrier(buffers.entry(dst), b::State::TRANSFER_WRITE),
-                                    ],
+                                    sb
+                                        .barrier(buffers.entry(src), b::State::TRANSFER_READ)
+                                        .into_iter()
+                                        .chain(db.barrier(buffers.entry(dst), b::State::TRANSFER_WRITE)),
                                 );
                                 command_buf.copy_buffer(&sb.handle, &db.handle, regions);
                             },
@@ -991,18 +1001,18 @@ impl<B: hal::Backend> Scene<B> {
                                 command_buf.pipeline_barrier(
                                     src_stage .. pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
-                                    vec![
-                                        st.barrier(
+                                    st
+                                        .barrier(
                                             images.entry(src),
                                             i::Access::TRANSFER_READ,
                                             i::Layout::TransferSrcOptimal,
-                                        ),
-                                        dt.barrier(
+                                        )
+                                        .into_iter()
+                                        .chain(dt.barrier(
                                             images.entry(dst),
                                             i::Access::TRANSFER_WRITE,
                                             i::Layout::TransferDstOptimal,
-                                        ),
-                                    ],
+                                        )),
                                 );
                                 command_buf.copy_image(
                                     &st.handle,
@@ -1028,14 +1038,14 @@ impl<B: hal::Backend> Scene<B> {
                                 command_buf.pipeline_barrier(
                                     src_stage .. pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
-                                    vec![
-                                        sb.barrier(buffers.entry(src), b::State::TRANSFER_READ),
-                                        dt.barrier(
+                                    sb
+                                        .barrier(buffers.entry(src), b::State::TRANSFER_READ)
+                                        .into_iter()
+                                        .chain(dt.barrier(
                                             images.entry(dst),
                                             i::Access::TRANSFER_WRITE,
                                             i::Layout::TransferDstOptimal,
-                                        ),
-                                    ],
+                                        )),
                                 );
                                 command_buf.copy_buffer_to_image(
                                     &sb.handle,
@@ -1060,14 +1070,14 @@ impl<B: hal::Backend> Scene<B> {
                                 command_buf.pipeline_barrier(
                                     src_stage .. pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
-                                    vec![
-                                        st.barrier(
+                                    st
+                                        .barrier(
                                             images.entry(src),
                                             i::Access::TRANSFER_READ,
                                             i::Layout::TransferSrcOptimal,
-                                        ),
-                                        db.barrier(buffers.entry(dst), b::State::TRANSFER_WRITE),
-                                    ],
+                                        )
+                                        .into_iter()
+                                        .chain(db.barrier(buffers.entry(dst), b::State::TRANSFER_WRITE)),
                                 );
                                 command_buf.copy_image_to_buffer(
                                     &st.handle,
@@ -1088,11 +1098,11 @@ impl<B: hal::Backend> Scene<B> {
                                 command_buf.pipeline_barrier(
                                     src_stage .. pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
-                                    vec![img.barrier(
+                                    img.barrier(
                                         images.entry(image),
                                         i::Access::TRANSFER_WRITE,
                                         i::Layout::TransferDstOptimal,
-                                    )],
+                                    ),
                                 );
                                 command_buf.clear_image(
                                     &img.handle,
@@ -1118,18 +1128,18 @@ impl<B: hal::Backend> Scene<B> {
                                 command_buf.pipeline_barrier(
                                     src_stage .. pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
-                                    vec![
-                                        st.barrier(
+                                    st
+                                        .barrier(
                                             images.entry(src),
                                             i::Access::TRANSFER_READ,
                                             i::Layout::TransferSrcOptimal,
-                                        ),
-                                        dt.barrier(
+                                        )
+                                        .into_iter()
+                                        .chain(dt.barrier(
                                             images.entry(dst),
                                             i::Access::TRANSFER_WRITE,
                                             i::Layout::TransferDstOptimal,
-                                        ),
-                                    ],
+                                        )),
                                 );
                                 command_buf.blit_image(
                                     &st.handle,
@@ -1153,7 +1163,7 @@ impl<B: hal::Backend> Scene<B> {
                                 command_buf.pipeline_barrier(
                                     src_stage .. pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
-                                    vec![buf.barrier(buffers.entry(buffer), b::State::TRANSFER_WRITE)],
+                                    buf.barrier(buffers.entry(buffer), b::State::TRANSFER_WRITE),
                                 );
                                 command_buf.fill_buffer(&buf.handle, (start, end), data);
                             },
