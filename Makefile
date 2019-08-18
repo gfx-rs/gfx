@@ -44,7 +44,7 @@ else
 endif
 
 
-.PHONY: all check quad quad-wasm test doc reftests travis-sdl2
+.PHONY: all check quad quad-wasm test doc reftests benches travis-sdl2
 
 all: check test
 
@@ -68,7 +68,9 @@ doc:
 	cargo doc --all $(EXCLUDES)
 
 reftests:
-	cd src/warden && cargo run --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- local #TODO: gl
+	cd src/warden && cargo run --bin reftest --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- local #TODO: gl
+benches:
+	cd src/warden && cargo run --release --bin bench --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- blit
 
 reftests-ci:
 	cd src/warden && cargo test --features "gl"

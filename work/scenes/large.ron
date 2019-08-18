@@ -1,0 +1,412 @@
+(
+	resources: {
+		"image.src": Image(
+			kind: D2(1024, 1024, 1, 1),
+			num_levels: 1,
+			format: Rgba8Unorm,
+			usage: (bits: 0x15), //COLOR_ATTACHMENT | TRANSFER_SRC | SAMPLED
+		),
+		"image.dst": Image(
+			kind: D2(2048, 2048, 1, 1),
+			num_levels: 1,
+			format: Rg8Unorm,
+			usage: (bits: 0x12), //COLOR_ATTACHMENT | TRANSFER_DST
+		),
+		"image.dst2": Image(
+			kind: D2(2048, 2048, 1, 1),
+			num_levels: 1,
+			format: Rgba8Unorm,
+			usage: (bits: 0x12), //COLOR_ATTACHMENT | TRANSFER_DST
+		),
+		"sampler": Sampler(
+			info: (
+				min_filter: Linear,
+				mag_filter: Linear,
+				mip_filter: Nearest,
+				wrap_mode: (Clamp, Clamp, Clamp),
+				lod_bias: (0),
+				lod_range: (start: (0), end: (1000)),
+				comparison: None,
+				border: (0),
+				normalized: true,
+				anisotropic: Off,
+			),
+		),
+		"pass-init": RenderPass(
+			attachments: {
+				"c": (
+					format: Some(Rgba8Unorm),
+					samples: 1,
+					ops: (load: Clear, store: Store),
+					layouts: (start: General, end: General),
+				),
+			},
+			subpasses: {
+				"main": (
+					colors: [("c", General)],
+					depth_stencil: None,
+				)
+			},
+			dependencies: [],
+		),
+		"pass-clear": RenderPass(
+			attachments: {
+				"c": (
+					format: Some(Rgba8Unorm),
+					samples: 1,
+					ops: (load: Clear, store: Store),
+					layouts: (start: General, end: General),
+				),
+			},
+			subpasses: {
+				"main": (
+					colors: [("c", General)],
+					depth_stencil: None,
+				)
+			},
+			dependencies: [],
+		),
+		"pass-blit": RenderPass(
+			attachments: {
+				"c": (
+					format: Some(Rg8Unorm),
+					samples: 1,
+					ops: (load: Clear, store: Store),
+					layouts: (start: General, end: General),
+				),
+			},
+			subpasses: {
+				"main": (
+					colors: [("c", General)],
+					depth_stencil: None,
+				)
+			},
+			dependencies: [],
+		),
+		"image.src.view": ImageView(
+			image: "image.src",
+			kind: D2,
+			format: Rgba8Unorm,
+			range: (
+				aspects: (bits: 1),
+				levels: (start: 0, end: 1),
+				layers: (start: 0, end: 1),
+			),
+		),
+		"image.dst.view": ImageView(
+			image: "image.dst",
+			kind: D2,
+			format: Rg8Unorm,
+			range: (
+				aspects: (bits: 1),
+				levels: (start: 0, end: 1),
+				layers: (start: 0, end: 1),
+			),
+		),
+		"fbo.src": Framebuffer(
+			pass: "pass-clear",
+			views: {
+				"c": "image.src.view"
+			},
+			extent: (
+				width: 1024,
+				height: 1024,
+				depth: 1,
+			),
+		),
+		"fbo.dst": Framebuffer(
+			pass: "pass-blit",
+			views: {
+				"c": "image.dst.view"
+			},
+			extent: (
+				width: 2048,
+				height: 2048,
+				depth: 1,
+			),
+		),
+		"set-layout": DescriptorSetLayout(
+			bindings: [
+				(
+					binding: 0,
+					ty: SampledImage,
+					count: 1,
+					stage_flags: (bits: 16),
+					immutable_samplers: false,
+				),
+				(
+					binding: 1,
+					ty: Sampler,
+					count: 1,
+					stage_flags: (bits: 16),
+					immutable_samplers: false,
+				),
+			],
+		),
+		"desc-pool": DescriptorPool(
+			capacity: 1,
+			ranges: [
+				(
+					ty: SampledImage,
+					count: 1,
+				),
+				(
+					ty: Sampler,
+					count: 1,
+				),
+			],
+		),
+		"set": DescriptorSet(
+			pool: "desc-pool",
+			layout: "set-layout",
+			data: [
+				Images([("image.src.view", ShaderReadOnlyOptimal)]),
+				Samplers(["sampler"]),
+			],
+		),
+		"pipe-layout": PipelineLayout(
+			set_layouts: ["set-layout"],
+			push_constant_ranges: [],
+		),
+		"shader.copy.vs": Shader("copy.vert"),
+		"shader.copy.fs": Shader("copy.frag"),
+		"pipe.copy": GraphicsPipeline(
+			shaders: (
+				vertex: "shader.copy.vs",
+				fragment: "shader.copy.fs",
+			),
+			rasterizer: (
+				polygon_mode: Fill,
+				cull_face: (bits: 0),
+				front_face: Clockwise,
+				depth_clamping: false,
+				depth_bias: None,
+				conservative: false,
+			),
+			input_assembler: (
+				primitive: TriangleStrip,
+				primitive_restart: Disabled,
+			),
+			blender: (
+				alpha_coverage: false,
+				logic_op: None,
+				targets: [
+					(mask: (bits: 15), blend: None),
+				],
+			),
+			layout: "pipe-layout",
+			subpass: (
+				parent: "pass-blit",
+				index: 0,
+			),
+		),
+	},
+	jobs: {
+		"init": Graphics(
+			framebuffer: "fbo.src",
+			clear_values: [
+				Color(Float((0.1, 0.2, 0.3, 1.0))),
+			],
+			pass: ("pass-init", {
+				"main": (commands: [
+				]),
+			}),
+		),
+		"copy": Transfer(
+			commands: [
+				CopyImage(
+					src: "image.src",
+					dst: "image.dst2",
+					regions: [
+						(
+							src_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							src_offset: (x: 0, y: 0, z: 0),
+							dst_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							dst_offset: (x: 0, y: 0, z: 0),
+							extent: (
+								width: 1024,
+								height: 1024,
+								depth: 1,
+							),
+						),
+						(
+							src_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							src_offset: (x: 0, y: 0, z: 0),
+							dst_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							dst_offset: (x: 1024, y: 0, z: 0),
+							extent: (
+								width: 1024,
+								height: 1024,
+								depth: 1,
+							),
+						),
+						(
+							src_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							src_offset: (x: 0, y: 0, z: 0),
+							dst_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							dst_offset: (x: 1024, y: 1024, z: 0),
+							extent: (
+								width: 1024,
+								height: 1024,
+								depth: 1,
+							),
+						),
+						(
+							src_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							src_offset: (x: 0, y: 0, z: 0),
+							dst_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							dst_offset: (x: 0, y: 1024, z: 0),
+							extent: (
+								width: 1024,
+								height: 1024,
+								depth: 1,
+							),
+						),
+					],
+				),
+			],
+		),
+		"blit": Transfer(
+			commands: [
+				BlitImage(
+					src: "image.src",
+					dst: "image.dst",
+					filter: Linear,
+					regions: [
+						(
+							src_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							src_bounds: (
+								start: (x: 0, y: 0, z: 0),
+								end: (x: 1024, y: 1024, z: 1),
+							),
+							dst_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							dst_bounds: (
+								start: (x: 0, y: 0, z: 0),
+								end: (x: 1024, y: 1024, z: 1),
+							),
+						),
+						(
+							src_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							src_bounds: (
+								start: (x: 0, y: 0, z: 0),
+								end: (x: 1024, y: 1024, z: 1),
+							),
+							dst_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							dst_bounds: (
+								start: (x: 1024, y: 0, z: 0),
+								end: (x: 2048, y: 1024, z: 1),
+							),
+						),
+						(
+							src_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							src_bounds: (
+								start: (x: 0, y: 0, z: 0),
+								end: (x: 1024, y: 1024, z: 1),
+							),
+							dst_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							dst_bounds: (
+								start: (x: 1024, y: 1024, z: 0),
+								end: (x: 2048, y: 2048, z: 1),
+							),
+						),
+						(
+							src_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							src_bounds: (
+								start: (x: 0, y: 0, z: 0),
+								end: (x: 1024, y: 1024, z: 1),
+							),
+							dst_subresource: (
+								aspects: (bits: 1),
+								level: 0,
+								layers: (start: 0, end: 1),
+							),
+							dst_bounds: (
+								start: (x: 0, y: 1024, z: 0),
+								end: (x: 1024, y: 2048, z: 1),
+							),
+						),
+					],
+				),
+			],
+		),
+		"shader": Graphics(
+			framebuffer: "fbo.dst",
+			clear_values: [
+				Color(Float((0.0, 0.0, 0.0, 1.0))),
+			],
+			pass: ("pass-blit", {
+				"main": (commands: [
+					BindPipeline("pipe.copy"),
+					BindDescriptorSets(
+						layout: "pipe-layout",
+						first: 0,
+						sets: ["set"],
+					),
+					Draw(
+						vertices: (start: 0, end: 4),
+					),
+				]),
+			}),
+		),
+	},
+)
