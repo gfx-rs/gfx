@@ -311,7 +311,10 @@ impl Instance {
     }
 
     #[allow(unreachable_code)]
-    pub fn create_surface(&self, has_handle: &impl raw_window_handle::HasRawWindowHandle) -> Surface {
+    pub fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Surface {
         use raw_window_handle::RawWindowHandle;
 
         #[cfg(all(
@@ -322,12 +325,16 @@ impl Instance {
         ))]
         {
             return match has_handle.raw_window_handle() {
-                RawWindowHandle::Wayland(handle) if self.extensions.contains(&khr::WaylandSurface::name()) => {
+                RawWindowHandle::Wayland(handle)
+                    if self.extensions.contains(&khr::WaylandSurface::name()) =>
+                {
                     self.create_surface_from_wayland(handle.display, handle.surface)
-                },
-                RawWindowHandle::X11(handle) if self.extensions.contains(&khr::XlibSurface::name()) => {
+                }
+                RawWindowHandle::X11(handle)
+                    if self.extensions.contains(&khr::XlibSurface::name()) =>
+                {
                     self.create_surface_from_xlib(handle.display as _, handle.window)
-                },
+                }
                 _ => panic!("The Vulkan driver does not support surface creation!"),
             };
         }
