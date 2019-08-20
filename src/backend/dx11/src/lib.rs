@@ -148,7 +148,10 @@ impl Instance {
         }
     }
 
-    pub fn create_surface(&self, has_handle: &impl raw_window_handle::HasRawWindowHandle) -> Surface {
+    pub fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Surface {
         let hwnd = match has_handle.raw_window_handle() {
             raw_window_handle::RawWindowHandle::Windows(handle) => handle.hwnd,
             _ => unreachable!(),
