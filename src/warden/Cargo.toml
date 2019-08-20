@@ -56,7 +56,7 @@ optional = true
 [target.'cfg(any(target_os = "macos", all(target_os = "ios", target_arch = "aarch64")))'.dependencies.gfx-backend-metal]
 path = "../../src/backend/metal"
 version = "0.3"
-features = ["winit", "auto-capture"]
+features = ["auto-capture"]
 optional = true
 
 [dependencies.gfx-backend-gl]
