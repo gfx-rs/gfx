@@ -55,7 +55,7 @@ features = [ "console", "Document", "Element", "HtmlElement", "Node", "Window" ]
 [dependencies.gfx-backend-vulkan]
 path = "../src/backend/vulkan"
 version = "0.3"
-features = ["winit", "x11"]
+features = ["x11"]
 optional = true
 
 [target.'cfg(any(target_os = "macos", all(target_os = "ios", target_arch = "aarch64")))'.dependencies.gfx-backend-metal]
