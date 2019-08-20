@@ -936,7 +936,7 @@ impl Instance {
     pub fn create_surface_from_raw(
         &self,
         _: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Surface {
+    ) -> Result<Surface, hal::window::InitError> {
         unimplemented!()
     }
 }

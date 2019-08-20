@@ -270,17 +270,17 @@ impl Instance {
     pub fn create_surface_from_raw(
         &self,
         has_handle: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Surface {
+    ) -> Result<Surface, hal::window::InitError> {
         match has_handle.raw_window_handle() {
             #[cfg(target_os = "ios")]
             raw_window_handle::RawWindowHandle::IOS(handle) => {
-                self.create_surface_from_uiview(handle.ui_view, false)
+                Ok(self.create_surface_from_uiview(handle.ui_view, false))
             }
             #[cfg(target_os = "macos")]
             raw_window_handle::RawWindowHandle::MacOS(handle) => {
-                self.create_surface_from_nsview(handle.ns_view, false)
+                Ok(self.create_surface_from_nsview(handle.ns_view, false))
             }
-            _ => panic!("Metal is not supported for this target"),
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
         }
     }
 

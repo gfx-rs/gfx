@@ -163,12 +163,12 @@ impl Instance {
     pub fn create_surface_from_raw(
         &self,
         has_handle: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Surface {
+    ) -> Result<Surface, hal::window::InitError> {
         match has_handle.raw_window_handle() {
             raw_window_handle::RawWindowHandle::Windows(handle) => {
-                self.create_surface_from_hwnd(handle.hwnd)
+                Ok(self.create_surface_from_hwnd(handle.hwnd))
             }
-            _ => panic!("DX11 is not supported for this target"),
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
         }
     }
 }
