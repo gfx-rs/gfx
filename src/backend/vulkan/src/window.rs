@@ -313,52 +313,54 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface)
     }
 
-    #[cfg(feature = "winit")]
     #[allow(unreachable_code)]
-    pub fn create_surface(&self, window: &winit::window::Window) -> Surface {
-        #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
-        {
-            use winit::platform::unix::WindowExtUnix;
+    pub fn create_surface(&self, has_handle: &impl raw_window_handle::HasRawWindowHandle) -> Surface {
+        use raw_window_handle::RawWindowHandle;
 
-            if self.extensions.contains(&khr::WaylandSurface::name()) {
-                if let Some(display) = window.wayland_display() {
-                    let display: *mut c_void = display as *mut _;
-                    let surface: *mut c_void = window.wayland_surface().unwrap() as *mut _;
-                    return self.create_surface_from_wayland(display, surface);
-                }
-            }
-            #[cfg(feature = "x11")]
-            {
-                if self.extensions.contains(&khr::XlibSurface::name()) {
-                    if let Some(display) = window.xlib_display() {
-                        let window = window.xlib_window().unwrap();
-                        return self.create_surface_from_xlib(display as _, window);
-                    }
-                }
-            }
-            panic!("The Vulkan driver does not support surface creation!");
+        #[cfg(all(
+            unix,
+            not(target_os = "android"),
+            not(target_os = "macos")
+        ))]
+        {
+            return match has_handle.raw_window_handle() {
+                RawWindowHandle::Wayland(handle) if self.extensions.contains(&khr::WaylandSurface::name()) => {
+                    self.create_surface_from_wayland(handle.display, handle.surface)
+                },
+                #[cfg(feature = "x11")]
+                RawWindowHandle::X11(handle) if self.extensions.contains(&khr::XlibSurface::name()) => {
+                    self.create_surface_from_xlib(handle.display as *mut _, handle.window)
+                },
+                _ => panic!("The Vulkan driver does not support surface creation!"),
+            };
         }
         #[cfg(target_os = "android")]
         {
-            use winit::platform::android::WindowExtAndroid;
-            return self.create_surface_android(window.get_native_window());
+            let native_window = match has_handle.raw_window_handle() {
+                _ => unimplemented!(),
+            };
+            return self.create_surface_android(native_window);
         }
         #[cfg(windows)]
         {
             use winapi::um::libloaderapi::GetModuleHandleW;
-            use winit::platform::windows::WindowExtWindows;
 
             let hinstance = unsafe { GetModuleHandleW(ptr::null()) };
-            let hwnd = window.hwnd();
-            return self.create_surface_from_hwnd(hinstance as *mut _, hwnd as *mut _);
+            let hwnd = match has_handle.raw_window_handle() {
+                RawWindowHandle::Windows(handle) => handle.hwnd,
+                _ => unreachable!(),
+            };
+            return self.create_surface_from_hwnd(hinstance as *mut _, hwnd);
         }
         #[cfg(target_os = "macos")]
         {
-            use winit::platform::macos::WindowExtMacOS;
-
-            return self.create_surface_from_ns_view(window.ns_view());
+            let ns_view = match has_handle.raw_window_handle() {
+                RawWindowHandle::MacOS(handle) => handle.ns_view,
+                _ => unreachable!(),
+            };
+            return self.create_surface_from_ns_view(ns_view);
         }
-        let _ = window;
+        let _ = has_handle;
         panic!("No suitable WSI enabled!");
     }
 
