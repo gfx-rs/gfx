@@ -13,8 +13,6 @@ extern crate smallvec;
 extern crate spirv_cross;
 #[macro_use]
 extern crate winapi;
-#[cfg(feature = "winit")]
-extern crate winit;
 extern crate wio;
 
 use hal::{
@@ -142,10 +140,12 @@ impl Instance {
         }
     }
 
-    #[cfg(feature = "winit")]
-    pub fn create_surface(&self, window: &winit::window::Window) -> Surface {
-        use winit::platform::windows::WindowExtWindows;
-        self.create_surface_from_hwnd(window.hwnd() as *mut _)
+    pub fn create_surface(&self, has_handle: &impl raw_window_handle::HasRawWindowHandle) -> Surface {
+        let hwnd = match has_handle.raw_window_handle() {
+            raw_window_handle::RawWindowHandle::Windows(handle) => handle.hwnd,
+            _ => unreachable!(),
+        };
+        self.create_surface_from_hwnd(hwnd)
     }
 }
 

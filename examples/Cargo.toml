@@ -67,7 +67,6 @@ optional = true
 [target.'cfg(windows)'.dependencies.gfx-backend-dx11]
 path = "../src/backend/dx11"
 version = "0.3"
-features = ["winit"]
 optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx12]
