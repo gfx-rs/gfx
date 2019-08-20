@@ -51,7 +51,6 @@ optional = true
 [target.'cfg(windows)'.dependencies.gfx-backend-dx11]
 path = "../../src/backend/dx11"
 version = "0.3"
-features = ["winit"]
 optional = true
 
 [target.'cfg(any(target_os = "macos", all(target_os = "ios", target_arch = "aarch64")))'.dependencies.gfx-backend-metal]
