@@ -13,4 +13,4 @@ name = "gfx_backend_empty"
 
 [dependencies]
 gfx-hal = { path = "../../hal", version = "0.3" }
-winit = { version = "0.20.0-alpha3", optional = true }
+raw-window-handle = "0.1.2"
