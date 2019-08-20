@@ -77,8 +77,6 @@ use objc::{
     runtime::{Object, BOOL, YES, Sel, Class}
 };
 use parking_lot::{Condvar, Mutex};
-#[cfg(feature = "winit")]
-use winit;
 use lazy_static::lazy_static;
 
 use std::mem;
@@ -305,17 +303,24 @@ impl Instance {
         })
     }
 
-    #[cfg(feature = "winit")]
-    pub fn create_surface(&self, window: &winit::window::Window) -> Surface {
+    pub fn create_surface(&self, has_handle: &impl raw_window_handle::HasRawWindowHandle) -> Surface {
+        use raw_window_handle::RawWindowHandle;
+
         #[cfg(target_os = "ios")]
         {
-            use winit::platform::ios::WindowExtIOS;
-            self.create_surface_from_uiview(window.ui_view(), false)
+            let ui_view = match has_handle.raw_window_handle() {
+                RawWindowHandle::IOS(handle) => handle.ui_view,
+                _ => unreachable!(),
+            };
+            self.create_surface_from_uiview(ui_view, false)
         }
         #[cfg(target_os = "macos")]
         {
-            use winit::platform::macos::WindowExtMacOS;
-            self.create_surface_from_nsview(window.ns_view(), false)
+            let ns_view = match has_handle.raw_window_handle() {
+                RawWindowHandle::MacOS(handle) => handle.ns_view,
+                _ => unreachable!(),
+            };
+            self.create_surface_from_nsview(ns_view, false)
         }
     }
 
