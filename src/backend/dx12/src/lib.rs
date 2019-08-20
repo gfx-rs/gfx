@@ -10,8 +10,6 @@ extern crate log;
 extern crate smallvec;
 extern crate spirv_cross;
 extern crate winapi;
-#[cfg(feature = "winit")]
-extern crate winit;
 
 mod command;
 mod conv;
