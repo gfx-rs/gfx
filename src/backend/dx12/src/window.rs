@@ -26,6 +26,19 @@ impl Instance {
         use winit::os::windows::WindowExt;
         self.create_surface_from_hwnd(window.get_hwnd() as *mut _)
     }
+
+    #[cfg(feature = "raw-window-handle")]
+    pub fn create_surface_from_raw(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Surface {
+        match has_handle.raw_window_handle() {
+            raw_window_handle::RawWindowHandle::Windows(handle) => {
+                self.create_surface_from_hwnd(handle.hwnd)
+            }
+            _ => panic!("DX12 is not supported for this target"),
+        }
+    }
 }
 
 #[derive(Derivative)]

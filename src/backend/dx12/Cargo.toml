@@ -28,6 +28,7 @@ smallvec = "0.6"
 spirv_cross = { version = "0.14.0", features = ["hlsl"] }
 winapi = { version = "0.3", features = ["basetsd","d3d12","d3d12sdklayers","d3d12shader","d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4","dxgi1_6","dxgidebug","dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
 winit = { version = "0.19", optional = true }
+raw-window-handle = { version = "0.1.2", optional = true }
 
 # This forces docs.rs to build the crate on windows, otherwise the build fails
 # and we get no docs at all.
