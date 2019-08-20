@@ -30,9 +30,6 @@ pub mod wgl_ext_sys {
 #[link(name = "opengl32")]
 extern "C" {}
 
-#[cfg(feature = "winit")]
-use winit;
-
 pub(crate) struct Entry {
     hwnd: HWND,
     pub(crate) hdc: HDC,
@@ -186,12 +183,16 @@ impl Instance {
         }
     }
 
-    #[cfg(feature = "winit")]
-    pub fn create_surface(&self, window: &winit::window::Window) -> Surface {
-        use winit::platform::windows::WindowExtWindows;
-
-        let hwnd = window.hwnd();
-        self.create_surface_from_hwnd(hwnd as *mut _)
+    #[cfg(windows)]
+    pub fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Surface {
+        let hwnd = match has_handle.raw_window_handle() {
+            raw_window_handle::RawWindowHandle::Windows(handle) => handle.hwnd,
+            _ => unreachable!(),
+        };
+        self.create_surface_from_hwnd(hwnd)
     }
 }
 
