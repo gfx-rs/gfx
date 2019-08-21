@@ -119,7 +119,7 @@ fn main() {
         let window = wb.build(&event_loop).unwrap();
         let instance = back::Instance::create("gfx-rs quad", 1)
             .expect("Failed to create an instance!");
-        let surface = instance.create_surface(&window);
+        let surface = instance.create_surface(&window).expect("Failed to create a surface!");
         let adapters = instance.enumerate_adapters();
         (window, instance, adapters, surface)
     };

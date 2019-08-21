@@ -502,3 +502,10 @@ pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
         self.present::<B::Semaphore, _>(present_queue, image_index, iter::empty())
     }
 }
+
+/// Error occurred during surface creation.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InitError {
+    /// Window handle is not supported by the backend.
+    UnsupportedWindowHandle,
+}
