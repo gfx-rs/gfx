@@ -119,7 +119,7 @@ fn main() {
     let (_window, _instance, mut adapters, surface) = {
         let window = wb.build(&event_loop).unwrap();
         let instance = back::Instance::create("gfx-rs quad", 1);
-        let surface = instance.create_surface(&window);
+        let surface = instance.create_surface(&window).unwrap();
         let adapters = instance.enumerate_adapters();
         (window, instance, adapters, surface)
     };

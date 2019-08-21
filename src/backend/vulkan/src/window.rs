@@ -313,7 +313,7 @@ impl Instance {
     pub fn create_surface(
         &self,
         has_handle: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Surface {
+    ) -> Result<Surface, hal::window::InitError> {
         use raw_window_handle::RawWindowHandle;
 
         match has_handle.raw_window_handle() {
@@ -326,7 +326,7 @@ impl Instance {
             RawWindowHandle::Wayland(handle)
                 if self.extensions.contains(&khr::WaylandSurface::name()) =>
             {
-                self.create_surface_from_wayland(handle.display, handle.surface)
+                Ok(self.create_surface_from_wayland(handle.display, handle.surface))
             }
             #[cfg(all(
                 feature = "x11",
@@ -337,7 +337,7 @@ impl Instance {
             RawWindowHandle::X11(handle)
                 if self.extensions.contains(&khr::XlibSurface::name()) =>
             {
-                self.create_surface_from_xlib(handle.display, handle.window)
+                Ok(self.create_surface_from_xlib(handle.display, handle.window))
             }
             // #[cfg(target_os = "android")]
             // RawWindowHandle::ANativeWindowHandle(handle) => {
@@ -349,13 +349,13 @@ impl Instance {
                 use winapi::um::libloaderapi::GetModuleHandleW;
 
                 let hinstance = unsafe { GetModuleHandleW(ptr::null()) };
-                self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd)
+                Ok(self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd))
             }
             #[cfg(target_os = "macos")]
             RawWindowHandle::MacOS(handle) => {
-                self.create_surface_from_ns_view(handle.ns_view)
+                Ok(self.create_surface_from_ns_view(handle.ns_view))
             }
-            _ => panic!("No suitable WSI enabled!"),
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
         }
     }
 

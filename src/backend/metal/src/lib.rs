@@ -254,24 +254,17 @@ impl Instance {
     pub fn create_surface(
         &self,
         has_handle: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Surface {
-        use raw_window_handle::RawWindowHandle;
-
-        #[cfg(target_os = "ios")]
-        {
-            let ui_view = match has_handle.raw_window_handle() {
-                RawWindowHandle::IOS(handle) => handle.ui_view,
-                _ => unreachable!(),
-            };
-            self.create_surface_from_uiview(ui_view, false)
-        }
-        #[cfg(target_os = "macos")]
-        {
-            let ns_view = match has_handle.raw_window_handle() {
-                RawWindowHandle::MacOS(handle) => handle.ns_view,
-                _ => unreachable!(),
-            };
-            self.create_surface_from_nsview(ns_view, false)
+    ) -> Result<Surface, hal::window::InitError> {
+        match has_handle.raw_window_handle() {
+            #[cfg(target_os = "ios")]
+            raw_window_handle::RawWindowHandle::IOS(handle) => {
+                Ok(self.create_surface_from_uiview(handle.ui_view, false))
+            }
+            #[cfg(target_os = "macos")]
+            raw_window_handle::RawWindowHandle::MacOS(handle) => {
+                Ok(self.create_surface_from_nsview(handle.ns_view, false))
+            }
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
         }
     }
 

@@ -571,7 +571,7 @@ fn create_backend(
 ) -> (BackendState<back::Backend>, back::Instance) {
     let window = wb.build(event_loop).unwrap();
     let instance = back::Instance::create("gfx-rs colour-uniform", 1);
-    let surface = instance.create_surface(&window);
+    let surface = instance.create_surface(&window).unwrap();
     let mut adapters = instance.enumerate_adapters();
     (
         BackendState {
