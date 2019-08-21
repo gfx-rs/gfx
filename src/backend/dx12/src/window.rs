@@ -27,7 +27,6 @@ impl Instance {
         self.create_surface_from_hwnd(window.get_hwnd() as *mut _)
     }
 
-    #[cfg(feature = "raw-window-handle")]
     pub fn create_surface_from_raw(
         &self,
         has_handle: &impl raw_window_handle::HasRawWindowHandle,

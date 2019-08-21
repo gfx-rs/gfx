@@ -266,7 +266,6 @@ impl Instance {
         }
     }
 
-    #[cfg(feature = "raw-window-handle")]
     pub fn create_surface_from_raw(
         &self,
         has_handle: &impl raw_window_handle::HasRawWindowHandle,

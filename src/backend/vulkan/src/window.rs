@@ -305,7 +305,6 @@ impl Instance {
         panic!("No suitable WSI enabled!");
     }
 
-    #[cfg(feature = "raw-window-handle")]
     pub fn create_surface_from_raw(
         &self,
         has_handle: &impl raw_window_handle::HasRawWindowHandle,
