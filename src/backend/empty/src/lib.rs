@@ -148,7 +148,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         unimplemented!()
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), error::OutOfMemory> {
         unimplemented!()
     }
 }
@@ -511,7 +511,7 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), error::OutOfMemory> {
         unimplemented!()
     }
 }

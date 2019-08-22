@@ -4,7 +4,7 @@ use ash::vk;
 use smallvec::SmallVec;
 
 use hal::{
-    error::HostExecutionError,
+    error::OutOfMemory,
     memory::Requirements,
     pool::CommandPoolCreateFlags,
     pso::VertexInputRate,
@@ -2131,7 +2131,7 @@ impl d::Device<B> for Device {
         self.raw.0.destroy_event(event.0, None);
     }
 
-    fn wait_idle(&self) -> Result<(), HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), OutOfMemory> {
         unsafe {
             self.raw
                 .0

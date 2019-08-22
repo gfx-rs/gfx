@@ -248,7 +248,7 @@ impl Drop for Frame {
 }
 
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AcquireMode {
     Wait,
     Oldest,

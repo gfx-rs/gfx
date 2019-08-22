@@ -2922,7 +2922,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {}
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), error::OutOfMemory> {
         command::QueueInner::wait_idle(&self.shared.queue);
         Ok(())
     }

@@ -990,7 +990,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), error::OutOfMemory> {
         // unimplemented!()
         Ok(())
     }

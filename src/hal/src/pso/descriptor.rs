@@ -16,14 +16,14 @@
 //! [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
 //! [`DescriptorSetCopy`]: struct.DescriptorSetWrite.html
 
-use std::borrow::Borrow;
-use std::fmt;
-use std::ops::Range;
+use std::{borrow::Borrow, fmt, ops::Range};
 
-use crate::buffer::Offset;
-use crate::image::Layout;
-use crate::pso::ShaderStageFlags;
-use crate::Backend;
+use crate::{
+    buffer::Offset,
+    image::Layout,
+    pso::ShaderStageFlags,
+    Backend,
+};
 
 ///
 pub type DescriptorSetIndex = u16;
@@ -107,7 +107,7 @@ pub struct DescriptorRangeDesc {
 }
 
 /// An error allocating descriptor sets from a pool.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AllocationError {
     /// Memory allocation on the host side failed.
     /// This could be caused by a lack of memory or pool fragmentation.

@@ -3357,7 +3357,7 @@ impl d::Device<B> for Device {
         inner.destroy();
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), error::OutOfMemory> {
         for queue in &self.queues {
             queue.wait_idle()?;
         }

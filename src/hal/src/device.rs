@@ -14,44 +14,43 @@
 use std::any::Any;
 use std::borrow::Borrow;
 use std::ops::Range;
-use std::{fmt, iter, mem, slice};
+use std::{fmt, iter};
 
-use crate::{buffer, format, image, mapping, pass, pso, query};
-use crate::{Backend, MemoryTypeId};
-
-use crate::error::HostExecutionError;
-use crate::memory::Requirements;
-use crate::pool::CommandPoolCreateFlags;
-use crate::pso::DescriptorPoolCreateFlags;
-use crate::queue::QueueFamilyId;
-use crate::range::RangeArg;
-use crate::window::{self, SwapchainConfig};
+use crate::{
+    buffer, format, image, pass, pso, query,
+    memory::Requirements,
+    pool::CommandPoolCreateFlags,
+    pso::DescriptorPoolCreateFlags,
+    queue::QueueFamilyId,
+    range::RangeArg,
+    window::{self, SwapchainConfig},
+    Backend, MemoryTypeId,
+};
 
 /// Error occurred caused device to be lost.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct DeviceLost;
 
 /// Error occurred caused surface to be lost.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct SurfaceLost;
 
 /// Native window is already in use by graphics API.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct WindowInUse;
 
 /// Error allocating memory.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum OutOfMemory {
     /// Host memory exhausted.
     OutOfHostMemory,
-
     /// Device memory exhausted.
     OutOfDeviceMemory,
 }
 
 /// Error occurred caused device to be lost
 /// or out of memory error.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum OomOrDeviceLost {
     /// Out of either host or device memory.
     OutOfMemory(OutOfMemory),
@@ -72,7 +71,7 @@ impl From<DeviceLost> for OomOrDeviceLost {
 }
 
 /// Possible cause of allocation failure.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AllocationError {
     /// Out of either host or device memory.
     OutOfMemory(OutOfMemory),
@@ -87,8 +86,49 @@ impl From<OutOfMemory> for AllocationError {
     }
 }
 
+/// Device creation errors during `open`.
+#[derive(Clone, Debug, PartialEq)]
+pub enum CreationError {
+    /// Out of either host or device memory.
+    OutOfMemory(OutOfMemory),
+    /// Device initialization failed due to implementation specific errors.
+    InitializationFailed,
+    /// At least one of the user requested extensions if not supported by the
+    /// physical device.
+    MissingExtension,
+    /// At least one of the user requested features if not supported by the
+    /// physical device.
+    ///
+    /// Use [`features`](trait.PhysicalDevice.html#tymethod.features)
+    /// for checking the supported features.
+    MissingFeature,
+    /// Too many logical devices have been created from this physical device.
+    ///
+    /// The implementation may only support one logical device for each physical
+    /// device or lacks resources to allocate a new device.
+    TooManyObjects,
+    /// The logical or physical device are lost during the device creation
+    /// process.
+    ///
+    /// This may be caused by hardware failure, physical device removal,
+    /// power outage, etc.
+    DeviceLost,
+}
+
+/// Error accessing a mapping.
+#[derive(Clone, Debug, PartialEq)]
+pub enum MapError {
+    /// Out of either host or device memory.
+    OutOfMemory(OutOfMemory),
+    /// The requested mapping range is outside of the resource.
+    OutOfBounds,
+    /// Failed to map memory range.
+    MappingFailed,
+}
+
+
 /// Error binding a resource to memory allocation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum BindError {
     /// Out of either host or device memory.
     OutOfMemory(OutOfMemory),
@@ -105,7 +145,7 @@ impl From<OutOfMemory> for BindError {
 }
 
 /// Specifies the waiting targets.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum WaitFor {
     /// Wait for any target.
@@ -115,7 +155,7 @@ pub enum WaitFor {
 }
 
 /// An error from creating a shader module.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ShaderError {
     /// The shader failed to compile.
     CompilationFailed(String),
@@ -515,7 +555,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Map a memory object into application address space
     ///
     /// Call `map_memory()` to retrieve a host virtual address pointer to a region of a mappable memory object
-    unsafe fn map_memory<R>(&self, memory: &B::Memory, range: R) -> Result<*mut u8, mapping::Error>
+    unsafe fn map_memory<R>(&self, memory: &B::Memory, range: R) -> Result<*mut u8, MapError>
     where
         R: RangeArg<u64>;
 
@@ -538,71 +578,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
 
     /// Unmap a memory object once host access to it is no longer needed by the application
     unsafe fn unmap_memory(&self, memory: &B::Memory);
-
-    /// Acquire a mapping Reader.
-    ///
-    /// The accessible slice will correspond to the specified range (in bytes).
-    unsafe fn acquire_mapping_reader<'a, T>(
-        &self,
-        memory: &'a B::Memory,
-        range: Range<u64>,
-    ) -> Result<mapping::Reader<'a, B, T>, mapping::Error>
-    where
-        T: Copy,
-    {
-        let len = range.end - range.start;
-        let count = len as usize / mem::size_of::<T>();
-        self.map_memory(memory, range.clone()).and_then(|ptr| {
-            let start_ptr = ptr as *const _;
-            self.invalidate_mapped_memory_ranges(iter::once((memory, range.clone())))?;
-
-            Ok(mapping::Reader {
-                slice: slice::from_raw_parts(start_ptr, count),
-                memory,
-                released: false,
-            })
-        })
-    }
-
-    /// Release a mapping Reader.
-    unsafe fn release_mapping_reader<'a, T>(&self, mut reader: mapping::Reader<'a, B, T>) {
-        reader.released = true;
-        self.unmap_memory(reader.memory);
-    }
-
-    /// Acquire a mapping Writer.
-    ///
-    /// The accessible slice will correspond to the specified range (in bytes).
-    unsafe fn acquire_mapping_writer<'a, T>(
-        &self,
-        memory: &'a B::Memory,
-        range: Range<u64>,
-    ) -> Result<mapping::Writer<'a, B, T>, mapping::Error>
-    where
-        T: Copy,
-    {
-        let count = (range.end - range.start) as usize / mem::size_of::<T>();
-        self.map_memory(memory, range.clone()).map(|ptr| {
-            let start_ptr = ptr as *mut _;
-            mapping::Writer {
-                slice: slice::from_raw_parts_mut(start_ptr, count),
-                memory,
-                range,
-                released: false,
-            }
-        })
-    }
-
-    /// Release a mapping Writer.
-    unsafe fn release_mapping_writer<'a, T>(
-        &self,
-        mut writer: mapping::Writer<'a, B, T>,
-    ) -> Result<(), OutOfMemory> {
-        writer.released = true;
-        self.flush_mapped_memory_ranges(iter::once((writer.memory, writer.range.clone())))?;
-        self.unmap_memory(writer.memory);
-        Ok(())
-    }
 
     /// Create a new semaphore object
     fn create_semaphore(&self) -> Result<B::Semaphore, OutOfMemory>;
@@ -783,5 +758,5 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Wait for all queues associated with this device to idle.
     ///
     /// Host access to all queues needs to be **externally** sycnhronized!
-    fn wait_idle(&self) -> Result<(), HostExecutionError>;
+    fn wait_idle(&self) -> Result<(), OutOfMemory>;
 }

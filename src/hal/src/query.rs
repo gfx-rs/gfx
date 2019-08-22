@@ -10,7 +10,7 @@ use crate::Backend;
 pub type Id = u32;
 
 /// Query creation error.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CreationError {
     /// Out of either host or device memory.
     OutOfMemory(OutOfMemory),

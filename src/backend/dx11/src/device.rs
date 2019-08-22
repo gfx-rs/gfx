@@ -2620,7 +2620,7 @@ impl device::Device<Backend> for Device {
         // automatic
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), error::OutOfMemory> {
         Ok(())
         // unimplemented!()
     }

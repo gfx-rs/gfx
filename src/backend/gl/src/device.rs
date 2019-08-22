@@ -1971,7 +1971,7 @@ impl d::Device<B> for Device {
         // Nothing to do
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), error::OutOfMemory> {
         unsafe {
             self.share.context.finish();
         }

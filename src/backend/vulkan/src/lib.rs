@@ -20,7 +20,7 @@ use ash::{Entry, LoadingError};
 use hal::{
     adapter,
     device::{DeviceLost, OutOfMemory, SurfaceLost},
-    error::{DeviceCreationError, HostExecutionError},
+    error::{DeviceCreationError, OutOfMemory},
     format,
     image,
     memory,
@@ -1249,13 +1249,13 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         }
     }
 
-    fn wait_idle(&self) -> Result<(), HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), OutOfMemory> {
         unsafe {
             self.device
                 .0
                 .queue_wait_idle(*self.raw)
                 .map_err(From::from)
-                .map_err(From::<result::Error>::from) // HostExecutionError
+                .map_err(From::<result::Error>::from) // OutOfMemory
         }
     }
 }

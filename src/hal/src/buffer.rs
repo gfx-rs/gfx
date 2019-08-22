@@ -15,7 +15,7 @@ pub type Offset = u64;
 pub type State = Access;
 
 /// Error creating a buffer.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CreationError {
     /// Out of either host or device memory.
     OutOfMemory(device::OutOfMemory),
@@ -36,7 +36,7 @@ impl From<device::OutOfMemory> for CreationError {
 }
 
 /// Error creating a buffer view.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ViewCreationError {
     /// Out of either host or device memory.
     OutOfMemory(device::OutOfMemory),
