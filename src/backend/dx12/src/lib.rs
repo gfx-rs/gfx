@@ -2,8 +2,6 @@ extern crate gfx_hal as hal;
 extern crate range_alloc;
 #[macro_use]
 extern crate bitflags;
-#[macro_use]
-extern crate derivative;
 extern crate d3d12 as native;
 #[macro_use]
 extern crate log;
@@ -36,7 +34,7 @@ use std::borrow::Borrow;
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::sync::{Arc, Mutex};
-use std::{mem, ptr};
+use std::{fmt, mem, ptr};
 
 use native::descriptor;
 
@@ -177,14 +175,10 @@ static QUEUE_FAMILIES: [QueueFamily; 4] = [
     QueueFamily::Normal(q::QueueType::Transfer),
 ];
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct PhysicalDevice {
-    #[derivative(Debug = "ignore")]
     adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
     features: Features,
     limits: Limits,
-    #[derivative(Debug = "ignore")]
     format_properties: Arc<FormatProperties>,
     private_caps: Capabilities,
     heap_properties: &'static [HeapProperties; NUM_HEAP_PROPERTIES],
@@ -192,6 +186,12 @@ pub struct PhysicalDevice {
     // Indicates that there is currently an active logical device.
     // Opening the same adapter multiple times will return the same D3D12Device again.
     is_open: Arc<Mutex<bool>>,
+}
+
+impl fmt::Debug for PhysicalDevice {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("PhysicalDevice")
+    }
 }
 
 unsafe impl Send for PhysicalDevice {}
@@ -405,13 +405,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 }
 
-#[derive(Clone, Derivative)]
-#[derivative(Debug)]
+#[derive(Clone)]
 pub struct CommandQueue {
     pub(crate) raw: native::CommandQueue,
     idle_fence: native::Fence,
-    #[derivative(Debug = "ignore")]
     idle_event: native::sync::Event,
+}
+
+impl fmt::Debug for CommandQueue {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("CommandQueue")
+    }
 }
 
 impl CommandQueue {
@@ -542,8 +546,6 @@ impl Shared {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Device {
     raw: native::Device,
     private_caps: Capabilities,
@@ -558,9 +560,7 @@ pub struct Device {
     // CPU/GPU descriptor heaps
     heap_srv_cbv_uav: Mutex<resource::DescriptorHeap>,
     heap_sampler: Mutex<resource::DescriptorHeap>,
-    #[derivative(Debug = "ignore")]
     events: Mutex<Vec<native::Event>>,
-    #[derivative(Debug = "ignore")]
     shared: Arc<Shared>,
     // Present queue exposed by the `Present` queue family.
     // Required for swapchain creation. Only a single queue supports presentation.
@@ -571,6 +571,13 @@ pub struct Device {
     // Indicates that there is currently an active device.
     open: Arc<Mutex<bool>>,
 }
+
+impl fmt::Debug for Device {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Device")
+    }
+}
+
 unsafe impl Send for Device {} //blocked by ComPtr
 unsafe impl Sync for Device {} //blocked by ComPtr
 

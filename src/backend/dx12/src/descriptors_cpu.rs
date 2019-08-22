@@ -1,18 +1,21 @@
 use native;
 use native::descriptor::{CpuDescriptor, HeapFlags, HeapType};
+use std::fmt;
 use std::collections::HashSet;
 
 // Linear stack allocator for CPU descriptor heaps.
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct HeapLinear {
     handle_size: usize,
     num: usize,
     size: usize,
-    #[derivative(Debug = "ignore")]
     start: CpuDescriptor,
-    #[derivative(Debug = "ignore")]
     raw: native::DescriptorHeap,
+}
+
+impl fmt::Debug for HeapLinear {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("HeapLinear")
+    }
 }
 
 impl HeapLinear {
@@ -55,8 +58,6 @@ impl HeapLinear {
 const HEAP_SIZE_FIXED: usize = 64;
 
 // Fixed-size free-list allocator for CPU descriptors.
-#[derive(Derivative)]
-#[derivative(Debug)]
 struct Heap {
     // Bit flag representation of available handles in the heap.
     //
@@ -64,10 +65,14 @@ struct Heap {
     //  1 - free
     availability: u64,
     handle_size: usize,
-    #[derivative(Debug = "ignore")]
     start: CpuDescriptor,
-    #[derivative(Debug = "ignore")]
     raw: native::DescriptorHeap,
+}
+
+impl fmt::Debug for Heap {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Heap")
+    }
 }
 
 impl Heap {
@@ -104,15 +109,17 @@ impl Heap {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct DescriptorCpuPool {
     device: native::Device,
-
-    #[derivative(Debug = "ignore")]
     ty: HeapType,
     heaps: Vec<Heap>,
     free_list: HashSet<usize>,
+}
+
+impl fmt::Debug for DescriptorCpuPool {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("DescriptorCpuPool")
+    }
 }
 
 impl DescriptorCpuPool {

@@ -13,8 +13,8 @@ pub union ClearColor {
     pub uint32: [u32; 4],
 }
 
-impl std::fmt::Debug for ClearColor {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Debug for ClearColor {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln![f, "ClearColor"]
     }
 }

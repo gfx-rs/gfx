@@ -15,7 +15,7 @@ use hal::{
 use std::borrow::Borrow;
 use std::ops::Range;
 use std::sync::Arc;
-use std::{cmp, iter, mem, ptr};
+use std::{cmp, fmt, iter, mem, ptr};
 
 use winapi::shared::minwindef::{FALSE, TRUE, UINT};
 use winapi::shared::{dxgiformat, winerror};
@@ -74,14 +74,17 @@ struct AttachmentClear {
     stencil_value: Option<u32>,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct RenderPassCache {
     render_pass: r::RenderPass,
     framebuffer: r::Framebuffer,
-    #[derivative(Debug = "ignore")]
     target_rect: d3d12::D3D12_RECT,
     attachment_clears: Vec<AttachmentClear>,
+}
+
+impl fmt::Debug for RenderPassCache {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("RenderPassCache")
+    }
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -111,8 +114,8 @@ struct UserData {
     dirty_mask: u64,
 }
 
-impl std::fmt::Debug for UserData {
-    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for UserData {
+    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("UserData")
             .field("data", &&self.data[..])
             .field("dirty_mask", &self.dirty_mask)
@@ -292,8 +295,6 @@ struct Copy {
     copy_extent: image::Extent,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct CommandBuffer {
     raw: native::GraphicsCommandList,
     allocator: native::CommandAllocator,
@@ -331,7 +332,6 @@ pub struct CommandBuffer {
     // inside the pipeline state.
     vertex_bindings_remap: [Option<r::VertexBinding>; MAX_VERTEX_BUFFERS],
 
-    #[derivative(Debug = "ignore")]
     vertex_buffer_views: [d3d12::D3D12_VERTEX_BUFFER_VIEW; MAX_VERTEX_BUFFERS],
 
     // Re-using allocation for the image-buffer copies.
@@ -339,12 +339,10 @@ pub struct CommandBuffer {
 
     // D3D12 only allows setting all viewports or all scissors at once, not partial updates.
     // So we must cache the implied state for these partial updates.
-    #[derivative(Debug = "ignore")]
     viewport_cache: SmallVec<
         [d3d12::D3D12_VIEWPORT;
             d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize],
     >,
-    #[derivative(Debug = "ignore")]
     scissor_cache: SmallVec<
         [d3d12::D3D12_RECT;
             d3d12::D3D12_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as usize],
@@ -360,6 +358,12 @@ pub struct CommandBuffer {
     //
     // Required for reset behavior.
     pool_create_flags: pool::CommandPoolCreateFlags,
+}
+
+impl fmt::Debug for CommandBuffer {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("CommandBuffer")
+    }
 }
 
 unsafe impl Send for CommandBuffer {}

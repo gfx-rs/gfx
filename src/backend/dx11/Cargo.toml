@@ -21,7 +21,6 @@ name = "gfx_backend_dx11"
 gfx-hal = { path = "../../hal", version = "0.3" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
-derivative = "1"
 log = { version = "0.4" }
 smallvec = "0.6"
 spirv_cross = { version = "0.15", features = ["hlsl"] }
