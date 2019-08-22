@@ -1,4 +1,3 @@
-use failure::Error;
 #[cfg(feature = "glsl-to-spirv")]
 use glsl_to_spirv;
 
@@ -196,7 +195,7 @@ impl<B: hal::Backend> Scene<B> {
         adapter: adapter::Adapter<B>,
         raw: &raw::Scene,
         data_path: PathBuf,
-    ) -> Result<Self, Error> {
+    ) -> Result<Self, ()> {
         info!("creating Scene from {:?}", data_path);
         let memory_types = adapter.physical_device.memory_properties().memory_types;
         let limits = adapter.physical_device.limits();
@@ -206,7 +205,7 @@ impl<B: hal::Backend> Scene<B> {
             adapter.physical_device.open(
                 &[(&adapter.queue_families[0], &[1.0])],
                 hal::Features::empty(),
-            )?
+            ).unwrap()
         };
         let device = gpu.device;
         let queue_group = gpu.queue_groups.pop().unwrap();
@@ -236,13 +235,13 @@ impl<B: hal::Backend> Scene<B> {
             device.create_command_pool(
                 queue_group.family,
                 hal::pool::CommandPoolCreateFlags::empty(),
-            )?
+            ).unwrap()
         };
         let query_pool = unsafe {
             device.create_query_pool(
                 query::Type::Timestamp,
                 2,
-            )?
+            ).unwrap()
         };
 
         // create resources

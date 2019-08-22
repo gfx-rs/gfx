@@ -10,14 +10,12 @@ use crate::Backend;
 pub type Id = u32;
 
 /// Query creation error.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CreationError {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(OutOfMemory),
 
     /// Query type unsupported.
-    #[fail(display = "Query type ({:?}) unsupported", _0)]
     Unsupported(Type),
 }
 
