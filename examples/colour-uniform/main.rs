@@ -1604,6 +1604,7 @@ impl<B: Backend> Drop for FramebufferState<B> {
     feature = "gl"
 ))]
 fn main() {
+    #[cfg(debug_assertions)]
     env_logger::init();
 
     let event_loop = winit::event_loop::EventLoop::new();

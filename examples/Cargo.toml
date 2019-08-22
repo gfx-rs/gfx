@@ -28,11 +28,13 @@ name = "compute"
 path = "compute/main.rs"
 
 [dependencies]
-env_logger = "0.6"
 image = "0.21"
 log = "0.4"
 gfx-hal = { path = "../src/hal", version = "0.3" }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.3" }
+
+[target.'cfg(debug_assertions)'.dependencies]
+env_logger = "0.6"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 winit = "0.20.0-alpha3"

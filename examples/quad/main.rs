@@ -97,7 +97,7 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 fn main() {
     #[cfg(target_arch = "wasm32")]
     console_log::init_with_level(log::Level::Debug).unwrap();
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
     env_logger::init();
 
     #[cfg(not(target_arch = "wasm32"))]

@@ -31,6 +31,7 @@ use std::fs;
     feature = "metal"
 ))]
 fn main() {
+    #[cfg(debug_assertions)]
     env_logger::init();
 
     // For now this just panics if you didn't pass numbers. Could add proper error handling.
