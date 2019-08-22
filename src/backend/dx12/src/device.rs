@@ -20,10 +20,8 @@ use hal::{
     self,
     buffer,
     device as d,
-    error,
     format,
     image,
-    mapping,
     memory,
     pass,
     pso,
@@ -1120,7 +1118,7 @@ impl d::Device<B> for Device {
             .clone()
             .CreateHeap(&desc, &d3d12::ID3D12Heap::uuidof(), heap.mut_void());
         if hr == winerror::E_OUTOFMEMORY {
-            return Err(d::OutOfMemory::OutOfDeviceMemory.into());
+            return Err(d::OutOfMemory::Device.into());
         }
         assert_eq!(winerror::S_OK, hr);
 
@@ -2973,7 +2971,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn map_memory<R>(&self, memory: &r::Memory, range: R) -> Result<*mut u8, mapping::Error>
+    unsafe fn map_memory<R>(&self, memory: &r::Memory, range: R) -> Result<*mut u8, d::MapError>
     where
         R: RangeArg<u64>,
     {
@@ -3135,8 +3133,8 @@ impl d::Device<B> for Device {
         const WAIT_OBJECT_LAST: u32 = winbase::WAIT_OBJECT_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         const WAIT_ABANDONED_LAST: u32 = winbase::WAIT_ABANDONED_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         match hr {
-            winbase::WAIT_OBJECT_0 ... WAIT_OBJECT_LAST => Ok(true),
-            winbase::WAIT_ABANDONED_0 ... WAIT_ABANDONED_LAST => Ok(true), //TODO?
+            winbase::WAIT_OBJECT_0 ..= WAIT_OBJECT_LAST => Ok(true),
+            winbase::WAIT_ABANDONED_0 ..= WAIT_ABANDONED_LAST => Ok(true), //TODO?
             winerror::WAIT_TIMEOUT => Ok(false),
             _ => panic!("Unexpected wait status 0x{:X}", hr),
         }
@@ -3357,7 +3355,7 @@ impl d::Device<B> for Device {
         inner.destroy();
     }
 
-    fn wait_idle(&self) -> Result<(), error::OutOfMemory> {
+    fn wait_idle(&self) -> Result<(), d::OutOfMemory> {
         for queue in &self.queues {
             queue.wait_idle()?;
         }

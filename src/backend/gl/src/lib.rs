@@ -17,7 +17,7 @@ use std::ops::Deref;
 use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 
-use hal::{adapter, buffer, error, image, memory, pso, queue as q};
+use hal::{adapter, buffer, image, memory, pso, queue as q};
 
 pub use self::device::Device;
 pub use self::info::{Info, PlatformName, Version};
@@ -574,17 +574,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         families: &[(&QueueFamily, &[q::QueuePriority])],
         requested_features: hal::Features,
-    ) -> Result<adapter::Gpu<Backend>, error::DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, hal::device::CreationError> {
         // Can't have multiple logical devices at the same time
         // as they would share the same context.
         if self.0.open.get() {
-            return Err(error::DeviceCreationError::TooManyObjects);
+            return Err(hal::device::CreationError::TooManyObjects);
         }
         self.0.open.set(true);
 
         // TODO: Check for support in the LegacyFeatures struct too
         if !self.features().contains(requested_features) {
-            return Err(error::DeviceCreationError::MissingFeature);
+            return Err(hal::device::CreationError::MissingFeature);
         }
 
         // initialize permanent states

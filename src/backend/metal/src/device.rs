@@ -24,11 +24,18 @@ use hal::{
     adapter,
     backend::FastHashMap,
     buffer,
-    device::{AllocationError, BindError, DeviceLost, OomOrDeviceLost, OutOfMemory, ShaderError},
-    error,
+    device::{
+        AllocationError,
+        BindError,
+        CreationError as DeviceCreationError,
+        DeviceLost,
+        MapError,
+        OomOrDeviceLost,
+        OutOfMemory,
+        ShaderError,
+    },
     format,
     image,
-    mapping,
     memory,
     memory::Properties,
     pass,
@@ -281,7 +288,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         families: &[(&QueueFamily, &[QueuePriority])],
         requested_features: hal::Features,
-    ) -> Result<adapter::Gpu<Backend>, error::DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, DeviceCreationError> {
         use hal::queue::QueueFamily as _;
 
         // TODO: Query supported features by feature set rather than hard coding in the supported
@@ -291,7 +298,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 "Features missing: {:?}",
                 requested_features - self.features()
             );
-            return Err(error::DeviceCreationError::MissingFeature);
+            return Err(DeviceCreationError::MissingFeature);
         }
 
         let device = self.shared.device.lock();
@@ -1697,7 +1704,7 @@ impl hal::device::Device<Backend> for Device {
         &self,
         memory: &n::Memory,
         generic_range: R,
-    ) -> Result<*mut u8, mapping::Error> {
+    ) -> Result<*mut u8, MapError> {
         let range = memory.resolve(&generic_range);
         debug!("map_memory of size {} at {:?}", memory.size, range);
 
@@ -2827,7 +2834,7 @@ impl hal::device::Device<Backend> for Device {
                     .allocate_range(count)
                     .map_err(|_| {
                         error!("Not enough space to allocate an occlusion query pool");
-                        OutOfMemory::OutOfHostMemory
+                        OutOfMemory::Host
                     })?;
                 Ok(n::QueryPool::Occlusion(range))
             }
@@ -2922,7 +2929,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {}
 
-    fn wait_idle(&self) -> Result<(), error::OutOfMemory> {
+    fn wait_idle(&self) -> Result<(), OutOfMemory> {
         command::QueueInner::wait_idle(&self.shared.queue);
         Ok(())
     }

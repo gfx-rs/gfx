@@ -20,7 +20,6 @@ extern crate gfx_backend_gl as back;
 extern crate gfx_backend_metal as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
-extern crate gfx_hal as hal;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
@@ -333,25 +332,20 @@ where
                 // to 1 it means we can use that type for our buffer. So this code finds the first
                 // memory type that has a `1` (or, is allowed), and is visible to the CPU.
                 buffer_req.type_mask & (1 << id) != 0
-                    && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
+                    && mem_type.properties.contains(m::Properties::CPU_VISIBLE | m::Properties::COHERENT)
             })
             .unwrap()
             .into();
 
-        let buffer_memory = ManuallyDrop::new(
-            unsafe { device.allocate_memory(upload_type, buffer_req.size) }.unwrap(),
-        );
-
-        unsafe { device.bind_buffer_memory(&buffer_memory, 0, &mut vertex_buffer) }.unwrap();
-
         // TODO: check transitions: read/write mapping and vertex buffer read
-        unsafe {
-            let mut vertices = device
-                .acquire_mapping_writer::<Vertex>(&buffer_memory, 0 .. buffer_req.size)
-                .unwrap();
-            vertices[0 .. QUAD.len()].copy_from_slice(&QUAD);
-            device.release_mapping_writer(vertices).unwrap();
-        }
+        let buffer_memory = unsafe {
+            let memory = device.allocate_memory(upload_type, buffer_req.size).unwrap();
+            device.bind_buffer_memory(&memory, 0, &mut vertex_buffer).unwrap();
+            let mapping = device.map_memory(&memory, 0 .. buffer_len).unwrap();
+            ptr::copy_nonoverlapping(QUAD.as_ptr() as *const u8, mapping, buffer_len as usize);
+            device.unmap_memory(&memory);
+            ManuallyDrop::new(memory)
+        };
 
         // Image
         let img_data = include_bytes!("data/logo.png");
@@ -370,26 +364,24 @@ where
             unsafe { device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC) }.unwrap(),
         );
         let image_mem_reqs = unsafe { device.get_buffer_requirements(&image_upload_buffer) };
-        let image_upload_memory = ManuallyDrop::new(
-            unsafe { device.allocate_memory(upload_type, image_mem_reqs.size) }.unwrap(),
-        );
-
-        unsafe { device.bind_buffer_memory(&image_upload_memory, 0, &mut image_upload_buffer) }
-            .unwrap();
 
         // copy image data into staging buffer
-        unsafe {
-            let mut data = device
-                .acquire_mapping_writer::<u8>(&image_upload_memory, 0 .. image_mem_reqs.size)
-                .unwrap();
+        let image_upload_memory = unsafe {
+            let memory = device.allocate_memory(upload_type, image_mem_reqs.size).unwrap();
+            device.bind_buffer_memory(&memory, 0, &mut image_upload_buffer).unwrap();
+            let mapping = device.map_memory(&memory, 0 .. upload_size).unwrap();
             for y in 0 .. height as usize {
                 let row = &(*img)[y * (width as usize) * image_stride
                     .. (y + 1) * (width as usize) * image_stride];
-                let dest_base = y * row_pitch as usize;
-                data[dest_base .. dest_base + row.len()].copy_from_slice(row);
+                ptr::copy_nonoverlapping(
+                    row.as_ptr(),
+                    mapping.offset(y as isize * row_pitch as isize),
+                    width as usize * image_stride,
+                );
             }
-            device.release_mapping_writer(data).unwrap();
-        }
+            device.unmap_memory(&memory);
+            ManuallyDrop::new(memory)
+        };
 
         let mut image_logo = ManuallyDrop::new(
             unsafe {

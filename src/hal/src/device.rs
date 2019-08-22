@@ -43,9 +43,9 @@ pub struct WindowInUse;
 #[derive(Clone, Debug, PartialEq)]
 pub enum OutOfMemory {
     /// Host memory exhausted.
-    OutOfHostMemory,
+    Host,
     /// Device memory exhausted.
-    OutOfDeviceMemory,
+    Device,
 }
 
 /// Error occurred caused device to be lost
@@ -126,6 +126,11 @@ pub enum MapError {
     MappingFailed,
 }
 
+impl From<OutOfMemory> for MapError {
+    fn from(error: OutOfMemory) -> Self {
+        MapError::OutOfMemory(error)
+    }
+}
 
 /// Error binding a resource to memory allocation.
 #[derive(Clone, Debug, PartialEq)]

@@ -601,10 +601,10 @@ impl w::PresentationSurface<Backend> for Surface {
                 Err(w::AcquireError::SurfaceLost(hal::device::SurfaceLost))
             }
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(w::AcquireError::OutOfMemory(
-                hal::device::OutOfMemory::OutOfHostMemory,
+                hal::device::OutOfMemory::Host,
             )),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(w::AcquireError::OutOfMemory(
-                hal::device::OutOfMemory::OutOfDeviceMemory,
+                hal::device::OutOfMemory::Device,
             )),
             Err(vk::Result::ERROR_DEVICE_LOST) => {
                 Err(w::AcquireError::DeviceLost(hal::device::DeviceLost))
@@ -650,10 +650,10 @@ impl w::Swapchain<Backend> for Swapchain {
                 Err(w::AcquireError::SurfaceLost(hal::device::SurfaceLost))
             }
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(w::AcquireError::OutOfMemory(
-                hal::device::OutOfMemory::OutOfHostMemory,
+                hal::device::OutOfMemory::Host,
             )),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(w::AcquireError::OutOfMemory(
-                hal::device::OutOfMemory::OutOfDeviceMemory,
+                hal::device::OutOfMemory::Device,
             )),
             Err(vk::Result::ERROR_DEVICE_LOST) => {
                 Err(w::AcquireError::DeviceLost(hal::device::DeviceLost))

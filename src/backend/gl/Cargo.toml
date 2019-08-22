@@ -24,7 +24,7 @@ wgl = []
 arrayvec = "0.4"
 bitflags = "1"
 log = { version = "0.4" }
-gfx-hal = { path = "../../hal", version = "0.3" }
+gfx-hal = { path = "../../hal", version = "0.3", features = ["fxhash"] }
 smallvec = "0.6"
 glow = "0.2.3"
 spirv_cross = { version = "0.15", features = ["glsl"] }

@@ -19,8 +19,7 @@ use ash::{Entry, LoadingError};
 
 use hal::{
     adapter,
-    device::{DeviceLost, OutOfMemory, SurfaceLost},
-    error::{DeviceCreationError, OutOfMemory},
+    device::{CreationError as DeviceCreationError, DeviceLost, OutOfMemory, SurfaceLost},
     format,
     image,
     memory,
@@ -48,7 +47,6 @@ mod device;
 mod info;
 mod native;
 mod pool;
-mod result;
 mod window;
 
 // CStr's cannot be constant yet, until const fn lands we need to use a lazy_static
@@ -556,11 +554,17 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 p_enabled_features: &enabled_features,
             };
 
-            self.instance
-                .0
-                .create_device(self.handle, &info, None)
-                .map_err(Into::<result::Error>::into)
-                .map_err(Into::<DeviceCreationError>::into)?
+            match self.instance.0.create_device(self.handle, &info, None) {
+                Ok(device) => device,
+                Err(e) => return Err(match e {
+                    vk::Result::ERROR_OUT_OF_HOST_MEMORY => DeviceCreationError::OutOfMemory(OutOfMemory::Host),
+                    vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => DeviceCreationError::OutOfMemory(OutOfMemory::Device),
+                    vk::Result::ERROR_INITIALIZATION_FAILED => DeviceCreationError::InitializationFailed,
+                    vk::Result::ERROR_DEVICE_LOST => DeviceCreationError::DeviceLost,
+                    vk::Result::ERROR_TOO_MANY_OBJECTS => DeviceCreationError::TooManyObjects,
+                    _ => unreachable!(),
+                }),
+            }
         };
 
         let swapchain_fn = vk::KhrSwapchainFn::load(|name| {
@@ -1184,10 +1188,10 @@ impl queue::CommandQueue<Backend> for CommandQueue {
             vk::Result::SUCCESS => Ok(None),
             vk::Result::SUBOPTIMAL_KHR => Ok(Some(Suboptimal)),
             vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                Err(PresentError::OutOfMemory(OutOfMemory::OutOfHostMemory))
+                Err(PresentError::OutOfMemory(OutOfMemory::Host))
             }
             vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
-                Err(PresentError::OutOfMemory(OutOfMemory::OutOfDeviceMemory))
+                Err(PresentError::OutOfMemory(OutOfMemory::Device))
             }
             vk::Result::ERROR_DEVICE_LOST => Err(PresentError::DeviceLost(DeviceLost)),
             vk::Result::ERROR_OUT_OF_DATE_KHR => Err(PresentError::OutOfDate),
@@ -1237,10 +1241,10 @@ impl queue::CommandQueue<Backend> for CommandQueue {
             vk::Result::SUCCESS => Ok(None),
             vk::Result::SUBOPTIMAL_KHR => Ok(Some(Suboptimal)),
             vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
-                Err(PresentError::OutOfMemory(OutOfMemory::OutOfHostMemory))
+                Err(PresentError::OutOfMemory(OutOfMemory::Host))
             }
             vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
-                Err(PresentError::OutOfMemory(OutOfMemory::OutOfDeviceMemory))
+                Err(PresentError::OutOfMemory(OutOfMemory::Device))
             }
             vk::Result::ERROR_DEVICE_LOST => Err(PresentError::DeviceLost(DeviceLost)),
             vk::Result::ERROR_OUT_OF_DATE_KHR => Err(PresentError::OutOfDate),
@@ -1250,12 +1254,13 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     }
 
     fn wait_idle(&self) -> Result<(), OutOfMemory> {
-        unsafe {
-            self.device
-                .0
-                .queue_wait_idle(*self.raw)
-                .map_err(From::from)
-                .map_err(From::<result::Error>::from) // OutOfMemory
+        match unsafe {
+            self.device.0.queue_wait_idle(*self.raw)
+        } {
+            Ok(()) => Ok(()),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host),
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device),
+            Err(_) => unreachable!()
         }
     }
 }

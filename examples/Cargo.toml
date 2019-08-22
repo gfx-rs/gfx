@@ -30,7 +30,7 @@ path = "compute/main.rs"
 [dependencies]
 image = "0.21"
 log = "0.4"
-gfx-hal = { path = "../src/hal", version = "0.3" }
+hal = { path = "../src/hal", version = "0.3", package = "gfx-hal" }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.3" }
 
 [target.'cfg(debug_assertions)'.dependencies]

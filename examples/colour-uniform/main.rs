@@ -30,11 +30,6 @@ extern crate gfx_backend_vulkan as back;
 
 #[macro_use]
 extern crate log;
-extern crate env_logger;
-extern crate gfx_hal as hal;
-extern crate glsl_to_spirv;
-extern crate image;
-extern crate winit;
 
 struct Dimensions<T> {
     width: T,
@@ -45,7 +40,7 @@ use std::cell::RefCell;
 use std::io::Cursor;
 use std::mem::size_of;
 use std::rc::Rc;
-use std::{fs, iter};
+use std::{fs, iter, ptr};
 
 use hal::{
     adapter::{Adapter, MemoryType},
@@ -756,13 +751,13 @@ impl<B: Backend> BufferState<B> {
         let mut buffer: B::Buffer;
         let size: u64;
 
-        let stride = size_of::<T>() as u64;
-        let upload_size = data_source.len() as u64 * stride;
+        let stride = size_of::<T>();
+        let upload_size = data_source.len() * stride;
 
         {
             let device = &device_ptr.borrow().device;
 
-            buffer = device.create_buffer(upload_size, usage).unwrap();
+            buffer = device.create_buffer(upload_size as u64, usage).unwrap();
             let mem_req = device.get_buffer_requirements(&buffer);
 
             // A note about performance: Using CPU_VISIBLE memory is convenient because it can be
@@ -775,7 +770,7 @@ impl<B: Backend> BufferState<B> {
                 .enumerate()
                 .position(|(id, mem_type)| {
                     mem_req.type_mask & (1 << id) != 0
-                        && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
+                        && mem_type.properties.contains(m::Properties::CPU_VISIBLE | m::Properties::COHERENT)
                 })
                 .unwrap()
                 .into();
@@ -785,13 +780,9 @@ impl<B: Backend> BufferState<B> {
             size = mem_req.size;
 
             // TODO: check transitions: read/write mapping and vertex buffer read
-            {
-                let mut data_target = device
-                    .acquire_mapping_writer::<T>(&memory, 0 .. size)
-                    .unwrap();
-                data_target[0 .. data_source.len()].copy_from_slice(data_source);
-                device.release_mapping_writer(data_target).unwrap();
-            }
+            let mapping = device.map_memory(&memory, 0 .. size).unwrap();
+            ptr::copy_nonoverlapping(data_source.as_ptr() as *const u8, mapping, upload_size);
+            device.unmap_memory(&memory);
         }
 
         BufferState {
@@ -808,17 +799,16 @@ impl<B: Backend> BufferState<B> {
     {
         let device = &self.device.borrow().device;
 
-        let stride = size_of::<T>() as u64;
-        let upload_size = data_source.len() as u64 * stride;
+        let stride = size_of::<T>();
+        let upload_size = data_source.len() * stride;
 
-        assert!(offset + upload_size <= self.size);
+        assert!(offset + upload_size as u64 <= self.size);
+        let memory = self.memory.as_ref().unwrap();
 
         unsafe {
-            let mut data_target = device
-                .acquire_mapping_writer::<T>(self.memory.as_ref().unwrap(), offset .. self.size)
-                .unwrap();
-            data_target[0 .. data_source.len()].copy_from_slice(data_source);
-            device.release_mapping_writer(data_target).unwrap();
+            let mapping = device.map_memory(memory, offset .. self.size).unwrap();
+            ptr::copy_nonoverlapping(data_source.as_ptr() as *const u8, mapping, upload_size);
+            device.unmap_memory(memory);
         }
     }
 
@@ -851,7 +841,7 @@ impl<B: Backend> BufferState<B> {
                 .enumerate()
                 .position(|(id, mem_type)| {
                     mem_reqs.type_mask & (1 << id) != 0
-                        && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
+                        && mem_type.properties.contains(m::Properties::CPU_VISIBLE | m::Properties::COHERENT)
                 })
                 .unwrap()
                 .into();
@@ -861,22 +851,17 @@ impl<B: Backend> BufferState<B> {
             size = mem_reqs.size;
 
             // copy image data into staging buffer
-            {
-                let mut data_target = device
-                    .acquire_mapping_writer::<u8>(&memory, 0 .. size)
-                    .unwrap();
-
-                for y in 0 .. height as usize {
-                    let data_source_slice = &(**img)
-                        [y * (width as usize) * stride .. (y + 1) * (width as usize) * stride];
-                    let dest_base = y * row_pitch as usize;
-
-                    data_target[dest_base .. dest_base + data_source_slice.len()]
-                        .copy_from_slice(data_source_slice);
-                }
-
-                device.release_mapping_writer(data_target).unwrap();
+            let mapping = device.map_memory(&memory, 0 .. size).unwrap();
+            for y in 0 .. height as usize {
+                let data_source_slice = &(**img)
+                    [y * (width as usize) * stride .. (y + 1) * (width as usize) * stride];
+                ptr::copy_nonoverlapping(
+                    data_source_slice.as_ptr(),
+                    mapping.offset(y as isize * row_pitch as isize),
+                    data_source_slice.len(),
+                );
             }
+            device.unmap_memory(&memory);
         }
 
         (

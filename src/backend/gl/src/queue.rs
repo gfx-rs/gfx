@@ -1,8 +1,6 @@
 use std::borrow::Borrow;
 use std::{mem, slice};
 
-use hal::error;
-
 use glow::Context;
 use smallvec::SmallVec;
 
@@ -1170,7 +1168,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
-    fn wait_idle(&self) -> Result<(), error::OutOfMemory> {
+    fn wait_idle(&self) -> Result<(), hal::device::OutOfMemory> {
         unsafe {
             self.share.context.finish();
         }

@@ -111,10 +111,10 @@ pub struct DescriptorRangeDesc {
 pub enum AllocationError {
     /// Memory allocation on the host side failed.
     /// This could be caused by a lack of memory or pool fragmentation.
-    OutOfHostMemory,
+    Host,
     /// Memory allocation on the host side failed.
     /// This could be caused by a lack of memory or pool fragmentation.
-    OutOfDeviceMemory,
+    Device,
     /// Memory allocation failed as there is not enough in the pool.
     /// This could be caused by too many descriptor sets being created.
     OutOfPoolMemory,
