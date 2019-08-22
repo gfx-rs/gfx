@@ -305,6 +305,56 @@ impl Instance {
         panic!("No suitable WSI enabled!");
     }
 
+    #[cfg(feature = "raw-window-handle")]
+    pub fn create_surface_from_raw(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Surface {
+        use raw_window_handle::RawWindowHandle;
+
+        match has_handle.raw_window_handle() {
+            #[cfg(all(
+                feature = "x11",
+                unix,
+                not(target_os = "android"),
+                not(target_os = "macos")
+            ))]
+            RawWindowHandle::Wayland(handle)
+                if self.extensions.contains(&khr::WaylandSurface::name()) =>
+            {
+                self.create_surface_from_wayland(handle.display, handle.surface)
+            }
+            #[cfg(all(
+                feature = "x11",
+                unix,
+                not(target_os = "android"),
+                not(target_os = "macos")
+            ))]
+            RawWindowHandle::X11(handle)
+                if self.extensions.contains(&khr::XlibSurface::name()) =>
+            {
+                self.create_surface_from_xlib(handle.display as *mut _, handle.window)
+            }
+            // #[cfg(target_os = "android")]
+            // RawWindowHandle::ANativeWindowHandle(handle) => {
+            //     let native_window = unimplemented!();
+            //     self.create_surface_android(native_window)
+            //}
+            #[cfg(windows)]
+            RawWindowHandle::Windows(handle) => {
+                use winapi::um::libloaderapi::GetModuleHandleW;
+
+                let hinstance = unsafe { GetModuleHandleW(ptr::null()) };
+                self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd)
+            }
+            #[cfg(target_os = "macos")]
+            RawWindowHandle::MacOS(handle) => {
+                self.create_surface_from_nsview(handle.ns_view)
+            }
+            _ => panic!("No suitable WSI enabled!"),
+        }
+    }
+
     pub fn create_surface_from_vk_surface_khr(
         &self,
         surface: vk::SurfaceKHR,
