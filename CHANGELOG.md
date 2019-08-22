@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-backend-metal-0.3.1 (21-08-2019)
+  - fix memory leaks in render pass and labels creation
+
 ## hal-0.3.0 (08-08-2019)
   - graphics pipeline state refactor
   - no `winit` feature by default
@@ -20,7 +23,7 @@
   - fix image view creation panics
 
 ### backend-backend-metal-0.2.3 (10-07-2019)
-  - fixed depth clip mode support, updates spirv-cross
+  - fix depth clip mode support, updates spirv-cross
 
 ### backend-dx11-0.2.1, backend-dx12-0.2.1, backend-metal-0.2.2, backend-empty-0.2.1 (28-06-2019)
   - `Debug` implementations for `Instance`

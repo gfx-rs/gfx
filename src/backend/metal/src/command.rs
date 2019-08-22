@@ -3486,11 +3486,13 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
             .make_render_commands(sin.combined_aspects)
             .chain(com_ds);
 
-        self.inner
-            .borrow_mut()
-            .sink()
-            .switch_render(sin.descriptor)
-            .issue_many(init_commands);
+        autoreleasepool(|| {
+            self.inner
+                .borrow_mut()
+                .sink()
+                .switch_render(sin.descriptor)
+                .issue_many(init_commands);
+        });
     }
 
     unsafe fn end_render_pass(&mut self) {
