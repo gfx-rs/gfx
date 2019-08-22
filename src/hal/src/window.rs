@@ -63,19 +63,15 @@ use std::iter;
 use std::ops::RangeInclusive;
 
 /// Error occurred during swapchain creation.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CreationError {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(device::OutOfMemory),
     /// Device is lost
-    #[fail(display = "{}", _0)]
     DeviceLost(device::DeviceLost),
     /// Surface is lost
-    #[fail(display = "{}", _0)]
     SurfaceLost(device::SurfaceLost),
     /// Window in use
-    #[fail(display = "{}", _0)]
     WindowInUse(device::WindowInUse),
 }
 
@@ -414,42 +410,32 @@ impl SwapchainConfig {
 pub struct Suboptimal;
 
 /// Error on acquiring the next image from a swapchain.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AcquireError {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(device::OutOfMemory),
     /// No image was ready and no timeout was specified.
-    #[fail(display = "No images ready")]
     NotReady,
     /// No image was ready after the specified timeout expired.
-    #[fail(display = "No images ready after the specified timeout expired")]
     Timeout,
     /// The swapchain is no longer in sync with the surface, needs to be re-created.
-    #[fail(display = "Swapchain is out of date")]
     OutOfDate,
     /// The surface was lost, and the swapchain is no longer usable.
-    #[fail(display = "{}", _0)]
     SurfaceLost(device::SurfaceLost),
     /// Device is lost
-    #[fail(display = "{}", _0)]
     DeviceLost(device::DeviceLost),
 }
 
 /// Error on acquiring the next image from a swapchain.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PresentError {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(device::OutOfMemory),
     /// The swapchain is no longer in sync with the surface, needs to be re-created.
-    #[fail(display = "Swapchain is out of date")]
     OutOfDate,
     /// The surface was lost, and the swapchain is no longer usable.
-    #[fail(display = "{}", _0)]
     SurfaceLost(device::SurfaceLost),
     /// Device is lost
-    #[fail(display = "{}", _0)]
     DeviceLost(device::DeviceLost),
 }
 

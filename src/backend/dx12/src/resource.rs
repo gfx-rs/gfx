@@ -10,6 +10,7 @@ use crate::{root_constants::RootConstant, Backend, MAX_VERTEX_BUFFERS};
 
 use std::collections::BTreeMap;
 use std::ops::Range;
+use std::fmt;
 
 // ShaderModule is either a precompiled if the source comes from HLSL or
 // the SPIR-V module doesn't contain specialization constants or push constants
@@ -157,23 +158,30 @@ pub struct BufferUnbound {
     pub(crate) usage: buffer::Usage,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct BufferBound {
     pub(crate) resource: native::Resource,
     pub(crate) requirements: memory::Requirements,
-    #[derivative(Debug = "ignore")]
     pub(crate) clear_uav: Option<native::CpuDescriptor>,
+}
+
+impl fmt::Debug for BufferBound {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("BufferBound")
+    }
 }
 
 unsafe impl Send for BufferBound {}
 unsafe impl Sync for BufferBound {}
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub enum Buffer {
     Unbound(BufferUnbound),
     Bound(BufferBound),
+}
+
+impl fmt::Debug for Buffer {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Buffer")
+    }
 }
 
 impl Buffer {
@@ -192,16 +200,20 @@ impl Buffer {
     }
 }
 
-#[derive(Copy, Clone, Derivative)]
-#[derivative(Debug)]
+#[derive(Copy, Clone)]
 pub struct BufferView {
     // Descriptor handle for uniform texel buffers.
-    #[derivative(Debug = "ignore")]
     pub(crate) handle_srv: native::CpuDescriptor,
     // Descriptor handle for storage texel buffers.
-    #[derivative(Debug = "ignore")]
     pub(crate) handle_uav: native::CpuDescriptor,
 }
+
+impl fmt::Debug for BufferView {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("BufferView")
+    }
+}
+
 unsafe impl Send for BufferView {}
 unsafe impl Sync for BufferView {}
 
@@ -211,29 +223,29 @@ pub enum Place {
     Heap { raw: native::Heap, offset: u64 },
 }
 
-#[derive(Clone, Derivative)]
-#[derivative(Debug)]
+#[derive(Clone)]
 pub struct ImageBound {
     pub(crate) resource: native::Resource,
-    #[derivative(Debug = "ignore")]
     pub(crate) place: Place,
     pub(crate) surface_type: format::SurfaceType,
     pub(crate) kind: image::Kind,
     pub(crate) usage: image::Usage,
     pub(crate) default_view_format: Option<DXGI_FORMAT>,
     pub(crate) view_caps: image::ViewCapabilities,
-    #[derivative(Debug = "ignore")]
     pub(crate) descriptor: d3d12::D3D12_RESOURCE_DESC,
     pub(crate) bytes_per_block: u8,
     // Dimension of a texel block (compressed formats).
     pub(crate) block_dim: (u8, u8),
-    #[derivative(Debug = "ignore")]
     pub(crate) clear_cv: Vec<native::CpuDescriptor>,
-    #[derivative(Debug = "ignore")]
     pub(crate) clear_dv: Vec<native::CpuDescriptor>,
-    #[derivative(Debug = "ignore")]
     pub(crate) clear_sv: Vec<native::CpuDescriptor>,
     pub(crate) requirements: memory::Requirements,
+}
+
+impl fmt::Debug for ImageBound {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("ImageBound")
+    }
 }
 
 unsafe impl Send for ImageBound {}
@@ -256,10 +268,8 @@ impl ImageBound {
     }
 }
 
-#[derive(Copy, Clone, Derivative)]
-#[derivative(Debug)]
+#[derive(Copy, Clone)]
 pub struct ImageUnbound {
-    #[derivative(Debug = "ignore")]
     pub(crate) desc: d3d12::D3D12_RESOURCE_DESC,
     pub(crate) view_format: Option<DXGI_FORMAT>,
     pub(crate) dsv_format: Option<DXGI_FORMAT>,
@@ -276,6 +286,12 @@ pub struct ImageUnbound {
     pub(crate) num_levels: image::Level,
 }
 
+impl fmt::Debug for ImageUnbound {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("ImageUnbound")
+    }
+}
+
 impl ImageUnbound {
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT, plane: UINT) -> UINT {
         mip_level
@@ -284,11 +300,16 @@ impl ImageUnbound {
     }
 }
 
-#[derive(Clone, Derivative)]
-#[derivative(Debug)]
+#[derive(Clone)]
 pub enum Image {
     Unbound(ImageUnbound),
     Bound(ImageBound),
+}
+
+impl fmt::Debug for Image {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Image")
+    }
 }
 
 impl Image {
@@ -321,18 +342,12 @@ impl Image {
     }
 }
 
-#[derive(Copy, Derivative, Clone)]
-#[derivative(Debug)]
+#[derive(Copy, Clone)]
 pub struct ImageView {
-    #[derivative(Debug = "ignore")]
     pub(crate) resource: native::Resource, // weak-ptr owned by image.
-    #[derivative(Debug = "ignore")]
     pub(crate) handle_srv: Option<native::CpuDescriptor>,
-    #[derivative(Debug = "ignore")]
     pub(crate) handle_rtv: Option<native::CpuDescriptor>,
-    #[derivative(Debug = "ignore")]
     pub(crate) handle_dsv: Option<native::CpuDescriptor>,
-    #[derivative(Debug = "ignore")]
     pub(crate) handle_uav: Option<native::CpuDescriptor>,
     // Required for attachment resolves.
     pub(crate) dxgi_format: DXGI_FORMAT,
@@ -341,6 +356,13 @@ pub struct ImageView {
     pub(crate) layers: (image::Layer, image::Layer),
     pub(crate) kind: image::Kind,
 }
+
+impl fmt::Debug for ImageView {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("ImageView")
+    }
+}
+
 unsafe impl Send for ImageView {}
 unsafe impl Sync for ImageView {}
 
@@ -350,11 +372,14 @@ impl ImageView {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Sampler {
-    #[derivative(Debug = "ignore")]
     pub(crate) handle: native::CpuDescriptor,
+}
+
+impl fmt::Debug for Sampler {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Sampler")
+    }
 }
 
 #[derive(Debug)]
@@ -444,21 +469,19 @@ pub struct DescriptorBindingInfo {
     pub(crate) content: DescriptorContent,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct DescriptorSet {
     // Required for binding at command buffer
-    #[derivative(Debug = "ignore")]
     pub(crate) heap_srv_cbv_uav: native::DescriptorHeap,
-    #[derivative(Debug = "ignore")]
     pub(crate) heap_samplers: native::DescriptorHeap,
-
     pub(crate) binding_infos: Vec<DescriptorBindingInfo>,
-
-    #[derivative(Debug = "ignore")]
     pub(crate) first_gpu_sampler: Option<native::GpuDescriptor>,
-    #[derivative(Debug = "ignore")]
     pub(crate) first_gpu_view: Option<native::GpuDescriptor>,
+}
+
+impl fmt::Debug for DescriptorSet {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("DescriptorSet")
+    }
 }
 
 // TODO: is this really safe?
@@ -475,26 +498,32 @@ impl DescriptorSet {
     }
 }
 
-#[derive(Copy, Clone, Derivative)]
-#[derivative(Debug)]
+#[derive(Copy, Clone)]
 pub struct DualHandle {
-    #[derivative(Debug = "ignore")]
     pub(crate) cpu: native::CpuDescriptor,
-    #[derivative(Debug = "ignore")]
     pub(crate) gpu: native::GpuDescriptor,
     /// How large the block allocated to this handle is.
     pub(crate) size: u64,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
+impl fmt::Debug for DualHandle {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("DualHandle")
+    }
+}
+
 pub struct DescriptorHeap {
-    #[derivative(Debug = "ignore")]
     pub(crate) raw: native::DescriptorHeap,
     pub(crate) handle_size: u64,
     pub(crate) total_handles: u64,
     pub(crate) start: DualHandle,
     pub(crate) range_allocator: RangeAllocator<u64>,
+}
+
+impl fmt::Debug for DescriptorHeap {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("DescriptorHeap")
+    }
 }
 
 impl DescriptorHeap {

@@ -14,20 +14,15 @@ mod output_merger;
 pub use self::{compute::*, descriptor::*, graphics::*, input_assembler::*, output_merger::*};
 
 /// Error types happening upon PSO creation on the device side.
-#[derive(Clone, Debug, PartialEq, Fail)]
+#[derive(Clone, Debug, PartialEq, )]
 pub enum CreationError {
     /// Unknown other error.
-    #[fail(display = "Unknown other error")]
     Other,
     /// Invalid subpass (not part of renderpass).
-    #[fail(display = "Invalid subpass index: {}", _0)]
     InvalidSubpass(pass::SubpassId),
     /// Shader compilation error.
-    #[fail(display = "Shader compilation error: {}", _0)]
     Shader(device::ShaderError),
-
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(device::OutOfMemory),
 }
 

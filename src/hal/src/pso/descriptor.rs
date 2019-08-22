@@ -107,25 +107,20 @@ pub struct DescriptorRangeDesc {
 }
 
 /// An error allocating descriptor sets from a pool.
-#[derive(Fail, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AllocationError {
     /// Memory allocation on the host side failed.
     /// This could be caused by a lack of memory or pool fragmentation.
-    #[fail(display = "Host memory allocation failed.")]
     OutOfHostMemory,
     /// Memory allocation on the host side failed.
     /// This could be caused by a lack of memory or pool fragmentation.
-    #[fail(display = "Device memory allocation failed.")]
     OutOfDeviceMemory,
     /// Memory allocation failed as there is not enough in the pool.
     /// This could be caused by too many descriptor sets being created.
-    #[fail(display = "Descriptor pool memory allocation failed.")]
     OutOfPoolMemory,
     /// Memory allocation failed due to pool fragmentation.
-    #[fail(display = "Descriptor pool is fragmented.")]
     FragmentedPool,
     /// Descriptor set allocation failed as the layout is incompatible with the pool.
-    #[fail(display = "Descriptor layout incompatible with pool.")]
     IncompatibleLayout,
 }
 

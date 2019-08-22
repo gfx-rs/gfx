@@ -28,41 +28,34 @@ use crate::range::RangeArg;
 use crate::window::{self, SwapchainConfig};
 
 /// Error occurred caused device to be lost.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
-#[fail(display = "Device is lost")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DeviceLost;
 
 /// Error occurred caused surface to be lost.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
-#[fail(display = "Surface is lost")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SurfaceLost;
 
 /// Native window is already in use by graphics API.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
-#[fail(display = "Native window in use")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WindowInUse;
 
 /// Error allocating memory.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OutOfMemory {
     /// Host memory exhausted.
-    #[fail(display = "Out of host memory")]
     OutOfHostMemory,
 
     /// Device memory exhausted.
-    #[fail(display = "Out of device memory")]
     OutOfDeviceMemory,
 }
 
 /// Error occurred caused device to be lost
 /// or out of memory error.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OomOrDeviceLost {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(OutOfMemory),
     /// Device is lost
-    #[fail(display = "{}", _0)]
     DeviceLost(DeviceLost),
 }
 
@@ -79,14 +72,12 @@ impl From<DeviceLost> for OomOrDeviceLost {
 }
 
 /// Possible cause of allocation failure.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AllocationError {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(OutOfMemory),
 
-    /// Vulkan implementation doesn't allow to create too many objects.
-    #[fail(display = "Can't allocate more memory objects")]
+    /// Cannot create any more objects.
     TooManyObjects,
 }
 
@@ -97,16 +88,13 @@ impl From<OutOfMemory> for AllocationError {
 }
 
 /// Error binding a resource to memory allocation.
-#[derive(Clone, Copy, Debug, Fail, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BindError {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(OutOfMemory),
     /// Requested binding to memory that doesn't support the required operations.
-    #[fail(display = "Unsupported memory allocation for the requirements")]
     WrongMemory,
     /// Requested binding to an invalid memory.
-    #[fail(display = "Not enough space in the memory allocation")]
     OutOfBounds,
 }
 
@@ -127,22 +115,17 @@ pub enum WaitFor {
 }
 
 /// An error from creating a shader module.
-#[derive(Clone, Debug, Fail, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ShaderError {
     /// The shader failed to compile.
-    #[fail(display = "shader compilation failed: {}", _0)]
     CompilationFailed(String),
-    /// Missing entry point.
-    #[fail(display = "shader is missing an entry point: {}", _0)]
+    /// The shader is missing an entry point.
     MissingEntryPoint(String),
-    /// Mismatch of interface (e.g missing push constants).
-    #[fail(display = "shader interface mismatch: {}", _0)]
+    /// The shader has a mismatch of interface (e.g missing push constants).
     InterfaceMismatch(String),
-    /// Shader stage is not supported.
-    #[fail(display = "shader stage \"{}\" is unsupported", _0)]
+    /// The shader stage is not supported.
     UnsupportedStage(pso::Stage),
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(OutOfMemory),
 }
 

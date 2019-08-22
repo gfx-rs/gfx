@@ -5,15 +5,12 @@
 
 #[macro_use]
 extern crate bitflags;
-#[macro_use]
-extern crate failure;
 
 #[cfg(feature = "serde")]
 #[macro_use]
 extern crate serde;
 
 use std::any::Any;
-use std::error::Error;
 use std::fmt;
 use std::hash::Hash;
 
@@ -516,18 +513,6 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
 #[derive(Clone, Debug, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum SubmissionError {}
-
-impl fmt::Display for SubmissionError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}", self.description())
-    }
-}
-
-impl Error for SubmissionError {
-    fn description(&self) -> &str {
-        "Submission error"
-    }
-}
 
 /// Submission result for DX11 backend.  Currently mostly unused.
 pub type SubmissionResult<T> = Result<T, SubmissionError>;

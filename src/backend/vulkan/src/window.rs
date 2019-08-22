@@ -1,5 +1,6 @@
 use std::{
     borrow::Borrow,
+    fmt,
     hash,
     os::raw::c_void,
     ptr,
@@ -76,15 +77,17 @@ impl SurfaceSwapchain {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Surface {
     // Vk (EXT) specs [29.2.7 Platform-Independent Information]
     // For vkDestroySurfaceKHR: Host access to surface must be externally synchronized
-    #[derivative(Debug = "ignore")]
     pub(crate) raw: Arc<RawSurface>,
-
     pub(crate) swapchain: Option<SurfaceSwapchain>,
+}
+
+impl fmt::Debug for Surface {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Surface")
+    }
 }
 
 pub struct RawSurface {
@@ -611,13 +614,15 @@ impl w::PresentationSurface<Backend> for Surface {
     }
 }
 
-
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Swapchain {
     pub(crate) raw: vk::SwapchainKHR,
-    #[derivative(Debug = "ignore")]
     pub(crate) functor: khr::Swapchain,
+}
+
+impl fmt::Debug for Swapchain {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Swapchain")
+    }
 }
 
 impl w::Swapchain<Backend> for Swapchain {

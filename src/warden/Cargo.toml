@@ -29,7 +29,6 @@ gl-headless = ["gfx-backend-gl"] # "glsl-to-spirv"
 #TODO: keep Warden backend-agnostic?
 
 [dependencies]
-failure = "0.1"
 hal = { path = "../hal", version = "0.3", package = "gfx-hal", features = ["serde"] }
 log = "0.4"
 ron = "0.5"

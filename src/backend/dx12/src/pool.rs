@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::fmt;
 
 use winapi::shared::winerror::SUCCEEDED;
 
@@ -13,16 +14,18 @@ pub enum CommandPoolAllocator {
     Individual(Vec<native::CommandAllocator>),
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct CommandPool {
     pub(crate) allocator: CommandPoolAllocator,
     pub(crate) device: native::Device,
-
-    #[derivative(Debug = "ignore")]
     pub(crate) list_type: CmdListType,
     pub(crate) shared: Arc<Shared>,
     pub(crate) create_flags: pool::CommandPoolCreateFlags,
+}
+
+impl fmt::Debug for CommandPool {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("CommandPool")
+    }
 }
 
 impl CommandPool {

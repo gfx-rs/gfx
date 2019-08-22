@@ -15,16 +15,14 @@ pub type Offset = u64;
 pub type State = Access;
 
 /// Error creating a buffer.
-#[derive(Fail, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CreationError {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(device::OutOfMemory),
 
     /// Requested buffer usage is not supported.
     ///
     /// Older GL version don't support constant buffers or multiple usage flags.
-    #[fail(display = "Buffer usage unsupported ({:?}).", usage)]
     UnsupportedUsage {
         /// Unsupported usage passed on buffer creation.
         usage: Usage,
@@ -38,14 +36,12 @@ impl From<device::OutOfMemory> for CreationError {
 }
 
 /// Error creating a buffer view.
-#[derive(Fail, Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ViewCreationError {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(device::OutOfMemory),
 
     /// Buffer view format is not supported.
-    #[fail(display = "Buffer view format unsupported ({:?}).", format)]
     UnsupportedFormat {
         /// Unsupported format passed on view creation.
         format: Option<format::Format>,

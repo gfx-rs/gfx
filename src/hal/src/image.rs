@@ -104,37 +104,21 @@ pub enum Tiling {
 }
 
 /// Pure image object creation error.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Fail)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, )]
 pub enum CreationError {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(device::OutOfMemory),
     /// The format is not supported by the device.
-    #[fail(display = "Failed to map a given format ({:?}) to the device", _0)]
     Format(format::Format),
     /// The kind doesn't support a particular operation.
-    #[fail(display = "The kind doesn't support a particular operation")]
     Kind,
     /// Failed to map a given multisampled kind to the device.
-    #[fail(
-        display = "Failed to map a given multisampled kind ({}) to the device",
-        _0
-    )]
     Samples(NumSamples),
     /// Unsupported size in one of the dimensions.
-    #[fail(display = "Unsupported size ({}) in one of the dimensions", _0)]
     Size(Size),
     /// The given data has a different size than the target image slice.
-    #[fail(
-        display = "The given data has a different size ({}) than the target image slice",
-        _0
-    )]
     Data(usize),
-    /// The mentioned usage mode is not supported
-    #[fail(
-        display = "The expected image usage mode ({:?}) is not supported by a graphic API",
-        _0
-    )]
+    /// The specified image usage mode is not supported.
     Usage(Usage),
 }
 
@@ -145,34 +129,21 @@ impl From<device::OutOfMemory> for CreationError {
 }
 
 /// Error creating an `ImageView`.
-#[derive(Clone, Debug, PartialEq, Eq, Fail)]
+#[derive(Clone, Debug, PartialEq, Eq, )]
 pub enum ViewError {
     /// The required usage flag is not present in the image.
-    #[fail(
-        display = "The required usage flag ({:?}) is not present in the image",
-        _0
-    )]
     Usage(Usage),
-    /// Selected mip levels doesn't exist.
-    #[fail(display = "Selected mip level ({}) doesn't exist", _0)]
+    /// Selected mip level doesn't exist.
     Level(Level),
     /// Selected array layer doesn't exist.
-    #[fail(display = "Selected mip layer ({}) doesn't exist", _0)]
     Layer(LayerError),
     /// An incompatible format was requested for the view.
-    #[fail(
-        display = "An incompatible format ({:?}) was requested for the view",
-        _0
-    )]
     BadFormat(format::Format),
-    /// Unsupported view kind.
-    #[fail(display = "An incompatible kind ({:?}) was requested for the view", _0)]
+    /// An incompatible view kind was requested for the view.
     BadKind(ViewKind),
     /// Out of either Host or Device memory
-    #[fail(display = "{}", _0)]
     OutOfMemory(device::OutOfMemory),
     /// The backend refused for some reason.
-    #[fail(display = "The backend refused for some reason")]
     Unsupported,
 }
 
@@ -183,19 +154,11 @@ impl From<device::OutOfMemory> for ViewError {
 }
 
 /// An error associated with selected image layer.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, Fail)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, )]
 pub enum LayerError {
     /// The source image kind doesn't support array slices.
-    #[fail(
-        display = "The source image kind ({:?}) doesn't support array slices",
-        _0
-    )]
     NotExpected(Kind),
-    /// Selected layer is outside of the provided range.
-    #[fail(
-        display = "Selected layers ({:?}) are outside of the provided range",
-        _0
-    )]
+    /// Selected layers are outside of the provided range.
     OutOfBounds(Range<Layer>),
 }
 

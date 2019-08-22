@@ -7,19 +7,15 @@ use std::ops::{self, Range};
 
 // TODO
 /// Error accessing a mapping.
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Fail)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, )]
 pub enum Error {
     /// Out of either host or device memory.
-    #[fail(display = "{}", _0)]
     OutOfMemory(device::OutOfMemory),
     /// The requested mapping access did not match the expected usage.
-    #[fail(display = "The requested mapping access did not match the expected usage")]
     InvalidAccess,
     /// The requested mapping range is outside of the resource.
-    #[fail(display = "The requested mapping range is outside of the resource")]
     OutOfBounds,
     /// Failed to map memory range.
-    #[fail(display = "Unable to allocate an appropriately sized contiguous virtual address")]
     MappingFailed,
 }
 

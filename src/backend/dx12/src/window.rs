@@ -1,5 +1,5 @@
 use std::collections::VecDeque;
-use std::mem;
+use std::{fmt, mem};
 
 #[cfg(feature = "winit")]
 use winit;
@@ -39,13 +39,16 @@ struct Presentation {
     size: w::Extent2D,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Surface {
-    #[derivative(Debug = "ignore")]
     pub(crate) factory: native::WeakPtr<dxgi1_4::IDXGIFactory4>,
     pub(crate) wnd_handle: HWND,
     presentation: Option<Presentation>,
+}
+
+impl fmt::Debug for Surface {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Surface")
+    }
 }
 
 unsafe impl Send for Surface {}

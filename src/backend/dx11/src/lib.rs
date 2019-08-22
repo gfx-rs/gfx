@@ -5,8 +5,6 @@ extern crate range_alloc;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
-extern crate derivative;
-#[macro_use]
 extern crate log;
 extern crate parking_lot;
 extern crate smallvec;
@@ -56,6 +54,7 @@ use parking_lot::{Condvar, Mutex};
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
+use std::fmt;
 use std::mem;
 use std::ops::Range;
 use std::ptr;
@@ -99,16 +98,20 @@ mod dxgi;
 mod internal;
 mod shader;
 
-#[derive(Derivative)]
-#[derivative(Clone, Debug)]
+#[derive(Clone)]
 pub(crate) struct ViewInfo {
-    #[derivative(Debug = "ignore")]
     resource: *mut d3d11::ID3D11Resource,
     kind: image::Kind,
     caps: image::ViewCapabilities,
     view_kind: image::ViewKind,
     format: dxgiformat::DXGI_FORMAT,
     range: image::SubresourceRange,
+}
+
+impl fmt::Debug for ViewInfo {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("ViewInfo")
+    }
 }
 
 #[derive(Debug)]
@@ -405,16 +408,18 @@ impl hal::Instance for Instance {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct PhysicalDevice {
-    #[derivative(Debug = "ignore")]
     adapter: ComPtr<IDXGIAdapter>,
     features: hal::Features,
     limits: hal::Limits,
     memory_properties: adapter::MemoryProperties,
-    #[derivative(Debug = "ignore")]
     format_properties: [format::Properties; format::NUM_FORMATS],
+}
+
+impl fmt::Debug for PhysicalDevice {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("PhysicalDevice")
+    }
 }
 
 unsafe impl Send for PhysicalDevice {}
@@ -676,14 +681,17 @@ struct Presentation {
     size: window::Extent2D,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Surface {
-    #[derivative(Debug = "ignore")]
     pub(crate) factory: ComPtr<IDXGIFactory>,
     wnd_handle: HWND,
-    #[derivative(Debug = "ignore")]
     presentation: Option<Presentation>,
+}
+
+
+impl fmt::Debug for Surface {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Surface")
+    }
 }
 
 unsafe impl Send for Surface {}
@@ -847,11 +855,15 @@ impl window::PresentationSurface<Backend> for Surface {
 }
 
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Swapchain {
-    #[derivative(Debug = "ignore")]
     dxgi_swapchain: ComPtr<IDXGISwapChain>,
+}
+
+
+impl fmt::Debug for Swapchain {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Swapchain")
+    }
 }
 
 unsafe impl Send for Swapchain {}
@@ -886,11 +898,15 @@ impl queue::QueueFamily for QueueFamily {
     }
 }
 
-#[derive(Derivative, Clone)]
-#[derivative(Debug)]
+#[derive(Clone)]
 pub struct CommandQueue {
-    #[derivative(Debug = "ignore")]
     context: ComPtr<d3d11::ID3D11DeviceContext>,
+}
+
+impl fmt::Debug for CommandQueue {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("CommandQueue")
+    }
 }
 
 unsafe impl Send for CommandQueue {}
@@ -980,8 +996,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
+#[derive(Debug)]
 pub struct AttachmentClear {
     subpass_id: Option<pass::SubpassId>,
     attachment_id: usize,
@@ -1065,8 +1080,6 @@ bitflags! {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct CommandBufferState {
     dirty_flag: DirtyStateFlag,
 
@@ -1083,7 +1096,6 @@ pub struct CommandBufferState {
     required_bindings: Option<u32>,
     // the highest binding number in currently bound pipeline
     max_bindings: Option<u32>,
-    #[derivative(Debug = "ignore")]
     viewports: Vec<d3d11::D3D11_VIEWPORT>,
     vertex_buffers: Vec<*mut d3d11::ID3D11Buffer>,
     vertex_offsets: Vec<u32>,
@@ -1094,6 +1106,13 @@ pub struct CommandBufferState {
     stencil_read_mask: Option<pso::StencilValue>,
     stencil_write_mask: Option<pso::StencilValue>,
     current_blend: Option<*mut d3d11::ID3D11BlendState>,
+}
+
+
+impl fmt::Debug for CommandBufferState {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("CommandBufferState")
+    }
 }
 
 impl CommandBufferState {
@@ -1342,15 +1361,10 @@ impl CommandBufferState {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct CommandBuffer {
     // TODO: better way of sharing
-    #[derivative(Debug = "ignore")]
     internal: internal::Internal,
-    #[derivative(Debug = "ignore")]
     context: ComPtr<d3d11::ID3D11DeviceContext>,
-    #[derivative(Debug = "ignore")]
     list: RefCell<Option<ComPtr<d3d11::ID3D11CommandList>>>,
 
     // since coherent memory needs to be synchronized at submission, we need to gather up all
@@ -1365,6 +1379,12 @@ pub struct CommandBuffer {
     cache: CommandBufferState,
 
     one_time_submit: bool,
+}
+
+impl fmt::Debug for CommandBuffer {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("CommandBuffer")
+    }
 }
 
 unsafe impl Send for CommandBuffer {}
@@ -2333,15 +2353,18 @@ pub struct MemoryFlush {
     buffer: *mut d3d11::ID3D11Buffer,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct MemoryInvalidate {
-    #[derivative(Debug = "ignore")]
     working_buffer: Option<ComPtr<d3d11::ID3D11Buffer>>,
     working_buffer_size: u64,
     host_memory: *mut u8,
     sync_range: Range<u64>,
     buffer: *mut d3d11::ID3D11Buffer,
+}
+
+impl fmt::Debug for MemoryInvalidate {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("MemoryInvalidate")
+    }
 }
 
 fn intersection(a: &Range<u64>, b: &Range<u64>) -> Option<Range<u64>> {
@@ -2478,8 +2501,6 @@ impl MemoryInvalidate {
 // range. This forces us to only expose non-coherent memory, as this
 // abstraction acts as a "cache" since the "staging buffer" vec is disjoint
 // from all the dx11 resources we store in the struct.
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Memory {
     ty: MemoryHeapFlags,
     properties: memory::Properties,
@@ -2491,12 +2512,16 @@ pub struct Memory {
     host_visible: Option<RefCell<Vec<u8>>>,
 
     // list of all buffers bound to this memory
-    #[derivative(Debug = "ignore")]
     local_buffers: RefCell<Vec<(Range<u64>, InternalBuffer)>>,
 
     // list of all images bound to this memory
-    #[derivative(Debug = "ignore")]
     local_images: RefCell<Vec<(Range<u64>, InternalImage)>>,
+}
+
+impl fmt::Debug for Memory {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Memory")
+    }
 }
 
 unsafe impl Send for Memory {}
@@ -2619,16 +2644,13 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
 }
 
 /// Similarily to dx12 backend, we can handle either precompiled dxbc or spirv
-// TODO: derivative doesn't work on enum variants?
-//#[derive(Derivative)]
-//#[derivative(Debug)]
 pub enum ShaderModule {
     Dxbc(Vec<u8>),
     Spirv(Vec<u32>),
 }
 
 // TODO: temporary
-impl ::std::fmt::Debug for ShaderModule {
+impl ::fmt::Debug for ShaderModule {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         write!(f, "{}", "ShaderModule { ... }")
     }
@@ -2679,8 +2701,6 @@ pub struct InternalBuffer {
     usage: buffer::Usage,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Buffer {
     internal: InternalBuffer,
     ty: MemoryHeapFlags,     // empty if unbound
@@ -2690,14 +2710,18 @@ pub struct Buffer {
     bind: d3d11::D3D11_BIND_FLAG,
 }
 
+impl fmt::Debug for Buffer {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Buffer")
+    }
+}
+
 unsafe impl Send for Buffer {}
 unsafe impl Sync for Buffer {}
 
 #[derive(Debug)]
 pub struct BufferView;
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Image {
     kind: image::Kind,
     usage: image::Usage,
@@ -2711,27 +2735,31 @@ pub struct Image {
     requirements: memory::Requirements,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
+impl fmt::Debug for Image {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Image")
+    }
+}
+
 pub struct InternalImage {
-    #[derivative(Debug = "ignore")]
     raw: *mut d3d11::ID3D11Resource,
-    #[derivative(Debug = "ignore")]
     copy_srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
-    #[derivative(Debug = "ignore")]
     srv: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
 
     /// Contains UAVs for all subresources
-    #[derivative(Debug = "ignore")]
     unordered_access_views: Vec<ComPtr<d3d11::ID3D11UnorderedAccessView>>,
 
     /// Contains DSVs for all subresources
-    #[derivative(Debug = "ignore")]
     depth_stencil_views: Vec<ComPtr<d3d11::ID3D11DepthStencilView>>,
 
     /// Contains RTVs for all subresources
-    #[derivative(Debug = "ignore")]
     render_target_views: Vec<ComPtr<d3d11::ID3D11RenderTargetView>>,
+}
+
+impl fmt::Debug for InternalImage {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("InternalImage")
+    }
 }
 
 unsafe impl Send for Image {}
@@ -2773,38 +2801,45 @@ impl Image {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Clone, Debug)]
+#[derive(Clone)]
 pub struct ImageView {
     format: format::Format,
-    #[derivative(Debug = "ignore")]
     rtv_handle: Option<ComPtr<d3d11::ID3D11RenderTargetView>>,
-    #[derivative(Debug = "ignore")]
     srv_handle: Option<ComPtr<d3d11::ID3D11ShaderResourceView>>,
-    #[derivative(Debug = "ignore")]
     dsv_handle: Option<ComPtr<d3d11::ID3D11DepthStencilView>>,
-    #[derivative(Debug = "ignore")]
     uav_handle: Option<ComPtr<d3d11::ID3D11UnorderedAccessView>>,
+}
+
+impl fmt::Debug for ImageView {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("ImageView")
+    }
 }
 
 unsafe impl Send for ImageView {}
 unsafe impl Sync for ImageView {}
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Sampler {
-    #[derivative(Debug = "ignore")]
     sampler_handle: ComPtr<d3d11::ID3D11SamplerState>,
+}
+
+impl fmt::Debug for Sampler {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Sampler")
+    }
 }
 
 unsafe impl Send for Sampler {}
 unsafe impl Sync for Sampler {}
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct ComputePipeline {
-    #[derivative(Debug = "ignore")]
     cs: ComPtr<d3d11::ID3D11ComputeShader>,
+}
+
+impl fmt::Debug for ComputePipeline {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("ComputePipeline")
+    }
 }
 
 unsafe impl Send for ComputePipeline {}
@@ -2815,28 +2850,17 @@ unsafe impl Sync for ComputePipeline {}
 ///       to.
 ///
 /// [0]: https://msdn.microsoft.com/en-us/library/windows/desktop/ff476500(v=vs.85).aspx
-#[derive(Derivative)]
-#[derivative(Clone, Debug)]
+#[derive(Clone)]
 pub struct GraphicsPipeline {
-    #[derivative(Debug = "ignore")]
     vs: ComPtr<d3d11::ID3D11VertexShader>,
-    #[derivative(Debug = "ignore")]
     gs: Option<ComPtr<d3d11::ID3D11GeometryShader>>,
-    #[derivative(Debug = "ignore")]
     hs: Option<ComPtr<d3d11::ID3D11HullShader>>,
-    #[derivative(Debug = "ignore")]
     ds: Option<ComPtr<d3d11::ID3D11DomainShader>>,
-    #[derivative(Debug = "ignore")]
     ps: Option<ComPtr<d3d11::ID3D11PixelShader>>,
-    #[derivative(Debug = "ignore")]
     topology: d3d11::D3D11_PRIMITIVE_TOPOLOGY,
-    #[derivative(Debug = "ignore")]
     input_layout: ComPtr<d3d11::ID3D11InputLayout>,
-    #[derivative(Debug = "ignore")]
     rasterizer_state: ComPtr<d3d11::ID3D11RasterizerState>,
-    #[derivative(Debug = "ignore")]
     blend_state: ComPtr<d3d11::ID3D11BlendState>,
-    #[derivative(Debug = "ignore")]
     depth_stencil_state: Option<(
         ComPtr<d3d11::ID3D11DepthStencilState>,
         pso::State<pso::StencilValue>,
@@ -2845,6 +2869,12 @@ pub struct GraphicsPipeline {
     required_bindings: u32,
     max_vertex_bindings: u32,
     strides: Vec<u32>,
+}
+
+impl fmt::Debug for GraphicsPipeline {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("GraphicsPipeline")
+    }
 }
 
 unsafe impl Send for GraphicsPipeline {}
@@ -2984,14 +3014,18 @@ impl CoherentBuffers {
 #[repr(C)]
 struct Descriptor(*mut d3d11::ID3D11DeviceChild);
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct DescriptorSet {
     offset: usize,
     len: usize,
     handles: *mut Descriptor,
     register_remap: RegisterRemapping,
     coherent_buffers: Mutex<CoherentBuffers>,
+}
+
+impl fmt::Debug for DescriptorSet {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("DescriptorSet")
+    }
 }
 
 unsafe impl Send for DescriptorSet {}

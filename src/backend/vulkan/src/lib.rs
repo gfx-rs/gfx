@@ -5,8 +5,6 @@ extern crate log;
 #[macro_use]
 extern crate ash;
 #[macro_use]
-extern crate derivative;
-#[macro_use]
 extern crate lazy_static;
 
 #[cfg(target_os = "macos")]
@@ -127,14 +125,17 @@ impl Drop for RawInstance {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Instance {
-    #[derivative(Debug = "ignore")]
     pub raw: Arc<RawInstance>,
 
     /// Supported extensions of this instance.
     pub extensions: Vec<&'static CStr>,
+}
+
+impl fmt::Debug for Instance {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Instance")
+    }
 }
 
 fn map_queue_type(flags: vk::QueueFlags) -> queue::QueueType {
@@ -497,13 +498,16 @@ impl queue::QueueFamily for QueueFamily {
     }
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct PhysicalDevice {
-    #[derivative(Debug = "ignore")]
     instance: Arc<RawInstance>,
     handle: vk::PhysicalDevice,
     properties: vk::PhysicalDeviceProperties,
+}
+
+impl fmt::Debug for PhysicalDevice {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("PhysicalDevice")
+    }
 }
 
 impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
@@ -1076,13 +1080,16 @@ impl Drop for RawDevice {
 // Need to explicitly synchronize on submission and present.
 pub type RawCommandQueue = Arc<vk::Queue>;
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct CommandQueue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
-    #[derivative(Debug = "ignore")]
     swapchain_fn: vk::KhrSwapchainFn,
+}
+
+impl fmt::Debug for CommandQueue {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("CommandQueue")
+    }
 }
 
 impl queue::CommandQueue<Backend> for CommandQueue {

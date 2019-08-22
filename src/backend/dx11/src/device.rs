@@ -20,9 +20,8 @@ use wio::com::ComPtr;
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::mem;
+use std::{fmt, mem, ptr};
 use std::ops::Range;
-use std::ptr;
 use std::sync::Arc;
 
 use parking_lot::{Condvar, Mutex};
@@ -71,16 +70,18 @@ struct InputLayout {
     vertex_strides: Vec<u32>,
 }
 
-#[derive(Derivative)]
-#[derivative(Debug)]
 pub struct Device {
-    #[derivative(Debug = "ignore")]
     raw: ComPtr<d3d11::ID3D11Device>,
-    #[derivative(Debug = "ignore")]
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     memory_properties: MemoryProperties,
     memory_heap_flags: [MemoryHeapFlags; 3],
     pub(crate) internal: internal::Internal,
+}
+
+impl fmt::Debug for Device {
+    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
+        fmt.write_str("Device")
+    }
 }
 
 impl Drop for Device {
