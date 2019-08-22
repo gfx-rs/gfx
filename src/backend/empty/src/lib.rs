@@ -11,10 +11,8 @@ use hal::{
     buffer,
     command,
     device,
-    error,
     format,
     image,
-    mapping,
     memory,
     pass,
     pool,
@@ -75,7 +73,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         _: &[(&QueueFamily, &[queue::QueuePriority])],
         _: hal::Features,
-    ) -> Result<adapter::Gpu<Backend>, error::DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, device::CreationError> {
         unimplemented!()
     }
 
@@ -148,7 +146,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         unimplemented!()
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 }
@@ -408,7 +406,7 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn map_memory<R: RangeArg<u64>>(&self, _: &(), _: R) -> Result<*mut u8, mapping::Error> {
+    unsafe fn map_memory<R: RangeArg<u64>>(&self, _: &(), _: R) -> Result<*mut u8, device::MapError> {
         unimplemented!()
     }
 
@@ -511,7 +509,7 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 }

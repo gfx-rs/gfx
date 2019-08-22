@@ -7,14 +7,11 @@ use std::sync::{Arc, Mutex, RwLock};
 use glow::Context as _;
 
 use hal::{
-    self as c,
     backend::FastHashMap,
     buffer,
     device as d,
-    error,
     format::{Format, Swizzle},
     image as i,
-    mapping,
     memory,
     pass,
     pool::CommandPoolCreateFlags,
@@ -448,7 +445,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
         i::Anisotropic::On(fac) if fac > 1 => {
             if share.private_caps.sampler_anisotropy_ext {
                 set_param_float(glow::TEXTURE_MAX_ANISOTROPY, fac as f32);
-            } else if share.features.contains(c::Features::SAMPLER_ANISOTROPY) {
+            } else if share.features.contains(hal::Features::SAMPLER_ANISOTROPY) {
                 set_param_float(glow::TEXTURE_MAX_ANISOTROPY, fac as f32);
             }
         }
@@ -495,7 +492,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
 impl d::Device<B> for Device {
     unsafe fn allocate_memory(
         &self,
-        mem_type: c::MemoryTypeId,
+        mem_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<n::Memory, d::AllocationError> {
         let (memory_type, memory_role) = self.share.memory_types[mem_type.0 as usize];
@@ -846,7 +843,7 @@ impl d::Device<B> for Device {
         };
 
         let patch_size = match desc.input_assembler.primitive {
-            c::Primitive::PatchList(size) => Some(size as _),
+            hal::Primitive::PatchList(size) => Some(size as _),
             _ => None,
         };
 
@@ -979,7 +976,7 @@ impl d::Device<B> for Device {
         I::Item: Borrow<n::ImageView>,
     {
         if !self.share.private_caps.framebuffer {
-            return Err(d::OutOfMemory::OutOfHostMemory);
+            return Err(d::OutOfMemory::Host);
         }
 
         let attachments: Vec<_> = attachments
@@ -1079,7 +1076,7 @@ impl d::Device<B> for Device {
 
         if let Err(_) = self.share.check() {
             Err(d::AllocationError::OutOfMemory(
-                d::OutOfMemory::OutOfHostMemory,
+                d::OutOfMemory::Host,
             ))
         } else {
             Ok(n::FatSampler::Sampler(name))
@@ -1144,7 +1141,7 @@ impl d::Device<B> for Device {
         &self,
         memory: &n::Memory,
         range: R,
-    ) -> Result<*mut u8, mapping::Error> {
+    ) -> Result<*mut u8, d::MapError> {
         let gl = &self.share.context;
         let caps = &self.share.private_caps;
 
@@ -1859,7 +1856,7 @@ impl d::Device<B> for Device {
         surface: &mut Surface,
         config: SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<n::Image>), c::window::CreationError> {
+    ) -> Result<(Swapchain, Vec<n::Image>), hal::window::CreationError> {
         let gl = &self.share.context;
 
         #[cfg(feature = "wgl")]
@@ -1971,7 +1968,7 @@ impl d::Device<B> for Device {
         // Nothing to do
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), d::OutOfMemory> {
         unsafe {
             self.share.context.finish();
         }

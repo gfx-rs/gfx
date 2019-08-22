@@ -6,12 +6,12 @@
 //! from an `Instance` of that backend.  `adapter.open_with(...)` will return a `Device`
 //! that has the properties specified.
 
-use std::any::Any;
-use std::fmt;
+use std::{any::Any, fmt};
 
-use crate::error::DeviceCreationError;
-use crate::queue::{QueueGroup, QueuePriority};
-use crate::{format, image, memory, Backend, Features, Limits};
+use crate::{
+    queue::{QueueGroup, QueuePriority},
+    device, format, image, memory, Backend, Features, Limits,
+};
 
 /// A description for a single chunk of memory in a heap.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
@@ -75,7 +75,7 @@ pub trait PhysicalDevice<B: Backend>: fmt::Debug + Any + Send + Sync {
         &self,
         families: &[(&B::QueueFamily, &[QueuePriority])],
         requested_features: Features,
-    ) -> Result<Gpu<B>, DeviceCreationError>;
+    ) -> Result<Gpu<B>, device::CreationError>;
 
     /// Fetch details for a particular format.
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties;

@@ -345,14 +345,12 @@ impl<B: hal::Backend> Scene<B> {
                             .unwrap();
                         // write the data
                         unsafe {
-                            let mut mapping = device
-                                .acquire_mapping_writer::<u8>(&upload_memory, 0 .. size as _)
-                                .unwrap();
+                            let mapping = device.map_memory(&upload_memory, 0 .. size as u64).unwrap();
                             File::open(data_path.join(data))
                                 .unwrap()
-                                .read_exact(&mut mapping)
+                                .read_exact(slice::from_raw_parts_mut(mapping, size))
                                 .unwrap();
-                            device.release_mapping_writer(mapping).unwrap();
+                            device.unmap_memory(&upload_memory);
                         }
                         // add init commands
                         let final_state = b::Access::SHADER_READ;
@@ -499,21 +497,17 @@ impl<B: hal::Backend> Scene<B> {
                         unsafe { device.bind_buffer_memory(&upload_memory, 0, &mut upload_buffer) }
                             .unwrap();
                         // write the data
-                        {
+                        unsafe {
                             let mut file = File::open(data_path.join(data)).unwrap();
-                            let mut mapping = unsafe {
-                                device
-                                    .acquire_mapping_writer::<u8>(&upload_memory, 0 .. upload_size)
-                            }
-                            .unwrap();
+                            let mapping = device.map_memory(&upload_memory, 0 .. upload_size).unwrap();
                             for y in 0 .. (h as usize * d as usize) {
-                                let dest_range = y * row_pitch as usize
-                                    .. y * row_pitch as usize + width_bytes as usize;
-                                file.read_exact(&mut mapping[dest_range]).unwrap();
+                                let slice = slice::from_raw_parts_mut(
+                                    mapping.offset(y as isize * row_pitch as isize),
+                                    width_bytes as usize,
+                                );
+                                file.read_exact(slice).unwrap();
                             }
-                            unsafe {
-                                device.release_mapping_writer(mapping).unwrap();
-                            }
+                            device.unmap_memory(&upload_memory);
                         }
                         // add init commands
                         let final_state =

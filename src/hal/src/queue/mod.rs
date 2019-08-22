@@ -8,10 +8,12 @@
 
 pub mod family;
 
-use crate::error::HostExecutionError;
-use crate::pso;
-use crate::window::{PresentError, PresentationSurface, Suboptimal, SwapImageIndex};
-use crate::Backend;
+use crate::{
+    device::OutOfMemory,
+    pso,
+    window::{PresentError, PresentationSurface, Suboptimal, SwapImageIndex},
+    Backend,
+};
 use std::{any::Any, borrow::Borrow, fmt, iter};
 
 pub use self::family::{QueueFamily, QueueFamilyId, QueueGroup};
@@ -143,5 +145,5 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<Option<Suboptimal>, PresentError>;
 
     /// Wait for the queue to idle.
-    fn wait_idle(&self) -> Result<(), HostExecutionError>;
+    fn wait_idle(&self) -> Result<(), OutOfMemory>;
 }

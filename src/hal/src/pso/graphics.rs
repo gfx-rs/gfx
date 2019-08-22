@@ -1,9 +1,15 @@
 //! Graphics pipeline descriptor.
 
-use super::input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc};
-use super::output_merger::{ColorBlendDesc, DepthStencilDesc, Face};
-use super::{BasePipeline, EntryPoint, PipelineCreationFlags, State};
-use crate::{image, pass, Backend, Primitive};
+use crate::{
+    image,
+    pass,
+    pso::{
+        input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc},
+        output_merger::{ColorBlendDesc, DepthStencilDesc, Face},
+        BasePipeline, EntryPoint, PipelineCreationFlags, State,
+    },
+    Backend, Primitive,
+};
 
 use std::ops::Range;
 

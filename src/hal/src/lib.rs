@@ -18,10 +18,8 @@ pub mod adapter;
 pub mod buffer;
 pub mod command;
 pub mod device;
-pub mod error;
 pub mod format;
 pub mod image;
-pub mod mapping;
 pub mod memory;
 pub mod pass;
 pub mod pool;
@@ -508,11 +506,3 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type Event: fmt::Debug + Any + Send + Sync;
     type QueryPool: fmt::Debug + Any + Send + Sync;
 }
-
-/// Marks that an error occurred submitting a command to a command buffer.
-#[derive(Clone, Debug, PartialEq)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum SubmissionError {}
-
-/// Submission result for DX11 backend.  Currently mostly unused.
-pub type SubmissionResult<T> = Result<T, SubmissionError>;

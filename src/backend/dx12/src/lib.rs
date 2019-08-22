@@ -23,7 +23,7 @@ mod window;
 
 use descriptors_cpu::DescriptorCpuPool;
 use hal::pso::PipelineStage;
-use hal::{adapter, error, format as f, image, memory, queue as q, Features, Limits};
+use hal::{adapter, format as f, image, memory, queue as q, Features, Limits};
 
 use winapi::shared::minwindef::TRUE;
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_6, winerror};
@@ -202,15 +202,15 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         families: &[(&QueueFamily, &[q::QueuePriority])],
         requested_features: Features,
-    ) -> Result<adapter::Gpu<Backend>, error::DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, hal::device::CreationError> {
         let lock = self.is_open.try_lock();
         let mut open_guard = match lock {
             Ok(inner) => inner,
-            Err(_) => return Err(error::DeviceCreationError::TooManyObjects),
+            Err(_) => return Err(hal::device::CreationError::TooManyObjects),
         };
 
         if !self.features().contains(requested_features) {
-            return Err(error::DeviceCreationError::MissingFeature);
+            return Err(hal::device::CreationError::MissingFeature);
         }
 
         let (device_raw, hr_device) =
@@ -489,7 +489,7 @@ impl q::CommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), hal::device::OutOfMemory> {
         self.raw.signal(self.idle_fence, 1);
         assert_eq!(
             winerror::S_OK,

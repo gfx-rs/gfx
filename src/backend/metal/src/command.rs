@@ -21,7 +21,7 @@ use hal::{
     backend::FastHashMap,
     buffer,
     command as com,
-    error,
+    device::OutOfMemory,
     format::{Aspects, FormatDesc},
     image::{Extent, Filter, Layout, Level, SubresourceRange},
     memory,
@@ -2310,7 +2310,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), OutOfMemory> {
         QueueInner::wait_idle(&self.shared.queue);
         Ok(())
     }

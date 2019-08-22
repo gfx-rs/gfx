@@ -2,7 +2,7 @@ use hal::adapter::MemoryProperties;
 use hal::pso::VertexInputRate;
 use hal::queue::QueueFamilyId;
 use hal::range::RangeArg;
-use hal::{buffer, device, error, format, image, mapping, memory, pass, pool, pso, query, window};
+use hal::{buffer, device, format, image, memory, pass, pool, pso, query, window};
 
 use winapi::shared::dxgi::{
     IDXGIFactory,
@@ -2306,7 +2306,7 @@ impl device::Device<Backend> for Device {
         }
     }
 
-    unsafe fn map_memory<R>(&self, memory: &Memory, range: R) -> Result<*mut u8, mapping::Error>
+    unsafe fn map_memory<R>(&self, memory: &Memory, range: R) -> Result<*mut u8, device::MapError>
     where
         R: RangeArg<u64>,
     {
@@ -2620,7 +2620,7 @@ impl device::Device<Backend> for Device {
         // automatic
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
         Ok(())
         // unimplemented!()
     }

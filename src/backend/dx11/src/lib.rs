@@ -19,7 +19,6 @@ use hal::{
     adapter,
     buffer,
     command,
-    error,
     format,
     image,
     memory,
@@ -489,10 +488,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         families: &[(&QueueFamily, &[queue::QueuePriority])],
         requested_features: hal::Features,
-    ) -> Result<adapter::Gpu<Backend>, error::DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Backend>, hal::device::CreationError> {
         let (device, cxt) = {
             if !self.features().contains(requested_features) {
-                return Err(error::DeviceCreationError::MissingFeature);
+                return Err(hal::device::CreationError::MissingFeature);
             }
 
             let feature_level = get_feature_level(self.adapter.as_raw());
@@ -525,7 +524,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             // type is not unknown; or if debug device is requested but not
             // present
             if !winerror::SUCCEEDED(hr) {
-                return Err(error::DeviceCreationError::InitializationFailed);
+                return Err(hal::device::CreationError::InitializationFailed);
             }
 
             info!("feature level={:x}", feature_level);
@@ -990,7 +989,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         Ok(None)
     }
 
-    fn wait_idle(&self) -> Result<(), error::HostExecutionError> {
+    fn wait_idle(&self) -> Result<(), hal::device::OutOfMemory> {
         // unimplemented!()
         Ok(())
     }

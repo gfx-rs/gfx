@@ -104,7 +104,7 @@ pub enum Tiling {
 }
 
 /// Pure image object creation error.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, )]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CreationError {
     /// Out of either host or device memory.
     OutOfMemory(device::OutOfMemory),
@@ -118,7 +118,7 @@ pub enum CreationError {
     Size(Size),
     /// The given data has a different size than the target image slice.
     Data(usize),
-    /// The specified image usage mode is not supported.
+    /// The mentioned usage mode is not supported
     Usage(Usage),
 }
 
@@ -129,7 +129,7 @@ impl From<device::OutOfMemory> for CreationError {
 }
 
 /// Error creating an `ImageView`.
-#[derive(Clone, Debug, PartialEq, Eq, )]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ViewError {
     /// The required usage flag is not present in the image.
     Usage(Usage),
@@ -154,7 +154,7 @@ impl From<device::OutOfMemory> for ViewError {
 }
 
 /// An error associated with selected image layer.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, )]
+#[derive(Clone, Debug, PartialEq)]
 pub enum LayerError {
     /// The source image kind doesn't support array slices.
     NotExpected(Kind),

@@ -146,8 +146,8 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                 )
             })
             .map_err(|err| match err {
-                vk::Result::ERROR_OUT_OF_HOST_MEMORY => pso::AllocationError::OutOfHostMemory,
-                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => pso::AllocationError::OutOfDeviceMemory,
+                vk::Result::ERROR_OUT_OF_HOST_MEMORY => pso::AllocationError::Host,
+                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => pso::AllocationError::Device,
                 vk::Result::ERROR_OUT_OF_POOL_MEMORY => pso::AllocationError::OutOfPoolMemory,
                 _ => pso::AllocationError::FragmentedPool,
             })

@@ -16,13 +16,11 @@ extern crate gfx_backend_dx12 as back;
 extern crate gfx_backend_metal as back;
 #[cfg(feature = "vulkan")]
 extern crate gfx_backend_vulkan as back;
-extern crate gfx_hal as hal;
 
-use std::str::FromStr;
+use std::{fs, ptr, slice, str::FromStr};
 
 use hal::{adapter::MemoryType, buffer, command, memory, pool, prelude::*, pso};
 
-use std::fs;
 
 #[cfg(any(
     feature = "vulkan",
@@ -31,6 +29,7 @@ use std::fs;
     feature = "metal"
 ))]
 fn main() {
+    #[cfg(debug_assertions)]
     env_logger::init();
 
     // For now this just panics if you didn't pass numbers. Could add proper error handling.
@@ -131,13 +130,9 @@ fn main() {
     };
 
     unsafe {
-        let mut writer = device
-            .acquire_mapping_writer::<u32>(&staging_memory, 0 .. staging_size)
-            .unwrap();
-        writer[0 .. numbers.len()].copy_from_slice(&numbers);
-        device
-            .release_mapping_writer(writer)
-            .expect("Can't relase mapping writer");
+        let mapping = device.map_memory(&staging_memory, 0 .. staging_size).unwrap();
+        ptr::copy_nonoverlapping(numbers.as_ptr() as *const u8, mapping, numbers.len() * stride as usize);
+        device.unmap_memory(&staging_memory);
     }
 
     let (device_memory, device_buffer, _device_buffer_size) = unsafe {
@@ -222,17 +217,12 @@ fn main() {
     }
 
     unsafe {
-        let reader = device
-            .acquire_mapping_reader::<u32>(&staging_memory, 0 .. staging_size)
-            .unwrap();
+        let mapping = device.map_memory(&staging_memory, 0 .. staging_size).unwrap();
         println!(
             "Times: {:?}",
-            reader[0 .. numbers.len()]
-                .into_iter()
-                .map(|n| *n)
-                .collect::<Vec<u32>>()
+            slice::from_raw_parts::<u32>(mapping as *const u8 as *const u32, numbers.len()),
         );
-        device.release_mapping_reader(reader);
+        device.unmap_memory(&staging_memory);
     }
 
     unsafe {

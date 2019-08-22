@@ -21,7 +21,7 @@ signpost = []
 name = "gfx_backend_metal"
 
 [dependencies]
-hal = { path = "../../hal", version = "0.3", package = "gfx-hal" }
+hal = { path = "../../hal", version = "0.3", package = "gfx-hal", features = ["fxhash"] }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 arrayvec = "0.4"
 bitflags = "1.0"
@@ -37,7 +37,7 @@ cocoa = "0.18"
 core-graphics = "0.17"
 smallvec = "0.6"
 spirv_cross = { version = "0.15", features = ["msl"] }
-parking_lot = "0.9.0"
+parking_lot = "0.9"
 storage-map = "0.2"
 
 # This forces docs.rs to build the crate on mac, otherwise the build fails

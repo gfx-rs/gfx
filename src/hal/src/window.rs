@@ -63,7 +63,7 @@ use std::iter;
 use std::ops::RangeInclusive;
 
 /// Error occurred during swapchain creation.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum CreationError {
     /// Out of either host or device memory.
     OutOfMemory(device::OutOfMemory),
@@ -410,7 +410,7 @@ impl SwapchainConfig {
 pub struct Suboptimal;
 
 /// Error on acquiring the next image from a swapchain.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AcquireError {
     /// Out of either host or device memory.
     OutOfMemory(device::OutOfMemory),
@@ -427,7 +427,7 @@ pub enum AcquireError {
 }
 
 /// Error on acquiring the next image from a swapchain.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum PresentError {
     /// Out of either host or device memory.
     OutOfMemory(device::OutOfMemory),
