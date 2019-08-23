@@ -26,6 +26,18 @@ impl Instance {
         use winit::os::windows::WindowExt;
         self.create_surface_from_hwnd(window.get_hwnd() as *mut _)
     }
+
+    pub fn create_surface_from_raw(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, hal::window::InitError> {
+        match has_handle.raw_window_handle() {
+            raw_window_handle::RawWindowHandle::Windows(handle) => {
+                Ok(self.create_surface_from_hwnd(handle.hwnd))
+            }
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
+        }
+    }
 }
 
 #[derive(Derivative)]

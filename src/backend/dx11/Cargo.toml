@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-dx11"
-version = "0.3.0"
+version = "0.3.1"
 description = "DirectX-11 API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -18,7 +18,7 @@ default = []
 name = "gfx_backend_dx11"
 
 [dependencies]
-gfx-hal = { path = "../../hal", version = "0.3" }
+gfx-hal = { path = "../../hal", version = "0.3.1" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
 derivative = "1"
@@ -29,6 +29,7 @@ parking_lot = "0.7"
 winapi = { version = "0.3", features = ["basetsd","d3d11", "d3d11sdklayers", "d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4", "dxgi1_5", "dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
 winit = { version = "0.19", optional = true }
 wio = "0.2"
+raw-window-handle = "0.1"
 
 # This forces docs.rs to build the crate on windows, otherwise the build fails
 # and we get no docs at all.
