@@ -20,14 +20,14 @@
 #[macro_use]
 extern crate log;
 extern crate gfx_gl as gl;
-extern crate gfx_core as core;
+extern crate gfx_core;
 
 use std::cell::RefCell;
 use std::error::Error as StdError;
 use std::fmt;
 use std::rc::Rc;
-use core::{self as c, handle, state as s, format, pso, texture, command as com, buffer};
-use core::target::{Layer, Level};
+use gfx_core::{self as c, handle, state as s, format, pso, texture, command as com, buffer};
+use gfx_core::target::{Layer, Level};
 use command::{Command, DataBuffer};
 use factory::MappingKind;
 
@@ -211,8 +211,8 @@ pub fn create<F>(fn_proc: F) -> (Device, Factory) where
 /// Not supposed to be used by the users directly.
 pub fn create_main_targets_raw(dim: texture::Dimensions, color_format: format::SurfaceType, depth_format: format::SurfaceType)
                                -> (handle::RawRenderTargetView<Resources>, handle::RawDepthStencilView<Resources>) {
-    use core::handle::Producer;
-    use core::memory::{Bind, Usage};
+    use gfx_core::handle::Producer;
+    use gfx_core::memory::{Bind, Usage};
 
     let mut temp = handle::Manager::new();
     let color_tex = temp.make_texture(
@@ -348,8 +348,8 @@ impl Device {
     }
 
     fn bind_attribute(&mut self, slot: c::AttributeSlot, buffer: Buffer, bel: BufferElement) {
-        use core::format::SurfaceType as S;
-        use core::format::ChannelType as C;
+        use gfx_core::format::SurfaceType as S;
+        use gfx_core::format::ChannelType as C;
         let (fm8, fm16, fm32) = match bel.elem.format.1 {
             C::Int | C::Inorm =>
                 (gl::BYTE, gl::SHORT, gl::INT),
@@ -907,7 +907,7 @@ impl Device {
     }
 
     fn place_fence(&mut self) -> handle::Fence<Resources> {
-        use core::handle::Producer;
+        use gfx_core::handle::Producer;
 
         let gl = &self.share.context;
         let fence = unsafe {
@@ -986,7 +986,7 @@ impl c::Device for Device {
     }
 
     fn cleanup(&mut self) {
-        use core::handle::Producer;
+        use gfx_core::handle::Producer;
         self.frame_handles.clear();
         self.share.handles.borrow_mut().clean_with(&mut &self.share.context,
             |gl, buffer| {

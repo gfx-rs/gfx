@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use std::iter::repeat;
-use core::{self as c, shade as s};
+use gfx_core::{self as c, shade as s};
 use info::PrivateCaps;
 use gl;
 
@@ -92,11 +92,11 @@ enum StorageType {
 
 impl StorageType {
     fn new(storage: gl::types::GLenum) -> StorageType {
-        use core::shade::{BaseType, ContainerType, TextureType, SamplerType, MatrixFormat};
-        use core::shade::IsArray::*;
-        use core::shade::IsRect::*;
-        use core::shade::IsComparison::*;
-        use core::shade::IsMultiSample::*;
+        use gfx_core::shade::{BaseType, ContainerType, TextureType, SamplerType, MatrixFormat};
+        use gfx_core::shade::IsArray::*;
+        use gfx_core::shade::IsRect::*;
+        use gfx_core::shade::IsComparison::*;
+        use gfx_core::shade::IsMultiSample::*;
         use self::StorageType::*;
         match storage {
             gl::FLOAT                        => Var(BaseType::F32,  ContainerType::Single),
@@ -529,7 +529,7 @@ pub fn create_program(gl: &gl::Gl, caps: &c::Capabilities, private: &PrivateCaps
 }
 
 pub fn bind_uniform(gl: &gl::Gl, loc: gl::types::GLint, uniform: s::UniformValue) {
-    use core::shade::UniformValue;
+    use gfx_core::shade::UniformValue;
     match uniform {
         UniformValue::I32(val) => unsafe { gl.Uniform1i(loc, val) },
         UniformValue::U32(val) => unsafe { gl.Uniform1ui(loc, val) },
