@@ -15,15 +15,15 @@
 #![allow(missing_docs)]
 
 use gl;
-use core::{self as c, command, state as s};
-use core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
-use core::texture::TextureCopyRegion;
+use gfx_core::{self as c, command, state as s};
+use gfx_core::target::{ColorValue, Depth, Mirror, Rect, Stencil};
+use gfx_core::texture::TextureCopyRegion;
 use {Buffer, BufferElement, Program, FrameBuffer, Texture,
      NewTexture, Resources, PipelineState, ResourceView, TargetView};
 
 
 fn primitive_to_gl(primitive: c::Primitive) -> gl::types::GLenum {
-    use core::Primitive::*;
+    use gfx_core::Primitive::*;
     match primitive {
         PointList => gl::POINTS,
         LineList => gl::LINES,
