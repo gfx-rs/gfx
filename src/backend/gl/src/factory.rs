@@ -16,11 +16,11 @@ use std::rc::Rc;
 use std::{slice, ptr};
 
 use {gl, tex};
-use core::{self as d, factory as f, texture as t, buffer, mapping};
-use core::memory::{Access, Bind, Typed, Usage};
-use core::format::{ChannelType, Format};
-use core::handle::{self, Producer};
-use core::target::{Layer, Level};
+use gfx_core::{self as d, factory as f, texture as t, buffer, mapping};
+use gfx_core::memory::{Access, Bind, Typed, Usage};
+use gfx_core::format::{ChannelType, Format};
+use gfx_core::handle::{self, Producer};
+use gfx_core::target::{Layer, Level};
 
 use command::CommandBuffer;
 use {Resources as R, Share, OutputMerger};
@@ -354,7 +354,7 @@ impl f::Factory<R> for Factory {
 
     fn create_pipeline_state_raw(&mut self, program: &handle::Program<R>, desc: &d::pso::Descriptor)
                                  -> Result<handle::RawPipelineState<R>, d::pso::CreationError> {
-        use core::state as s;
+        use gfx_core::state as s;
         let caps = &self.share.capabilities;
         match desc.primitive {
             d::Primitive::PatchList(num) if num == 0 || (num as usize) > caps.max_patch_size =>
@@ -416,7 +416,7 @@ impl f::Factory<R> for Factory {
 
     fn create_texture_raw(&mut self, desc: t::Info, hint: Option<ChannelType>, data_opt: Option<(&[&[u8]], t::Mipmap)>)
                           -> Result<handle::RawTexture<R>, t::CreationError> {
-        use core::texture::CreationError;
+        use gfx_core::texture::CreationError;
         let caps = &self.share.private_caps;
         if desc.levels == 0 {
             return Err(CreationError::Size(0))

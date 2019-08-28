@@ -16,10 +16,10 @@ use {gl, FrameBuffer, Surface, Texture, NewTexture, Buffer, Sampler};
 use gl::types::{GLenum, GLuint, GLint, GLfloat, GLsizei, GLvoid};
 use state;
 use info::PrivateCaps;
-use core::memory::Bind;
-use core::factory::ResourceViewError;
-use core::format::{Format as NewFormat, ChannelType};
-use core::texture as t;
+use gfx_core::memory::Bind;
+use gfx_core::factory::ResourceViewError;
+use gfx_core::format::{Format as NewFormat, ChannelType};
+use gfx_core::texture as t;
 
 
 fn cube_face_to_gl(face: t::CubeFace) -> GLenum {
@@ -55,8 +55,8 @@ fn kind_face_to_gl(kind: t::Kind, face: Option<t::CubeFace>) -> GLenum {
 }
 
 fn format_to_glpixel(format: NewFormat) -> GLenum {
-    use core::format::SurfaceType as S;
-    use core::format::ChannelType as C;
+    use gfx_core::format::SurfaceType as S;
+    use gfx_core::format::ChannelType as C;
     let (r, rg, rgb, rgba, bgra) = match format.1 {
         C::Int | C::Uint => (gl::RED_INTEGER, gl::RG_INTEGER, gl::RGB_INTEGER, gl::RGBA_INTEGER, gl::BGRA_INTEGER),
         _ => (gl::RED, gl::RG, gl::RGB, gl::RGBA, gl::BGRA),
@@ -83,8 +83,8 @@ fn format_to_glpixel(format: NewFormat) -> GLenum {
 }
 
 fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
-    use core::format::SurfaceType as S;
-    use core::format::ChannelType as C;
+    use gfx_core::format::SurfaceType as S;
+    use gfx_core::format::ChannelType as C;
     let (fm8, fm16, fm32) = match format.1 {
         C::Int | C::Inorm =>
             (gl::BYTE, gl::SHORT, gl::INT),
@@ -116,8 +116,8 @@ fn format_to_gltype(format: NewFormat) -> Result<GLenum, ()> {
 }
 
 pub fn format_to_glfull(format: NewFormat) -> Result<GLenum, ()> {
-    use core::format::SurfaceType as S;
-    use core::format::ChannelType as C;
+    use gfx_core::format::SurfaceType as S;
+    use gfx_core::format::ChannelType as C;
     let cty = format.1;
     Ok(match format.0 {
         //S::R3_G3_B2 => gl::R3_G3_B2,
@@ -1200,9 +1200,9 @@ trait CompressionAware {
     fn is_compressed(&self) -> bool;
 }
 
-impl CompressionAware for core::format::SurfaceType {
+impl CompressionAware for gfx_core::format::SurfaceType {
     fn is_compressed(&self) -> bool {
-        use core::format::SurfaceType as S;
+        use gfx_core::format::SurfaceType as S;
         match *self {
             S::BC3_R8_G8_B8_A8 | S::BC1_R8_G8_B8 => true,
             S::R4_G4
