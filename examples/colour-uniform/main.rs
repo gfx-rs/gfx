@@ -565,7 +565,8 @@ fn create_backend(
     event_loop: &winit::event_loop::EventLoop<()>,
 ) -> (BackendState<back::Backend>, back::Instance) {
     let window = wb.build(event_loop).unwrap();
-    let instance = back::Instance::create("gfx-rs colour-uniform", 1);
+    let instance = back::Instance::create("gfx-rs colour-uniform", 1)
+        .expect("Failed to create an instance!");
     let surface = instance.create_surface(&window);
     let mut adapters = instance.enumerate_adapters();
     (

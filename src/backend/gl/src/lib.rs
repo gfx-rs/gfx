@@ -727,15 +727,18 @@ impl hal::Instance for Instance {
 impl Instance {
     /// TODO: Update portability to make this more flexible
     #[cfg(target_os = "linux")]
-    pub fn create(_: &str, _: u32) -> Instance {
+    pub fn create(_: &str, _: u32) -> Result<Instance, hal::UnsupportedBackend> {
         use glutin::platform::unix::HeadlessContextExt;
         let size = glutin::dpi::PhysicalSize::from((800, 600));
         let builder = glutin::ContextBuilder::new().with_hardware_acceleration(Some(false));
         let context: glutin::Context<glutin::NotCurrent> =
             HeadlessContextExt::build_osmesa(builder, size)
-                .expect("failed to create osmesa context");
+            .map_err(|e| {
+                info!("Headless context error {:?}", e);
+                hal::UnsupportedBackend
+            })?;
         let context = unsafe { context.make_current() }.expect("failed to make context current");
         let headless = Headless::from_context(context);
-        Instance::Headless(headless)
+        Ok(Instance::Headless(headless))
     }
 }

@@ -117,7 +117,8 @@ fn main() {
     #[cfg(not(feature = "gl"))]
     let (_window, _instance, mut adapters, surface) = {
         let window = wb.build(&event_loop).unwrap();
-        let instance = back::Instance::create("gfx-rs quad", 1);
+        let instance = back::Instance::create("gfx-rs quad", 1)
+            .expect("Failed to create an instance!");
         let surface = instance.create_surface(&window);
         let adapters = instance.enumerate_adapters();
         (window, instance, adapters, surface)

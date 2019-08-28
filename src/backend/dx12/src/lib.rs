@@ -702,7 +702,7 @@ unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
 impl Instance {
-    pub fn create(_: &str, _: u32) -> Instance {
+    pub fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
         #[cfg(debug_assertions)]
         {
             // Enable debug layer
@@ -754,12 +754,13 @@ impl Instance {
             )
         };
 
-        if !winerror::SUCCEEDED(hr) {
-            error!("Failed on dxgi factory creation: {:?}", hr);
-        }
-
-        Instance {
-            factory: dxgi_factory,
+        if winerror::SUCCEEDED(hr) {
+            Ok(Instance {
+                factory: dxgi_factory,
+            })
+        } else {
+            info!("Failed on dxgi factory creation: {:?}", hr);
+            Err(hal::UnsupportedBackend)
         }
     }
 }

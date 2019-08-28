@@ -453,6 +453,11 @@ pub trait Instance: Any + Send + Sync {
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Self::Backend>>;
 }
 
+/// Error creating an instance of a backend on the platform that
+/// doesn't support this backend.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnsupportedBackend;
+
 /// A strongly-typed index to a particular `MemoryType`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

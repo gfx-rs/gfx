@@ -152,25 +152,25 @@ fn main() {
     #[cfg(feature = "vulkan")]
     {
         println!("Benching Vulkan:");
-        let instance = gfx_backend_vulkan::Instance::create("warden", 1);
+        let instance = gfx_backend_vulkan::Instance::create("warden", 1).unwrap();
         harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "dx12")]
     {
         println!("Benching DX12:");
-        let instance = gfx_backend_dx12::Instance::create("warden", 1);
+        let instance = gfx_backend_dx12::Instance::create("warden", 1).unwrap();
         harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "dx11")]
     {
         println!("Benching DX11:");
-        let instance = gfx_backend_dx11::Instance::create("warden", 1);
+        let instance = gfx_backend_dx11::Instance::create("warden", 1).unwrap();
         harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "metal")]
     {
         println!("Benching Metal:");
-        let instance = gfx_backend_metal::Instance::create("warden", 1);
+        let instance = gfx_backend_metal::Instance::create("warden", 1).unwrap();
         harness.run(
             instance,
             Disabilities {
@@ -187,7 +187,7 @@ fn main() {
             .with_gl_profile(glutin::GlProfile::Core)
             .build_windowed(glutin::window::WindowBuilder::new(), &events_loop)
             .unwrap();
-        let (context, window) = unsafe {
+        let (context, _window) = unsafe {
             windowed_context
                 .make_current()
                 .expect("Unable to make window current")

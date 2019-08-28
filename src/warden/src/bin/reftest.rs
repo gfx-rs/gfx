@@ -188,25 +188,25 @@ fn main() {
     #[cfg(feature = "vulkan")]
     {
         println!("Testing Vulkan:");
-        let instance = gfx_backend_vulkan::Instance::create("warden", 1);
+        let instance = gfx_backend_vulkan::Instance::create("warden", 1).unwrap();
         num_failures += harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "dx12")]
     {
         println!("Testing DX12:");
-        let instance = gfx_backend_dx12::Instance::create("warden", 1);
+        let instance = gfx_backend_dx12::Instance::create("warden", 1).unwrap();
         num_failures += harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "dx11")]
     {
         println!("Testing DX11:");
-        let instance = gfx_backend_dx11::Instance::create("warden", 1);
+        let instance = gfx_backend_dx11::Instance::create("warden", 1).unwrap();
         num_failures += harness.run(instance, Disabilities::default());
     }
     #[cfg(feature = "metal")]
     {
         println!("Testing Metal:");
-        let instance = gfx_backend_metal::Instance::create("warden", 1);
+        let instance = gfx_backend_metal::Instance::create("warden", 1).unwrap();
         num_failures += harness.run(
             instance,
             Disabilities {
