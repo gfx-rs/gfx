@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use core::{MAX_COLOR_TARGETS, ColorSlot};
-use core::state as s;
-use core::state::{BlendValue, Comparison, CullFace, Equation,
+use gfx_core::{MAX_COLOR_TARGETS, ColorSlot};
+use gfx_core::state as s;
+use gfx_core::state::{BlendValue, Comparison, CullFace, Equation,
                   Offset, RasterMethod, StencilOp, FrontFace};
-use core::target::{ColorValue, Rect, Stencil};
+use gfx_core::target::{ColorValue, Rect, Stencil};
 use gl;
 
 
@@ -221,7 +221,7 @@ pub fn set_output_masks(gl: &gl::Gl, color: bool, depth: bool, stencil: bool) {
 }
 
 pub fn bind_blend(gl: &gl::Gl, color: s::Color) {
-    use core::state::ColorMask as Cm;
+    use gfx_core::state::ColorMask as Cm;
     match color.blend {
         Some(b) => unsafe {
             gl.Enable(gl::BLEND);
@@ -249,7 +249,7 @@ pub fn bind_blend(gl: &gl::Gl, color: s::Color) {
 }
 
 pub fn bind_blend_slot(gl: &gl::Gl, slot: ColorSlot, color: s::Color) {
-    use core::state::ColorMask as Cm;
+    use gfx_core::state::ColorMask as Cm;
     let buf = slot as gl::types::GLuint;
     match color.blend {
         Some(b) => unsafe {
