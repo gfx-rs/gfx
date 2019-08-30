@@ -317,12 +317,22 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     vk::FALSE
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct Unsupported;
+
 impl Instance {
     pub fn create(name: &str, version: u32) -> Self {
+        Self::try_create(name, version).unwrap()
+    }
+
+    pub fn try_create(name: &str, version: u32) -> Result<Self, Unsupported> {
         // TODO: return errors instead of panic
         let entry = VK_ENTRY
             .as_ref()
-            .expect("Unable to load Vulkan entry points");
+            .map_err(|e| {
+                info!("Missing Vulkan entry points: {:?}", e);
+                Unsupported
+            })?;
 
         let app_name = CString::new(name).unwrap();
         let app_info = vk::ApplicationInfo {
@@ -401,7 +411,10 @@ impl Instance {
             };
 
             unsafe { entry.create_instance(&create_info, None) }
-                .expect("Unable to create Vulkan instance")
+                .map_err(|e| {
+                    warn!("Unable to create Vulkan instance: {:?}", e);
+                    Unsupported
+                })?
         };
 
         #[cfg(debug_assertions)]
@@ -429,10 +442,10 @@ impl Instance {
         #[cfg(not(debug_assertions))]
         let debug_messenger = None;
 
-        Instance {
+        Ok(Instance {
             raw: Arc::new(RawInstance(instance, debug_messenger)),
             extensions,
-        }
+        })
     }
 }
 

@@ -1,6 +1,9 @@
 # Change Log
 
-### backend-backend-metal-0.3.1 (21-08-2019)
+### backend-vulkan-0.3.2, backend-dx12-0.3.2 (30-08-2019)
+  - add `Instance::try_create` methods
+
+### backend-metal-0.3.1 (21-08-2019)
   - fix memory leaks in render pass and labels creation
 
 ## hal-0.3.0 (08-08-2019)
