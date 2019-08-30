@@ -247,10 +247,10 @@ impl hal::Instance for Instance {
 }
 
 impl Instance {
-    pub fn create(_: &str, _: u32) -> Self {
-        Instance {
+    pub fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+        Ok(Instance {
             experiments: Experiments::default(),
-        }
+        })
     }
 
     #[cfg(feature = "winit")]

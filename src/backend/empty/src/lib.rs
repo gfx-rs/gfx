@@ -947,8 +947,8 @@ pub struct Instance;
 
 impl Instance {
     /// Create instance.
-    pub fn create(_name: &str, _version: u32) -> Self {
-        Instance
+    pub fn create(_name: &str, _version: u32) -> Result<Self, hal::UnsupportedBackend> {
+        Ok(Instance)
     }
 
     #[cfg(feature = "winit")]

@@ -123,16 +123,21 @@ unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
 impl Instance {
-    pub fn create(_: &str, _: u32) -> Self {
+    pub fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
         // TODO: get the latest factory we can find
 
-        let (factory, dxgi_version) = dxgi::get_dxgi_factory().unwrap();
-
-        info!("DXGI version: {:?}", dxgi_version);
-
-        Instance {
-            factory,
-            dxgi_version,
+        match dxgi::get_dxgi_factory() {
+            Ok((factory, dxgi_version)) => {
+                info!("DXGI version: {:?}", dxgi_version);
+                Ok(Instance {
+                    factory,
+                    dxgi_version,
+                })
+            }
+            Err(hr) => {
+                info!("Failed on factory creation: {:?}", hr);
+                Err(hal::UnsupportedBackend)
+            }
         }
     }
 

@@ -158,7 +158,7 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn create(_name: &str, version: u32) -> Self {
+    pub fn create(_name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
         unsafe {
             let glrc = WGL_ENTRY.wgl.CreateContextAttribsARB(
                 WGL_ENTRY.hdc as *const _,
@@ -168,12 +168,12 @@ impl Instance {
 
             wglMakeCurrent(WGL_ENTRY.hdc as *mut _, glrc);
 
-            Instance {
+            Ok(Instance {
                 ctxt: DeviceContext {
                     ctxt: Context { glrc },
                     hdc: WGL_ENTRY.hdc,
                 },
-            }
+            })
         }
     }
 
