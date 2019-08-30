@@ -254,6 +254,26 @@ pub enum AcquireMode {
     Oldest,
 }
 
+impl Default for AcquireMode {
+    fn default() -> Self {
+        AcquireMode::Oldest
+    }
+}
+
+/// Mode of filling the gap frame on swapchain resize.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ResizeFill {
+    Empty,
+    Clear(hal::pso::ColorValue),
+    Blit,
+}
+
+impl Default for ResizeFill {
+    fn default() -> Self {
+        ResizeFill::Clear([0.0; 4])
+    }
+}
+
 #[derive(Debug)]
 pub struct Swapchain {
     frames: Arc<Vec<Frame>>,
@@ -261,6 +281,7 @@ pub struct Swapchain {
     extent: w::Extent2D,
     last_frame: usize,
     pub acquire_mode: AcquireMode,
+    pub resize_fill: ResizeFill,
 }
 
 impl Drop for Swapchain {
@@ -519,13 +540,33 @@ impl Device {
                         match old_swapchain {
                             Some(ref old) => {
                                 let cmd_buffer = cmd_queue.spawn_temp();
-                                self.shared.service_pipes.simple_blit(
-                                    &self.shared.device,
-                                    cmd_buffer,
-                                    &old.frames[0].texture,
-                                    texture,
-                                    &self.shared.private_caps,
-                                );
+                                match old.resize_fill {
+                                    ResizeFill::Empty => {}
+                                    ResizeFill::Clear(value) => {
+                                        let descriptor = metal::RenderPassDescriptor::new().to_owned();
+                                        let attachment = descriptor.color_attachments().object_at(0).unwrap();
+                                        attachment.set_texture(Some(texture));
+                                        attachment.set_store_action(metal::MTLStoreAction::Store);
+                                        attachment.set_load_action(metal::MTLLoadAction::Clear);
+                                        attachment.set_clear_color(metal::MTLClearColor::new(
+                                            value[0] as _,
+                                            value[1] as _,
+                                            value[2] as _,
+                                            value[3] as _,
+                                        ));
+                                        let encoder = cmd_buffer.new_render_command_encoder(&descriptor);
+                                        encoder.end_encoding();
+                                    }
+                                    ResizeFill::Blit => {
+                                        self.shared.service_pipes.simple_blit(
+                                            &self.shared.device,
+                                            cmd_buffer,
+                                            &old.frames[0].texture,
+                                            texture,
+                                            &self.shared.private_caps,
+                                        );
+                                    }
+                                }
                                 cmd_buffer.present_drawable(drawable);
                                 cmd_buffer.set_label("build_swapchain");
                                 cmd_buffer.commit();
@@ -573,13 +614,17 @@ impl Device {
                 mtl_type: metal::MTLTextureType::D2,
             })
             .collect();
+        let (acquire_mode, resize_fill) = old_swapchain
+            .map(|ref old| (old.acquire_mode.clone(), old.resize_fill.clone()))
+            .unwrap_or_default();
 
         let swapchain = Swapchain {
             frames: Arc::new(frames),
             surface: surface.inner.clone(),
             extent: config.extent,
             last_frame: 0,
-            acquire_mode: AcquireMode::Oldest,
+            acquire_mode,
+            resize_fill,
         };
 
         (swapchain, images)
