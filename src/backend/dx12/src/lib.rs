@@ -685,8 +685,15 @@ impl Drop for Instance {
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct Unsupported;
+
 impl Instance {
-    pub fn create(_: &str, _: u32) -> Instance {
+    pub fn create(name: &str, version: u32) -> Self {
+        Self::try_create(name, version).unwrap()
+    }
+
+    pub fn try_create(_: &str, _: u32) -> Result<Self, Unsupported> {
         #[cfg(debug_assertions)]
         {
             // Enable debug layer
@@ -738,12 +745,13 @@ impl Instance {
             )
         };
 
-        if !winerror::SUCCEEDED(hr) {
-            error!("Failed on dxgi factory creation: {:?}", hr);
-        }
-
-        Instance {
-            factory: dxgi_factory,
+        if winerror::SUCCEEDED(hr) {
+            Ok(Instance {
+                factory: dxgi_factory,
+            })
+        } else {
+            info!("Failed on dxgi factory creation: {:?}", hr);
+            Err(Unsupported)
         }
     }
 }
