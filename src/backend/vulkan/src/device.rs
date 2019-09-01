@@ -61,7 +61,7 @@ impl GraphicsPipelineInfoBuf {
             vertex_bindings: Vec::new(),
             vertex_attributes: Vec::new(),
             blend_states: Vec::new(),
-            ..unsafe{ mem::zeroed() }
+            ..unsafe { mem::zeroed() }
         });
         buf.as_mut().initialize_inner(device, desc);
         buf
@@ -74,26 +74,29 @@ impl GraphicsPipelineInfoBuf {
     {
         let mut bufs: Pin<Box<[_]>> = descs
             .map(|desc| {
-                (desc, Self {
-                    dynamic_states: SmallVec::new(),
-                    c_strings: SmallVec::new(),
-                    stages: SmallVec::new(),
-                    specializations: SmallVec::new(),
-                    specialization_entries: SmallVec::new(),
-                    vertex_bindings: Vec::new(),
-                    vertex_attributes: Vec::new(),
-                    blend_states: Vec::new(),
-                    ..unsafe { mem::zeroed() }
-                })
+                (
+                    desc,
+                    Self {
+                        dynamic_states: SmallVec::new(),
+                        c_strings: SmallVec::new(),
+                        stages: SmallVec::new(),
+                        specializations: SmallVec::new(),
+                        specialization_entries: SmallVec::new(),
+                        vertex_bindings: Vec::new(),
+                        vertex_attributes: Vec::new(),
+                        blend_states: Vec::new(),
+                        ..unsafe { mem::zeroed() }
+                    },
+                )
             })
             .collect::<Box<[_]>>()
             .into();
-        
+
         for (desc, buf) in unsafe { bufs.as_mut().get_unchecked_mut() } {
             let desc: &I::Item = desc;
             unsafe { Pin::new_unchecked(buf) }.initialize_inner(device, desc.borrow());
         }
-        
+
         bufs
     }
 
@@ -115,7 +118,7 @@ impl GraphicsPipelineInfoBuf {
                 .collect(),
         );
         let map_entries = self.specialization_entries.last().unwrap();
-            
+
         self.specializations.push(vk::SpecializationInfo {
             map_entry_count: map_entries.len() as _,
             p_map_entries: map_entries.as_ptr(),
@@ -174,14 +177,16 @@ impl GraphicsPipelineInfoBuf {
                 },
             }
         }).collect();
-        this.vertex_attributes = desc.attributes.iter().map(|attr| {
-            vk::VertexInputAttributeDescription {
+        this.vertex_attributes = desc
+            .attributes
+            .iter()
+            .map(|attr| vk::VertexInputAttributeDescription {
                 location: attr.location as u32,
                 binding: attr.binding as u32,
                 format: conv::map_format(attr.element.format),
                 offset: attr.element.offset as u32,
-            }
-        }).collect();
+            })
+            .collect();
 
         this.vertex_input_state = vk::PipelineVertexInputStateCreateInfo {
             s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -199,11 +204,11 @@ impl GraphicsPipelineInfoBuf {
             flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
             topology: conv::map_topology(desc.input_assembler.primitive),
             primitive_restart_enable: match desc.input_assembler.primitive_restart {
-                pso::PrimitiveRestart::U16|pso::PrimitiveRestart::U32 => vk::TRUE,
-                pso::PrimitiveRestart::Disabled => vk::FALSE
-            }
+                pso::PrimitiveRestart::U16 | pso::PrimitiveRestart::U32 => vk::TRUE,
+                pso::PrimitiveRestart::Disabled => vk::FALSE,
+            },
         };
-        
+
         let depth_bias = match desc.rasterizer.depth_bias {
             Some(pso::State::Static(db)) => db,
             Some(pso::State::Dynamic) => {
@@ -215,13 +220,16 @@ impl GraphicsPipelineInfoBuf {
 
         let (polygon_mode, line_width) = match desc.rasterizer.polygon_mode {
             pso::PolygonMode::Point => (vk::PolygonMode::POINT, 1.0),
-            pso::PolygonMode::Line(width) => (vk::PolygonMode::LINE, match width {
-                pso::State::Static(w) => w,
-                pso::State::Dynamic => {
-                    this.dynamic_states.push(vk::DynamicState::LINE_WIDTH);
-                    1.0
-                }
-            }),
+            pso::PolygonMode::Line(width) => (
+                vk::PolygonMode::LINE,
+                match width {
+                    pso::State::Static(w) => w,
+                    pso::State::Dynamic => {
+                        this.dynamic_states.push(vk::DynamicState::LINE_WIDTH);
+                        1.0
+                    }
+                },
+            ),
             pso::PolygonMode::Fill => (vk::PolygonMode::FILL, 1.0),
         };
 
@@ -239,10 +247,9 @@ impl GraphicsPipelineInfoBuf {
             } else {
                 vk::FALSE
             },
-            rasterizer_discard_enable: if
-                desc.shaders.fragment.is_none() &&
-                desc.depth_stencil.depth.is_none() &&
-                desc.depth_stencil.stencil.is_none()
+            rasterizer_discard_enable: if desc.shaders.fragment.is_none()
+                && desc.depth_stencil.depth.is_none()
+                && desc.depth_stencil.stencil.is_none()
             {
                 vk::TRUE
             } else {
@@ -315,8 +322,7 @@ impl GraphicsPipelineInfoBuf {
                     p_next: ptr::null(),
                     flags: vk::PipelineMultisampleStateCreateFlags::empty(),
                     rasterization_samples: vk::SampleCountFlags::from_raw(
-                        (ms.rasterization_samples as u32)
-                            & vk::SampleCountFlags::all().as_raw(),
+                        (ms.rasterization_samples as u32) & vk::SampleCountFlags::all().as_raw(),
                     ),
                     sample_shading_enable: ms.sample_shading.is_some() as _,
                     min_sample_shading: ms.sample_shading.unwrap_or(0.0),
@@ -339,13 +345,10 @@ impl GraphicsPipelineInfoBuf {
         };
 
         let depth_stencil = desc.depth_stencil;
-        let (depth_test_enable, depth_write_enable, depth_compare_op) =
-            match depth_stencil.depth {
-                Some(ref depth) => {
-                    (vk::TRUE, depth.write as _, conv::map_comparison(depth.fun))
-                }
-                None => (vk::FALSE, vk::FALSE, vk::CompareOp::NEVER),
-            };
+        let (depth_test_enable, depth_write_enable, depth_compare_op) = match depth_stencil.depth {
+            Some(ref depth) => (vk::TRUE, depth.write as _, conv::map_comparison(depth.fun)),
+            None => (vk::FALSE, vk::FALSE, vk::CompareOp::NEVER),
+        };
         let (stencil_test_enable, front, back) = match depth_stencil.stencil {
             Some(ref stencil) => {
                 let mut front = conv::map_stencil_side(&stencil.faces.front);
@@ -356,7 +359,8 @@ impl GraphicsPipelineInfoBuf {
                         back.compare_mask = sides.back;
                     }
                     pso::State::Dynamic => {
-                        this.dynamic_states.push(vk::DynamicState::STENCIL_COMPARE_MASK);
+                        this.dynamic_states
+                            .push(vk::DynamicState::STENCIL_COMPARE_MASK);
                     }
                 }
                 match stencil.write_masks {
@@ -365,7 +369,8 @@ impl GraphicsPipelineInfoBuf {
                         back.write_mask = sides.back;
                     }
                     pso::State::Dynamic => {
-                        this.dynamic_states.push(vk::DynamicState::STENCIL_WRITE_MASK);
+                        this.dynamic_states
+                            .push(vk::DynamicState::STENCIL_WRITE_MASK);
                     }
                 }
                 match stencil.reference_values {
@@ -374,21 +379,21 @@ impl GraphicsPipelineInfoBuf {
                         back.reference = sides.back;
                     }
                     pso::State::Dynamic => {
-                        this.dynamic_states.push(vk::DynamicState::STENCIL_REFERENCE);
+                        this.dynamic_states
+                            .push(vk::DynamicState::STENCIL_REFERENCE);
                     }
                 }
                 (vk::TRUE, front, back)
             }
             None => unsafe { mem::zeroed() },
         };
-        let (min_depth_bounds, max_depth_bounds) =
-            match desc.baked_states.depth_bounds {
-                Some(ref range) => (range.start, range.end),
-                None => {
-                    this.dynamic_states.push(vk::DynamicState::DEPTH_BOUNDS);
-                    (0.0, 1.0)
-                }
-            };
+        let (min_depth_bounds, max_depth_bounds) = match desc.baked_states.depth_bounds {
+            Some(ref range) => (range.start, range.end),
+            None => {
+                this.dynamic_states.push(vk::DynamicState::DEPTH_BOUNDS);
+                (0.0, 1.0)
+            }
+        };
 
         this.depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo {
             s_type: vk::StructureType::PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
@@ -410,19 +415,14 @@ impl GraphicsPipelineInfoBuf {
             .targets
             .iter()
             .map(|color_desc| {
-                let color_write_mask = vk::ColorComponentFlags::from_raw(color_desc.mask.bits() as _);
+                let color_write_mask =
+                    vk::ColorComponentFlags::from_raw(color_desc.mask.bits() as _);
                 match color_desc.blend {
                     Some(ref bs) => {
-                        let (
-                            color_blend_op,
-                            src_color_blend_factor,
-                            dst_color_blend_factor,
-                        ) = conv::map_blend_op(bs.color);
-                        let (
-                            alpha_blend_op,
-                            src_alpha_blend_factor,
-                            dst_alpha_blend_factor,
-                        ) = conv::map_blend_op(bs.alpha);
+                        let (color_blend_op, src_color_blend_factor, dst_color_blend_factor) =
+                            conv::map_blend_op(bs.color);
+                        let (alpha_blend_op, src_alpha_blend_factor, dst_alpha_blend_factor) =
+                            conv::map_blend_op(bs.alpha);
                         vk::PipelineColorBlendAttachmentState {
                             color_write_mask,
                             blend_enable: vk::TRUE,
@@ -441,7 +441,7 @@ impl GraphicsPipelineInfoBuf {
                 }
             })
             .collect();
-        
+
         this.color_blend_state = vk::PipelineColorBlendStateCreateInfo {
             s_type: vk::StructureType::PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
             p_next: ptr::null(),
@@ -488,9 +488,7 @@ impl d::Device<B> for Device {
             Ok(memory) => Ok(n::Memory { raw: memory }),
             Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => Err(d::AllocationError::TooManyObjects),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -846,7 +844,7 @@ impl d::Device<B> for Device {
                 p_vertex_input_state: &buf.vertex_input_state,
                 p_input_assembly_state: &buf.input_assembly_state,
                 p_rasterization_state: &buf.rasterization_state,
-                p_tessellation_state:  match buf.tessellation_state.as_ref() {
+                p_tessellation_state: match buf.tessellation_state.as_ref() {
                     Some(t) => t as _,
                     None => ptr::null(),
                 },
@@ -877,7 +875,7 @@ impl d::Device<B> for Device {
                 vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
                 vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
                 _ => unreachable!(),
-            }
+            },
         }
     }
 
@@ -1010,7 +1008,7 @@ impl d::Device<B> for Device {
                 size: (c.range.end - c.range.start) as _,
             })
             .collect::<SmallVec<[_; 4]>>();
-        
+
         let specialization = vk::SpecializationInfo {
             map_entry_count: entries.len() as _,
             p_map_entries: entries.as_ptr(),
@@ -1042,10 +1040,16 @@ impl d::Device<B> for Device {
                     flags |= vk::PipelineCreateFlags::DERIVATIVE;
                 }
             }
-            if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
+            if desc
+                .flags
+                .contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION)
+            {
                 flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
             }
-            if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
+            if desc
+                .flags
+                .contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES)
+            {
                 flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
             }
 
@@ -1069,7 +1073,7 @@ impl d::Device<B> for Device {
                 let pso = pipelines.remove(0);
                 assert!(pso != vk::Pipeline::null());
                 Ok(n::ComputePipeline(pso))
-            },
+            }
             Err((_, error)) => match error {
                 vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
                 vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
@@ -1095,13 +1099,18 @@ impl d::Device<B> for Device {
 
         let mut bufs: Pin<Box<[_]>> = descs
             .into_iter()
-            .map(|desc| (desc, InfoBuf {
-                entries: SmallVec::new(),
-                ..mem::zeroed()
-            }))
+            .map(|desc| {
+                (
+                    desc,
+                    InfoBuf {
+                        entries: SmallVec::new(),
+                        ..mem::zeroed()
+                    },
+                )
+            })
             .collect::<Box<[_]>>()
             .into();
-        
+
         let infos: Vec<_> = bufs
             .as_mut()
             .get_unchecked_mut()
@@ -1122,7 +1131,7 @@ impl d::Device<B> for Device {
                         size: (c.range.end - c.range.start) as _,
                     })
                     .collect::<SmallVec<[_; 4]>>();
-                
+
                 buf.specialization = vk::SpecializationInfo {
                     map_entry_count: buf.entries.len() as _,
                     p_map_entries: buf.entries.as_ptr(),
@@ -1153,10 +1162,16 @@ impl d::Device<B> for Device {
                         flags |= vk::PipelineCreateFlags::DERIVATIVE;
                     }
                 }
-                if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
+                if desc
+                    .flags
+                    .contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION)
+                {
                     flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
                 }
-                if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
+                if desc
+                    .flags
+                    .contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES)
+                {
                     flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
                 }
 
@@ -1276,9 +1291,7 @@ impl d::Device<B> for Device {
         match module {
             Ok(raw) => Ok(n::ShaderModule { raw }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             Err(_) => {
                 Err(d::ShaderError::CompilationFailed(String::new())) // TODO
             }
@@ -1346,9 +1359,7 @@ impl d::Device<B> for Device {
             Ok(sampler) => Ok(n::Sampler(sampler)),
             Err(vk::Result::ERROR_TOO_MANY_OBJECTS) => Err(d::AllocationError::TooManyObjects),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1375,9 +1386,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(raw) => Ok(n::Buffer { raw }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1406,9 +1415,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1435,9 +1442,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(raw) => Ok(n::BufferView { raw }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1489,9 +1494,7 @@ impl d::Device<B> for Device {
                 extent,
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1535,9 +1538,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1577,9 +1578,7 @@ impl d::Device<B> for Device {
                 owner: n::ImageViewOwner::User,
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1623,9 +1622,7 @@ impl d::Device<B> for Device {
                 set_free_vec: Vec::new(),
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1689,9 +1686,7 @@ impl d::Device<B> for Device {
                 bindings,
             }),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1851,9 +1846,7 @@ impl d::Device<B> for Device {
             Ok(ptr) => Ok(ptr as *mut _),
             Err(vk::Result::ERROR_MEMORY_MAP_FAILED) => Err(d::MapError::MappingFailed),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1874,9 +1867,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device)
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device),
             _ => unreachable!(),
         }
     }
@@ -1896,9 +1887,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device)
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device),
             _ => unreachable!(),
         }
     }
@@ -1915,9 +1904,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(semaphore) => Ok(n::Semaphore(semaphore)),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1938,9 +1925,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(fence) => Ok(n::Fence(fence)),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1959,9 +1944,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -1990,9 +1973,7 @@ impl d::Device<B> for Device {
             Err(vk::Result::TIMEOUT) => Ok(false),
             Err(vk::Result::ERROR_DEVICE_LOST) => Err(d::DeviceLost.into()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -2018,9 +1999,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(e) => Ok(n::Event(e)),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -2030,9 +2009,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(b) => Ok(b),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             Err(vk::Result::ERROR_DEVICE_LOST) => Err(d::DeviceLost.into()),
             _ => unreachable!(),
         }
@@ -2043,9 +2020,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -2055,9 +2030,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -2100,9 +2073,7 @@ impl d::Device<B> for Device {
         match result {
             Ok(pool) => Ok(n::QueryPool(pool)),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host.into()),
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(d::OutOfMemory::Device.into())
-            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device.into()),
             _ => unreachable!(),
         }
     }
@@ -2310,13 +2281,11 @@ impl d::Device<B> for Device {
     }
 
     fn wait_idle(&self) -> Result<(), d::OutOfMemory> {
-        match unsafe {
-            self.raw.0.device_wait_idle()
-        } {
+        match unsafe { self.raw.0.device_wait_idle() } {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device),
-            _ => unreachable!()
+            _ => unreachable!(),
         }
     }
 }
