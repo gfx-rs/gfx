@@ -16,12 +16,458 @@ use hal::{
 use std::borrow::Borrow;
 use std::ffi::CString;
 use std::ops::Range;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::{mem, ptr};
 
 use crate::pool::RawCommandPool;
 use crate::{conv, native as n, window as w};
 use crate::{Backend as B, Device};
+
+struct GraphicsPipelineInfoBuf {
+    // 10 is the max amount of dynamic states
+    dynamic_states: SmallVec<[vk::DynamicState; 10]>,
+
+    // 5 is the amount of stages
+    c_strings: SmallVec<[CString; 5]>,
+    stages: SmallVec<[vk::PipelineShaderStageCreateInfo; 5]>,
+    specializations: SmallVec<[vk::SpecializationInfo; 5]>,
+    specialization_entries: SmallVec<[SmallVec<[vk::SpecializationMapEntry; 4]>; 5]>,
+
+    vertex_bindings: Vec<vk::VertexInputBindingDescription>,
+    vertex_attributes: Vec<vk::VertexInputAttributeDescription>,
+    blend_states: Vec<vk::PipelineColorBlendAttachmentState>,
+    sample_mask: [u32; 2],
+    vertex_input_state: vk::PipelineVertexInputStateCreateInfo,
+    input_assembly_state: vk::PipelineInputAssemblyStateCreateInfo,
+    tessellation_state: Option<vk::PipelineTessellationStateCreateInfo>,
+    viewport_state: vk::PipelineViewportStateCreateInfo,
+    rasterization_state: vk::PipelineRasterizationStateCreateInfo,
+    multisample_state: vk::PipelineMultisampleStateCreateInfo,
+    depth_stencil_state: vk::PipelineDepthStencilStateCreateInfo,
+    color_blend_state: vk::PipelineColorBlendStateCreateInfo,
+    pipeline_dynamic_state: vk::PipelineDynamicStateCreateInfo,
+    viewport: vk::Viewport,
+    scissor: vk::Rect2D,
+}
+impl GraphicsPipelineInfoBuf {
+    fn new<'a>(device: &Device, desc: &pso::GraphicsPipelineDesc<'a, B>) -> Pin<Box<Self>> {
+        let mut buf = Box::pin(Self {
+            dynamic_states: SmallVec::new(),
+            c_strings: SmallVec::new(),
+            stages: SmallVec::new(),
+            specializations: SmallVec::new(),
+            specialization_entries: SmallVec::new(),
+            vertex_bindings: Vec::new(),
+            vertex_attributes: Vec::new(),
+            blend_states: Vec::new(),
+            ..unsafe{ mem::zeroed() }
+        });
+        buf.as_mut().initialize_inner(device, desc);
+        buf
+    }
+
+    fn collect_from<'a, I>(device: &Device, descs: I) -> Pin<Box<[(I::Item, Self)]>>
+    where
+        I: Iterator,
+        I::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
+    {
+        let mut bufs: Pin<Box<[_]>> = descs
+            .map(|desc| {
+                (desc, Self {
+                    dynamic_states: SmallVec::new(),
+                    c_strings: SmallVec::new(),
+                    stages: SmallVec::new(),
+                    specializations: SmallVec::new(),
+                    specialization_entries: SmallVec::new(),
+                    vertex_bindings: Vec::new(),
+                    vertex_attributes: Vec::new(),
+                    blend_states: Vec::new(),
+                    ..unsafe { mem::zeroed() }
+                })
+            })
+            .collect::<Box<[_]>>()
+            .into();
+        
+        for (desc, buf) in unsafe { bufs.as_mut().get_unchecked_mut() } {
+            let desc: &I::Item = desc;
+            unsafe { Pin::new_unchecked(buf) }.initialize_inner(device, desc.borrow());
+        }
+        
+        bufs
+    }
+
+    fn add_stage<'a>(&mut self, stage: vk::ShaderStageFlags, source: &pso::EntryPoint<'a, B>) {
+        let string = CString::new(source.entry).unwrap();
+        let p_name = string.as_ptr();
+        self.c_strings.push(string);
+
+        self.specialization_entries.push(
+            source
+                .specialization
+                .constants
+                .iter()
+                .map(|c| vk::SpecializationMapEntry {
+                    constant_id: c.id,
+                    offset: c.range.start as _,
+                    size: (c.range.end - c.range.start) as _,
+                })
+                .collect(),
+        );
+        let map_entries = self.specialization_entries.last().unwrap();
+            
+        self.specializations.push(vk::SpecializationInfo {
+            map_entry_count: map_entries.len() as _,
+            p_map_entries: map_entries.as_ptr(),
+            data_size: source.specialization.data.len() as _,
+            p_data: source.specialization.data.as_ptr() as _,
+        });
+
+        self.stages.push(vk::PipelineShaderStageCreateInfo {
+            s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineShaderStageCreateFlags::empty(),
+            stage,
+            module: source.module.raw,
+            p_name,
+            p_specialization_info: self.specializations.last().unwrap(),
+        })
+    }
+
+    fn initialize_inner<'a>(
+        self: Pin<&mut Self>,
+        device: &Device,
+        desc: &pso::GraphicsPipelineDesc<'a, B>,
+    ) {
+        let mut this = Pin::get_mut(self); // use into_inner when it gets stable
+
+        // Vertex stage
+        // vertex shader is required
+        this.add_stage(vk::ShaderStageFlags::VERTEX, &desc.shaders.vertex);
+        // Pixel stage
+        if let Some(ref entry) = desc.shaders.fragment {
+            this.add_stage(vk::ShaderStageFlags::FRAGMENT, entry);
+        }
+        // Geometry stage
+        if let Some(ref entry) = desc.shaders.geometry {
+            this.add_stage(vk::ShaderStageFlags::GEOMETRY, entry);
+        }
+        // Domain stage
+        if let Some(ref entry) = desc.shaders.domain {
+            this.add_stage(vk::ShaderStageFlags::TESSELLATION_EVALUATION, entry);
+        }
+        // Hull stage
+        if let Some(ref entry) = desc.shaders.hull {
+            this.add_stage(vk::ShaderStageFlags::TESSELLATION_CONTROL, entry);
+        }
+
+        this.vertex_bindings = desc.vertex_buffers.iter().map(|vbuf| {
+            vk::VertexInputBindingDescription {
+                binding: vbuf.binding,
+                stride: vbuf.stride as u32,
+                input_rate: match vbuf.rate {
+                    VertexInputRate::Vertex => vk::VertexInputRate::VERTEX,
+                    VertexInputRate::Instance(divisor) => {
+                        debug_assert_eq!(divisor, 1, "Custom vertex rate divisors not supported in Vulkan backend without extension");
+                        vk::VertexInputRate::INSTANCE
+                    },
+                },
+            }
+        }).collect();
+        this.vertex_attributes = desc.attributes.iter().map(|attr| {
+            vk::VertexInputAttributeDescription {
+                location: attr.location as u32,
+                binding: attr.binding as u32,
+                format: conv::map_format(attr.element.format),
+                offset: attr.element.offset as u32,
+            }
+        }).collect();
+
+        this.vertex_input_state = vk::PipelineVertexInputStateCreateInfo {
+            s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineVertexInputStateCreateFlags::empty(),
+            vertex_binding_description_count: this.vertex_bindings.len() as _,
+            p_vertex_binding_descriptions: this.vertex_bindings.as_ptr(),
+            vertex_attribute_description_count: this.vertex_attributes.len() as _,
+            p_vertex_attribute_descriptions: this.vertex_attributes.as_ptr(),
+        };
+
+        this.input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo {
+            s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
+            topology: conv::map_topology(desc.input_assembler.primitive),
+            primitive_restart_enable: match desc.input_assembler.primitive_restart {
+                pso::PrimitiveRestart::U16|pso::PrimitiveRestart::U32 => vk::TRUE,
+                pso::PrimitiveRestart::Disabled => vk::FALSE
+            }
+        };
+        
+        let depth_bias = match desc.rasterizer.depth_bias {
+            Some(pso::State::Static(db)) => db,
+            Some(pso::State::Dynamic) => {
+                this.dynamic_states.push(vk::DynamicState::DEPTH_BIAS);
+                pso::DepthBias::default()
+            }
+            None => pso::DepthBias::default(),
+        };
+
+        let (polygon_mode, line_width) = match desc.rasterizer.polygon_mode {
+            pso::PolygonMode::Point => (vk::PolygonMode::POINT, 1.0),
+            pso::PolygonMode::Line(width) => (vk::PolygonMode::LINE, match width {
+                pso::State::Static(w) => w,
+                pso::State::Dynamic => {
+                    this.dynamic_states.push(vk::DynamicState::LINE_WIDTH);
+                    1.0
+                }
+            }),
+            pso::PolygonMode::Fill => (vk::PolygonMode::FILL, 1.0),
+        };
+
+        this.rasterization_state = vk::PipelineRasterizationStateCreateInfo {
+            s_type: vk::StructureType::PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineRasterizationStateCreateFlags::empty(),
+            depth_clamp_enable: if desc.rasterizer.depth_clamping {
+                if device.raw.1.contains(Features::DEPTH_CLAMP) {
+                    vk::TRUE
+                } else {
+                    warn!("Depth clamping was requested on a device with disabled feature");
+                    vk::FALSE
+                }
+            } else {
+                vk::FALSE
+            },
+            rasterizer_discard_enable: if
+                desc.shaders.fragment.is_none() &&
+                desc.depth_stencil.depth.is_none() &&
+                desc.depth_stencil.stencil.is_none()
+            {
+                vk::TRUE
+            } else {
+                vk::FALSE
+            },
+            polygon_mode,
+            cull_mode: conv::map_cull_face(desc.rasterizer.cull_face),
+            front_face: conv::map_front_face(desc.rasterizer.front_face),
+            depth_bias_enable: if desc.rasterizer.depth_bias.is_some() {
+                vk::TRUE
+            } else {
+                vk::FALSE
+            },
+            depth_bias_constant_factor: depth_bias.const_factor,
+            depth_bias_clamp: depth_bias.clamp,
+            depth_bias_slope_factor: depth_bias.slope_factor,
+            line_width,
+        };
+
+        use hal::Primitive::PatchList;
+        this.tessellation_state = {
+            if let PatchList(patch_control_points) = desc.input_assembler.primitive {
+                Some(vk::PipelineTessellationStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineTessellationStateCreateFlags::empty(),
+                    patch_control_points: patch_control_points as _,
+                })
+            } else {
+                None
+            }
+        };
+
+        this.viewport_state = vk::PipelineViewportStateCreateInfo {
+            s_type: vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineViewportStateCreateFlags::empty(),
+            scissor_count: 1, // TODO
+            p_scissors: match desc.baked_states.scissor {
+                Some(ref rect) => {
+                    this.scissor = conv::map_rect(rect);
+                    &this.scissor
+                }
+                None => {
+                    this.dynamic_states.push(vk::DynamicState::SCISSOR);
+                    ptr::null()
+                }
+            },
+            viewport_count: 1, // TODO
+            p_viewports: match desc.baked_states.viewport {
+                Some(ref vp) => {
+                    this.viewport = conv::map_viewport(vp);
+                    &this.viewport
+                }
+                None => {
+                    this.dynamic_states.push(vk::DynamicState::VIEWPORT);
+                    ptr::null()
+                }
+            },
+        };
+
+        this.multisample_state = match desc.multisampling {
+            Some(ref ms) => {
+                this.sample_mask = [
+                    (ms.sample_mask & 0xFFFFFFFF) as u32,
+                    ((ms.sample_mask >> 32) & 0xFFFFFFFF) as u32,
+                ];
+                vk::PipelineMultisampleStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineMultisampleStateCreateFlags::empty(),
+                    rasterization_samples: vk::SampleCountFlags::from_raw(
+                        (ms.rasterization_samples as u32)
+                            & vk::SampleCountFlags::all().as_raw(),
+                    ),
+                    sample_shading_enable: ms.sample_shading.is_some() as _,
+                    min_sample_shading: ms.sample_shading.unwrap_or(0.0),
+                    p_sample_mask: &this.sample_mask as _,
+                    alpha_to_coverage_enable: ms.alpha_coverage as _,
+                    alpha_to_one_enable: ms.alpha_to_one as _,
+                }
+            }
+            None => vk::PipelineMultisampleStateCreateInfo {
+                s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
+                p_next: ptr::null(),
+                flags: vk::PipelineMultisampleStateCreateFlags::empty(),
+                rasterization_samples: vk::SampleCountFlags::TYPE_1,
+                sample_shading_enable: vk::FALSE,
+                min_sample_shading: 0.0,
+                p_sample_mask: ptr::null(),
+                alpha_to_coverage_enable: vk::FALSE,
+                alpha_to_one_enable: vk::FALSE,
+            },
+        };
+
+        let depth_stencil = desc.depth_stencil;
+        let (depth_test_enable, depth_write_enable, depth_compare_op) =
+            match depth_stencil.depth {
+                Some(ref depth) => {
+                    (vk::TRUE, depth.write as _, conv::map_comparison(depth.fun))
+                }
+                None => (vk::FALSE, vk::FALSE, vk::CompareOp::NEVER),
+            };
+        let (stencil_test_enable, front, back) = match depth_stencil.stencil {
+            Some(ref stencil) => {
+                let mut front = conv::map_stencil_side(&stencil.faces.front);
+                let mut back = conv::map_stencil_side(&stencil.faces.back);
+                match stencil.read_masks {
+                    pso::State::Static(ref sides) => {
+                        front.compare_mask = sides.front;
+                        back.compare_mask = sides.back;
+                    }
+                    pso::State::Dynamic => {
+                        this.dynamic_states.push(vk::DynamicState::STENCIL_COMPARE_MASK);
+                    }
+                }
+                match stencil.write_masks {
+                    pso::State::Static(ref sides) => {
+                        front.write_mask = sides.front;
+                        back.write_mask = sides.back;
+                    }
+                    pso::State::Dynamic => {
+                        this.dynamic_states.push(vk::DynamicState::STENCIL_WRITE_MASK);
+                    }
+                }
+                match stencil.reference_values {
+                    pso::State::Static(ref sides) => {
+                        front.reference = sides.front;
+                        back.reference = sides.back;
+                    }
+                    pso::State::Dynamic => {
+                        this.dynamic_states.push(vk::DynamicState::STENCIL_REFERENCE);
+                    }
+                }
+                (vk::TRUE, front, back)
+            }
+            None => unsafe { mem::zeroed() },
+        };
+        let (min_depth_bounds, max_depth_bounds) =
+            match desc.baked_states.depth_bounds {
+                Some(ref range) => (range.start, range.end),
+                None => {
+                    this.dynamic_states.push(vk::DynamicState::DEPTH_BOUNDS);
+                    (0.0, 1.0)
+                }
+            };
+
+        this.depth_stencil_state = vk::PipelineDepthStencilStateCreateInfo {
+            s_type: vk::StructureType::PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
+            depth_test_enable,
+            depth_write_enable,
+            depth_compare_op,
+            depth_bounds_test_enable: depth_stencil.depth_bounds as _,
+            stencil_test_enable,
+            front,
+            back,
+            min_depth_bounds,
+            max_depth_bounds,
+        };
+
+        this.blend_states = desc
+            .blender
+            .targets
+            .iter()
+            .map(|color_desc| {
+                let color_write_mask = vk::ColorComponentFlags::from_raw(color_desc.mask.bits() as _);
+                match color_desc.blend {
+                    Some(ref bs) => {
+                        let (
+                            color_blend_op,
+                            src_color_blend_factor,
+                            dst_color_blend_factor,
+                        ) = conv::map_blend_op(bs.color);
+                        let (
+                            alpha_blend_op,
+                            src_alpha_blend_factor,
+                            dst_alpha_blend_factor,
+                        ) = conv::map_blend_op(bs.alpha);
+                        vk::PipelineColorBlendAttachmentState {
+                            color_write_mask,
+                            blend_enable: vk::TRUE,
+                            src_color_blend_factor,
+                            dst_color_blend_factor,
+                            color_blend_op,
+                            src_alpha_blend_factor,
+                            dst_alpha_blend_factor,
+                            alpha_blend_op,
+                        }
+                    }
+                    None => vk::PipelineColorBlendAttachmentState {
+                        color_write_mask,
+                        ..unsafe { mem::zeroed() }
+                    },
+                }
+            })
+            .collect();
+        
+        this.color_blend_state = vk::PipelineColorBlendStateCreateInfo {
+            s_type: vk::StructureType::PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineColorBlendStateCreateFlags::empty(),
+            logic_op_enable: vk::FALSE, // TODO
+            logic_op: vk::LogicOp::CLEAR,
+            attachment_count: this.blend_states.len() as _,
+            p_attachments: this.blend_states.as_ptr(), // TODO:
+            blend_constants: match desc.baked_states.blend_color {
+                Some(value) => value,
+                None => {
+                    this.dynamic_states.push(vk::DynamicState::BLEND_CONSTANTS);
+                    [0.0; 4]
+                }
+            },
+        };
+
+        this.pipeline_dynamic_state = vk::PipelineDynamicStateCreateInfo {
+            s_type: vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO,
+            p_next: ptr::null(),
+            flags: vk::PipelineDynamicStateCreateFlags::empty(),
+            dynamic_state_count: this.dynamic_states.len() as _,
+            p_dynamic_states: this.dynamic_states.as_ptr(),
+        };
+    }
+}
 
 impl d::Device<B> for Device {
     unsafe fn allocate_memory(
@@ -356,6 +802,85 @@ impl d::Device<B> for Device {
         }
     }
 
+    unsafe fn create_graphics_pipeline<'a>(
+        &self,
+        desc: &pso::GraphicsPipelineDesc<'a, B>,
+        cache: Option<&n::PipelineCache>,
+    ) -> Result<n::GraphicsPipeline, pso::CreationError> {
+        debug!("create_graphics_pipeline {:?}", desc);
+
+        let buf = GraphicsPipelineInfoBuf::new(self, desc);
+        let info = {
+            let (base_handle, base_index) = match desc.parent {
+                pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
+                pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
+                pso::BasePipeline::None => (vk::Pipeline::null(), -1),
+            };
+
+            let mut flags = vk::PipelineCreateFlags::empty();
+            match desc.parent {
+                pso::BasePipeline::None => (),
+                _ => {
+                    flags |= vk::PipelineCreateFlags::DERIVATIVE;
+                }
+            }
+            if desc
+                .flags
+                .contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION)
+            {
+                flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
+            }
+            if desc
+                .flags
+                .contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES)
+            {
+                flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
+            }
+
+            vk::GraphicsPipelineCreateInfo {
+                s_type: vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO,
+                p_next: ptr::null(),
+                flags,
+                stage_count: buf.stages.len() as _,
+                p_stages: buf.stages.as_ptr(),
+                p_vertex_input_state: &buf.vertex_input_state,
+                p_input_assembly_state: &buf.input_assembly_state,
+                p_rasterization_state: &buf.rasterization_state,
+                p_tessellation_state:  match buf.tessellation_state.as_ref() {
+                    Some(t) => t as _,
+                    None => ptr::null(),
+                },
+                p_viewport_state: &buf.viewport_state,
+                p_multisample_state: &buf.multisample_state,
+                p_depth_stencil_state: &buf.depth_stencil_state,
+                p_color_blend_state: &buf.color_blend_state,
+                p_dynamic_state: &buf.pipeline_dynamic_state,
+                layout: desc.layout.raw,
+                render_pass: desc.subpass.main_pass.raw,
+                subpass: desc.subpass.index as _,
+                base_pipeline_handle: base_handle,
+                base_pipeline_index: base_index,
+            }
+        };
+
+        match self.raw.0.create_graphics_pipelines(
+            cache.map_or(vk::PipelineCache::null(), |cache| cache.raw),
+            &[info],
+            None,
+        ) {
+            Ok(mut vec) => {
+                let pso = vec.remove(0);
+                assert!(pso != vk::Pipeline::null());
+                Ok(n::GraphicsPipeline(pso))
+            }
+            Err((_, error)) => match error {
+                vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
+                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
+                _ => unreachable!(),
+            }
+        }
+    }
+
     unsafe fn create_graphics_pipelines<'a, T>(
         &self,
         descs: T,
@@ -365,428 +890,21 @@ impl d::Device<B> for Device {
         T: IntoIterator,
         T::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
     {
-        let descs = descs.into_iter().collect::<Vec<_>>();
-        debug!(
-            "create_graphics_pipelines {:?}",
-            descs.iter().map(Borrow::borrow).collect::<Vec<_>>()
-        );
-        const NUM_STAGES: usize = 5;
-        const MAX_DYNAMIC_STATES: usize = 10;
-
-        // Store pipeline parameters to avoid stack usage
-        let mut info_stages = Vec::with_capacity(descs.len());
-        let mut info_vertex_descs = Vec::with_capacity(descs.len());
-        let mut info_vertex_input_states = Vec::with_capacity(descs.len());
-        let mut info_input_assembly_states = Vec::with_capacity(descs.len());
-        let mut info_tessellation_states = Vec::with_capacity(descs.len());
-        let mut info_viewport_states = Vec::with_capacity(descs.len());
-        let mut info_rasterization_states = Vec::with_capacity(descs.len());
-        let mut info_multisample_states = Vec::with_capacity(descs.len());
-        let mut info_depth_stencil_states = Vec::with_capacity(descs.len());
-        let mut info_color_blend_states = Vec::with_capacity(descs.len());
-        let mut info_dynamic_states = Vec::with_capacity(descs.len());
-        let mut color_attachments = Vec::with_capacity(descs.len());
-        let mut info_specializations = Vec::with_capacity(descs.len() * NUM_STAGES);
-        let mut specialization_entries = Vec::with_capacity(descs.len() * NUM_STAGES);
-        let mut dynamic_states = Vec::with_capacity(descs.len() * MAX_DYNAMIC_STATES);
-        let mut viewports = Vec::with_capacity(descs.len());
-        let mut scissors = Vec::with_capacity(descs.len());
-        let mut sample_masks = Vec::with_capacity(descs.len());
-
-        let mut c_strings = Vec::new(); // hold the C strings temporarily
-        let mut make_stage = |stage, source: &pso::EntryPoint<'a, B>| {
-            let string = CString::new(source.entry).unwrap();
-            let p_name = string.as_ptr();
-            c_strings.push(string);
-
-            let map_entries = source
-                .specialization
-                .constants
-                .iter()
-                .map(|c| vk::SpecializationMapEntry {
-                    constant_id: c.id,
-                    offset: c.range.start as _,
-                    size: (c.range.end - c.range.start) as _,
-                })
-                .collect::<SmallVec<[_; 4]>>();
-
-            specialization_entries.push(map_entries);
-            let map_entries = specialization_entries.last().unwrap();
-
-            info_specializations.push(vk::SpecializationInfo {
-                map_entry_count: map_entries.len() as _,
-                p_map_entries: map_entries.as_ptr(),
-                data_size: source.specialization.data.len() as _,
-                p_data: source.specialization.data.as_ptr() as _,
-            });
-            let info = info_specializations.last().unwrap();
-
-            vk::PipelineShaderStageCreateInfo {
-                s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
-                p_next: ptr::null(),
-                flags: vk::PipelineShaderStageCreateFlags::empty(),
-                stage,
-                module: source.module.raw,
-                p_name,
-                p_specialization_info: info,
-            }
+        let bufs = if cfg!(debug_assertions) {
+            let descs: Vec<_> = descs.into_iter().collect::<Vec<_>>();
+            debug!(
+                "create_graphics_pipelines {:?}",
+                descs.iter().map(Borrow::borrow).collect::<Vec<_>>(),
+            );
+            GraphicsPipelineInfoBuf::collect_from(self, descs.into_iter())
+        } else {
+            GraphicsPipelineInfoBuf::collect_from(self, descs.into_iter())
         };
 
-        let infos = descs
+        let infos: Vec<_> = bufs
             .iter()
-            .map(|desc| {
+            .map(|(desc, buf)| {
                 let desc = desc.borrow();
-                let dynamic_state_base = dynamic_states.len();
-
-                let mut stages = Vec::new();
-                // Vertex stage
-                if true {
-                    //vertex shader is required
-                    stages.push(make_stage(
-                        vk::ShaderStageFlags::VERTEX,
-                        &desc.shaders.vertex,
-                    ));
-                }
-                // Pixel stage
-                if let Some(ref entry) = desc.shaders.fragment {
-                    stages.push(make_stage(vk::ShaderStageFlags::FRAGMENT, entry));
-                }
-                // Geometry stage
-                if let Some(ref entry) = desc.shaders.geometry {
-                    stages.push(make_stage(vk::ShaderStageFlags::GEOMETRY, entry));
-                }
-                // Domain stage
-                if let Some(ref entry) = desc.shaders.domain {
-                    stages.push(make_stage(
-                        vk::ShaderStageFlags::TESSELLATION_EVALUATION,
-                        entry,
-                    ));
-                }
-                // Hull stage
-                if let Some(ref entry) = desc.shaders.hull {
-                    stages.push(make_stage(
-                        vk::ShaderStageFlags::TESSELLATION_CONTROL,
-                        entry,
-                    ));
-                }
-
-                info_stages.push(stages);
-
-                {
-                    let mut vertex_bindings = Vec::new();
-                    for vbuf in &desc.vertex_buffers {
-                        vertex_bindings.push(vk::VertexInputBindingDescription {
-                            binding: vbuf.binding,
-                            stride: vbuf.stride as u32,
-                            input_rate: match vbuf.rate {
-                                VertexInputRate::Vertex => vk::VertexInputRate::VERTEX,
-                                VertexInputRate::Instance(divisor) => {
-                                    debug_assert_eq!(divisor, 1, "Custom vertex rate divisors not supported in Vulkan backend without extension");
-                                    vk::VertexInputRate::INSTANCE
-                                },
-                            },
-                        });
-                    }
-                    let mut vertex_attributes = Vec::new();
-                    for attr in desc.attributes.iter() {
-                        vertex_attributes.push(vk::VertexInputAttributeDescription {
-                            location: attr.location as u32,
-                            binding: attr.binding as u32,
-                            format: conv::map_format(attr.element.format),
-                            offset: attr.element.offset as u32,
-                        });
-                    }
-
-                    info_vertex_descs.push((vertex_bindings, vertex_attributes));
-                }
-
-                let &(ref vertex_bindings, ref vertex_attributes) =
-                    info_vertex_descs.last().unwrap();
-
-                info_vertex_input_states.push(vk::PipelineVertexInputStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineVertexInputStateCreateFlags::empty(),
-                    vertex_binding_description_count: vertex_bindings.len() as u32,
-                    p_vertex_binding_descriptions: vertex_bindings.as_ptr(),
-                    vertex_attribute_description_count: vertex_attributes.len() as u32,
-                    p_vertex_attribute_descriptions: vertex_attributes.as_ptr(),
-                });
-
-                info_input_assembly_states.push(vk::PipelineInputAssemblyStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
-                    topology: conv::map_topology(desc.input_assembler.primitive),
-                    primitive_restart_enable: match desc.input_assembler.primitive_restart {
-                        pso::PrimitiveRestart::U16|pso::PrimitiveRestart::U32 => vk::TRUE,
-                        pso::PrimitiveRestart::Disabled => vk::FALSE
-                    }
-
-                });
-
-                let depth_bias = match desc.rasterizer.depth_bias {
-                    Some(pso::State::Static(db)) => db,
-                    Some(pso::State::Dynamic) => {
-                        dynamic_states.push(vk::DynamicState::DEPTH_BIAS);
-                        pso::DepthBias::default()
-                    }
-                    None => pso::DepthBias::default(),
-                };
-
-                let (polygon_mode, line_width) = match desc.rasterizer.polygon_mode {
-                    pso::PolygonMode::Point => (vk::PolygonMode::POINT, 1.0),
-                    pso::PolygonMode::Line(width) => (vk::PolygonMode::LINE, match width {
-                        pso::State::Static(w) => w,
-                        pso::State::Dynamic => {
-                            dynamic_states.push(vk::DynamicState::LINE_WIDTH);
-                            1.0
-                        }
-                    }),
-                    pso::PolygonMode::Fill => (vk::PolygonMode::FILL, 1.0),
-                };
-
-                info_rasterization_states.push(vk::PipelineRasterizationStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineRasterizationStateCreateFlags::empty(),
-                    depth_clamp_enable: if desc.rasterizer.depth_clamping {
-                        if self.raw.1.contains(Features::DEPTH_CLAMP) {
-                            vk::TRUE
-                        } else {
-                            warn!("Depth clamping was requested on a device with disabled feature");
-                            vk::FALSE
-                        }
-                    } else {
-                        vk::FALSE
-                    },
-                    rasterizer_discard_enable: if
-                        desc.shaders.fragment.is_none() &&
-                        desc.depth_stencil.depth.is_none() &&
-                        desc.depth_stencil.stencil.is_none()
-                    {
-                        vk::TRUE
-                    } else {
-                        vk::FALSE
-                    },
-                    polygon_mode,
-                    cull_mode: conv::map_cull_face(desc.rasterizer.cull_face),
-                    front_face: conv::map_front_face(desc.rasterizer.front_face),
-                    depth_bias_enable: if desc.rasterizer.depth_bias.is_some() {
-                        vk::TRUE
-                    } else {
-                        vk::FALSE
-                    },
-                    depth_bias_constant_factor: depth_bias.const_factor,
-                    depth_bias_clamp: depth_bias.clamp,
-                    depth_bias_slope_factor: depth_bias.slope_factor,
-                    line_width,
-                });
-
-                use hal::Primitive::PatchList;
-                if let PatchList(patch_control_points) = desc.input_assembler.primitive {
-                    info_tessellation_states.push(vk::PipelineTessellationStateCreateInfo {
-                        s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
-                        p_next: ptr::null(),
-                        flags: vk::PipelineTessellationStateCreateFlags::empty(),
-                        patch_control_points: patch_control_points as u32,
-                    });
-                }
-
-                info_viewport_states.push(vk::PipelineViewportStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_VIEWPORT_STATE_CREATE_INFO,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineViewportStateCreateFlags::empty(),
-                    scissor_count: 1, // TODO
-                    p_scissors: match desc.baked_states.scissor {
-                        Some(ref rect) => {
-                            scissors.push(conv::map_rect(rect));
-                            scissors.last().unwrap()
-                        }
-                        None => {
-                            dynamic_states.push(vk::DynamicState::SCISSOR);
-                            ptr::null()
-                        }
-                    },
-                    viewport_count: 1, // TODO
-                    p_viewports: match desc.baked_states.viewport {
-                        Some(ref vp) => {
-                            viewports.push(conv::map_viewport(vp));
-                            viewports.last().unwrap()
-                        }
-                        None => {
-                            dynamic_states.push(vk::DynamicState::VIEWPORT);
-                            ptr::null()
-                        }
-                    },
-                });
-
-                let multisampling_state = match desc.multisampling {
-                    Some(ref ms) => {
-                        let sample_mask = [
-                            (ms.sample_mask & 0xFFFFFFFF) as u32,
-                            ((ms.sample_mask >> 32) & 0xFFFFFFFF) as u32,
-                        ];
-                        sample_masks.push(sample_mask);
-
-                        vk::PipelineMultisampleStateCreateInfo {
-                            s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                            p_next: ptr::null(),
-                            flags: vk::PipelineMultisampleStateCreateFlags::empty(),
-                            rasterization_samples: vk::SampleCountFlags::from_raw(
-                                (ms.rasterization_samples as u32)
-                                    & vk::SampleCountFlags::all().as_raw(),
-                            ),
-                            sample_shading_enable: ms.sample_shading.is_some() as _,
-                            min_sample_shading: ms.sample_shading.unwrap_or(0.0),
-                            p_sample_mask: sample_masks.last().unwrap().as_ptr(),
-                            alpha_to_coverage_enable: ms.alpha_coverage as _,
-                            alpha_to_one_enable: ms.alpha_to_one as _,
-                        }
-                    }
-                    None => vk::PipelineMultisampleStateCreateInfo {
-                        s_type: vk::StructureType::PIPELINE_MULTISAMPLE_STATE_CREATE_INFO,
-                        p_next: ptr::null(),
-                        flags: vk::PipelineMultisampleStateCreateFlags::empty(),
-                        rasterization_samples: vk::SampleCountFlags::TYPE_1,
-                        sample_shading_enable: vk::FALSE,
-                        min_sample_shading: 0.0,
-                        p_sample_mask: ptr::null(),
-                        alpha_to_coverage_enable: vk::FALSE,
-                        alpha_to_one_enable: vk::FALSE,
-                    },
-                };
-                info_multisample_states.push(multisampling_state);
-
-                let depth_stencil = desc.depth_stencil;
-                let (depth_test_enable, depth_write_enable, depth_compare_op) =
-                    match depth_stencil.depth {
-                        Some(ref depth) => {
-                            (vk::TRUE, depth.write as _, conv::map_comparison(depth.fun))
-                        }
-                        None => (vk::FALSE, vk::FALSE, vk::CompareOp::NEVER),
-                    };
-                let (stencil_test_enable, front, back) = match depth_stencil.stencil {
-                    Some(ref stencil) => {
-                        let mut front = conv::map_stencil_side(&stencil.faces.front);
-                        let mut back = conv::map_stencil_side(&stencil.faces.back);
-                        match stencil.read_masks {
-                            pso::State::Static(ref sides) => {
-                                front.compare_mask = sides.front;
-                                back.compare_mask = sides.back;
-                            }
-                            pso::State::Dynamic => {
-                                dynamic_states.push(vk::DynamicState::STENCIL_COMPARE_MASK);
-                            }
-                        }
-                        match stencil.write_masks {
-                            pso::State::Static(ref sides) => {
-                                front.write_mask = sides.front;
-                                back.write_mask = sides.back;
-                            }
-                            pso::State::Dynamic => {
-                                dynamic_states.push(vk::DynamicState::STENCIL_WRITE_MASK);
-                            }
-                        }
-                        match stencil.reference_values {
-                            pso::State::Static(ref sides) => {
-                                front.reference = sides.front;
-                                back.reference = sides.back;
-                            }
-                            pso::State::Dynamic => {
-                                dynamic_states.push(vk::DynamicState::STENCIL_REFERENCE);
-                            }
-                        }
-                        (vk::TRUE, front, back)
-                    }
-                    None => mem::zeroed(),
-                };
-                let (min_depth_bounds, max_depth_bounds) = match desc.baked_states.depth_bounds {
-                    Some(ref range) => (range.start, range.end),
-                    None => {
-                        dynamic_states.push(vk::DynamicState::DEPTH_BOUNDS);
-                        (0.0, 1.0)
-                    }
-                };
-
-                info_depth_stencil_states.push(vk::PipelineDepthStencilStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineDepthStencilStateCreateFlags::empty(),
-                    depth_test_enable,
-                    depth_write_enable,
-                    depth_compare_op,
-                    depth_bounds_test_enable: depth_stencil.depth_bounds as _,
-                    stencil_test_enable,
-                    front,
-                    back,
-                    min_depth_bounds,
-                    max_depth_bounds,
-                });
-
-                // Build blend states for color attachments
-                let blend_states = desc
-                    .blender
-                    .targets
-                    .iter()
-                    .map(|color_desc| {
-                        let color_write_mask = vk::ColorComponentFlags::from_raw(color_desc.mask.bits() as _);
-                        match color_desc.blend {
-                            Some(ref bs) => {
-                                let (
-                                    color_blend_op,
-                                    src_color_blend_factor,
-                                    dst_color_blend_factor,
-                                ) = conv::map_blend_op(bs.color);
-                                let (
-                                    alpha_blend_op,
-                                    src_alpha_blend_factor,
-                                    dst_alpha_blend_factor,
-                                ) = conv::map_blend_op(bs.alpha);
-                                vk::PipelineColorBlendAttachmentState {
-                                    color_write_mask,
-                                    blend_enable: vk::TRUE,
-                                    src_color_blend_factor,
-                                    dst_color_blend_factor,
-                                    color_blend_op,
-                                    src_alpha_blend_factor,
-                                    dst_alpha_blend_factor,
-                                    alpha_blend_op,
-                                }
-                            }
-                            None => vk::PipelineColorBlendAttachmentState {
-                                color_write_mask,
-                                ..mem::zeroed()
-                            },
-                        }
-                    })
-                    .collect::<Vec<_>>();
-                color_attachments.push(blend_states);
-
-                info_color_blend_states.push(vk::PipelineColorBlendStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_COLOR_BLEND_STATE_CREATE_INFO,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineColorBlendStateCreateFlags::empty(),
-                    logic_op_enable: vk::FALSE, // TODO
-                    logic_op: vk::LogicOp::CLEAR,
-                    attachment_count: color_attachments.last().unwrap().len() as _,
-                    p_attachments: color_attachments.last().unwrap().as_ptr(), // TODO:
-                    blend_constants: match desc.baked_states.blend_color {
-                        Some(value) => value,
-                        None => {
-                            dynamic_states.push(vk::DynamicState::BLEND_CONSTANTS);
-                            [0.0; 4]
-                        }
-                    },
-                });
-
-                info_dynamic_states.push(vk::PipelineDynamicStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_DYNAMIC_STATE_CREATE_INFO,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineDynamicStateCreateFlags::empty(),
-                    dynamic_state_count: (dynamic_states.len() - dynamic_state_base) as _,
-                    p_dynamic_states: dynamic_states.as_ptr().offset(dynamic_state_base as _),
-                });
 
                 let (base_handle, base_index) = match desc.parent {
                     pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
@@ -814,77 +932,150 @@ impl d::Device<B> for Device {
                     flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
                 }
 
-                Ok(vk::GraphicsPipelineCreateInfo {
+                vk::GraphicsPipelineCreateInfo {
                     s_type: vk::StructureType::GRAPHICS_PIPELINE_CREATE_INFO,
                     p_next: ptr::null(),
                     flags,
-                    stage_count: info_stages.last().unwrap().len() as _,
-                    p_stages: info_stages.last().unwrap().as_ptr(),
-                    p_vertex_input_state: info_vertex_input_states.last().unwrap(),
-                    p_input_assembly_state: info_input_assembly_states.last().unwrap(),
-                    p_rasterization_state: info_rasterization_states.last().unwrap(),
-                    p_tessellation_state: match desc.input_assembler.primitive {
-                        PatchList(_) => info_tessellation_states.last().unwrap(),
-                        _            => ptr::null(),
+                    stage_count: buf.stages.len() as _,
+                    p_stages: buf.stages.as_ptr(),
+                    p_vertex_input_state: &buf.vertex_input_state,
+                    p_input_assembly_state: &buf.input_assembly_state,
+                    p_rasterization_state: &buf.rasterization_state,
+                    p_tessellation_state: match buf.tessellation_state.as_ref() {
+                        Some(t) => t as _,
+                        None => ptr::null(),
                     },
-                    p_viewport_state: info_viewport_states.last().unwrap(),
-                    p_multisample_state: info_multisample_states.last().unwrap(),
-                    p_depth_stencil_state: info_depth_stencil_states.last().unwrap(),
-                    p_color_blend_state: info_color_blend_states.last().unwrap(),
-                    p_dynamic_state: info_dynamic_states.last().unwrap(),
+                    p_viewport_state: &buf.viewport_state,
+                    p_multisample_state: &buf.multisample_state,
+                    p_depth_stencil_state: &buf.depth_stencil_state,
+                    p_color_blend_state: &buf.color_blend_state,
+                    p_dynamic_state: &buf.pipeline_dynamic_state,
                     layout: desc.layout.raw,
                     render_pass: desc.subpass.main_pass.raw,
                     subpass: desc.subpass.index as _,
                     base_pipeline_handle: base_handle,
                     base_pipeline_index: base_index,
-                })
+                }
             })
-            .collect::<Vec<_>>();
+            .collect();
 
-        let valid_infos = infos
-            .iter()
-            .filter_map(|info| info.clone().ok())
-            .collect::<Vec<_>>();
-        let result = if valid_infos.is_empty() {
-            Ok(Vec::new())
+        let (pipelines, error) = if infos.is_empty() {
+            (Vec::new(), None)
         } else {
-            self.raw.0.create_graphics_pipelines(
-                match cache {
-                    Some(cache) => cache.raw,
-                    None => vk::PipelineCache::null(),
-                },
-                &valid_infos,
+            match self.raw.0.create_graphics_pipelines(
+                cache.map_or(vk::PipelineCache::null(), |cache| cache.raw),
+                &infos,
                 None,
-            )
+            ) {
+                Ok(pipelines) => (pipelines, None),
+                Err((pipelines, error)) => (pipelines, Some(error)),
+            }
         };
 
-        let (pipelines, error) = match result {
-            Ok(pipelines) => (pipelines, None),
-            Err((pipelines, error)) => (pipelines, Some(error)),
-        };
-
-        let mut psos = pipelines.into_iter();
-        infos
+        pipelines
             .into_iter()
-            .map(|result| {
-                result.and_then(|_| {
-                    let pso = psos.next().unwrap();
-                    if pso == vk::Pipeline::null() {
-                        match error {
-                            Some(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                                Err(d::OutOfMemory::Host.into())
-                            }
-                            Some(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                                Err(d::OutOfMemory::Device.into())
-                            }
-                            _ => unreachable!(),
+            .map(|pso| {
+                if pso == vk::Pipeline::null() {
+                    match error {
+                        Some(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                            Err(d::OutOfMemory::Host.into())
                         }
-                    } else {
-                        Ok(n::GraphicsPipeline(pso))
+                        Some(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                            Err(d::OutOfMemory::Device.into())
+                        }
+                        _ => unreachable!(),
                     }
-                })
+                } else {
+                    Ok(n::GraphicsPipeline(pso))
+                }
             })
             .collect()
+    }
+
+    unsafe fn create_compute_pipeline<'a>(
+        &self,
+        desc: &pso::ComputePipelineDesc<'a, B>,
+        cache: Option<&n::PipelineCache>,
+    ) -> Result<n::ComputePipeline, pso::CreationError> {
+        let c_string = CString::new(desc.shader.entry).unwrap();
+
+        let entries = desc
+            .shader
+            .specialization
+            .constants
+            .iter()
+            .map(|c| vk::SpecializationMapEntry {
+                constant_id: c.id,
+                offset: c.range.start as _,
+                size: (c.range.end - c.range.start) as _,
+            })
+            .collect::<SmallVec<[_; 4]>>();
+        
+        let specialization = vk::SpecializationInfo {
+            map_entry_count: entries.len() as _,
+            p_map_entries: entries.as_ptr(),
+            data_size: desc.shader.specialization.data.len() as _,
+            p_data: desc.shader.specialization.data.as_ptr() as _,
+        };
+
+        let info = {
+            let stage = vk::PipelineShaderStageCreateInfo {
+                s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
+                p_next: ptr::null(),
+                flags: vk::PipelineShaderStageCreateFlags::empty(),
+                stage: vk::ShaderStageFlags::COMPUTE,
+                module: desc.shader.module.raw,
+                p_name: c_string.as_ptr(),
+                p_specialization_info: &specialization,
+            };
+
+            let (base_handle, base_index) = match desc.parent {
+                pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
+                pso::BasePipeline::Index(index) => (vk::Pipeline::null(), index as _),
+                pso::BasePipeline::None => (vk::Pipeline::null(), -1),
+            };
+
+            let mut flags = vk::PipelineCreateFlags::empty();
+            match desc.parent {
+                pso::BasePipeline::None => (),
+                _ => {
+                    flags |= vk::PipelineCreateFlags::DERIVATIVE;
+                }
+            }
+            if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
+                flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
+            }
+            if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
+                flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
+            }
+
+            vk::ComputePipelineCreateInfo {
+                s_type: vk::StructureType::COMPUTE_PIPELINE_CREATE_INFO,
+                p_next: ptr::null(),
+                flags,
+                stage,
+                layout: desc.layout.raw,
+                base_pipeline_handle: base_handle,
+                base_pipeline_index: base_index,
+            }
+        };
+
+        match self.raw.0.create_compute_pipelines(
+            cache.map_or(vk::PipelineCache::null(), |cache| cache.raw),
+            &[info],
+            None,
+        ) {
+            Ok(mut pipelines) => {
+                let pso = pipelines.remove(0);
+                assert!(pso != vk::Pipeline::null());
+                Ok(n::ComputePipeline(pso))
+            },
+            Err((_, error)) => match error {
+                vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
+                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
+                _ => unreachable!(),
+            },
+        }
     }
 
     unsafe fn create_compute_pipelines<'a, T>(
@@ -896,20 +1087,31 @@ impl d::Device<B> for Device {
         T: IntoIterator,
         T::Item: Borrow<pso::ComputePipelineDesc<'a, B>>,
     {
-        let descs = descs.into_iter().collect::<Vec<_>>();
-        let mut c_strings = Vec::new(); // hold the C strings temporarily
-        let mut info_specializations = Vec::with_capacity(descs.len());
-        let mut specialization_entries = Vec::with_capacity(descs.len());
+        struct InfoBuf {
+            c_string: CString,
+            specialization: vk::SpecializationInfo,
+            entries: SmallVec<[vk::SpecializationMapEntry; 4]>,
+        }
 
-        let infos = descs
-            .iter()
-            .map(|desc| {
-                let desc = desc.borrow();
-                let string = CString::new(desc.shader.entry).unwrap();
-                let p_name = string.as_ptr();
-                c_strings.push(string);
+        let mut bufs: Pin<Box<[_]>> = descs
+            .into_iter()
+            .map(|desc| (desc, InfoBuf {
+                entries: SmallVec::new(),
+                ..mem::zeroed()
+            }))
+            .collect::<Box<[_]>>()
+            .into();
+        
+        let infos: Vec<_> = bufs
+            .as_mut()
+            .get_unchecked_mut()
+            .iter_mut()
+            .map(|(desc, buf)| {
+                let desc = (desc as &T::Item).borrow();
 
-                let map_entries = desc
+                buf.c_string = CString::new(desc.shader.entry).unwrap();
+
+                buf.entries = desc
                     .shader
                     .specialization
                     .constants
@@ -920,17 +1122,13 @@ impl d::Device<B> for Device {
                         size: (c.range.end - c.range.start) as _,
                     })
                     .collect::<SmallVec<[_; 4]>>();
-
-                specialization_entries.push(map_entries);
-                let map_entries = specialization_entries.last().unwrap();
-
-                info_specializations.push(vk::SpecializationInfo {
-                    map_entry_count: map_entries.len() as _,
-                    p_map_entries: map_entries.as_ptr(),
+                
+                buf.specialization = vk::SpecializationInfo {
+                    map_entry_count: buf.entries.len() as _,
+                    p_map_entries: buf.entries.as_ptr(),
                     data_size: desc.shader.specialization.data.len() as _,
                     p_data: desc.shader.specialization.data.as_ptr() as _,
-                });
-                let info = info_specializations.last().unwrap();
+                };
 
                 let stage = vk::PipelineShaderStageCreateInfo {
                     s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
@@ -938,8 +1136,8 @@ impl d::Device<B> for Device {
                     flags: vk::PipelineShaderStageCreateFlags::empty(),
                     stage: vk::ShaderStageFlags::COMPUTE,
                     module: desc.shader.module.raw,
-                    p_name,
-                    p_specialization_info: info,
+                    p_name: buf.c_string.as_ptr(),
+                    p_specialization_info: &buf.specialization,
                 };
 
                 let (base_handle, base_index) = match desc.parent {
@@ -955,20 +1153,14 @@ impl d::Device<B> for Device {
                         flags |= vk::PipelineCreateFlags::DERIVATIVE;
                     }
                 }
-                if desc
-                    .flags
-                    .contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION)
-                {
+                if desc.flags.contains(pso::PipelineCreationFlags::DISABLE_OPTIMIZATION) {
                     flags |= vk::PipelineCreateFlags::DISABLE_OPTIMIZATION;
                 }
-                if desc
-                    .flags
-                    .contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES)
-                {
+                if desc.flags.contains(pso::PipelineCreationFlags::ALLOW_DERIVATIVES) {
                     flags |= vk::PipelineCreateFlags::ALLOW_DERIVATIVES;
                 }
 
-                Ok(vk::ComputePipelineCreateInfo {
+                vk::ComputePipelineCreateInfo {
                     s_type: vk::StructureType::COMPUTE_PIPELINE_CREATE_INFO,
                     p_next: ptr::null(),
                     flags,
@@ -976,52 +1168,39 @@ impl d::Device<B> for Device {
                     layout: desc.layout.raw,
                     base_pipeline_handle: base_handle,
                     base_pipeline_index: base_index,
-                })
+                }
             })
-            .collect::<Vec<_>>();
+            .collect();
 
-        let valid_infos = infos
-            .iter()
-            .filter_map(|info| info.clone().ok())
-            .collect::<Vec<_>>();
-        let result = if valid_infos.is_empty() {
-            Ok(Vec::new())
+        let (pipelines, error) = if infos.is_empty() {
+            (Vec::new(), None)
         } else {
-            self.raw.0.create_compute_pipelines(
-                match cache {
-                    Some(cache) => cache.raw,
-                    None => vk::PipelineCache::null(),
-                },
-                &valid_infos,
+            match self.raw.0.create_compute_pipelines(
+                cache.map_or(vk::PipelineCache::null(), |cache| cache.raw),
+                &infos,
                 None,
-            )
+            ) {
+                Ok(pipelines) => (pipelines, None),
+                Err((pipelines, error)) => (pipelines, Some(error)),
+            }
         };
 
-        let (pipelines, error) = match result {
-            Ok(pipelines) => (pipelines, None),
-            Err((pipelines, error)) => (pipelines, Some(error)),
-        };
-
-        let mut psos = pipelines.into_iter();
-        infos
+        pipelines
             .into_iter()
-            .map(|result| {
-                result.and_then(|_| {
-                    let pso = psos.next().unwrap();
-                    if pso == vk::Pipeline::null() {
-                        match error {
-                            Some(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                                Err(d::OutOfMemory::Host.into())
-                            }
-                            Some(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                                Err(d::OutOfMemory::Device.into())
-                            }
-                            _ => unreachable!(),
+            .map(|pso| {
+                if pso == vk::Pipeline::null() {
+                    match error {
+                        Some(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                            Err(d::OutOfMemory::Host.into())
                         }
-                    } else {
-                        Ok(n::ComputePipeline(pso))
+                        Some(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                            Err(d::OutOfMemory::Device.into())
+                        }
+                        _ => unreachable!(),
                     }
-                })
+                } else {
+                    Ok(n::ComputePipeline(pso))
+                }
             })
             .collect()
     }

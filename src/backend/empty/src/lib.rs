@@ -217,6 +217,22 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
+    unsafe fn create_graphics_pipeline<'a>(
+        &self,
+        _: &pso::GraphicsPipelineDesc<'a, Backend>,
+        _: Option<&()>,
+    ) -> Result<(), pso::CreationError> {
+        unimplemented!()
+    }
+
+    unsafe fn create_compute_pipeline<'a>(
+        &self,
+        _: &pso::ComputePipelineDesc<'a, Backend>,
+        _: Option<&()>,
+    ) -> Result<(), pso::CreationError> {
+        unimplemented!()
+    }
+
     unsafe fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
