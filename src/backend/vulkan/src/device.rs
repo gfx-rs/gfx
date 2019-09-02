@@ -1,3 +1,4 @@
+use arrayvec::ArrayVec;
 use ash::extensions::khr;
 use ash::version::DeviceV1_0;
 use ash::vk;
@@ -24,19 +25,21 @@ use crate::pool::RawCommandPool;
 use crate::{conv, native as n, window as w};
 use crate::{Backend as B, Device};
 
+#[derive(Debug, Default)]
 struct GraphicsPipelineInfoBuf {
     // 10 is the max amount of dynamic states
-    dynamic_states: SmallVec<[vk::DynamicState; 10]>,
+    dynamic_states: ArrayVec<[vk::DynamicState; 10]>,
 
     // 5 is the amount of stages
-    c_strings: SmallVec<[CString; 5]>,
-    stages: SmallVec<[vk::PipelineShaderStageCreateInfo; 5]>,
-    specializations: SmallVec<[vk::SpecializationInfo; 5]>,
-    specialization_entries: SmallVec<[SmallVec<[vk::SpecializationMapEntry; 4]>; 5]>,
+    c_strings: ArrayVec<[CString; 5]>,
+    stages: ArrayVec<[vk::PipelineShaderStageCreateInfo; 5]>,
+    specializations: ArrayVec<[vk::SpecializationInfo; 5]>,
+    specialization_entries: ArrayVec<[SmallVec<[vk::SpecializationMapEntry; 4]>; 5]>,
 
     vertex_bindings: Vec<vk::VertexInputBindingDescription>,
     vertex_attributes: Vec<vk::VertexInputAttributeDescription>,
     blend_states: Vec<vk::PipelineColorBlendAttachmentState>,
+    
     sample_mask: [u32; 2],
     vertex_input_state: vk::PipelineVertexInputStateCreateInfo,
     input_assembly_state: vk::PipelineInputAssemblyStateCreateInfo,
@@ -51,56 +54,7 @@ struct GraphicsPipelineInfoBuf {
     scissor: vk::Rect2D,
 }
 impl GraphicsPipelineInfoBuf {
-    fn new<'a>(device: &Device, desc: &pso::GraphicsPipelineDesc<'a, B>) -> Pin<Box<Self>> {
-        let mut buf = Box::pin(Self {
-            dynamic_states: SmallVec::new(),
-            c_strings: SmallVec::new(),
-            stages: SmallVec::new(),
-            specializations: SmallVec::new(),
-            specialization_entries: SmallVec::new(),
-            vertex_bindings: Vec::new(),
-            vertex_attributes: Vec::new(),
-            blend_states: Vec::new(),
-            ..unsafe { mem::zeroed() }
-        });
-        buf.as_mut().initialize_inner(device, desc);
-        buf
-    }
-
-    fn collect_from<'a, I>(device: &Device, descs: I) -> Pin<Box<[(I::Item, Self)]>>
-    where
-        I: Iterator,
-        I::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
-    {
-        let mut bufs: Pin<Box<[_]>> = descs
-            .map(|desc| {
-                (
-                    desc,
-                    Self {
-                        dynamic_states: SmallVec::new(),
-                        c_strings: SmallVec::new(),
-                        stages: SmallVec::new(),
-                        specializations: SmallVec::new(),
-                        specialization_entries: SmallVec::new(),
-                        vertex_bindings: Vec::new(),
-                        vertex_attributes: Vec::new(),
-                        blend_states: Vec::new(),
-                        ..unsafe { mem::zeroed() }
-                    },
-                )
-            })
-            .collect::<Box<[_]>>()
-            .into();
-
-        for (desc, buf) in unsafe { bufs.as_mut().get_unchecked_mut() } {
-            let desc: &I::Item = desc;
-            unsafe { Pin::new_unchecked(buf) }.initialize_inner(device, desc.borrow());
-        }
-
-        bufs
-    }
-
-    fn add_stage<'a>(&mut self, stage: vk::ShaderStageFlags, source: &pso::EntryPoint<'a, B>) {
+    unsafe fn add_stage<'a>(&mut self, stage: vk::ShaderStageFlags, source: &pso::EntryPoint<'a, B>) {
         let string = CString::new(source.entry).unwrap();
         let p_name = string.as_ptr();
         self.c_strings.push(string);
@@ -137,12 +91,12 @@ impl GraphicsPipelineInfoBuf {
         })
     }
 
-    fn initialize_inner<'a>(
-        self: Pin<&mut Self>,
+    unsafe fn initialize<'a>(
+        this: &mut Pin<&mut Self>,
         device: &Device,
         desc: &pso::GraphicsPipelineDesc<'a, B>,
     ) {
-        let mut this = Pin::get_mut(self); // use into_inner when it gets stable
+        let mut this = Pin::get_mut(this.as_mut()); // use into_inner when it gets stable
 
         // Vertex stage
         // vertex shader is required
@@ -385,7 +339,7 @@ impl GraphicsPipelineInfoBuf {
                 }
                 (vk::TRUE, front, back)
             }
-            None => unsafe { mem::zeroed() },
+            None => mem::zeroed(),
         };
         let (min_depth_bounds, max_depth_bounds) = match desc.baked_states.depth_bounds {
             Some(ref range) => (range.start, range.end),
@@ -436,7 +390,7 @@ impl GraphicsPipelineInfoBuf {
                     }
                     None => vk::PipelineColorBlendAttachmentState {
                         color_write_mask,
-                        ..unsafe { mem::zeroed() }
+                        ..mem::zeroed()
                     },
                 }
             })
@@ -465,6 +419,40 @@ impl GraphicsPipelineInfoBuf {
             flags: vk::PipelineDynamicStateCreateFlags::empty(),
             dynamic_state_count: this.dynamic_states.len() as _,
             p_dynamic_states: this.dynamic_states.as_ptr(),
+        };
+    }
+}
+
+#[derive(Debug, Default)]
+struct ComputePipelineInfoBuf {
+    c_string: CString,
+    specialization: vk::SpecializationInfo,
+    entries: SmallVec<[vk::SpecializationMapEntry; 4]>,
+}
+impl ComputePipelineInfoBuf {
+    unsafe fn initialize<'a>(
+        this: &mut Pin<&mut Self>,
+        desc: &pso::ComputePipelineDesc<'a, B>,
+    ) {
+        let mut this = Pin::get_mut(this.as_mut()); // use into_inner when it gets stable
+
+        this.c_string = CString::new(desc.shader.entry).unwrap();
+        this.entries = desc
+            .shader
+            .specialization
+            .constants
+            .iter()
+            .map(|c| vk::SpecializationMapEntry {
+                constant_id: c.id,
+                offset: c.range.start as _,
+                size: (c.range.end - c.range.start) as _,
+            })
+            .collect();
+        this.specialization = vk::SpecializationInfo {
+            map_entry_count: this.entries.len() as _,
+            p_map_entries: this.entries.as_ptr(),
+            data_size: desc.shader.specialization.data.len() as _,
+            p_data: desc.shader.specialization.data.as_ptr() as _,
         };
     }
 }
@@ -807,7 +795,10 @@ impl d::Device<B> for Device {
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         debug!("create_graphics_pipeline {:?}", desc);
 
-        let buf = GraphicsPipelineInfoBuf::new(self, desc);
+        let mut buf = GraphicsPipelineInfoBuf::default();
+        let mut buf = Pin::new(&mut buf);
+        GraphicsPipelineInfoBuf::initialize(&mut buf, self, desc);
+        
         let info = {
             let (base_handle, base_index) = match desc.parent {
                 pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
@@ -888,16 +879,20 @@ impl d::Device<B> for Device {
         T: IntoIterator,
         T::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
     {
-        let bufs = if cfg!(debug_assertions) {
-            let descs: Vec<_> = descs.into_iter().collect::<Vec<_>>();
-            debug!(
-                "create_graphics_pipelines {:?}",
-                descs.iter().map(Borrow::borrow).collect::<Vec<_>>(),
-            );
-            GraphicsPipelineInfoBuf::collect_from(self, descs.into_iter())
-        } else {
-            GraphicsPipelineInfoBuf::collect_from(self, descs.into_iter())
-        };
+        debug!("create_graphics_pipelines:");
+        
+        let mut bufs: Pin<Box<[_]>> = descs
+            .into_iter()
+            .enumerate()
+            .inspect(|(idx, desc)| debug!("# {} {:?}", idx, desc.borrow()))
+            .map(|(_, desc)| (desc, GraphicsPipelineInfoBuf::default()))
+            .collect::<Box<[_]>>()
+            .into();
+        
+        for (desc, buf) in bufs.as_mut().get_unchecked_mut() {
+            let desc: &T::Item = desc;
+            GraphicsPipelineInfoBuf::initialize(&mut Pin::new_unchecked(buf), self, desc.borrow());
+        }
 
         let infos: Vec<_> = bufs
             .iter()
@@ -995,26 +990,9 @@ impl d::Device<B> for Device {
         desc: &pso::ComputePipelineDesc<'a, B>,
         cache: Option<&n::PipelineCache>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
-        let c_string = CString::new(desc.shader.entry).unwrap();
-
-        let entries = desc
-            .shader
-            .specialization
-            .constants
-            .iter()
-            .map(|c| vk::SpecializationMapEntry {
-                constant_id: c.id,
-                offset: c.range.start as _,
-                size: (c.range.end - c.range.start) as _,
-            })
-            .collect::<SmallVec<[_; 4]>>();
-
-        let specialization = vk::SpecializationInfo {
-            map_entry_count: entries.len() as _,
-            p_map_entries: entries.as_ptr(),
-            data_size: desc.shader.specialization.data.len() as _,
-            p_data: desc.shader.specialization.data.as_ptr() as _,
-        };
+        let mut buf = ComputePipelineInfoBuf::default();
+        let mut buf = Pin::new(&mut buf);
+        ComputePipelineInfoBuf::initialize(&mut buf, desc);
 
         let info = {
             let stage = vk::PipelineShaderStageCreateInfo {
@@ -1023,8 +1001,8 @@ impl d::Device<B> for Device {
                 flags: vk::PipelineShaderStageCreateFlags::empty(),
                 stage: vk::ShaderStageFlags::COMPUTE,
                 module: desc.shader.module.raw,
-                p_name: c_string.as_ptr(),
-                p_specialization_info: &specialization,
+                p_name: buf.c_string.as_ptr(),
+                p_specialization_info: &buf.specialization,
             };
 
             let (base_handle, base_index) = match desc.parent {
@@ -1091,53 +1069,21 @@ impl d::Device<B> for Device {
         T: IntoIterator,
         T::Item: Borrow<pso::ComputePipelineDesc<'a, B>>,
     {
-        struct InfoBuf {
-            c_string: CString,
-            specialization: vk::SpecializationInfo,
-            entries: SmallVec<[vk::SpecializationMapEntry; 4]>,
-        }
-
         let mut bufs: Pin<Box<[_]>> = descs
             .into_iter()
-            .map(|desc| {
-                (
-                    desc,
-                    InfoBuf {
-                        entries: SmallVec::new(),
-                        ..mem::zeroed()
-                    },
-                )
-            })
+            .map(|desc| (desc, ComputePipelineInfoBuf::default()))
             .collect::<Box<[_]>>()
             .into();
+        
+        for (desc, buf) in bufs.as_mut().get_unchecked_mut() {
+            let desc: &T::Item = desc;
+            ComputePipelineInfoBuf::initialize(&mut Pin::new_unchecked(buf), desc.borrow());
+        }
 
         let infos: Vec<_> = bufs
-            .as_mut()
-            .get_unchecked_mut()
-            .iter_mut()
+            .iter()
             .map(|(desc, buf)| {
-                let desc = (desc as &T::Item).borrow();
-
-                buf.c_string = CString::new(desc.shader.entry).unwrap();
-
-                buf.entries = desc
-                    .shader
-                    .specialization
-                    .constants
-                    .iter()
-                    .map(|c| vk::SpecializationMapEntry {
-                        constant_id: c.id,
-                        offset: c.range.start as _,
-                        size: (c.range.end - c.range.start) as _,
-                    })
-                    .collect::<SmallVec<[_; 4]>>();
-
-                buf.specialization = vk::SpecializationInfo {
-                    map_entry_count: buf.entries.len() as _,
-                    p_map_entries: buf.entries.as_ptr(),
-                    data_size: desc.shader.specialization.data.len() as _,
-                    p_data: desc.shader.specialization.data.as_ptr() as _,
-                };
+                let desc = desc.borrow();
 
                 let stage = vk::PipelineShaderStageCreateInfo {
                     s_type: vk::StructureType::PIPELINE_SHADER_STAGE_CREATE_INFO,
