@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-vulkan-0.3.3 (03-09-2019)
+  - fix iOS build
+
 ### backend-vulkan-0.3.2, backend-dx12-0.3.2 (30-08-2019)
   - add `Instance::try_create` methods
 
