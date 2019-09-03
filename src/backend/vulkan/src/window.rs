@@ -316,7 +316,8 @@ impl Instance {
                 feature = "x11",
                 unix,
                 not(target_os = "android"),
-                not(target_os = "macos")
+                not(target_os = "macos"),
+                not(target_os = "ios")
             ))]
             RawWindowHandle::Wayland(handle)
                 if self.extensions.contains(&khr::WaylandSurface::name()) =>
@@ -327,7 +328,8 @@ impl Instance {
                 feature = "x11",
                 unix,
                 not(target_os = "android"),
-                not(target_os = "macos")
+                not(target_os = "macos"),
+                not(target_os = "ios")
             ))]
             RawWindowHandle::X11(handle)
                 if self.extensions.contains(&khr::XlibSurface::name()) =>

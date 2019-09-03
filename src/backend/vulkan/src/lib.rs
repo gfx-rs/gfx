@@ -28,7 +28,8 @@ extern crate winit;
     feature = "x11",
     unix,
     not(target_os = "android"),
-    not(target_os = "macos")
+    not(target_os = "macos"),
+    not(target_os = "ios")
 ))]
 extern crate x11;
 #[cfg(all(
