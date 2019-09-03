@@ -313,10 +313,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         &self,
         desc: &pso::GraphicsPipelineDesc<'a, B>,
         cache: Option<&B::PipelineCache>,
-    ) -> Result<B::GraphicsPipeline, pso::CreationError> {
-        self.create_graphics_pipelines(iter::once(desc), cache)
-            .remove(0)
-    }
+    ) -> Result<B::GraphicsPipeline, pso::CreationError>;
 
     /// Create graphics pipelines.
     unsafe fn create_graphics_pipelines<'a, I>(
@@ -345,10 +342,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         &self,
         desc: &pso::ComputePipelineDesc<'a, B>,
         cache: Option<&B::PipelineCache>,
-    ) -> Result<B::ComputePipeline, pso::CreationError> {
-        self.create_compute_pipelines(iter::once(desc), cache)
-            .remove(0)
-    }
+    ) -> Result<B::ComputePipeline, pso::CreationError>;
 
     /// Create compute pipelines.
     unsafe fn create_compute_pipelines<'a, I>(

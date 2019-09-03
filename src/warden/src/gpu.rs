@@ -899,8 +899,7 @@ impl<B: hal::Backend> Scene<B> {
                         flags: pso::PipelineCreationFlags::empty(),
                         parent: pso::BasePipeline::None,
                     };
-                    let pso = unsafe { device.create_graphics_pipelines(&[desc], None) }
-                        .remove(0)
+                    let pso = unsafe { device.create_graphics_pipeline(&desc, None) }
                         .unwrap();
                     resources.graphics_pipelines.insert(name.clone(), pso);
                 }
@@ -924,8 +923,7 @@ impl<B: hal::Backend> Scene<B> {
                         flags: pso::PipelineCreationFlags::empty(),
                         parent: pso::BasePipeline::None,
                     };
-                    let pso = unsafe { device.create_compute_pipelines(&[desc], None) }
-                        .remove(0)
+                    let pso = unsafe { device.create_compute_pipeline(&desc, None) }
                         .unwrap();
                     resources
                         .compute_pipelines
