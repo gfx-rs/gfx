@@ -98,7 +98,9 @@ pub struct Token {
 impl Drop for Token {
     fn drop(&mut self) {
         // poor man's linear type...
-        debug_assert!(!self.active);
+        if !thread::panicking() {
+            debug_assert!(!self.active);
+        }
     }
 }
 
