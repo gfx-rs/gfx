@@ -516,7 +516,10 @@ impl PhysicalDevice {
             "mali",
             "intel",
         ];
-        let strings_that_imply_cpu = ["mesa offscreen"];
+        let strings_that_imply_cpu = [
+            "mesa offscreen",
+            "swiftshader",
+        ];
         // todo: Intel will release a discrete gpu soon, and we will need to update this logic when they do
         let inferred_device_type = if vendor_lower.contains("qualcomm")
             || vendor_lower.contains("intel")
