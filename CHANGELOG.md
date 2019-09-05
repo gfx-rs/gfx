@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-metal-0.3.3 (05-09-2019)
+  - fix immutable samplers in combined image-samplers
+
 ### backend-vulkan-0.3.3 (03-09-2019)
   - fix iOS build
 

@@ -1939,8 +1939,9 @@ impl hal::Device<Backend> for Device {
 
             for set_layout_binding in binding_iter {
                 let slb = set_layout_binding.borrow();
+                let mut content = n::DescriptorContent::from(slb.ty);
 
-                let content = if slb.immutable_samplers {
+                if slb.immutable_samplers {
                     tmp_samplers.extend(
                         immutable_sampler_iter
                             .by_ref()
@@ -1952,10 +1953,8 @@ impl hal::Device<Backend> for Device {
                                 array_index,
                             }),
                     );
-                    n::DescriptorContent::IMMUTABLE_SAMPLER
-                } else {
-                    n::DescriptorContent::from(slb.ty)
-                };
+                    content |= n::DescriptorContent::IMMUTABLE_SAMPLER
+                }
 
                 desc_layouts.extend((0 .. slb.count).map(|array_index| n::DescriptorLayout {
                     content,
