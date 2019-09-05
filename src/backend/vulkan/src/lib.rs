@@ -1213,27 +1213,31 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         wait_semaphore: Option<&native::Semaphore>,
     ) -> Result<Option<Suboptimal>, PresentError> {
         let ssc = surface.swapchain.as_ref().unwrap();
-        let submit_info = vk::SubmitInfo {
-            s_type: vk::StructureType::SUBMIT_INFO,
-            p_next: ptr::null(),
-            wait_semaphore_count: 0,
-            p_wait_semaphores: wait_semaphore.map_or(ptr::null(), |s| &s.0 as *const _),
-            p_wait_dst_stage_mask: &vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
-            command_buffer_count: 0,
-            p_command_buffers: ptr::null(),
-            signal_semaphore_count: 1,
-            p_signal_semaphores: &ssc.semaphore.0,
+        let p_wait_semaphores = if let Some(wait_semaphore) = wait_semaphore {
+            &wait_semaphore.0
+        } else {
+            let submit_info = vk::SubmitInfo {
+                s_type: vk::StructureType::SUBMIT_INFO,
+                p_next: ptr::null(),
+                wait_semaphore_count: 0,
+                p_wait_semaphores: ptr::null(),
+                p_wait_dst_stage_mask: &vk::PipelineStageFlags::COLOR_ATTACHMENT_OUTPUT,
+                command_buffer_count: 0,
+                p_command_buffers: ptr::null(),
+                signal_semaphore_count: 1,
+                p_signal_semaphores: &ssc.semaphore.0,
+            };
+            self.device
+                .0
+                .queue_submit(*self.raw, &[submit_info], vk::Fence::null())
+                .unwrap();
+            &ssc.semaphore.0
         };
-        self.device
-            .0
-            .queue_submit(*self.raw, &[submit_info], vk::Fence::null())
-            .unwrap();
-
         let present_info = vk::PresentInfoKHR {
             s_type: vk::StructureType::PRESENT_INFO_KHR,
             p_next: ptr::null(),
             wait_semaphore_count: 1,
-            p_wait_semaphores: &ssc.semaphore.0,
+            p_wait_semaphores,
             swapchain_count: 1,
             p_swapchains: &ssc.swapchain.raw,
             p_image_indices: &image.index,
