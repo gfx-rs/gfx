@@ -38,6 +38,7 @@ use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
 use {
     conv,
+    command as cmd,
     descriptors_cpu,
     native,
     resource as r,
@@ -3360,6 +3361,38 @@ impl d::Device<B> for Device {
             queue.wait_idle()?;
         }
         Ok(())
+    }
+
+    unsafe fn set_image_name(&self, _image: &mut r::Image, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_buffer_name(&self, _buffer: &mut r::Buffer, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_command_buffer_name(
+        &self,
+        _command_buffer: &mut cmd::CommandBuffer,
+        _name: &str
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_semaphore_name(&self, _semaphore: &mut r::Semaphore, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_fence_name(&self, _fence: &mut r::Fence, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_framebuffer_name(&self, _framebuffer: &mut r::Framebuffer, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_render_pass_name(&self, _render_pass: &mut r::RenderPass, _name: &str) {
+        // TODO
     }
 }
 

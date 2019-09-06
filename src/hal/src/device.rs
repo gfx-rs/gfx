@@ -758,4 +758,26 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ///
     /// Host access to all queues needs to be **externally** sycnhronized!
     fn wait_idle(&self) -> Result<(), OutOfMemory>;
+
+    /// Associate a name with an image, for easier debugging in external tools or with validation
+    /// layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_image_name(&self, image: &mut B::Image, name: &str);
+    /// Associate a name with a buffer, for easier debugging in external tools or with validation
+    /// layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_buffer_name(&self, buffer: &mut B::Buffer, name: &str);
+    /// Associate a name with a command buffer, for easier debugging in external tools or with
+    /// validation layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_command_buffer_name(&self, command_buffer: &mut B::CommandBuffer, name: &str);
+    /// Associate a name with a semaphore, for easier debugging in external tools or with validation
+    /// layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_semaphore_name(&self, semaphore: &mut B::Semaphore, name: &str);
+    /// Associate a name with a fence, for easier debugging in external tools or with validation
+    /// layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_fence_name(&self, fence: &mut B::Fence, name: &str);
+    /// Associate a name with a framebuffer, for easier debugging in external tools or with
+    /// validation layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_framebuffer_name(&self, framebuffer: &mut B::Framebuffer, name: &str);
+    /// Associate a name with a render pass, for easier debugging in external tools or with
+    /// validation layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_render_pass_name(&self, render_pass: &mut B::RenderPass, name: &str);
 }

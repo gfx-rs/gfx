@@ -528,6 +528,34 @@ impl device::Device<Backend> for Device {
     fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
+
+    unsafe fn set_image_name(&self, _: &mut (), _: &str) {
+        unimplemented!()
+    }
+
+    unsafe fn set_buffer_name(&self, _: &mut (), _: &str) {
+        unimplemented!()
+    }
+
+    unsafe fn set_command_buffer_name(&self, _: &mut CommandBuffer, _: &str) {
+        unimplemented!()
+    }
+
+    unsafe fn set_semaphore_name(&self, _: &mut (), _: &str) {
+        unimplemented!()
+    }
+
+    unsafe fn set_fence_name(&self, _: &mut (), _: &str) {
+        unimplemented!()
+    }
+
+    unsafe fn set_framebuffer_name(&self, _: &mut (), _: &str) {
+        unimplemented!()
+    }
+
+    unsafe fn set_render_pass_name(&self, _: &mut (), _: &str) {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug)]

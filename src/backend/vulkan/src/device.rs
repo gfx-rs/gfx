@@ -2,6 +2,7 @@ use arrayvec::ArrayVec;
 use ash::extensions::khr;
 use ash::version::DeviceV1_0;
 use ash::vk;
+use ash::vk::Handle;
 use smallvec::SmallVec;
 
 use hal::{
@@ -22,7 +23,7 @@ use std::sync::Arc;
 use std::{mem, ptr};
 
 use crate::pool::RawCommandPool;
-use crate::{conv, native as n, window as w};
+use crate::{conv, native as n, window as w, command as cmd};
 use crate::{Backend as B, Device};
 
 #[derive(Debug, Default)]
@@ -2232,6 +2233,64 @@ impl d::Device<B> for Device {
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(d::OutOfMemory::Host),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(d::OutOfMemory::Device),
             _ => unreachable!(),
+        }
+    }
+
+    unsafe fn set_image_name(&self, image: &mut n::Image, name: &str) {
+        self.set_object_name(vk::ObjectType::IMAGE, image.raw.as_raw(), name)
+    }
+
+    unsafe fn set_buffer_name(&self, buffer: &mut n::Buffer, name: &str) {
+        self.set_object_name(vk::ObjectType::BUFFER, buffer.raw.as_raw(), name)
+    }
+
+    unsafe fn set_command_buffer_name(
+        &self,
+        command_buffer: &mut cmd::CommandBuffer,
+        name: &str
+    ) {
+        self.set_object_name(vk::ObjectType::COMMAND_BUFFER, command_buffer.raw.as_raw(), name)
+    }
+
+    unsafe fn set_semaphore_name(&self, semaphore: &mut n::Semaphore, name: &str) {
+        self.set_object_name(vk::ObjectType::SEMAPHORE, semaphore.0.as_raw(), name)
+    }
+
+    unsafe fn set_fence_name(&self, fence: &mut n::Fence, name: &str) {
+        self.set_object_name(vk::ObjectType::FENCE, fence.0.as_raw(), name)
+    }
+
+    unsafe fn set_framebuffer_name(&self, framebuffer: &mut n::Framebuffer, name: &str) {
+        self.set_object_name(vk::ObjectType::FRAMEBUFFER, framebuffer.raw.as_raw(), name)
+    }
+
+    unsafe fn set_render_pass_name(&self, render_pass: &mut n::RenderPass, name: &str) {
+        self.set_object_name(vk::ObjectType::RENDER_PASS, render_pass.raw.as_raw(), name)
+    }
+}
+
+impl Device {
+    unsafe fn set_object_name(&self, object_type: vk::ObjectType, object_handle: u64, name: &str) {
+        let instance = &self.raw.2;
+        if let Some(ref debug_utils_ext) = instance.1 {
+            // Append a null terminator to the string while avoiding allocating memory
+            static mut NAME_BUF: [i8; 64] = [0_i8; 64];
+            std::ptr::copy_nonoverlapping(
+                name.as_ptr() as *mut i8,
+                &mut NAME_BUF[0],
+                name.len().min(NAME_BUF.len())
+            );
+            NAME_BUF[name.len()] = 0;
+            let _result = debug_utils_ext.0.debug_utils_set_object_name(
+                self.raw.0.handle(),
+                &vk::DebugUtilsObjectNameInfoEXT {
+                    s_type: vk::StructureType::DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
+                    p_next: std::ptr::null_mut(),
+                    object_type,
+                    object_handle,
+                    p_object_name: NAME_BUF.as_ptr(),
+                }
+            );
         }
     }
 }
