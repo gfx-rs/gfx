@@ -42,3 +42,9 @@ cp ../../../../spirv_cross/wasm/spirv_cross*.* ./ # Copy (or symlink) the spirv_
 ```
 
 Afterwards, run any HTTP server supporting `application/wasm` from the `generated-wasm` directory. You may need to add `application/wasm` MIME type to your web server in order for WebAssembly to be served correctly. While the web server is running, open the `index.html` file in your web browser to see the quad render.
+
+## Compiling your own shaders
+
+Now that you've gotten the examples running, you probably want to use your own shaders.
+
+Have a look at [shaderc-rs](https://crates.io/crates/shaderc), [glslang](https://github.com/KhronosGroup/glslang), or [glsl-to-spirv](https://crates.io/crates/glsl-to-spirv)<sup>[deprecated]</sup>.
