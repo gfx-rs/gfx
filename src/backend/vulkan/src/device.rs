@@ -852,21 +852,20 @@ impl d::Device<B> for Device {
             }
         };
 
-        match self.raw.0.create_graphics_pipelines(
+        let mut pipeline = vk::Pipeline::null();
+
+        match self.raw.0.fp_v1_0().create_graphics_pipelines(
+            self.raw.0.handle(),
             cache.map_or(vk::PipelineCache::null(), |cache| cache.raw),
-            &[info],
-            None,
+            1,
+            &info,
+            ptr::null(),
+            &mut pipeline,
         ) {
-            Ok(mut vec) => {
-                let pso = vec.remove(0);
-                assert!(pso != vk::Pipeline::null());
-                Ok(n::GraphicsPipeline(pso))
-            }
-            Err((_, error)) => match error {
-                vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
-                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
-                _ => unreachable!(),
-            },
+            vk::Result::SUCCESS => Ok(n::GraphicsPipeline(pipeline)),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
+            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
+            _ => Err(pso::CreationError::Other),
         }
     }
 
@@ -1042,21 +1041,20 @@ impl d::Device<B> for Device {
             }
         };
 
-        match self.raw.0.create_compute_pipelines(
+        let mut pipeline = vk::Pipeline::null();
+
+        match self.raw.0.fp_v1_0().create_compute_pipelines(
+            self.raw.0.handle(),
             cache.map_or(vk::PipelineCache::null(), |cache| cache.raw),
-            &[info],
-            None,
+            1,
+            &info,
+            ptr::null(),
+            &mut pipeline,
         ) {
-            Ok(mut pipelines) => {
-                let pso = pipelines.remove(0);
-                assert!(pso != vk::Pipeline::null());
-                Ok(n::ComputePipeline(pso))
-            }
-            Err((_, error)) => match error {
-                vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
-                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
-                _ => unreachable!(),
-            },
+            vk::Result::SUCCESS => Ok(n::ComputePipeline(pipeline)),
+            vk::Result::ERROR_OUT_OF_HOST_MEMORY => Err(d::OutOfMemory::Host.into()),
+            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => Err(d::OutOfMemory::Device.into()),
+            _ => Err(pso::CreationError::Other),
         }
     }
 
