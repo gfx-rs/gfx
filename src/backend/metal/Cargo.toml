@@ -29,14 +29,14 @@ copyless = "0.1.4"
 log = { version = "0.4" }
 winit = { version = "0.20.0-alpha3", optional = true }
 dispatch = { version = "0.1", optional = true }
-metal = { version = "0.16", features = ["private"] }
+metal = { version = "0.17", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
 cocoa = "0.19"
 core-graphics = "0.17"
 smallvec = "0.6"
-spirv_cross = { version = "0.15", features = ["msl"] }
+spirv_cross = { version = "0.16", features = ["msl"] }
 parking_lot = "0.9"
 storage-map = "0.2"
 

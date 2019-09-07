@@ -308,7 +308,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope =
                 shared_capture_manager.new_capture_scope_with_device(&*device);
-            shared_capture_manager.set_default_capture_scope(default_capture_scope);
+            shared_capture_manager.set_default_capture_scope(&default_capture_scope);
             shared_capture_manager.start_capture_with_scope(&default_capture_scope);
             default_capture_scope.begin_scope();
         }
@@ -1230,6 +1230,7 @@ impl hal::device::Device<Backend> for Device {
             MTLLanguageVersion::V1_2 => msl::Version::V1_2,
             MTLLanguageVersion::V2_0 => msl::Version::V2_0,
             MTLLanguageVersion::V2_1 => msl::Version::V2_1,
+            MTLLanguageVersion::V2_2 => msl::Version::V2_2,
         };
         shader_compiler_options.enable_point_size_builtin = false;
         shader_compiler_options.vertex.invert_y = true;

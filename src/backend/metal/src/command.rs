@@ -1527,7 +1527,7 @@ where
             }
         }
         Cmd::SetVisibilityResult(mode, offset) => {
-            encoder.set_visibility_result_mode(offset, mode);
+            encoder.set_visibility_result_mode(mode, offset);
         }
         Cmd::BindBuffer {
             stage,
