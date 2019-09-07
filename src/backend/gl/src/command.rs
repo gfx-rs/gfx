@@ -9,9 +9,10 @@ use hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
 use crate::pool::{self, BufferMemory};
 use crate::{native as n, Backend};
 
+use parking_lot::Mutex;
 use std::borrow::Borrow;
 use std::ops::Range;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::{mem, slice};
 
 // Command buffer implementation details:
@@ -1013,10 +1014,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         assert!(offsets.into_iter().next().is_none()); // TODO: offsets unsupported
 
         let mut set = first_set as _;
-        let drd = &*layout.desc_remap_data.read().unwrap();
+        let drd = &*layout.desc_remap_data.read();
         for desc_set in sets {
             let desc_set = desc_set.borrow();
-            let bindings = desc_set.bindings.lock().unwrap();
+            let bindings = desc_set.bindings.lock();
             for new_binding in &*bindings {
                 match new_binding {
                     n::DescSetBindings::Buffer {

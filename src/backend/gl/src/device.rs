@@ -1,8 +1,11 @@
+use arrayvec::ArrayVec;
+use parking_lot::{Mutex, RwLock};
+use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 use std::borrow::Borrow;
 use std::cell::Cell;
 use std::ops::Range;
 use std::slice;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 
 use glow::Context as _;
 
@@ -21,9 +24,6 @@ use hal::{
     range::RangeArg,
     window::{Extent2D, SwapchainConfig},
 };
-
-use arrayvec::ArrayVec;
-use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 
 use crate::{
     conv,
@@ -787,7 +787,7 @@ impl d::Device<B> for Device {
                         let shader_name = self.compile_shader(
                             point,
                             stage,
-                            &mut desc.layout.desc_remap_data.write().unwrap(),
+                            &mut desc.layout.desc_remap_data.write(),
                             &mut name_binding_map,
                         );
                         gl.attach_shader(name, shader_name);
@@ -922,7 +922,7 @@ impl d::Device<B> for Device {
             let shader = self.compile_shader(
                 &desc.shader,
                 pso::Stage::Compute,
-                &mut desc.layout.desc_remap_data.write().unwrap(),
+                &mut desc.layout.desc_remap_data.write(),
                 &mut name_binding_map,
             );
 
@@ -1523,7 +1523,7 @@ impl d::Device<B> for Device {
     {
         for mut write in writes {
             let set = &mut write.set;
-            let mut bindings = set.bindings.lock().unwrap();
+            let mut bindings = set.bindings.lock();
             let binding = write.binding;
             let mut offset = write.array_offset as i32;
 

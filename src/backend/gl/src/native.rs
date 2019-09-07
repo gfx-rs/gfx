@@ -1,6 +1,7 @@
+use parking_lot::{Mutex, RwLock};
 use std::cell::Cell;
 use std::ops::Range;
-use std::sync::{Arc, Mutex, RwLock};
+use std::sync::Arc;
 
 use hal::backend::FastHashMap;
 use hal::memory::{Properties, Requirements};

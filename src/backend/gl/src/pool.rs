@@ -3,7 +3,8 @@ use crate::native as n;
 use crate::Backend;
 use hal::backend::FastHashMap;
 
-use std::sync::{Arc, Mutex};
+use parking_lot::Mutex;
+use std::sync::Arc;
 
 #[derive(Debug)]
 pub struct OwnedBuffer {
