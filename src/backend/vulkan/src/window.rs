@@ -565,7 +565,7 @@ impl w::PresentationSurface<Backend> for Surface {
         let (index, suboptimal) =
             ssc.swapchain
                 .acquire_image(timeout_ns, None, Some(&ssc.fence))?;
-        timeout_ns -= moment.elapsed().as_nanos() as u64;
+        timeout_ns = timeout_ns.saturating_sub(moment.elapsed().as_nanos() as u64);
         let fences = &[ssc.fence.0];
 
         match ssc.device.0.wait_for_fences(fences, true, timeout_ns) {
