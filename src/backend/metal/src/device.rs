@@ -327,7 +327,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
-        match format.and_then(|f| self.shared.private_caps.map_format(f)) {
+        match format {
             Some(format) => self.shared.private_caps.map_format_properties(format),
             None => format::Properties {
                 linear_tiling: format::ImageFeature::empty(),
