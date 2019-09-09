@@ -30,6 +30,7 @@ use {
     Backend,
     Buffer,
     BufferView,
+    CommandBuffer,
     CommandPool,
     ComputePipeline,
     Descriptor,
@@ -2623,5 +2624,33 @@ impl device::Device<Backend> for Device {
     fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
         Ok(())
         // unimplemented!()
+    }
+
+    unsafe fn set_image_name(&self, _image: &mut Image, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_buffer_name(&self, _buffer: &mut Buffer, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_command_buffer_name(&self, _command_buffer: &mut CommandBuffer, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_semaphore_name(&self, _semaphore: &mut Semaphore, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_fence_name(&self, _fence: &mut Fence, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_framebuffer_name(&self, _framebuffer: &mut Framebuffer, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_render_pass_name(&self, _render_pass: &mut RenderPass, _name: &str) {
+        // TODO
     }
 }

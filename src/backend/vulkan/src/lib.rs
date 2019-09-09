@@ -582,7 +582,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         });
 
         let device = Device {
-            raw: Arc::new(RawDevice(device_raw, requested_features)),
+            raw: Arc::new(RawDevice(device_raw, requested_features, self.instance.clone())),
         };
 
         let device_arc = device.raw.clone();
@@ -1073,7 +1073,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 }
 
 #[doc(hidden)]
-pub struct RawDevice(pub ash::Device, Features);
+pub struct RawDevice(
+    pub ash::Device,
+    Features,
+    Arc<RawInstance>,
+);
+
 impl fmt::Debug for RawDevice {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "RawDevice") // TODO: Real Debug impl

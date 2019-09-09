@@ -308,7 +308,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             let shared_capture_manager = CaptureManager::shared();
             let default_capture_scope =
                 shared_capture_manager.new_capture_scope_with_device(&*device);
-            shared_capture_manager.set_default_capture_scope(default_capture_scope);
+            shared_capture_manager.set_default_capture_scope(&default_capture_scope);
             shared_capture_manager.start_capture_with_scope(&default_capture_scope);
             default_capture_scope.begin_scope();
         }
@@ -1007,6 +1007,7 @@ impl hal::device::Device<Backend> for Device {
         Ok(n::RenderPass {
             attachments,
             subpasses,
+            name: String::new(),
         })
     }
 
@@ -1230,6 +1231,7 @@ impl hal::device::Device<Backend> for Device {
             MTLLanguageVersion::V1_2 => msl::Version::V1_2,
             MTLLanguageVersion::V2_0 => msl::Version::V2_0,
             MTLLanguageVersion::V2_1 => msl::Version::V2_1,
+            MTLLanguageVersion::V2_2 => msl::Version::V2_2,
         };
         shader_compiler_options.enable_point_size_builtin = false;
         shader_compiler_options.vertex.invert_y = true;
@@ -2229,12 +2231,12 @@ impl hal::device::Device<Backend> for Device {
         usage: buffer::Usage,
     ) -> Result<n::Buffer, buffer::CreationError> {
         debug!("create_buffer of size {} and usage {:?}", size, usage);
-        Ok(n::Buffer::Unbound { usage, size })
+        Ok(n::Buffer::Unbound { usage, size, name: String::new() })
     }
 
     unsafe fn get_buffer_requirements(&self, buffer: &n::Buffer) -> memory::Requirements {
         let (size, usage) = match *buffer {
-            n::Buffer::Unbound { size, usage } => (size, usage),
+            n::Buffer::Unbound { size, usage, .. } => (size, usage),
             n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
         };
         let mut max_size = size;
@@ -2279,8 +2281,8 @@ impl hal::device::Device<Backend> for Device {
         offset: u64,
         buffer: &mut n::Buffer,
     ) -> Result<(), BindError> {
-        let size = match *buffer {
-            n::Buffer::Unbound { size, .. } => size,
+        let (size, name) = match buffer {
+            n::Buffer::Unbound { size, name, .. } => (*size, name),
             n::Buffer::Bound { .. } => panic!("Unexpected Buffer::Bound"),
         };
         debug!("bind_buffer_memory of size {} at offset {}", size, offset);
@@ -2294,6 +2296,7 @@ impl hal::device::Device<Backend> for Device {
                     // TODO: disable hazard tracking?
                     self.shared.device.lock().new_buffer(size, options)
                 });
+                raw.set_label(name);
                 n::Buffer::Bound {
                     raw,
                     options,
@@ -2307,6 +2310,11 @@ impl hal::device::Device<Backend> for Device {
                 );
                 let (storage, cache) = MemoryTypes::describe(mt.0);
                 let options = conv::resource_options_from_storage_and_cache(storage, cache);
+                if offset == 0x0 && size == cpu_buffer.length() {
+                    cpu_buffer.set_label(name);
+                } else {
+                    cpu_buffer.add_debug_marker(name, NSRange { location: offset, length: size });
+                }
                 n::Buffer::Bound {
                     raw: cpu_buffer.clone(),
                     options,
@@ -2318,6 +2326,7 @@ impl hal::device::Device<Backend> for Device {
                 let options = MTLResourceOptions::StorageModePrivate
                     | MTLResourceOptions::CPUCacheModeDefaultCache;
                 let raw = self.shared.device.lock().new_buffer(size, options);
+                raw.set_label(name);
                 n::Buffer::Bound {
                     raw,
                     options,
@@ -2503,6 +2512,7 @@ impl hal::device::Device<Backend> for Device {
                 descriptor,
                 mip_sizes,
                 host_visible,
+                name: String::new(),
             },
             kind,
             format_desc,
@@ -2518,6 +2528,7 @@ impl hal::device::Device<Backend> for Device {
                 ref descriptor,
                 ref mip_sizes,
                 host_visible,
+                ..
             } => (descriptor, mip_sizes, host_visible),
             n::ImageLike::Texture(..) | n::ImageLike::Buffer(..) => {
                 panic!("Expected Image::Unbound")
@@ -2599,12 +2610,13 @@ impl hal::device::Device<Backend> for Device {
         image: &mut n::Image,
     ) -> Result<(), BindError> {
         let like = {
-            let (descriptor, mip_sizes) = match image.like {
+            let (descriptor, mip_sizes, name) = match image.like {
                 n::ImageLike::Unbound {
                     ref descriptor,
                     ref mip_sizes,
+                    ref name,
                     ..
-                } => (descriptor, mip_sizes),
+                } => (descriptor, mip_sizes, name),
                 n::ImageLike::Texture(..) | n::ImageLike::Buffer(..) => {
                     panic!("Expected Image::Unbound")
                 }
@@ -2619,11 +2631,18 @@ impl hal::device::Device<Backend> for Device {
                     descriptor.set_resource_options(resource_options);
                     n::ImageLike::Texture(heap.new_texture(descriptor).unwrap_or_else(|| {
                         // TODO: disable hazard tracking?
-                        self.shared.device.lock().new_texture(&descriptor)
+                        let texture = self.shared.device.lock().new_texture(&descriptor);
+                        texture.set_label(name);
+                        texture
                     }))
                 }
                 n::MemoryHeap::Public(_memory_type, ref cpu_buffer) => {
                     assert_eq!(mip_sizes.len(), 1);
+                    if offset == 0x0 && cpu_buffer.length() == mip_sizes[0] {
+                        cpu_buffer.set_label(name);
+                    } else {
+                        cpu_buffer.add_debug_marker(name, NSRange { location: offset, length: mip_sizes[0] });
+                    }
                     n::ImageLike::Buffer(n::Buffer::Bound {
                         raw: cpu_buffer.clone(),
                         range: offset .. offset + mip_sizes[0] as u64,
@@ -2632,7 +2651,9 @@ impl hal::device::Device<Backend> for Device {
                 }
                 n::MemoryHeap::Private => {
                     descriptor.set_storage_mode(MTLStorageMode::Private);
-                    n::ImageLike::Texture(self.shared.device.lock().new_texture(descriptor))
+                    let texture = self.shared.device.lock().new_texture(descriptor);
+                    texture.set_label(name);
+                    n::ImageLike::Texture(texture)
                 }
             }
         };
@@ -2931,6 +2952,51 @@ impl hal::device::Device<Backend> for Device {
     fn wait_idle(&self) -> Result<(), OutOfMemory> {
         command::QueueInner::wait_idle(&self.shared.queue);
         Ok(())
+    }
+
+    unsafe fn set_image_name(&self, image: &mut n::Image, name: &str) {
+        match image {
+            n::Image { like: n::ImageLike::Buffer(ref mut buf), .. } => self.set_buffer_name(buf, name),
+            n::Image { like: n::ImageLike::Texture(ref tex), .. } => tex.set_label(name),
+            n::Image { like: n::ImageLike::Unbound { name: ref mut unbound_name, .. }, .. } => {
+                *unbound_name = name.to_string();
+            }
+        };
+    }
+
+    unsafe fn set_buffer_name(&self, buffer: &mut n::Buffer, name: &str) {
+        match buffer {
+            n::Buffer::Unbound { name: ref mut unbound_name, .. } => {
+                *unbound_name = name.to_string();
+            },
+            n::Buffer::Bound { ref raw, ref range, .. } => {
+                raw.add_debug_marker(
+                    name,
+                    NSRange { location: range.start, length: range.end - range.start }
+                );
+            }
+        }
+    }
+
+    unsafe fn set_command_buffer_name(
+        &self,
+        command_buffer: &mut command::CommandBuffer,
+        name: &str,
+    ) {
+        command_buffer.name = name.to_string();
+    }
+
+    unsafe fn set_semaphore_name(&self, _semaphore: &mut n::Semaphore, _name: &str) {
+    }
+
+    unsafe fn set_fence_name(&self, _fence: &mut n::Fence, _name: &str) {
+    }
+
+    unsafe fn set_framebuffer_name(&self, _framebuffer: &mut n::Framebuffer, _name: &str) {
+    }
+
+    unsafe fn set_render_pass_name(&self, render_pass: &mut n::RenderPass, name: &str) {
+        render_pass.name = name.to_string();
     }
 }
 

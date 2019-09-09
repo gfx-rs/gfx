@@ -27,6 +27,7 @@ use hal::{
 
 use crate::{
     conv,
+    command as cmd,
     info::LegacyFeatures,
     native as n,
     pool::{BufferMemory, CommandPool, OwnedBuffer},
@@ -1973,5 +1974,37 @@ impl d::Device<B> for Device {
             self.share.context.finish();
         }
         Ok(())
+    }
+
+    unsafe fn set_image_name(&self, _image: &mut n::Image, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_buffer_name(&self, _buffer: &mut n::Buffer, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_command_buffer_name(
+        &self,
+        _command_buffer: &mut cmd::CommandBuffer,
+        _name: &str
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_semaphore_name(&self, _semaphore: &mut n::Semaphore, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_fence_name(&self, _fence: &mut n::Fence, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_framebuffer_name(&self, _framebuffer: &mut n::FrameBuffer, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_render_pass_name(&self, _render_pass: &mut n::RenderPass, _name: &str) {
+        // TODO
     }
 }

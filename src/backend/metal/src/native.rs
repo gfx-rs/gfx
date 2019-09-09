@@ -96,6 +96,7 @@ pub struct Subpass {
 pub struct RenderPass {
     pub(crate) attachments: Vec<Attachment>,
     pub(crate) subpasses: Vec<Subpass>,
+    pub(crate) name: String,
 }
 
 #[derive(Debug)]
@@ -294,6 +295,7 @@ pub enum ImageLike {
         descriptor: metal::TextureDescriptor,
         mip_sizes: Vec<buffer::Offset>,
         host_visible: bool,
+        name: String,
     },
     /// This is a linearly tiled HOST-visible image, which is represented by a buffer.
     Buffer(Buffer),
@@ -413,6 +415,7 @@ pub enum Buffer {
     Unbound {
         size: u64,
         usage: buffer::Usage,
+        name: String,
     },
     Bound {
         raw: metal::Buffer,
