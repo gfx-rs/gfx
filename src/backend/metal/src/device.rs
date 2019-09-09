@@ -82,6 +82,7 @@ use std::{cmp, iter, mem, ptr, thread, time};
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
 const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
+const SHADER_STAGE_COUNT: usize = 3;
 
 /// Emit error during shader module parsing.
 fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
@@ -334,7 +335,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
-        match format.and_then(|f| self.shared.private_caps.map_format(f)) {
+        match format {
             Some(format) => self.shared.private_caps.map_format_properties(format),
             None => format::Properties {
                 linear_tiling: format::ImageFeature::empty(),
@@ -399,7 +400,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 } else {
                     self.shared.private_caps.max_texture_layers as _
                 },
-                sample_count_mask: 0x1,
+                sample_count_mask: self.shared.private_caps.sample_count_mask as _,
                 //TODO: buffers and textures have separate limits
                 // Max buffer size is determined by feature set
                 // Max texture size does not appear to be documented publicly
@@ -457,8 +458,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             max_push_constants_size: 0x1000,
             max_sampler_allocation_count: !0,
             max_bound_descriptor_sets: MAX_BOUND_DESCRIPTOR_SETS as _,
-            max_descriptor_set_uniform_buffers: 0x100, // also arbitrary, but probably shouldn't be more than max_bound_descriptor_sets
-            max_fragment_input_components: 32, // TODO: Add to private caps since 32 is only for mac
+            max_descriptor_set_samplers: pc.max_samplers_per_stage as usize * SHADER_STAGE_COUNT,
+            max_descriptor_set_uniform_buffers: pc.max_buffers_per_stage as usize * SHADER_STAGE_COUNT,
+            max_descriptor_set_storage_buffers: pc.max_buffers_per_stage as usize * SHADER_STAGE_COUNT,
+            max_descriptor_set_sampled_images: pc.max_textures_per_stage as usize * SHADER_STAGE_COUNT,
+            max_descriptor_set_storage_images: pc.max_textures_per_stage as usize * SHADER_STAGE_COUNT,
+            max_descriptor_set_input_attachments: pc.max_textures_per_stage as usize * SHADER_STAGE_COUNT,
+            max_fragment_input_components: pc.max_fragment_input_components as usize,
             max_framebuffer_layers: 2048,      // TODO: Determine is this is the correct value
             max_memory_allocation_count: 4096, // TODO: Determine is this is the correct value
 
@@ -496,7 +502,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             max_vertex_input_bindings: 31,
             max_vertex_input_attribute_offset: 255, // TODO
             max_vertex_input_binding_stride: 256,   // TODO
-            max_vertex_output_components: 16,       // TODO
+            max_vertex_output_components: pc.max_fragment_input_components as usize,
 
             framebuffer_color_sample_counts: 0b101,   // TODO
             framebuffer_depth_sample_counts: 0b101,   // TODO

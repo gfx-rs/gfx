@@ -653,6 +653,8 @@ struct PrivateCapabilities {
     max_texture_size: u64,
     max_texture_3d_size: u64,
     max_texture_layers: u64,
+    max_fragment_input_components: u64,
+    sample_count_mask: u8,
 }
 
 impl PrivateCapabilities {
@@ -684,6 +686,14 @@ impl PrivateCapabilities {
         let major = version.major as u32;
         let minor = version.minor as u32;
         let os_is_mac = device.supports_feature_set(MTLFeatureSet::macOS_GPUFamily1_v1);
+
+        let mut sample_count_mask: u8 = 1 | 4; // 1 and 4 samples are supported on all devices
+        if device.supports_sample_count(2) {
+            sample_count_mask |= 2;
+        }
+        if device.supports_sample_count(8) {
+            sample_count_mask |= 8;
+        }
 
         PrivateCapabilities {
             os_is_mac,
@@ -884,6 +894,8 @@ impl PrivateCapabilities {
             },
             max_texture_3d_size: 2048,
             max_texture_layers: 2048,
+            max_fragment_input_components: if os_is_mac { 128 } else { 60 },
+            sample_count_mask,
         }
     }
 
