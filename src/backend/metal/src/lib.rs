@@ -658,6 +658,7 @@ struct PrivateCapabilities {
     max_texture_size: u64,
     max_texture_3d_size: u64,
     max_texture_layers: u64,
+    max_fragment_input_components: u64,
 }
 
 impl PrivateCapabilities {
@@ -886,6 +887,7 @@ impl PrivateCapabilities {
             },
             max_texture_3d_size: 2048,
             max_texture_layers: 2048,
+            max_fragment_input_components: if os_is_mac { 128 } else { 60 },
         }
     }
 
