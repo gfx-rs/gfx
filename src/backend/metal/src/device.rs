@@ -392,7 +392,7 @@ impl hal::PhysicalDevice<Backend> for PhysicalDevice {
                 } else {
                     self.shared.private_caps.max_texture_layers as _
                 },
-                sample_count_mask: 0x1,
+                sample_count_mask: self.shared.private_caps.sample_count_mask as _,
                 //TODO: buffers and textures have separate limits
                 // Max buffer size is determined by feature set
                 // Max texture size does not appear to be documented publicly
