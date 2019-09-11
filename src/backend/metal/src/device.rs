@@ -84,11 +84,12 @@ const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
 const STRIDE_GRANULARITY: pso::ElemStride = 4; //TODO: work around?
 const SHADER_STAGE_COUNT: usize = 3;
 
-/// Emit error during shader module parsing.
-fn gen_parse_error(err: SpirvErrorCode) -> ShaderError {
+/// Emit error during shader module creation. Used if we don't expect an error
+/// but might panic due to an exception in SPIRV-Cross.
+fn gen_unexpected_error(err: SpirvErrorCode) -> ShaderError {
     let msg = match err {
         SpirvErrorCode::CompilationError(msg) => msg,
-        SpirvErrorCode::Unhandled => "Unknown parse error".into(),
+        SpirvErrorCode::Unhandled => "Unexpected error".into(),
     };
     ShaderError::CompilationFailed(msg)
 }
@@ -596,23 +597,56 @@ impl Device {
             .map_err(|e| ShaderError::CompilationFailed(e.into()))
     }
 
+    // TODO: this is duplicated across backends, should refactor
+    fn specialize_ast(
+        ast: &mut spirv::Ast<msl::Target>,
+        specialization: &pso::Specialization,
+    ) -> Result<(), ShaderError> {
+        let spec_constants = ast
+            .get_specialization_constants()
+            .map_err(gen_unexpected_error)?;
+
+        for spec_constant in spec_constants {
+            if let Some(constant) = specialization
+                .constants
+                .iter()
+                .find(|c| c.id == spec_constant.constant_id)
+            {
+                // Override specialization constant values
+                let value = specialization.data
+                    [constant.range.start as usize .. constant.range.end as usize]
+                    .iter()
+                    .rev()
+                    .fold(0u64, |u, &b| (u << 8) + b as u64);
+
+                ast.set_scalar_constant(spec_constant.id, value)
+                    .map_err(gen_unexpected_error)?;
+            }
+        }
+
+        Ok(())
+    }
+
     fn compile_shader_library(
         device: &Mutex<metal::Device>,
         raw_data: &[u32],
         compiler_options: &msl::CompilerOptions,
         msl_version: MTLLanguageVersion,
+        specialization: &pso::Specialization,
     ) -> Result<n::ModuleInfo, ShaderError> {
         let module = spirv::Module::from_words(raw_data);
 
         // now parse again using the new overrides
-        let mut ast = spirv::Ast::<msl::Target>::parse(&module).map_err(gen_parse_error)?;
-
-        ast.set_compiler_options(compiler_options).map_err(|err| {
+        let mut ast = spirv::Ast::<msl::Target>::parse(&module).map_err(|err| {
             ShaderError::CompilationFailed(match err {
                 SpirvErrorCode::CompilationError(msg) => msg,
-                SpirvErrorCode::Unhandled => "Unexpected error".into(),
+                SpirvErrorCode::Unhandled => "Unexpected parse error".into(),
             })
         })?;
+
+        Self::specialize_ast(&mut ast, specialization)?;
+
+        ast.set_compiler_options(compiler_options).map_err(gen_unexpected_error)?;
 
         let entry_points = ast.get_entry_points().map_err(|err| {
             ShaderError::CompilationFailed(match err {
@@ -700,6 +734,7 @@ impl Device {
                                 data,
                                 compiler_options,
                                 msl_version,
+                                &ep.specialization,
                             )
                             .unwrap()
                         });
@@ -711,6 +746,7 @@ impl Device {
                             data,
                             compiler_options,
                             msl_version,
+                            &ep.specialization,
                         )
                         .map_err(|e| {
                             error!("Error compiling the shader {:?}", e);
@@ -1677,6 +1713,13 @@ impl hal::device::Device<Backend> for Device {
     ) -> Result<n::ShaderModule, ShaderError> {
         //TODO: we can probably at least parse here and save the `Ast`
         let depends_on_pipeline_layout = true; //TODO: !self.private_caps.argument_buffers
+                                               // TODO: also depends on pipeline layout if there are
+                                               // specialization constants that SPIRV-Cross
+                                               // generates macros for, which occurs when MSL
+                                               // version is older than 1.2 or the constant is used
+                                               // as an array size (see
+                                               // `CompilerMSL::emit_specialization_constants_and_structs`
+                                               // in SPIRV-Cross)
         Ok(if depends_on_pipeline_layout {
             n::ShaderModule::Raw(raw_data.to_vec())
         } else {
@@ -1688,6 +1731,9 @@ impl hal::device::Device<Backend> for Device {
                 raw_data,
                 &options,
                 self.shared.private_caps.msl_version,
+                &pso::Specialization::default(), // we should only pass empty specialization constants
+                                                 // here if we know they won't be used by
+                                                 // SPIRV-Cross, see above
             )?;
             n::ShaderModule::Compiled(info)
         })
