@@ -10,6 +10,7 @@ use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winer
 use winapi::um::{d3d12, d3dcompiler, synchapi, winbase, winnt};
 use winapi::Interface;
 
+use auxil::spirv_cross_specialize_ast;
 use hal::format::Aspects;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
@@ -424,29 +425,7 @@ impl Device {
             }
             r::ShaderModule::Spirv(ref raw_data) => {
                 let mut ast = Self::parse_spirv(raw_data)?;
-                let spec_constants = ast
-                    .get_specialization_constants()
-                    .map_err(gen_query_error)?;
-
-                //TODO: move this out into `auxil`
-                for spec_constant in spec_constants {
-                    if let Some(constant) = source
-                        .specialization
-                        .constants
-                        .iter()
-                        .find(|c| c.id == spec_constant.constant_id)
-                    {
-                        // Override specialization constant values
-                        let value = source.specialization.data
-                            [constant.range.start as usize .. constant.range.end as usize]
-                            .iter()
-                            .rev()
-                            .fold(0u64, |u, &b| (u << 8) + b as u64);
-                        ast.set_scalar_constant(spec_constant.id, value)
-                            .map_err(gen_query_error)?;
-                    }
-                }
-
+                spirv_cross_specialize_ast(&mut ast, &source.specialization)?;
                 Self::patch_spirv_resources(&mut ast, Some(layout))?;
 
                 let shader_model = hlsl::ShaderModel::V5_1;

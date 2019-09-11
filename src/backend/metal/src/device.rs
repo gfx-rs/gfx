@@ -17,6 +17,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
+use auxil::spirv_cross_specialize_ast;
 use cocoa::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
@@ -597,36 +598,6 @@ impl Device {
             .map_err(|e| ShaderError::CompilationFailed(e.into()))
     }
 
-    // TODO: this is duplicated across backends, should refactor
-    fn specialize_ast(
-        ast: &mut spirv::Ast<msl::Target>,
-        specialization: &pso::Specialization,
-    ) -> Result<(), ShaderError> {
-        let spec_constants = ast
-            .get_specialization_constants()
-            .map_err(gen_unexpected_error)?;
-
-        for spec_constant in spec_constants {
-            if let Some(constant) = specialization
-                .constants
-                .iter()
-                .find(|c| c.id == spec_constant.constant_id)
-            {
-                // Override specialization constant values
-                let value = specialization.data
-                    [constant.range.start as usize .. constant.range.end as usize]
-                    .iter()
-                    .rev()
-                    .fold(0u64, |u, &b| (u << 8) + b as u64);
-
-                ast.set_scalar_constant(spec_constant.id, value)
-                    .map_err(gen_unexpected_error)?;
-            }
-        }
-
-        Ok(())
-    }
-
     fn compile_shader_library(
         device: &Mutex<metal::Device>,
         raw_data: &[u32],
@@ -644,7 +615,7 @@ impl Device {
             })
         })?;
 
-        Self::specialize_ast(&mut ast, specialization)?;
+        spirv_cross_specialize_ast(&mut ast, specialization)?;
 
         ast.set_compiler_options(compiler_options).map_err(gen_unexpected_error)?;
 
@@ -1713,13 +1684,10 @@ impl hal::device::Device<Backend> for Device {
     ) -> Result<n::ShaderModule, ShaderError> {
         //TODO: we can probably at least parse here and save the `Ast`
         let depends_on_pipeline_layout = true; //TODO: !self.private_caps.argument_buffers
-                                               // TODO: also depends on pipeline layout if there are
-                                               // specialization constants that SPIRV-Cross
-                                               // generates macros for, which occurs when MSL
-                                               // version is older than 1.2 or the constant is used
-                                               // as an array size (see
-                                               // `CompilerMSL::emit_specialization_constants_and_structs`
-                                               // in SPIRV-Cross)
+        // TODO: also depends on pipeline layout if there are specialization constants that
+        // SPIRV-Cross generates macros for, which occurs when MSL version is older than 1.2 or the
+        // constant is used as an array size (see
+        // `CompilerMSL::emit_specialization_constants_and_structs` in SPIRV-Cross)
         Ok(if depends_on_pipeline_layout {
             n::ShaderModule::Raw(raw_data.to_vec())
         } else {

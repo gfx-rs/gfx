@@ -1,6 +1,7 @@
 [workspace]
 
 members = [
+    "src/auxil/auxil",
     "src/auxil/range-alloc",
     "src/backend/dx11",
     "src/backend/dx12",

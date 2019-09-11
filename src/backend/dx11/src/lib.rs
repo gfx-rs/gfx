@@ -1,6 +1,7 @@
 //#[deny(missing_docs)]
 
 extern crate gfx_hal as hal;
+extern crate auxil;
 extern crate range_alloc;
 #[macro_use]
 extern crate bitflags;

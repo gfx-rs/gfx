@@ -9,6 +9,8 @@ use std::sync::Arc;
 
 use glow::Context as _;
 
+use auxil::spirv_cross_specialize_ast;
+
 use hal::{
     backend::FastHashMap,
     buffer,
@@ -175,36 +177,6 @@ impl Device {
             };
             d::ShaderError::CompilationFailed(msg)
         })
-    }
-
-    fn specialize_ast(
-        &self,
-        ast: &mut spirv::Ast<glsl::Target>,
-        specialization: &pso::Specialization,
-    ) -> Result<(), d::ShaderError> {
-        let spec_constants = ast
-            .get_specialization_constants()
-            .map_err(gen_unexpected_error)?;
-
-        for spec_constant in spec_constants {
-            if let Some(constant) = specialization
-                .constants
-                .iter()
-                .find(|c| c.id == spec_constant.constant_id)
-            {
-                // Override specialization constant values
-                let value = specialization.data
-                    [constant.range.start as usize .. constant.range.end as usize]
-                    .iter()
-                    .rev()
-                    .fold(0u64, |u, &b| (u << 8) + b as u64);
-
-                ast.set_scalar_constant(spec_constant.id, value)
-                    .map_err(gen_unexpected_error)?;
-            }
-        }
-
-        Ok(())
     }
 
     fn set_push_const_layout(
@@ -406,8 +378,7 @@ impl Device {
             n::ShaderModule::Spirv(ref spirv) => {
                 let mut ast = self.parse_spirv(spirv).unwrap();
 
-                self.specialize_ast(&mut ast, &point.specialization)
-                    .unwrap();
+                spirv_cross_specialize_ast(&mut ast, &point.specialization).unwrap();
                 self.remap_bindings(&mut ast, desc_remap_data, name_binding_map);
                 self.combine_separate_images_and_samplers(
                     &mut ast,
