@@ -10,6 +10,8 @@ use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, winerror};
 use winapi::um::{d3d12, d3dcompiler, synchapi, winbase, winnt};
 use winapi::Interface;
 
+use smallvec::SmallVec;
+
 use hal::format::Aspects;
 use hal::memory::Requirements;
 use hal::pool::CommandPoolCreateFlags;
@@ -21,7 +23,6 @@ use hal::{self, buffer, device as d, error, format, image, mapping, memory, pass
 use native::command_list::IndirectArgument;
 use descriptor;
 use native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
-
 use pool::{CommandPoolAllocator, RawCommandPool};
 use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
@@ -1129,9 +1130,38 @@ impl d::Device<B> for Device {
         let attachments = attachments
             .into_iter()
             .map(|attachment| attachment.borrow().clone())
-            .collect::<Vec<_>>();
-        let subpasses = subpasses.into_iter().collect::<Vec<_>>();
-        let dependencies = dependencies.into_iter().collect::<Vec<_>>();
+            .collect::<SmallVec<[_; 5]>>();
+        let subpasses = subpasses.into_iter().collect::<SmallVec<[_; 1]>>();
+        let dependencies = dependencies.into_iter().collect::<SmallVec<[_; 2]>>();
+
+        // `deps_left[i]` counts the number of dependencies that need to be resolved
+        // before starting subpass `[i]`.
+        let mut deps_left = (0 .. subpasses.len())
+            .map(|_| 0u16)
+            .collect::<SmallVec<[_; 1]>>();
+        let mut external_access = image::Access::empty() .. image::Access::empty();
+        for dep in &dependencies {
+            use hal::pass::SubpassRef as Sr;
+            let dep = dep.borrow();
+            match dep.passes {
+                Range { start: Sr::External, end: Sr::External } => {
+                    error!("Unexpected external-external dependency!");
+                }
+                Range { start: Sr::External, end: Sr::Pass(_) } => {
+                    external_access.start |= dep.accesses.start;
+                }
+                Range { start: Sr::Pass(_), end: Sr::External } => {
+                    external_access.end |= dep.accesses.end;
+                }
+                Range { start: Sr::Pass(a), end: Sr::Pass(b) } => {
+                    //Note: self-dependencies are ignored
+                    if a != b {
+                        deps_left[b] += 1;
+                    }
+                }
+            }
+        }
+
         let mut att_infos = attachments
             .iter()
             .map(|att| AttachmentInfo {
@@ -1142,12 +1172,12 @@ impl d::Device<B> for Device {
                     d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET
                 },
                 last_state: conv::map_image_resource_state(
-                    image::Access::empty(),
+                    external_access.start,
                     att.layouts.start,
                 ),
                 barrier_start_index: 0,
             })
-            .collect::<Vec<_>>();
+            .collect::<SmallVec<[_; 5]>>();
 
         // Fill out subpass known layouts
         for (sid, sub) in subpasses.iter().enumerate() {
@@ -1182,20 +1212,8 @@ impl d::Device<B> for Device {
             }
         }
 
-        let mut deps_left = vec![0u16; subpasses.len()];
-        for dep in &dependencies {
-            let dep = dep.borrow();
-            //Note: self-dependencies are ignored
-            if dep.passes.start != dep.passes.end && dep.passes.start != pass::SubpassRef::External
-            {
-                if let pass::SubpassRef::Pass(sid) = dep.passes.end {
-                    deps_left[sid] += 1;
-                }
-            }
-        }
-
         let mut rp = r::RenderPass {
-            attachments: attachments.clone(),
+            attachments: attachments.iter().cloned().collect(),
             subpasses: Vec::new(),
             post_barriers: Vec::new(),
         };
@@ -1276,7 +1294,7 @@ impl d::Device<B> for Device {
 
         // take care of the post-pass transitions at the end of the renderpass.
         for (att_id, (ai, att)) in att_infos.iter().zip(attachments.iter()).enumerate() {
-            let state_dst = conv::map_image_resource_state(image::Access::empty(), att.layouts.end);
+            let state_dst = conv::map_image_resource_state(external_access.end, att.layouts.end);
             if state_dst == ai.last_state {
                 continue;
             }
@@ -2995,8 +3013,8 @@ impl d::Device<B> for Device {
         const WAIT_OBJECT_LAST: u32 = winbase::WAIT_OBJECT_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         const WAIT_ABANDONED_LAST: u32 = winbase::WAIT_ABANDONED_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         match hr {
-            winbase::WAIT_OBJECT_0 ... WAIT_OBJECT_LAST => Ok(true),
-            winbase::WAIT_ABANDONED_0 ... WAIT_ABANDONED_LAST => Ok(true), //TODO?
+            winbase::WAIT_OBJECT_0 ..= WAIT_OBJECT_LAST => Ok(true),
+            winbase::WAIT_ABANDONED_0 ..= WAIT_ABANDONED_LAST => Ok(true), //TODO?
             winerror::WAIT_TIMEOUT => Ok(false),
             _ => panic!("Unexpected wait status 0x{:X}", hr),
         }
