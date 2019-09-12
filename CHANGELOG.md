@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.3.3 (12-09-2019)
+  - improve external render pass barriers
+
 ### backend-metal-0.3.3 (05-09-2019)
   - fix immutable samplers in combined image-samplers
 
