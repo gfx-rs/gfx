@@ -1140,6 +1140,7 @@ impl d::Device<B> for Device {
             .map(|_| 0u16)
             .collect::<SmallVec<[_; 1]>>();
         let mut external_access = image::Access::empty() .. image::Access::empty();
+        let mut external_access_depth = image::Access::empty() .. image::Access::empty();
         for dep in &dependencies {
             use hal::pass::SubpassRef as Sr;
             let dep = dep.borrow();
@@ -1148,9 +1149,21 @@ impl d::Device<B> for Device {
                     error!("Unexpected external-external dependency!");
                 }
                 Range { start: Sr::External, end: Sr::Pass(_) } => {
+                    if dep.accesses.start.contains(image::Access::DEPTH_STENCIL_ATTACHMENT_READ)
+                        || dep.accesses.start.contains(image::Access::DEPTH_STENCIL_ATTACHMENT_WRITE) {
+                        external_access_depth.start |= dep.accesses.start;
+                        external_access_depth.end |= dep.accesses.end;
+                        continue
+                    }
                     external_access.start |= dep.accesses.start;
+                    external_access.end |= dep.accesses.end;
                 }
                 Range { start: Sr::Pass(_), end: Sr::External } => {
+                    if dep.accesses.end.contains(image::Access::DEPTH_STENCIL_ATTACHMENT_READ)
+                        || dep.accesses.end.contains(image::Access::DEPTH_STENCIL_ATTACHMENT_WRITE) {
+                        external_access_depth.end |= dep.accesses.end;
+                        continue
+                    }
                     external_access.end |= dep.accesses.end;
                 }
                 Range { start: Sr::Pass(a), end: Sr::Pass(b) } => {
@@ -1172,7 +1185,11 @@ impl d::Device<B> for Device {
                     d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET
                 },
                 last_state: conv::map_image_resource_state(
-                    external_access.start,
+                    if att.format.map_or(false, |f| f.is_depth()) {
+                        external_access_depth.start
+                    } else {
+                        external_access.start
+                    },
                     att.layouts.start,
                 ),
                 barrier_start_index: 0,
@@ -1294,7 +1311,14 @@ impl d::Device<B> for Device {
 
         // take care of the post-pass transitions at the end of the renderpass.
         for (att_id, (ai, att)) in att_infos.iter().zip(attachments.iter()).enumerate() {
-            let state_dst = conv::map_image_resource_state(external_access.end, att.layouts.end);
+            let state_dst = conv::map_image_resource_state(
+                if att.format.map_or(false, |f| f.is_depth()) {
+                    external_access_depth.end
+                } else {
+                    external_access.end
+                },
+                att.layouts.end,
+            );
             if state_dst == ai.last_state {
                 continue;
             }
