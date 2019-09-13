@@ -6,6 +6,7 @@ use winapi::shared::winerror;
 use winapi::um::{d3dcommon, d3dcompiler};
 use wio::com::ComPtr;
 
+use auxil::spirv_cross_specialize_ast;
 use hal::{device, pso};
 
 use {conv, Backend, PipelineLayout};
@@ -36,27 +37,7 @@ pub(crate) fn compile_spirv_entrypoint(
     layout: &PipelineLayout,
 ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, device::ShaderError> {
     let mut ast = parse_spirv(raw_data)?;
-    let spec_constants = ast
-        .get_specialization_constants()
-        .map_err(gen_query_error)?;
-
-    for spec_constant in spec_constants {
-        if let Some(constant) = source
-            .specialization
-            .constants
-            .iter()
-            .find(|c| c.id == spec_constant.constant_id)
-        {
-            // Override specialization constant values
-            let value = source.specialization.data
-                [constant.range.start as usize .. constant.range.end as usize]
-                .iter()
-                .rev()
-                .fold(0u64, |u, &b| (u << 8) + b as u64);
-            ast.set_scalar_constant(spec_constant.id, value)
-                .map_err(gen_query_error)?;
-        }
-    }
+    spirv_cross_specialize_ast(&mut ast, &source.specialization)?;
 
     patch_spirv_resources(&mut ast, layout)?;
     let shader_model = hlsl::ShaderModel::V5_0;

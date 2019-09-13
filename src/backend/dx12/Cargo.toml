@@ -19,12 +19,13 @@ name = "gfx_backend_dx12"
 
 [dependencies]
 gfx-hal = { path = "../../hal", version = "0.3", features = ["fxhash"] }
+auxil = { path = "../../auxil/auxil", version = "0.1", package = "gfx-auxil" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
 d3d12 = "0.1"
 log = { version = "0.4" }
 smallvec = "0.6"
-spirv_cross = { version = "0.15", features = ["hlsl"] }
+spirv_cross = { version = "0.16", features = ["hlsl"] }
 winapi = { version = "0.3", features = ["basetsd","d3d12","d3d12sdklayers","d3d12shader","d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4","dxgi1_6","dxgidebug","dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
 winit = { version = "0.20.0-alpha3", optional = true }
 
