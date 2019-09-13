@@ -486,54 +486,47 @@ pub fn map_image_resource_state(
     layout: image::Layout,
 ) -> D3D12_RESOURCE_STATES {
     use self::image::Access;
-    // `D3D12_RESOURCE_STATE_PRESENT` is the same as COMMON (general state)
-    if layout == image::Layout::Present {
-        return D3D12_RESOURCE_STATE_PRESENT;
-    }
 
-    // Mutable states
-    if access.contains(Access::SHADER_WRITE) {
-        return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    }
-    if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_WRITE) {
-        return D3D12_RESOURCE_STATE_DEPTH_WRITE;
-    }
-    if access.contains(Access::COLOR_ATTACHMENT_READ)
-        || access.contains(Access::COLOR_ATTACHMENT_WRITE)
-    {
-        return D3D12_RESOURCE_STATE_RENDER_TARGET;
-    }
+    match layout {
+        // the same as COMMON (general state)
+        image::Layout::Present => D3D12_RESOURCE_STATE_PRESENT,
+        image::Layout::ColorAttachmentOptimal => D3D12_RESOURCE_STATE_RENDER_TARGET,
+        image::Layout::DepthStencilAttachmentOptimal => D3D12_RESOURCE_STATE_DEPTH_WRITE,
+        // `TRANSFER_WRITE` requires special handling as it requires RESOLVE_DEST | COPY_DEST
+        // but only 1 write-only allowed. We do the required translation before the commands.
+        // We currently assume that `COPY_DEST` is more common state than out of renderpass resolves.
+        // Resolve operations need to insert a barrier before and after the command to transition
+        // from and into `COPY_DEST` to have a consistent state for srcAccess.
+        image::Layout::TransferDstOptimal => D3D12_RESOURCE_STATE_COPY_DEST,
+        image::Layout::TransferSrcOptimal => D3D12_RESOURCE_STATE_COPY_SOURCE,
+        // At this point, we assume that the mutable access flags have already been covered by the
+        // layout checks, and we ignore them.
+        image::Layout::General if access.contains(Access::SHADER_WRITE) => D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        image::Layout::ShaderReadOnlyOptimal | // could be moved outside
+        image::Layout::DepthStencilReadOnlyOptimal |
+        image::Layout::General |
+        image::Layout::Undefined |
+        image::Layout::Preinitialized => {
+            // Read-only states
+            let mut state = D3D12_RESOURCE_STATE_COMMON;
 
-    // `TRANSFER_WRITE` requires special handling as it requires RESOLVE_DEST | COPY_DEST
-    // but only 1 write-only allowed. We do the required translation before the commands.
-    // We currently assume that `COPY_DEST` is more common state than out of renderpass resolves.
-    // Resolve operations need to insert a barrier before and after the command to transition from and
-    // into `COPY_DEST` to have a consistent state for srcAccess.
-    if access.contains(Access::TRANSFER_WRITE) {
-        return D3D12_RESOURCE_STATE_COPY_DEST;
-    }
+            if access.contains(Access::TRANSFER_READ) {
+                state |= D3D12_RESOURCE_STATE_COPY_SOURCE;
+            }
+            if access.contains(Access::INPUT_ATTACHMENT_READ) {
+                state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+            }
+            if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_READ) {
+                state |= D3D12_RESOURCE_STATE_DEPTH_READ;
+            }
+            if access.contains(Access::SHADER_READ) {
+                state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
+                    | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+            }
 
-    // Read-only states
-    let mut state = D3D12_RESOURCE_STATE_COMMON;
-
-    if access.contains(Access::TRANSFER_READ) {
-        state |= D3D12_RESOURCE_STATE_COPY_SOURCE;
+            state
+        }
     }
-    if access.contains(Access::INPUT_ATTACHMENT_READ) {
-        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-    }
-    if access.contains(Access::DEPTH_STENCIL_ATTACHMENT_READ) {
-        state |= D3D12_RESOURCE_STATE_DEPTH_READ;
-    }
-    if access.contains(Access::SHADER_READ) {
-        // SHADER_READ only allows SRV access
-        // Already handled the `SHADER_WRITE` write case above.
-        assert!(!access.contains(Access::SHADER_WRITE));
-        state |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE
-            | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-    }
-
-    state
 }
 
 pub fn map_shader_visibility(flags: pso::ShaderStageFlags) -> ShaderVisibility {
