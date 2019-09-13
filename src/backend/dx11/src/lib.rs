@@ -510,20 +510,18 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             // TODO: request debug device only on debug config?
             let mut device = ptr::null_mut();
             let mut cxt = ptr::null_mut();
-            let hr = unsafe {
-                d3d11::D3D11CreateDevice(
-                    self.adapter.as_raw() as *mut _,
-                    d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
-                    ptr::null_mut(),
-                    create_flags,
-                    [feature_level].as_ptr(),
-                    1,
-                    d3d11::D3D11_SDK_VERSION,
-                    &mut device as *mut *mut _ as *mut *mut _,
-                    &mut returned_level as *mut _,
-                    &mut cxt as *mut *mut _ as *mut *mut _,
-                )
-            };
+            let hr = d3d11::D3D11CreateDevice(
+                self.adapter.as_raw() as *mut _,
+                d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
+                ptr::null_mut(),
+                create_flags,
+                [feature_level].as_ptr(),
+                1,
+                d3d11::D3D11_SDK_VERSION,
+                &mut device as *mut *mut _ as *mut *mut _,
+                &mut returned_level as *mut _,
+                &mut cxt as *mut *mut _ as *mut *mut _,
+            );
 
             // NOTE: returns error if adapter argument is non-null and driver
             // type is not unknown; or if debug device is requested but not
@@ -534,7 +532,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
             info!("feature level={:x}", feature_level);
 
-            unsafe { (ComPtr::from_raw(device), ComPtr::from_raw(cxt)) }
+            (ComPtr::from_raw(device), ComPtr::from_raw(cxt))
         };
 
         let device = device::Device::new(device, cxt, self.memory_properties.clone());
@@ -1756,12 +1754,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             if range.aspects.contains(format::Aspects::COLOR) {
                 for layer in range.layers.clone() {
                     for level in range.levels.clone() {
-                        unsafe {
-                            self.context.ClearRenderTargetView(
-                                image.get_rtv(level, layer).unwrap().as_raw(),
-                                &value.color.float32,
-                            );
-                        }
+                        self.context.ClearRenderTargetView(
+                            image.get_rtv(level, layer).unwrap().as_raw(),
+                            &value.color.float32,
+                        );
                     }
                 }
             }
@@ -1778,14 +1774,12 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             if depth_stencil_flags != 0 {
                 for layer in range.layers.clone() {
                     for level in range.levels.clone() {
-                        unsafe {
-                            self.context.ClearDepthStencilView(
-                                image.get_dsv(level, layer).unwrap().as_raw(),
-                                depth_stencil_flags,
-                                value.depth_stencil.depth,
-                                value.depth_stencil.stencil as _,
-                            );
-                        }
+                        self.context.ClearDepthStencilView(
+                            image.get_dsv(level, layer).unwrap().as_raw(),
+                            depth_stencil_flags,
+                            value.depth_stencil.depth,
+                            value.depth_stencil.stencil as _,
+                        );
                     }
                 }
             }
@@ -1850,13 +1844,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
-        unsafe {
-            self.context.IASetIndexBuffer(
-                ibv.buffer.internal.raw,
-                conv::map_index_type(ibv.index_type),
-                ibv.offset as u32,
-            );
-        }
+        self.context.IASetIndexBuffer(
+            ibv.buffer.internal.raw,
+            conv::map_index_type(ibv.index_type),
+            ibv.offset as u32,
+        );
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
@@ -1911,10 +1903,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             .collect::<Vec<_>>();
 
         // TODO: same as for viewports
-        unsafe {
-            self.context
-                .RSSetScissorRects(scissors.len() as _, scissors.as_ptr());
-        }
+        self.context
+            .RSSetScissorRects(scissors.len() as _, scissors.as_ptr());
     }
 
     unsafe fn set_blend_constants(&mut self, color: pso::ColorValue) {
@@ -1967,14 +1957,12 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         let _scope = debug_scope!(&self.context, "BindGraphicsDescriptorSets");
 
         // TODO: find a better solution to invalidating old bindings..
-        unsafe {
-            self.context.CSSetUnorderedAccessViews(
-                0,
-                16,
-                [ptr::null_mut(); 16].as_ptr(),
-                ptr::null_mut(),
-            );
-        }
+        self.context.CSSetUnorderedAccessViews(
+            0,
+            16,
+            [ptr::null_mut(); 16].as_ptr(),
+            ptr::null_mut(),
+        );
 
         //let offsets: Vec<command::DescriptorSetOffset> = offsets.into_iter().map(|o| *o.borrow()).collect();
 
@@ -2027,10 +2015,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn bind_compute_pipeline(&mut self, pipeline: &ComputePipeline) {
-        unsafe {
-            self.context
-                .CSSetShader(pipeline.cs.as_raw(), ptr::null_mut(), 0);
-        }
+        self.context
+            .CSSetShader(pipeline.cs.as_raw(), ptr::null_mut(), 0);
     }
 
     unsafe fn bind_compute_descriptor_sets<I, J>(
@@ -2047,14 +2033,12 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     {
         let _scope = debug_scope!(&self.context, "BindComputeDescriptorSets");
 
-        unsafe {
-            self.context.CSSetUnorderedAccessViews(
-                0,
-                16,
-                [ptr::null_mut(); 16].as_ptr(),
-                ptr::null_mut(),
-            );
-        }
+        self.context.CSSetUnorderedAccessViews(
+            0,
+            16,
+            [ptr::null_mut(); 16].as_ptr(),
+            ptr::null_mut(),
+        );
         let iter = sets
             .into_iter()
             .zip(layout.set_bindings.iter().skip(first_set));
@@ -3139,7 +3123,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                 DescriptorSet {
                     offset: range.start,
                     len,
-                    handles: unsafe { self.handles.as_mut_ptr().offset(range.start as _) },
+                    handles: self.handles.as_mut_ptr().offset(range.start as _),
                     register_remap: layout.register_remap.clone(),
                     coherent_buffers: Mutex::new(CoherentBuffers {
                         flush_coherent_buffers: RefCell::new(Vec::new()),

@@ -20,9 +20,9 @@ use wio::com::ComPtr;
 
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::{fmt, mem, ptr};
 use std::ops::Range;
 use std::sync::Arc;
+use std::{fmt, mem, ptr};
 
 use parking_lot::{Condvar, Mutex};
 
@@ -1263,7 +1263,7 @@ impl device::Device<Backend> for Device {
             .host_visible
             .as_ref()
             .map(|p| d3d11::D3D11_SUBRESOURCE_DATA {
-                pSysMem: unsafe { p.borrow().as_ptr().offset(offset as isize) as _ },
+                pSysMem: p.borrow().as_ptr().offset(offset as isize) as _,
                 SysMemPitch: 0,
                 SysMemSlicePitch: 0,
             });
@@ -1325,23 +1325,21 @@ impl device::Device<Backend> for Device {
                 };
 
                 let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
-                let hr = unsafe {
-                    self.raw.CreateBuffer(
-                        &desc,
-                        if let Some(data) = initial_data {
-                            &data
-                        } else {
-                            ptr::null_mut()
-                        },
-                        &mut buffer as *mut *mut _ as *mut *mut _,
-                    )
-                };
+                let hr = self.raw.CreateBuffer(
+                    &desc,
+                    if let Some(data) = initial_data {
+                        &data
+                    } else {
+                        ptr::null_mut()
+                    },
+                    &mut buffer as *mut *mut _ as *mut *mut _,
+                );
 
                 if !winerror::SUCCEEDED(hr) {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                unsafe { ComPtr::from_raw(buffer) }
+                ComPtr::from_raw(buffer)
             }
             _ => unimplemented!(),
         };
@@ -1357,17 +1355,15 @@ impl device::Device<Backend> for Device {
             };
 
             let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.CreateBuffer(
-                    &desc,
-                    if let Some(data) = initial_data {
-                        &data
-                    } else {
-                        ptr::null_mut()
-                    },
-                    &mut buffer as *mut *mut _ as *mut *mut _,
-                )
-            };
+            let hr = self.raw.CreateBuffer(
+                &desc,
+                if let Some(data) = initial_data {
+                    &data
+                } else {
+                    ptr::null_mut()
+                },
+                &mut buffer as *mut *mut _ as *mut *mut _,
+            );
 
             if !winerror::SUCCEEDED(hr) {
                 return Err(device::BindError::WrongMemory);
@@ -1379,26 +1375,22 @@ impl device::Device<Backend> for Device {
         };
 
         let srv = if buffer.bind & d3d11::D3D11_BIND_SHADER_RESOURCE != 0 {
-            let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC>() };
+            let mut desc = mem::zeroed::<d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC>();
             desc.Format = dxgiformat::DXGI_FORMAT_R32_TYPELESS;
             desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_BUFFEREX;
-            unsafe {
-                *desc.u.BufferEx_mut() = d3d11::D3D11_BUFFEREX_SRV {
-                    FirstElement: 0,
-                    // TODO: enforce alignment through HAL limits
-                    NumElements: buffer.requirements.size as u32 / 4,
-                    Flags: d3d11::D3D11_BUFFEREX_SRV_FLAG_RAW,
-                };
+            *desc.u.BufferEx_mut() = d3d11::D3D11_BUFFEREX_SRV {
+                FirstElement: 0,
+                // TODO: enforce alignment through HAL limits
+                NumElements: buffer.requirements.size as u32 / 4,
+                Flags: d3d11::D3D11_BUFFEREX_SRV_FLAG_RAW,
             };
 
             let mut srv = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.CreateShaderResourceView(
-                    raw.as_raw() as *mut _,
-                    &desc,
-                    &mut srv as *mut *mut _ as *mut *mut _,
-                )
-            };
+            let hr = self.raw.CreateShaderResourceView(
+                raw.as_raw() as *mut _,
+                &desc,
+                &mut srv as *mut *mut _ as *mut *mut _,
+            );
 
             if !winerror::SUCCEEDED(hr) {
                 error!("CreateShaderResourceView failed: 0x{:x}", hr);
@@ -1412,25 +1404,21 @@ impl device::Device<Backend> for Device {
         };
 
         let uav = if buffer.bind & d3d11::D3D11_BIND_UNORDERED_ACCESS != 0 {
-            let mut desc = unsafe { mem::zeroed::<d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC>() };
+            let mut desc = mem::zeroed::<d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC>();
             desc.Format = dxgiformat::DXGI_FORMAT_R32_TYPELESS;
             desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_BUFFER;
-            unsafe {
-                *desc.u.Buffer_mut() = d3d11::D3D11_BUFFER_UAV {
-                    FirstElement: 0,
-                    NumElements: buffer.requirements.size as u32 / 4,
-                    Flags: d3d11::D3D11_BUFFER_UAV_FLAG_RAW,
-                };
+            *desc.u.Buffer_mut() = d3d11::D3D11_BUFFER_UAV {
+                FirstElement: 0,
+                NumElements: buffer.requirements.size as u32 / 4,
+                Flags: d3d11::D3D11_BUFFER_UAV_FLAG_RAW,
             };
 
             let mut uav = ptr::null_mut();
-            let hr = unsafe {
-                self.raw.CreateUnorderedAccessView(
-                    raw.as_raw() as *mut _,
-                    &desc,
-                    &mut uav as *mut *mut _ as *mut *mut _,
-                )
-            };
+            let hr = self.raw.CreateUnorderedAccessView(
+                raw.as_raw() as *mut _,
+                &desc,
+                &mut uav as *mut *mut _ as *mut *mut _,
+            );
 
             if !winerror::SUCCEEDED(hr) {
                 error!("CreateUnorderedAccessView failed: 0x{:x}", hr);
@@ -1604,7 +1592,7 @@ impl device::Device<Backend> for Device {
                         .host_visible
                         .as_ref()
                         .map(|_p| d3d11::D3D11_SUBRESOURCE_DATA {
-                            pSysMem: unsafe { memory.mapped_ptr.offset(offset as isize) as _ },
+                            pSysMem: memory.mapped_ptr.offset(offset as isize) as _,
                             SysMemPitch: 0,
                             SysMemSlicePitch: 0,
                         });
@@ -1621,17 +1609,15 @@ impl device::Device<Backend> for Device {
                 };
 
                 let mut resource = ptr::null_mut();
-                let hr = unsafe {
-                    self.raw.CreateTexture1D(
-                        &desc,
-                        if let Some(data) = initial_data {
-                            &data
-                        } else {
-                            ptr::null_mut()
-                        },
-                        &mut resource as *mut *mut _ as *mut *mut _,
-                    )
-                };
+                let hr = self.raw.CreateTexture1D(
+                    &desc,
+                    if let Some(data) = initial_data {
+                        &data
+                    } else {
+                        ptr::null_mut()
+                    },
+                    &mut resource as *mut *mut _ as *mut *mut _,
+                );
 
                 if !winerror::SUCCEEDED(hr) {
                     error!("CreateTexture1D failed: 0x{:x}", hr);
@@ -1650,7 +1636,7 @@ impl device::Device<Backend> for Device {
 
                         // TODO: layer offset?
                         initial_datas.push(d3d11::D3D11_SUBRESOURCE_DATA {
-                            pSysMem: unsafe { memory.mapped_ptr.offset(offset as isize) as _ },
+                            pSysMem: memory.mapped_ptr.offset(offset as isize) as _,
                             SysMemPitch: width * bpp,
                             SysMemSlicePitch: 0,
                         });
@@ -1678,17 +1664,15 @@ impl device::Device<Backend> for Device {
                 };
 
                 let mut resource = ptr::null_mut();
-                let hr = unsafe {
-                    self.raw.CreateTexture2D(
-                        &desc,
-                        if !depth {
-                            initial_datas.as_ptr()
-                        } else {
-                            ptr::null_mut()
-                        },
-                        &mut resource as *mut *mut _ as *mut *mut _,
-                    )
-                };
+                let hr = self.raw.CreateTexture2D(
+                    &desc,
+                    if !depth {
+                        initial_datas.as_ptr()
+                    } else {
+                        ptr::null_mut()
+                    },
+                    &mut resource as *mut *mut _ as *mut *mut _,
+                );
 
                 if !winerror::SUCCEEDED(hr) {
                     error!("CreateTexture2D failed: 0x{:x}", hr);
@@ -1704,7 +1688,7 @@ impl device::Device<Backend> for Device {
                         .host_visible
                         .as_ref()
                         .map(|_p| d3d11::D3D11_SUBRESOURCE_DATA {
-                            pSysMem: unsafe { memory.mapped_ptr.offset(offset as isize) as _ },
+                            pSysMem: memory.mapped_ptr.offset(offset as isize) as _,
                             SysMemPitch: width * bpp,
                             SysMemSlicePitch: width * height * bpp,
                         });
@@ -1722,17 +1706,15 @@ impl device::Device<Backend> for Device {
                 };
 
                 let mut resource = ptr::null_mut();
-                let hr = unsafe {
-                    self.raw.CreateTexture3D(
-                        &desc,
-                        if let Some(data) = initial_data {
-                            &data
-                        } else {
-                            ptr::null_mut()
-                        },
-                        &mut resource as *mut *mut _ as *mut *mut _,
-                    )
-                };
+                let hr = self.raw.CreateTexture3D(
+                    &desc,
+                    if let Some(data) = initial_data {
+                        &data
+                    } else {
+                        ptr::null_mut()
+                    },
+                    &mut resource as *mut *mut _ as *mut *mut _,
+                );
 
                 if !winerror::SUCCEEDED(hr) {
                     error!("CreateTexture3D failed: 0x{:x}", hr);
@@ -1970,15 +1952,14 @@ impl device::Device<Backend> for Device {
         };
 
         let mut sampler = ptr::null_mut();
-        let hr = unsafe {
-            self.raw
-                .CreateSamplerState(&desc, &mut sampler as *mut *mut _ as *mut *mut _)
-        };
+        let hr = self
+            .raw
+            .CreateSamplerState(&desc, &mut sampler as *mut *mut _ as *mut *mut _);
 
         assert_eq!(true, winerror::SUCCEEDED(hr));
 
         Ok(Sampler {
-            sampler_handle: unsafe { ComPtr::from_raw(sampler) },
+            sampler_handle: ComPtr::from_raw(sampler),
         })
     }
 
@@ -2186,8 +2167,8 @@ impl device::Device<Backend> for Device {
             assert!((second_offset as usize) < write.set.len);
 
             for descriptor in write.descriptors {
-                let handle = unsafe { write.set.handles.offset(first_offset as isize) };
-                let second_handle = unsafe { write.set.handles.offset(second_offset as isize) };
+                let handle = write.set.handles.offset(first_offset as isize);
+                let second_handle = write.set.handles.offset(second_offset as isize);
 
                 //println!("  Write(offset={}, handle={:?}) <= {:?}", first_offset, handle, ty);
 
@@ -2196,61 +2177,51 @@ impl device::Device<Backend> for Device {
                         pso::DescriptorType::UniformBuffer
                         | pso::DescriptorType::UniformBufferDynamic => {
                             if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
-                                let old_buffer = unsafe { (*handle).0 } as *mut _;
+                                let old_buffer = (*handle).0 as *mut _;
 
                                 write.set.add_flush(old_buffer, buffer);
                             }
 
-                            if let Some(buffer) = buffer.internal.disjoint_cb {
-                                unsafe {
-                                    *handle = Descriptor(buffer as *mut _);
-                                }
+                            *handle = if let Some(buffer) = buffer.internal.disjoint_cb {
+                                Descriptor(buffer as *mut _)
                             } else {
-                                unsafe {
-                                    *handle = Descriptor(buffer.internal.raw as *mut _);
-                                }
-                            }
+                                Descriptor(buffer.internal.raw as *mut _)
+                            };
                         }
                         pso::DescriptorType::StorageBuffer => {
                             if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
-                                let old_buffer = unsafe { (*handle).0 } as *mut _;
+                                let old_buffer = (*handle).0 as *mut _;
 
                                 write.set.add_flush(old_buffer, buffer);
                                 write.set.add_invalidate(old_buffer, buffer);
                             }
 
-                            unsafe {
-                                *handle = Descriptor(buffer.internal.uav.unwrap() as *mut _);
-                            }
+                            *handle = Descriptor(buffer.internal.uav.unwrap() as *mut _);
                         }
                         _ => unreachable!(),
                     },
                     pso::Descriptor::Image(image, _layout) => match ty {
-                        pso::DescriptorType::SampledImage => unsafe {
+                        pso::DescriptorType::SampledImage => {
                             *handle =
                                 Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _);
-                        },
-                        pso::DescriptorType::StorageImage => unsafe {
+                        }
+                        pso::DescriptorType::StorageImage => {
                             *handle =
                                 Descriptor(image.uav_handle.clone().unwrap().as_raw() as *mut _);
-                        },
-                        pso::DescriptorType::InputAttachment => unsafe {
+                        }
+                        pso::DescriptorType::InputAttachment => {
                             *handle =
                                 Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _);
-                        },
+                        }
                         _ => unreachable!(),
                     },
-                    pso::Descriptor::Sampler(sampler) => unsafe {
+                    pso::Descriptor::Sampler(sampler) => {
                         *handle = Descriptor(sampler.sampler_handle.as_raw() as *mut _);
-                    },
+                    }
                     pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
-                        unsafe {
-                            *handle = Descriptor(sampler.sampler_handle.as_raw() as *mut _);
-                        }
-                        unsafe {
-                            *second_handle =
-                                Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _);
-                        }
+                        *handle = Descriptor(sampler.sampler_handle.as_raw() as *mut _);
+                        *second_handle =
+                            Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _);
                     }
                     pso::Descriptor::UniformTexelBuffer(_buffer_view) => {}
                     pso::Descriptor::StorageTexelBuffer(_buffer_view) => {}
@@ -2276,32 +2247,24 @@ impl device::Device<Backend> for Device {
                     .get_handle_offset(copy.src_binding + offset as u32);
                 assert_eq!(dst_ty, src_ty);
 
-                let dst_handle = unsafe { copy.dst_set.handles.offset(dst_handle_offset as isize) };
-                let src_handle = unsafe { copy.dst_set.handles.offset(src_handle_offset as isize) };
+                let dst_handle = copy.dst_set.handles.offset(dst_handle_offset as isize);
+                let src_handle = copy.dst_set.handles.offset(src_handle_offset as isize);
 
                 match dst_ty {
                     pso::DescriptorType::CombinedImageSampler => {
-                        let dst_second_handle = unsafe {
-                            copy.dst_set
-                                .handles
-                                .offset(dst_second_handle_offset as isize)
-                        };
-                        let src_second_handle = unsafe {
-                            copy.dst_set
-                                .handles
-                                .offset(src_second_handle_offset as isize)
-                        };
+                        let dst_second_handle = copy
+                            .dst_set
+                            .handles
+                            .offset(dst_second_handle_offset as isize);
+                        let src_second_handle = copy
+                            .dst_set
+                            .handles
+                            .offset(src_second_handle_offset as isize);
 
-                        unsafe {
-                            *dst_handle = *src_handle;
-                        }
-                        unsafe {
-                            *dst_second_handle = *src_second_handle;
-                        }
-                    }
-                    _ => unsafe {
                         *dst_handle = *src_handle;
-                    },
+                        *dst_second_handle = *src_second_handle;
+                    }
+                    _ => *dst_handle = *src_handle,
                 }
             }
         }
@@ -2313,11 +2276,9 @@ impl device::Device<Backend> for Device {
     {
         assert_eq!(memory.host_visible.is_some(), true);
 
-        Ok(unsafe {
-            memory
-                .mapped_ptr
-                .offset(*range.start().unwrap_or(&0) as isize)
-        })
+        Ok(memory
+            .mapped_ptr
+            .offset(*range.start().unwrap_or(&0) as isize))
     }
 
     unsafe fn unmap_memory(&self, memory: &Memory) {
@@ -2449,11 +2410,9 @@ impl device::Device<Backend> for Device {
 
     unsafe fn free_memory(&self, memory: Memory) {
         for (_range, internal) in memory.local_buffers.borrow_mut().iter() {
-            unsafe {
-                (*internal.raw).Release();
-                if let Some(srv) = internal.srv {
-                    (*srv).Release();
-                }
+            (*internal.raw).Release();
+            if let Some(srv) = internal.srv {
+                (*srv).Release();
             }
         }
     }
