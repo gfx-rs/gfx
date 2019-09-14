@@ -2272,9 +2272,9 @@ impl Device {
         let instance = &self.raw.2;
         if let Some(DebugMessenger::Utils(ref debug_utils_ext, _)) = instance.1 {
             // Append a null terminator to the string while avoiding allocating memory
-            static mut NAME_BUF: [i8; 64] = [0_i8; 64];
+            static mut NAME_BUF: [u8; 64] = [0u8; 64];
             std::ptr::copy_nonoverlapping(
-                name.as_ptr() as *mut i8,
+                name.as_ptr(),
                 &mut NAME_BUF[0],
                 name.len().min(NAME_BUF.len())
             );
@@ -2286,7 +2286,7 @@ impl Device {
                     p_next: std::ptr::null_mut(),
                     object_type,
                     object_handle,
-                    p_object_name: NAME_BUF.as_ptr(),
+                    p_object_name: NAME_BUF.as_ptr() as *mut _,
                 }
             );
         }
