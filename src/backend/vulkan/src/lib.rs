@@ -11,7 +11,10 @@ extern crate lazy_static;
 #[macro_use]
 extern crate objc;
 
-use ash::extensions::{self, ext::DebugUtils};
+use ash::extensions::{
+    self,
+    ext::{DebugReport, DebugUtils},
+};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
@@ -64,7 +67,14 @@ lazy_static! {
     } else {
         vec![]
     };
-    static ref EXTENSIONS: Vec<&'static CStr> = vec![#[cfg(debug_assertions)] CStr::from_bytes_with_nul(b"VK_EXT_debug_utils\0").unwrap()];
+    static ref EXTENSIONS: Vec<&'static CStr> = if cfg!(debug_assertions) {
+        vec![
+            DebugUtils::name(),
+            DebugReport::name(),
+        ]
+    } else {
+        vec![]
+    };
     static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![extensions::khr::Swapchain::name()];
     static ref SURFACE_EXTENSIONS: Vec<&'static CStr> = vec![
         extensions::khr::Surface::name(),
@@ -103,18 +113,26 @@ lazy_static! {
         );
 }
 
-pub struct RawInstance(
-    pub ash::Instance,
-    Option<(DebugUtils, vk::DebugUtilsMessengerEXT)>,
-);
+pub struct RawInstance(pub ash::Instance, Option<DebugMessenger>);
+
+pub enum DebugMessenger {
+    Utils(DebugUtils, vk::DebugUtilsMessengerEXT),
+    Report(DebugReport, vk::DebugReportCallbackEXT),
+}
 
 impl Drop for RawInstance {
     fn drop(&mut self) {
         unsafe {
             #[cfg(debug_assertions)]
             {
-                if let Some((ref ext, callback)) = self.1 {
-                    ext.destroy_debug_utils_messenger(callback, None);
+                match self.1 {
+                    Some(DebugMessenger::Utils(ref ext, callback)) => {
+                        ext.destroy_debug_utils_messenger(callback, None)
+                    }
+                    Some(DebugMessenger::Report(ref ext, callback)) => {
+                        ext.destroy_debug_report_callback(callback, None)
+                    }
+                    None => {}
                 }
             }
 
@@ -291,15 +309,37 @@ unsafe extern "system" fn debug_utils_messenger_callback(
     vk::FALSE
 }
 
+unsafe extern "system" fn debug_report_callback(
+    type_: vk::DebugReportFlagsEXT,
+    _: vk::DebugReportObjectTypeEXT,
+    _object: u64,
+    _location: usize,
+    _msg_code: i32,
+    layer_prefix: *const std::os::raw::c_char,
+    description: *const std::os::raw::c_char,
+    _user_data: *mut std::os::raw::c_void,
+) -> vk::Bool32 {
+    let level = match type_ {
+        vk::DebugReportFlagsEXT::ERROR => log::Level::Error,
+        vk::DebugReportFlagsEXT::WARNING => log::Level::Warn,
+        vk::DebugReportFlagsEXT::INFORMATION => log::Level::Info,
+        vk::DebugReportFlagsEXT::DEBUG => log::Level::Debug,
+        _ => log::Level::Warn,
+    };
+
+    let layer_prefix = CStr::from_ptr(layer_prefix).to_str().unwrap();
+    let description = CStr::from_ptr(description).to_str().unwrap();
+    log!(level, "[{}] {}", layer_prefix, description);
+    vk::FALSE
+}
+
 impl Instance {
     pub fn create(name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
         // TODO: return errors instead of panic
-        let entry = VK_ENTRY
-            .as_ref()
-            .map_err(|e| {
-                info!("Missing Vulkan entry points: {:?}", e);
-                hal::UnsupportedBackend
-            })?;
+        let entry = VK_ENTRY.as_ref().map_err(|e| {
+            info!("Missing Vulkan entry points: {:?}", e);
+            hal::UnsupportedBackend
+        })?;
 
         let app_name = CString::new(name).unwrap();
         let app_info = vk::ApplicationInfo {
@@ -377,11 +417,10 @@ impl Instance {
                 pp_enabled_extension_names: str_pointers[layers.len() ..].as_ptr(),
             };
 
-            unsafe { entry.create_instance(&create_info, None) }
-                .map_err(|e| {
-                    warn!("Unable to create Vulkan instance: {:?}", e);
-                    hal::UnsupportedBackend
-                })?
+            unsafe { entry.create_instance(&create_info, None) }.map_err(|e| {
+                warn!("Unable to create Vulkan instance: {:?}", e);
+                hal::UnsupportedBackend
+            })?
         };
 
         #[cfg(debug_assertions)]
@@ -401,7 +440,20 @@ impl Instance {
                     p_user_data: ptr::null_mut(),
                 };
                 let handle = unsafe { ext.create_debug_utils_messenger(&info, None) }.unwrap();
-                Some((ext, handle))
+                Some(DebugMessenger::Utils(ext, handle))
+            } else if instance_extensions.iter().any(|props| unsafe {
+                CStr::from_ptr(props.extension_name.as_ptr()) == DebugReport::name()
+            }) {
+                let ext = DebugReport::new(entry, &instance);
+                let info = vk::DebugReportCallbackCreateInfoEXT {
+                    s_type: vk::StructureType::DEBUG_REPORT_CALLBACK_CREATE_INFO_EXT,
+                    p_next: ptr::null(),
+                    flags: vk::DebugReportFlagsEXT::all(),
+                    pfn_callback: Some(debug_report_callback),
+                    p_user_data: ptr::null_mut(),
+                };
+                let handle = unsafe { ext.create_debug_report_callback(&info, None) }.unwrap();
+                Some(DebugMessenger::Report(ext, handle))
             } else {
                 None
             }
@@ -1269,13 +1321,11 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     }
 
     fn wait_idle(&self) -> Result<(), OutOfMemory> {
-        match unsafe {
-            self.device.0.queue_wait_idle(*self.raw)
-        } {
+        match unsafe { self.device.0.queue_wait_idle(*self.raw) } {
             Ok(()) => Ok(()),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(OutOfMemory::Host),
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(OutOfMemory::Device),
-            Err(_) => unreachable!()
+            Err(_) => unreachable!(),
         }
     }
 }

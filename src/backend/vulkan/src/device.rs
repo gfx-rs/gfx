@@ -24,7 +24,7 @@ use std::{mem, ptr};
 
 use crate::pool::RawCommandPool;
 use crate::{conv, native as n, window as w, command as cmd};
-use crate::{Backend as B, Device};
+use crate::{Backend as B, DebugMessenger, Device};
 
 #[derive(Debug, Default)]
 struct GraphicsPipelineInfoBuf {
@@ -2270,7 +2270,7 @@ impl d::Device<B> for Device {
 impl Device {
     unsafe fn set_object_name(&self, object_type: vk::ObjectType, object_handle: u64, name: &str) {
         let instance = &self.raw.2;
-        if let Some(ref debug_utils_ext) = instance.1 {
+        if let Some(DebugMessenger::Utils(ref debug_utils_ext, _)) = instance.1 {
             // Append a null terminator to the string while avoiding allocating memory
             static mut NAME_BUF: [i8; 64] = [0_i8; 64];
             std::ptr::copy_nonoverlapping(
@@ -2279,7 +2279,7 @@ impl Device {
                 name.len().min(NAME_BUF.len())
             );
             NAME_BUF[name.len()] = 0;
-            let _result = debug_utils_ext.0.debug_utils_set_object_name(
+            let _result = debug_utils_ext.debug_utils_set_object_name(
                 self.raw.0.handle(),
                 &vk::DebugUtilsObjectNameInfoEXT {
                     s_type: vk::StructureType::DEBUG_UTILS_OBJECT_NAME_INFO_EXT,
