@@ -556,6 +556,14 @@ impl device::Device<Backend> for Device {
     unsafe fn set_render_pass_name(&self, _: &mut (), _: &str) {
         unimplemented!()
     }
+
+    unsafe fn set_descriptor_set_name(&self, _: &mut (), _: &str) {
+        unimplemented!()
+    }
+
+    unsafe fn set_descriptor_set_layout_name(&self, _: &mut (), _: &str) {
+        unimplemented!()
+    }
 }
 
 #[derive(Debug)]

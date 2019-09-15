@@ -1978,4 +1978,16 @@ impl d::Device<B> for Device {
     unsafe fn set_render_pass_name(&self, _render_pass: &mut n::RenderPass, _name: &str) {
         // TODO
     }
+
+    unsafe fn set_descriptor_set_name(&self, _descriptor_set: &mut n::DescriptorSet, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_descriptor_set_layout_name(
+        &self,
+        _descriptor_set_layout: &mut n::DescriptorSetLayout,
+        _name: &str,
+    ) {
+        // TODO
+    }
 }

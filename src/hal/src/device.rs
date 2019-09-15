@@ -780,4 +780,15 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Associate a name with a render pass, for easier debugging in external tools or with
     /// validation layers that can print a friendly name when referring to objects in error messages
     unsafe fn set_render_pass_name(&self, render_pass: &mut B::RenderPass, name: &str);
+    /// Associate a name with a descriptor set, for easier debugging in external tools or with
+    /// validation layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_descriptor_set_name(&self, descriptor_set: &mut B::DescriptorSet, name: &str);
+    /// Associate a name with a descriptor set layout, for easier debugging in external tools or
+    /// with validation layers that can print a friendly name when referring to objects in error
+    /// messages
+    unsafe fn set_descriptor_set_layout_name(
+        &self,
+        descriptor_set_layout: &mut B::DescriptorSetLayout,
+        name: &str,
+    );
 }

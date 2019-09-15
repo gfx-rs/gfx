@@ -2265,6 +2265,14 @@ impl d::Device<B> for Device {
     unsafe fn set_render_pass_name(&self, render_pass: &mut n::RenderPass, name: &str) {
         self.set_object_name(vk::ObjectType::RENDER_PASS, render_pass.raw.as_raw(), name)
     }
+
+    unsafe fn set_descriptor_set_name(&self, descriptor_set: &mut n::DescriptorSet, name: &str) {
+        self.set_object_name(vk::ObjectType::DESCRIPTOR_SET, descriptor_set.raw.as_raw(), name)
+    }
+
+    unsafe fn set_descriptor_set_layout_name(&self, descriptor_set_layout: &mut n::DescriptorSetLayout, name: &str) {
+        self.set_object_name(vk::ObjectType::DESCRIPTOR_SET_LAYOUT, descriptor_set_layout.raw.as_raw(), name)
+    }
 }
 
 impl Device {
