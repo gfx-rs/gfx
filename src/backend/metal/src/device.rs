@@ -3018,6 +3018,18 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn set_render_pass_name(&self, render_pass: &mut n::RenderPass, name: &str) {
         render_pass.name = name.to_string();
     }
+
+    unsafe fn set_descriptor_set_name(&self, _descriptor_set: &mut n::DescriptorSet, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_descriptor_set_layout_name(
+        &self,
+        _descriptor_set_layout: &mut n::DescriptorSetLayout,
+        _name: &str,
+    ) {
+        // TODO
+    }
 }
 
 #[test]

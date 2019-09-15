@@ -35,6 +35,7 @@ use {
     ComputePipeline,
     Descriptor,
     DescriptorPool,
+    DescriptorSet,
     DescriptorSetLayout,
     Fence,
     Framebuffer,
@@ -2610,6 +2611,18 @@ impl device::Device<Backend> for Device {
     }
 
     unsafe fn set_render_pass_name(&self, _render_pass: &mut RenderPass, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_descriptor_set_name(&self, _descriptor_set: &mut DescriptorSet, _name: &str) {
+        // TODO
+    }
+
+    unsafe fn set_descriptor_set_layout_name(
+        &self,
+        _descriptor_set_layout: &mut DescriptorSetLayout,
+        _name: &str,
+    ) {
         // TODO
     }
 }
