@@ -431,6 +431,7 @@ impl<B: Backend> RendererState<B> {
                 command::SubpassContents::Inline,
             );
             cmd_buffer.draw(0 .. 6, 0 .. 1);
+            cmd_buffer.end_render_pass();
             cmd_buffer.finish();
 
             let submission = Submission {
