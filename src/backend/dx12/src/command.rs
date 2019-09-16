@@ -1051,6 +1051,38 @@ impl CommandBuffer {
             }
         }
     }
+
+    fn fill_texture_barries(
+        target: &r::ImageBound,
+        states: Range<d3d12::D3D12_RESOURCE_STATES>,
+        range: &image::SubresourceRange,
+        list: &mut impl Extend<d3d12::D3D12_RESOURCE_BARRIER>,
+    ) {
+        let mut bar =
+            Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+                pResource: target.resource.as_mut_ptr(),
+                Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+                StateBefore: states.start,
+                StateAfter: states.end,
+            });
+
+        if *range == target.to_subresource_range(range.aspects) {
+            // Only one barrier if it affects the whole image.
+            list.extend(iter::once(bar));
+        } else {
+            // Generate barrier for each layer/level combination.
+            for level in range.levels.clone() {
+                for layer in range.layers.clone() {
+                    unsafe {
+                        let transition_barrier = &mut *bar.u.Transition_mut();
+                        transition_barrier.Subresource =
+                            target.calc_subresource(level as _, layer as _, 0);
+                    }
+                    list.extend(iter::once(bar));
+                }
+            }
+        }
+    }
 }
 
 impl com::RawCommandBuffer<Backend> for CommandBuffer {
@@ -1176,7 +1208,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        let mut raw_barriers = Vec::new();
+        let mut raw_barriers = SmallVec::<[_; 4]>::new();
 
         // transition barriers
         for barrier in barriers {
@@ -1236,7 +1268,6 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                             unimplemented!("Queue family resource ownership transitions are not implemented for DX12 (attempted transition from queue family {} to {}", f.start.0, f.end.0);
                         }
                     }
-                    let _ = range; //TODO: use subresource range
                     let state_src = conv::map_image_resource_state(states.start.0, states.start.1);
                     let state_dst = conv::map_image_resource_state(states.end.0, states.end.1);
 
@@ -1245,30 +1276,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     }
 
                     let target = target.expect_bound();
-                    let mut bar =
-                        Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
-                            pResource: target.resource.as_mut_ptr(),
-                            Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                            StateBefore: state_src,
-                            StateAfter: state_dst,
-                        });
-
-                    if *range == target.to_subresource_range(range.aspects) {
-                        // Only one barrier if it affects the whole image.
-                        raw_barriers.push(bar);
-                    } else {
-                        // Generate barrier for each layer/level combination.
-                        for level in range.levels.clone() {
-                            for layer in range.layers.clone() {
-                                {
-                                    let transition_barrier = &mut *bar.u.Transition_mut();
-                                    transition_barrier.Subresource =
-                                        target.calc_subresource(level as _, layer as _, 0);
-                                }
-                                raw_barriers.push(bar);
-                            }
-                        }
-                    }
+                    Self::fill_texture_barries(target, state_src .. state_dst, range, &mut raw_barriers);
                 }
             }
         }
@@ -1313,7 +1321,7 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
     unsafe fn clear_image<T>(
         &mut self,
         image: &r::Image,
-        _: image::Layout,
+        layout: image::Layout,
         color: com::ClearColorRaw,
         depth_stencil: com::ClearDepthStencilRaw,
         subresource_ranges: T,
@@ -1322,9 +1330,27 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<image::SubresourceRange>,
     {
         let image = image.expect_bound();
+        let base_state = conv::map_image_resource_state(image::Access::TRANSFER_WRITE, layout);
+        let mut raw_barriers = SmallVec::<[_; 4]>::new();
+
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
-            assert_eq!(sub.levels, 0 .. 1); //TODO
+            if sub.levels.end != 1 {
+                warn!("Clearing non-zero mipmap levels is not supported yet");
+            }
+            let target_state = if sub.aspects.contains(Aspects::COLOR) {
+                d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET
+            } else {
+                d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE
+            };
+
+            // Transition into a renderable state. We don't expect `*AttachmentOptimal`
+            // here since this would be invalid.
+            raw_barriers.clear();
+            Self::fill_texture_barries(image, base_state .. target_state, sub, &mut raw_barriers);
+            self.raw
+                .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
+
             for layer in sub.layers.clone() {
                 if sub.aspects.contains(Aspects::COLOR) {
                     let rtv = image.clear_cv[layer as usize];
@@ -1339,6 +1365,12 @@ impl com::RawCommandBuffer<Backend> for CommandBuffer {
                     self.clear_depth_stencil_view(dsv, None, Some(depth_stencil.stencil as _), &[]);
                 }
             }
+
+            // Transition back into the old state.
+            raw_barriers.clear();
+            Self::fill_texture_barries(image, target_state .. base_state, sub, &mut raw_barriers);
+            self.raw
+                .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
         }
     }
 
