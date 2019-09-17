@@ -133,7 +133,7 @@ pub struct SubpassDependency {
 }
 
 /// Description of a subpass for renderpass creation.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct SubpassDesc<'a> {
     /// Which attachments will be used as color buffers.
     pub colors: &'a [AttachmentRef],

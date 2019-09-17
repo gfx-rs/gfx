@@ -1234,16 +1234,8 @@ impl d::Device<B> for Device {
         let mut sub_infos = subpasses
             .into_iter()
             .map(|desc| {
-                let sub = desc.borrow();
                 SubInfo {
-                    //TODO: impl Clone for `pass::SubpassDesc`
-                    desc: pass::SubpassDesc {
-                        colors: sub.colors,
-                        depth_stencil: sub.depth_stencil,
-                        inputs: sub.inputs,
-                        resolves: sub.resolves,
-                        preserves: sub.preserves,
-                    },
+                    desc: desc.borrow().clone(),
                     external_dependencies: image::Access::empty() .. image::Access::empty(),
                     unresolved_dependencies: 0,
                 }
@@ -2280,7 +2272,6 @@ impl d::Device<B> for Device {
             view_caps,
             bytes_per_block,
             block_dim,
-            num_levels: mip_levels,
         }))
     }
 
