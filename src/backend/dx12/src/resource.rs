@@ -283,7 +283,6 @@ pub struct ImageUnbound {
     pub(crate) bytes_per_block: u8,
     // Dimension of a texel block (compressed formats).
     pub(crate) block_dim: (u8, u8),
-    pub(crate) num_levels: image::Level,
 }
 
 impl fmt::Debug for ImageUnbound {

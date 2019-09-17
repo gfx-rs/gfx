@@ -4,6 +4,7 @@ use std::ops::Range;
 use std::{ffi, mem, ptr, slice};
 
 use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
+use smallvec::SmallVec;
 
 use winapi::shared::minwindef::{FALSE, TRUE, UINT};
 use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winerror};
@@ -33,7 +34,6 @@ use hal::{
 use descriptor;
 use native::command_list::IndirectArgument;
 use native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
-
 use pool::{CommandPool, CommandPoolAllocator};
 use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
@@ -1204,16 +1204,25 @@ impl d::Device<B> for Device {
         ID::Item: Borrow<pass::SubpassDependency>,
     {
         #[derive(Copy, Clone, Debug, PartialEq)]
-        pub enum SubState {
+        enum SubState {
             New(d3d12::D3D12_RESOURCE_STATES),
             // Color attachment which will be resolved at the end of the subpass
             Resolve(d3d12::D3D12_RESOURCE_STATES),
             Preserve,
             Undefined,
         }
+        /// Temporary information about every sub-pass
+        struct SubInfo<'a> {
+            desc: pass::SubpassDesc<'a>,
+            /// States before the render-pass (in self.start)
+            /// and after the render-pass (in self.end).
+            external_dependencies: Range<image::Access>,
+            /// Counts the number of dependencies that need to be resolved
+            /// before starting this subpass.
+            unresolved_dependencies: u16,
+        }
         struct AttachmentInfo {
             sub_states: Vec<SubState>,
-            target_state: d3d12::D3D12_RESOURCE_STATES,
             last_state: d3d12::D3D12_RESOURCE_STATES,
             barrier_start_index: usize,
         }
@@ -1221,40 +1230,71 @@ impl d::Device<B> for Device {
         let attachments = attachments
             .into_iter()
             .map(|attachment| attachment.borrow().clone())
-            .collect::<Vec<_>>();
-        let subpasses = subpasses.into_iter().collect::<Vec<_>>();
-        let dependencies = dependencies.into_iter().collect::<Vec<_>>();
-        let mut att_infos = attachments
-            .iter()
-            .map(|att| AttachmentInfo {
-                sub_states: vec![SubState::Undefined; subpasses.len()],
-                target_state: if att.format.map_or(false, |f| f.is_depth()) {
-                    d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE //TODO?
-                } else {
-                    d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET
-                },
-                last_state: conv::map_image_resource_state(
-                    image::Access::empty(),
-                    att.layouts.start,
-                ),
+            .collect::<SmallVec<[_; 5]>>();
+        let mut sub_infos = subpasses
+            .into_iter()
+            .map(|desc| {
+                SubInfo {
+                    desc: desc.borrow().clone(),
+                    external_dependencies: image::Access::empty() .. image::Access::empty(),
+                    unresolved_dependencies: 0,
+                }
+            })
+            .collect::<SmallVec<[_; 1]>>();
+        let dependencies = dependencies.into_iter().collect::<SmallVec<[_; 2]>>();
+
+        let mut att_infos = (0 .. attachments.len())
+            .map(|_| AttachmentInfo {
+                sub_states: vec![SubState::Undefined; sub_infos.len()],
+                last_state: d3d12::D3D12_RESOURCE_STATE_COMMON, // is to be overwritten
                 barrier_start_index: 0,
             })
-            .collect::<Vec<_>>();
+            .collect::<SmallVec<[_; 5]>>();
+
+        for dep in &dependencies {
+            use hal::pass::SubpassRef as Sr;
+            let dep = dep.borrow();
+            match dep.passes {
+                Range { start: Sr::External, end: Sr::External } => {
+                    error!("Unexpected external-external dependency!");
+                }
+                Range { start: Sr::External, end: Sr::Pass(sid) } => {
+                    sub_infos[sid].external_dependencies.start |= dep.accesses.start;
+                }
+                Range { start: Sr::Pass(sid), end: Sr::External } => {
+                    sub_infos[sid].external_dependencies.end |= dep.accesses.end;
+                }
+                Range { start: Sr::Pass(from_sid), end: Sr::Pass(sid) } => {
+                    //Note: self-dependencies are ignored
+                    if from_sid != sid {
+                        sub_infos[sid].unresolved_dependencies += 1;
+                    }
+                }
+            }
+        }
 
         // Fill out subpass known layouts
-        for (sid, sub) in subpasses.iter().enumerate() {
-            let sub = sub.borrow();
+        for (sid, sub_info) in sub_infos.iter().enumerate() {
+            let sub = &sub_info.desc;
             for (i, &(id, _layout)) in sub.colors.iter().enumerate() {
-                let dst_state = att_infos[id].target_state;
+                let target_state = d3d12::D3D12_RESOURCE_STATE_RENDER_TARGET;
                 let state = match sub.resolves.get(i) {
-                    Some(_) => SubState::Resolve(dst_state),
-                    None => SubState::New(dst_state),
+                    Some(_) => SubState::Resolve(target_state),
+                    None => SubState::New(target_state),
                 };
                 let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
                 debug_assert_eq!(SubState::Undefined, old);
             }
-            for &(id, _layout) in sub.depth_stencil {
-                let state = SubState::New(att_infos[id].target_state);
+            for &(id, layout) in sub.depth_stencil {
+                let state = SubState::New(match layout {
+                    image::Layout::DepthStencilAttachmentOptimal => d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                    image::Layout::DepthStencilReadOnlyOptimal => d3d12::D3D12_RESOURCE_STATE_DEPTH_READ,
+                    image::Layout::General => d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE,
+                    _ => {
+                        error!("Unexpected depth/stencil layout: {:?}", layout);
+                        d3d12::D3D12_RESOURCE_STATE_COMMON
+                    }
+                });
                 let old = mem::replace(&mut att_infos[id].sub_states[sid], state);
                 debug_assert_eq!(SubState::Undefined, old);
             }
@@ -1274,41 +1314,41 @@ impl d::Device<B> for Device {
             }
         }
 
-        let mut deps_left = vec![0u16; subpasses.len()];
-        for dep in &dependencies {
-            let dep = dep.borrow();
-            //Note: self-dependencies are ignored
-            if dep.passes.start != dep.passes.end && dep.passes.start != pass::SubpassRef::External
-            {
-                if let pass::SubpassRef::Pass(sid) = dep.passes.end {
-                    deps_left[sid] += 1;
-                }
-            }
-        }
-
         let mut rp = r::RenderPass {
-            attachments: attachments.clone(),
+            attachments: attachments.iter().cloned().collect(),
             subpasses: Vec::new(),
             post_barriers: Vec::new(),
         };
 
-        while let Some(sid) = deps_left.iter().position(|count| *count == 0) {
-            deps_left[sid] = !0; // mark as done
+        while let Some(sid) = sub_infos.iter().position(|si| si.unresolved_dependencies == 0) {
             for dep in &dependencies {
                 let dep = dep.borrow();
                 if dep.passes.start != dep.passes.end
                     && dep.passes.start == pass::SubpassRef::Pass(sid)
                 {
                     if let pass::SubpassRef::Pass(other) = dep.passes.end {
-                        deps_left[other] -= 1;
+                        sub_infos[other].unresolved_dependencies -= 1;
                     }
                 }
             }
 
+            let si = &mut sub_infos[sid];
+            si.unresolved_dependencies = !0; // mark as done
+
             // Subpass barriers
             let mut pre_barriers = Vec::new();
             let mut post_barriers = Vec::new();
-            for (att_id, ai) in att_infos.iter_mut().enumerate() {
+            for (att_id, (ai, att)) in att_infos.iter_mut().zip(attachments.iter()).enumerate() {
+                // Attachment wasn't used before, figure out the initial state
+                if ai.barrier_start_index == 0 {
+                    //Note: the external dependencies are provided for all attachments that are
+                    // first used in this sub-pass, so they may contain more states than we expect
+                    // for this particular attachment.
+                    ai.last_state = conv::map_image_resource_state(
+                        si.external_dependencies.start,
+                        att.layouts.start,
+                    );
+                }
                 // Barrier from previous subpass to current or following subpasses.
                 match ai.sub_states[sid] {
                     SubState::Preserve => {
@@ -1349,26 +1389,33 @@ impl d::Device<B> for Device {
                         ai.last_state = resolve_state;
                         ai.barrier_start_index = rp.subpasses.len() + 1;
                     }
-                    _ => {}
+                    SubState::Undefined |
+                    SubState::New(_) => {}
                 };
             }
 
             rp.subpasses.push(r::SubpassDesc {
-                color_attachments: subpasses[sid].borrow().colors.iter().cloned().collect(),
-                depth_stencil_attachment: subpasses[sid].borrow().depth_stencil.cloned(),
-                input_attachments: subpasses[sid].borrow().inputs.iter().cloned().collect(),
-                resolve_attachments: subpasses[sid].borrow().resolves.iter().cloned().collect(),
+                color_attachments: si.desc.colors.iter().cloned().collect(),
+                depth_stencil_attachment: si.desc.depth_stencil.cloned(),
+                input_attachments: si.desc.inputs.iter().cloned().collect(),
+                resolve_attachments: si.desc.resolves.iter().cloned().collect(),
                 pre_barriers,
                 post_barriers,
             });
         }
         // if this fails, our graph has cycles
-        assert_eq!(rp.subpasses.len(), subpasses.len());
-        assert!(deps_left.into_iter().all(|count| count == !0));
+        assert_eq!(rp.subpasses.len(), sub_infos.len());
+        assert!(sub_infos.iter().all(|si| si.unresolved_dependencies == !0));
 
         // take care of the post-pass transitions at the end of the renderpass.
         for (att_id, (ai, att)) in att_infos.iter().zip(attachments.iter()).enumerate() {
-            let state_dst = conv::map_image_resource_state(image::Access::empty(), att.layouts.end);
+            let state_dst = if ai.barrier_start_index == 0 {
+                // attachment wasn't used in any sub-pass?
+                continue
+            } else {
+                let si = &sub_infos[ai.barrier_start_index - 1];
+                conv::map_image_resource_state(si.external_dependencies.end, att.layouts.end)
+            };
             if state_dst == ai.last_state {
                 continue;
             }
@@ -2225,7 +2272,6 @@ impl d::Device<B> for Device {
             view_caps,
             bytes_per_block,
             block_dim,
-            num_levels: mip_levels,
         }))
     }
 
