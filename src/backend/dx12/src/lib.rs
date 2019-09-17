@@ -22,7 +22,6 @@ mod resource;
 mod root_constants;
 mod window;
 
-use descriptors_cpu::DescriptorCpuPool;
 use hal::pso::PipelineStage;
 use hal::{adapter, format as f, image, memory, queue as q, Features, Limits};
 
@@ -37,6 +36,7 @@ use std::os::windows::ffi::OsStringExt;
 use std::sync::{Arc, Mutex};
 use std::{fmt, mem, ptr};
 
+use descriptors_cpu::DescriptorCpuPool;
 use native::descriptor;
 
 #[derive(Debug)]

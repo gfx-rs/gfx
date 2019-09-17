@@ -3,6 +3,22 @@
 ## hal-0.4.0 (TODO)
   - all strongly typed HAL wrappers are removed
   - alternative swapchain model built into `Surface`
+  - debug labels for objects
+
+### backend-dx12-0.3.4 (13-09-2019)
+  - improve external render pass barriers
+
+### backend-metal-0.3.3 (05-09-2019)
+  - fix immutable samplers in combined image-samplers
+
+### backend-vulkan-0.3.3 (03-09-2019)
+  - fix iOS build
+
+### backend-vulkan-0.3.2, backend-dx12-0.3.2 (30-08-2019)
+  - add `Instance::try_create` methods
+
+### backend-metal-0.3.1 (21-08-2019)
+  - fix memory leaks in render pass and labels creation
 
 ## hal-0.3.0 (08-08-2019)
   - graphics pipeline state refactor
