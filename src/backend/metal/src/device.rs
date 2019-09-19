@@ -1063,7 +1063,8 @@ impl hal::device::Device<Backend> for Device {
             let (flags, range) = pcr.borrow();
             for (limit, &(stage_bit, _, _)) in pc_limits.iter_mut().zip(&stage_infos) {
                 if flags.contains(stage_bit) {
-                    *limit = range.end.max(*limit);
+                    debug_assert_eq!(range.end % 4, 0);
+                    *limit = (range.end / 4).max(*limit);
                 }
             }
         }

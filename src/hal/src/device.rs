@@ -258,8 +258,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ///
     /// * `set_layouts` - Descriptor set layouts
     /// * `push_constants` - Ranges of push constants. A shader stage may only contain one push
-    ///     constant block. The length of the range indicates the number of u32 constants occupied
-    ///     by the push constant block.
+    ///     constant block. The range is defined in units of bytes.
     ///
     /// # PipelineLayout
     ///
