@@ -531,9 +531,11 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Requests a timestamp to be written.
     unsafe fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<B>);
 
-    /// Modify constant data in a graphics pipeline.
-    /// Push constants are intended to modify data in a pipeline more
-    /// quickly than a updating the values inside a descriptor set.
+    /// Modify constant data in a graphics pipeline. Push constants are intended to modify data in a
+    /// pipeline more quickly than a updating the values inside a descriptor set.
+    ///
+    /// Push constants must be aligned to 4 bytes, and to guarantee alignment, this function takes a
+    /// `&[u32]` instead of a `&[u8]`. Note that the offset is still specified in units of bytes.
     unsafe fn push_graphics_constants(
         &mut self,
         layout: &B::PipelineLayout,
@@ -542,9 +544,11 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         constants: &[u32],
     );
 
-    /// Modify constant data in a compute pipeline.
-    /// Push constants are intended to modify data in a pipeline more
-    /// quickly than a updating the values inside a descriptor set.
+    /// Modify constant data in a compute pipeline. Push constants are intended to modify data in a
+    /// pipeline more quickly than a updating the values inside a descriptor set.
+    ///
+    /// Push constants must be aligned to 4 bytes, and to guarantee alignment, this function takes a
+    /// `&[u32]` instead of a `&[u8]`. Note that the offset is still specified in units of bytes.
     unsafe fn push_compute_constants(
         &mut self,
         layout: &B::PipelineLayout,

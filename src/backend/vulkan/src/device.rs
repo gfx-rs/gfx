@@ -689,8 +689,8 @@ impl d::Device<B> for Device {
                 let &(s, ref r) = range.borrow();
                 vk::PushConstantRange {
                     stage_flags: conv::map_stage_flags(s),
-                    offset: r.start * 4,
-                    size: (r.end - r.start) * 4,
+                    offset: r.start,
+                    size: r.end - r.start,
                 }
             })
             .collect::<Vec<_>>();

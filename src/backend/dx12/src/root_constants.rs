@@ -129,9 +129,11 @@ where
         .into_iter()
         .map(|borrowable| {
             let &(stages, ref range) = borrowable.borrow();
+            debug_assert_eq!(range.start % 4, 0);
+            debug_assert_eq!(range.end % 4, 0);
             RootConstant {
                 stages,
-                range: range.clone(),
+                range: range.start / 4 .. range.end / 4,
             }
         })
         .collect()
@@ -143,7 +145,7 @@ mod tests {
 
     #[test]
     fn test_single() {
-        let range = &[(pso::ShaderStageFlags::VERTEX, 0 .. 3)];
+        let range = &[(pso::ShaderStageFlags::VERTEX, 0 .. 12)];
         assert_eq!(into_vec(range), split(range));
     }
 
@@ -153,8 +155,8 @@ mod tests {
         //      |----------|
         //          |------------|
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 0 .. 3),
-            (pso::ShaderStageFlags::FRAGMENT, 2 .. 4),
+            (pso::ShaderStageFlags::VERTEX, 0 .. 12),
+            (pso::ShaderStageFlags::FRAGMENT, 8 .. 16),
         ];
 
         let reference = vec![
@@ -180,8 +182,8 @@ mod tests {
         //      |-------------------|
         //          |------------|
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 0 .. 5),
-            (pso::ShaderStageFlags::FRAGMENT, 2 .. 4),
+            (pso::ShaderStageFlags::VERTEX, 0 .. 20),
+            (pso::ShaderStageFlags::FRAGMENT, 8 .. 16),
         ];
 
         let reference = vec![
@@ -207,8 +209,8 @@ mod tests {
         //      |--------------|
         //      |------------|
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 0 .. 5),
-            (pso::ShaderStageFlags::FRAGMENT, 0 .. 4),
+            (pso::ShaderStageFlags::VERTEX, 0 .. 20),
+            (pso::ShaderStageFlags::FRAGMENT, 0 .. 16),
         ];
 
         let reference = vec![
@@ -230,8 +232,8 @@ mod tests {
         //      |-----|
         //      |-----|
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 0 .. 4),
-            (pso::ShaderStageFlags::FRAGMENT, 0 .. 4),
+            (pso::ShaderStageFlags::VERTEX, 0 .. 16),
+            (pso::ShaderStageFlags::FRAGMENT, 0 .. 16),
         ];
 
         let reference = vec![RootConstant {
@@ -247,8 +249,8 @@ mod tests {
         //      |------|
         //               |------------|
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 0 .. 3),
-            (pso::ShaderStageFlags::FRAGMENT, 3 .. 4),
+            (pso::ShaderStageFlags::VERTEX, 0 .. 12),
+            (pso::ShaderStageFlags::FRAGMENT, 12 .. 16),
         ];
         assert_eq!(into_vec(ranges), split(ranges));
     }
@@ -256,10 +258,10 @@ mod tests {
     #[test]
     fn test_complex() {
         let ranges = &[
-            (pso::ShaderStageFlags::VERTEX, 2 .. 10),
-            (pso::ShaderStageFlags::FRAGMENT, 0 .. 5),
-            (pso::ShaderStageFlags::GEOMETRY, 6 .. 10),
-            (pso::ShaderStageFlags::HULL, 4 .. 7),
+            (pso::ShaderStageFlags::VERTEX, 8 .. 40),
+            (pso::ShaderStageFlags::FRAGMENT, 0 .. 20),
+            (pso::ShaderStageFlags::GEOMETRY, 24 .. 40),
+            (pso::ShaderStageFlags::HULL, 16 .. 28),
         ];
 
         let reference = vec![
