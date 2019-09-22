@@ -316,12 +316,7 @@ impl Instance {
     #[cfg(feature = "winit")]
     #[allow(unreachable_code)]
     pub fn create_surface(&self, window: &winit::window::Window) -> Surface {
-        #[cfg(all(
-            feature = "x11",
-            unix,
-            not(target_os = "android"),
-            not(target_os = "macos")
-        ))]
+        #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
         {
             use winit::platform::unix::WindowExtUnix;
 
@@ -332,10 +327,13 @@ impl Instance {
                     return self.create_surface_from_wayland(display, surface);
                 }
             }
-            if self.extensions.contains(&khr::XlibSurface::name()) {
-                if let Some(display) = window.xlib_display() {
-                    let window = window.xlib_window().unwrap();
-                    return self.create_surface_from_xlib(display as _, window);
+            #[cfg(feature = "x11")]
+            {
+                if self.extensions.contains(&khr::XlibSurface::name()) {
+                    if let Some(display) = window.xlib_display() {
+                        let window = window.xlib_window().unwrap();
+                        return self.create_surface_from_xlib(display as _, window);
+                    }
                 }
             }
             panic!("The Vulkan driver does not support surface creation!");
