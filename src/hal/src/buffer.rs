@@ -103,7 +103,7 @@ bitflags!(
         /// ../pso/struct.PipelineStage.html#associatedconstant.VERTEX_INPUT) stage.
         const VERTEX_BUFFER_READ = 0x4;
         ///
-        const CONSTANT_BUFFER_READ = 0x8;
+        const UNIFORM_READ = 0x8;
         ///
         const SHADER_READ = 0x20;
         ///

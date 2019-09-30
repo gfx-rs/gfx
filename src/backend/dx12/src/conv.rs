@@ -473,7 +473,7 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
     if access.contains(Access::INDEX_BUFFER_READ) {
         state |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
     }
-    if access.contains(Access::VERTEX_BUFFER_READ) || access.contains(Access::CONSTANT_BUFFER_READ)
+    if access.contains(Access::VERTEX_BUFFER_READ) || access.contains(Access::UNIFORM_READ)
     {
         state |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
