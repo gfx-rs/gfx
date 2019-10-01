@@ -72,10 +72,14 @@ use dispatch;
 use foreign_types::ForeignTypeRef;
 use metal::MTLFeatureSet;
 use metal::MTLLanguageVersion;
-use objc::runtime::{Object, BOOL, YES};
+use objc::{
+    declare::ClassDecl,
+    runtime::{Object, BOOL, YES, Sel, Class}
+};
 use parking_lot::{Condvar, Mutex};
 #[cfg(feature = "winit")]
 use winit;
+use lazy_static::lazy_static;
 
 use std::mem;
 use std::os::raw::c_void;
@@ -207,6 +211,7 @@ pub struct Experiments {
 #[derive(Debug)]
 pub struct Instance {
     pub experiments: Experiments,
+    gfx_managed_metal_layer_delegate: GfxManagedMetalLayerDelegate,
 }
 
 impl hal::Instance for Instance {
@@ -246,10 +251,57 @@ impl hal::Instance for Instance {
     }
 }
 
+lazy_static! {
+    static ref GFX_MANAGED_METAL_LAYER_DELEGATE_CLASS: &'static Class = unsafe {
+        let mut decl = ClassDecl::new("GfxManagedMetalLayerDelegate", class!(NSObject)).unwrap();
+        decl.add_method(
+            sel!(layer:shouldInheritContentsScale:fromWindow:),
+            layer_should_inherit_contents_scale_from_window
+                as extern "C" fn(&Object, Sel, *mut Object, CGFloat, *mut Object) -> BOOL,
+        );
+        decl.register()
+    };
+}
+
+extern "C" fn layer_should_inherit_contents_scale_from_window(
+    _: &Object,
+    _: Sel,
+    _layer: *mut Object,
+    _new_scale: CGFloat,
+    _from_window: *mut Object
+) -> BOOL {
+    return YES;
+}
+
+#[derive(Debug)]
+struct GfxManagedMetalLayerDelegate(*mut Object);
+
+impl GfxManagedMetalLayerDelegate {
+    pub fn new() -> Self {
+        unsafe {
+            let mut delegate: *mut Object = msg_send![*GFX_MANAGED_METAL_LAYER_DELEGATE_CLASS, alloc];
+            delegate = msg_send![delegate, init];
+            Self(delegate)
+        }
+    }
+}
+
+impl Drop for GfxManagedMetalLayerDelegate {
+    fn drop(&mut self) {
+        unsafe {
+            let () = msg_send![self.0, release];
+        }
+    }
+}
+
+unsafe impl Send for GfxManagedMetalLayerDelegate {}
+unsafe impl Sync for GfxManagedMetalLayerDelegate {}
+
 impl Instance {
     pub fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
         Ok(Instance {
             experiments: Experiments::default(),
+            gfx_managed_metal_layer_delegate: GfxManagedMetalLayerDelegate::new()
         })
     }
 
@@ -339,6 +391,7 @@ impl Instance {
                 let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
                 let () = msg_send![layer, setContentsScale: scale_factor];
             }
+            let () = msg_send![layer, setDelegate: self.gfx_managed_metal_layer_delegate.0];
             layer
         };
 
