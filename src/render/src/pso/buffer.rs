@@ -34,13 +34,33 @@ pub trait Structure<F> {
 type AttributeSlotSet = usize;
 
 /// Service struct to simplify the implementations of `VertexBuffer` and `InstanceBuffer`.
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct VertexBufferCommon<T, I=InstanceRate>(
-    RawVertexBuffer,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<(T, I)>
-);
+pub struct VertexBufferCommon<T, I=InstanceRate>(RawVertexBuffer, PhantomData<(T, I)>);
+
+impl<T, I> PartialEq for VertexBufferCommon<T, I> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T, I> Eq for VertexBufferCommon<T, I> {}
+
+impl<T, I> std::hash::Hash for VertexBufferCommon<T, I> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<T, I> Clone for VertexBufferCommon<T, I> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<T, I> std::fmt::Debug for VertexBufferCommon<T, I> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("VertexBufferCommon").field(&self.0).finish()
+    }
+}
 
 /// Helper trait for `VertexBufferCommon` to support variable instance rate.
 pub trait ToInstanceRate {
@@ -89,13 +109,33 @@ pub struct RawVertexBuffer(Option<BufferIndex>, AttributeSlotSet);
 ///
 /// - init: `&str` = name of the buffer
 /// - data: `Buffer<T>`
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(
-    RawConstantBuffer,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct ConstantBuffer<T: Structure<shade::ConstFormat>>(RawConstantBuffer, PhantomData<T>);
+
+impl<T: Structure<shade::ConstFormat>> PartialEq for ConstantBuffer<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T: Structure<shade::ConstFormat>> Eq for ConstantBuffer<T> {}
+
+impl<T: Structure<shade::ConstFormat>> std::hash::Hash for ConstantBuffer<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<T: Structure<shade::ConstFormat>> Clone for ConstantBuffer<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<T: Structure<shade::ConstFormat>> std::fmt::Debug for ConstantBuffer<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ConstantBuffer").field(&self.0).finish()
+    }
+}
 
 /// Raw constant buffer component.
 ///
@@ -109,13 +149,33 @@ pub struct RawConstantBuffer(Option<(Usage, ConstantBufferSlot)>);
 ///
 /// - init: `&str` = name of the constant
 /// - data: `T` = value
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Global<T: ToUniform>(
-    RawGlobal,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct Global<T: ToUniform>(RawGlobal, PhantomData<T>);
+
+impl<T: ToUniform> PartialEq for Global<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T: ToUniform> Eq for Global<T> {}
+
+impl<T: ToUniform> std::hash::Hash for Global<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<T: ToUniform> Clone for Global<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<T: ToUniform> std::fmt::Debug for Global<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Global").field(&self.0).finish()
+    }
+}
 
 /// Raw global (uniform) constant component. Describes a free-standing value
 /// passed into the shader, which is not enclosed in any constant buffer.
