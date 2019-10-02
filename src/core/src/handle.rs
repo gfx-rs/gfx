@@ -32,13 +32,35 @@ impl<R: Resources> Deref for RawBuffer<R> {
 }
 
 /// Type-safe buffer handle
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Buffer<R: Resources, T>(
-    RawBuffer<R>,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct Buffer<R: Resources, T>(RawBuffer<R>, PhantomData<T>);
+
+impl<R: Resources, T> PartialEq for Buffer<R, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<R: Resources, T> Eq for Buffer<R, T> {}
+
+impl<R: Resources, T> std::hash::Hash for Buffer<R, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<R: Resources, T> Clone for Buffer<R, T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<R: Resources, T> std::fmt::Debug for Buffer<R, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Buffer")
+            .field(&self.0)
+            .finish()
+    }
+}
 
 impl<R: Resources, T> Typed for Buffer<R, T> {
     type Raw = RawBuffer<R>;
@@ -88,13 +110,35 @@ impl<R: Resources> Deref for RawTexture<R> {
 }
 
 /// Typed texture object
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct Texture<R: Resources, S>(
-    RawTexture<R>,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<S>
-);
+pub struct Texture<R: Resources, S>(RawTexture<R>, PhantomData<S>);
+
+impl<R: Resources, T> PartialEq for Texture<R, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<R: Resources, T> Eq for Texture<R, T> {}
+
+impl<R: Resources, T> std::hash::Hash for Texture<R, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<R: Resources, T> Clone for Texture<R, T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<R: Resources, T> std::fmt::Debug for Texture<R, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("Texture")
+            .field(&self.0)
+            .finish()
+    }
+}
 
 impl<R: Resources, S> Typed for Texture<R, S> {
     type Raw = RawTexture<R>;
@@ -121,13 +165,35 @@ enum ViewSource<R: Resources> {
 pub struct RawShaderResourceView<R: Resources>(Arc<R::ShaderResourceView>, ViewSource<R>);
 
 /// Type-safe Shader Resource View Handle
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct ShaderResourceView<R: Resources, T>(
-    RawShaderResourceView<R>,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct ShaderResourceView<R: Resources, T>(RawShaderResourceView<R>, PhantomData<T>);
+
+impl<R: Resources, T> PartialEq for ShaderResourceView<R, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<R: Resources, T> Eq for ShaderResourceView<R, T> {}
+
+impl<R: Resources, T> std::hash::Hash for ShaderResourceView<R, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<R: Resources, T> Clone for ShaderResourceView<R, T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<R: Resources, T> std::fmt::Debug for ShaderResourceView<R, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ShaderResourceView")
+            .field(&self.0)
+            .finish()
+    }
+}
 
 impl<R: Resources, T> ShaderResourceView<R, T> {
     /// Gets the raw view
@@ -148,13 +214,35 @@ impl<R: Resources, T> Typed for ShaderResourceView<R, T> {
 pub struct RawUnorderedAccessView<R: Resources>(Arc<R::UnorderedAccessView>, ViewSource<R>);
 
 /// Type-safe Unordered Access View Handle
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct UnorderedAccessView<R: Resources, T>(
-    RawUnorderedAccessView<R>,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct UnorderedAccessView<R: Resources, T>(RawUnorderedAccessView<R>, PhantomData<T>);
+
+impl<R: Resources, T> PartialEq for UnorderedAccessView<R, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<R: Resources, T> Eq for UnorderedAccessView<R, T> {}
+
+impl<R: Resources, T> std::hash::Hash for UnorderedAccessView<R, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<R: Resources, T> Clone for UnorderedAccessView<R, T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<R: Resources, T> std::fmt::Debug for UnorderedAccessView<R, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("UnorderedAccessView")
+            .field(&self.0)
+            .finish()
+    }
+}
 
 impl<R: Resources, T> Typed for UnorderedAccessView<R, T> {
     type Raw = RawUnorderedAccessView<R>;
@@ -192,13 +280,35 @@ impl<R: Resources> RawDepthStencilView<R> {
 }
 
 /// Typed RTV
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RenderTargetView<R: Resources, T>(
-    RawRenderTargetView<R>,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct RenderTargetView<R: Resources, T>(RawRenderTargetView<R>, PhantomData<T>);
+
+impl<R: Resources, T> PartialEq for RenderTargetView<R, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<R: Resources, T> Eq for RenderTargetView<R, T> {}
+
+impl<R: Resources, T> std::hash::Hash for RenderTargetView<R, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<R: Resources, T> Clone for RenderTargetView<R, T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<R: Resources, T> std::fmt::Debug for RenderTargetView<R, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("RenderTargetView")
+            .field(&self.0)
+            .finish()
+    }
+}
 
 impl<R: Resources, T> RenderTargetView<R, T> {
     /// Get target dimensions
@@ -215,13 +325,35 @@ impl<R: Resources, T> Typed for RenderTargetView<R, T> {
 }
 
 /// Typed DSV
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct DepthStencilView<R: Resources, T>(
-    RawDepthStencilView<R>,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct DepthStencilView<R: Resources, T>(RawDepthStencilView<R>, PhantomData<T>);
+
+impl<R: Resources, T> PartialEq for DepthStencilView<R, T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<R: Resources, T> Eq for DepthStencilView<R, T> {}
+
+impl<R: Resources, T> std::hash::Hash for DepthStencilView<R, T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<R: Resources, T> Clone for DepthStencilView<R, T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<R: Resources, T> std::fmt::Debug for DepthStencilView<R, T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("DepthStencilView")
+            .field(&self.0)
+            .finish()
+    }
+}
 
 impl<R: Resources, T> DepthStencilView<R, T> {
     /// Get target dimensions

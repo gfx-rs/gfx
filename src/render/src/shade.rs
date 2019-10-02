@@ -110,7 +110,7 @@ impl Error for ProgramError {
         }
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         match *self {
             ProgramError::Vertex(ref e) => Some(e),
             ProgramError::Hull(ref e) => Some(e),

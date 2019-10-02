@@ -70,7 +70,7 @@ impl<S: fmt::Debug + fmt::Display> Error for PipelineStateError<S> {
         }
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         match *self {
             PipelineStateError::Program(ref program_error) => Some(program_error),
             PipelineStateError::DescriptorInit(ref init_error) => Some(init_error),
