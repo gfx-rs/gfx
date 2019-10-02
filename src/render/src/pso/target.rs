@@ -25,25 +25,65 @@ use super::{DataLink, DataBind, RawDataSet, AccessInfo};
 ///
 /// - init: `&str` = name of the target
 /// - data: `RenderTargetView<T>`
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct RenderTarget<T>(
-    Option<ColorSlot>,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct RenderTarget<T>(Option<ColorSlot>, PhantomData<T>);
+
+impl<T> PartialEq for RenderTarget<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T> Eq for RenderTarget<T> {}
+
+impl<T> std::hash::Hash for RenderTarget<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<T> Clone for RenderTarget<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<T> std::fmt::Debug for RenderTarget<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("RenderTarget").field(&self.0).finish()
+    }
+}
 
 /// Render target component with active blending mode.
 ///
 /// - init: (`&str`, `ColorMask`, `Blend` = blending state)
 /// - data: `RenderTargetView<T>`
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct BlendTarget<T>(
-    RawRenderTarget,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct BlendTarget<T>(RawRenderTarget, PhantomData<T>);
+
+impl<T> PartialEq for BlendTarget<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T> Eq for BlendTarget<T> {}
+
+impl<T> std::hash::Hash for BlendTarget<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<T> Clone for BlendTarget<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<T> std::fmt::Debug for BlendTarget<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("BlendTarget").field(&self.0).finish()
+    }
+}
 
 /// Raw (untyped) render target component with optional blending.
 ///
@@ -56,34 +96,85 @@ pub struct RawRenderTarget(Option<ColorSlot>);
 ///
 /// - init: `Depth` = depth state
 /// - data: `DepthStencilView<T>`
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct DepthTarget<T>(
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct DepthTarget<T>(PhantomData<T>);
+
+impl<T> PartialEq for DepthTarget<T> {
+    fn eq(&self, _: &Self) -> bool { true }
+}
+
+impl<T> Eq for DepthTarget<T> {}
+
+impl<T> std::hash::Hash for DepthTarget<T> {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+
+impl<T> Clone for DepthTarget<T> {
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T> std::fmt::Debug for DepthTarget<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DepthTarget")
+    }
+}
 
 /// Stencil target component.
 ///
 /// - init: `Stencil` = stencil state
 /// - data: (`DepthStencilView<T>`, `(front, back)` = stencil reference values)
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct StencilTarget<T>(
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct StencilTarget<T>(PhantomData<T>);
+
+impl<T> PartialEq for StencilTarget<T> {
+    fn eq(&self, _: &Self) -> bool { true }
+}
+
+impl<T> Eq for StencilTarget<T> {}
+
+impl<T> std::hash::Hash for StencilTarget<T> {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+
+impl<T> Clone for StencilTarget<T> {
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T> std::fmt::Debug for StencilTarget<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "StencilTarget")
+    }
+}
 
 /// Depth + stencil target component.
 ///
 /// - init: (`Depth` = depth state, `Stencil` = stencil state)
 /// - data: (`DepthStencilView<T>`, `(front, back)` = stencil reference values)
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct DepthStencilTarget<T>(
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct DepthStencilTarget<T>(PhantomData<T>);
+
+impl<T> PartialEq for DepthStencilTarget<T> {
+    fn eq(&self, _: &Self) -> bool { true }
+}
+
+impl<T> Eq for DepthStencilTarget<T> {}
+
+impl<T> std::hash::Hash for DepthStencilTarget<T> {
+    fn hash<H: std::hash::Hasher>(&self, _: &mut H) {}
+}
+
+impl<T> Clone for DepthStencilTarget<T> {
+    fn clone(&self) -> Self {
+        Self(PhantomData)
+    }
+}
+
+impl<T> std::fmt::Debug for DepthStencilTarget<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "DepthStencilTarget")
+    }
+}
 
 /// Scissor component. Sets up the scissor test for rendering.
 ///

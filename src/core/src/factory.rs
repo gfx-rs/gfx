@@ -57,7 +57,7 @@ impl Error for ResourceViewError {
         }
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         if let ResourceViewError::Layer(ref e) = *self {
             Some(e)
         } else {
@@ -113,7 +113,7 @@ impl Error for TargetViewError {
         }
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         if let TargetViewError::Layer(ref e) = *self {
             Some(e)
         } else {
@@ -152,7 +152,7 @@ impl Error for CombinedError {
         }
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         match *self {
             CombinedError::Texture(ref e) => Some(e),
             CombinedError::Resource(ref e) => Some(e),
