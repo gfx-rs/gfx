@@ -36,5 +36,5 @@ unstable = []
 [dependencies]
 mint = { version = "0.5", optional = true }
 draw_state = "0.8"
-gfx_core = { path = "../core", version = "0.9.1" }
+gfx_core = { path = "../core", version = "0.9.2" }
 log = "0.4"
