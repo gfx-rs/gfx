@@ -236,7 +236,7 @@ impl<S: fmt::Debug + fmt::Display> Error for InitError<S> {
         }
     }
 
-    fn cause(&self) -> Option<&Error> {
+    fn cause(&self) -> Option<&dyn Error> {
         if let InitError::ConstantBuffer(_, Some(ref e)) = *self {
             Some(e)
         } else {

@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx_core"
-version = "0.9.1"
+version = "0.9.2"
 description = "Core library of Gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -30,7 +30,6 @@ path = "src/lib.rs"
 [dependencies]
 bitflags = "1"
 mint = { version = "0.5", optional = true }
-derivative = "1"
 draw_state = "0.8"
 log = "0.4"
 serde = { version = "1", features = ["serde_derive"], optional = true }

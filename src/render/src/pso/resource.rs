@@ -26,13 +26,33 @@ use super::{DataLink, DataBind, RawDataSet, AccessInfo};
 ///
 /// - init: `&str` = name of the resource
 /// - data: `ShaderResourceView<T>`
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct ShaderResource<T>(
-    RawShaderResource,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct ShaderResource<T>(RawShaderResource, PhantomData<T>);
+
+impl<T> PartialEq for ShaderResource<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T> Eq for ShaderResource<T> {}
+
+impl<T> std::hash::Hash for ShaderResource<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<T> Clone for ShaderResource<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<T> std::fmt::Debug for ShaderResource<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ShaderResource").field(&self.0).finish()
+    }
+}
 
 /// Raw (untyped) shader resource (SRV).
 ///
@@ -47,13 +67,33 @@ pub struct RawShaderResource(Option<(ResourceViewSlot, shade::Usage)>);
 ///
 /// - init: `&str` = name of the resource
 /// - data: `UnorderedAccessView<T>`
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash, PartialEq)]
-pub struct UnorderedAccess<T>(
-    Option<(UnorderedViewSlot, shade::Usage)>,
-    #[derivative(Hash = "ignore", PartialEq = "ignore")]
-    PhantomData<T>
-);
+pub struct UnorderedAccess<T>(Option<(UnorderedViewSlot, shade::Usage)>, PhantomData<T>);
+
+impl<T> PartialEq for UnorderedAccess<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0
+    }
+}
+
+impl<T> Eq for UnorderedAccess<T> {}
+
+impl<T> std::hash::Hash for UnorderedAccess<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+    }
+}
+
+impl<T> Clone for UnorderedAccess<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+impl<T> std::fmt::Debug for UnorderedAccess<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("UnorderedAccess").field(&self.0).finish()
+    }
+}
 
 /// Sampler component.
 ///
@@ -69,9 +109,34 @@ pub struct Sampler(Option<(SamplerSlot, shade::Usage)>);
 ///
 /// - init: `&str` = name of the sampler/texture (assuming they match)
 /// - data: (`ShaderResourceView<T>`, `Sampler`)
-#[derive(Derivative)]
-#[derivative(Clone, Debug, Eq, Hash(bound=""), PartialEq)]
 pub struct TextureSampler<T>(ShaderResource<T>, Sampler);
+
+impl<T> PartialEq for TextureSampler<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.0 == other.0 && self.1 == other.1
+    }
+}
+
+impl<T> Eq for TextureSampler<T> {}
+
+impl<T> std::hash::Hash for TextureSampler<T> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.0.hash(state);
+        self.1.hash(state);
+    }
+}
+
+impl<T> Clone for TextureSampler<T> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), self.1.clone())
+    }
+}
+
+impl<T> std::fmt::Debug for TextureSampler<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("TextureSampler").field(&self.0).field(&self.1).finish()
+    }
+}
 
 impl<'a, T> DataLink<'a> for ShaderResource<T> {
     type Init = &'a str;

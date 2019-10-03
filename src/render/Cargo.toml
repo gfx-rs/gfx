@@ -14,7 +14,7 @@
 
 [package]
 name = "gfx"
-version = "0.18.1"
+version = "0.18.2"
 description = "A high-performance, bindless graphics API"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -35,7 +35,6 @@ unstable = []
 
 [dependencies]
 mint = { version = "0.5", optional = true }
-derivative = "1.0"
 draw_state = "0.8"
 gfx_core = { path = "../core", version = "0.9.1" }
 log = "0.4"
