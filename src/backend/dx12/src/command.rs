@@ -213,6 +213,9 @@ impl PipelineCache {
         assert!(offsets.into_iter().next().is_none()); //TODO
 
         let mut sets = sets.into_iter().peekable();
+
+        // 'Global' GPU descriptor heaps.
+        // All descriptors live in the same heaps.
         let (srv_cbv_uav_start, sampler_start, heap_srv_cbv_uav, heap_sampler) =
             if let Some(set_0) = sets.peek().map(Borrow::borrow) {
                 (
@@ -228,46 +231,31 @@ impl PipelineCache {
         self.srv_cbv_uav_start = srv_cbv_uav_start;
         self.sampler_start = sampler_start;
 
-        let mut table_id = 0;
-        for table in &layout.tables[.. first_set] {
-            if table.contains(r::SRV_CBV_UAV) {
-                table_id += 1;
-            }
-            if table.contains(r::SAMPLERS) {
-                table_id += 1;
-            }
-        }
-
-        let table_base_offset = layout
-            .root_constants
-            .iter()
-            .fold(0, |sum, c| sum + c.range.end - c.range.start);
-
         for (set, table) in sets.zip(layout.tables[first_set ..].iter()) {
             let set = set.borrow();
-            set.first_gpu_view.map(|gpu| {
-                assert!(table.contains(r::SRV_CBV_UAV));
 
-                let root_offset = table_id + table_base_offset;
+            let mut num_tables = 0;
+            set.first_gpu_view.map(|gpu| {
+                assert!(table.ty.contains(r::SRV_CBV_UAV));
+
                 // Cast is safe as offset **must** be in u32 range. Unable to
                 // create heaps with more descriptors.
-                let table_offset = (gpu.ptr - srv_cbv_uav_start) as u32;
+                let table_gpu_offset = (gpu.ptr - srv_cbv_uav_start) as u32;
+                let table_offset = table.offset + num_tables;
                 self.user_data
-                    .set_srv_cbv_uav_table(root_offset as _, table_offset);
-
-                table_id += 1;
+                    .set_srv_cbv_uav_table(table_offset, table_gpu_offset);
+                num_tables += 1;
             });
             set.first_gpu_sampler.map(|gpu| {
-                assert!(table.contains(r::SAMPLERS));
+                assert!(table.ty.contains(r::SAMPLERS));
 
-                let root_offset = table_id + table_base_offset;
                 // Cast is safe as offset **must** be in u32 range. Unable to
                 // create heaps with more descriptors.
-                let table_offset = (gpu.ptr - sampler_start) as u32;
+                let table_gpu_offset = (gpu.ptr - sampler_start) as u32;
+                let table_offset = table.offset + num_tables;
                 self.user_data
-                    .set_sampler_table(root_offset as _, table_offset);
-
-                table_id += 1;
+                    .set_sampler_table(table_offset, table_gpu_offset);
+                num_tables += 1;
             });
         }
 

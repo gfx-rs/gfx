@@ -272,7 +272,7 @@ impl Device {
     ) -> Result<(), d::ShaderError> {
         // Move the descriptor sets away to yield for the root constants at "space0".
         let space_offset = match layout {
-            Some(layout) if !layout.root_constants.is_empty() => 1,
+            Some(layout) if !layout.constants.is_empty() => 1,
             _ => return Ok(()),
         };
 
@@ -378,7 +378,7 @@ impl Device {
 
         let stage_flag = stage.into();
         let root_constant_layout = layout
-            .root_constants
+            .constants
             .iter()
             .filter_map(|constant| {
                 if constant.stages.contains(stage_flag) {
@@ -1446,23 +1446,34 @@ impl d::Device<B> for Device {
     {
         // Pipeline layouts are implemented as RootSignature for D3D12.
         //
+        // Push Constants are implemented as root constants.
+        //
         // Each descriptor set layout will be one table entry of the root signature.
         // We have the additional restriction that SRV/CBV/UAV and samplers need to be
         // separated, so each set layout will actually occupy up to 2 entries!
         //
+        // Dynamic uniform/storage buffers are implemented as root descriptors.
+        // This allows to handle the dynamic offsets properly, which would not be feasible
+        // with a combination of root constant and descriptor table.
+        //
         // Root signature layout:
         //     Root Constants: Register: Offest/4, Space: 0
-        //       ...
-        //     DescriptorTable0: Space: 2 (+1) (SrvCbvUav)
-        //     DescriptorTable0: Space: 3 (+1) (Sampler)
-        //     DescriptorTable1: Space: 4 (+1) (SrvCbvUav)
         //     ...
+        //     DescriptorTable0: Space: 1 (+1) (SrvCbvUav)
+        //     DescriptorTable0: Space: 2 (+1) (Sampler)
+        //     DescriptorTable1: Space: 3 (+1) (SrvCbvUav)
+        //     ...
+        //     Root Descriptors
 
         let sets = sets.into_iter().collect::<Vec<_>>();
+
+        let mut root_table_offset = 0;
         let root_constants = root_constants::split(push_constant_ranges)
             .iter()
             .map(|constant| {
                 assert!(constant.range.start <= constant.range.end);
+                root_table_offset += constant.range.end - constant.range.start;
+
                 RootConstant {
                     stages: constant.stages,
                     range: constant.range.start .. constant.range.end,
@@ -1470,14 +1481,17 @@ impl d::Device<B> for Device {
             })
             .collect::<Vec<_>>();
 
-        // guarantees that no re-allocation is done, and our pointers are valid
         info!(
             "Creating a pipeline layout with {} sets and {} root constants",
             sets.len(),
             root_constants.len()
         );
+
+        // Number of elements in the root signature.
+        // Guarantees that no re-allocation is done, and our pointers are valid
         let mut parameters = Vec::with_capacity(root_constants.len() + sets.len() * 2);
 
+        // Convert root signature descriptions into root signature parameters.
         for root_constant in root_constants.iter() {
             debug!(
                 "\tRoot constant set={} range {:?}",
@@ -1496,7 +1510,7 @@ impl d::Device<B> for Device {
         // Offest of `spaceN` for descriptor tables. Root constants will be in
         // `space0`.
         // This has to match `patch_spirv_resources` logic.
-        let table_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
+        let root_table_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
 
         // Collect the whole number of bindings we will create upfront.
         // It allows us to preallocate enough storage to avoid reallocation,
@@ -1513,11 +1527,11 @@ impl d::Device<B> for Device {
             })
             .sum();
         let mut ranges = Vec::with_capacity(total);
-        let mut set_tables = Vec::with_capacity(sets.len());
 
-        for (i, set) in sets.iter().enumerate() {
+        let root_tables = sets.iter().enumerate().map(|(i, set)| {
             let set = set.borrow();
-            let space = (table_space_offset + i) as u32;
+            let space = (root_table_space_offset + i) as u32;
+            let root_offset = root_table_offset;
             let mut table_type = r::SetTableTypes::empty();
 
             for bind in set.bindings.iter() {
@@ -1563,6 +1577,7 @@ impl d::Device<B> for Device {
                     &ranges[range_base ..],
                 ));
                 table_type |= r::SRV_CBV_UAV;
+                root_table_offset += 1;
             }
 
             range_base = ranges.len();
@@ -1578,10 +1593,14 @@ impl d::Device<B> for Device {
                     &ranges[range_base ..],
                 ));
                 table_type |= r::SAMPLERS;
+                root_table_offset += 1;
             }
 
-            set_tables.push(table_type);
-        }
+            r::RootTable {
+                ty: table_type,
+                offset: root_offset as _,
+            }
+        }).collect();
 
         // Ensure that we didn't reallocate!
         debug_assert_eq!(ranges.len(), total);
@@ -1608,8 +1627,8 @@ impl d::Device<B> for Device {
 
         Ok(r::PipelineLayout {
             raw: signature,
-            tables: set_tables,
-            root_constants,
+            constants: root_constants,
+            tables: root_tables,
             num_parameter_slots: parameters.len(),
         })
     }
@@ -1908,7 +1927,7 @@ impl d::Device<B> for Device {
                 signature: desc.layout.raw,
                 num_parameter_slots: desc.layout.num_parameter_slots,
                 topology,
-                constants: desc.layout.root_constants.clone(),
+                constants: desc.layout.constants.clone(),
                 vertex_bindings,
                 baked_states,
             })
@@ -1943,7 +1962,7 @@ impl d::Device<B> for Device {
                 raw: pipeline,
                 signature: desc.layout.raw,
                 num_parameter_slots: desc.layout.num_parameter_slots,
-                constants: desc.layout.root_constants.clone(),
+                constants: desc.layout.constants.clone(),
             })
         } else {
             Err(pso::CreationError::Other)
@@ -2592,6 +2611,10 @@ impl d::Device<B> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
+        // Descriptor pools are implemented as slices of the global descriptor heaps.
+        // A descriptor pool will occupy a contiguous space in each heap (CBV/SRV/UAV and Sampler) depending
+        // on the total requested amount of descriptors.
+
         let mut num_srv_cbv_uav = 0;
         let mut num_samplers = 0;
 
@@ -2623,6 +2646,7 @@ impl d::Device<B> for Device {
             num_srv_cbv_uav, num_samplers
         );
 
+        // Allocate slices of the global GPU descriptor heaps.
         let heap_srv_cbv_uav = {
             let mut heap_srv_cbv_uav = self.heap_srv_cbv_uav.lock().unwrap();
 

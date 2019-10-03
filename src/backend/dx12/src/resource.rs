@@ -131,15 +131,22 @@ pub const SRV_CBV_UAV: SetTableTypes = SetTableTypes::SRV_CBV_UAV;
 pub const SAMPLERS: SetTableTypes = SetTableTypes::SAMPLERS;
 
 #[derive(Debug, Hash)]
+pub struct RootTable {
+    pub ty: SetTableTypes,
+    // Offset in the root signature.
+    pub offset: usize,
+}
+
+#[derive(Debug, Hash)]
 pub struct PipelineLayout {
     pub(crate) raw: native::RootSignature,
+    // Disjunct, sorted vector of root constant ranges.
+    pub(crate) constants: Vec<RootConstant>,
     // Storing for each associated descriptor set layout, which tables we created
     // in the root signature. This is required for binding descriptor sets.
-    pub(crate) tables: Vec<SetTableTypes>,
-    // Disjunct, sorted vector of root constant ranges.
-    pub(crate) root_constants: Vec<RootConstant>,
+    pub(crate) tables: Vec<RootTable>,
     // Number of parameter slots in this layout, can be larger than number of tables.
-    // Required for updating the root signature when flusing user data.
+    // Required for updating the root signature when flushing user data.
     pub(crate) num_parameter_slots: usize,
 }
 unsafe impl Send for PipelineLayout {}
@@ -422,7 +429,12 @@ bitflags! {
         const SRV = 0x2;
         const UAV = 0x4;
         const SAMPLER = 0x8;
-        const VIEW = 0x7;
+
+        /// Indicates if the descriptor is a dynamic uniform/storage buffer.
+        /// Important as dynamic buffers are implemented as root descriptors.
+        const DYNAMIC = 0x10;
+
+        const VIEW = DescriptorContent::CBV.bits |DescriptorContent::SRV.bits | DescriptorContent::UAV.bits;
     }
 }
 
@@ -437,9 +449,10 @@ impl From<pso::DescriptorType> for DescriptorContent {
             }
             Dt::StorageImage
             | Dt::StorageBuffer
-            | Dt::StorageBufferDynamic
             | Dt::StorageTexelBuffer => DescriptorContent::SRV | DescriptorContent::UAV,
-            Dt::UniformBuffer | Dt::UniformBufferDynamic => DescriptorContent::CBV,
+            Dt::StorageBufferDynamic => DescriptorContent::SRV | DescriptorContent::UAV | DescriptorContent::DYNAMIC,
+            Dt::UniformBuffer => DescriptorContent::CBV,
+            Dt::UniformBufferDynamic => DescriptorContent::CBV | DescriptorContent::DYNAMIC,
         }
     }
 }
