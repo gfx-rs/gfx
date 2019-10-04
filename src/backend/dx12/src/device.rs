@@ -1452,7 +1452,7 @@ impl d::Device<B> for Device {
         // We have the additional restriction that SRV/CBV/UAV and samplers need to be
         // separated, so each set layout will actually occupy up to 2 entries!
         //
-        // Dynamic uniform/storage buffers are implemented as root descriptors.
+        // Dynamic uniform buffers are implemented as root descriptors.
         // This allows to handle the dynamic offsets properly, which would not be feasible
         // with a combination of root constant and descriptor table.
         //
@@ -1460,19 +1460,19 @@ impl d::Device<B> for Device {
         //     Root Constants: Register: Offest/4, Space: 0
         //     ...
         //     DescriptorTable0: Space: 1 (+1) (SrvCbvUav)
+        //     Root Descriptors
         //     DescriptorTable0: Space: 2 (+1) (Sampler)
         //     DescriptorTable1: Space: 3 (+1) (SrvCbvUav)
         //     ...
-        //     Root Descriptors
 
         let sets = sets.into_iter().collect::<Vec<_>>();
 
-        let mut root_table_offset = 0;
+        let mut root_offset = 0;
         let root_constants = root_constants::split(push_constant_ranges)
             .iter()
             .map(|constant| {
                 assert!(constant.range.start <= constant.range.end);
-                root_table_offset += constant.range.end - constant.range.start;
+                root_offset += (constant.range.end - constant.range.start) as usize;
 
                 RootConstant {
                     stages: constant.stages,
@@ -1510,7 +1510,7 @@ impl d::Device<B> for Device {
         // Offest of `spaceN` for descriptor tables. Root constants will be in
         // `space0`.
         // This has to match `patch_spirv_resources` logic.
-        let root_table_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
+        let root_space_offset = if !root_constants.is_empty() { 1 } else { 0 };
 
         // Collect the whole number of bindings we will create upfront.
         // It allows us to preallocate enough storage to avoid reallocation,
@@ -1521,22 +1521,21 @@ impl d::Device<B> for Device {
                 let mut sum = 0;
                 for binding in desc_set.borrow().bindings.iter() {
                     let content = r::DescriptorContent::from(binding.ty);
-                    sum += content.bits().count_ones() as usize;
+                    if !content.is_dynamic() {
+                        sum += content.bits().count_ones() as usize;
+                    }
                 }
                 sum
             })
             .sum();
         let mut ranges = Vec::with_capacity(total);
 
-        let root_tables = sets.iter().enumerate().map(|(i, set)| {
+        let elements = sets.iter().enumerate().map(|(i, set)| {
             let set = set.borrow();
-            let space = (root_table_space_offset + i) as u32;
-            let root_offset = root_table_offset;
+            let space = (root_space_offset + i) as u32;
             let mut table_type = r::SetTableTypes::empty();
+            let root_table_offset = root_offset;
 
-            for bind in set.bindings.iter() {
-                debug!("\tRange {:?} at space={}", bind, space);
-            }
             //TODO: split between sampler and non-sampler tables
             let visibility = conv::map_shader_visibility(
                 set.bindings
@@ -1545,6 +1544,10 @@ impl d::Device<B> for Device {
                         u | bind.stage_flags
                     }),
             );
+
+            for bind in set.bindings.iter() {
+                debug!("\tRange {:?} at space={}", bind, space);
+            }
 
             let describe = |bind: &pso::DescriptorSetLayoutBinding, ty| {
                 descriptor::DescriptorRange::new(
@@ -1558,17 +1561,39 @@ impl d::Device<B> for Device {
                 )
             };
 
+            let mut descriptors = Vec::new();
             let mut range_base = ranges.len();
             for bind in set.bindings.iter() {
                 let content = r::DescriptorContent::from(bind.ty);
-                if content.contains(r::DescriptorContent::CBV) {
-                    ranges.push(describe(bind, descriptor::DescriptorRangeType::CBV));
-                }
-                if content.contains(r::DescriptorContent::SRV) {
-                    ranges.push(describe(bind, descriptor::DescriptorRangeType::SRV));
-                }
-                if content.contains(r::DescriptorContent::UAV) {
-                    ranges.push(describe(bind, descriptor::DescriptorRangeType::UAV));
+
+                if content.is_dynamic() {
+                    // Root Descriptor
+                    let binding = descriptor::Binding {
+                        register: bind.binding as _,
+                        space,
+                    };
+
+                    if content.contains(r::DescriptorContent::CBV) {
+                        descriptors.push(r::RootDescriptor {
+                            offset: root_offset,
+                        });
+                        parameters.push(descriptor::RootParameter::cbv_descriptor(visibility, binding));
+                        root_offset += 2;
+                    } else {
+                        // SRV and UAV not implemented so far
+                        unimplemented!()
+                    }
+                } else {
+                    // Descriptor table ranges
+                    if content.contains(r::DescriptorContent::CBV) {
+                        ranges.push(describe(bind, descriptor::DescriptorRangeType::CBV));
+                    }
+                    if content.contains(r::DescriptorContent::SRV) {
+                        ranges.push(describe(bind, descriptor::DescriptorRangeType::SRV));
+                    }
+                    if content.contains(r::DescriptorContent::UAV) {
+                        ranges.push(describe(bind, descriptor::DescriptorRangeType::UAV));
+                    }
                 }
             }
             if ranges.len() > range_base {
@@ -1577,7 +1602,7 @@ impl d::Device<B> for Device {
                     &ranges[range_base ..],
                 ));
                 table_type |= r::SRV_CBV_UAV;
-                root_table_offset += 1;
+                root_offset += 1;
             }
 
             range_base = ranges.len();
@@ -1593,12 +1618,15 @@ impl d::Device<B> for Device {
                     &ranges[range_base ..],
                 ));
                 table_type |= r::SAMPLERS;
-                root_table_offset += 1;
+                root_offset += 1;
             }
 
-            r::RootTable {
-                ty: table_type,
-                offset: root_offset as _,
+            r::RootElement {
+                table: r::RootTable {
+                    ty: table_type,
+                    offset: root_table_offset as _,
+                },
+                descriptors,
             }
         }).collect();
 
@@ -1628,7 +1656,7 @@ impl d::Device<B> for Device {
         Ok(r::PipelineLayout {
             raw: signature,
             constants: root_constants,
-            tables: root_tables,
+            elements,
             num_parameter_slots: parameters.len(),
         })
     }
@@ -2751,94 +2779,106 @@ impl d::Device<B> for Device {
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref range) => {
                         let buffer = buffer.expect_bound();
-                        if update_pool_index == descriptor_update_pools.len() {
-                            let max_size = 1u64 << 12; //arbitrary
-                            descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
-                                self.raw,
-                                descriptor::HeapType::CbvSrvUav,
-                                max_size as _,
-                            ));
-                        }
-                        let mut heap = descriptor_update_pools.last_mut().unwrap();
-                        let start = range.start.unwrap_or(0);
-                        let end = range.end.unwrap_or(buffer.requirements.size as _);
 
-                        if bind_info.content.intersects(r::DescriptorContent::CBV) {
-                            // Making the size field of buffer requirements for uniform
-                            // buffers a multiple of 256 and setting the required offset
-                            // alignment to 256 allows us to patch the size here.
-                            // We can always enforce the size to be aligned to 256 for
-                            // CBVs without going out-of-bounds.
-                            let size = ((end - start) + 255) & !255;
-                            let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
-                                BufferLocation: (*buffer.resource).GetGPUVirtualAddress() + start,
-                                SizeInBytes: size as _,
-                            };
-                            let handle = heap.alloc_handle();
-                            self.raw.CreateConstantBufferView(&desc, handle);
-                            src_cbv = Some(handle);
-                        }
-                        if bind_info.content.contains(r::DescriptorContent::SRV) {
-                            assert_eq!((end - start) % 4, 0);
-                            let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
-                                Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
-                                Shader4ComponentMapping: IDENTITY_MAPPING,
-                                ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
-                                u: mem::zeroed(),
-                            };
-                            *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
-                                FirstElement: start as _,
-                                NumElements: ((end - start) / 4) as _,
-                                StructureByteStride: 0,
-                                Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
-                            };
-                            let handle = heap.alloc_handle();
-                            self.raw.CreateShaderResourceView(
-                                buffer.resource.as_mut_ptr(),
-                                &desc,
-                                handle,
-                            );
-                            src_srv = Some(handle);
-                        }
-                        if bind_info.content.contains(r::DescriptorContent::UAV) {
-                            assert_eq!((end - start) % 4, 0);
-                            let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
-                                Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
-                                ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
-                                u: mem::zeroed(),
-                            };
-                            *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
-                                FirstElement: start as _,
-                                NumElements: ((end - start) / 4) as _,
-                                StructureByteStride: 0,
-                                CounterOffsetInBytes: 0,
-                                Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
-                            };
-                            if heap.is_full() {
-                                // pool is full, move to the next one
-                                update_pool_index += 1;
+                        if bind_info.content.is_dynamic() {
+                            // Root Descriptor
+                            let buffer_offset = range.start.unwrap_or(0);
+                            let buffer_address = (*buffer.resource).GetGPUVirtualAddress();
+
+                            // Descriptor sets need to be externally synchronized according to specification
+                            let dynamic_descriptors = &mut *bind_info.dynamic_descriptors.get();
+                            dynamic_descriptors[offset as usize].gpu_buffer_location = buffer_address + buffer_offset;
+                        } else {
+                            // Descriptor table
+                            if update_pool_index == descriptor_update_pools.len() {
                                 let max_size = 1u64 << 12; //arbitrary
                                 descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
                                     self.raw,
                                     descriptor::HeapType::CbvSrvUav,
                                     max_size as _,
                                 ));
-                                heap = descriptor_update_pools.last_mut().unwrap();
                             }
-                            let handle = heap.alloc_handle();
-                            self.raw.CreateUnorderedAccessView(
-                                buffer.resource.as_mut_ptr(),
-                                ptr::null_mut(),
-                                &desc,
-                                handle,
-                            );
-                            src_uav = Some(handle);
-                        }
+                            let mut heap = descriptor_update_pools.last_mut().unwrap();
+                            let start = range.start.unwrap_or(0);
+                            let end = range.end.unwrap_or(buffer.requirements.size as _);
 
-                        // always leave this block of code prepared
-                        if heap.is_full() {
-                            // pool is full, move to the next one
-                            update_pool_index += 1;
+                            if bind_info.content.contains(r::DescriptorContent::CBV) {
+                                // Making the size field of buffer requirements for uniform
+                                // buffers a multiple of 256 and setting the required offset
+                                // alignment to 256 allows us to patch the size here.
+                                // We can always enforce the size to be aligned to 256 for
+                                // CBVs without going out-of-bounds.
+                                let size = ((end - start) + 255) & !255;
+                                let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
+                                    BufferLocation: (*buffer.resource).GetGPUVirtualAddress() + start,
+                                    SizeInBytes: size as _,
+                                };
+                                let handle = heap.alloc_handle();
+                                self.raw.CreateConstantBufferView(&desc, handle);
+                                src_cbv = Some(handle);
+                            }
+                            if bind_info.content.contains(r::DescriptorContent::SRV) {
+                                assert_eq!((end - start) % 4, 0);
+                                let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
+                                    Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+                                    Shader4ComponentMapping: IDENTITY_MAPPING,
+                                    ViewDimension: d3d12::D3D12_SRV_DIMENSION_BUFFER,
+                                    u: mem::zeroed(),
+                                };
+                                *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
+                                    FirstElement: start as _,
+                                    NumElements: ((end - start) / 4) as _,
+                                    StructureByteStride: 0,
+                                    Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
+                                };
+                                let handle = heap.alloc_handle();
+                                self.raw.CreateShaderResourceView(
+                                    buffer.resource.as_mut_ptr(),
+                                    &desc,
+                                    handle,
+                                );
+                                src_srv = Some(handle);
+                            }
+                            if bind_info.content.contains(r::DescriptorContent::UAV) {
+                                assert_eq!((end - start) % 4, 0);
+                                let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
+                                    Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
+                                    ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
+                                    u: mem::zeroed(),
+                                };
+                                *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
+                                    FirstElement: start as _,
+                                    NumElements: ((end - start) / 4) as _,
+                                    StructureByteStride: 0,
+                                    CounterOffsetInBytes: 0,
+                                    Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
+                                };
+                                if heap.is_full() {
+                                    // pool is full, move to the next one
+                                    update_pool_index += 1;
+                                    let max_size = 1u64 << 12; //arbitrary
+                                    descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
+                                        self.raw,
+                                        descriptor::HeapType::CbvSrvUav,
+                                        max_size as _,
+                                    ));
+                                    heap = descriptor_update_pools.last_mut().unwrap();
+                                }
+                                let handle = heap.alloc_handle();
+                                self.raw.CreateUnorderedAccessView(
+                                    buffer.resource.as_mut_ptr(),
+                                    ptr::null_mut(),
+                                    &desc,
+                                    handle,
+                                );
+                                src_uav = Some(handle);
+                            }
+
+                            // always leave this block of code prepared
+                            if heap.is_full() {
+                                // pool is full, move to the next one
+                                update_pool_index += 1;
+                            }
                         }
                     }
                     pso::Descriptor::Image(image, _layout) => {

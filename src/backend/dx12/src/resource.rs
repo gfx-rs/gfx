@@ -9,8 +9,9 @@ use range_alloc::RangeAllocator;
 use crate::{root_constants::RootConstant, Backend, MAX_VERTEX_BUFFERS};
 
 use std::collections::BTreeMap;
-use std::ops::Range;
 use std::fmt;
+use std::ops::Range;
+use std::cell::UnsafeCell;
 
 // ShaderModule is either a precompiled if the source comes from HLSL or
 // the SPIR-V module doesn't contain specialization constants or push constants
@@ -130,11 +131,23 @@ bitflags! {
 pub const SRV_CBV_UAV: SetTableTypes = SetTableTypes::SRV_CBV_UAV;
 pub const SAMPLERS: SetTableTypes = SetTableTypes::SAMPLERS;
 
+pub type RootSignatureOffset = usize;
+
 #[derive(Debug, Hash)]
 pub struct RootTable {
     pub ty: SetTableTypes,
-    // Offset in the root signature.
-    pub offset: usize,
+    pub offset: RootSignatureOffset,
+}
+
+#[derive(Debug, Hash)]
+pub struct RootDescriptor {
+    pub offset: RootSignatureOffset,
+}
+
+#[derive(Debug, Hash)]
+pub struct RootElement {
+    pub table: RootTable,
+    pub descriptors: Vec<RootDescriptor>,
 }
 
 #[derive(Debug, Hash)]
@@ -144,7 +157,7 @@ pub struct PipelineLayout {
     pub(crate) constants: Vec<RootConstant>,
     // Storing for each associated descriptor set layout, which tables we created
     // in the root signature. This is required for binding descriptor sets.
-    pub(crate) tables: Vec<RootTable>,
+    pub(crate) elements: Vec<RootElement>,
     // Number of parameter slots in this layout, can be larger than number of tables.
     // Required for updating the root signature when flushing user data.
     pub(crate) num_parameter_slots: usize,
@@ -438,6 +451,12 @@ bitflags! {
     }
 }
 
+impl DescriptorContent {
+    pub fn is_dynamic(&self) -> bool {
+        self.contains(DescriptorContent::DYNAMIC)
+    }
+}
+
 impl From<pso::DescriptorType> for DescriptorContent {
     fn from(ty: pso::DescriptorType) -> Self {
         use hal::pso::DescriptorType as Dt;
@@ -447,10 +466,12 @@ impl From<pso::DescriptorType> for DescriptorContent {
             Dt::SampledImage | Dt::InputAttachment | Dt::UniformTexelBuffer => {
                 DescriptorContent::SRV
             }
-            Dt::StorageImage
-            | Dt::StorageBuffer
-            | Dt::StorageTexelBuffer => DescriptorContent::SRV | DescriptorContent::UAV,
-            Dt::StorageBufferDynamic => DescriptorContent::SRV | DescriptorContent::UAV | DescriptorContent::DYNAMIC,
+            Dt::StorageImage | Dt::StorageBuffer | Dt::StorageTexelBuffer => {
+                DescriptorContent::SRV | DescriptorContent::UAV
+            }
+            Dt::StorageBufferDynamic => {
+                DescriptorContent::SRV | DescriptorContent::UAV | DescriptorContent::DYNAMIC
+            }
             Dt::UniformBuffer => DescriptorContent::CBV,
             Dt::UniformBufferDynamic => DescriptorContent::CBV | DescriptorContent::DYNAMIC,
         }
@@ -473,11 +494,18 @@ impl DescriptorRange {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
+pub(crate) struct DynamicDescriptor {
+    pub content: DescriptorContent,
+    pub gpu_buffer_location: u64,
+}
+
 #[derive(Debug, Default)]
 pub struct DescriptorBindingInfo {
     pub(crate) count: u64,
     pub(crate) view_range: Option<DescriptorRange>,
     pub(crate) sampler_range: Option<DescriptorRange>,
+    pub(crate) dynamic_descriptors: UnsafeCell<Vec<DynamicDescriptor>>,
     pub(crate) content: DescriptorContent,
 }
 
@@ -616,14 +644,21 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 
         info!("allocate_set");
         for binding in &layout.bindings {
+            // Add dummy bindings in case of out-of-range or sparse binding layout.
             while binding_infos.len() <= binding.binding as usize {
                 binding_infos.push(DescriptorBindingInfo::default());
             }
             let content = DescriptorContent::from(binding.ty);
             debug!("\tbinding {:?} with content {:?}", binding, content);
-            binding_infos[binding.binding as usize] = DescriptorBindingInfo {
-                count: binding.count as _,
-                view_range: if content.intersects(DescriptorContent::VIEW) {
+
+            let (view_range, sampler_range, dynamic_descriptors) = if content.is_dynamic() {
+                let descriptor = DynamicDescriptor {
+                    content: content ^ DescriptorContent::DYNAMIC,
+                    gpu_buffer_location: 0,
+                };
+                (None, None, vec![descriptor; binding.count])
+            } else {
+                let view_range = if content.intersects(DescriptorContent::VIEW) {
                     let count = if content.contains(DescriptorContent::SRV | DescriptorContent::UAV)
                     {
                         2 * binding.count as u64
@@ -646,8 +681,9 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                     })
                 } else {
                     None
-                },
-                sampler_range: if content.intersects(DescriptorContent::SAMPLER) {
+                };
+
+                let sampler_range = if content.intersects(DescriptorContent::SAMPLER) && !content.is_dynamic() {
                     let count = binding.count as u64;
                     debug!("\tsampler handles: {}", count);
                     let handle = self
@@ -665,7 +701,16 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                     })
                 } else {
                     None
-                },
+                };
+
+                (view_range, sampler_range, Vec::new())
+            };
+
+            binding_infos[binding.binding as usize] = DescriptorBindingInfo {
+                count: binding.count as _,
+                view_range,
+                sampler_range,
+                dynamic_descriptors: UnsafeCell::new(dynamic_descriptors),
                 content,
             };
         }

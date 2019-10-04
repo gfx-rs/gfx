@@ -22,7 +22,7 @@ gfx-hal = { path = "../../hal", version = "0.3", features = ["fxhash"] }
 auxil = { path = "../../auxil/auxil", version = "0.1", package = "gfx-auxil" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
-d3d12 = "0.1"
+d3d12 = "0.2.2"
 log = { version = "0.4" }
 smallvec = "0.6"
 spirv_cross = { version = "0.16", features = ["hlsl"] }
