@@ -1,7 +1,7 @@
 use crate::{
     internal::{Channel, FastStorageMap},
     window::SwapchainImage,
-    Backend,
+    Instance,
     BufferPtr,
     ResourceIndex,
     SamplerPtr,
@@ -532,7 +532,7 @@ impl DescriptorPool {
     }
 }
 
-impl pso::DescriptorPool<Backend> for DescriptorPool {
+impl pso::DescriptorPool<Instance> for DescriptorPool {
     unsafe fn allocate_set(
         &mut self,
         set_layout: &DescriptorSetLayout,

@@ -81,9 +81,10 @@ use parking_lot::{Condvar, Mutex};
 use winit;
 use lazy_static::lazy_static;
 
+use std::hash::{Hash, Hasher};
 use std::mem;
 use std::os::raw::c_void;
-use std::ptr::NonNull;
+use std::ptr::{self, NonNull};
 use std::sync::Arc;
 
 mod command;
@@ -203,23 +204,42 @@ impl Shared {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, Default)]
 pub struct Experiments {
     pub argument_buffers: bool,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
+// #[derive(Debug)]
 pub struct Instance {
     pub experiments: Experiments,
-    gfx_managed_metal_layer_delegate: GfxManagedMetalLayerDelegate,
+    gfx_managed_metal_layer_delegate: Arc<GfxManagedMetalLayerDelegate>,
+}
+
+impl PartialEq for Instance {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(
+            &self.gfx_managed_metal_layer_delegate,
+            &other.gfx_managed_metal_layer_delegate,
+        ) && self.experiments == other.experiments
+    }
+}
+
+impl Eq for Instance {}
+
+impl Hash for Instance {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        ptr::hash(&*self.gfx_managed_metal_layer_delegate, state);
+        self.experiments.hash(state);
+    }
 }
 
 impl hal::Instance for Instance {
-    type Backend = Backend;
+    type Backend = Instance;
 
-    fn enumerate_adapters(&self) -> Vec<Adapter<Backend>> {
+    fn enumerate_adapters(&self) -> Vec<Adapter<Instance>> {
         let devices = metal::Device::all();
-        let mut adapters: Vec<Adapter<Backend>> = devices
+        let mut adapters: Vec<Adapter<Instance>> = devices
             .into_iter()
             .map(|dev| {
                 let name = dev.name().into();
@@ -249,6 +269,44 @@ impl hal::Instance for Instance {
         });
         adapters
     }
+}
+
+impl hal::Backend for Instance {
+    type PhysicalDevice = device::PhysicalDevice;
+    type Device = device::Device;
+
+    type Surface = window::Surface;
+    type Swapchain = window::Swapchain;
+
+    type QueueFamily = QueueFamily;
+    type CommandQueue = command::CommandQueue;
+    type CommandBuffer = command::CommandBuffer;
+
+    type Memory = native::Memory;
+    type CommandPool = command::CommandPool;
+
+    type ShaderModule = native::ShaderModule;
+    type RenderPass = native::RenderPass;
+    type Framebuffer = native::Framebuffer;
+
+    type Buffer = native::Buffer;
+    type BufferView = native::BufferView;
+    type Image = native::Image;
+    type ImageView = native::ImageView;
+    type Sampler = native::Sampler;
+
+    type ComputePipeline = native::ComputePipeline;
+    type GraphicsPipeline = native::GraphicsPipeline;
+    type PipelineCache = native::PipelineCache;
+    type PipelineLayout = native::PipelineLayout;
+    type DescriptorSetLayout = native::DescriptorSetLayout;
+    type DescriptorPool = native::DescriptorPool;
+    type DescriptorSet = native::DescriptorSet;
+
+    type Fence = native::Fence;
+    type Semaphore = native::Semaphore;
+    type Event = native::Event;
+    type QueryPool = native::QueryPool;
 }
 
 lazy_static! {
@@ -301,7 +359,7 @@ impl Instance {
     pub fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
         Ok(Instance {
             experiments: Experiments::default(),
-            gfx_managed_metal_layer_delegate: GfxManagedMetalLayerDelegate::new()
+            gfx_managed_metal_layer_delegate: Arc::new(GfxManagedMetalLayerDelegate::new()),
         })
     }
 
@@ -432,46 +490,6 @@ impl Instance {
     ) -> Surface {
         unsafe { self.create_from_uiview(uiview) }.into_surface(enable_signposts)
     }
-}
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Backend {}
-impl hal::Backend for Backend {
-    type PhysicalDevice = device::PhysicalDevice;
-    type Device = device::Device;
-
-    type Surface = window::Surface;
-    type Swapchain = window::Swapchain;
-
-    type QueueFamily = QueueFamily;
-    type CommandQueue = command::CommandQueue;
-    type CommandBuffer = command::CommandBuffer;
-
-    type Memory = native::Memory;
-    type CommandPool = command::CommandPool;
-
-    type ShaderModule = native::ShaderModule;
-    type RenderPass = native::RenderPass;
-    type Framebuffer = native::Framebuffer;
-
-    type Buffer = native::Buffer;
-    type BufferView = native::BufferView;
-    type Image = native::Image;
-    type ImageView = native::ImageView;
-    type Sampler = native::Sampler;
-
-    type ComputePipeline = native::ComputePipeline;
-    type GraphicsPipeline = native::GraphicsPipeline;
-    type PipelineCache = native::PipelineCache;
-    type PipelineLayout = native::PipelineLayout;
-    type DescriptorSetLayout = native::DescriptorSetLayout;
-    type DescriptorPool = native::DescriptorPool;
-    type DescriptorSet = native::DescriptorSet;
-
-    type Fence = native::Fence;
-    type Semaphore = native::Semaphore;
-    type Event = native::Event;
-    type QueryPool = native::QueryPool;
 }
 
 const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[

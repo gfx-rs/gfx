@@ -5,7 +5,7 @@ use crate::{
     soft,
     window,
     AsNative,
-    Backend,
+    Instance,
     BufferPtr,
     OnlineRecording,
     PrivateDisabilities,
@@ -2048,7 +2048,7 @@ impl CommandQueue {
     }
 }
 
-impl hal::queue::CommandQueue<Backend> for CommandQueue {
+impl hal::queue::CommandQueue<Instance> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         hal::queue::Submission {
@@ -2365,7 +2365,7 @@ fn assign_sides(
     }
 }
 
-impl hal::pool::CommandPool<Backend> for CommandPool {
+impl hal::pool::CommandPool<Instance> for CommandPool {
     unsafe fn reset(&mut self, release_resources: bool) {
         for cmd_buffer in &self.allocated {
             cmd_buffer
@@ -2475,11 +2475,11 @@ impl CommandBuffer {
     }
 }
 
-impl com::CommandBuffer<Backend> for CommandBuffer {
+impl com::CommandBuffer<Instance> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         flags: com::CommandBufferFlags,
-        info: com::CommandBufferInheritanceInfo<Backend>,
+        info: com::CommandBufferInheritanceInfo<Instance>,
     ) {
         self.reset(false);
 
@@ -2586,7 +2586,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _barriers: T,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T::Item: Borrow<memory::Barrier<'a, Instance>>,
     {
     }
 
@@ -3276,7 +3276,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         retained_textures.extend(dst_cubish);
     }
 
-    unsafe fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Instance>) {
         let (raw, range) = view.buffer.as_bound();
         assert!(range.start + view.offset < range.end); // conservative
         self.state.index_buffer = Some(IndexBuffer {
@@ -4426,7 +4426,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator,
         I::Item: Borrow<native::Event>,
         J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J::Item: Borrow<memory::Barrier<'a, Instance>>,
     {
         let mut need_barrier = false;
 
@@ -4450,7 +4450,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn begin_query(&mut self, query: query::Query<Backend>, flags: query::ControlFlags) {
+    unsafe fn begin_query(&mut self, query: query::Query<Instance>, flags: query::ControlFlags) {
         match query.pool {
             native::QueryPool::Occlusion(ref pool_range) => {
                 debug_assert!(pool_range.start + query.id < pool_range.end);
@@ -4468,7 +4468,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn end_query(&mut self, query: query::Query<Backend>) {
+    unsafe fn end_query(&mut self, query: query::Query<Instance>) {
         match query.pool {
             native::QueryPool::Occlusion(ref pool_range) => {
                 let mut inner = self.inner.borrow_mut();
@@ -4621,7 +4621,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         }
     }
 
-    unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, _: query::Query<Backend>) {
+    unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, _: query::Query<Instance>) {
         // nothing to do, timestamps are unsupported on Metal
     }
 

@@ -2,7 +2,7 @@ use crate::{
     device::{Device, PhysicalDevice},
     internal::Channel,
     native,
-    Backend,
+    Instance,
     QueueFamily,
     Shared,
 };
@@ -393,7 +393,7 @@ impl Borrow<native::ImageView> for SurfaceImage {
     }
 }
 
-impl w::Surface<Backend> for Surface {
+impl w::Surface<Instance> for Surface {
     fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
         // we only expose one family atm, so it's compatible
         true
@@ -465,7 +465,7 @@ impl w::Surface<Backend> for Surface {
     }
 }
 
-impl w::PresentationSurface<Backend> for Surface {
+impl w::PresentationSurface<Instance> for Surface {
     type SwapchainImage = SurfaceImage;
 
     unsafe fn configure_swapchain(
@@ -631,7 +631,7 @@ impl Device {
     }
 }
 
-impl w::Swapchain<Backend> for Swapchain {
+impl w::Swapchain<Instance> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,

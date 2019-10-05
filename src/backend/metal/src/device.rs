@@ -4,7 +4,7 @@ use crate::{
     internal::{Channel, FastStorageMap},
     native as n,
     AsNative,
-    Backend,
+    Instance,
     OnlineRecording,
     QueueFamily,
     ResourceIndex,
@@ -286,12 +286,12 @@ impl PhysicalDevice {
     }
 }
 
-impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
+impl adapter::PhysicalDevice<Instance> for PhysicalDevice {
     unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[QueuePriority])],
         requested_features: hal::Features,
-    ) -> Result<adapter::Gpu<Backend>, DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Instance>, DeviceCreationError> {
         use hal::queue::QueueFamily as _;
 
         // TODO: Query supported features by feature set rather than hard coding in the supported
@@ -677,7 +677,7 @@ impl Device {
 
     fn load_shader(
         &self,
-        ep: &pso::EntryPoint<Backend>,
+        ep: &pso::EntryPoint<Instance>,
         layout: &n::PipelineLayout,
         primitive_class: MTLPrimitiveTopologyClass,
         pipeline_cache: Option<&n::PipelineCache>,
@@ -896,7 +896,7 @@ impl Device {
     }
 }
 
-impl hal::device::Device<Backend> for Device {
+impl hal::device::Device<Instance> for Device {
     unsafe fn create_command_pool(
         &self,
         _family: QueueFamilyId,
@@ -1341,7 +1341,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn create_graphics_pipeline<'a>(
         &self,
-        pipeline_desc: &pso::GraphicsPipelineDesc<'a, Backend>,
+        pipeline_desc: &pso::GraphicsPipelineDesc<'a, Instance>,
         cache: Option<&n::PipelineCache>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         debug!("create_graphics_pipeline {:#?}", pipeline_desc);
@@ -1630,7 +1630,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn create_compute_pipeline<'a>(
         &self,
-        pipeline_desc: &pso::ComputePipelineDesc<'a, Backend>,
+        pipeline_desc: &pso::ComputePipelineDesc<'a, Instance>,
         cache: Option<&n::PipelineCache>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         debug!("create_compute_pipeline {:?}", pipeline_desc);
@@ -2023,9 +2023,9 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn write_descriptor_sets<'a, I, J>(&self, write_iter: I)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
+        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Instance, J>>,
         J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        J::Item: Borrow<pso::Descriptor<'a, Instance>>,
     {
         debug!("write_descriptor_sets");
         for write in write_iter {
@@ -2181,7 +2181,7 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, Instance>>,
     {
         for _copy in copies {
             unimplemented!()
