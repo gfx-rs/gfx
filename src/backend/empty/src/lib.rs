@@ -24,56 +24,15 @@ use hal::{
 use std::borrow::Borrow;
 use std::ops::Range;
 
-/// Dummy backend.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum Backend {}
-impl hal::Backend for Backend {
-    type PhysicalDevice = PhysicalDevice;
-    type Device = Device;
-
-    type Surface = Surface;
-    type Swapchain = Swapchain;
-
-    type QueueFamily = QueueFamily;
-    type CommandQueue = CommandQueue;
-    type CommandBuffer = CommandBuffer;
-
-    type Memory = ();
-    type CommandPool = CommandPool;
-
-    type ShaderModule = ();
-    type RenderPass = ();
-    type Framebuffer = ();
-
-    type Buffer = ();
-    type BufferView = ();
-    type Image = ();
-    type ImageView = ();
-    type Sampler = ();
-
-    type ComputePipeline = ();
-    type GraphicsPipeline = ();
-    type PipelineCache = ();
-    type PipelineLayout = ();
-    type DescriptorSetLayout = ();
-    type DescriptorPool = DescriptorPool;
-    type DescriptorSet = ();
-
-    type Fence = ();
-    type Semaphore = ();
-    type Event = ();
-    type QueryPool = ();
-}
-
 /// Dummy physical device.
 #[derive(Debug)]
 pub struct PhysicalDevice;
-impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
+impl adapter::PhysicalDevice<Instance> for PhysicalDevice {
     unsafe fn open(
         &self,
         _: &[(&QueueFamily, &[queue::QueuePriority])],
         _: hal::Features,
-    ) -> Result<adapter::Gpu<Backend>, device::CreationError> {
+    ) -> Result<adapter::Gpu<Instance>, device::CreationError> {
         unimplemented!()
     }
 
@@ -108,7 +67,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 /// Dummy command queue doing nothing.
 #[derive(Debug)]
 pub struct CommandQueue;
-impl queue::CommandQueue<Backend> for CommandQueue {
+impl queue::CommandQueue<Instance> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         _: queue::Submission<Ic, Iw, Is>,
@@ -154,7 +113,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
 /// Dummy device doing nothing.
 #[derive(Debug)]
 pub struct Device;
-impl device::Device<Backend> for Device {
+impl device::Device<Instance> for Device {
     unsafe fn create_command_pool(
         &self,
         _: queue::QueueFamilyId,
@@ -219,7 +178,7 @@ impl device::Device<Backend> for Device {
 
     unsafe fn create_graphics_pipeline<'a>(
         &self,
-        _: &pso::GraphicsPipelineDesc<'a, Backend>,
+        _: &pso::GraphicsPipelineDesc<'a, Instance>,
         _: Option<&()>,
     ) -> Result<(), pso::CreationError> {
         unimplemented!()
@@ -227,7 +186,7 @@ impl device::Device<Backend> for Device {
 
     unsafe fn create_compute_pipeline<'a>(
         &self,
-        _: &pso::ComputePipelineDesc<'a, Backend>,
+        _: &pso::ComputePipelineDesc<'a, Instance>,
         _: Option<&()>,
     ) -> Result<(), pso::CreationError> {
         unimplemented!()
@@ -360,9 +319,9 @@ impl device::Device<Backend> for Device {
 
     unsafe fn write_descriptor_sets<'a, I, J>(&self, _: I)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Backend, J>>,
+        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Instance, J>>,
         J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, Backend>>,
+        J::Item: Borrow<pso::Descriptor<'a, Instance>>,
     {
         unimplemented!()
     }
@@ -370,7 +329,7 @@ impl device::Device<Backend> for Device {
     unsafe fn copy_descriptor_sets<'a, I>(&self, _: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, Instance>>,
     {
         unimplemented!()
     }
@@ -583,7 +542,7 @@ impl queue::QueueFamily for QueueFamily {
 /// Dummy raw command pool.
 #[derive(Debug)]
 pub struct CommandPool;
-impl pool::CommandPool<Backend> for CommandPool {
+impl pool::CommandPool<Instance> for CommandPool {
     unsafe fn reset(&mut self, _: bool) {
         unimplemented!()
     }
@@ -599,11 +558,11 @@ impl pool::CommandPool<Backend> for CommandPool {
 /// Dummy command buffer, which ignores all the calls.
 #[derive(Debug)]
 pub struct CommandBuffer;
-impl command::CommandBuffer<Backend> for CommandBuffer {
+impl command::CommandBuffer<Instance> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         _: command::CommandBufferFlags,
-        _: command::CommandBufferInheritanceInfo<Backend>,
+        _: command::CommandBufferInheritanceInfo<Instance>,
     ) {
         unimplemented!()
     }
@@ -623,7 +582,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: T,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T::Item: Borrow<memory::Barrier<'a, Instance>>,
     {
         unimplemented!()
     }
@@ -680,7 +639,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn bind_index_buffer(&mut self, _: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(&mut self, _: buffer::IndexBufferView<Instance>) {
         unimplemented!()
     }
 
@@ -866,16 +825,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator,
         I::Item: Borrow<()>,
         J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J::Item: Borrow<memory::Barrier<'a, Instance>>,
     {
         unimplemented!()
     }
 
-    unsafe fn begin_query(&mut self, _: query::Query<Backend>, _: query::ControlFlags) {
+    unsafe fn begin_query(&mut self, _: query::Query<Instance>, _: query::ControlFlags) {
         unimplemented!()
     }
 
-    unsafe fn end_query(&mut self, _: query::Query<Backend>) {
+    unsafe fn end_query(&mut self, _: query::Query<Instance>) {
         unimplemented!()
     }
 
@@ -895,7 +854,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, _: query::Query<Backend>) {
+    unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, _: query::Query<Instance>) {
         unimplemented!()
     }
 
@@ -925,7 +884,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 // Dummy descriptor pool.
 #[derive(Debug)]
 pub struct DescriptorPool;
-impl pso::DescriptorPool<Backend> for DescriptorPool {
+impl pso::DescriptorPool<Instance> for DescriptorPool {
     unsafe fn free_sets<I>(&mut self, _descriptor_sets: I)
     where
         I: IntoIterator<Item = ()>,
@@ -941,7 +900,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 /// Dummy surface.
 #[derive(Debug)]
 pub struct Surface;
-impl window::Surface<Backend> for Surface {
+impl window::Surface<Instance> for Surface {
     fn compatibility(
         &self,
         _: &PhysicalDevice,
@@ -957,7 +916,7 @@ impl window::Surface<Backend> for Surface {
         unimplemented!()
     }
 }
-impl window::PresentationSurface<Backend> for Surface {
+impl window::PresentationSurface<Instance> for Surface {
     type SwapchainImage = ();
 
     unsafe fn configure_swapchain(
@@ -983,7 +942,7 @@ impl window::PresentationSurface<Backend> for Surface {
 /// Dummy swapchain.
 #[derive(Debug)]
 pub struct Swapchain;
-impl window::Swapchain<Backend> for Swapchain {
+impl window::Swapchain<Instance> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _: u64,
@@ -994,7 +953,7 @@ impl window::Swapchain<Backend> for Swapchain {
     }
 }
 
-#[derive(Debug)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Instance;
 
 impl Instance {
@@ -1009,9 +968,47 @@ impl Instance {
     }
 }
 
+impl hal::Backend for Instance {
+    type PhysicalDevice = PhysicalDevice;
+    type Device = Device;
+
+    type Surface = Surface;
+    type Swapchain = Swapchain;
+
+    type QueueFamily = QueueFamily;
+    type CommandQueue = CommandQueue;
+    type CommandBuffer = CommandBuffer;
+
+    type Memory = ();
+    type CommandPool = CommandPool;
+
+    type ShaderModule = ();
+    type RenderPass = ();
+    type Framebuffer = ();
+
+    type Buffer = ();
+    type BufferView = ();
+    type Image = ();
+    type ImageView = ();
+    type Sampler = ();
+
+    type ComputePipeline = ();
+    type GraphicsPipeline = ();
+    type PipelineCache = ();
+    type PipelineLayout = ();
+    type DescriptorSetLayout = ();
+    type DescriptorPool = DescriptorPool;
+    type DescriptorSet = ();
+
+    type Fence = ();
+    type Semaphore = ();
+    type Event = ();
+    type QueryPool = ();
+}
+
 impl hal::Instance for Instance {
-    type Backend = Backend;
-    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
+    type Backend = Instance;
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Instance>> {
         vec![]
     }
 }
