@@ -110,7 +110,7 @@ trait SurfaceTrait {
     fn get_context_t(&self) -> &back::glutin::RawContext<back::glutin::PossiblyCurrent>;
 }
 
-impl SurfaceTrait for <back::Backend as Backend>::Surface {
+impl SurfaceTrait for <back::Instance as Backend>::Surface {
     #[cfg(feature = "gl")]
     fn get_context_t(&self) -> &back::glutin::RawContext<back::glutin::PossiblyCurrent> {
         self.context()
@@ -564,7 +564,7 @@ struct BackendState<B: Backend> {
 fn create_backend(
     wb: winit::window::WindowBuilder,
     event_loop: &winit::event_loop::EventLoop<()>,
-) -> (BackendState<back::Backend>, back::Instance) {
+) -> (BackendState<back::Instance>, back::Instance) {
     let window = wb.build(event_loop).unwrap();
     let instance = back::Instance::create("gfx-rs colour-uniform", 1)
         .expect("Failed to create an instance!");
