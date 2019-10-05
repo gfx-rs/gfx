@@ -1,6 +1,6 @@
 use crate::command::{self, Command, CommandBuffer};
 use crate::native as n;
-use crate::Backend;
+use crate::Instance;
 use hal::backend::FastHashMap;
 
 use parking_lot::Mutex;
@@ -60,7 +60,7 @@ pub struct CommandPool {
     pub(crate) memory: Arc<Mutex<BufferMemory>>,
 }
 
-impl hal::pool::CommandPool<Backend> for CommandPool {
+impl hal::pool::CommandPool<Instance> for CommandPool {
     unsafe fn reset(&mut self, _release_resources: bool) {
         let mut memory = self
             .memory

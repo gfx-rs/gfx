@@ -13,7 +13,9 @@ pub extern crate glutin;
 
 use std::cell::Cell;
 use std::fmt;
+use std::hash::{Hash, Hasher};
 use std::ops::Deref;
+use std::ptr;
 use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 
@@ -120,46 +122,6 @@ impl Deref for GlContainer {
         self.make_current();
         &self.context
     }
-}
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Backend {}
-impl hal::Backend for Backend {
-    type PhysicalDevice = PhysicalDevice;
-    type Device = Device;
-
-    type Surface = Surface;
-    type Swapchain = Swapchain;
-
-    type QueueFamily = QueueFamily;
-    type CommandQueue = queue::CommandQueue;
-    type CommandBuffer = command::CommandBuffer;
-
-    type Memory = native::Memory;
-    type CommandPool = pool::CommandPool;
-
-    type ShaderModule = native::ShaderModule;
-    type RenderPass = native::RenderPass;
-    type Framebuffer = native::FrameBuffer;
-
-    type Buffer = native::Buffer;
-    type BufferView = native::BufferView;
-    type Image = native::Image;
-    type ImageView = native::ImageView;
-    type Sampler = native::FatSampler;
-
-    type ComputePipeline = native::ComputePipeline;
-    type GraphicsPipeline = native::GraphicsPipeline;
-    type PipelineLayout = native::PipelineLayout;
-    type PipelineCache = ();
-    type DescriptorSetLayout = native::DescriptorSetLayout;
-    type DescriptorPool = native::DescriptorPool;
-    type DescriptorSet = native::DescriptorSet;
-
-    type Fence = native::Fence;
-    type Semaphore = native::Semaphore;
-    type Event = ();
-    type QueryPool = ();
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -331,6 +293,21 @@ impl<T: ?Sized> fmt::Debug for Starc<T> {
     }
 }
 
+impl<T: ?Sized> PartialEq for Starc<T> {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.arc, &other.arc) && self.thread == other.thread
+    }
+}
+
+impl<T: ?Sized> Eq for Starc<T> {}
+
+impl<T: ?Sized> Hash for Starc<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        ptr::hash(&*self.arc, state);
+        self.thread.hash(state);
+    }
+}
+
 impl<T> Starc<T> {
     #[inline]
     fn new(value: T) -> Self {
@@ -399,7 +376,7 @@ type DeviceContext = ();
 
 impl PhysicalDevice {
     #[allow(unused)]
-    fn new_adapter(instance_context: DeviceContext, gl: GlContainer) -> adapter::Adapter<Backend> {
+    fn new_adapter(instance_context: DeviceContext, gl: GlContainer) -> adapter::Adapter<Instance> {
         // query information
         let (info, features, legacy_features, limits, private_caps) = info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
@@ -572,12 +549,12 @@ impl PhysicalDevice {
     }
 }
 
-impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
+impl adapter::PhysicalDevice<Instance> for PhysicalDevice {
     unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[q::QueuePriority])],
         requested_features: hal::Features,
-    ) -> Result<adapter::Gpu<Backend>, hal::device::CreationError> {
+    ) -> Result<adapter::Gpu<Instance>, hal::device::CreationError> {
         // Can't have multiple logical devices at the same time
         // as they would share the same context.
         if self.0.open.get() {
@@ -709,16 +686,54 @@ impl q::QueueFamily for QueueFamily {
 }
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Instance {
     Headless(Headless),
     Surface(Surface),
 }
 
+impl hal::Backend for Instance {
+    type PhysicalDevice = PhysicalDevice;
+    type Device = Device;
+
+    type Surface = Surface;
+    type Swapchain = Swapchain;
+
+    type QueueFamily = QueueFamily;
+    type CommandQueue = queue::CommandQueue;
+    type CommandBuffer = command::CommandBuffer;
+
+    type Memory = native::Memory;
+    type CommandPool = pool::CommandPool;
+
+    type ShaderModule = native::ShaderModule;
+    type RenderPass = native::RenderPass;
+    type Framebuffer = native::FrameBuffer;
+
+    type Buffer = native::Buffer;
+    type BufferView = native::BufferView;
+    type Image = native::Image;
+    type ImageView = native::ImageView;
+    type Sampler = native::FatSampler;
+
+    type ComputePipeline = native::ComputePipeline;
+    type GraphicsPipeline = native::GraphicsPipeline;
+    type PipelineLayout = native::PipelineLayout;
+    type PipelineCache = ();
+    type DescriptorSetLayout = native::DescriptorSetLayout;
+    type DescriptorPool = native::DescriptorPool;
+    type DescriptorSet = native::DescriptorSet;
+
+    type Fence = native::Fence;
+    type Semaphore = native::Semaphore;
+    type Event = ();
+    type QueryPool = ();
+}
+
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 impl hal::Instance for Instance {
-    type Backend = Backend;
-    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
+    type Backend = Instance;
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Instance>> {
         match self {
             Instance::Headless(instance) => instance.enumerate_adapters(),
             Instance::Surface(instance) => instance.enumerate_adapters(),

@@ -102,7 +102,7 @@ impl From<device::WindowInUse> for CreationError {
 /// An extent describes the size of a rectangle, such as
 /// a window or texture. It is not used for referring to a
 /// sub-rectangle; for that see `command::Rect`.
-#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct Extent2D {
     /// Width

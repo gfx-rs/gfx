@@ -10,7 +10,7 @@ use crate::{
     info::LegacyFeatures,
     native,
     state,
-    Backend,
+    Instance,
     GlContext,
     Share,
     Starc,
@@ -1078,7 +1078,7 @@ impl CommandQueue {
     }
 }
 
-impl hal::queue::CommandQueue<Backend> for CommandQueue {
+impl hal::queue::CommandQueue<Instance> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         submit_info: hal::queue::Submission<Ic, Iw, Is>,

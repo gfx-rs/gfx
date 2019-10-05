@@ -47,7 +47,7 @@
 //! }
 //! ```
 
-use crate::{conv, native, Backend as B, Device, GlContainer, PhysicalDevice, QueueFamily, Starc};
+use crate::{conv, native, Instance, Device, GlContainer, PhysicalDevice, QueueFamily, Starc};
 use hal::{adapter::Adapter, format as f, image, window};
 
 use arrayvec::ArrayVec;
@@ -57,7 +57,7 @@ use glutin;
 use std::iter;
 
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Swapchain {
     // Underlying window, required for presentation
     pub(crate) context: Starc<glutin::RawContext<glutin::PossiblyCurrent>>,
@@ -67,7 +67,7 @@ pub struct Swapchain {
     pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,
 }
 
-impl window::Swapchain<B> for Swapchain {
+impl window::Swapchain<Instance> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         _timeout_ns: u64,
@@ -82,7 +82,7 @@ impl window::Swapchain<B> for Swapchain {
 //TODO: if we make `Surface` a `WindowBuilder` instead of `RawContext`,
 // we could spawn window + GL context when a swapchain is requested
 // and actually respect the swapchain configuration provided by the user.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Surface {
     pub(crate) context: Starc<glutin::RawContext<glutin::PossiblyCurrent>>,
     pub(crate) swapchain: Option<Swapchain>,
@@ -117,7 +117,7 @@ impl Surface {
     }
 }
 
-impl window::PresentationSurface<B> for Surface {
+impl window::PresentationSurface<Instance> for Surface {
     type SwapchainImage = native::ImageView;
 
     unsafe fn configure_swapchain(
@@ -184,7 +184,7 @@ impl window::PresentationSurface<B> for Surface {
     }
 }
 
-impl window::Surface<B> for Surface {
+impl window::Surface<Instance> for Surface {
     fn compatibility(
         &self,
         _: &PhysicalDevice,
@@ -224,8 +224,8 @@ impl window::Surface<B> for Surface {
 }
 
 impl hal::Instance for Surface {
-    type Backend = B;
-    fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
+    type Backend = Instance;
+    fn enumerate_adapters(&self) -> Vec<Adapter<Instance>> {
         let adapter = PhysicalDevice::new_adapter(
             (),
             GlContainer::from_fn_proc(|s| self.context.get_proc_address(s) as *const _),
@@ -255,7 +255,7 @@ where
         .with_srgb(color_base.1 == f::ChannelType::Srgb)
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct Headless(pub Starc<glutin::Context<glutin::PossiblyCurrent>>);
 
 impl Headless {
@@ -265,8 +265,8 @@ impl Headless {
 }
 
 impl hal::Instance for Headless {
-    type Backend = B;
-    fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
+    type Backend = Instance;
+    fn enumerate_adapters(&self) -> Vec<Adapter<Instance>> {
         let adapter = PhysicalDevice::new_adapter(
             (),
             GlContainer::from_fn_proc(|s| self.0.get_proc_address(s) as *const _),

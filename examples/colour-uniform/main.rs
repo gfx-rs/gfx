@@ -584,7 +584,7 @@ fn create_backend(
 fn create_backend(
     wb: winit::window::WindowBuilder,
     event_loop: &winit::event_loop::EventLoop<()>,
-) -> (BackendState<back::Backend>, ()) {
+) -> (BackendState<back::Instance>, ()) {
     let (context, window) = {
         let builder =
             back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)

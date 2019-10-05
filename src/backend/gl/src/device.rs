@@ -34,7 +34,7 @@ use crate::{
     native as n,
     pool::{BufferMemory, CommandPool, OwnedBuffer},
     state,
-    Backend as B,
+    Instance,
     GlContainer,
     GlContext,
     MemoryUsage,
@@ -364,7 +364,7 @@ impl Device {
 
     fn compile_shader(
         &self,
-        point: &pso::EntryPoint<B>,
+        point: &pso::EntryPoint<Instance>,
         stage: pso::Stage,
         desc_remap_data: &mut n::DescRemapData,
         name_binding_map: &mut FastHashMap<String, pso::DescriptorBinding>,
@@ -461,7 +461,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     }
 }
 
-impl d::Device<B> for Device {
+impl d::Device<Instance> for Device {
     unsafe fn allocate_memory(
         &self,
         mem_type: hal::MemoryTypeId,
@@ -725,7 +725,7 @@ impl d::Device<B> for Device {
 
     unsafe fn create_graphics_pipeline<'a>(
         &self,
-        desc: &pso::GraphicsPipelineDesc<'a, B>,
+        desc: &pso::GraphicsPipelineDesc<'a, Instance>,
         _cache: Option<&()>,
     ) -> Result<n::GraphicsPipeline, pso::CreationError> {
         let gl = &self.share.context;
@@ -881,7 +881,7 @@ impl d::Device<B> for Device {
 
     unsafe fn create_compute_pipeline<'a>(
         &self,
-        desc: &pso::ComputePipelineDesc<'a, B>,
+        desc: &pso::ComputePipelineDesc<'a, Instance>,
         _cache: Option<&()>,
     ) -> Result<n::ComputePipeline, pso::CreationError> {
         let gl = &self.share.context;
@@ -1489,9 +1489,9 @@ impl d::Device<B> for Device {
 
     unsafe fn write_descriptor_sets<'a, I, J>(&self, writes: I)
     where
-        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, B, J>>,
+        I: IntoIterator<Item = pso::DescriptorSetWrite<'a, Instance, J>>,
         J: IntoIterator,
-        J::Item: Borrow<pso::Descriptor<'a, B>>,
+        J::Item: Borrow<pso::Descriptor<'a, Instance>>,
     {
         for mut write in writes {
             let set = &mut write.set;
@@ -1571,7 +1571,7 @@ impl d::Device<B> for Device {
     unsafe fn copy_descriptor_sets<'a, I>(&self, copies: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, Instance>>,
     {
         for _copy in copies {
             unimplemented!()

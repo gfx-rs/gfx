@@ -7,7 +7,7 @@ use hal::range::RangeArg;
 use hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
 
 use crate::pool::{self, BufferMemory};
-use crate::{native as n, Backend};
+use crate::{native as n, Instance};
 
 use parking_lot::Mutex;
 use std::borrow::Borrow;
@@ -552,11 +552,11 @@ impl CommandBuffer {
     }
 }
 
-impl command::CommandBuffer<Backend> for CommandBuffer {
+impl command::CommandBuffer<Instance> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         _flags: command::CommandBufferFlags,
-        _inheritance_info: command::CommandBufferInheritanceInfo<Backend>,
+        _inheritance_info: command::CommandBufferInheritanceInfo<Instance>,
     ) {
         // TODO: Implement flags!
         if self.individual_reset {
@@ -605,7 +605,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _barriers: T,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T::Item: Borrow<memory::Barrier<'a, Instance>>,
     {
         // TODO
     }
@@ -801,7 +801,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Instance>) {
         let (raw_buffer, range) = ibv.buffer.as_bound();
 
         self.cache.index_type_range = Some((ibv.index_type, range.start + ibv.offset .. range.end));
@@ -1380,12 +1380,12 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator,
         I::Item: Borrow<()>,
         J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J::Item: Borrow<memory::Barrier<'a, Instance>>,
     {
         unimplemented!()
     }
 
-    unsafe fn begin_query(&mut self, _query: query::Query<Backend>, _flags: query::ControlFlags) {
+    unsafe fn begin_query(&mut self, _query: query::Query<Instance>, _flags: query::ControlFlags) {
         unimplemented!()
     }
 
@@ -1401,7 +1401,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn end_query(&mut self, _query: query::Query<Backend>) {
+    unsafe fn end_query(&mut self, _query: query::Query<Instance>) {
         unimplemented!()
     }
 
@@ -1409,7 +1409,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, _: query::Query<Backend>) {
+    unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, _: query::Query<Instance>) {
         unimplemented!()
     }
 

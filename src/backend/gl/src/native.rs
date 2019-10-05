@@ -7,7 +7,7 @@ use hal::backend::FastHashMap;
 use hal::memory::{Properties, Requirements};
 use hal::{buffer, format, image as i, pass, pso};
 
-use crate::{Backend, GlContext};
+use crate::{Instance, GlContext};
 
 pub type TextureTarget = u32;
 pub type TextureFormat = u32;
@@ -232,7 +232,7 @@ pub struct DescriptorSet {
 #[derive(Debug)]
 pub struct DescriptorPool {}
 
-impl pso::DescriptorPool<Backend> for DescriptorPool {
+impl pso::DescriptorPool<Instance> for DescriptorPool {
     unsafe fn allocate_set(
         &mut self,
         layout: &DescriptorSetLayout,
