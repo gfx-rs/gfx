@@ -14,7 +14,6 @@ use smallvec::SmallVec;
 
 use crate::{conv, native};
 use crate::{
-    Backend,
     Device,
     Instance,
     PhysicalDevice,
@@ -382,7 +381,7 @@ impl Instance {
     }
 }
 
-impl w::Surface<Backend> for Surface {
+impl w::Surface<Instance> for Surface {
     fn compatibility(
         &self,
         physical_device: &PhysicalDevice,
@@ -494,7 +493,7 @@ impl Borrow<native::ImageView> for SurfaceImage {
     }
 }
 
-impl w::PresentationSurface<Backend> for Surface {
+impl w::PresentationSurface<Instance> for Surface {
     type SwapchainImage = SurfaceImage;
 
     unsafe fn configure_swapchain(
@@ -623,7 +622,7 @@ impl fmt::Debug for Swapchain {
     }
 }
 
-impl w::Swapchain<Backend> for Swapchain {
+impl w::Swapchain<Instance> for Swapchain {
     unsafe fn acquire_image(
         &mut self,
         timeout_ns: u64,

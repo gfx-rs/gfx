@@ -6,7 +6,7 @@ use std::ops::Range;
 use std::sync::Arc;
 use std::{mem, ptr};
 
-use crate::{conv, native as n, Backend, RawDevice};
+use crate::{conv, native as n, Instance, RawDevice};
 use hal::{
     buffer,
     command as com,
@@ -68,7 +68,7 @@ struct BarrierSet {
 fn destructure_barriers<'a, T>(barriers: T) -> BarrierSet
 where
     T: IntoIterator,
-    T::Item: Borrow<memory::Barrier<'a, Backend>>,
+    T::Item: Borrow<memory::Barrier<'a, Instance>>,
 {
     let mut global: SmallVec<[vk::MemoryBarrier; 4]> = SmallVec::new();
     let mut buffer: SmallVec<[vk::BufferMemoryBarrier; 4]> = SmallVec::new();
@@ -181,11 +181,11 @@ impl CommandBuffer {
     }
 }
 
-impl com::CommandBuffer<Backend> for CommandBuffer {
+impl com::CommandBuffer<Instance> for CommandBuffer {
     unsafe fn begin(
         &mut self,
         flags: com::CommandBufferFlags,
-        info: com::CommandBufferInheritanceInfo<Backend>,
+        info: com::CommandBufferInheritanceInfo<Instance>,
     ) {
         let inheritance_info = vk::CommandBufferInheritanceInfo {
             s_type: vk::StructureType::COMMAND_BUFFER_INHERITANCE_INFO,
@@ -291,7 +291,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         barriers: T,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T::Item: Borrow<memory::Barrier<'a, Instance>>,
     {
         let BarrierSet {
             global,
@@ -509,7 +509,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Instance>) {
         self.device.0.cmd_bind_index_buffer(
             self.raw,
             ibv.buffer.raw,
@@ -848,7 +848,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator,
         I::Item: Borrow<n::Event>,
         J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J::Item: Borrow<memory::Barrier<'a, Instance>>,
     {
         let events = events.into_iter().map(|e| e.borrow().0).collect::<Vec<_>>();
 
@@ -869,7 +869,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         )
     }
 
-    unsafe fn begin_query(&mut self, query: query::Query<Backend>, flags: query::ControlFlags) {
+    unsafe fn begin_query(&mut self, query: query::Query<Instance>, flags: query::ControlFlags) {
         self.device.0.cmd_begin_query(
             self.raw,
             query.pool.0,
@@ -878,7 +878,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         )
     }
 
-    unsafe fn end_query(&mut self, query: query::Query<Backend>) {
+    unsafe fn end_query(&mut self, query: query::Query<Instance>) {
         self.device
             .0
             .cmd_end_query(self.raw, query.pool.0, query.id)
@@ -915,7 +915,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<Backend>) {
+    unsafe fn write_timestamp(&mut self, stage: pso::PipelineStage, query: query::Query<Instance>) {
         self.device.0.cmd_write_timestamp(
             self.raw,
             conv::map_pipeline_stage(stage),

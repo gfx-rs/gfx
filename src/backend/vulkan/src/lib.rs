@@ -35,6 +35,7 @@ use hal::{
 };
 
 use std::borrow::{Borrow, Cow};
+use std::hash::{Hash, Hasher};
 use std::ffi::{CStr, CString};
 use std::sync::Arc;
 use std::{fmt, mem, ptr, slice};
@@ -141,6 +142,7 @@ impl Drop for RawInstance {
     }
 }
 
+#[derive(Clone)]
 pub struct Instance {
     pub raw: Arc<RawInstance>,
 
@@ -151,6 +153,21 @@ pub struct Instance {
 impl fmt::Debug for Instance {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.write_str("Instance")
+    }
+}
+
+impl PartialEq for Instance {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.raw, &other.raw) && self.extensions == other.extensions
+    }
+}
+
+impl Eq for Instance {}
+
+impl Hash for Instance {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        ptr::hash(&*self.raw, state);
+        self.extensions.hash(state);
     }
 }
 
@@ -468,10 +485,48 @@ impl Instance {
     }
 }
 
-impl hal::Instance for Instance {
-    type Backend = Backend;
+impl hal::Backend for Instance {
+    type PhysicalDevice = PhysicalDevice;
+    type Device = Device;
 
-    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
+    type Surface = window::Surface;
+    type Swapchain = window::Swapchain;
+
+    type QueueFamily = QueueFamily;
+    type CommandQueue = CommandQueue;
+    type CommandBuffer = command::CommandBuffer;
+
+    type Memory = native::Memory;
+    type CommandPool = pool::RawCommandPool;
+
+    type ShaderModule = native::ShaderModule;
+    type RenderPass = native::RenderPass;
+    type Framebuffer = native::Framebuffer;
+
+    type Buffer = native::Buffer;
+    type BufferView = native::BufferView;
+    type Image = native::Image;
+    type ImageView = native::ImageView;
+    type Sampler = native::Sampler;
+
+    type ComputePipeline = native::ComputePipeline;
+    type GraphicsPipeline = native::GraphicsPipeline;
+    type PipelineLayout = native::PipelineLayout;
+    type PipelineCache = native::PipelineCache;
+    type DescriptorSetLayout = native::DescriptorSetLayout;
+    type DescriptorPool = native::DescriptorPool;
+    type DescriptorSet = native::DescriptorSet;
+
+    type Fence = native::Fence;
+    type Semaphore = native::Semaphore;
+    type Event = native::Event;
+    type QueryPool = native::QueryPool;
+}
+
+impl hal::Instance for Instance {
+    type Backend = Instance;
+
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Instance>> {
         let devices = match unsafe { self.raw.0.enumerate_physical_devices() } {
             Ok(devices) => devices,
             Err(err) => {
@@ -566,12 +621,12 @@ impl fmt::Debug for PhysicalDevice {
     }
 }
 
-impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
+impl adapter::PhysicalDevice<Instance> for PhysicalDevice {
     unsafe fn open(
         &self,
         families: &[(&QueueFamily, &[queue::QueuePriority])],
         requested_features: Features,
-    ) -> Result<adapter::Gpu<Backend>, DeviceCreationError> {
+    ) -> Result<adapter::Gpu<Instance>, DeviceCreationError> {
         let family_infos = families
             .iter()
             .map(|&(family, priorities)| vk::DeviceQueueCreateInfo {
@@ -1159,7 +1214,7 @@ impl fmt::Debug for CommandQueue {
     }
 }
 
-impl queue::CommandQueue<Backend> for CommandQueue {
+impl queue::CommandQueue<Instance> for CommandQueue {
     unsafe fn submit<'a, T, Ic, S, Iw, Is>(
         &mut self,
         submission: queue::Submission<Ic, Iw, Is>,
@@ -1333,44 +1388,4 @@ impl queue::CommandQueue<Backend> for CommandQueue {
 #[derive(Debug)]
 pub struct Device {
     raw: Arc<RawDevice>,
-}
-
-#[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
-pub enum Backend {}
-impl hal::Backend for Backend {
-    type PhysicalDevice = PhysicalDevice;
-    type Device = Device;
-
-    type Surface = window::Surface;
-    type Swapchain = window::Swapchain;
-
-    type QueueFamily = QueueFamily;
-    type CommandQueue = CommandQueue;
-    type CommandBuffer = command::CommandBuffer;
-
-    type Memory = native::Memory;
-    type CommandPool = pool::RawCommandPool;
-
-    type ShaderModule = native::ShaderModule;
-    type RenderPass = native::RenderPass;
-    type Framebuffer = native::Framebuffer;
-
-    type Buffer = native::Buffer;
-    type BufferView = native::BufferView;
-    type Image = native::Image;
-    type ImageView = native::ImageView;
-    type Sampler = native::Sampler;
-
-    type ComputePipeline = native::ComputePipeline;
-    type GraphicsPipeline = native::GraphicsPipeline;
-    type PipelineLayout = native::PipelineLayout;
-    type PipelineCache = native::PipelineCache;
-    type DescriptorSetLayout = native::DescriptorSetLayout;
-    type DescriptorPool = native::DescriptorPool;
-    type DescriptorSet = native::DescriptorSet;
-
-    type Fence = native::Fence;
-    type Semaphore = native::Semaphore;
-    type Event = native::Event;
-    type QueryPool = native::QueryPool;
 }

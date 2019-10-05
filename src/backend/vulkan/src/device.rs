@@ -24,7 +24,7 @@ use std::{mem, ptr};
 
 use crate::pool::RawCommandPool;
 use crate::{conv, native as n, window as w, command as cmd};
-use crate::{Backend as B, DebugMessenger, Device};
+use crate::{Instance as B, DebugMessenger, Device};
 
 #[derive(Debug, Default)]
 struct GraphicsPipelineInfoBuf {

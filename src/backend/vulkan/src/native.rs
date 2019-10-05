@@ -1,4 +1,4 @@
-use crate::{window::FramebufferCachePtr, Backend, RawDevice};
+use crate::{window::FramebufferCachePtr, Instance, RawDevice};
 use ash::{version::DeviceV1_0, vk};
 use hal::{image::SubresourceRange, pso};
 use std::{borrow::Borrow, sync::Arc};
@@ -108,7 +108,7 @@ pub struct DescriptorPool {
     pub(crate) set_free_vec: Vec<vk::DescriptorSet>,
 }
 
-impl pso::DescriptorPool<Backend> for DescriptorPool {
+impl pso::DescriptorPool<Instance> for DescriptorPool {
     unsafe fn allocate_sets<I>(
         &mut self,
         layout_iter: I,

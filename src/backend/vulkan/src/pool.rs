@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::command::CommandBuffer;
 use crate::conv;
-use crate::{Backend, RawDevice};
+use crate::{Instance, RawDevice};
 use hal::{command, pool};
 
 #[derive(Debug)]
@@ -15,7 +15,7 @@ pub struct RawCommandPool {
     pub(crate) device: Arc<RawDevice>,
 }
 
-impl pool::CommandPool<Backend> for RawCommandPool {
+impl pool::CommandPool<Instance> for RawCommandPool {
     unsafe fn reset(&mut self, release_resources: bool) {
         let flags = if release_resources {
             vk::CommandPoolResetFlags::RELEASE_RESOURCES
