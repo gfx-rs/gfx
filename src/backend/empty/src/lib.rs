@@ -28,6 +28,7 @@ use std::ops::Range;
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Backend {}
 impl hal::Backend for Backend {
+    type Instance = Instance;
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
 

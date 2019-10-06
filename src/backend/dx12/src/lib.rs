@@ -1144,6 +1144,7 @@ impl hal::Instance for Instance {
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
 impl hal::Backend for Backend {
+    type Instance = Instance;
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
 

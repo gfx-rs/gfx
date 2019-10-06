@@ -124,7 +124,20 @@ impl Deref for GlContainer {
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Backend {}
+
 impl hal::Backend for Backend {
+    #[cfg(any(
+        all(not(target_arch = "wasm32"), feature = "glutin"),
+        feature = "wgl"
+    ))]
+    type Instance = Instance;
+
+    #[cfg(all(target_arch = "wasm32", not(feature = "wgl")))]
+    type Instance = Surface;
+
+    #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+    type Instance = DummyInstance;
+
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
 
@@ -707,6 +720,18 @@ impl q::QueueFamily for QueueFamily {
         q::QueueFamilyId(0)
     }
 }
+
+#[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+pub struct DummyInstance;
+
+#[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+impl hal::Instance for DummyInstance {
+    type Backend = Backend;
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
+        unimplemented!()
+    }
+}
+
 
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 #[derive(Debug)]
