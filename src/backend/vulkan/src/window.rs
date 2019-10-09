@@ -331,7 +331,7 @@ impl Instance {
                 not(target_os = "macos"),
                 not(target_os = "ios")
             ))]
-            RawWindowHandle::X11(handle)
+            RawWindowHandle::Xlib(handle)
                 if self.extensions.contains(&khr::XlibSurface::name()) =>
             {
                 Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
