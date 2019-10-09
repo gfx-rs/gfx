@@ -336,6 +336,16 @@ impl Instance {
             {
                 Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
             }
+            #[cfg(all(
+                feature = "xcb",
+                unix,
+                not(target_os = "android"),
+                not(target_os = "macos"),
+                not(target_os = "ios")
+            ))]
+            RawWindowHandle::Xcb(handle) if self.extensions.contains(&khr::XcbSurface::name()) => {
+                Ok(self.create_surface_from_xcb(handle.connection as *mut _, handle.window))
+            }
             // #[cfg(target_os = "android")]
             // RawWindowHandle::ANativeWindowHandle(handle) => {
             //     let native_window = unimplemented!();
