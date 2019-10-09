@@ -77,8 +77,6 @@ use objc::{
     runtime::{Object, BOOL, YES, Sel, Class}
 };
 use parking_lot::{Condvar, Mutex};
-#[cfg(feature = "winit")]
-use winit;
 use lazy_static::lazy_static;
 
 use std::mem;
@@ -305,17 +303,20 @@ impl Instance {
         })
     }
 
-    #[cfg(feature = "winit")]
-    pub fn create_surface(&self, window: &winit::window::Window) -> Surface {
-        #[cfg(target_os = "ios")]
-        {
-            use winit::platform::ios::WindowExtIOS;
-            self.create_surface_from_uiview(window.ui_view(), false)
-        }
-        #[cfg(target_os = "macos")]
-        {
-            use winit::platform::macos::WindowExtMacOS;
-            self.create_surface_from_nsview(window.ns_view(), false)
+    pub fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, hal::window::InitError> {
+        match has_handle.raw_window_handle() {
+            #[cfg(target_os = "ios")]
+            raw_window_handle::RawWindowHandle::IOS(handle) => {
+                Ok(self.create_surface_from_uiview(handle.ui_view, false))
+            }
+            #[cfg(target_os = "macos")]
+            raw_window_handle::RawWindowHandle::MacOS(handle) => {
+                Ok(self.create_surface_from_nsview(handle.ns_view, false))
+            }
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
         }
     }
 

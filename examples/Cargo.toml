@@ -9,7 +9,7 @@ edition = "2018"
 default = []
 metal = ["gfx-backend-metal"]
 gl = ["gfx-backend-gl", "gfx-backend-gl/glutin"]
-wgl = ["gfx-backend-gl", "gfx-backend-gl/winit", "gfx-backend-gl/wgl"]
+wgl = ["gfx-backend-gl", "gfx-backend-gl/wgl"]
 dx11 = ["gfx-backend-dx11"]
 dx12 = ["gfx-backend-dx12"]
 vulkan = ["gfx-backend-vulkan"]
@@ -57,23 +57,20 @@ features = [ "console", "Document", "Element", "HtmlElement", "Node", "Window" ]
 [dependencies.gfx-backend-vulkan]
 path = "../src/backend/vulkan"
 version = "0.3"
-features = ["winit", "x11"]
+features = ["x11"]
 optional = true
 
 [target.'cfg(any(target_os = "macos", all(target_os = "ios", target_arch = "aarch64")))'.dependencies.gfx-backend-metal]
 path = "../src/backend/metal"
 version = "0.3"
-features = ["winit"]
 optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx11]
 path = "../src/backend/dx11"
 version = "0.3"
-features = ["winit"]
 optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx12]
 path = "../src/backend/dx12"
 version = "0.3"
-features = ["winit"]
 optional = true
