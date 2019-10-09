@@ -274,14 +274,14 @@ impl Instance {
 
             if !use_current {
                 let layer: *mut Object = msg_send![class, new];
-                msg_send![view, setLayer: layer];
+                let () = msg_send![view, setLayer: layer];
                 let bounds: CGRect = msg_send![view, bounds];
-                msg_send![layer, setBounds: bounds];
+                let () = msg_send![layer, setBounds: bounds];
 
                 let window: *mut Object = msg_send![view, window];
                 if !window.is_null() {
                     let scale_factor: CGFloat = msg_send![window, backingScaleFactor];
-                    msg_send![layer, setContentsScale: scale_factor];
+                    let () = msg_send![layer, setContentsScale: scale_factor];
                 }
             }
         }
@@ -336,10 +336,20 @@ impl Instance {
                 not(target_os = "android"),
                 not(target_os = "macos")
             ))]
-            RawWindowHandle::X11(handle)
+            RawWindowHandle::Xlib(handle)
                 if self.extensions.contains(&khr::XlibSurface::name()) =>
             {
                 Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
+            }
+            #[cfg(all(
+                feature = "xcb",
+                unix,
+                not(target_os = "android"),
+                not(target_os = "macos"),
+                not(target_os = "ios")
+            ))]
+            RawWindowHandle::Xcb(handle) if self.extensions.contains(&khr::XcbSurface::name()) => {
+                Ok(self.create_surface_from_xcb(handle.connection as *mut _, handle.window))
             }
             // #[cfg(target_os = "android")]
             // RawWindowHandle::ANativeWindowHandle(handle) => {
