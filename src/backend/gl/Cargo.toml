@@ -27,7 +27,7 @@ log = { version = "0.4" }
 gfx-hal = { path = "../../hal", version = "0.3", features = ["fxhash"] }
 auxil = { path = "../../auxil/auxil", version = "0.1", package = "gfx-auxil" }
 smallvec = "0.6"
-glow = "0.2.3"
+glow = "0.3.0-alpha3"
 parking_lot = "0.9"
 spirv_cross = { version = "0.16", features = ["glsl"] }
 lazy_static = "1"
@@ -38,7 +38,7 @@ glutin = { version = "0.22.0-alpha3", optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3.6"
-wasm-bindgen = "0.2.39"
+wasm-bindgen = "0.2.51"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies.web-sys]
 version = "0.3.6"

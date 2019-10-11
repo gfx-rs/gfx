@@ -1,7 +1,7 @@
 use std::borrow::Borrow;
 use std::{mem, slice};
 
-use glow::Context;
+use glow::HasContext;
 use smallvec::SmallVec;
 
 use crate::{

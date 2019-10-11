@@ -3,7 +3,7 @@ use hal::{Features, Limits};
 use std::collections::HashSet;
 use std::{fmt, str};
 
-use glow::Context;
+use glow::HasContext;
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]
@@ -333,9 +333,11 @@ impl Info {
     }
 
     pub fn is_webgl(&self) -> bool {
-        cfg!(target_arch = "wasm32")
+        IS_WEBGL
     }
 }
+
+const IS_WEBGL: bool = cfg!(target_arch = "wasm32");
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
@@ -345,6 +347,16 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     let max_texture_size = get_usize(gl, glow::MAX_TEXTURE_SIZE).unwrap_or(64) as u32;
     let max_samples = get_usize(gl, glow::MAX_SAMPLES).unwrap_or(8);
     let max_samples_mask = (max_samples * 2 - 1) as u8;
+    let max_texel_elements = if IS_WEBGL {
+        0
+    } else {
+        get_usize(gl, glow::MAX_TEXTURE_BUFFER_SIZE).unwrap_or(0)
+    };
+    let min_storage_buffer_offset_alignment = if IS_WEBGL {
+        1024
+    } else {
+        get_u64(gl, glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT).unwrap_or(1024)
+    };
 
     let mut limits = Limits {
         max_image_1d_size: max_texture_size,
@@ -352,18 +364,14 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         max_image_3d_size: max_texture_size,
         max_image_cube_size: max_texture_size,
         max_image_array_layers: get_usize(gl, glow::MAX_ARRAY_TEXTURE_LAYERS).unwrap_or(1) as u16,
-        max_texel_elements: get_usize(gl, glow::MAX_TEXTURE_BUFFER_SIZE).unwrap_or(0),
+        max_texel_elements,
         max_viewports: 1,
         optimal_buffer_copy_offset_alignment: 1,
         optimal_buffer_copy_pitch_alignment: 1,
         min_texel_buffer_offset_alignment: 1,
         min_uniform_buffer_offset_alignment: get_u64(gl, glow::UNIFORM_BUFFER_OFFSET_ALIGNMENT)
             .unwrap_or(1024),
-        min_storage_buffer_offset_alignment: get_u64(
-            gl,
-            glow::SHADER_STORAGE_BUFFER_OFFSET_ALIGNMENT,
-        )
-        .unwrap_or(1024),
+        min_storage_buffer_offset_alignment,
         framebuffer_color_sample_counts: max_samples_mask,
         non_coherent_atom_size: 1,
         max_color_attachments: get_usize(gl, glow::MAX_COLOR_ATTACHMENTS).unwrap_or(1),

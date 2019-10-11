@@ -333,7 +333,7 @@ where
                 // to 1 it means we can use that type for our buffer. So this code finds the first
                 // memory type that has a `1` (or, is allowed), and is visible to the CPU.
                 buffer_req.type_mask & (1 << id) != 0
-                    && mem_type.properties.contains(m::Properties::CPU_VISIBLE | m::Properties::COHERENT)
+                    && mem_type.properties.contains(m::Properties::CPU_VISIBLE)
             })
             .unwrap()
             .into();
@@ -344,6 +344,7 @@ where
             device.bind_buffer_memory(&memory, 0, &mut vertex_buffer).unwrap();
             let mapping = device.map_memory(&memory, 0 .. buffer_len).unwrap();
             ptr::copy_nonoverlapping(QUAD.as_ptr() as *const u8, mapping, buffer_len as usize);
+            device.flush_mapped_memory_ranges(iter::once((&memory, 0 .. buffer_len))).unwrap();
             device.unmap_memory(&memory);
             ManuallyDrop::new(memory)
         };
@@ -380,6 +381,7 @@ where
                     width as usize * image_stride,
                 );
             }
+            device.flush_mapped_memory_ranges(iter::once((&memory, 0 .. upload_size))).unwrap();
             device.unmap_memory(&memory);
             ManuallyDrop::new(memory)
         };

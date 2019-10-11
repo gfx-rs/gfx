@@ -45,11 +45,8 @@ use window::wgl::{DeviceContext, Surface, Swapchain};
 #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
 pub use window::dummy::{Surface, Swapchain};
 
-#[cfg(not(target_arch = "wasm32"))]
-pub use glow::native::Context as GlContext;
-#[cfg(target_arch = "wasm32")]
-pub use glow::web::Context as GlContext;
-use glow::Context;
+pub use glow::Context as GlContext;
+use glow::HasContext;
 
 
 pub(crate) struct GlContainer {
@@ -67,7 +64,7 @@ impl GlContainer {
     where
         F: FnMut(&str) -> *const std::os::raw::c_void,
     {
-        let context = glow::native::Context::from_loader_function(fn_proc);
+        let context = glow::Context::from_loader_function(fn_proc);
         GlContainer { context }
     }
 
@@ -107,7 +104,7 @@ impl GlContainer {
                 .expect("Cannot get document body")
                 .append_child(&canvas)
                 .expect("Cannot insert canvas into document body");
-            glow::web::Context::from_webgl2_context(webgl2_context)
+            glow::Context::from_webgl2_context(webgl2_context)
         };
         GlContainer { context }
     }

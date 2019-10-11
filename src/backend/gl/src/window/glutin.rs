@@ -51,7 +51,7 @@ use crate::{conv, native, Backend as B, Device, GlContainer, PhysicalDevice, Que
 use hal::{adapter::Adapter, format as f, image, window};
 
 use arrayvec::ArrayVec;
-use glow::Context as _;
+use glow::HasContext;
 use glutin;
 
 use std::iter;
