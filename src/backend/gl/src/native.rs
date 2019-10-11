@@ -14,17 +14,17 @@ pub type TextureFormat = u32;
 pub type DataType = u32;
 
 // TODO: Consider being generic over `glow::Context` instead
-pub type VertexArray = <GlContext as glow::Context>::VertexArray;
-pub type RawBuffer = <GlContext as glow::Context>::Buffer;
-pub type Shader = <GlContext as glow::Context>::Shader;
-pub type Program = <GlContext as glow::Context>::Program;
-pub type Renderbuffer = <GlContext as glow::Context>::Renderbuffer;
-pub type Texture = <GlContext as glow::Context>::Texture;
-pub type Sampler = <GlContext as glow::Context>::Sampler;
-pub type UniformLocation = <GlContext as glow::Context>::UniformLocation;
+pub type VertexArray = <GlContext as glow::HasContext>::VertexArray;
+pub type RawBuffer = <GlContext as glow::HasContext>::Buffer;
+pub type Shader = <GlContext as glow::HasContext>::Shader;
+pub type Program = <GlContext as glow::HasContext>::Program;
+pub type Renderbuffer = <GlContext as glow::HasContext>::Renderbuffer;
+pub type Texture = <GlContext as glow::HasContext>::Texture;
+pub type Sampler = <GlContext as glow::HasContext>::Sampler;
+pub type UniformLocation = <GlContext as glow::HasContext>::UniformLocation;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
 
-pub type RawFrameBuffer = <GlContext as glow::Context>::Framebuffer;
+pub type RawFrameBuffer = <GlContext as glow::HasContext>::Framebuffer;
 
 #[derive(Clone, Debug)]
 pub struct FrameBuffer {
@@ -59,7 +59,7 @@ pub struct BufferView;
 #[derive(Copy, Clone, Debug)]
 pub(crate) enum FenceInner {
     Idle { signaled: bool },
-    Pending(Option<<GlContext as glow::Context>::Fence>),
+    Pending(Option<<GlContext as glow::HasContext>::Fence>),
 }
 
 #[derive(Debug)]

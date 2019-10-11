@@ -1,6 +1,6 @@
 use crate::{conv, device::Device, native, Backend as B, GlContainer, PhysicalDevice, QueueFamily};
 use arrayvec::ArrayVec;
-use glow::Context as _;
+use glow::HasContext;
 use hal::{adapter::Adapter, format as f, image, window};
 use std::iter;
 

@@ -3,7 +3,7 @@ use hal::{Features, Limits};
 use std::collections::HashSet;
 use std::{fmt, str};
 
-use glow::Context;
+use glow::HasContext;
 
 /// A version number for a specific component of an OpenGL implementation
 #[derive(Clone, Eq, Ord, PartialEq, PartialOrd)]

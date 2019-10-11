@@ -7,7 +7,7 @@ use std::ops::Range;
 use std::slice;
 use std::sync::Arc;
 
-use glow::Context as _;
+use glow::HasContext;
 
 use auxil::spirv_cross_specialize_ast;
 
@@ -54,7 +54,7 @@ fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
     d::ShaderError::CompilationFailed(msg)
 }
 
-fn create_fbo_internal(share: &Starc<Share>) -> Option<<GlContext as glow::Context>::Framebuffer> {
+fn create_fbo_internal(share: &Starc<Share>) -> Option<<GlContext as glow::HasContext>::Framebuffer> {
     if share.private_caps.framebuffer {
         let gl = &share.context;
         let name = unsafe { gl.create_framebuffer() }.unwrap();

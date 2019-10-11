@@ -107,7 +107,7 @@ pub enum Command {
     BindTargetView(FrameBufferTarget, AttachmentPoint, n::ImageView),
     SetDrawColorBuffers(usize),
     SetPatchSize(i32),
-    BindProgram(<GlContext as glow::Context>::Program),
+    BindProgram(<GlContext as glow::HasContext>::Program),
     SetBlend(pso::ColorBlendDesc),
     SetBlendSlot(ColorSlot, pso::ColorBlendDesc),
     BindAttribute(n::AttributeDesc, n::RawBuffer, i32, u32),

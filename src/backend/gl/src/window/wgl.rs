@@ -8,7 +8,7 @@ use std::{
     ptr,
 };
 
-use glow::Context as _;
+use glow::HasContext;
 use hal::{adapter::Adapter, format as f, image, window};
 
 use arrayvec::ArrayVec;

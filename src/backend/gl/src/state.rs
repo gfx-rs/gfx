@@ -1,7 +1,7 @@
 #![allow(dead_code)] //TODO: remove
 
 use crate::{GlContainer, Share};
-use glow::Context;
+use glow::HasContext;
 use hal::{pso, ColorSlot};
 use smallvec::SmallVec;
 
