@@ -432,18 +432,20 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         T::Item: Borrow<BufferImageCopy>;
 
     // TODO: This explanation needs improvement.
-    /// Performs a non-indexed drawing operation, fetching vertex attributes
-    /// from the currently bound vertex buffers.  It performs instanced
-    /// drawing, drawing `instances.len()`
-    /// times with an `instanceIndex` starting with the start of the range.
+    /// Performs a non-indexed drawing operation, fetching vertex attributes from the currently
+    /// bound vertex buffers. It performs instanced drawing, drawing `instances.len()` times
+    /// starting from `instances.start`.
+    ///
+    /// `instance.start` must be `0` if `Features::BASE_VERTEX_INSTANCE_DRAWING` is not supported.
     unsafe fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>);
 
-    /// Performs indexed drawing, drawing the range of indices
-    /// given by the current index buffer and any bound vertex buffers.
-    /// `base_vertex` specifies the vertex offset corresponding to index 0.
-    /// That is, the offset into the vertex buffer is `(current_index + base_vertex)`
+    /// Performs indexed drawing, drawing the range of indices given by the current index buffer and
+    /// any bound vertex buffers. `base_vertex` specifies the vertex offset corresponding to index
+    /// 0. That is, the offset into the vertex buffer is `(current_index + base_vertex)`. It
+    /// performs instanced drawing, drawing `instances.len()` times starting from `instances.start`.
     ///
-    /// It also performs instanced drawing, identical to `draw()`.
+    /// `base_vertex` and `instance.start` must be `0` if `Features::BASE_VERTEX_INSTANCE_DRAWING`
+    /// is not supported.
     unsafe fn draw_indexed(
         &mut self,
         indices: Range<IndexCount>,

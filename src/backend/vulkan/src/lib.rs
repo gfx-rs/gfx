@@ -794,7 +794,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let features = unsafe { self.instance.0.get_physical_device_features(self.handle) };
         let mut bits = Features::TRIANGLE_FAN
             | Features::SEPARATE_STENCIL_REF_VALUES
-            | Features::SAMPLER_MIP_LOD_BIAS;
+            | Features::SAMPLER_MIP_LOD_BIAS
+            | Features::BASE_VERTEX_INSTANCE_DRAWING;
 
         if features.robust_buffer_access != 0 {
             bits |= Features::ROBUST_BUFFER_ACCESS;

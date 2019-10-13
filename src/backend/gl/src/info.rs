@@ -234,8 +234,6 @@ bitflags! {
         const DRAW_INDEXED_INSTANCED = 0x00000010;
         /// Support indexed, instanced drawing with base vertex only.
         const DRAW_INDEXED_INSTANCED_BASE_VERTEX = 0x00000020;
-        /// Support indexed, instanced drawing with base vertex and instance.
-        const DRAW_INDEXED_INSTANCED_BASE = 0x00000040;
         /// Support base vertex offset for indexed drawing.
         const VERTEX_BASE = 0x00000080;
         /// Support sRGB textures and rendertargets.
@@ -440,7 +438,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
     }
     if info.is_supported(&[Core(4, 2)]) {
         // TODO: extension
-        legacy |= LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE;
+        features |= Features::BASE_VERTEX_INSTANCE_DRAWING;
     }
     if info.is_supported(&[
         Core(3, 2),

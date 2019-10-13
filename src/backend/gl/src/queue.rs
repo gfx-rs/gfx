@@ -18,6 +18,8 @@ use crate::{
     Swapchain,
 };
 
+use hal::Features;
+
 // State caching system for command queue.
 //
 // We track the current global state, which is based on
@@ -356,6 +358,7 @@ impl CommandQueue {
                 ref instances,
             } => {
                 let gl = &self.share.context;
+                let features = &self.share.features;
                 let legacy = &self.share.legacy_features;
 
                 if instances == &(0u32 .. 1) {
@@ -407,7 +410,7 @@ impl CommandQueue {
                         }
                     } else if instances.start == 0 {
                         error!("Base vertex with instanced indexed drawing is not supported");
-                    } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE) {
+                    } else if features.contains(Features::BASE_VERTEX_INSTANCE_DRAWING) {
                         unsafe {
                             gl.draw_elements_instanced_base_vertex_base_instance(
                                 primitive,

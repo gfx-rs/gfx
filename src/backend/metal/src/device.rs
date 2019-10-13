@@ -443,6 +443,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 hal::Features::empty()
             }
             | hal::Features::SHADER_CLIP_DISTANCE
+            | if self.shared.private_caps.base_vertex_instance_drawing {
+                hal::Features::BASE_VERTEX_INSTANCE_DRAWING
+            } else {
+                hal::Features::empty()
+            }
     }
 
     fn limits(&self) -> hal::Limits {

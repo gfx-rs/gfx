@@ -80,11 +80,11 @@ bitflags! {
     /// Features that the device supports.
     /// These only include features of the core interface and not API extensions.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct Features: u64 {
+    pub struct Features: u128 {
         /// Bit mask of Vulkan Core features.
         const CORE_MASK   = 0x0FFF_FFFF_FFFF_FFFF;
         /// Bit mask of Vulkan Portability features.
-        const PORTABILITY_MASK  = 0xF000_0000_0000_0000;
+        const PORTABILITY_MASK  = 0xFFFF_F000_0000_0000_0000;
 
         /// Support for robust buffer access.
         /// Buffer access by SPIR-V shaders is checked against the buffer/image boundaries.
@@ -212,6 +212,8 @@ bitflags! {
         const INSTANCE_RATE = 0x4000_0000_0000_0000;
         /// Support non-zero mipmap bias on samplers.
         const SAMPLER_MIP_LOD_BIAS = 0x8000_0000_0000_0000;
+        /// Support indexed, instanced drawing with base vertex and instance.
+        const BASE_VERTEX_INSTANCE_DRAWING = 0x0001_0000_0000_0000_0000;
     }
 }
 
