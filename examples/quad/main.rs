@@ -121,6 +121,7 @@ fn main() {
             .expect("Failed to create an instance!");
         let surface = instance.create_surface(&window).expect("Failed to create a surface!");
         let adapters = instance.enumerate_adapters();
+        // Return `window` so it is not dropped: dropping it invalidates `surface`.
         (window, instance, adapters, surface)
     };
     #[cfg(feature = "gl")]
@@ -619,7 +620,7 @@ where
             submission_complete_fences.push(
                 device
                     .create_fence(true)
-                    .expect("Could not create semaphore"),
+                    .expect("Could not create fence"),
             );
             cmd_buffers.push(cmd_pools[i].allocate_one(command::Level::Primary));
         }
@@ -927,6 +928,8 @@ where
             }
             self.device
                 .destroy_render_pass(ManuallyDrop::into_inner(ptr::read(&self.render_pass)));
+            self.surface
+              .unconfigure_swapchain(&self.device);
             self.device
                 .free_memory(ManuallyDrop::into_inner(ptr::read(&self.buffer_memory)));
             self.device
