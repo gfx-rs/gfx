@@ -384,6 +384,7 @@ impl Instance {
         } else {
             let layer: CAMetalLayer = msg_send![class, new];
             let () = msg_send![view, setLayer: layer];
+            let () = msg_send![view, setWantsLayer: YES];
             let bounds: CGRect = msg_send![view, bounds];
             let () = msg_send![layer, setBounds: bounds];
 
