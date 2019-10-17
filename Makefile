@@ -39,7 +39,7 @@ else
 endif
 
 
-.PHONY: all check quad quad-wasm test doc reftests benches
+.PHONY: all check quad quad-wasm test doc reftests benches shader-binaries
 
 all: check test
 
@@ -78,3 +78,10 @@ quad:
 quad-wasm:
 	cd examples && cargo +nightly build --target wasm32-unknown-unknown --features gl --bin quad && wasm-bindgen ../target/wasm32-unknown-unknown/debug/quad.wasm --out-dir ../examples/generated-wasm --web
 
+shader-binaries:
+ifeq ($(UNAME_S),Darwin)
+	cd ./src/backend/metal/shaders && \
+	xcrun -sdk macosx metal -c *.metal -mmacosx-version-min=10.11 && \
+	xcrun -sdk macosx metallib *.air -o gfx_shaders.metallib && \
+	rm *.air
+endif
