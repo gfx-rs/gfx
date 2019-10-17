@@ -60,12 +60,8 @@ before_install:
   # Do not run bors builds against the nightly compiler.
   # We want to find out about nightly bugs, so they're done in master, but we don't block on them.
   - if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then exit; fi
-  # Extract SDL2 .deb into a cached directory (see cache section above and LIBRARY_PATH exports below)
-  # Will no longer be needed when Trusty build environment goes out of beta at Travis CI
-  # (assuming it will have libsdl2-dev and Rust by then)
-  # see https://docs.travis-ci.com/user/trusty-ci-environment/
-  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then make travis-sdl2 && export CXX=g++-5; fi
-  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then brew update && brew install sdl2; fi
+  - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export CXX=g++-5; fi
+  - if [[ $TRAVIS_OS_NAME == "osx" ]]; then brew update; fi
   - if [[ $TRAVIS_OS_NAME == "windows" ]]; then choco install make; fi
   - rustup self update
   - rustup target add $TARGET; true
