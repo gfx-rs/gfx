@@ -1,13 +1,8 @@
 RUST_BACKTRACE:=1
 EXCLUDES:=
-FEATURES_EXTRA:=mint serialize
 FEATURES_HAL:=
 FEATURES_HAL2:=
 FEATURES_HAL3:=
-
-SDL2_DEST=$(HOME)/deps
-SDL2_CONFIG=$(SDL2_DEST)/usr/bin/sdl2-config
-SDL2_PPA=http://ppa.launchpad.net/zoogie/sdl2-snapshots/ubuntu/pool/main/libs/libsdl2
 
 ifeq (,$(TARGET))
 	CHECK_TARGET_FLAG=
@@ -44,7 +39,7 @@ else
 endif
 
 
-.PHONY: all check quad quad-wasm test doc reftests benches travis-sdl2
+.PHONY: all check quad quad-wasm test doc reftests benches
 
 all: check test
 
@@ -69,6 +64,7 @@ doc:
 
 reftests:
 	cd src/warden && cargo run --bin reftest --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- local #TODO: gl
+
 benches:
 	cd src/warden && cargo run --release --bin bench --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- blit
 
@@ -82,14 +78,3 @@ quad:
 quad-wasm:
 	cd examples && cargo +nightly build --target wasm32-unknown-unknown --features gl --bin quad && wasm-bindgen ../target/wasm32-unknown-unknown/debug/quad.wasm --out-dir ../examples/generated-wasm --web
 
-travis-sdl2:
-	#TODO
-	#if [ -e $(SDL2_CONFIG) ]; then exit 1; fi
-	#mkdir -p $(SDL2_DEST)
-	#test -f $(SDL2_DEST)/dev.deb || curl -sLo $(SDL2_DEST)/dev.deb $(SDL2_PPA)/libsdl2-dev_2.0.3+z4~20140315-8621-1ppa1precise1_amd64.deb
-	#test -f $(SDL2_DEST)/bin.deb || curl -sLo $(SDL2_DEST)/bin.deb $(SDL2_PPA)/libsdl2_2.0.3+z4~20140315-8621-1ppa1precise1_amd64.deb
-	#dpkg-deb -x $(SDL2_DEST)/bin.deb .
-	#dpkg-deb -x $(SDL2_DEST)/dev.deb .
-	#sed -e s,/usr,$(SDL2_DEST),g $(SDL2_CONFIG) > $(SDL2_CONFIG).new
-	#mv $(SDL2_CONFIG).new $(SDL2_CONFIG)
-	#chmod a+x $(SDL2_CONFIG)
