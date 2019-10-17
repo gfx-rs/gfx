@@ -315,13 +315,15 @@ where
 
         // Buffer allocations
         println!("Memory types: {:?}", memory_types);
+        let non_coherent_alignment = limits.non_coherent_atom_size as u64;
 
         let buffer_stride = mem::size_of::<Vertex>() as u64;
         let buffer_len = QUAD.len() as u64 * buffer_stride;
-
         assert_ne!(buffer_len, 0);
+        let padded_buffer_len = ((buffer_len + non_coherent_alignment - 1) / non_coherent_alignment) * non_coherent_alignment;
+
         let mut vertex_buffer = ManuallyDrop::new(
-            unsafe { device.create_buffer(buffer_len, buffer::Usage::VERTEX) }.unwrap(),
+            unsafe { device.create_buffer(padded_buffer_len, buffer::Usage::VERTEX) }.unwrap(),
         );
 
         let buffer_req = unsafe { device.get_buffer_requirements(&vertex_buffer) };
@@ -343,9 +345,9 @@ where
         let buffer_memory = unsafe {
             let memory = device.allocate_memory(upload_type, buffer_req.size).unwrap();
             device.bind_buffer_memory(&memory, 0, &mut vertex_buffer).unwrap();
-            let mapping = device.map_memory(&memory, 0 .. buffer_len).unwrap();
+            let mapping = device.map_memory(&memory, 0 .. padded_buffer_len).unwrap();
             ptr::copy_nonoverlapping(QUAD.as_ptr() as *const u8, mapping, buffer_len as usize);
-            device.flush_mapped_memory_ranges(iter::once((&memory, 0 .. buffer_len))).unwrap();
+            device.flush_mapped_memory_ranges(iter::once((&memory, 0 .. padded_buffer_len))).unwrap();
             device.unmap_memory(&memory);
             ManuallyDrop::new(memory)
         };
@@ -362,9 +364,10 @@ where
         let image_stride = 4usize;
         let row_pitch = (width * image_stride as u32 + row_alignment_mask) & !row_alignment_mask;
         let upload_size = (height * row_pitch) as u64;
+        let padded_upload_size = ((upload_size + non_coherent_alignment - 1) / non_coherent_alignment) * non_coherent_alignment;
 
         let mut image_upload_buffer = ManuallyDrop::new(
-            unsafe { device.create_buffer(upload_size, buffer::Usage::TRANSFER_SRC) }.unwrap(),
+            unsafe { device.create_buffer(padded_upload_size, buffer::Usage::TRANSFER_SRC) }.unwrap(),
         );
         let image_mem_reqs = unsafe { device.get_buffer_requirements(&image_upload_buffer) };
 
@@ -372,7 +375,7 @@ where
         let image_upload_memory = unsafe {
             let memory = device.allocate_memory(upload_type, image_mem_reqs.size).unwrap();
             device.bind_buffer_memory(&memory, 0, &mut image_upload_buffer).unwrap();
-            let mapping = device.map_memory(&memory, 0 .. upload_size).unwrap();
+            let mapping = device.map_memory(&memory, 0 .. padded_upload_size).unwrap();
             for y in 0 .. height as usize {
                 let row = &(*img)[y * (width as usize) * image_stride
                     .. (y + 1) * (width as usize) * image_stride];
@@ -382,7 +385,7 @@ where
                     width as usize * image_stride,
                 );
             }
-            device.flush_mapped_memory_ranges(iter::once((&memory, 0 .. upload_size))).unwrap();
+            device.flush_mapped_memory_ranges(iter::once((&memory, 0 .. padded_upload_size))).unwrap();
             device.unmap_memory(&memory);
             ManuallyDrop::new(memory)
         };
