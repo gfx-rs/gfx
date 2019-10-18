@@ -451,7 +451,7 @@ pub struct ServicePipes {
 
 impl ServicePipes {
     pub fn new(device: &metal::DeviceRef) -> Self {
-        let data = include_bytes!(concat!(env!("OUT_DIR"), "/gfx_shaders.metallib"));
+        let data = include_bytes!("./../shaders/gfx_shaders.metallib");
         let library = device.new_library_with_data(data).unwrap();
 
         let copy_buffer = Self::create_copy_buffer(&library, device);
