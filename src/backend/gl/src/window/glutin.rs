@@ -223,14 +223,17 @@ impl window::Surface<B> for Surface {
     }
 }
 
-impl hal::Instance for Surface {
-    type Backend = B;
+impl hal::Instance<B> for Surface {
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
         let adapter = PhysicalDevice::new_adapter(
             (),
             GlContainer::from_fn_proc(|s| self.context.get_proc_address(s) as *const _),
         );
         vec![adapter]
+    }
+
+    unsafe fn destroy_surface(&self, _surface: Surface) {
+        // TODO: Implement Surface cleanup
     }
 }
 
@@ -264,13 +267,16 @@ impl Headless {
     }
 }
 
-impl hal::Instance for Headless {
-    type Backend = B;
+impl hal::Instance<B> for Headless {
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
         let adapter = PhysicalDevice::new_adapter(
             (),
             GlContainer::from_fn_proc(|s| self.0.get_proc_address(s) as *const _),
         );
         vec![adapter]
+    }
+
+    unsafe fn destroy_surface(&self, _surface: Surface) {
+        // TODO: Implement Surface cleanup
     }
 }

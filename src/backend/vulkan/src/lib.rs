@@ -468,9 +468,7 @@ impl Instance {
     }
 }
 
-impl hal::Instance for Instance {
-    type Backend = Backend;
-
+impl hal::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         let devices = match unsafe { self.raw.0.enumerate_physical_devices() } {
             Ok(devices) => devices,
@@ -532,6 +530,10 @@ impl hal::Instance for Instance {
                 }
             })
             .collect()
+    }
+
+    unsafe fn destroy_surface(&self, surface: window::Surface) {
+        surface.raw.functor.destroy_surface(surface.raw.handle, None);
     }
 }
 

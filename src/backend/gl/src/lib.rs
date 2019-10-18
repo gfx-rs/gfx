@@ -717,9 +717,12 @@ impl q::QueueFamily for QueueFamily {
 pub struct DummyInstance;
 
 #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
-impl hal::Instance for DummyInstance {
-    type Backend = Backend;
+impl hal::Instance<Backend> for DummyInstance {
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
+        unimplemented!()
+    }
+
+    unsafe fn destroy_surface(&self, _surface: Surface) {
         unimplemented!()
     }
 }
@@ -733,13 +736,16 @@ pub enum Instance {
 }
 
 #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
-impl hal::Instance for Instance {
-    type Backend = Backend;
+impl hal::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         match self {
             Instance::Headless(instance) => instance.enumerate_adapters(),
             Instance::Surface(instance) => instance.enumerate_adapters(),
         }
+    }
+
+    unsafe fn destroy_surface(&self, _surface: Surface) {
+        // TODO: Implement Surface cleanup
     }
 }
 

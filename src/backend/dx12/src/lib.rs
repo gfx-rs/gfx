@@ -764,9 +764,7 @@ impl Instance {
     }
 }
 
-impl hal::Instance for Instance {
-    type Backend = Backend;
-
+impl hal::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         use self::memory::Properties;
 
@@ -1136,6 +1134,10 @@ impl hal::Instance for Instance {
             });
         }
         adapters
+    }
+
+    unsafe fn destroy_surface(&self, _surface: window::Surface) {
+        // TODO: Implement Surface cleanup
     }
 }
 

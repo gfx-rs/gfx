@@ -446,11 +446,14 @@ pub enum IndexType {
 ///     println!("Adapter {}: {:?}", idx, adapter.info);
 /// }
 /// ```
-pub trait Instance: Any + Send + Sync {
-    /// Associated backend type of this instance.
-    type Backend: Backend;
+pub trait Instance<B: Backend>: Any + Send + Sync {
     /// Return all available adapters.
-    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Self::Backend>>;
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<B>>;
+    /// Destroy a surface.
+    ///
+    /// The surface shouldn't be destroyed before the attached
+    /// swapchain is destroyed.
+    unsafe fn destroy_surface(&self, surface: B::Surface);
 }
 
 /// Error creating an instance of a backend on the platform that
@@ -474,7 +477,7 @@ impl From<usize> for MemoryTypeId {
 /// or Metal, will implement this trait with its own concrete types.
 #[allow(missing_docs)]
 pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send + Sync {
-    type Instance: Instance;
+    type Instance: Instance<Self>;
     type PhysicalDevice: adapter::PhysicalDevice<Self>;
     type Device: device::Device<Self>;
 

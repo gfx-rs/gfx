@@ -1016,9 +1016,12 @@ impl Instance {
     }
 }
 
-impl hal::Instance for Instance {
-    type Backend = Backend;
+impl hal::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         vec![]
+    }
+
+    unsafe fn destroy_surface(&self, _surface: Surface) {
+        panic!(DO_NOT_USE_MESSAGE)
     }
 }
