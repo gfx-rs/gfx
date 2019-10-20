@@ -178,7 +178,7 @@ pub struct Scene<B: hal::Backend> {
     command_pool: Option<B::CommandPool>,
     query_pool: Option<B::QueryPool>,
     upload_buffers: HashMap<String, (B::Buffer, B::Memory)>,
-    download_type: hal::MemoryTypeId,
+    download_types: Vec<hal::MemoryTypeId>,
     limits: hal::Limits,
 }
 
@@ -210,26 +210,29 @@ impl<B: hal::Backend> Scene<B> {
         let device = gpu.device;
         let queue_group = gpu.queue_groups.pop().unwrap();
 
-        let upload_type: hal::MemoryTypeId = memory_types
+        let upload_types: Vec<hal::MemoryTypeId> = memory_types
             .iter()
-            .position(|mt| {
-                mt.properties
-                    .contains(memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT)
-                //&&!mt.properties.contains(memory::Properties::CPU_CACHED)
+            .enumerate()
+            .filter_map(|(i, mt)| {
+                if mt.properties.contains(memory::Properties::CPU_VISIBLE) {
+                    Some(i.into())
+                } else {
+                    None
+                }
             })
-            .unwrap()
-            .into();
-        let download_type = memory_types
+            .collect();
+        let download_types: Vec<hal::MemoryTypeId> = memory_types
             .iter()
-            .position(|mt| {
-                mt.properties
-                    .contains(memory::Properties::CPU_VISIBLE | memory::Properties::COHERENT)
-                //&&!mt.properties.contains(memory::Properties::CPU_CACHED)
-            })
-            .unwrap()
-            .into();
-        info!("upload memory: {:?}", upload_type);
-        info!("download memory: {:?}", &download_type);
+            .enumerate()
+            .filter_map(|(i, mt)| {
+                if mt.properties.contains(memory::Properties::CPU_VISIBLE | memory::Properties::CPU_CACHED) {
+                    Some(i.into())
+                } else {
+                    None
+                }
+            }).collect();
+        info!("upload memory: {:?}", upload_types);
+        info!("download memory: {:?}", &download_types);
 
         let mut command_pool = unsafe {
             device.create_command_pool(
@@ -336,7 +339,9 @@ impl<B: hal::Backend> Scene<B> {
                             unsafe { device.create_buffer(upload_size, b::Usage::TRANSFER_SRC) }
                                 .unwrap();
                         let upload_req = unsafe { device.get_buffer_requirements(&upload_buffer) };
-                        assert_ne!(upload_req.type_mask & (1 << upload_type.0), 0);
+                        let upload_type = *upload_types.iter().find(|i| {
+                            upload_req.type_mask & (1 << i.0) != 0
+                        }).unwrap();
                         let upload_memory =
                             unsafe { device.allocate_memory(upload_type, upload_req.size) }
                                 .unwrap();
@@ -490,7 +495,9 @@ impl<B: hal::Backend> Scene<B> {
                             unsafe { device.create_buffer(upload_size, b::Usage::TRANSFER_SRC) }
                                 .unwrap();
                         let upload_req = unsafe { device.get_buffer_requirements(&upload_buffer) };
-                        assert_ne!(upload_req.type_mask & (1 << upload_type.0), 0);
+                        let upload_type = *upload_types.iter().find(|i| {
+                            upload_req.type_mask & (1 << i.0) != 0
+                        }).unwrap();
                         let upload_memory =
                             unsafe { device.allocate_memory(upload_type, upload_req.size) }
                                 .unwrap();
@@ -1402,7 +1409,7 @@ impl<B: hal::Backend> Scene<B> {
             command_pool: Some(command_pool),
             query_pool: Some(query_pool),
             upload_buffers,
-            download_type,
+            download_types,
             limits,
         })
     }
@@ -1446,10 +1453,12 @@ impl<B: hal::Backend> Scene<B> {
         let mut down_buffer =
             unsafe { self.device.create_buffer(down_size, b::Usage::TRANSFER_DST) }.unwrap();
         let down_req = unsafe { self.device.get_buffer_requirements(&down_buffer) };
-        assert_ne!(down_req.type_mask & (1 << self.download_type.0), 0);
+        let download_type = *self.download_types.iter().find(|i| {
+            down_req.type_mask & (1 << i.0) != 0
+        }).unwrap();
         let down_memory = unsafe {
             self.device
-                .allocate_memory(self.download_type, down_req.size)
+                .allocate_memory(download_type, down_req.size)
         }
         .unwrap();
 
@@ -1553,10 +1562,12 @@ impl<B: hal::Backend> Scene<B> {
         let mut down_buffer =
             unsafe { self.device.create_buffer(down_size, b::Usage::TRANSFER_DST) }.unwrap();
         let down_req = unsafe { self.device.get_buffer_requirements(&down_buffer) };
-        assert_ne!(down_req.type_mask & (1 << self.download_type.0), 0);
+        let download_type = *self.download_types.iter().find(|i| {
+            down_req.type_mask & (1 << i.0) != 0
+        }).unwrap();
         let down_memory = unsafe {
             self.device
-                .allocate_memory(self.download_type, down_req.size)
+                .allocate_memory(download_type, down_req.size)
         }
         .unwrap();
         unsafe {

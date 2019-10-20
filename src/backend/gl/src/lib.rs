@@ -8,7 +8,7 @@ extern crate bitflags;
 #[macro_use]
 extern crate log;
 extern crate gfx_hal as hal;
-#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+#[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
 pub extern crate glutin;
 
 use std::cell::Cell;
@@ -35,12 +35,13 @@ mod window;
 #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
 pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
 #[cfg(target_arch = "wasm32")]
-pub use window::web::{Surface, Swapchain, Window};
+pub use window::web::{Surface, Swapchain};
 
-#[cfg(feature = "wgl")]
-pub use window::wgl::Instance;
-#[cfg(feature = "wgl")]
-use window::wgl::{DeviceContext, Surface, Swapchain};
+#[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
+use window::wgl::DeviceContext;
+
+#[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
+pub use window::wgl::{Surface, Swapchain, Instance};
 
 #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
 pub use window::dummy::{Surface, Swapchain};
@@ -69,17 +70,9 @@ impl GlContainer {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn from_new_canvas() -> GlContainer {
+    fn from_canvas(canvas: &web_sys::HtmlCanvasElement) -> GlContainer {
         let context = {
             use wasm_bindgen::JsCast;
-            let document = web_sys::window()
-                .and_then(|win| win.document())
-                .expect("Cannot get document");
-            let canvas = document
-                .create_element("canvas")
-                .expect("Cannot create canvas")
-                .dyn_into::<web_sys::HtmlCanvasElement>()
-                .expect("Cannot get canvas element");
             // TODO: Remove hardcoded width/height
             canvas
                 .set_attribute("width", "640")
@@ -99,11 +92,6 @@ impl GlContainer {
                 .expect("Cannot create WebGL2 context")
                 .and_then(|context| context.dyn_into::<web_sys::WebGl2RenderingContext>().ok())
                 .expect("Cannot convert into WebGL2 context");
-            document
-                .body()
-                .expect("Cannot get document body")
-                .append_child(&canvas)
-                .expect("Cannot insert canvas into document body");
             glow::Context::from_webgl2_context(webgl2_context)
         };
         GlContainer { context }
@@ -113,7 +101,7 @@ impl GlContainer {
 impl Deref for GlContainer {
     type Target = GlContext;
     fn deref(&self) -> &GlContext {
-        #[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+        #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
         self.make_current();
         &self.context
     }
@@ -253,10 +241,12 @@ enum MemoryUsage {
 /// Internal struct of shared data between the physical and logical device.
 struct Share {
     context: GlContainer,
+
     /// Context associated with an instance.
     ///
     /// Parenting context for all device contexts shared with it.
     /// Used for querying basic information and spawning shared contexts.
+    #[allow(unused)]
     instance_context: DeviceContext,
 
     info: Info,
@@ -349,7 +339,6 @@ impl<T> Starc<T> {
             thread: thread::current().id(),
         }
     }
-
     #[inline]
     pub fn try_unwrap(self) -> Result<T, Self> {
         let a = Arc::try_unwrap(self.arc);
@@ -360,6 +349,12 @@ impl<T> Starc<T> {
         })
     }
 
+}
+
+impl<T> Starc<T>
+where
+    T: ?Sized,
+{
     #[inline]
     pub fn downgrade(this: &Starc<T>) -> Wstarc<T> {
         Wstarc {
@@ -404,7 +399,7 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 #[derive(Debug)]
 pub struct PhysicalDevice(Starc<Share>);
 
-#[cfg(not(feature = "wgl"))]
+#[cfg(any(target_arch = "wasm32", not(feature = "wgl")))]
 type DeviceContext = ();
 
 impl PhysicalDevice {
@@ -730,14 +725,14 @@ impl hal::Instance for DummyInstance {
 }
 
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+#[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
 #[derive(Debug)]
 pub enum Instance {
     Headless(Headless),
     Surface(Surface),
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+#[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
 impl hal::Instance for Instance {
     type Backend = Backend;
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
@@ -748,7 +743,7 @@ impl hal::Instance for Instance {
     }
 }
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
+#[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
 impl Instance {
     /// TODO: Update portability to make this more flexible
     #[cfg(target_os = "linux")]

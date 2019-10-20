@@ -1,4 +1,5 @@
 use crate::command::{self, Command, CommandBuffer};
+use crate::info;
 use crate::native as n;
 use crate::Backend;
 use hal::backend::FastHashMap;
@@ -58,6 +59,7 @@ pub struct CommandPool {
     pub(crate) fbo: Option<n::RawFrameBuffer>,
     pub(crate) limits: command::Limits,
     pub(crate) memory: Arc<Mutex<BufferMemory>>,
+    pub(crate) legacy_features: info::LegacyFeatures,
 }
 
 impl hal::pool::CommandPool<Backend> for CommandPool {
@@ -83,7 +85,12 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
 
     fn allocate_one(&mut self, _level: hal::command::Level) -> CommandBuffer {
         // TODO: Implement secondary buffers
-        CommandBuffer::new(self.fbo, self.limits, self.memory.clone())
+        CommandBuffer::new(
+            self.fbo,
+            self.limits,
+            self.memory.clone(),
+            self.legacy_features,
+        )
     }
 
     unsafe fn free<I>(&mut self, buffers: I)
