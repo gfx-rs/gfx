@@ -84,14 +84,6 @@ pub struct DescRemapData {
         ),
         Vec<pso::DescriptorBinding>,
     >,
-    names: FastHashMap<
-        String,
-        (
-            BindingTypes,
-            pso::DescriptorSetIndex,
-            pso::DescriptorBinding,
-        ),
-    >,
     next_binding: FastHashMap<BindingTypes, pso::DescriptorBinding>,
 }
 
@@ -102,7 +94,6 @@ impl DescRemapData {
     pub fn new() -> Self {
         DescRemapData {
             bindings: FastHashMap::default(),
-            names: FastHashMap::default(),
             next_binding: FastHashMap::default(),
         }
     }

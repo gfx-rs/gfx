@@ -6,6 +6,7 @@ use hal::format::ChannelType;
 use hal::range::RangeArg;
 use hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
 
+use crate::info;
 use crate::pool::{self, BufferMemory};
 use crate::{native as n, Backend};
 
@@ -265,6 +266,7 @@ pub struct CommandBuffer {
     cur_subpass: usize,
 
     limits: Limits,
+    legacy_featues: info::LegacyFeatures,
     active_attribs: usize,
 }
 
@@ -273,6 +275,7 @@ impl CommandBuffer {
         fbo: Option<n::RawFrameBuffer>,
         limits: Limits,
         memory: Arc<Mutex<BufferMemory>>,
+        legacy_featues: info::LegacyFeatures,
     ) -> Self {
         let (id, individual_reset) = {
             let mut memory = memory
@@ -306,6 +309,7 @@ impl CommandBuffer {
             cur_subpass: !0,
             limits,
             active_attribs: 0,
+            legacy_featues,
         }
     }
 
@@ -399,7 +403,7 @@ impl CommandBuffer {
         }
     }
 
-    pub(crate) fn bind_attributes(&mut self) {
+    pub(crate) fn bind_attributes(&mut self, first_instance: u32) {
         let Cache {
             ref attributes,
             ref vertex_buffers,
@@ -421,6 +425,10 @@ impl CommandBuffer {
 
             match vertex_buffer_descs.get(binding) {
                 Some(&Some(desc)) => {
+                    if let pso::VertexInputRate::Instance(_) = desc.rate {
+                        attribute.offset += desc.stride * first_instance as u32;
+                    }
+
                     push_cmd_internal(
                         &self.id,
                         &mut self.memory,
@@ -1282,9 +1290,18 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn draw(
         &mut self,
         vertices: Range<hal::VertexCount>,
-        instances: Range<hal::InstanceCount>,
+        mut instances: Range<hal::InstanceCount>,
     ) {
-        self.bind_attributes();
+        if !self
+            .legacy_featues
+            .contains(info::LegacyFeatures::DRAW_INSTANCED_BASE)
+        {
+            instances.end -= instances.start;
+            self.bind_attributes(instances.start);
+            instances.start = 0;
+        } else {
+            self.bind_attributes(0);
+        }
 
         match self.cache.primitive {
             Some(primitive) => {
@@ -1305,9 +1322,18 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         &mut self,
         indices: Range<hal::IndexCount>,
         base_vertex: hal::VertexOffset,
-        instances: Range<hal::InstanceCount>,
+        mut instances: Range<hal::InstanceCount>,
     ) {
-        self.bind_attributes();
+        if !self
+            .legacy_featues
+            .contains(info::LegacyFeatures::DRAW_INSTANCED_BASE)
+        {
+            instances.end -= instances.start;
+            self.bind_attributes(instances.start);
+            instances.start = 0;
+        } else {
+            self.bind_attributes(0);
+        }
 
         let (index_type, buffer_range) = match &self.cache.index_type_range {
             Some((index_type, buffer_range)) => (index_type, buffer_range),

@@ -99,13 +99,9 @@ fn main() {
     #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
     env_logger::init();
 
-    #[cfg(not(target_arch = "wasm32"))]
     let event_loop = winit::event_loop::EventLoop::new();
 
-    #[cfg(not(target_arch = "wasm32"))]
     let dpi = event_loop.primary_monitor().hidpi_factor();
-
-    #[cfg(not(target_arch = "wasm32"))]
     let wb = winit::window::WindowBuilder::new()
         .with_min_inner_size(winit::dpi::LogicalSize::new(1.0, 1.0))
         .with_inner_size(winit::dpi::LogicalSize::from_physical(
@@ -113,6 +109,7 @@ fn main() {
             dpi,
         ))
         .with_title("quad".to_string());
+
     // instantiate backend
     #[cfg(not(feature = "gl"))]
     let (_window, _instance, mut adapters, surface) = {
@@ -143,8 +140,9 @@ fn main() {
         };
         #[cfg(target_arch = "wasm32")]
         let (window, surface) = {
-            let window = back::Window;
-            let surface = back::Surface::from_window(&window);
+            let window = wb.build(&event_loop).unwrap();
+            web_sys::window().unwrap().document().unwrap().body().unwrap().append_child(&winit::platform::web::WindowExtWebSys::canvas(&window));
+            let surface = back::Surface::from_raw_handle(&window);
             (window, surface)
         };
 
@@ -160,10 +158,8 @@ fn main() {
 
     let mut renderer = Renderer::new(surface, adapter);
 
-    #[cfg(target_arch = "wasm32")]
     renderer.render();
 
-    #[cfg(not(target_arch = "wasm32"))]
     // It is important that the closure move captures the Renderer,
     // otherwise it will not be dropped when the event loop exits.
     event_loop.run(move |event, _, control_flow| {
@@ -184,7 +180,7 @@ fn main() {
                 } => *control_flow = winit::event_loop::ControlFlow::Exit,
                 winit::event::WindowEvent::Resized(dims) => {
                     println!("resized to {:?}", dims);
-                    #[cfg(feature = "gl")]
+                    #[cfg(all(feature = "gl", not(target_arch = "wasm32")))]
                     {
                         let context = renderer.surface.context();
                         context.resize(dims.to_physical(window.hidpi_factor()));

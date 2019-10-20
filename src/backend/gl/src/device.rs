@@ -238,7 +238,7 @@ impl Device {
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
         desc_remap_data: &mut n::DescRemapData,
-        nb_map: &mut FastHashMap<String, pso::DescriptorBinding>,
+        nb_map: &mut FastHashMap<String, (n::BindingTypes, pso::DescriptorBinding)>,
     ) {
         let res = ast.get_shader_resources().unwrap();
         self.remap_binding(
@@ -268,7 +268,7 @@ impl Device {
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
         desc_remap_data: &mut n::DescRemapData,
-        nb_map: &mut FastHashMap<String, pso::DescriptorBinding>,
+        nb_map: &mut FastHashMap<String, (n::BindingTypes, pso::DescriptorBinding)>,
         all_res: &[spirv::Resource],
         btype: n::BindingTypes,
     ) {
@@ -293,7 +293,7 @@ impl Device {
                 } else {
                     ast.unset_decoration(res.id, spirv::Decoration::Binding)
                         .unwrap();
-                    assert!(nb_map.insert(res.name.clone(), *nb).is_none());
+                    assert!(nb_map.insert(res.name.clone(), (btype, *nb)).is_none());
                 }
                 ast.unset_decoration(res.id, spirv::Decoration::DescriptorSet)
                     .unwrap();
@@ -305,7 +305,7 @@ impl Device {
         &self,
         ast: &mut spirv::Ast<glsl::Target>,
         desc_remap_data: &mut n::DescRemapData,
-        nb_map: &mut FastHashMap<String, pso::DescriptorBinding>,
+        nb_map: &mut FastHashMap<String, (n::BindingTypes, pso::DescriptorBinding)>,
     ) {
         let mut id_map =
             FastHashMap::<u32, (pso::DescriptorSetIndex, pso::DescriptorBinding)>::default();
@@ -338,7 +338,9 @@ impl Device {
             } else {
                 ast.unset_decoration(cis.combined_id, spirv::Decoration::Binding)
                     .unwrap();
-                assert!(nb_map.insert(new_name, nb).is_none())
+                assert!(nb_map
+                    .insert(new_name, (n::BindingTypes::Images, nb))
+                    .is_none())
             }
             ast.unset_decoration(cis.combined_id, spirv::Decoration::DescriptorSet)
                 .unwrap();
@@ -367,7 +369,7 @@ impl Device {
         point: &pso::EntryPoint<B>,
         stage: pso::Stage,
         desc_remap_data: &mut n::DescRemapData,
-        name_binding_map: &mut FastHashMap<String, pso::DescriptorBinding>,
+        name_binding_map: &mut FastHashMap<String, (n::BindingTypes, pso::DescriptorBinding)>,
     ) -> n::Shader {
         assert_eq!(point.entry, "main");
         match *point.module {
@@ -529,7 +531,11 @@ impl d::Device<B> for Device {
                 } else {
                     assert!(!is_coherent_memory);
                     let usage = if is_cpu_visible_memory {
-                        glow::DYNAMIC_DRAW
+                        if is_readable_memory {
+                            glow::STREAM_READ
+                        } else {
+                            glow::DYNAMIC_DRAW
+                        }
                     } else {
                         glow::STATIC_DRAW
                     };
@@ -586,6 +592,7 @@ impl d::Device<B> for Device {
             fbo,
             limits,
             memory: Arc::new(Mutex::new(memory)),
+            legacy_features: self.share.legacy_features,
         })
     }
 
@@ -751,7 +758,8 @@ impl d::Device<B> for Device {
                 (pso::Stage::Fragment, desc.shaders.fragment.as_ref()),
             ];
 
-            let mut name_binding_map = FastHashMap::<String, pso::DescriptorBinding>::default();
+            let mut name_binding_map =
+                FastHashMap::<String, (n::BindingTypes, pso::DescriptorBinding)>::default();
             let shader_names = &shaders
                 .iter()
                 .filter_map(|&(stage, point_maybe)| {
@@ -793,9 +801,21 @@ impl d::Device<B> for Device {
             {
                 let gl = &self.share.context;
                 gl.use_program(Some(name));
-                for (bname, binding) in name_binding_map.iter() {
-                    let loc = gl.get_uniform_location(name, bname);
-                    gl.uniform_1_i32(loc, *binding as _);
+                for (bname, (btype, binding)) in name_binding_map.iter() {
+                    match btype {
+                        n::BindingTypes::Images => {
+                            let loc = gl.get_uniform_location(name, bname);
+                            gl.uniform_1_i32(loc, *binding as _);
+                        }
+                        n::BindingTypes::UniformBuffers => {
+                            let index = gl.get_uniform_block_index(name, bname).unwrap();
+                            gl.uniform_block_binding(name, index, *binding);
+                        }
+                        n::BindingTypes::StorageBuffers => {
+                            let index = gl.get_shader_storage_block_index(name, bname).unwrap();
+                            gl.shader_storage_block_binding(name, index, *binding);
+                        }
+                    }
                 }
             }
 
@@ -890,7 +910,8 @@ impl d::Device<B> for Device {
         let program = {
             let name = gl.create_program().unwrap();
 
-            let mut name_binding_map = FastHashMap::<String, pso::DescriptorBinding>::default();
+            let mut name_binding_map =
+                FastHashMap::<String, (n::BindingTypes, pso::DescriptorBinding)>::default();
             let shader = self.compile_shader(
                 &desc.shader,
                 pso::Stage::Compute,
@@ -915,9 +936,17 @@ impl d::Device<B> for Device {
             {
                 let gl = &self.share.context;
                 gl.use_program(Some(name));
-                for (bname, binding) in name_binding_map.iter() {
-                    let loc = gl.get_uniform_location(name, bname);
-                    gl.uniform_1_i32(loc, *binding as _);
+                for (bname, (btype, binding)) in name_binding_map.iter() {
+                    match btype {
+                        n::BindingTypes::Images => {
+                            let loc = gl.get_uniform_location(name, bname);
+                            gl.uniform_1_i32(loc, *binding as _);
+                        }
+                        n::BindingTypes::UniformBuffers | n::BindingTypes::StorageBuffers => {
+                            let index = gl.get_uniform_block_index(name, bname).unwrap();
+                            gl.uniform_block_binding(name, index, *binding);
+                        }
+                    }
                 }
             }
 
@@ -1831,7 +1860,7 @@ impl d::Device<B> for Device {
     ) -> Result<(Swapchain, Vec<n::Image>), hal::window::CreationError> {
         let gl = &self.share.context;
 
-        #[cfg(feature = "wgl")]
+        #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
         let context = {
             use crate::window::wgl::PresentContext;
 
@@ -1917,6 +1946,9 @@ impl d::Device<B> for Device {
                 surface.context.clone()
             },
         };
+
+        #[cfg(target_arch = "wasm32")]
+        let _ = surface;
 
         #[cfg(target_arch = "wasm32")]
         let swapchain = Swapchain {

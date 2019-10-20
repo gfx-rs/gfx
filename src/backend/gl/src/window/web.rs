@@ -1,46 +1,12 @@
-use crate::{conv, device::Device, native, Backend as B, GlContainer, PhysicalDevice, QueueFamily};
+use crate::{conv, device::Device, native, Backend as B, GlContainer, PhysicalDevice, QueueFamily, Starc};
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use hal::{adapter::Adapter, format as f, image, window};
 use std::iter;
+use wasm_bindgen::JsCast;
 
-
-struct PixelFormat {
-    color_bits: u32,
-    alpha_bits: u32,
-    srgb: bool,
-    double_buffer: bool,
-    multisampling: Option<u32>,
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Window;
-
-impl Window {
-    fn get_pixel_format(&self) -> PixelFormat {
-        PixelFormat {
-            color_bits: 24,
-            alpha_bits: 8,
-            srgb: false,
-            double_buffer: true,
-            multisampling: None,
-        }
-    }
-
-    pub fn get_window_extent(&self) -> image::Extent {
-        image::Extent {
-            width: 640,
-            height: 480,
-            depth: 1,
-        }
-    }
-
-    pub fn get_hidpi_factor(&self) -> f64 {
-        1.0
-    }
-
-    pub fn resize<T>(&self, parameter: T) {}
-}
+#[cfg(feature = "winit")]
+use winit::{platform::web::WindowExtWebSys, window::Window};
 
 #[derive(Clone, Debug)]
 pub struct Swapchain {
@@ -62,30 +28,38 @@ impl window::Swapchain<B> for Swapchain {
 
 #[derive(Clone, Debug)]
 pub struct Surface {
+    canvas: Starc<web_sys::HtmlCanvasElement>,
     pub(crate) swapchain: Option<Swapchain>,
     renderbuffer: Option<native::Renderbuffer>,
 }
 
 impl Surface {
-    pub fn from_window(_window: &Window) -> Self {
+    pub fn from_canvas(canvas: web_sys::HtmlCanvasElement) -> Self {
         Surface {
+            canvas: Starc::new(canvas),
             swapchain: None,
             renderbuffer: None,
         }
     }
 
-    fn swapchain_formats(&self) -> Vec<f::Format> {
-        let pixel_format = Window.get_pixel_format();
-        let color_bits = pixel_format.color_bits;
-        let alpha_bits = pixel_format.alpha_bits;
-        let srgb = pixel_format.srgb;
-
-        // TODO: expose more formats
-        match (color_bits, alpha_bits, srgb) {
-            (24, 8, true) => vec![f::Format::Rgba8Srgb, f::Format::Bgra8Srgb],
-            (24, 8, false) => vec![f::Format::Rgba8Unorm, f::Format::Bgra8Unorm],
-            _ => vec![],
+    pub fn from_raw_handle(has_handle: &impl raw_window_handle::HasRawWindowHandle) -> Self {
+        if let raw_window_handle::RawWindowHandle::Web(handle) = has_handle.raw_window_handle() {
+            let canvas = web_sys::window()
+                .and_then(|win| win.document())
+                .expect("Cannot get document")
+                .query_selector(&format!("canvas[data-raw-handle=\"{}\"]", handle.id))
+                .expect("Cannot query for canvas")
+                .expect("Canvas is not found")
+                .dyn_into()
+                .expect("Failed to downcast to canvas type");
+            Self::from_canvas(canvas)
+        } else {
+            unreachable!()
         }
+    }
+
+    fn swapchain_formats(&self) -> Vec<f::Format> {
+        vec![f::Format::Rgba8Unorm, f::Format::Bgra8Unorm]
     }
 }
 
@@ -98,17 +72,18 @@ impl window::Surface<B> for Surface {
         Option<Vec<f::Format>>,
         Vec<window::PresentMode>,
     ) {
-        let ex = Window.get_window_extent();
-        let extent = window::Extent2D::from(ex);
+        let extent = hal::window::Extent2D {
+            width: self.canvas.width(),
+            height: self.canvas.height(),
+        };
 
-        let caps = window::SurfaceCapabilities {
-            image_count: if Window.get_pixel_format().double_buffer {
-                2 ..= 2
-            } else {
-                1 ..= 1
-            },
+        let caps = hal::window::SurfaceCapabilities {
+            image_count: 1 ..= 1,
             current_extent: Some(extent),
-            extents: extent ..= extent,
+            extents: extent ..= hal::window::Extent2D {
+                width: extent.width,
+                height: extent.height,
+            },
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
             composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
@@ -194,7 +169,7 @@ impl window::PresentationSurface<B> for Surface {
 impl hal::Instance for Surface {
     type Backend = B;
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
-        let adapter = PhysicalDevice::new_adapter((), GlContainer::from_new_canvas()); // TODO: Move to `self` like native/window
+        let adapter = PhysicalDevice::new_adapter((), GlContainer::from_canvas(&self.canvas)); // TODO: Move to `self` like native/window
         vec![adapter]
     }
 }
