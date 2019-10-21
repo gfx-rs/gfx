@@ -4,11 +4,11 @@ use crate::GlContext;
 
 use hal::format::ChannelType;
 use hal::range::RangeArg;
-use hal::{self, buffer, command, image, memory, pass, pso, query, ColorSlot};
+use hal::{self, buffer, command, image, memory, pass, pso, query};
 
 use crate::info;
 use crate::pool::{self, BufferMemory};
-use crate::{native as n, Backend};
+use crate::{native as n, Backend, ColorSlot};
 
 use parking_lot::Mutex;
 use std::borrow::Borrow;

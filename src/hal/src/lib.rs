@@ -58,19 +58,6 @@ pub type PatchSize = u8;
 /// Number of work groups.
 pub type WorkGroupCount = [u32; 3];
 
-/// Slot for an attribute.
-pub type AttributeSlot = u8;
-/// Slot for a constant buffer object.
-pub type ConstantBufferSlot = u8;
-/// Slot for a shader resource view.
-pub type ResourceViewSlot = u8;
-/// Slot for an unordered access object.
-pub type UnorderedViewSlot = u8;
-/// Slot for an active color buffer.
-pub type ColorSlot = u8;
-/// Slot for a sampler.
-pub type SamplerSlot = u8;
-
 bitflags! {
     //TODO: add a feature for non-normalized samplers
     //TODO: add a feature for mutable comparison samplers

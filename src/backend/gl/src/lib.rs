@@ -49,6 +49,8 @@ pub use window::dummy::{Surface, Swapchain};
 pub use glow::Context as GlContext;
 use glow::HasContext;
 
+type ColorSlot = u8;
+
 
 pub(crate) struct GlContainer {
     context: GlContext,
