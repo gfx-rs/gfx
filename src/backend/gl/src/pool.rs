@@ -2,8 +2,8 @@ use crate::command::{self, Command, CommandBuffer};
 use crate::info;
 use crate::native as n;
 use crate::Backend;
-use hal::backend::FastHashMap;
 
+use auxil::FastHashMap;
 use parking_lot::Mutex;
 use std::sync::Arc;
 

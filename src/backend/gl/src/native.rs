@@ -3,7 +3,7 @@ use std::cell::Cell;
 use std::ops::Range;
 use std::sync::Arc;
 
-use hal::backend::FastHashMap;
+use auxil::FastHashMap;
 use hal::memory::{Properties, Requirements};
 use hal::{buffer, format, image as i, pass, pso};
 

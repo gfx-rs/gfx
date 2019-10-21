@@ -13,6 +13,7 @@ edition = "2018"
 
 [dependencies]
 hal = { path = "../../hal", version = "0.3", package = "gfx-hal" }
+fxhash = "0.2.1"
 spirv_cross = "0.16"
 
 [lib]

@@ -21,7 +21,7 @@ signpost = []
 name = "gfx_backend_metal"
 
 [dependencies]
-hal = { path = "../../hal", version = "0.3", package = "gfx-hal", features = ["fxhash"] }
+hal = { path = "../../hal", version = "0.3", package = "gfx-hal" }
 auxil = { path = "../../auxil/auxil", version = "0.1", package = "gfx-auxil" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 arrayvec = "0.4"

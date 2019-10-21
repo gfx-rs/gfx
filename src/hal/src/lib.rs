@@ -29,9 +29,6 @@ pub mod queue;
 pub mod range;
 pub mod window;
 
-#[doc(hidden)]
-pub mod backend;
-
 /// Prelude module re-exports all the traits necessary to use gfx-hal.
 pub mod prelude {
     pub use crate::{

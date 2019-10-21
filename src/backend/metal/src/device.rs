@@ -17,13 +17,15 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use auxil::spirv_cross_specialize_ast;
+use auxil::{
+    FastHashMap,
+    spirv_cross_specialize_ast,
+};
 use cocoa::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use hal::{
     adapter,
-    backend::FastHashMap,
     buffer,
     device::{
         AllocationError,

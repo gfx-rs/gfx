@@ -24,7 +24,7 @@ wgl = []
 arrayvec = "0.5"
 bitflags = "1"
 log = { version = "0.4" }
-gfx-hal = { path = "../../hal", version = "0.3", features = ["fxhash"] }
+gfx-hal = { path = "../../hal", version = "0.3" }
 auxil = { path = "../../auxil/auxil", version = "0.1", package = "gfx-auxil" }
 smallvec = "0.6"
 glow = "0.3.0-alpha3"

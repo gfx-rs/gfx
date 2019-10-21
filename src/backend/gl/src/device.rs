@@ -9,10 +9,12 @@ use std::sync::Arc;
 
 use glow::HasContext;
 
-use auxil::spirv_cross_specialize_ast;
+use auxil::{
+    FastHashMap,
+    spirv_cross_specialize_ast,
+};
 
 use hal::{
-    backend::FastHashMap,
     buffer,
     device as d,
     format::{Format, Swizzle},

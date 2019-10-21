@@ -18,7 +18,6 @@ use crate::{
 };
 
 use hal::{
-    backend::FastHashMap,
     buffer,
     command as com,
     device::OutOfMemory,
@@ -40,6 +39,7 @@ use hal::{
 };
 
 use arrayvec::ArrayVec;
+use auxil::FastHashMap;
 use block::ConcreteBlock;
 use cocoa::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
