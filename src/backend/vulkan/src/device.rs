@@ -1244,11 +1244,11 @@ impl d::Device<B> for Device {
 
     unsafe fn create_sampler(
         &self,
-        sampler_info: image::SamplerInfo,
+        desc: &image::SamplerDesc,
     ) -> Result<n::Sampler, d::AllocationError> {
         use hal::pso::Comparison;
 
-        let (anisotropy_enable, max_anisotropy) = match sampler_info.anisotropic {
+        let (anisotropy_enable, max_anisotropy) = match desc.anisotropic {
             image::Anisotropic::Off => (vk::FALSE, 1.0),
             image::Anisotropic::On(aniso) => {
                 if self.raw.1.contains(Features::SAMPLER_ANISOTROPY) {
@@ -1266,31 +1266,31 @@ impl d::Device<B> for Device {
             s_type: vk::StructureType::SAMPLER_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::SamplerCreateFlags::empty(),
-            mag_filter: conv::map_filter(sampler_info.mag_filter),
-            min_filter: conv::map_filter(sampler_info.min_filter),
-            mipmap_mode: conv::map_mip_filter(sampler_info.mip_filter),
-            address_mode_u: conv::map_wrap(sampler_info.wrap_mode.0),
-            address_mode_v: conv::map_wrap(sampler_info.wrap_mode.1),
-            address_mode_w: conv::map_wrap(sampler_info.wrap_mode.2),
-            mip_lod_bias: sampler_info.lod_bias.0,
+            mag_filter: conv::map_filter(desc.mag_filter),
+            min_filter: conv::map_filter(desc.min_filter),
+            mipmap_mode: conv::map_mip_filter(desc.mip_filter),
+            address_mode_u: conv::map_wrap(desc.wrap_mode.0),
+            address_mode_v: conv::map_wrap(desc.wrap_mode.1),
+            address_mode_w: conv::map_wrap(desc.wrap_mode.2),
+            mip_lod_bias: desc.lod_bias.0,
             anisotropy_enable,
             max_anisotropy,
-            compare_enable: if sampler_info.comparison.is_some() {
+            compare_enable: if desc.comparison.is_some() {
                 vk::TRUE
             } else {
                 vk::FALSE
             },
-            compare_op: conv::map_comparison(sampler_info.comparison.unwrap_or(Comparison::Never)),
-            min_lod: sampler_info.lod_range.start.0,
-            max_lod: sampler_info.lod_range.end.0,
-            border_color: match conv::map_border_color(sampler_info.border) {
+            compare_op: conv::map_comparison(desc.comparison.unwrap_or(Comparison::Never)),
+            min_lod: desc.lod_range.start.0,
+            max_lod: desc.lod_range.end.0,
+            border_color: match conv::map_border_color(desc.border) {
                 Some(bc) => bc,
                 None => {
-                    error!("Unsupported border color {:x}", sampler_info.border.0);
+                    error!("Unsupported border color {:x}", desc.border.0);
                     vk::BorderColor::FLOAT_TRANSPARENT_BLACK
                 }
             },
-            unnormalized_coordinates: if sampler_info.normalized {
+            unnormalized_coordinates: if desc.normalized {
                 vk::FALSE
             } else {
                 vk::TRUE

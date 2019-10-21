@@ -450,7 +450,7 @@ impl Into<[f32; 4]> for PackedColor {
 // TODO: document the details of sampling.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct SamplerInfo {
+pub struct SamplerDesc {
     /// Minification filter method to use.
     pub min_filter: Filter,
     /// Magnification filter method to use.
@@ -476,11 +476,11 @@ pub struct SamplerInfo {
     pub anisotropic: Anisotropic,
 }
 
-impl SamplerInfo {
+impl SamplerDesc {
     /// Create a new sampler description with a given filter method for all filtering operations
     /// and a wrapping mode, using no LOD modifications.
     pub fn new(filter: Filter, wrap: WrapMode) -> Self {
-        SamplerInfo {
+        SamplerDesc {
             min_filter: filter,
             mag_filter: filter,
             mip_filter: filter,

@@ -406,7 +406,7 @@ impl Device {
 
 pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamInt>(
     share: &Starc<Share>,
-    info: &i::SamplerInfo,
+    info: &i::SamplerDesc,
     mut set_param_float: SetParamFloat,
     mut set_param_float_vec: SetParamFloatVec,
     mut set_param_int: SetParamInt,
@@ -1054,7 +1054,7 @@ impl d::Device<B> for Device {
 
     unsafe fn create_sampler(
         &self,
-        info: i::SamplerInfo,
+        info: &i::SamplerDesc,
     ) -> Result<n::FatSampler, d::AllocationError> {
         assert!(info.normalized);
 
@@ -1063,7 +1063,7 @@ impl d::Device<B> for Device {
             .legacy_features
             .contains(LegacyFeatures::SAMPLER_OBJECTS)
         {
-            return Ok(n::FatSampler::Info(info));
+            return Ok(n::FatSampler::Info(info.clone()));
         }
 
         let gl = &self.share.context;
@@ -1572,7 +1572,7 @@ impl d::Device<B> for Device {
                                 bindings.push(n::DescSetBindings::Sampler(binding, *sampler))
                             }
                             n::FatSampler::Info(info) => bindings
-                                .push(n::DescSetBindings::SamplerInfo(binding, info.clone())),
+                                .push(n::DescSetBindings::SamplerDesc(binding, info.clone())),
                         }
                     }
                     pso::Descriptor::Image(view, _layout) => match view {
@@ -1589,7 +1589,7 @@ impl d::Device<B> for Device {
                             bindings.push(n::DescSetBindings::Sampler(binding, *sampler))
                         }
                         n::FatSampler::Info(info) => {
-                            bindings.push(n::DescSetBindings::SamplerInfo(binding, info.clone()))
+                            bindings.push(n::DescSetBindings::SamplerDesc(binding, info.clone()))
                         }
                     },
                     pso::Descriptor::UniformTexelBuffer(_view) => unimplemented!(),

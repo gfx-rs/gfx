@@ -259,7 +259,7 @@ impl device::Device<Backend> for Device {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn create_sampler(&self, _: image::SamplerInfo) -> Result<(), device::AllocationError> {
+    unsafe fn create_sampler(&self, _: &image::SamplerDesc) -> Result<(), device::AllocationError> {
         panic!(DO_NOT_USE_MESSAGE)
     }
     unsafe fn create_buffer(&self, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {

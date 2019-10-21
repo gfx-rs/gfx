@@ -592,7 +592,7 @@ impl<B: hal::Backend> Scene<B> {
                     ref info
                 } => {
                     let sampler = unsafe {
-                        device.create_sampler(info.clone()).unwrap()
+                        device.create_sampler(info).unwrap()
                     };
                     resources.samplers.insert(name.clone(), sampler);
                 }

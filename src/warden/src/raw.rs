@@ -103,7 +103,7 @@ pub enum Resource {
         range: hal::image::SubresourceRange,
     },
     Sampler {
-        info: hal::image::SamplerInfo,
+        info: hal::image::SamplerDesc,
     },
     RenderPass {
         attachments: HashMap<String, hal::pass::Attachment>,

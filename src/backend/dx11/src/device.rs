@@ -1921,7 +1921,7 @@ impl device::Device<Backend> for Device {
 
     unsafe fn create_sampler(
         &self,
-        info: image::SamplerInfo,
+        info: &image::SamplerDesc,
     ) -> Result<Sampler, device::AllocationError> {
         assert!(info.normalized);
 

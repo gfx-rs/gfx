@@ -2593,7 +2593,7 @@ impl d::Device<B> for Device {
 
     unsafe fn create_sampler(
         &self,
-        info: image::SamplerInfo,
+        info: &image::SamplerDesc,
     ) -> Result<r::Sampler, d::AllocationError> {
         assert!(info.normalized);
         let handle = self.sampler_pool.lock().unwrap().alloc_handle();

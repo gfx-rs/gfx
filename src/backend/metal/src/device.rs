@@ -767,7 +767,7 @@ impl Device {
 
     fn make_sampler_descriptor(
         &self,
-        info: &image::SamplerInfo,
+        info: &image::SamplerDesc,
     ) -> Option<metal::SamplerDescriptor> {
         let caps = &self.shared.private_caps;
         let descriptor = metal::SamplerDescriptor::new();
@@ -840,7 +840,7 @@ impl Device {
         Some(descriptor)
     }
 
-    fn make_sampler_data(info: &image::SamplerInfo) -> msl::SamplerData {
+    fn make_sampler_data(info: &image::SamplerDesc) -> msl::SamplerData {
         fn map_address(wrap: image::WrapMode) -> msl::SamplerAddress {
             match wrap {
                 image::WrapMode::Tile => msl::SamplerAddress::Repeat,
@@ -1712,7 +1712,7 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn create_sampler(
         &self,
-        info: image::SamplerInfo,
+        info: &image::SamplerDesc,
     ) -> Result<n::Sampler, AllocationError> {
         Ok(n::Sampler {
             raw: match self.make_sampler_descriptor(&info) {

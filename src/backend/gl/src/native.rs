@@ -186,11 +186,11 @@ pub enum ImageKind {
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-/// Additionally storing the `SamplerInfo` for older OpenGL versions, which
+/// Additionally storing the `SamplerDesc` for older OpenGL versions, which
 /// don't support separate sampler objects.
 pub enum FatSampler {
     Sampler(Sampler),
-    Info(i::SamplerInfo),
+    Info(i::SamplerDesc),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]
@@ -211,7 +211,7 @@ pub(crate) enum DescSetBindings {
     },
     Texture(pso::DescriptorBinding, Texture, TextureTarget),
     Sampler(pso::DescriptorBinding, Sampler),
-    SamplerInfo(pso::DescriptorBinding, i::SamplerInfo),
+    SamplerDesc(pso::DescriptorBinding, i::SamplerDesc),
 }
 
 #[derive(Clone, Debug)]

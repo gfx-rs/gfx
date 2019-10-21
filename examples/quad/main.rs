@@ -435,7 +435,7 @@ where
 
         let sampler = ManuallyDrop::new(
             unsafe {
-                device.create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
+                device.create_sampler(&i::SamplerDesc::new(i::Filter::Linear, i::WrapMode::Clamp))
             }
             .expect("Can't create sampler"),
         );

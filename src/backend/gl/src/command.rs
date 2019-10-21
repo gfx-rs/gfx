@@ -148,7 +148,7 @@ pub enum Command {
     BindBufferRange(u32, u32, n::RawBuffer, i32, i32),
     BindTexture(u32, n::Texture, n::TextureTarget),
     BindSampler(u32, n::Sampler),
-    SetTextureSamplerSettings(u32, n::Texture, n::TextureTarget, image::SamplerInfo),
+    SetTextureSamplerSettings(u32, n::Texture, n::TextureTarget, image::SamplerDesc),
 }
 
 pub type FrameBufferTarget = u32;
@@ -1066,7 +1066,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                             self.push_cmd(Command::BindSampler(*binding, *sampler))
                         }
                     }
-                    n::DescSetBindings::SamplerInfo(binding, sinfo) => {
+                    n::DescSetBindings::SamplerDesc(binding, sinfo) => {
                         let mut all_txts = drd
                             .get_binding(n::BindingTypes::Images, set, *binding)
                             .unwrap()

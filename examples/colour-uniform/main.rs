@@ -1085,7 +1085,7 @@ impl<B: Backend> ImageState<B> {
             .unwrap();
 
         let sampler = device
-            .create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
+            .create_sampler(&i::SamplerDesc::new(i::Filter::Linear, i::WrapMode::Clamp))
             .expect("Can't create sampler");
 
         desc.write_to_state(
