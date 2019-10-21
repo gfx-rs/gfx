@@ -4,7 +4,7 @@ use smallvec::SmallVec;
 use std::borrow::Borrow;
 use std::ops::Range;
 use std::sync::Arc;
-use std::{mem, ptr};
+use std::{mem, ptr, slice};
 
 use crate::{conv, native as n, Backend, RawDevice};
 use hal::{
@@ -935,7 +935,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             layout.raw,
             vk::ShaderStageFlags::COMPUTE,
             offset,
-            memory::cast_slice(constants),
+            slice::from_raw_parts(constants.as_ptr() as _, constants.len() * 4),
         );
     }
 
@@ -951,7 +951,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             layout.raw,
             conv::map_stage_flags(stages),
             offset,
-            memory::cast_slice(constants),
+            slice::from_raw_parts(constants.as_ptr() as _, constants.len() * 4),
         );
     }
 
