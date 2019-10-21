@@ -279,9 +279,7 @@ fn get_format_properties(
     format_properties
 }
 
-impl hal::Instance for Instance {
-    type Backend = Backend;
-
+impl hal::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         let mut adapters = Vec::new();
         let mut idx = 0;
@@ -414,6 +412,10 @@ impl hal::Instance for Instance {
         }
 
         adapters
+    }
+
+    unsafe fn destroy_surface(&self, _surface: Surface) {
+        // TODO: Implement Surface cleanup
     }
 }
 

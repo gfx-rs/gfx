@@ -212,9 +212,7 @@ pub struct Instance {
     gfx_managed_metal_layer_delegate: GfxManagedMetalLayerDelegate,
 }
 
-impl hal::Instance for Instance {
-    type Backend = Backend;
-
+impl hal::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<Adapter<Backend>> {
         let devices = metal::Device::all();
         let mut adapters: Vec<Adapter<Backend>> = devices
@@ -246,6 +244,10 @@ impl hal::Instance for Instance {
             )
         });
         adapters
+    }
+
+    unsafe fn destroy_surface(&self, _surface: Surface) {
+        // TODO: Implement Surface cleanup
     }
 }
 

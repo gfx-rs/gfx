@@ -38,7 +38,7 @@ struct Dimensions<T> {
 
 use std::cell::RefCell;
 use std::io::Cursor;
-use std::mem::size_of;
+use std::mem::{size_of, ManuallyDrop};
 use std::rc::Rc;
 use std::{fs, iter, ptr};
 
@@ -548,11 +548,23 @@ impl<B: Backend> Drop for RendererState<B> {
 }
 
 struct BackendState<B: Backend> {
-    surface: B::Surface,
+    instance: Option<B::Instance>,
+    surface: ManuallyDrop<B::Surface>,
     adapter: AdapterState<B>,
     /// Needs to be kept alive even if its not used directly
     #[allow(dead_code)]
     window: winit::window::Window,
+}
+
+impl<B: Backend> Drop for BackendState<B> {
+    fn drop(&mut self) {
+        if let Some(instance) = &self.instance {
+            unsafe {
+                let surface = ManuallyDrop::into_inner(ptr::read(&self.surface));
+                instance.destroy_surface(surface);
+            }
+        }
+    }
 }
 
 #[cfg(any(
@@ -564,27 +576,25 @@ struct BackendState<B: Backend> {
 fn create_backend(
     wb: winit::window::WindowBuilder,
     event_loop: &winit::event_loop::EventLoop<()>,
-) -> (BackendState<back::Backend>, back::Instance) {
+) -> BackendState<back::Backend> {
     let window = wb.build(event_loop).unwrap();
     let instance = back::Instance::create("gfx-rs colour-uniform", 1)
         .expect("Failed to create an instance!");
     let surface = instance.create_surface(&window).expect("Failed to create a surface!");
     let mut adapters = instance.enumerate_adapters();
-    (
-        BackendState {
-            adapter: AdapterState::new(&mut adapters),
-            surface,
-            window,
-        },
-        instance,
-    )
+    BackendState {
+        instance: Some(instance),
+        adapter: AdapterState::new(&mut adapters),
+        surface: ManuallyDrop::new(surface),
+        window,
+    }
 }
 
 #[cfg(feature = "gl")]
 fn create_backend(
     wb: winit::window::WindowBuilder,
     event_loop: &winit::event_loop::EventLoop<()>,
-) -> (BackendState<back::Backend>, ()) {
+) -> BackendState<back::Backend> {
     let (context, window) = {
         let builder =
             back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
@@ -600,14 +610,12 @@ fn create_backend(
 
     let surface = back::Surface::from_context(context);
     let mut adapters = surface.enumerate_adapters();
-    (
-        BackendState {
-            adapter: AdapterState::new(&mut adapters),
-            surface,
-            window,
-        },
-        (),
-    )
+    BackendState {
+        instance: None,
+        adapter: AdapterState::new(&mut adapters),
+        surface: ManuallyDrop::new(surface),
+        window,
+    }
 }
 
 struct AdapterState<B: Backend> {
@@ -1603,7 +1611,7 @@ fn main() {
         ))
         .with_title("colour-uniform".to_string());
 
-    let (backend, _instance) = create_backend(window_builder, &event_loop);
+    let backend = create_backend(window_builder, &event_loop);
 
     let mut renderer_state = unsafe { RendererState::new(backend) };
 

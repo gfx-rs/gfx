@@ -71,7 +71,7 @@ impl Harness {
         Harness { base_path, suite }
     }
 
-    fn run<I: hal::Instance>(&self, instance: I, _disabilities: Disabilities) {
+    fn run<I: hal::Instance<B>, B: hal::Backend>(&self, instance: I, _disabilities: Disabilities) {
         use hal::adapter::PhysicalDevice as _;
 
         for tg in &self.suite {
@@ -94,7 +94,7 @@ impl Harness {
                 }
             }
 
-            let mut scene = warden::gpu::Scene::<I::Backend>::new(
+            let mut scene = warden::gpu::Scene::<B>::new(
                 adapter,
                 &tg.scene,
                 self.base_path.join("data"),

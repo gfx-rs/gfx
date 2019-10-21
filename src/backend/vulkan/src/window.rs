@@ -92,16 +92,8 @@ impl fmt::Debug for Surface {
 
 pub struct RawSurface {
     pub(crate) handle: vk::SurfaceKHR,
-    functor: khr::Surface,
+    pub(crate) functor: khr::Surface,
     pub(crate) instance: Arc<RawInstance>,
-}
-
-impl Drop for RawSurface {
-    fn drop(&mut self) {
-        unsafe {
-            self.functor.destroy_surface(self.handle, None);
-        }
-    }
 }
 
 impl Instance {

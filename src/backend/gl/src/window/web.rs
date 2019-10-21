@@ -166,10 +166,13 @@ impl window::PresentationSurface<B> for Surface {
     }
 }
 
-impl hal::Instance for Surface {
-    type Backend = B;
+impl hal::Instance<B> for Surface {
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
         let adapter = PhysicalDevice::new_adapter((), GlContainer::from_canvas(&self.canvas)); // TODO: Move to `self` like native/window
         vec![adapter]
+    }
+
+    unsafe fn destroy_surface(&self, _surface: Surface) {
+        // TODO: Implement Surface cleanup
     }
 }

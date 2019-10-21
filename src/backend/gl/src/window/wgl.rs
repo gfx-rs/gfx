@@ -197,9 +197,7 @@ impl Instance {
     }
 }
 
-impl hal::Instance for Instance {
-    type Backend = Backend;
-
+impl hal::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<Adapter<Backend>> {
         let gl_container = GlContainer::from_fn_proc(|s| unsafe {
             let sym = CString::new(s.as_bytes()).unwrap();
@@ -212,6 +210,10 @@ impl hal::Instance for Instance {
         });
         let adapter = PhysicalDevice::new_adapter(self.ctxt, gl_container);
         vec![adapter]
+    }
+
+    unsafe fn destroy_surface(&self, _surface: Surface) {
+        // TODO: Implement Surface cleanup
     }
 }
 

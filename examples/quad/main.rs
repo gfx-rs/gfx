@@ -112,17 +112,17 @@ fn main() {
 
     // instantiate backend
     #[cfg(not(feature = "gl"))]
-    let (_window, _instance, mut adapters, surface) = {
+    let (_window, instance, mut adapters, surface) = {
         let window = wb.build(&event_loop).unwrap();
         let instance = back::Instance::create("gfx-rs quad", 1)
             .expect("Failed to create an instance!");
         let surface = instance.create_surface(&window).expect("Failed to create a surface!");
         let adapters = instance.enumerate_adapters();
         // Return `window` so it is not dropped: dropping it invalidates `surface`.
-        (window, instance, adapters, surface)
+        (window, Some(instance), adapters, surface)
     };
     #[cfg(feature = "gl")]
-    let (window, mut adapters, surface) = {
+    let (window, instance, mut adapters, surface) = {
         #[cfg(not(target_arch = "wasm32"))]
         let (window, surface) = {
             let builder =
@@ -147,7 +147,7 @@ fn main() {
         };
 
         let adapters = surface.enumerate_adapters();
-        (window, adapters, surface)
+        (window, None, adapters, surface)
     };
 
     for adapter in &adapters {
@@ -156,7 +156,7 @@ fn main() {
 
     let adapter = adapters.remove(0);
 
-    let mut renderer = Renderer::new(surface, adapter);
+    let mut renderer = Renderer::new(instance, surface, adapter);
 
     renderer.render();
 
@@ -202,10 +202,11 @@ fn main() {
 }
 
 struct Renderer<B: hal::Backend> {
+    instance: Option<B::Instance>,
     device: B::Device,
     queue_group: QueueGroup<B>,
     desc_pool: ManuallyDrop<B::DescriptorPool>,
-    surface: B::Surface,
+    surface: ManuallyDrop<B::Surface>,
     adapter: hal::adapter::Adapter<B>,
     format: hal::format::Format,
     dimensions: window::Extent2D,
@@ -235,7 +236,11 @@ impl<B> Renderer<B>
 where
     B: hal::Backend,
 {
-    fn new(mut surface: B::Surface, mut adapter: hal::adapter::Adapter<B>) -> Renderer<B> {
+    fn new(
+        instance: Option<B::Instance>,
+        mut surface: B::Surface,
+        mut adapter: hal::adapter::Adapter<B>
+    ) -> Renderer<B> {
         let memory_types = adapter.physical_device.memory_properties().memory_types;
         let limits = adapter.physical_device.limits();
 
@@ -732,10 +737,11 @@ where
         };
 
         Renderer {
+            instance,
             device,
             queue_group,
             desc_pool,
-            surface,
+            surface: ManuallyDrop::new(surface),
             adapter,
             format,
             dimensions: DIMS,
@@ -942,6 +948,10 @@ where
                 .destroy_pipeline_layout(ManuallyDrop::into_inner(ptr::read(
                     &self.pipeline_layout,
                 )));
+            if let Some(instance) = &self.instance {
+                let surface = ManuallyDrop::into_inner(ptr::read(&self.surface));
+                instance.destroy_surface(surface);
+            }
         }
         println!("DROPPED!");
     }
