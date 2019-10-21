@@ -1,7 +1,7 @@
 //! Input Assembler (IA) stage description.
 //! The input assembler collects raw vertex and index data.
 
-use crate::{format, Primitive};
+use crate::{format, IndexType};
 
 /// Shader binding location.
 pub type Location = u32;
@@ -13,6 +13,9 @@ pub type ElemOffset = u32;
 pub type ElemStride = u32;
 /// Number of instances between each advancement of the vertex buffer.
 pub type InstanceRate = u8;
+/// Number of vertices in a patch
+pub type PatchSize = u8;
+
 
 /// The rate at which to advance input data to shaders for the given buffer
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
@@ -79,22 +82,30 @@ pub struct AttributeDesc {
     pub element: Element<format::Format>,
 }
 
-/// Describes whether or not primitive restart is supported for
-/// an input assembler. Primitive restart is a feature that
-/// allows a mark to be placed in an index buffer where it is
-/// is "broken" into multiple pieces of geometry.
-///
-/// See <https://www.khronos.org/opengl/wiki/Vertex_Rendering#Primitive_Restart>
-/// for more detail.
+/// Describes the type of geometric primitives,
+/// created from vertex data.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum PrimitiveRestart {
-    /// No primitive restart.
-    Disabled,
-    /// Primitive restart using a 16-bit index value (`std::u16::MAX`).
-    U16,
-    /// Primitive restart using a 32-bit index value (`std::u32::MAX`)
-    U32,
+#[repr(u8)]
+pub enum Primitive {
+    /// Each vertex represents a single point.
+    PointList,
+    /// Each pair of vertices represent a single line segment. For example, with `[a, b, c, d,
+    /// e]`, `a` and `b` form a line, `c` and `d` form a line, and `e` is discarded.
+    LineList,
+    /// Every two consecutive vertices represent a single line segment. Visually forms a "path" of
+    /// lines, as they are all connected. For example, with `[a, b, c]`, `a` and `b` form a line
+    /// line, and `b` and `c` form a line.
+    LineStrip,
+    /// Each triplet of vertices represent a single triangle. For example, with `[a, b, c, d, e]`,
+    /// `a`, `b`, and `c` form a triangle, `d` and `e` are discarded.
+    TriangleList,
+    /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
+    /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
+    TriangleStrip,
+    /// Patch list,
+    /// used with shaders capable of producing primitives on their own (tessellation)
+    PatchList(PatchSize),
 }
 
 /// All the information needed to create an input assembler.
@@ -103,16 +114,33 @@ pub enum PrimitiveRestart {
 pub struct InputAssemblerDesc {
     /// Type of the primitive
     pub primitive: Primitive,
-    /// The primitive restart specification.
-    pub primitive_restart: PrimitiveRestart,
+    /// When adjacency information is enabled, every even-numbered vertex
+    /// (every other starting from the first) represents an additional
+    /// vertex for the primitive, while odd-numbered vertices (every other starting from the
+    /// second) represent adjacent vertices.
+    ///
+    /// For example, with `[a, b, c, d, e, f, g, h]`, `[a, c,
+    /// e, g]` form a triangle strip, and `[b, d, f, h]` are the adjacent vertices, where `b`, `d`,
+    /// and `f` are adjacent to the first triangle in the strip, and `d`, `f`, and `h` are adjacent
+    /// to the second.
+    pub with_adjacency: bool,
+    /// Describes whether or not primitive restart is supported for
+    /// an input assembler. Primitive restart is a feature that
+    /// allows a mark to be placed in an index buffer where it is
+    /// is "broken" into multiple pieces of geometry.
+    ///
+    /// See <https://www.khronos.org/opengl/wiki/Vertex_Rendering#Primitive_Restart>
+    /// for more detail.
+    pub restart_index: Option<IndexType>,
 }
 
 impl InputAssemblerDesc {
-    /// Create a new IA descriptor without primitive restart
+    /// Create a new IA descriptor without primitive restart or adjucency.
     pub fn new(primitive: Primitive) -> Self {
         InputAssemblerDesc {
             primitive,
-            primitive_restart: PrimitiveRestart::Disabled,
+            with_adjacency: false,
+            restart_index: None,
         }
     }
 }

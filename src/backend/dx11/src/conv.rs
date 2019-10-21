@@ -10,6 +10,7 @@ use hal::pso::{
     Face,
     Factor,
     FrontFace,
+    InputAssemblerDesc,
     PolygonMode,
     Rasterizer,
     Rect,
@@ -21,7 +22,7 @@ use hal::pso::{
     StencilValue,
     Viewport,
 };
-use hal::{IndexType, Primitive};
+use hal::IndexType;
 
 use spirv_cross::spirv;
 
@@ -482,21 +483,24 @@ pub fn map_rect(rect: &Rect) -> D3D11_RECT {
     }
 }
 
-pub fn map_topology(primitive: Primitive) -> D3D11_PRIMITIVE_TOPOLOGY {
-    match primitive {
-        Primitive::PointList => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
-        Primitive::LineList => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
-        Primitive::LineListAdjacency => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
-        Primitive::LineStrip => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
-        Primitive::LineStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
-        Primitive::TriangleList => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        Primitive::TriangleListAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        Primitive::TriangleStrip => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-        Primitive::TriangleStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-        Primitive::PatchList(num) => {
+pub fn map_topology(ia: &InputAssemblerDesc) -> D3D11_PRIMITIVE_TOPOLOGY {
+    use hal::pso::Primitive::*;
+    match (ia.primitive, ia.with_adjacency) {
+        (PointList, false) => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
+        (PointList, true) => panic!("Points can't have adjacency info"),
+        (LineList, false) => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+        (LineList, true) => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
+        (LineStrip, false) => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
+        (LineStrip, true) => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
+        (TriangleList, false) => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        (TriangleList, true) => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ,
+        (TriangleStrip, false) => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        (TriangleStrip, true) => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ,
+        (PatchList(num), false) => {
             assert!(num != 0);
             D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + (num as u32) - 1
         }
+        (_, true) => panic!("Patches can't have adjacency info"),
     }
 }
 

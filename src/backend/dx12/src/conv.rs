@@ -10,7 +10,7 @@ use winapi::um::d3d12::*;
 use winapi::um::d3dcommon::*;
 
 use hal::format::{Format, ImageFeature, SurfaceType, Swizzle};
-use hal::{buffer, image, pso, Primitive};
+use hal::{buffer, image, pso};
 
 use native::descriptor::ShaderVisibility;
 
@@ -175,36 +175,38 @@ pub fn map_format_dsv(surface: SurfaceType) -> Option<DXGI_FORMAT> {
     })
 }
 
-pub fn map_topology_type(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY_TYPE {
-    use hal::Primitive::*;
+pub fn map_topology_type(primitive: pso::Primitive) -> D3D12_PRIMITIVE_TOPOLOGY_TYPE {
+    use hal::pso::Primitive::*;
     match primitive {
         PointList => D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
-        LineList | LineStrip | LineListAdjacency | LineStripAdjacency => {
+        LineList | LineStrip => {
             D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE
         }
-        TriangleList | TriangleStrip | TriangleListAdjacency | TriangleStripAdjacency => {
+        TriangleList | TriangleStrip => {
             D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
         }
         PatchList(_) => D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH,
     }
 }
 
-pub fn map_topology(primitive: Primitive) -> D3D12_PRIMITIVE_TOPOLOGY {
-    use hal::Primitive::*;
-    match primitive {
-        PointList => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
-        LineList => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
-        LineListAdjacency => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
-        LineStrip => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
-        LineStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
-        TriangleList => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        TriangleListAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
-        TriangleStrip => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-        TriangleStripAdjacency => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
-        PatchList(num) => {
+pub fn map_topology(ia: &pso::InputAssemblerDesc) -> D3D12_PRIMITIVE_TOPOLOGY {
+    use hal::pso::Primitive::*;
+    match (ia.primitive, ia.with_adjacency) {
+        (PointList, false) => D3D_PRIMITIVE_TOPOLOGY_POINTLIST,
+        (PointList, true) => panic!("Points can't have adjacency info"),
+        (LineList, false) => D3D_PRIMITIVE_TOPOLOGY_LINELIST,
+        (LineList, true) => D3D_PRIMITIVE_TOPOLOGY_LINELIST_ADJ,
+        (LineStrip, false) => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP,
+        (LineStrip, true) => D3D_PRIMITIVE_TOPOLOGY_LINESTRIP_ADJ,
+        (TriangleList, false) => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST,
+        (TriangleList, true) => D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST_ADJ,
+        (TriangleStrip, false) => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP,
+        (TriangleStrip, true) => D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP_ADJ,
+        (PatchList(num), false) => {
             assert!(num != 0);
             D3D_PRIMITIVE_TOPOLOGY_1_CONTROL_POINT_PATCHLIST + (num as u32) - 1
         }
+        (_, true) => panic!("Patches can't have adjacency info"),
     }
 }
 

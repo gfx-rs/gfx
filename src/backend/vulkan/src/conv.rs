@@ -12,7 +12,6 @@ use hal::{
     window::{CompositeAlpha, PresentMode},
     Features,
     IndexType,
-    Primitive,
 };
 
 use crate::native as n;
@@ -203,18 +202,20 @@ pub fn map_border_color(col: image::PackedColor) -> Option<vk::BorderColor> {
     }
 }
 
-pub fn map_topology(prim: Primitive) -> vk::PrimitiveTopology {
-    match prim {
-        Primitive::PointList => vk::PrimitiveTopology::POINT_LIST,
-        Primitive::LineList => vk::PrimitiveTopology::LINE_LIST,
-        Primitive::LineListAdjacency => vk::PrimitiveTopology::LINE_LIST_WITH_ADJACENCY,
-        Primitive::LineStrip => vk::PrimitiveTopology::LINE_STRIP,
-        Primitive::LineStripAdjacency => vk::PrimitiveTopology::LINE_STRIP_WITH_ADJACENCY,
-        Primitive::TriangleList => vk::PrimitiveTopology::TRIANGLE_LIST,
-        Primitive::TriangleListAdjacency => vk::PrimitiveTopology::TRIANGLE_LIST_WITH_ADJACENCY,
-        Primitive::TriangleStrip => vk::PrimitiveTopology::TRIANGLE_STRIP,
-        Primitive::TriangleStripAdjacency => vk::PrimitiveTopology::TRIANGLE_STRIP_WITH_ADJACENCY,
-        Primitive::PatchList(_) => vk::PrimitiveTopology::PATCH_LIST,
+pub fn map_topology(ia: &pso::InputAssemblerDesc) -> vk::PrimitiveTopology {
+    match (ia.primitive, ia.with_adjacency) {
+        (pso::Primitive::PointList, false) => vk::PrimitiveTopology::POINT_LIST,
+        (pso::Primitive::PointList, true) => panic!("Points can't have adjacency info"),
+        (pso::Primitive::LineList, false) => vk::PrimitiveTopology::LINE_LIST,
+        (pso::Primitive::LineList, true) => vk::PrimitiveTopology::LINE_LIST_WITH_ADJACENCY,
+        (pso::Primitive::LineStrip, false) => vk::PrimitiveTopology::LINE_STRIP,
+        (pso::Primitive::LineStrip, true) => vk::PrimitiveTopology::LINE_STRIP_WITH_ADJACENCY,
+        (pso::Primitive::TriangleList, false) => vk::PrimitiveTopology::TRIANGLE_LIST,
+        (pso::Primitive::TriangleList, true) => vk::PrimitiveTopology::TRIANGLE_LIST_WITH_ADJACENCY,
+        (pso::Primitive::TriangleStrip, false) => vk::PrimitiveTopology::TRIANGLE_STRIP,
+        (pso::Primitive::TriangleStrip, true) => vk::PrimitiveTopology::TRIANGLE_STRIP_WITH_ADJACENCY,
+        (pso::Primitive::PatchList(_), false) => vk::PrimitiveTopology::PATCH_LIST,
+        (pso::Primitive::PatchList(_), true) => panic!("Patches can't have adjacency info"),
     }
 }
 

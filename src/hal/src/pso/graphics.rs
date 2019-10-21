@@ -4,11 +4,11 @@ use crate::{
     image,
     pass,
     pso::{
-        input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc},
+        input_assembler::{AttributeDesc, InputAssemblerDesc, Primitive, VertexBufferDesc},
         output_merger::{ColorBlendDesc, DepthStencilDesc, Face},
         BasePipeline, EntryPoint, PipelineCreationFlags, State,
     },
-    Backend, Primitive,
+    Backend,
 };
 
 use std::ops::Range;

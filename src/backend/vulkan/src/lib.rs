@@ -26,12 +26,11 @@ use hal::{
     format,
     image,
     memory,
-    pso::PipelineStage,
+    pso::{PatchSize, PipelineStage},
     queue,
     window::{PresentError, Suboptimal, SwapImageIndex},
     Features,
     Limits,
-    PatchSize,
 };
 
 use std::borrow::{Borrow, Cow};

@@ -262,7 +262,7 @@ impl Device {
         };
 
         if winerror::SUCCEEDED(hr) {
-            let topology = conv::map_topology(input_assembler.primitive);
+            let topology = conv::map_topology(input_assembler);
 
             Ok(InputLayout {
                 raw: unsafe { ComPtr::from_raw(layout) },

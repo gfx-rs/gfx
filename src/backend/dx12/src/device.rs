@@ -1902,7 +1902,7 @@ impl d::Device<B> for Device {
             Flags: d3d12::D3D12_PIPELINE_STATE_FLAG_NONE,
         };
 
-        let topology = conv::map_topology(desc.input_assembler.primitive);
+        let topology = conv::map_topology(&desc.input_assembler);
 
         // Create PSO
         let mut pipeline = native::PipelineState::null();

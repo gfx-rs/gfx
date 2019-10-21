@@ -1281,7 +1281,7 @@ impl<B: Backend> PipelineState<B> {
 
                 let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
                     shader_entries,
-                    hal::Primitive::TriangleList,
+                    pso::Primitive::TriangleList,
                     pso::Rasterizer::FILL,
                     &pipeline_layout,
                     subpass,

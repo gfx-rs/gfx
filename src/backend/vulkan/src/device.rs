@@ -157,10 +157,10 @@ impl GraphicsPipelineInfoBuf {
             s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
-            topology: conv::map_topology(desc.input_assembler.primitive),
-            primitive_restart_enable: match desc.input_assembler.primitive_restart {
-                pso::PrimitiveRestart::U16 | pso::PrimitiveRestart::U32 => vk::TRUE,
-                pso::PrimitiveRestart::Disabled => vk::FALSE,
+            topology: conv::map_topology(&desc.input_assembler),
+            primitive_restart_enable: match desc.input_assembler.restart_index {
+                Some(_) => vk::TRUE,
+                None => vk::FALSE,
             },
         };
 
@@ -224,9 +224,8 @@ impl GraphicsPipelineInfoBuf {
             line_width,
         };
 
-        use hal::Primitive::PatchList;
         this.tessellation_state = {
-            if let PatchList(patch_control_points) = desc.input_assembler.primitive {
+            if let pso::Primitive::PatchList(patch_control_points) = desc.input_assembler.primitive {
                 Some(vk::PipelineTessellationStateCreateInfo {
                     s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
                     p_next: ptr::null(),

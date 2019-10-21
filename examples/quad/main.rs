@@ -210,7 +210,7 @@ struct Renderer<B: hal::Backend> {
     adapter: hal::adapter::Adapter<B>,
     format: hal::format::Format,
     dimensions: window::Extent2D,
-    viewport: hal::pso::Viewport,
+    viewport: pso::Viewport,
     render_pass: ManuallyDrop<B::RenderPass>,
     pipeline: ManuallyDrop<B::GraphicsPipeline>,
     pipeline_layout: ManuallyDrop<B::PipelineLayout>,
@@ -438,7 +438,7 @@ where
                 device.create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
             }
             .expect("Can't create sampler"),
-        );;
+        );
 
         unsafe {
             device.write_descriptor_sets(vec![
@@ -674,7 +674,7 @@ where
 
                 let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
                     shader_entries,
-                    hal::Primitive::TriangleList,
+                    pso::Primitive::TriangleList,
                     pso::Rasterizer::FILL,
                     &*pipeline_layout,
                     subpass,

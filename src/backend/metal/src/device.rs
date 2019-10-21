@@ -1355,25 +1355,25 @@ impl hal::device::Device<Backend> for Device {
         };
 
         let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {
-            hal::Primitive::PointList => {
+            pso::Primitive::PointList => {
                 (MTLPrimitiveTopologyClass::Point, MTLPrimitiveType::Point)
             }
-            hal::Primitive::LineList => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::Line),
-            hal::Primitive::LineStrip => {
+            pso::Primitive::LineList => (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::Line),
+            pso::Primitive::LineStrip => {
                 (MTLPrimitiveTopologyClass::Line, MTLPrimitiveType::LineStrip)
             }
-            hal::Primitive::TriangleList => (
+            pso::Primitive::TriangleList => (
                 MTLPrimitiveTopologyClass::Triangle,
                 MTLPrimitiveType::Triangle,
             ),
-            hal::Primitive::TriangleStrip => (
+            pso::Primitive::TriangleStrip => (
                 MTLPrimitiveTopologyClass::Triangle,
                 MTLPrimitiveType::TriangleStrip,
             ),
-            _ => (
+            pso::Primitive::PatchList(_) => (
                 MTLPrimitiveTopologyClass::Unspecified,
                 MTLPrimitiveType::Point,
-            ), //TODO: double-check
+            ),
         };
         if self.shared.private_caps.layered_rendering {
             pipeline.set_input_primitive_topology(primitive_class);

@@ -1,6 +1,6 @@
 use crate::native::VertexAttribFunction;
 use hal::format::Format;
-use hal::{image as i, Primitive};
+use hal::{image as i, pso};
 
 /*
 pub fn _image_kind_to_gl(kind: i::Kind) -> t::GLenum {
@@ -44,18 +44,20 @@ pub fn wrap_to_gl(w: i::WrapMode) -> u32 {
     }
 }
 
-pub fn primitive_to_gl_primitive(primitive: Primitive) -> u32 {
-    match primitive {
-        Primitive::PointList => glow::POINTS,
-        Primitive::LineList => glow::LINES,
-        Primitive::LineStrip => glow::LINE_STRIP,
-        Primitive::TriangleList => glow::TRIANGLES,
-        Primitive::TriangleStrip => glow::TRIANGLE_STRIP,
-        Primitive::LineListAdjacency => glow::LINES_ADJACENCY,
-        Primitive::LineStripAdjacency => glow::LINE_STRIP_ADJACENCY,
-        Primitive::TriangleListAdjacency => glow::TRIANGLES_ADJACENCY,
-        Primitive::TriangleStripAdjacency => glow::TRIANGLE_STRIP_ADJACENCY,
-        Primitive::PatchList(_) => glow::PATCHES,
+pub fn input_assember_to_gl_primitive(ia : &pso::InputAssemblerDesc) -> u32 {
+    match (ia.primitive, ia.with_adjacency) {
+        (pso::Primitive::PointList, false) => glow::POINTS,
+        (pso::Primitive::PointList, true) => panic!("Points can't have adjacency info"),
+        (pso::Primitive::LineList, false) => glow::LINES,
+        (pso::Primitive::LineList, true) => glow::LINES_ADJACENCY,
+        (pso::Primitive::LineStrip, false) => glow::LINE_STRIP,
+        (pso::Primitive::LineStrip, true) => glow::LINE_STRIP_ADJACENCY,
+        (pso::Primitive::TriangleList, false) => glow::TRIANGLES,
+        (pso::Primitive::TriangleList, true) => glow::TRIANGLES_ADJACENCY,
+        (pso::Primitive::TriangleStrip, false) => glow::TRIANGLE_STRIP,
+        (pso::Primitive::TriangleStrip, true) => glow::TRIANGLE_STRIP_ADJACENCY,
+        (pso::Primitive::PatchList(_), false) => glow::PATCHES,
+        (pso::Primitive::PatchList(_), true) => panic!("Patches can't have adjacency info"),
     }
 }
 
