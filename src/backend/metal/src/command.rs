@@ -2374,7 +2374,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate_one(&mut self, level: com::Level) -> CommandBuffer {
+    unsafe fn allocate_one(&mut self, level: com::Level) -> CommandBuffer {
         //TODO: fail with OOM if we allocate more actual command buffers
         // than our mega-queue supports.
         let inner = Arc::new(RefCell::new(CommandBufferInner {

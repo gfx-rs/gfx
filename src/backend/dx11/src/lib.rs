@@ -2625,7 +2625,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
         //unimplemented!()
     }
 
-    fn allocate_one(&mut self, _level: command::Level) -> CommandBuffer {
+    unsafe fn allocate_one(&mut self, _level: command::Level) -> CommandBuffer {
         CommandBuffer::create_deferred(self.device.clone(), self.internal.clone())
     }
 

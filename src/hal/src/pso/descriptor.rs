@@ -16,7 +16,8 @@
 //! [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
 //! [`DescriptorSetCopy`]: struct.DescriptorSetWrite.html
 
-use std::{borrow::Borrow, fmt, ops::Range};
+use smallvec::SmallVec;
+use std::{borrow::Borrow, fmt, iter, ops::Range};
 
 use crate::{
     buffer::Offset,
@@ -141,8 +142,8 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
         &mut self,
         layout: &B::DescriptorSetLayout,
     ) -> Result<B::DescriptorSet, AllocationError> {
-        let mut sets = Vec::with_capacity(1);
-        self.allocate_sets(Some(layout), &mut sets)
+        let mut sets = SmallVec::new();
+        self.allocate_sets(iter::once(layout), &mut sets)
             .map(|_| sets.remove(0))
     }
 
@@ -161,7 +162,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     unsafe fn allocate_sets<I>(
         &mut self,
         layouts: I,
-        sets: &mut Vec<B::DescriptorSet>,
+        sets: &mut SmallVec<[B::DescriptorSet; 1]>,
     ) -> Result<(), AllocationError>
     where
         I: IntoIterator,
@@ -172,7 +173,9 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
             match self.allocate_set(layout.borrow()) {
                 Ok(set) => sets.push(set),
                 Err(e) => {
-                    self.free_sets(sets.drain(base ..));
+                    while sets.len() != base {
+                        self.free_sets(sets.pop());
+                    }
                     return Err(e);
                 }
             }

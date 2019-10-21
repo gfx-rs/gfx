@@ -264,8 +264,9 @@ impl<B: hal::Backend> Scene<B> {
             compute_pipelines: HashMap::new(),
         };
         let mut upload_buffers = HashMap::new();
-        let mut finish_cmd = command_pool.allocate_one(c::Level::Primary);
+        let mut finish_cmd;
         unsafe {
+            finish_cmd = command_pool.allocate_one(c::Level::Primary);
             finish_cmd.begin_primary(c::CommandBufferFlags::empty());
             finish_cmd.write_timestamp(
                 pso::PipelineStage::BOTTOM_OF_PIPE,
@@ -273,8 +274,9 @@ impl<B: hal::Backend> Scene<B> {
             );
             finish_cmd.finish();
         }
-        let mut init_cmd = command_pool.allocate_one(c::Level::Primary);
+        let mut init_cmd;
         unsafe {
+            init_cmd = command_pool.allocate_one(c::Level::Primary);
             init_cmd.begin_primary(c::CommandBufferFlags::empty());
             init_cmd.reset_query_pool(&query_pool, 0 .. 2);
             init_cmd.write_timestamp(
@@ -949,8 +951,9 @@ impl<B: hal::Backend> Scene<B> {
         let mut jobs = HashMap::new();
         for (name, job) in &raw.jobs {
             use crate::raw::TransferCommand as Tc;
-            let mut command_buf = command_pool.allocate_one(c::Level::Primary);
+            let mut command_buf;
             unsafe {
+                command_buf = command_pool.allocate_one(c::Level::Primary);
                 command_buf.begin_primary(c::CommandBufferFlags::SIMULTANEOUS_USE);
             }
             match *job {
@@ -1476,8 +1479,9 @@ impl<B: hal::Backend> Scene<B> {
             )
         }
         .expect("Can't create command pool");
-        let mut cmd_buffer = command_pool.allocate_one(c::Level::Primary);
+        let mut cmd_buffer;
         unsafe {
+            cmd_buffer = command_pool.allocate_one(c::Level::Primary);
             cmd_buffer.begin_primary(c::CommandBufferFlags::ONE_TIME_SUBMIT);
             let pre_barrier = memory::Barrier::whole_buffer(
                 &buffer.handle,
@@ -1584,8 +1588,9 @@ impl<B: hal::Backend> Scene<B> {
             )
         }
         .expect("Can't create command pool");
-        let mut cmd_buffer = command_pool.allocate_one(c::Level::Primary);
+        let mut cmd_buffer;
         unsafe {
+            cmd_buffer = command_pool.allocate_one(c::Level::Primary);
             cmd_buffer.begin_primary(c::CommandBufferFlags::ONE_TIME_SUBMIT);
             let pre_barrier = memory::Barrier::Image {
                 states: image.stable_state

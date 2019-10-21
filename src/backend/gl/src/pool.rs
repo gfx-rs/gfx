@@ -83,7 +83,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate_one(&mut self, _level: hal::command::Level) -> CommandBuffer {
+    unsafe fn allocate_one(&mut self, _level: hal::command::Level) -> CommandBuffer {
         // TODO: Implement secondary buffers
         CommandBuffer::new(
             self.fbo,
