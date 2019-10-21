@@ -1941,15 +1941,15 @@ impl device::Device<Backend> for Device {
             AddressU: conv::map_wrapping(info.wrap_mode.0),
             AddressV: conv::map_wrapping(info.wrap_mode.1),
             AddressW: conv::map_wrapping(info.wrap_mode.2),
-            MipLODBias: info.lod_bias.into(),
+            MipLODBias: info.lod_bias.0,
             MaxAnisotropy: match info.anisotropic {
                 image::Anisotropic::Off => 0,
                 image::Anisotropic::On(aniso) => aniso as _,
             },
             ComparisonFunc: info.comparison.map_or(0, |comp| conv::map_comparison(comp)),
             BorderColor: info.border.into(),
-            MinLOD: info.lod_range.start.into(),
-            MaxLOD: info.lod_range.end.into(),
+            MinLOD: info.lod_range.start.0,
+            MaxLOD: info.lod_range.end.0,
         };
 
         let mut sampler = ptr::null_mut();

@@ -2616,14 +2616,14 @@ impl d::Device<B> for Device {
                 conv::map_wrap(info.wrap_mode.1),
                 conv::map_wrap(info.wrap_mode.2),
             ],
-            info.lod_bias.into(),
+            info.lod_bias.0,
             match info.anisotropic {
                 image::Anisotropic::On(max) => max as _, // TODO: check support here?
                 image::Anisotropic::Off => 0,
             },
             conv::map_comparison(info.comparison.unwrap_or(pso::Comparison::Always)),
             info.border.into(),
-            info.lod_range.start.into() .. info.lod_range.end.into(),
+            info.lod_range.start.0 .. info.lod_range.end.0,
         );
 
         Ok(r::Sampler { handle })

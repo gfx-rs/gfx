@@ -8,7 +8,7 @@ use crate::{
     format,
     pso::{Comparison, Rect},
 };
-use std::{i16, ops::Range};
+use std::{f32, hash, ops::Range};
 
 /// Dimension size.
 pub type Size = u32;
@@ -399,29 +399,21 @@ pub enum WrapMode {
     Border,
 }
 
-/// A wrapper for the LOD level of an image.
-/// The LOD is stored in base-16 fixed point format. That allows
-/// deriving Hash and Eq for it safely.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd)]
+/// A wrapper for the LOD level of an image. Needed so that we can
+/// implement Eq and Hash for it.
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub struct Lod(i16);
+pub struct Lod(pub f32);
 
 impl Lod {
-    /// Zero LOD.
-    pub const ZERO: Self = Lod(0);
-    /// Maximum LOD.
-    pub const MAX: Self = Lod(i16::MAX);
+    /// Possible LOD range.
+    pub const RANGE: Range<Self> = Lod(f32::MIN) .. Lod(f32::MAX);
 }
 
-impl From<f32> for Lod {
-    fn from(v: f32) -> Lod {
-        Lod((v * 16.0).max(0.0).min(i16::MAX as f32) as i16)
-    }
-}
-
-impl Into<f32> for Lod {
-    fn into(self) -> f32 {
-        self.0 as f32 / 16.0
+impl Eq for Lod {}
+impl hash::Hash for Lod {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
+        self.0.to_bits().hash(state)
     }
 }
 
@@ -493,8 +485,8 @@ impl SamplerInfo {
             mag_filter: filter,
             mip_filter: filter,
             wrap_mode: (wrap, wrap, wrap),
-            lod_bias: Lod::ZERO,
-            lod_range: Lod::ZERO .. Lod::MAX,
+            lod_bias: Lod(0.0),
+            lod_range: Lod::RANGE.clone(),
             comparison: None,
             border: PackedColor(0),
             normalized: true,

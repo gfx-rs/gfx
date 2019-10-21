@@ -779,7 +779,7 @@ impl Device {
         descriptor.set_mip_filter(match info.mip_filter {
             // Note: this shouldn't be required, but Metal appears to be confused when mipmaps
             // are provided even with trivial LOD bias.
-            image::Filter::Nearest if info.lod_range.end < image::Lod::from(0.5) => {
+            image::Filter::Nearest if info.lod_range.end.0 < 0.5 => {
                 MTLSamplerMipFilter::NotMipmapped
             }
             image::Filter::Nearest => MTLSamplerMipFilter::Nearest,
@@ -795,18 +795,18 @@ impl Device {
         descriptor.set_address_mode_t(conv::map_wrap_mode(t));
         descriptor.set_address_mode_r(conv::map_wrap_mode(r));
 
-        let lod_bias: f32 = info.lod_bias.into();
+        let lod_bias = info.lod_bias.0;
         if lod_bias != 0.0 {
             if self.features.contains(hal::Features::SAMPLER_MIP_LOD_BIAS) {
                 unsafe {
-                    descriptor.set_lod_bias(info.lod_bias.into());
+                    descriptor.set_lod_bias(lod_bias);
                 }
             } else {
                 error!("Lod bias {:?} is not supported", info.lod_bias);
             }
         }
-        descriptor.set_lod_min_clamp(info.lod_range.start.into());
-        descriptor.set_lod_max_clamp(info.lod_range.end.into());
+        descriptor.set_lod_min_clamp(info.lod_range.start.0);
+        descriptor.set_lod_max_clamp(info.lod_range.end.0);
 
         // TODO: Clarify minimum macOS version with Apple (43707452)
         if (caps.os_is_mac && caps.has_version_at_least(10, 13))
@@ -850,7 +850,7 @@ impl Device {
             }
         }
 
-        let lods: Range<f32> = info.lod_range.start.into() .. info.lod_range.end.into();
+        let lods = info.lod_range.start.0 .. info.lod_range.end.0;
         msl::SamplerData {
             coord: if info.normalized {
                 msl::SamplerCoord::Normalized
@@ -866,7 +866,7 @@ impl Device {
                 image::Filter::Linear => msl::SamplerFilter::Linear,
             },
             mip_filter: match info.min_filter {
-                image::Filter::Nearest if info.lod_range.end < image::Lod::from(0.5) => {
+                image::Filter::Nearest if info.lod_range.end.0 < 0.5 => {
                     msl::SamplerMipFilter::None
                 }
                 image::Filter::Nearest => msl::SamplerMipFilter::Nearest,

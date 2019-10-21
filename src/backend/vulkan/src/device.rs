@@ -1273,7 +1273,7 @@ impl d::Device<B> for Device {
             address_mode_u: conv::map_wrap(sampler_info.wrap_mode.0),
             address_mode_v: conv::map_wrap(sampler_info.wrap_mode.1),
             address_mode_w: conv::map_wrap(sampler_info.wrap_mode.2),
-            mip_lod_bias: sampler_info.lod_bias.into(),
+            mip_lod_bias: sampler_info.lod_bias.0,
             anisotropy_enable,
             max_anisotropy,
             compare_enable: if sampler_info.comparison.is_some() {
@@ -1282,8 +1282,8 @@ impl d::Device<B> for Device {
                 vk::FALSE
             },
             compare_op: conv::map_comparison(sampler_info.comparison.unwrap_or(Comparison::Never)),
-            min_lod: sampler_info.lod_range.start.into(),
-            max_lod: sampler_info.lod_range.end.into(),
+            min_lod: sampler_info.lod_range.start.0,
+            max_lod: sampler_info.lod_range.end.0,
             border_color: match conv::map_border_color(sampler_info.border) {
                 Some(bc) => bc,
                 None => {

@@ -437,7 +437,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     set_param_int(glow::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as i32);
 
     if share.features.contains(hal::Features::SAMPLER_MIP_LOD_BIAS) {
-        set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.into());
+        set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.0);
     }
     if share
         .legacy_features
@@ -447,8 +447,8 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
         set_param_float_vec(glow::TEXTURE_BORDER_COLOR, &mut border);
     }
 
-    set_param_float(glow::TEXTURE_MIN_LOD, info.lod_range.start.into());
-    set_param_float(glow::TEXTURE_MAX_LOD, info.lod_range.end.into());
+    set_param_float(glow::TEXTURE_MIN_LOD, info.lod_range.start.0);
+    set_param_float(glow::TEXTURE_MAX_LOD, info.lod_range.end.0);
 
     match info.comparison {
         None => set_param_int(glow::TEXTURE_COMPARE_MODE, glow::NONE as i32),
