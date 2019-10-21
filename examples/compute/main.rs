@@ -163,8 +163,8 @@ fn main() {
         unsafe { device.create_command_pool(family.id(), pool::CommandPoolCreateFlags::empty()) }
             .expect("Can't create command pool");
     let fence = device.create_fence(false).unwrap();
-    let mut command_buffer = command_pool.allocate_one(command::Level::Primary);
     unsafe {
+        let mut command_buffer = command_pool.allocate_one(command::Level::Primary);
         command_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
         command_buffer.copy_buffer(
             &staging_buffer,

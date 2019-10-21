@@ -568,16 +568,8 @@ where
                 preserves: &[],
             };
 
-            let dependency = pass::SubpassDependency {
-                passes: pass::SubpassRef::External .. pass::SubpassRef::Pass(0),
-                stages: PipelineStage::COLOR_ATTACHMENT_OUTPUT
-                    .. PipelineStage::COLOR_ATTACHMENT_OUTPUT,
-                accesses: i::Access::empty()
-                    .. (i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
-            };
-
             ManuallyDrop::new(
-                unsafe { device.create_render_pass(&[attachment], &[subpass], &[dependency]) }
+                unsafe { device.create_render_pass(&[attachment], &[subpass], &[]) }
                     .expect("Can't create render pass"),
             )
         };
@@ -626,7 +618,9 @@ where
                     .create_fence(true)
                     .expect("Could not create fence"),
             );
-            cmd_buffers.push(cmd_pools[i].allocate_one(command::Level::Primary));
+            cmd_buffers.push(unsafe {
+                cmd_pools[i].allocate_one(command::Level::Primary)
+            });
         }
 
         let pipeline_layout = ManuallyDrop::new(

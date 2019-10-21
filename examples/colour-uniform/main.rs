@@ -705,18 +705,10 @@ impl<B: Backend> RenderPassState<B> {
                 preserves: &[],
             };
 
-            let dependency = pass::SubpassDependency {
-                passes: pass::SubpassRef::External .. pass::SubpassRef::Pass(0),
-                stages: pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT
-                    .. pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
-                accesses: i::Access::empty()
-                    .. (i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
-            };
-
             device
                 .borrow()
                 .device
-                .create_render_pass(&[attachment], &[subpass], &[dependency])
+                .create_render_pass(&[attachment], &[subpass], &[])
                 .ok()
         };
 

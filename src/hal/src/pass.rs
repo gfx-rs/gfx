@@ -1,6 +1,6 @@
 //! RenderPass handling.
 
-use crate::{format::Format, image, pso::PipelineStage, Backend};
+use crate::{format::Format, image, memory::Dependencies, pso::PipelineStage, Backend};
 use std::ops::Range;
 
 /// Specifies the operation which will be applied at the beginning of a subpass.
@@ -130,6 +130,8 @@ pub struct SubpassDependency {
     pub stages: Range<PipelineStage>,
     /// Resource accesses this subpass depends on.
     pub accesses: Range<image::Access>,
+    /// Dependency flags.
+    pub flags: Dependencies,
 }
 
 /// Description of a subpass for renderpass creation.

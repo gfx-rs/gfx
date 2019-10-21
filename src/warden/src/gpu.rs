@@ -642,6 +642,7 @@ impl<B: hal::Backend> Scene<B> {
                         passes: subpass_ref(&dep.passes.start) .. subpass_ref(&dep.passes.end),
                         stages: dep.stages.clone(),
                         accesses: dep.accesses.clone(),
+                        flags: memory::Dependencies::empty(),
                     });
 
                     let rp = RenderPass {

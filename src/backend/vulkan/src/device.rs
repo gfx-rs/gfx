@@ -40,7 +40,7 @@ struct GraphicsPipelineInfoBuf {
     vertex_bindings: Vec<vk::VertexInputBindingDescription>,
     vertex_attributes: Vec<vk::VertexInputAttributeDescription>,
     blend_states: Vec<vk::PipelineColorBlendAttachmentState>,
-    
+
     sample_mask: [u32; 2],
     vertex_input_state: vk::PipelineVertexInputStateCreateInfo,
     input_assembly_state: vk::PipelineInputAssemblyStateCreateInfo,
@@ -625,17 +625,17 @@ impl d::Device<B> for Device {
 
         let dependencies = dependencies
             .into_iter()
-            .map(|dependency| {
-                let dependency = dependency.borrow();
+            .map(|subpass_dep| {
+                let sdep = subpass_dep.borrow();
                 // TODO: checks
                 vk::SubpassDependency {
-                    src_subpass: map_subpass_ref(dependency.passes.start),
-                    dst_subpass: map_subpass_ref(dependency.passes.end),
-                    src_stage_mask: conv::map_pipeline_stage(dependency.stages.start),
-                    dst_stage_mask: conv::map_pipeline_stage(dependency.stages.end),
-                    src_access_mask: conv::map_image_access(dependency.accesses.start),
-                    dst_access_mask: conv::map_image_access(dependency.accesses.end),
-                    dependency_flags: vk::DependencyFlags::empty(), // TODO
+                    src_subpass: map_subpass_ref(sdep.passes.start),
+                    dst_subpass: map_subpass_ref(sdep.passes.end),
+                    src_stage_mask: conv::map_pipeline_stage(sdep.stages.start),
+                    dst_stage_mask: conv::map_pipeline_stage(sdep.stages.end),
+                    src_access_mask: conv::map_image_access(sdep.accesses.start),
+                    dst_access_mask: conv::map_image_access(sdep.accesses.end),
+                    dependency_flags: mem::transmute(sdep.flags),
                 }
             })
             .collect::<Vec<_>>();
@@ -799,7 +799,7 @@ impl d::Device<B> for Device {
         let mut buf = GraphicsPipelineInfoBuf::default();
         let mut buf = Pin::new(&mut buf);
         GraphicsPipelineInfoBuf::initialize(&mut buf, self, desc);
-        
+
         let info = {
             let (base_handle, base_index) = match desc.parent {
                 pso::BasePipeline::Pipeline(pipeline) => (pipeline.0, -1),
@@ -880,7 +880,7 @@ impl d::Device<B> for Device {
         T::Item: Borrow<pso::GraphicsPipelineDesc<'a, B>>,
     {
         debug!("create_graphics_pipelines:");
-        
+
         let mut bufs: Pin<Box<[_]>> = descs
             .into_iter()
             .enumerate()
@@ -888,7 +888,7 @@ impl d::Device<B> for Device {
             .map(|(_, desc)| (desc, GraphicsPipelineInfoBuf::default()))
             .collect::<Box<[_]>>()
             .into();
-        
+
         for (desc, buf) in bufs.as_mut().get_unchecked_mut() {
             let desc: &T::Item = desc;
             GraphicsPipelineInfoBuf::initialize(&mut Pin::new_unchecked(buf), self, desc.borrow());
@@ -1073,7 +1073,7 @@ impl d::Device<B> for Device {
             .map(|desc| (desc, ComputePipelineInfoBuf::default()))
             .collect::<Box<[_]>>()
             .into();
-        
+
         for (desc, buf) in bufs.as_mut().get_unchecked_mut() {
             let desc: &T::Item = desc;
             ComputePipelineInfoBuf::initialize(&mut Pin::new_unchecked(buf), desc.borrow());
