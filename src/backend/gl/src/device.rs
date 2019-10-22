@@ -1681,7 +1681,7 @@ impl d::Device<B> for Device {
         I::Item: Borrow<n::Fence>,
     {
         let performance = web_sys::window().unwrap().performance().unwrap();
-        let start = performance.now();;
+        let start = performance.now();
         let get_elapsed = || ((performance.now() - start) * 1_000_000.0) as u64;
 
         match wait {

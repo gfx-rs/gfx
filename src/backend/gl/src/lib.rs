@@ -720,10 +720,18 @@ pub struct DummyInstance;
 
 #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
 impl hal::Instance<Backend> for DummyInstance {
+    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+        unimplemented!()
+    }
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         unimplemented!()
     }
-
+    unsafe fn create_surface(
+        &self,
+        _: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, hal::window::InitError> {
+        unimplemented!()
+    }
     unsafe fn destroy_surface(&self, _surface: Surface) {
         unimplemented!()
     }
@@ -739,6 +747,11 @@ pub enum Instance {
 
 #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
 impl hal::Instance<Backend> for Instance {
+    fn create(name: &str, version: u32) -> Result<Instance, hal::UnsupportedBackend> {
+        Headless::create(name, version)
+            .map(Instance::Headless)
+    }
+
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         match self {
             Instance::Headless(instance) => instance.enumerate_adapters(),
@@ -746,27 +759,14 @@ impl hal::Instance<Backend> for Instance {
         }
     }
 
+    unsafe fn create_surface(
+        &self,
+        _: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, hal::window::InitError> {
+        unimplemented!()
+    }
+
     unsafe fn destroy_surface(&self, _surface: Surface) {
         // TODO: Implement Surface cleanup
-    }
-}
-
-#[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
-impl Instance {
-    /// TODO: Update portability to make this more flexible
-    #[cfg(target_os = "linux")]
-    pub fn create(_: &str, _: u32) -> Result<Instance, hal::UnsupportedBackend> {
-        use glutin::platform::unix::HeadlessContextExt;
-        let size = glutin::dpi::PhysicalSize::from((800, 600));
-        let builder = glutin::ContextBuilder::new().with_hardware_acceleration(Some(false));
-        let context: glutin::Context<glutin::NotCurrent> =
-            HeadlessContextExt::build_osmesa(builder, size)
-            .map_err(|e| {
-                info!("Headless context error {:?}", e);
-                hal::UnsupportedBackend
-            })?;
-        let context = unsafe { context.make_current() }.expect("failed to make context current");
-        let headless = Headless::from_context(context);
-        Ok(Instance::Headless(headless))
     }
 }

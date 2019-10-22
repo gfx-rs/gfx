@@ -580,7 +580,9 @@ fn create_backend(
     let window = wb.build(event_loop).unwrap();
     let instance = back::Instance::create("gfx-rs colour-uniform", 1)
         .expect("Failed to create an instance!");
-    let surface = instance.create_surface(&window).expect("Failed to create a surface!");
+    let surface = unsafe {
+        instance.create_surface(&window).expect("Failed to create a surface!")
+    };
     let mut adapters = instance.enumerate_adapters();
     BackendState {
         instance: Some(instance),

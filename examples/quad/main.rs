@@ -116,7 +116,9 @@ fn main() {
         let window = wb.build(&event_loop).unwrap();
         let instance = back::Instance::create("gfx-rs quad", 1)
             .expect("Failed to create an instance!");
-        let surface = instance.create_surface(&window).expect("Failed to create a surface!");
+        let surface = unsafe {
+            instance.create_surface(&window).expect("Failed to create a surface!")
+        };
         let adapters = instance.enumerate_adapters();
         // Return `window` so it is not dropped: dropping it invalidates `surface`.
         (window, Some(instance), adapters, surface)

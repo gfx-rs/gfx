@@ -155,7 +155,18 @@ pub struct Instance {
 }
 
 impl Instance {
-    pub fn create(_name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
+    #[cfg(windows)]
+    pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
+        Surface {
+            hwnd: hwnd as *mut _,
+            swapchain: None,
+            renderbuffer: None,
+        }
+    }
+}
+
+impl hal::Instance<Backend> for Instance {
+    fn create(_name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
         unsafe {
             let glrc = WGL_ENTRY.wgl.CreateContextAttribsARB(
                 WGL_ENTRY.hdc as *const _,
@@ -174,30 +185,6 @@ impl Instance {
         }
     }
 
-    #[cfg(windows)]
-    pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
-        Surface {
-            hwnd: hwnd as *mut _,
-            swapchain: None,
-            renderbuffer: None,
-        }
-    }
-
-    pub fn create_surface(
-        &self,
-        has_handle: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Result<Surface, hal::window::InitError> {
-        match has_handle.raw_window_handle() {
-            #[cfg(windows)]
-            raw_window_handle::RawWindowHandle::Windows(handle) => {
-                Ok(self.create_surface_from_hwnd(handle.hwnd))
-            }
-            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
-        }
-    }
-}
-
-impl hal::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<Adapter<Backend>> {
         let gl_container = GlContainer::from_fn_proc(|s| unsafe {
             let sym = CString::new(s.as_bytes()).unwrap();
@@ -210,6 +197,19 @@ impl hal::Instance<Backend> for Instance {
         });
         let adapter = PhysicalDevice::new_adapter(self.ctxt, gl_container);
         vec![adapter]
+    }
+
+    unsafe fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, hal::window::InitError> {
+        match has_handle.raw_window_handle() {
+            #[cfg(windows)]
+            raw_window_handle::RawWindowHandle::Windows(handle) => {
+                Ok(self.create_surface_from_hwnd(handle.hwnd))
+            }
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
+        }
     }
 
     unsafe fn destroy_surface(&self, _surface: Surface) {

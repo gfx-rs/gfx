@@ -1002,23 +1002,20 @@ impl window::Swapchain<Backend> for Swapchain {
 #[derive(Debug)]
 pub struct Instance;
 
-impl Instance {
-    /// Create instance.
-    pub fn create(_name: &str, _version: u32) -> Result<Self, hal::UnsupportedBackend> {
+impl hal::Instance<Backend> for Instance {
+    fn create(_name: &str, _version: u32) -> Result<Self, hal::UnsupportedBackend> {
         Ok(Instance)
     }
 
-    pub fn create_surface(
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
+        vec![]
+    }
+
+    unsafe fn create_surface(
         &self,
         _: &impl raw_window_handle::HasRawWindowHandle,
     ) -> Result<Surface, hal::window::InitError> {
         panic!(DO_NOT_USE_MESSAGE)
-    }
-}
-
-impl hal::Instance<Backend> for Instance {
-    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
-        vec![]
     }
 
     unsafe fn destroy_surface(&self, _surface: Surface) {

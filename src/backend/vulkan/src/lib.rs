@@ -332,8 +332,8 @@ unsafe extern "system" fn debug_report_callback(
     vk::FALSE
 }
 
-impl Instance {
-    pub fn create(name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
+impl hal::Instance<Backend> for Instance {
+    fn create(name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
         // TODO: return errors instead of panic
         let entry = VK_ENTRY.as_ref().map_err(|e| {
             info!("Missing Vulkan entry points: {:?}", e);
@@ -465,9 +465,7 @@ impl Instance {
             extensions,
         })
     }
-}
 
-impl hal::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         let devices = match unsafe { self.raw.0.enumerate_physical_devices() } {
             Ok(devices) => devices,
@@ -529,6 +527,64 @@ impl hal::Instance<Backend> for Instance {
                 }
             })
             .collect()
+    }
+
+    unsafe fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<window::Surface, hal::window::InitError> {
+        use raw_window_handle::RawWindowHandle;
+
+        match has_handle.raw_window_handle() {
+            #[cfg(all(
+                unix,
+                not(target_os = "android"),
+                not(target_os = "macos")
+            ))]
+            RawWindowHandle::Wayland(handle)
+                if self.extensions.contains(&extensions::khr::WaylandSurface::name()) =>
+            {
+                Ok(self.create_surface_from_wayland(handle.display, handle.surface))
+            }
+            #[cfg(all(
+                feature = "x11",
+                unix,
+                not(target_os = "android"),
+                not(target_os = "macos")
+            ))]
+            RawWindowHandle::Xlib(handle)
+                if self.extensions.contains(&extensions::khr::XlibSurface::name()) =>
+            {
+                Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
+            }
+            #[cfg(all(
+                feature = "xcb",
+                unix,
+                not(target_os = "android"),
+                not(target_os = "macos"),
+                not(target_os = "ios")
+            ))]
+            RawWindowHandle::Xcb(handle) if self.extensions.contains(&extensions::khr::XcbSurface::name()) => {
+                Ok(self.create_surface_from_xcb(handle.connection as *mut _, handle.window))
+            }
+            // #[cfg(target_os = "android")]
+            // RawWindowHandle::ANativeWindowHandle(handle) => {
+            //     let native_window = unimplemented!();
+            //     self.create_surface_android(native_window)
+            //}
+            #[cfg(windows)]
+            RawWindowHandle::Windows(handle) => {
+                use winapi::um::libloaderapi::GetModuleHandleW;
+
+                let hinstance = GetModuleHandleW(ptr::null());
+                Ok(self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd))
+            }
+            #[cfg(target_os = "macos")]
+            RawWindowHandle::MacOS(handle) => {
+                Ok(self.create_surface_from_ns_view(handle.ns_view))
+            }
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
+        }
     }
 
     unsafe fn destroy_surface(&self, surface: window::Surface) {

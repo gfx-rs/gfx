@@ -359,6 +359,11 @@ pub enum IndexType {
     U32,
 }
 
+/// Error creating an instance of a backend on the platform that
+/// doesn't support this backend.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnsupportedBackend;
+
 /// An instantiated backend.
 ///
 /// Any startup the backend needs to perform will be done when creating the type that implements
@@ -382,20 +387,22 @@ pub enum IndexType {
 ///     println!("Adapter {}: {:?}", idx, adapter.info);
 /// }
 /// ```
-pub trait Instance<B: Backend>: Any + Send + Sync {
+pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
+    /// Create a new instance.
+    fn create(name: &str, version: u32) -> Result<Self, UnsupportedBackend>;
     /// Return all available adapters.
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<B>>;
+    /// Create a new surface.
+    unsafe fn create_surface(
+        &self,
+        _: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<B::Surface, window::InitError>;
     /// Destroy a surface.
     ///
     /// The surface shouldn't be destroyed before the attached
     /// swapchain is destroyed.
     unsafe fn destroy_surface(&self, surface: B::Surface);
 }
-
-/// Error creating an instance of a backend on the platform that
-/// doesn't support this backend.
-#[derive(Clone, Debug, PartialEq)]
-pub struct UnsupportedBackend;
 
 /// A strongly-typed index to a particular `MemoryType`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

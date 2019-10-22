@@ -122,41 +122,11 @@ unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
 impl Instance {
-    pub fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
-        // TODO: get the latest factory we can find
-
-        match dxgi::get_dxgi_factory() {
-            Ok((factory, dxgi_version)) => {
-                info!("DXGI version: {:?}", dxgi_version);
-                Ok(Instance {
-                    factory,
-                    dxgi_version,
-                })
-            }
-            Err(hr) => {
-                info!("Failed on factory creation: {:?}", hr);
-                Err(hal::UnsupportedBackend)
-            }
-        }
-    }
-
     pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
         Surface {
             factory: self.factory.clone(),
             wnd_handle: hwnd as *mut _,
             presentation: None,
-        }
-    }
-
-    pub fn create_surface(
-        &self,
-        has_handle: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Result<Surface, hal::window::InitError> {
-        match has_handle.raw_window_handle() {
-            raw_window_handle::RawWindowHandle::Windows(handle) => {
-                Ok(self.create_surface_from_hwnd(handle.hwnd))
-            }
-            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
         }
     }
 }
@@ -280,6 +250,24 @@ fn get_format_properties(
 }
 
 impl hal::Instance<Backend> for Instance {
+    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+        // TODO: get the latest factory we can find
+
+        match dxgi::get_dxgi_factory() {
+            Ok((factory, dxgi_version)) => {
+                info!("DXGI version: {:?}", dxgi_version);
+                Ok(Instance {
+                    factory,
+                    dxgi_version,
+                })
+            }
+            Err(hr) => {
+                info!("Failed on factory creation: {:?}", hr);
+                Err(hal::UnsupportedBackend)
+            }
+        }
+    }
+
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         let mut adapters = Vec::new();
         let mut idx = 0;
@@ -412,6 +400,18 @@ impl hal::Instance<Backend> for Instance {
         }
 
         adapters
+    }
+
+    unsafe fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, hal::window::InitError> {
+        match has_handle.raw_window_handle() {
+            raw_window_handle::RawWindowHandle::Windows(handle) => {
+                Ok(self.create_surface_from_hwnd(handle.hwnd))
+            }
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
+        }
     }
 
     unsafe fn destroy_surface(&self, _surface: Surface) {
