@@ -3,6 +3,9 @@ use {
     spirv_cross::spirv,
 };
 
+/// Fast hash map used internally.
+pub type FastHashMap<K, V> = std::collections::HashMap<K, V, std::hash::BuildHasherDefault<fxhash::FxHasher>>;
+
 pub fn spirv_cross_specialize_ast<T>(
     ast: &mut spirv::Ast<T>,
     specialization: &pso::Specialization,

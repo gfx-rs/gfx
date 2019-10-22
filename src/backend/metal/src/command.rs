@@ -18,7 +18,6 @@ use crate::{
 };
 
 use hal::{
-    backend::FastHashMap,
     buffer,
     command as com,
     device::OutOfMemory,
@@ -40,6 +39,7 @@ use hal::{
 };
 
 use arrayvec::ArrayVec;
+use auxil::FastHashMap;
 use block::ConcreteBlock;
 use cocoa::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
@@ -2374,7 +2374,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate_one(&mut self, level: com::Level) -> CommandBuffer {
+    unsafe fn allocate_one(&mut self, level: com::Level) -> CommandBuffer {
         //TODO: fail with OOM if we allocate more actual command buffers
         // than our mega-queue supports.
         let inner = Arc::new(RefCell::new(CommandBufferInner {

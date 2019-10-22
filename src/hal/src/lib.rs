@@ -29,9 +29,6 @@ pub mod queue;
 pub mod range;
 pub mod window;
 
-#[doc(hidden)]
-pub mod backend;
-
 /// Prelude module re-exports all the traits necessary to use gfx-hal.
 pub mod prelude {
     pub use crate::{
@@ -56,23 +53,8 @@ pub type IndexCount = u32;
 pub type InstanceCount = u32;
 /// Indirect draw calls count.
 pub type DrawCount = u32;
-/// Number of vertices in a patch
-pub type PatchSize = u8;
 /// Number of work groups.
 pub type WorkGroupCount = [u32; 3];
-
-/// Slot for an attribute.
-pub type AttributeSlot = u8;
-/// Slot for a constant buffer object.
-pub type ConstantBufferSlot = u8;
-/// Slot for a shader resource view.
-pub type ResourceViewSlot = u8;
-/// Slot for an unordered access object.
-pub type UnorderedViewSlot = u8;
-/// Slot for an active color buffer.
-pub type ColorSlot = u8;
-/// Slot for a sampler.
-pub type SamplerSlot = u8;
 
 bitflags! {
     //TODO: add a feature for non-normalized samplers
@@ -289,7 +271,7 @@ pub struct Limits {
     pub max_vertex_output_components: usize,
 
     /// Maximum number of vertices for each patch.
-    pub max_patch_size: PatchSize,
+    pub max_patch_size: pso::PatchSize,
     ///
     pub max_geometry_shader_invocations: usize,
     ///
@@ -367,52 +349,6 @@ pub struct Limits {
     pub min_vertex_input_binding_stride_alignment: buffer::Offset,
 }
 
-/// Describes the type of geometric primitives,
-/// created from vertex data.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq, PartialOrd, Ord)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[repr(u8)]
-pub enum Primitive {
-    /// Each vertex represents a single point.
-    PointList,
-    /// Each pair of vertices represent a single line segment. For example, with `[a, b, c, d,
-    /// e]`, `a` and `b` form a line, `c` and `d` form a line, and `e` is discarded.
-    LineList,
-    /// Every two consecutive vertices represent a single line segment. Visually forms a "path" of
-    /// lines, as they are all connected. For example, with `[a, b, c]`, `a` and `b` form a line
-    /// line, and `b` and `c` form a line.
-    LineStrip,
-    /// Each triplet of vertices represent a single triangle. For example, with `[a, b, c, d, e]`,
-    /// `a`, `b`, and `c` form a triangle, `d` and `e` are discarded.
-    TriangleList,
-    /// Every three consecutive vertices represent a single triangle. For example, with `[a, b, c,
-    /// d]`, `a`, `b`, and `c` form a triangle, and `b`, `c`, and `d` form a triangle.
-    TriangleStrip,
-    /// Each quadtruplet of vertices represent a single line segment with adjacency information.
-    /// For example, with `[a, b, c, d]`, `b` and `c` form a line, and `a` and `d` are the adjacent
-    /// vertices.
-    LineListAdjacency,
-    /// Every four consecutive vertices represent a single line segment with adjacency information.
-    /// For example, with `[a, b, c, d, e]`, `[a, b, c, d]` form a line segment with adjacency, and
-    /// `[b, c, d, e]` form a line segment with adjacency.
-    LineStripAdjacency,
-    /// Each sextuplet of vertices represent a single triangle with adjacency information. For
-    /// example, with `[a, b, c, d, e, f]`, `a`, `c`, and `e` form a triangle, and `b`, `d`, and
-    /// `f` are the adjacent vertices, where `b` is adjacent to the edge formed by `a` and `c`, `d`
-    /// is adjacent to the edge `c` and `e`, and `f` is adjacent to the edge `e` and `a`.
-    TriangleListAdjacency,
-    /// Every even-numbered vertex (every other starting from the first) represents an additional
-    /// vertex for the triangle strip, while odd-numbered vertices (every other starting from the
-    /// second) represent adjacent vertices. For example, with `[a, b, c, d, e, f, g, h]`, `[a, c,
-    /// e, g]` form a triangle strip, and `[b, d, f, h]` are the adjacent vertices, where `b`, `d`,
-    /// and `f` are adjacent to the first triangle in the strip, and `d`, `f`, and `h` are adjacent
-    /// to the second.
-    TriangleStripAdjacency,
-    /// Patch list,
-    /// used with shaders capable of producing primitives on their own (tessellation)
-    PatchList(PatchSize),
-}
-
 /// An enum describing the type of an index value in a slice's index buffer
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -422,6 +358,11 @@ pub enum IndexType {
     U16,
     U32,
 }
+
+/// Error creating an instance of a backend on the platform that
+/// doesn't support this backend.
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnsupportedBackend;
 
 /// An instantiated backend.
 ///
@@ -446,20 +387,22 @@ pub enum IndexType {
 ///     println!("Adapter {}: {:?}", idx, adapter.info);
 /// }
 /// ```
-pub trait Instance<B: Backend>: Any + Send + Sync {
+pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
+    /// Create a new instance.
+    fn create(name: &str, version: u32) -> Result<Self, UnsupportedBackend>;
     /// Return all available adapters.
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<B>>;
+    /// Create a new surface.
+    unsafe fn create_surface(
+        &self,
+        _: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<B::Surface, window::InitError>;
     /// Destroy a surface.
     ///
     /// The surface shouldn't be destroyed before the attached
     /// swapchain is destroyed.
     unsafe fn destroy_surface(&self, surface: B::Surface);
 }
-
-/// Error creating an instance of a backend on the platform that
-/// doesn't support this backend.
-#[derive(Clone, Debug, PartialEq)]
-pub struct UnsupportedBackend;
 
 /// A strongly-typed index to a particular `MemoryType`.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]

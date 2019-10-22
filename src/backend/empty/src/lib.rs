@@ -259,7 +259,7 @@ impl device::Device<Backend> for Device {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn create_sampler(&self, _: image::SamplerInfo) -> Result<(), device::AllocationError> {
+    unsafe fn create_sampler(&self, _: &image::SamplerDesc) -> Result<(), device::AllocationError> {
         panic!(DO_NOT_USE_MESSAGE)
     }
     unsafe fn create_buffer(&self, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
@@ -1002,23 +1002,20 @@ impl window::Swapchain<Backend> for Swapchain {
 #[derive(Debug)]
 pub struct Instance;
 
-impl Instance {
-    /// Create instance.
-    pub fn create(_name: &str, _version: u32) -> Result<Self, hal::UnsupportedBackend> {
+impl hal::Instance<Backend> for Instance {
+    fn create(_name: &str, _version: u32) -> Result<Self, hal::UnsupportedBackend> {
         Ok(Instance)
     }
 
-    pub fn create_surface(
+    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
+        vec![]
+    }
+
+    unsafe fn create_surface(
         &self,
         _: &impl raw_window_handle::HasRawWindowHandle,
     ) -> Result<Surface, hal::window::InitError> {
         panic!(DO_NOT_USE_MESSAGE)
-    }
-}
-
-impl hal::Instance<Backend> for Instance {
-    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
-        vec![]
     }
 
     unsafe fn destroy_surface(&self, _surface: Surface) {

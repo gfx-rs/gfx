@@ -9,8 +9,8 @@ use crate::{
     MAX_COLOR_ATTACHMENTS,
 };
 
+use auxil::FastHashMap;
 use hal::{
-    backend::FastHashMap,
     buffer,
     format::FormatDesc,
     image,

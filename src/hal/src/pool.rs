@@ -3,6 +3,7 @@
 use crate::command::Level;
 use crate::Backend;
 
+use smallvec::SmallVec;
 use std::any::Any;
 use std::fmt;
 
@@ -26,12 +27,12 @@ pub trait CommandPool<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn reset(&mut self, release_resources: bool);
 
     /// Allocate a single command buffers from the pool.
-    fn allocate_one(&mut self, level: Level) -> B::CommandBuffer {
+    unsafe fn allocate_one(&mut self, level: Level) -> B::CommandBuffer {
         self.allocate_vec(1, level).pop().unwrap()
     }
 
     /// Allocate new command buffers from the pool.
-    fn allocate_vec(&mut self, num: usize, level: Level) -> Vec<B::CommandBuffer> {
+    unsafe fn allocate_vec(&mut self, num: usize, level: Level) -> SmallVec<[B::CommandBuffer; 1]> {
         (0 .. num).map(|_| self.allocate_one(level)).collect()
     }
 

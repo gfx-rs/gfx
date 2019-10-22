@@ -224,12 +224,23 @@ impl window::Surface<B> for Surface {
 }
 
 impl hal::Instance<B> for Surface {
+    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+        panic!("Unable to create a surface")
+    }
+
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
         let adapter = PhysicalDevice::new_adapter(
             (),
             GlContainer::from_fn_proc(|s| self.context.get_proc_address(s) as *const _),
         );
         vec![adapter]
+    }
+
+    unsafe fn create_surface(
+        &self,
+        _: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, window::InitError> {
+        unimplemented!()
     }
 
     unsafe fn destroy_surface(&self, _surface: Surface) {
@@ -268,12 +279,41 @@ impl Headless {
 }
 
 impl hal::Instance<B> for Headless {
+    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+        let context: glutin::Context<glutin::NotCurrent>;
+        #[cfg(target_os = "linux")]
+        {
+            /// TODO: Update portability to make this more flexible
+            use glutin::platform::unix::HeadlessContextExt;
+            let size = glutin::dpi::PhysicalSize::from((800, 600));
+            let builder = glutin::ContextBuilder::new().with_hardware_acceleration(Some(false));
+            context = HeadlessContextExt::build_osmesa(builder, size)
+                .map_err(|e| {
+                    info!("Headless context error {:?}", e);
+                    hal::UnsupportedBackend
+                })?;
+        };
+        #[cfg(not(target_os = "linux"))]
+        {
+            context = unimplemented!();
+        }
+        let context = unsafe { context.make_current() }.expect("failed to make context current");
+        Ok(Headless::from_context(context))
+    }
+
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
         let adapter = PhysicalDevice::new_adapter(
             (),
             GlContainer::from_fn_proc(|s| self.0.get_proc_address(s) as *const _),
         );
         vec![adapter]
+    }
+
+    unsafe fn create_surface(
+        &self,
+        _: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, window::InitError> {
+        unimplemented!()
     }
 
     unsafe fn destroy_surface(&self, _surface: Surface) {

@@ -1902,7 +1902,7 @@ impl d::Device<B> for Device {
             Flags: d3d12::D3D12_PIPELINE_STATE_FLAG_NONE,
         };
 
-        let topology = conv::map_topology(desc.input_assembler.primitive);
+        let topology = conv::map_topology(&desc.input_assembler);
 
         // Create PSO
         let mut pipeline = native::PipelineState::null();
@@ -2593,7 +2593,7 @@ impl d::Device<B> for Device {
 
     unsafe fn create_sampler(
         &self,
-        info: image::SamplerInfo,
+        info: &image::SamplerDesc,
     ) -> Result<r::Sampler, d::AllocationError> {
         assert!(info.normalized);
         let handle = self.sampler_pool.lock().unwrap().alloc_handle();
@@ -2616,14 +2616,14 @@ impl d::Device<B> for Device {
                 conv::map_wrap(info.wrap_mode.1),
                 conv::map_wrap(info.wrap_mode.2),
             ],
-            info.lod_bias.into(),
+            info.lod_bias.0,
             match info.anisotropic {
                 image::Anisotropic::On(max) => max as _, // TODO: check support here?
                 image::Anisotropic::Off => 0,
             },
             conv::map_comparison(info.comparison.unwrap_or(pso::Comparison::Always)),
             info.border.into(),
-            info.lod_range.start.into() .. info.lod_range.end.into(),
+            info.lod_range.start.0 .. info.lod_range.end.0,
         );
 
         Ok(r::Sampler { handle })

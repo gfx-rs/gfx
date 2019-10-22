@@ -700,8 +700,8 @@ impl Drop for Instance {
 unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
-impl Instance {
-    pub fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+impl hal::Instance<Backend> for Instance {
+    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
         #[cfg(debug_assertions)]
         {
             // Enable debug layer
@@ -762,9 +762,7 @@ impl Instance {
             Err(hal::UnsupportedBackend)
         }
     }
-}
 
-impl hal::Instance<Backend> for Instance {
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
         use self::memory::Properties;
 
@@ -1134,6 +1132,18 @@ impl hal::Instance<Backend> for Instance {
             });
         }
         adapters
+    }
+
+    unsafe fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<window::Surface, hal::window::InitError> {
+        match has_handle.raw_window_handle() {
+            raw_window_handle::RawWindowHandle::Windows(handle) => {
+                Ok(self.create_surface_from_hwnd(handle.hwnd))
+            }
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
+        }
     }
 
     unsafe fn destroy_surface(&self, _surface: window::Surface) {

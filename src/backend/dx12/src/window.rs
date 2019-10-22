@@ -21,18 +21,6 @@ impl Instance {
             presentation: None,
         }
     }
-
-    pub fn create_surface(
-        &self,
-        has_handle: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Result<Surface, hal::window::InitError> {
-        match has_handle.raw_window_handle() {
-            raw_window_handle::RawWindowHandle::Windows(handle) => {
-                Ok(self.create_surface_from_hwnd(handle.hwnd))
-            }
-            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
-        }
-    }
 }
 
 #[derive(Debug)]

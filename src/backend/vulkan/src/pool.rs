@@ -26,7 +26,7 @@ impl pool::CommandPool<Backend> for RawCommandPool {
         assert_eq!(Ok(()), self.device.0.reset_command_pool(self.raw, flags));
     }
 
-    fn allocate_vec(&mut self, num: usize, level: command::Level) -> Vec<CommandBuffer> {
+    unsafe fn allocate_vec(&mut self, num: usize, level: command::Level) -> SmallVec<[CommandBuffer; 1]> {
         let info = vk::CommandBufferAllocateInfo {
             s_type: vk::StructureType::COMMAND_BUFFER_ALLOCATE_INFO,
             p_next: ptr::null(),
@@ -36,7 +36,8 @@ impl pool::CommandPool<Backend> for RawCommandPool {
         };
 
         let device = &self.device;
-        let cbufs_raw = unsafe { device.0.allocate_command_buffers(&info) }
+        let cbufs_raw = device.0
+            .allocate_command_buffers(&info)
             .expect("Error on command buffer allocation");
 
         cbufs_raw

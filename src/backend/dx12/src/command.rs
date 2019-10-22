@@ -1,4 +1,4 @@
-use hal::backend::FastHashMap;
+use auxil::FastHashMap;
 use hal::format::Aspects;
 use hal::range::RangeArg;
 use hal::{buffer, command as com, format, image, memory, pass, pool, pso, query};

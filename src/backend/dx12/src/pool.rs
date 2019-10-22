@@ -97,7 +97,7 @@ impl pool::CommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate_one(&mut self, level: command::Level) -> CommandBuffer {
+    unsafe fn allocate_one(&mut self, level: command::Level) -> CommandBuffer {
         // TODO: Implement secondary buffers
         assert_eq!(level, command::Level::Primary);
         let (command_list, command_allocator) = self.create_command_list();

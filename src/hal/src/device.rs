@@ -490,7 +490,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Create a new sampler object
     unsafe fn create_sampler(
         &self,
-        info: image::SamplerInfo,
+        desc: &image::SamplerDesc,
     ) -> Result<B::Sampler, AllocationError>;
 
     /// Destroy a sampler object

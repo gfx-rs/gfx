@@ -305,64 +305,6 @@ impl Instance {
         self.create_surface_from_vk_surface_khr(surface)
     }
 
-    pub fn create_surface(
-        &self,
-        has_handle: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Result<Surface, hal::window::InitError> {
-        use raw_window_handle::RawWindowHandle;
-
-        match has_handle.raw_window_handle() {
-            #[cfg(all(
-                unix,
-                not(target_os = "android"),
-                not(target_os = "macos")
-            ))]
-            RawWindowHandle::Wayland(handle)
-                if self.extensions.contains(&khr::WaylandSurface::name()) =>
-            {
-                Ok(self.create_surface_from_wayland(handle.display, handle.surface))
-            }
-            #[cfg(all(
-                feature = "x11",
-                unix,
-                not(target_os = "android"),
-                not(target_os = "macos")
-            ))]
-            RawWindowHandle::Xlib(handle)
-                if self.extensions.contains(&khr::XlibSurface::name()) =>
-            {
-                Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
-            }
-            #[cfg(all(
-                feature = "xcb",
-                unix,
-                not(target_os = "android"),
-                not(target_os = "macos"),
-                not(target_os = "ios")
-            ))]
-            RawWindowHandle::Xcb(handle) if self.extensions.contains(&khr::XcbSurface::name()) => {
-                Ok(self.create_surface_from_xcb(handle.connection as *mut _, handle.window))
-            }
-            // #[cfg(target_os = "android")]
-            // RawWindowHandle::ANativeWindowHandle(handle) => {
-            //     let native_window = unimplemented!();
-            //     self.create_surface_android(native_window)
-            //}
-            #[cfg(windows)]
-            RawWindowHandle::Windows(handle) => {
-                use winapi::um::libloaderapi::GetModuleHandleW;
-
-                let hinstance = unsafe { GetModuleHandleW(ptr::null()) };
-                Ok(self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd))
-            }
-            #[cfg(target_os = "macos")]
-            RawWindowHandle::MacOS(handle) => {
-                Ok(self.create_surface_from_ns_view(handle.ns_view))
-            }
-            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
-        }
-    }
-
     pub fn create_surface_from_vk_surface_khr(&self, surface: vk::SurfaceKHR) -> Surface {
         let entry = VK_ENTRY
             .as_ref()

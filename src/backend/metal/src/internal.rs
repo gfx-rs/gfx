@@ -1,7 +1,7 @@
 use crate::{conversions as conv, PrivateCapabilities};
 
+use auxil::FastHashMap;
 use hal::{
-    backend::FastHashMap,
     command::ClearColor,
     format::{Aspects, ChannelType},
     image::Filter,

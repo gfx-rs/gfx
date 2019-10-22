@@ -167,9 +167,20 @@ impl window::PresentationSurface<B> for Surface {
 }
 
 impl hal::Instance<B> for Surface {
+    fn create(_name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
+        unimplemented!()
+    }
+
     fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
         let adapter = PhysicalDevice::new_adapter((), GlContainer::from_canvas(&self.canvas)); // TODO: Move to `self` like native/window
         vec![adapter]
+    }
+
+    unsafe fn create_surface(
+        &self,
+        _: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, window::InitError> {
+        unimplemented!()
     }
 
     unsafe fn destroy_surface(&self, _surface: Surface) {

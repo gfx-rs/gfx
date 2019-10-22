@@ -2,8 +2,8 @@ use crate::command::{self, Command, CommandBuffer};
 use crate::info;
 use crate::native as n;
 use crate::Backend;
-use hal::backend::FastHashMap;
 
+use auxil::FastHashMap;
 use parking_lot::Mutex;
 use std::sync::Arc;
 
@@ -83,7 +83,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
         }
     }
 
-    fn allocate_one(&mut self, _level: hal::command::Level) -> CommandBuffer {
+    unsafe fn allocate_one(&mut self, _level: hal::command::Level) -> CommandBuffer {
         // TODO: Implement secondary buffers
         CommandBuffer::new(
             self.fbo,

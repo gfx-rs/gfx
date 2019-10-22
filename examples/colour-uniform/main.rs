@@ -580,7 +580,9 @@ fn create_backend(
     let window = wb.build(event_loop).unwrap();
     let instance = back::Instance::create("gfx-rs colour-uniform", 1)
         .expect("Failed to create an instance!");
-    let surface = instance.create_surface(&window).expect("Failed to create a surface!");
+    let surface = unsafe {
+        instance.create_surface(&window).expect("Failed to create a surface!")
+    };
     let mut adapters = instance.enumerate_adapters();
     BackendState {
         instance: Some(instance),
@@ -705,18 +707,10 @@ impl<B: Backend> RenderPassState<B> {
                 preserves: &[],
             };
 
-            let dependency = pass::SubpassDependency {
-                passes: pass::SubpassRef::External .. pass::SubpassRef::Pass(0),
-                stages: pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT
-                    .. pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
-                accesses: i::Access::empty()
-                    .. (i::Access::COLOR_ATTACHMENT_READ | i::Access::COLOR_ATTACHMENT_WRITE),
-            };
-
             device
                 .borrow()
                 .device
-                .create_render_pass(&[attachment], &[subpass], &[dependency])
+                .create_render_pass(&[attachment], &[subpass], &[])
                 .ok()
         };
 
@@ -1093,7 +1087,7 @@ impl<B: Backend> ImageState<B> {
             .unwrap();
 
         let sampler = device
-            .create_sampler(i::SamplerInfo::new(i::Filter::Linear, i::WrapMode::Clamp))
+            .create_sampler(&i::SamplerDesc::new(i::Filter::Linear, i::WrapMode::Clamp))
             .expect("Can't create sampler");
 
         desc.write_to_state(
@@ -1289,7 +1283,7 @@ impl<B: Backend> PipelineState<B> {
 
                 let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
                     shader_entries,
-                    hal::Primitive::TriangleList,
+                    pso::Primitive::TriangleList,
                     pso::Rasterizer::FILL,
                     &pipeline_layout,
                     subpass,

@@ -213,6 +213,13 @@ pub struct Instance {
 }
 
 impl hal::Instance<Backend> for Instance {
+    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+        Ok(Instance {
+            experiments: Experiments::default(),
+            gfx_managed_metal_layer_delegate: GfxManagedMetalLayerDelegate::new()
+        })
+    }
+
     fn enumerate_adapters(&self) -> Vec<Adapter<Backend>> {
         let devices = metal::Device::all();
         let mut adapters: Vec<Adapter<Backend>> = devices
@@ -244,6 +251,23 @@ impl hal::Instance<Backend> for Instance {
             )
         });
         adapters
+    }
+
+    unsafe fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, hal::window::InitError> {
+        match has_handle.raw_window_handle() {
+            #[cfg(target_os = "ios")]
+            raw_window_handle::RawWindowHandle::IOS(handle) => {
+                Ok(self.create_surface_from_uiview(handle.ui_view, false))
+            }
+            #[cfg(target_os = "macos")]
+            raw_window_handle::RawWindowHandle::MacOS(handle) => {
+                Ok(self.create_surface_from_nsview(handle.ns_view, false))
+            }
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
+        }
     }
 
     unsafe fn destroy_surface(&self, _surface: Surface) {
@@ -298,30 +322,6 @@ unsafe impl Send for GfxManagedMetalLayerDelegate {}
 unsafe impl Sync for GfxManagedMetalLayerDelegate {}
 
 impl Instance {
-    pub fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
-        Ok(Instance {
-            experiments: Experiments::default(),
-            gfx_managed_metal_layer_delegate: GfxManagedMetalLayerDelegate::new()
-        })
-    }
-
-    pub fn create_surface(
-        &self,
-        has_handle: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Result<Surface, hal::window::InitError> {
-        match has_handle.raw_window_handle() {
-            #[cfg(target_os = "ios")]
-            raw_window_handle::RawWindowHandle::IOS(handle) => {
-                Ok(self.create_surface_from_uiview(handle.ui_view, false))
-            }
-            #[cfg(target_os = "macos")]
-            raw_window_handle::RawWindowHandle::MacOS(handle) => {
-                Ok(self.create_surface_from_nsview(handle.ns_view, false))
-            }
-            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
-        }
-    }
-
     #[cfg(target_os = "ios")]
     unsafe fn create_from_uiview(&self, uiview: *mut c_void) -> window::SurfaceInner {
         let view: cocoa::base::id = mem::transmute(uiview);

@@ -185,7 +185,8 @@
 			),
 			input_assembler: (
 				primitive: TriangleStrip,
-				primitive_restart: Disabled,
+				with_adjacency: false,
+				restart_index: None,
 			),
 			blender: (
 				alpha_coverage: false,

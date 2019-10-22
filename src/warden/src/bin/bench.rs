@@ -13,6 +13,7 @@ extern crate gfx_warden as warden;
 #[macro_use]
 extern crate serde;
 
+use hal::{Instance as _, adapter::PhysicalDevice as _};
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
@@ -71,9 +72,15 @@ impl Harness {
         Harness { base_path, suite }
     }
 
-    fn run<I: hal::Instance<B>, B: hal::Backend>(&self, instance: I, _disabilities: Disabilities) {
-        use hal::adapter::PhysicalDevice as _;
+    fn run<B: hal::Backend>(&self, name: &str, disabilities: Disabilities) {
+        println!("Benching {}:", name);
+        let instance = B::Instance::create("warden", 1).unwrap();
+        self.run_instance(instance, disabilities)
+    }
 
+    fn run_instance<B: hal::Backend, I: hal::Instance<B>>(
+        &self, instance: I, _disabilities: Disabilities
+    ) {
         for tg in &self.suite {
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
@@ -151,32 +158,19 @@ fn main() {
     let harness = Harness::new(&suite_name);
     #[cfg(feature = "vulkan")]
     {
-        println!("Benching Vulkan:");
-        let instance = gfx_backend_vulkan::Instance::create("warden", 1).unwrap();
-        harness.run(instance, Disabilities::default());
+        harness.run::<gfx_backend_vulkan::Backend>("Vulkan", Disabilities::default());
     }
     #[cfg(feature = "dx12")]
     {
-        println!("Benching DX12:");
-        let instance = gfx_backend_dx12::Instance::create("warden", 1).unwrap();
-        harness.run(instance, Disabilities::default());
+        harness.run::<gfx_backend_dx12::Backend>("DX12", Disabilities::default());
     }
     #[cfg(feature = "dx11")]
     {
-        println!("Benching DX11:");
-        let instance = gfx_backend_dx11::Instance::create("warden", 1).unwrap();
-        harness.run(instance, Disabilities::default());
+        harness.run::<gfx_backend_dx11::Backend>("DX11", Disabilities::default());
     }
     #[cfg(feature = "metal")]
     {
-        println!("Benching Metal:");
-        let instance = gfx_backend_metal::Instance::create("warden", 1).unwrap();
-        harness.run(
-            instance,
-            Disabilities {
-                ..Disabilities::default()
-            },
-        );
+        harness.run::<gfx_backend_metal::Backend>("Metal", Disabilities::default());
     }
     #[cfg(feature = "gl")]
     {
@@ -194,7 +188,7 @@ fn main() {
                 .split()
         };
         let instance = gfx_backend_gl::Surface::from_context(context);
-        harness.run(instance, Disabilities::default());
+        harness.run_instance(instance, Disabilities::default());
     }
     #[cfg(feature = "gl-headless")]
     {
@@ -206,7 +200,7 @@ fn main() {
             .unwrap();
         let context = unsafe { context.make_current() }.expect("Unable to make context current");
         let instance = gfx_backend_gl::Headless::from_context(context);
-        harness.run(instance, Disabilities::default());
+        harness.run_instance(instance, Disabilities::default());
     }
     #[cfg(not(any(
         feature = "vulkan",

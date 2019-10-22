@@ -24,14 +24,14 @@ wgl = []
 arrayvec = "0.5"
 bitflags = "1"
 log = { version = "0.4" }
-gfx-hal = { path = "../../hal", version = "0.3", features = ["fxhash"] }
+gfx-hal = { path = "../../hal", version = "0.3" }
 auxil = { path = "../../auxil/auxil", version = "0.1", package = "gfx-auxil" }
 smallvec = "0.6"
 glow = "0.3.0-alpha3"
 parking_lot = "0.9"
 spirv_cross = { version = "0.16", features = ["glsl"] }
 lazy_static = "1"
-raw-window-handle = { version = "0.3" }
+raw-window-handle = "0.3"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 glutin = { version = "0.22.0-alpha3", optional = true }

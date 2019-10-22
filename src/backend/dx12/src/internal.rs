@@ -1,4 +1,4 @@
-use hal::backend::FastHashMap;
+use auxil::FastHashMap;
 use std::ffi::CStr;
 use std::sync::Mutex;
 use std::{mem, ptr};

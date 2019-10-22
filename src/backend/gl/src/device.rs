@@ -9,10 +9,12 @@ use std::sync::Arc;
 
 use glow::HasContext;
 
-use auxil::spirv_cross_specialize_ast;
+use auxil::{
+    FastHashMap,
+    spirv_cross_specialize_ast,
+};
 
 use hal::{
-    backend::FastHashMap,
     buffer,
     device as d,
     format::{Format, Swizzle},
@@ -404,7 +406,7 @@ impl Device {
 
 pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamInt>(
     share: &Starc<Share>,
-    info: &i::SamplerInfo,
+    info: &i::SamplerDesc,
     mut set_param_float: SetParamFloat,
     mut set_param_float_vec: SetParamFloatVec,
     mut set_param_int: SetParamInt,
@@ -435,7 +437,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     set_param_int(glow::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as i32);
 
     if share.features.contains(hal::Features::SAMPLER_MIP_LOD_BIAS) {
-        set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.into());
+        set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.0);
     }
     if share
         .legacy_features
@@ -445,8 +447,8 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
         set_param_float_vec(glow::TEXTURE_BORDER_COLOR, &mut border);
     }
 
-    set_param_float(glow::TEXTURE_MIN_LOD, info.lod_range.start.into());
-    set_param_float(glow::TEXTURE_MAX_LOD, info.lod_range.end.into());
+    set_param_float(glow::TEXTURE_MIN_LOD, info.lod_range.start.0);
+    set_param_float(glow::TEXTURE_MAX_LOD, info.lod_range.end.0);
 
     match info.comparison {
         None => set_param_int(glow::TEXTURE_COMPARE_MODE, glow::NONE as i32),
@@ -835,7 +837,7 @@ impl d::Device<B> for Device {
         };
 
         let patch_size = match desc.input_assembler.primitive {
-            hal::Primitive::PatchList(size) => Some(size as _),
+            pso::Primitive::PatchList(size) => Some(size as _),
             _ => None,
         };
 
@@ -874,7 +876,7 @@ impl d::Device<B> for Device {
 
         Ok(n::GraphicsPipeline {
             program,
-            primitive: conv::primitive_to_gl_primitive(desc.input_assembler.primitive),
+            primitive: conv::input_assember_to_gl_primitive(&desc.input_assembler),
             patch_size,
             blend_targets: desc.blender.targets.clone(),
             vertex_buffers,
@@ -1052,7 +1054,7 @@ impl d::Device<B> for Device {
 
     unsafe fn create_sampler(
         &self,
-        info: i::SamplerInfo,
+        info: &i::SamplerDesc,
     ) -> Result<n::FatSampler, d::AllocationError> {
         assert!(info.normalized);
 
@@ -1061,7 +1063,7 @@ impl d::Device<B> for Device {
             .legacy_features
             .contains(LegacyFeatures::SAMPLER_OBJECTS)
         {
-            return Ok(n::FatSampler::Info(info));
+            return Ok(n::FatSampler::Info(info.clone()));
         }
 
         let gl = &self.share.context;
@@ -1570,7 +1572,7 @@ impl d::Device<B> for Device {
                                 bindings.push(n::DescSetBindings::Sampler(binding, *sampler))
                             }
                             n::FatSampler::Info(info) => bindings
-                                .push(n::DescSetBindings::SamplerInfo(binding, info.clone())),
+                                .push(n::DescSetBindings::SamplerDesc(binding, info.clone())),
                         }
                     }
                     pso::Descriptor::Image(view, _layout) => match view {
@@ -1587,7 +1589,7 @@ impl d::Device<B> for Device {
                             bindings.push(n::DescSetBindings::Sampler(binding, *sampler))
                         }
                         n::FatSampler::Info(info) => {
-                            bindings.push(n::DescSetBindings::SamplerInfo(binding, info.clone()))
+                            bindings.push(n::DescSetBindings::SamplerDesc(binding, info.clone()))
                         }
                     },
                     pso::Descriptor::UniformTexelBuffer(_view) => unimplemented!(),
@@ -1679,7 +1681,7 @@ impl d::Device<B> for Device {
         I::Item: Borrow<n::Fence>,
     {
         let performance = web_sys::window().unwrap().performance().unwrap();
-        let start = performance.now();;
+        let start = performance.now();
         let get_elapsed = || ((performance.now() - start) * 1_000_000.0) as u64;
 
         match wait {

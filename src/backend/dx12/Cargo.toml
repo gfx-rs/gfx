@@ -18,8 +18,8 @@ default = []
 name = "gfx_backend_dx12"
 
 [dependencies]
-gfx-hal = { path = "../../hal", version = "0.3", features = ["fxhash"] }
 auxil = { path = "../../auxil/auxil", version = "0.1", package = "gfx-auxil" }
+gfx-hal = { path = "../../hal", version = "0.3" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
 d3d12 = "0.2.2"
