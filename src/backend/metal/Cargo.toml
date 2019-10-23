@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-metal"
-version = "0.3.2"
+version = "0.4.0"
 description = "Metal API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -21,10 +21,10 @@ signpost = []
 name = "gfx_backend_metal"
 
 [dependencies]
-hal = { path = "../../hal", version = "0.3", package = "gfx-hal" }
+hal = { path = "../../hal", version = "0.4", package = "gfx-hal" }
 auxil = { path = "../../auxil/auxil", version = "0.1", package = "gfx-auxil" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
-arrayvec = "0.4"
+arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1.4"
 log = { version = "0.4" }

@@ -1,6 +1,6 @@
 [package]
 name = "gfx-hal"
-version = "0.3.0"
+version = "0.4.0"
 description = "gfx-rs hardware abstraction layer"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -26,4 +26,4 @@ serde = { version = "1", features = ["serde_derive"], optional = true }
 smallvec = "0.6"
 
 [dev-dependencies]
-gfx-backend-empty = { path = "../backend/empty", version = "0.3" }
+gfx-backend-empty = { path = "../backend/empty", version = "0.4" }

@@ -1,7 +1,8 @@
 # Change Log
 
-## hal-0.4.0 (TODO)
+## hal-0.4.0 (23-10-2019)
   - all strongly typed HAL wrappers are removed
+  - all use of `failure` is removed
   - alternative swapchain model built into `Surface`
   - `Instance` trait is assocated by `Backend`, now includes surface creation and destruction
   - `Surface` capabiltities queried are refactored, `PresentMode` is turned into bitflags

@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-vulkan"
-version = "0.3.0"
+version = "0.4.0"
 description = "Vulkan API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -20,13 +20,13 @@ use-rtld-next = ["shared_library"]
 name = "gfx_backend_vulkan"
 
 [dependencies]
-arrayvec = "0.4"
+arrayvec = "0.5"
 byteorder = "1"
 log = { version = "0.4" }
 lazy_static = "1"
 shared_library = { version = "0.1.9", optional = true }
 ash = "0.29.0"
-hal = { path = "../../hal", version = "0.3", package = "gfx-hal" }
+hal = { path = "../../hal", version = "0.4", package = "gfx-hal" }
 smallvec = "0.6"
 raw-window-handle = "0.3"
 
