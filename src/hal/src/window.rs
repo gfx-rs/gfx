@@ -161,8 +161,11 @@ pub struct SurfaceCapabilities {
     /// Supported image usage flags.
     pub usage: image::Usage,
 
+    /// A bitmask of supported presentation modes.
+    pub present_modes: PresentMode,
+
     /// A bitmask of supported alpha composition modes.
-    pub composite_alpha: CompositeAlpha,
+    pub composite_alpha_modes: CompositeAlphaMode,
 }
 
 impl SurfaceCapabilities {
@@ -195,17 +198,22 @@ pub trait Surface<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// ```
     fn supports_queue_family(&self, family: &B::QueueFamily) -> bool;
 
-    /// Query surface capabilities, formats, and present modes for this physical device.
+    /// Query surface capabilities for this physical device.
     ///
     /// Use this function for configuring swapchain creation.
+    fn capabilities(&self, physical_device: &B::PhysicalDevice) -> SurfaceCapabilities;
+
+    /// Query surface formats for this physical device.
     ///
-    /// Returns a tuple of surface capabilities and formats.
-    /// If formats are `None` then the surface has no preferred format and the
+    /// This function may be slow. It's typically used during the initialization only.
+    ///
+    /// Note: technically the surface support formats may change at the point
+    /// where an application needs to recreate the swapchain, e.g. when the window
+    /// is moved to a different monitor.
+    ///
+    /// If `None` is returned then the surface has no preferred format and the
     /// application may use any desired format.
-    fn compatibility(
-        &self,
-        physical_device: &B::PhysicalDevice,
-    ) -> (SurfaceCapabilities, Option<Vec<Format>>, Vec<PresentMode>);
+    fn supported_formats(&self, physical_device: &B::PhysicalDevice) -> Option<Vec<Format>>;
 }
 
 /// A surface trait that exposes the ability to present images on the
@@ -253,25 +261,27 @@ pub trait PresentationSurface<B: Backend>: Surface<B> {
 /// to a particular image in the swapchain.
 pub type SwapImageIndex = u32;
 
-/// Specifies the mode regulating how a swapchain presents frames.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, Hash, Eq, PartialEq)]
-pub enum PresentMode {
-    /// Don't ever wait for v-sync.
-    Immediate = 0,
-    /// Wait for v-sync, overwrite the last rendered frame.
-    Mailbox = 1,
-    /// Present frames in the same order they are rendered.
-    Fifo = 2,
-    /// Don't wait for the next v-sync if we just missed it.
-    Relaxed = 3,
-}
+
+bitflags!(
+    /// Specifies the mode regulating how a swapchain presents frames.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct PresentMode: u32 {
+        /// Don't ever wait for v-sync.
+        const IMMEDIATE = 0x1;
+        /// Wait for v-sync, overwrite the last rendered frame.
+        const MAILBOX = 0x2;
+        /// Present frames in the same order they are rendered.
+        const FIFO = 0x4;
+        /// Don't wait for the next v-sync if we just missed it.
+        const RELAXED = 0x8;
+    }
+);
 
 bitflags!(
     /// Specifies how the alpha channel of the images should be handled during
     /// compositing.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct CompositeAlpha: u32 {
+    pub struct CompositeAlphaMode: u32 {
         /// The alpha channel, if it exists, of the images is ignored in the
         /// compositing process. Instead, the image is treated as if it has a
         /// constant alpha of 1.0.
@@ -318,7 +328,7 @@ pub struct SwapchainConfig {
     /// Presentation mode.
     pub present_mode: PresentMode,
     /// Alpha composition mode.
-    pub composite_alpha: CompositeAlpha,
+    pub composite_alpha_mode: CompositeAlphaMode,
     /// Format of the backbuffer images.
     pub format: Format,
     /// Requested image extent. Must be in
@@ -344,8 +354,8 @@ impl SwapchainConfig {
     /// ```
     pub fn new(width: u32, height: u32, format: Format, image_count: SwapImageIndex) -> Self {
         SwapchainConfig {
-            present_mode: PresentMode::Fifo,
-            composite_alpha: CompositeAlpha::OPAQUE,
+            present_mode: PresentMode::FIFO,
+            composite_alpha_mode: CompositeAlphaMode::OPAQUE,
             format,
             extent: Extent2D { width, height },
             image_count,
@@ -358,17 +368,22 @@ impl SwapchainConfig {
     /// returned from a physical device query. If the surface does not
     /// specify a current size, default_extent is clamped and used instead.
     pub fn from_caps(caps: &SurfaceCapabilities, format: Format, default_extent: Extent2D) -> Self {
-        let composite_alpha = if caps.composite_alpha.contains(CompositeAlpha::INHERIT) {
-            CompositeAlpha::INHERIT
-        } else if caps.composite_alpha.contains(CompositeAlpha::OPAQUE) {
-            CompositeAlpha::OPAQUE
+        let composite_alpha_mode = if caps.composite_alpha_modes.contains(CompositeAlphaMode::INHERIT) {
+            CompositeAlphaMode::INHERIT
+        } else if caps.composite_alpha_modes.contains(CompositeAlphaMode::OPAQUE) {
+            CompositeAlphaMode::OPAQUE
         } else {
-            unreachable!("neither INHERIT or OPAQUE CompositeAlpha modes are supported")
+            panic!("neither INHERIT or OPAQUE CompositeAlphaMode(s) are supported")
+        };
+        let present_mode = if caps.present_modes.contains(PresentMode::FIFO) {
+            PresentMode::FIFO
+        } else {
+            panic!("FIFO PresentMode is not supported")
         };
 
         SwapchainConfig {
-            present_mode: PresentMode::Fifo,
-            composite_alpha,
+            present_mode,
+            composite_alpha_mode,
             format,
             extent: caps.clamped_extent(default_extent),
             image_count: *caps.image_count.start(),
@@ -384,7 +399,7 @@ impl SwapchainConfig {
     /// ```no_run
     ///
     /// ```
-    pub fn with_mode(mut self, mode: PresentMode) -> Self {
+    pub fn with_present_mode(mut self, mode: PresentMode) -> Self {
         self.present_mode = mode;
         self
     }

@@ -96,7 +96,7 @@ impl SurfaceInner {
         let render_layer_borrow = self.render_layer.lock();
         let render_layer = *render_layer_borrow;
         let framebuffer_only = config.image_usage == image::Usage::COLOR_ATTACHMENT;
-        let display_sync = config.present_mode != w::PresentMode::Immediate;
+        let display_sync = config.present_mode != w::PresentMode::IMMEDIATE;
         let is_mac = caps.os_is_mac;
         let can_set_next_drawable_timeout = if is_mac {
             caps.has_version_at_least(10, 13)
@@ -399,14 +399,7 @@ impl w::Surface<Backend> for Surface {
         true
     }
 
-    fn compatibility(
-        &self,
-        device: &PhysicalDevice,
-    ) -> (
-        w::SurfaceCapabilities,
-        Option<Vec<format::Format>>,
-        Vec<w::PresentMode>,
-    ) {
+    fn capabilities(&self, physical_device: &PhysicalDevice) -> w::SurfaceCapabilities {
         let current_extent = if self.main_thread_id == thread::current().id() {
             Some(self.inner.dimensions())
         } else {
@@ -414,22 +407,28 @@ impl w::Surface<Backend> for Surface {
             None
         };
 
-        let device_caps = &device.shared.private_caps;
+        let device_caps = &physical_device.shared.private_caps;
 
         let can_set_maximum_drawables_count =
             device_caps.os_is_mac || device_caps.has_version_at_least(11, 2);
+        let can_set_display_sync =
+            device_caps.os_is_mac && device_caps.has_version_at_least(10, 13);
 
-        let image_count = if can_set_maximum_drawables_count {
-            2 ..= 3
-        } else {
-            // 3 is the default in `CAMetalLayer` documentation
-            // iOS 10.3 was tested to use 3 on iphone5s
-            3 ..= 3
-        };
-
-        let caps = w::SurfaceCapabilities {
+         w::SurfaceCapabilities {
+            present_modes: if can_set_display_sync {
+                w::PresentMode::FIFO | w::PresentMode::IMMEDIATE
+            } else {
+                w::PresentMode::FIFO
+            },
+            composite_alpha_modes: w::CompositeAlphaMode::OPAQUE, //TODO
             //Note: this is hardcoded in `CAMetalLayer` documentation
-            image_count,
+            image_count: if can_set_maximum_drawables_count {
+                2 ..= 3
+            } else {
+                // 3 is the default in `CAMetalLayer` documentation
+                // iOS 10.3 was tested to use 3 on iphone5s
+                3 ..= 3
+            },
             current_extent,
             extents: w::Extent2D {
                 width: 4,
@@ -443,25 +442,15 @@ impl w::Surface<Backend> for Surface {
                 | image::Usage::SAMPLED
                 | image::Usage::TRANSFER_SRC
                 | image::Usage::TRANSFER_DST,
-            composite_alpha: w::CompositeAlpha::OPAQUE, //TODO
-        };
+        }
+    }
 
-        let formats = vec![
+    fn supported_formats(&self, _physical_device: &PhysicalDevice) -> Option<Vec<format::Format>> {
+         Some(vec![
             format::Format::Bgra8Unorm,
             format::Format::Bgra8Srgb,
             format::Format::Rgba16Sfloat,
-        ];
-
-        let can_set_display_sync =
-            device_caps.os_is_mac && device_caps.has_version_at_least(10, 13);
-
-        let present_modes = if can_set_display_sync {
-            vec![w::PresentMode::Fifo, w::PresentMode::Immediate]
-        } else {
-            vec![w::PresentMode::Fifo]
-        };
-
-        (caps, Some(formats), present_modes)
+        ])
     }
 }
 

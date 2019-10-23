@@ -4,6 +4,7 @@
   - all strongly typed HAL wrappers are removed
   - alternative swapchain model built into `Surface`
   - `Instance` trait is assocated by `Backend`, now includes surface creation and destruction
+  - `Surface` capabiltities queried are refactored, `PresentMode` is turned into bitflags
   - `Primitive` enum is refactored and moved to `pso` module
   - `SamplerInfo` struct is refactored and renamed to `SamplerDesc`
   - debug labels for objects

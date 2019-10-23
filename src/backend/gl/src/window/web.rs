@@ -64,39 +64,29 @@ impl Surface {
 }
 
 impl window::Surface<B> for Surface {
-    fn compatibility(
-        &self,
-        _: &PhysicalDevice,
-    ) -> (
-        window::SurfaceCapabilities,
-        Option<Vec<f::Format>>,
-        Vec<window::PresentMode>,
-    ) {
+    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
+        true
+    }
+
+    fn capabilities(&self, _physical_device: &PhysicalDevice) -> window::SurfaceCapabilities {
         let extent = hal::window::Extent2D {
             width: self.canvas.width(),
             height: self.canvas.height(),
         };
 
-        let caps = hal::window::SurfaceCapabilities {
+        window::SurfaceCapabilities {
+            present_modes: window::PresentMode::FIFO, //TODO
+            composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
             image_count: 1 ..= 1,
             current_extent: Some(extent),
-            extents: extent ..= hal::window::Extent2D {
-                width: extent.width,
-                height: extent.height,
-            },
+            extents: extent ..= extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
-            composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
-        };
-        let present_modes = vec![
-            window::PresentMode::Fifo, //TODO
-        ];
-
-        (caps, Some(self.swapchain_formats()), present_modes)
+        }
     }
 
-    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
-        true
+    fn supported_formats(&self, _physical_device: &PhysicalDevice) -> Option<Vec<f::Format>> {
+        Some(self.swapchain_formats())
     }
 }
 

@@ -8,18 +8,15 @@ pub struct Surface {
 }
 
 impl window::Surface<Backend> for Surface {
-    fn compatibility(
-        &self,
-        _: &PhysicalDevice,
-    ) -> (
-        window::SurfaceCapabilities,
-        Option<Vec<hal::format::Format>>,
-        Vec<window::PresentMode>,
-    ) {
+    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
         unimplemented!()
     }
 
-    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
+    fn capabilities(&self, _: &PhysicalDevice) -> window::SurfaceCapabilities {
+        unimplemented!()
+    }
+
+    fn supported_formats(&self, _: &PhysicalDevice) -> Option<Vec<hal::format::Format>> {
         unimplemented!()
     }
 }

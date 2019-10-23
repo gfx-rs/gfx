@@ -947,18 +947,15 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 #[derive(Debug)]
 pub struct Surface;
 impl window::Surface<Backend> for Surface {
-    fn compatibility(
-        &self,
-        _: &PhysicalDevice,
-    ) -> (
-        window::SurfaceCapabilities,
-        Option<Vec<format::Format>>,
-        Vec<window::PresentMode>,
-    ) {
+    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
+    fn capabilities(&self, _: &PhysicalDevice) -> window::SurfaceCapabilities {
+        panic!(DO_NOT_USE_MESSAGE)
+    }
+
+    fn supported_formats(&self, _: &PhysicalDevice) -> Option<Vec<format::Format>> {
         panic!(DO_NOT_USE_MESSAGE)
     }
 }
