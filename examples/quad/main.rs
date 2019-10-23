@@ -241,7 +241,7 @@ where
     fn new(
         instance: Option<B::Instance>,
         mut surface: B::Surface,
-        mut adapter: hal::adapter::Adapter<B>
+        adapter: hal::adapter::Adapter<B>
     ) -> Renderer<B> {
         let memory_types = adapter.physical_device.memory_properties().memory_types;
         let limits = adapter.physical_device.limits();
@@ -531,7 +531,8 @@ where
             device.destroy_fence(copy_fence);
         }
 
-        let (caps, formats, _present_modes) = surface.compatibility(&mut adapter.physical_device);
+        let caps = surface.capabilities(&adapter.physical_device);
+        let formats = surface.supported_formats(&adapter.physical_device);
         println!("formats: {:?}", formats);
         let format = formats.map_or(f::Format::Rgba8Srgb, |formats| {
             formats
@@ -765,12 +766,7 @@ where
     }
 
     fn recreate_swapchain(&mut self) {
-        let (caps, formats, _present_modes) = self
-            .surface
-            .compatibility(&mut self.adapter.physical_device);
-        // Verify that previous format still exists so we may reuse it.
-        assert!(formats.iter().any(|fs| fs.contains(&self.format)));
-
+        let caps = self.surface.capabilities(&self.adapter.physical_device);
         let swap_config = window::SwapchainConfig::from_caps(&caps, self.format, self.dimensions);
         println!("{:?}", swap_config);
         let extent = swap_config.extent.to_extent();

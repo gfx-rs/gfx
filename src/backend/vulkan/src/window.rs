@@ -326,14 +326,17 @@ impl Instance {
 }
 
 impl w::Surface<Backend> for Surface {
-    fn compatibility(
-        &self,
-        physical_device: &PhysicalDevice,
-    ) -> (
-        w::SurfaceCapabilities,
-        Option<Vec<Format>>,
-        Vec<w::PresentMode>,
-    ) {
+    fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
+        unsafe {
+            self.raw.functor.get_physical_device_surface_support(
+                queue_family.device,
+                queue_family.index,
+                self.raw.handle,
+            )
+        }
+    }
+
+    fn capabilities(&self, physical_device: &PhysicalDevice) -> w::SurfaceCapabilities {
         // Capabilities
         let caps = unsafe {
             self.raw
@@ -370,57 +373,46 @@ impl w::Surface<Backend> for Surface {
             height: caps.max_image_extent.height,
         };
 
-        let capabilities = w::SurfaceCapabilities {
+        let raw_present_modes = unsafe {
+            self.raw
+                .functor
+                .get_physical_device_surface_present_modes(physical_device.handle, self.raw.handle)
+        }
+        .expect("Unable to query present modes");
+
+        w::SurfaceCapabilities {
+            present_modes: raw_present_modes
+                .into_iter()
+                .fold(w::PresentMode::empty(), |u, m| { u | conv::map_vk_present_mode(m) }),
+            composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
             image_count: caps.min_image_count ..= max_images,
             current_extent,
             extents: min_extent ..= max_extent,
             max_image_layers: caps.max_image_array_layers as _,
             usage: conv::map_vk_image_usage(caps.supported_usage_flags),
-            composite_alpha: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
-        };
+        }
+    }
 
+    fn supported_formats(&self, physical_device: &PhysicalDevice) -> Option<Vec<Format>> {
         // Swapchain formats
-        let formats = unsafe {
+        let raw_formats = unsafe {
             self.raw
                 .functor
                 .get_physical_device_surface_formats(physical_device.handle, self.raw.handle)
         }
         .expect("Unable to query surface formats");
 
-        let formats = match formats[0].format {
+        match raw_formats[0].format {
             // If pSurfaceFormats includes just one entry, whose value for format is
             // VK_FORMAT_UNDEFINED, surface has no preferred format. In this case, the application
             // can use any valid VkFormat value.
             vk::Format::UNDEFINED => None,
             _ => Some(
-                formats
+                raw_formats
                     .into_iter()
                     .filter_map(|sf| conv::map_vk_format(sf.format))
                     .collect(),
             ),
-        };
-
-        let present_modes = unsafe {
-            self.raw
-                .functor
-                .get_physical_device_surface_present_modes(physical_device.handle, self.raw.handle)
-        }
-        .expect("Unable to query present modes");
-        let present_modes = present_modes
-            .into_iter()
-            .map(conv::map_vk_present_mode)
-            .collect();
-
-        (capabilities, formats, present_modes)
-    }
-
-    fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
-        unsafe {
-            self.raw.functor.get_physical_device_surface_support(
-                queue_family.device,
-                queue_family.index,
-                self.raw.handle,
-            )
         }
     }
 }

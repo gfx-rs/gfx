@@ -229,14 +229,11 @@ unsafe impl Send for Surface {}
 unsafe impl Sync for Surface {}
 
 impl window::Surface<Backend> for Surface {
-    fn compatibility(
-        &self,
-        physical_device: &PhysicalDevice,
-    ) -> (
-        window::SurfaceCapabilities,
-        Option<Vec<f::Format>>,
-        Vec<window::PresentMode>,
-    ) {
+    fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
+        true
+    }
+
+    fn capabilities(&self, _physical_device: &PhysicalDevice) -> window::SurfaceCapabilities {
         let extent = unsafe {
             let mut rect: RECT = mem::zeroed();
             GetClientRect(self.hwnd, &mut rect);
@@ -246,27 +243,19 @@ impl window::Surface<Backend> for Surface {
             }
         };
 
-        let caps = window::SurfaceCapabilities {
+        window::SurfaceCapabilities {
+            present_modes: window::PresentMode::FIFO, //TODO
+            composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
             image_count: 2 ..= 2,
             current_extent: Some(extent),
             extents: extent ..= extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
-            composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
-        };
-        let present_modes = vec![
-            window::PresentMode::Fifo, //TODO
-        ];
-
-        (
-            caps,
-            Some(vec![f::Format::Rgba8Srgb, f::Format::Bgra8Srgb]),
-            present_modes,
-        )
+        }
     }
 
-    fn supports_queue_family(&self, _queue_family: &QueueFamily) -> bool {
-        true
+    fn supported_formats(&self, _physical_device: &PhysicalDevice) -> Option<Vec<f::Format>> {
+        Some(vec![f::Format::Rgba8Srgb, f::Format::Bgra8Srgb])
     }
 }
 

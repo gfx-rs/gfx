@@ -9,7 +9,7 @@ use hal::{
     pso,
     query,
     range::RangeArg,
-    window::{CompositeAlpha, PresentMode},
+    window::{CompositeAlphaMode, PresentMode},
     Features,
     IndexType,
 };
@@ -544,19 +544,40 @@ pub fn map_view_capabilities(caps: image::ViewCapabilities) -> vk::ImageCreateFl
 }
 
 pub fn map_present_mode(mode: PresentMode) -> vk::PresentModeKHR {
-    vk::PresentModeKHR::from_raw(mode as i32)
+    if mode == PresentMode::IMMEDIATE {
+        vk::PresentModeKHR::IMMEDIATE
+    } else if mode == PresentMode::MAILBOX {
+        vk::PresentModeKHR::MAILBOX
+    } else if mode == PresentMode::FIFO {
+        vk::PresentModeKHR::FIFO
+    } else if mode == PresentMode::RELAXED {
+        vk::PresentModeKHR::FIFO_RELAXED
+    } else {
+        panic!("Unexpected present mode {:?}", mode)
+    }
 }
 
 pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> PresentMode {
-    unsafe { mem::transmute(mode) }
+    if mode == vk::PresentModeKHR::IMMEDIATE {
+        PresentMode::IMMEDIATE
+    } else if mode == vk::PresentModeKHR::MAILBOX {
+        PresentMode::MAILBOX
+    } else if mode == vk::PresentModeKHR::FIFO {
+        PresentMode::FIFO
+    } else if mode == vk::PresentModeKHR::FIFO_RELAXED {
+        PresentMode::RELAXED
+    } else {
+        warn!("Unrecognized present mode {:?}", mode);
+        PresentMode::IMMEDIATE
+    }
 }
 
-pub fn map_composite_alpha(composite_alpha: CompositeAlpha) -> vk::CompositeAlphaFlagsKHR {
-    vk::CompositeAlphaFlagsKHR::from_raw(composite_alpha.bits())
+pub fn map_composite_alpha_mode(composite_alpha_mode: CompositeAlphaMode) -> vk::CompositeAlphaFlagsKHR {
+    vk::CompositeAlphaFlagsKHR::from_raw(composite_alpha_mode.bits())
 }
 
-pub fn map_vk_composite_alpha(composite_alpha: vk::CompositeAlphaFlagsKHR) -> CompositeAlpha {
-    CompositeAlpha::from_bits_truncate(composite_alpha.as_raw())
+pub fn map_vk_composite_alpha(composite_alpha: vk::CompositeAlphaFlagsKHR) -> CompositeAlphaMode {
+    CompositeAlphaMode::from_bits_truncate(composite_alpha.as_raw())
 }
 
 pub fn map_descriptor_pool_create_flags(

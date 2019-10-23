@@ -64,14 +64,7 @@ impl w::Surface<Backend> for Surface {
         }
     }
 
-    fn compatibility(
-        &self,
-        _: &PhysicalDevice,
-    ) -> (
-        w::SurfaceCapabilities,
-        Option<Vec<f::Format>>,
-        Vec<w::PresentMode>,
-    ) {
+    fn capabilities(&self, _physical_device: &PhysicalDevice) -> w::SurfaceCapabilities {
         let current_extent = unsafe {
             let mut rect: RECT = mem::zeroed();
             if GetClientRect(self.wnd_handle as *mut _, &mut rect as *mut RECT) == 0 {
@@ -83,7 +76,9 @@ impl w::Surface<Backend> for Surface {
             })
         };
 
-        let capabilities = w::SurfaceCapabilities {
+        w::SurfaceCapabilities {
+            present_modes: w::PresentMode::FIFO, //TODO
+            composite_alpha_modes: w::CompositeAlphaMode::OPAQUE, //TODO
             image_count: 2 ..= 16, // we currently use a flip effect which supports 2..=16 buffers
             current_extent,
             extents: w::Extent2D {
@@ -95,26 +90,18 @@ impl w::Surface<Backend> for Surface {
             },
             max_image_layers: 1,
             usage: i::Usage::COLOR_ATTACHMENT | i::Usage::TRANSFER_SRC | i::Usage::TRANSFER_DST,
-            composite_alpha: w::CompositeAlpha::OPAQUE, //TODO
-        };
+        }
+    }
 
-        // Sticking to FLIP swap effects for the moment.
-        // We also expose sRGB buffers but they are handled internally as UNORM.
-        // Roughly ordered by popularity..
-        let formats = vec![
+    fn supported_formats(&self, _physical_device: &PhysicalDevice) -> Option<Vec<f::Format>> {
+         Some(vec![
             f::Format::Bgra8Srgb,
             f::Format::Bgra8Unorm,
             f::Format::Rgba8Srgb,
             f::Format::Rgba8Unorm,
             f::Format::A2b10g10r10Unorm,
             f::Format::Rgba16Sfloat,
-        ];
-
-        let present_modes = vec![
-            w::PresentMode::Fifo, //TODO
-        ];
-
-        (capabilities, Some(formats), present_modes)
+        ])
     }
 }
 

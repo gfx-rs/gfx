@@ -711,14 +711,7 @@ impl window::Surface<Backend> for Surface {
         true
     }
 
-    fn compatibility(
-        &self,
-        _: &PhysicalDevice,
-    ) -> (
-        window::SurfaceCapabilities,
-        Option<Vec<format::Format>>,
-        Vec<window::PresentMode>,
-    ) {
+    fn capabilities(&self, physical_device: &PhysicalDevice) -> window::SurfaceCapabilities {
         let current_extent = unsafe {
             let mut rect: RECT = mem::zeroed();
             assert_ne!(
@@ -734,7 +727,9 @@ impl window::Surface<Backend> for Surface {
         // TODO: flip swap effects require dx11.1/windows8
         // NOTE: some swap effects affect msaa capabilities..
         // TODO: _DISCARD swap effects can only have one image?
-        let capabilities = window::SurfaceCapabilities {
+        window::SurfaceCapabilities {
+            present_modes: window::PresentMode::FIFO, //TODO
+            composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
             image_count: 1 ..= 16, // TODO:
             current_extent,
             extents: window::Extent2D {
@@ -746,23 +741,18 @@ impl window::Surface<Backend> for Surface {
             },
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
-            composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
-        };
+        }
+    }
 
-        let formats = vec![
+    fn supported_formats(&self, _physical_device: &PhysicalDevice) -> Option<Vec<format::Format>> {
+         Some(vec![
             format::Format::Bgra8Srgb,
             format::Format::Bgra8Unorm,
             format::Format::Rgba8Srgb,
             format::Format::Rgba8Unorm,
             format::Format::A2b10g10r10Unorm,
             format::Format::Rgba16Sfloat,
-        ];
-
-        let present_modes = vec![
-            window::PresentMode::Fifo, //TODO
-        ];
-
-        (capabilities, Some(formats), present_modes)
+        ])
     }
 }
 

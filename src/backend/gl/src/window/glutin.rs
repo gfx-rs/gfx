@@ -185,15 +185,14 @@ impl window::PresentationSurface<B> for Surface {
 }
 
 impl window::Surface<B> for Surface {
-    fn compatibility(
-        &self,
-        _: &PhysicalDevice,
-    ) -> (
-        window::SurfaceCapabilities,
-        Option<Vec<f::Format>>,
-        Vec<window::PresentMode>,
-    ) {
-        let caps = window::SurfaceCapabilities {
+    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
+        true
+    }
+
+    fn capabilities(&self, _physical_device: &PhysicalDevice) -> window::SurfaceCapabilities {
+        window::SurfaceCapabilities {
+            present_modes: window::PresentMode::FIFO, //TODO
+            composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
             image_count: if self.context.get_pixel_format().double_buffer {
                 2 ..= 2
             } else {
@@ -209,17 +208,11 @@ impl window::Surface<B> for Surface {
             },
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
-            composite_alpha: window::CompositeAlpha::OPAQUE, //TODO
-        };
-        let present_modes = vec![
-            window::PresentMode::Fifo, //TODO
-        ];
-
-        (caps, Some(self.swapchain_formats()), present_modes)
+        }
     }
 
-    fn supports_queue_family(&self, _: &QueueFamily) -> bool {
-        true
+    fn supported_formats(&self, _physical_device: &PhysicalDevice) -> Option<Vec<f::Format>> {
+        Some(self.swapchain_formats())
     }
 }
 
@@ -292,7 +285,7 @@ impl hal::Instance<B> for Headless {
                     info!("Headless context error {:?}", e);
                     hal::UnsupportedBackend
                 })?;
-        };
+        }
         #[cfg(not(target_os = "linux"))]
         {
             context = unimplemented!();
