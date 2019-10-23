@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-dx11"
-version = "0.3.0"
+version = "0.4.0"
 description = "DirectX-11 API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -18,7 +18,7 @@ default = []
 name = "gfx_backend_dx11"
 
 [dependencies]
-gfx-hal = { path = "../../hal", version = "0.3" }
+gfx-hal = { path = "../../hal", version = "0.4" }
 auxil = { path = "../../auxil/auxil", version = "0.1", package = "gfx-auxil" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
