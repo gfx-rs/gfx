@@ -1,32 +1,43 @@
-use hal::adapter::MemoryProperties;
-use hal::pso::VertexInputRate;
-use hal::queue::QueueFamilyId;
-use hal::range::RangeArg;
-use hal::{buffer, device, format, image, memory, pass, pool, pso, query, window};
-
-use winapi::shared::dxgi::{
-    IDXGIFactory,
-    IDXGISwapChain,
-    DXGI_SWAP_CHAIN_DESC,
-    DXGI_SWAP_EFFECT_DISCARD,
+use hal::{
+    adapter::MemoryProperties,
+    buffer,
+    device,
+    format,
+    image,
+    memory,
+    pass,
+    pool,
+    pso,
+    pso::VertexInputRate,
+    query,
+    queue::QueueFamilyId,
+    range::RangeArg,
+    window,
 };
-use winapi::shared::minwindef::TRUE;
-use winapi::shared::windef::HWND;
-use winapi::shared::{dxgiformat, dxgitype, winerror};
-use winapi::um::{d3d11, d3d11sdklayers, d3dcommon};
-use winapi::Interface as _;
+
+use winapi::{
+    shared::{
+        dxgi::{IDXGIFactory, IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD},
+        dxgiformat,
+        dxgitype,
+        minwindef::TRUE,
+        windef::HWND,
+        winerror,
+    },
+    um::{d3d11, d3d11sdklayers, d3dcommon},
+    Interface as _,
+};
 
 use wio::com::ComPtr;
 
-use std::borrow::Borrow;
-use std::cell::RefCell;
-use std::ops::Range;
-use std::sync::Arc;
-use std::{fmt, mem, ptr};
+use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, ptr, sync::Arc};
 
 use parking_lot::{Condvar, Mutex};
 
-use {
+use crate::{
+    conv,
+    internal,
+    shader,
     Backend,
     Buffer,
     BufferView,
@@ -61,8 +72,6 @@ use {
     Swapchain,
     ViewInfo,
 };
-
-use {conv, internal, shader};
 
 struct InputLayout {
     raw: ComPtr<d3d11::ID3D11InputLayout>,

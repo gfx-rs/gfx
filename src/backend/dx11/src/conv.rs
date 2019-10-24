@@ -1,36 +1,40 @@
-use hal::format::Format;
-use hal::image::{Anisotropic, Filter, WrapMode};
-use hal::pso::{
-    BlendDesc,
-    BlendOp,
-    ColorBlendDesc,
-    Comparison,
-    DepthBias,
-    DepthStencilDesc,
-    Face,
-    Factor,
-    FrontFace,
-    InputAssemblerDesc,
-    PolygonMode,
-    Rasterizer,
-    Rect,
-    Sided,
-    Stage,
-    State,
-    StencilFace,
-    StencilOp,
-    StencilValue,
-    Viewport,
+use hal::{
+    format::Format,
+    image::{Anisotropic, Filter, WrapMode},
+    pso::{
+        BlendDesc,
+        BlendOp,
+        ColorBlendDesc,
+        Comparison,
+        DepthBias,
+        DepthStencilDesc,
+        Face,
+        Factor,
+        FrontFace,
+        InputAssemblerDesc,
+        PolygonMode,
+        Rasterizer,
+        Rect,
+        Sided,
+        Stage,
+        State,
+        StencilFace,
+        StencilOp,
+        StencilValue,
+        Viewport,
+    },
+    IndexType,
 };
-use hal::IndexType;
 
 use spirv_cross::spirv;
 
-use winapi::shared::dxgiformat::*;
-use winapi::shared::minwindef::{FALSE, INT, TRUE};
-
-use winapi::um::d3d11::*;
-use winapi::um::d3dcommon::*;
+use winapi::{
+    shared::{
+        dxgiformat::*,
+        minwindef::{FALSE, INT, TRUE},
+    },
+    um::{d3d11::*, d3dcommon::*},
+};
 
 use std::mem;
 
