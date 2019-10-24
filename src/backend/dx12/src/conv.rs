@@ -1,16 +1,23 @@
-use validate_line_width;
+use crate::validate_line_width;
 
 use spirv_cross::spirv;
 use std::mem;
 
-use winapi::shared::basetsd::UINT8;
-use winapi::shared::dxgiformat::*;
-use winapi::shared::minwindef::{FALSE, INT, TRUE, UINT};
-use winapi::um::d3d12::*;
-use winapi::um::d3dcommon::*;
+use winapi::{
+    shared::{
+        basetsd::UINT8,
+        dxgiformat::*,
+        minwindef::{FALSE, INT, TRUE, UINT},
+    },
+    um::{d3d12::*, d3dcommon::*},
+};
 
-use hal::format::{Format, ImageFeature, SurfaceType, Swizzle};
-use hal::{buffer, image, pso};
+use hal::{
+    buffer,
+    format::{Format, ImageFeature, SurfaceType, Swizzle},
+    image,
+    pso,
+};
 
 use native::descriptor::ShaderVisibility;
 
@@ -179,12 +186,8 @@ pub fn map_topology_type(primitive: pso::Primitive) -> D3D12_PRIMITIVE_TOPOLOGY_
     use hal::pso::Primitive::*;
     match primitive {
         PointList => D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT,
-        LineList | LineStrip => {
-            D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE
-        }
-        TriangleList | TriangleStrip => {
-            D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE
-        }
+        LineList | LineStrip => D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE,
+        TriangleList | TriangleStrip => D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE,
         PatchList(_) => D3D12_PRIMITIVE_TOPOLOGY_TYPE_PATCH,
     }
 }
@@ -475,8 +478,7 @@ pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATE
     if access.contains(Access::INDEX_BUFFER_READ) {
         state |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
     }
-    if access.contains(Access::VERTEX_BUFFER_READ) || access.contains(Access::UNIFORM_READ)
-    {
+    if access.contains(Access::VERTEX_BUFFER_READ) || access.contains(Access::UNIFORM_READ) {
         state |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
     }
     if access.contains(Access::INDIRECT_COMMAND_READ) {
@@ -513,10 +515,22 @@ fn derive_image_state(access: image::Access) -> D3D12_RESOURCE_STATES {
 }
 
 const MUTABLE_IMAGE_ACCESS: &[(image::Access, D3D12_RESOURCE_STATES)] = &[
-    (image::Access::SHADER_WRITE, D3D12_RESOURCE_STATE_UNORDERED_ACCESS),
-    (image::Access::COLOR_ATTACHMENT_WRITE, D3D12_RESOURCE_STATE_RENDER_TARGET),
-    (image::Access::DEPTH_STENCIL_ATTACHMENT_WRITE, D3D12_RESOURCE_STATE_DEPTH_WRITE),
-    (image::Access::TRANSFER_WRITE, D3D12_RESOURCE_STATE_COPY_DEST),
+    (
+        image::Access::SHADER_WRITE,
+        D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+    ),
+    (
+        image::Access::COLOR_ATTACHMENT_WRITE,
+        D3D12_RESOURCE_STATE_RENDER_TARGET,
+    ),
+    (
+        image::Access::DEPTH_STENCIL_ATTACHMENT_WRITE,
+        D3D12_RESOURCE_STATE_DEPTH_WRITE,
+    ),
+    (
+        image::Access::TRANSFER_WRITE,
+        D3D12_RESOURCE_STATE_COPY_DEST,
+    ),
 ];
 
 pub fn map_image_resource_state(
@@ -536,7 +550,10 @@ pub fn map_image_resource_state(
         image::Layout::TransferDstOptimal => D3D12_RESOURCE_STATE_COPY_DEST,
         image::Layout::TransferSrcOptimal => D3D12_RESOURCE_STATE_COPY_SOURCE,
         image::Layout::General => {
-            match MUTABLE_IMAGE_ACCESS.iter().find(|&(bit, _)| access.contains(*bit)) {
+            match MUTABLE_IMAGE_ACCESS
+                .iter()
+                .find(|&(bit, _)| access.contains(*bit))
+            {
                 Some(&(bit, state)) => {
                     if !(access & !bit).is_empty() {
                         warn!("Required access contains multiple writable states with `General` layout: {:?}", access);
@@ -546,10 +563,10 @@ pub fn map_image_resource_state(
                 None => derive_image_state(access),
             }
         }
-        image::Layout::ShaderReadOnlyOptimal |
-        image::Layout::DepthStencilReadOnlyOptimal => derive_image_state(access),
-        image::Layout::Undefined |
-        image::Layout::Preinitialized => D3D12_RESOURCE_STATE_COMMON,
+        image::Layout::ShaderReadOnlyOptimal | image::Layout::DepthStencilReadOnlyOptimal => {
+            derive_image_state(access)
+        }
+        image::Layout::Undefined | image::Layout::Preinitialized => D3D12_RESOURCE_STATE_COMMON,
     }
 }
 

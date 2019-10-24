@@ -1,16 +1,14 @@
 use hal::adapter::{AdapterInfo, DeviceType};
 
-use winapi::shared::guiddef::GUID;
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_5, winerror};
-use winapi::um::unknwnbase::IUnknown;
-use winapi::Interface;
+use winapi::{
+    shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_5, guiddef::GUID, winerror},
+    um::unknwnbase::IUnknown,
+    Interface,
+};
 
 use wio::com::ComPtr;
 
-use std::ffi::OsString;
-use std::mem;
-use std::os::windows::ffi::OsStringExt;
-use std::ptr;
+use std::{ffi::OsString, mem, os::windows::ffi::OsStringExt, ptr};
 
 #[derive(Debug, Copy, Clone)]
 pub(crate) enum DxgiVersion {

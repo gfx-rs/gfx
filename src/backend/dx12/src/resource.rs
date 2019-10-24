@@ -1,6 +1,7 @@
-use winapi::shared::dxgiformat::DXGI_FORMAT;
-use winapi::shared::minwindef::UINT;
-use winapi::um::d3d12;
+use winapi::{
+    shared::{dxgiformat::DXGI_FORMAT, minwindef::UINT},
+    um::d3d12,
+};
 
 use hal::{buffer, format, image, memory, pass, pso};
 use native::{self, query};
@@ -8,10 +9,7 @@ use range_alloc::RangeAllocator;
 
 use crate::{root_constants::RootConstant, Backend, MAX_VERTEX_BUFFERS};
 
-use std::collections::BTreeMap;
-use std::fmt;
-use std::ops::Range;
-use std::cell::UnsafeCell;
+use std::{cell::UnsafeCell, collections::BTreeMap, fmt, ops::Range};
 
 // ShaderModule is either a precompiled if the source comes from HLSL or
 // the SPIR-V module doesn't contain specialization constants or push constants
@@ -683,25 +681,26 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                     None
                 };
 
-                let sampler_range = if content.intersects(DescriptorContent::SAMPLER) && !content.is_dynamic() {
-                    let count = binding.count as u64;
-                    debug!("\tsampler handles: {}", count);
-                    let handle = self
-                        .heap_sampler
-                        .alloc_handles(count)
-                        .ok_or(pso::AllocationError::OutOfPoolMemory)?;
-                    if first_gpu_sampler.is_none() {
-                        first_gpu_sampler = Some(handle.gpu);
-                    }
-                    Some(DescriptorRange {
-                        handle,
-                        ty: binding.ty,
-                        count,
-                        handle_size: self.heap_sampler.handle_size,
-                    })
-                } else {
-                    None
-                };
+                let sampler_range =
+                    if content.intersects(DescriptorContent::SAMPLER) && !content.is_dynamic() {
+                        let count = binding.count as u64;
+                        debug!("\tsampler handles: {}", count);
+                        let handle = self
+                            .heap_sampler
+                            .alloc_handles(count)
+                            .ok_or(pso::AllocationError::OutOfPoolMemory)?;
+                        if first_gpu_sampler.is_none() {
+                            first_gpu_sampler = Some(handle.gpu);
+                        }
+                        Some(DescriptorRange {
+                            handle,
+                            ty: binding.ty,
+                            count,
+                            handle_size: self.heap_sampler.handle_size,
+                        })
+                    } else {
+                        None
+                    };
 
                 (view_range, sampler_range, Vec::new())
             };

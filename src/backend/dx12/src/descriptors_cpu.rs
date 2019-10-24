@@ -1,7 +1,5 @@
-use native;
 use native::descriptor::{CpuDescriptor, HeapFlags, HeapType};
-use std::fmt;
-use std::collections::HashSet;
+use std::{collections::HashSet, fmt};
 
 // Linear stack allocator for CPU descriptor heaps.
 pub struct HeapLinear {

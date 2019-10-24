@@ -1,18 +1,11 @@
 //#[deny(missing_docs)]
 
-extern crate gfx_hal as hal;
-extern crate auxil;
-extern crate range_alloc;
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate log;
-extern crate parking_lot;
-extern crate smallvec;
-extern crate spirv_cross;
 #[macro_use]
 extern crate winapi;
-extern crate wio;
 
 use hal::{
     adapter,
@@ -38,27 +31,23 @@ use hal::{
 
 use range_alloc::RangeAllocator;
 
-use winapi::shared::dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain};
-use winapi::shared::minwindef::{FALSE, UINT};
-use winapi::shared::windef::{HWND, RECT};
-use winapi::shared::{dxgiformat, winerror};
-use winapi::um::winuser::GetClientRect;
-use winapi::um::{d3d11, d3dcommon};
-use winapi::Interface as _;
+use winapi::{
+    shared::{
+        dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain},
+        dxgiformat,
+        minwindef::{FALSE, UINT},
+        windef::{HWND, RECT},
+        winerror,
+    },
+    um::{d3d11, d3dcommon, winuser::GetClientRect},
+    Interface as _,
+};
 
 use wio::com::ComPtr;
 
 use parking_lot::{Condvar, Mutex};
 
-use std::borrow::Borrow;
-use std::cell::RefCell;
-use std::fmt;
-use std::mem;
-use std::ops::Range;
-use std::ptr;
-use std::sync::Arc;
-
-use std::os::raw::c_void;
+use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, os::raw::c_void, ptr, sync::Arc};
 
 macro_rules! debug_scope {
     ($context:expr, $($arg:tt)+) => ({
@@ -730,7 +719,7 @@ impl window::Surface<Backend> for Surface {
         window::SurfaceCapabilities {
             present_modes: window::PresentMode::FIFO, //TODO
             composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
-            image_count: 1 ..= 16, // TODO:
+            image_count: 1 ..= 16,                    // TODO:
             current_extent,
             extents: window::Extent2D {
                 width: 16,
@@ -745,7 +734,7 @@ impl window::Surface<Backend> for Surface {
     }
 
     fn supported_formats(&self, _physical_device: &PhysicalDevice) -> Option<Vec<format::Format>> {
-         Some(vec![
+        Some(vec![
             format::Format::Bgra8Srgb,
             format::Format::Bgra8Unorm,
             format::Format::Rgba8Srgb,
@@ -2635,7 +2624,7 @@ pub enum ShaderModule {
 }
 
 // TODO: temporary
-impl ::fmt::Debug for ShaderModule {
+impl fmt::Debug for ShaderModule {
     fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
         write!(f, "{}", "ShaderModule { ... }")
     }

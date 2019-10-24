@@ -10,6 +10,7 @@ authors = ["The Gfx-rs Developers"]
 readme = "README.md"
 documentation = "https://docs.rs/gfx-backend-dx12"
 workspace = "../../.."
+edition = "2018"
 
 [features]
 default = []
@@ -19,10 +20,10 @@ name = "gfx_backend_dx12"
 
 [dependencies]
 auxil = { path = "../../auxil/auxil", version = "0.1", package = "gfx-auxil" }
-gfx-hal = { path = "../../hal", version = "0.4" }
+hal = { path = "../../hal", version = "0.4", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
-d3d12 = "0.2.2"
+native = { version = "0.2.2", package = "d3d12" }
 log = { version = "0.4" }
 smallvec = "0.6"
 spirv_cross = { version = "0.16", features = ["hlsl"] }

@@ -2,14 +2,16 @@ use std::{ffi, ptr, slice};
 
 use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 
-use winapi::shared::winerror;
-use winapi::um::{d3dcommon, d3dcompiler};
+use winapi::{
+    shared::winerror,
+    um::{d3dcommon, d3dcompiler},
+};
 use wio::com::ComPtr;
 
 use auxil::spirv_cross_specialize_ast;
 use hal::{device, pso};
 
-use {conv, Backend, PipelineLayout};
+use crate::{conv, Backend, PipelineLayout};
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.

@@ -1,49 +1,61 @@
-use std::borrow::Borrow;
-use std::collections::{BTreeMap, VecDeque};
-use std::ops::Range;
-use std::{ffi, mem, ptr, slice};
+use std::{
+    borrow::Borrow,
+    collections::{BTreeMap, VecDeque},
+    ffi,
+    mem,
+    ops::Range,
+    ptr,
+    slice,
+};
 
-use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
+use range_alloc::RangeAllocator;
 use smallvec::SmallVec;
+use spirv_cross::{hlsl, spirv, ErrorCode as SpirvErrorCode};
 
-use winapi::shared::minwindef::{FALSE, TRUE, UINT};
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_4, dxgiformat, dxgitype, windef, winerror};
-use winapi::um::{d3d12, d3dcompiler, synchapi, winbase, winnt};
-use winapi::Interface;
+use winapi::{
+    shared::{
+        dxgi,
+        dxgi1_2,
+        dxgi1_4,
+        dxgiformat,
+        dxgitype,
+        minwindef::{FALSE, TRUE, UINT},
+        windef,
+        winerror,
+    },
+    um::{d3d12, d3dcompiler, synchapi, winbase, winnt},
+    Interface,
+};
 
 use auxil::spirv_cross_specialize_ast;
-use hal::format::Aspects;
-use hal::memory::Requirements;
-use hal::pool::CommandPoolCreateFlags;
-use hal::pso::VertexInputRate;
-use hal::queue::{CommandQueue as _, QueueFamilyId};
-use hal::range::RangeArg;
 use hal::{
     self,
     buffer,
     device as d,
     format,
+    format::Aspects,
     image,
     memory,
+    memory::Requirements,
     pass,
+    pool::CommandPoolCreateFlags,
     pso,
+    pso::VertexInputRate,
     query,
+    queue::{CommandQueue as _, QueueFamilyId},
+    range::RangeArg,
     window as w,
 };
 
-use descriptor;
-use native::command_list::IndirectArgument;
-use native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
-use pool::{CommandPool, CommandPoolAllocator};
-use range_alloc::RangeAllocator;
-use root_constants::RootConstant;
-use {
-    conv,
+use crate::{
     command as cmd,
+    conv,
+    descriptor,
     descriptors_cpu,
-    native,
+    pool::{CommandPool, CommandPoolAllocator},
     resource as r,
     root_constants,
+    root_constants::RootConstant,
     window::{Surface, Swapchain},
     Backend as B,
     Device,
@@ -51,6 +63,10 @@ use {
     MAX_VERTEX_BUFFERS,
     NUM_HEAP_PROPERTIES,
     QUEUE_FAMILIES,
+};
+use native::{
+    command_list::IndirectArgument,
+    pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject},
 };
 
 // Register space used for root constants.
@@ -701,7 +717,9 @@ impl Device {
                     ArraySize,
                 }
             }
-            image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => unimplemented!(),
+            image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => {
+                unimplemented!()
+            }
         };
 
         unsafe {
@@ -1233,12 +1251,10 @@ impl d::Device<B> for Device {
             .collect::<SmallVec<[_; 5]>>();
         let mut sub_infos = subpasses
             .into_iter()
-            .map(|desc| {
-                SubInfo {
-                    desc: desc.borrow().clone(),
-                    external_dependencies: image::Access::empty() .. image::Access::empty(),
-                    unresolved_dependencies: 0,
-                }
+            .map(|desc| SubInfo {
+                desc: desc.borrow().clone(),
+                external_dependencies: image::Access::empty() .. image::Access::empty(),
+                unresolved_dependencies: 0,
             })
             .collect::<SmallVec<[_; 1]>>();
         let dependencies = dependencies.into_iter().collect::<SmallVec<[_; 2]>>();
@@ -1255,16 +1271,28 @@ impl d::Device<B> for Device {
             use hal::pass::SubpassRef as Sr;
             let dep = dep.borrow();
             match dep.passes {
-                Range { start: Sr::External, end: Sr::External } => {
+                Range {
+                    start: Sr::External,
+                    end: Sr::External,
+                } => {
                     error!("Unexpected external-external dependency!");
                 }
-                Range { start: Sr::External, end: Sr::Pass(sid) } => {
+                Range {
+                    start: Sr::External,
+                    end: Sr::Pass(sid),
+                } => {
                     sub_infos[sid].external_dependencies.start |= dep.accesses.start;
                 }
-                Range { start: Sr::Pass(sid), end: Sr::External } => {
+                Range {
+                    start: Sr::Pass(sid),
+                    end: Sr::External,
+                } => {
                     sub_infos[sid].external_dependencies.end |= dep.accesses.end;
                 }
-                Range { start: Sr::Pass(from_sid), end: Sr::Pass(sid) } => {
+                Range {
+                    start: Sr::Pass(from_sid),
+                    end: Sr::Pass(sid),
+                } => {
                     //Note: self-dependencies are ignored
                     if from_sid != sid {
                         sub_infos[sid].unresolved_dependencies += 1;
@@ -1287,8 +1315,12 @@ impl d::Device<B> for Device {
             }
             for &(id, layout) in sub.depth_stencil {
                 let state = SubState::New(match layout {
-                    image::Layout::DepthStencilAttachmentOptimal => d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE,
-                    image::Layout::DepthStencilReadOnlyOptimal => d3d12::D3D12_RESOURCE_STATE_DEPTH_READ,
+                    image::Layout::DepthStencilAttachmentOptimal => {
+                        d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE
+                    }
+                    image::Layout::DepthStencilReadOnlyOptimal => {
+                        d3d12::D3D12_RESOURCE_STATE_DEPTH_READ
+                    }
                     image::Layout::General => d3d12::D3D12_RESOURCE_STATE_DEPTH_WRITE,
                     _ => {
                         error!("Unexpected depth/stencil layout: {:?}", layout);
@@ -1320,7 +1352,10 @@ impl d::Device<B> for Device {
             post_barriers: Vec::new(),
         };
 
-        while let Some(sid) = sub_infos.iter().position(|si| si.unresolved_dependencies == 0) {
+        while let Some(sid) = sub_infos
+            .iter()
+            .position(|si| si.unresolved_dependencies == 0)
+        {
             for dep in &dependencies {
                 let dep = dep.borrow();
                 if dep.passes.start != dep.passes.end
@@ -1389,8 +1424,7 @@ impl d::Device<B> for Device {
                         ai.last_state = resolve_state;
                         ai.barrier_start_index = rp.subpasses.len() + 1;
                     }
-                    SubState::Undefined |
-                    SubState::New(_) => {}
+                    SubState::Undefined | SubState::New(_) => {}
                 };
             }
 
@@ -1411,7 +1445,7 @@ impl d::Device<B> for Device {
         for (att_id, (ai, att)) in att_infos.iter().zip(attachments.iter()).enumerate() {
             let state_dst = if ai.barrier_start_index == 0 {
                 // attachment wasn't used in any sub-pass?
-                continue
+                continue;
             } else {
                 let si = &sub_infos[ai.barrier_start_index - 1];
                 conv::map_image_resource_state(si.external_dependencies.end, att.layouts.end)
@@ -1530,105 +1564,111 @@ impl d::Device<B> for Device {
             .sum();
         let mut ranges = Vec::with_capacity(total);
 
-        let elements = sets.iter().enumerate().map(|(i, set)| {
-            let set = set.borrow();
-            let space = (root_space_offset + i) as u32;
-            let mut table_type = r::SetTableTypes::empty();
-            let root_table_offset = root_offset;
+        let elements = sets
+            .iter()
+            .enumerate()
+            .map(|(i, set)| {
+                let set = set.borrow();
+                let space = (root_space_offset + i) as u32;
+                let mut table_type = r::SetTableTypes::empty();
+                let root_table_offset = root_offset;
 
-            //TODO: split between sampler and non-sampler tables
-            let visibility = conv::map_shader_visibility(
-                set.bindings
-                    .iter()
-                    .fold(pso::ShaderStageFlags::empty(), |u, bind| {
-                        u | bind.stage_flags
-                    }),
-            );
+                //TODO: split between sampler and non-sampler tables
+                let visibility = conv::map_shader_visibility(
+                    set.bindings
+                        .iter()
+                        .fold(pso::ShaderStageFlags::empty(), |u, bind| {
+                            u | bind.stage_flags
+                        }),
+                );
 
-            for bind in set.bindings.iter() {
-                debug!("\tRange {:?} at space={}", bind, space);
-            }
+                for bind in set.bindings.iter() {
+                    debug!("\tRange {:?} at space={}", bind, space);
+                }
 
-            let describe = |bind: &pso::DescriptorSetLayoutBinding, ty| {
-                descriptor::DescriptorRange::new(
-                    ty,
-                    bind.count as _,
-                    descriptor::Binding {
-                        register: bind.binding as _,
-                        space,
-                    },
-                    d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
-                )
-            };
+                let describe = |bind: &pso::DescriptorSetLayoutBinding, ty| {
+                    descriptor::DescriptorRange::new(
+                        ty,
+                        bind.count as _,
+                        descriptor::Binding {
+                            register: bind.binding as _,
+                            space,
+                        },
+                        d3d12::D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND,
+                    )
+                };
 
-            let mut descriptors = Vec::new();
-            let mut range_base = ranges.len();
-            for bind in set.bindings.iter() {
-                let content = r::DescriptorContent::from(bind.ty);
+                let mut descriptors = Vec::new();
+                let mut range_base = ranges.len();
+                for bind in set.bindings.iter() {
+                    let content = r::DescriptorContent::from(bind.ty);
 
-                if content.is_dynamic() {
-                    // Root Descriptor
-                    let binding = descriptor::Binding {
-                        register: bind.binding as _,
-                        space,
-                    };
+                    if content.is_dynamic() {
+                        // Root Descriptor
+                        let binding = descriptor::Binding {
+                            register: bind.binding as _,
+                            space,
+                        };
 
-                    if content.contains(r::DescriptorContent::CBV) {
-                        descriptors.push(r::RootDescriptor {
-                            offset: root_offset,
-                        });
-                        parameters.push(descriptor::RootParameter::cbv_descriptor(visibility, binding));
-                        root_offset += 2;
+                        if content.contains(r::DescriptorContent::CBV) {
+                            descriptors.push(r::RootDescriptor {
+                                offset: root_offset,
+                            });
+                            parameters.push(descriptor::RootParameter::cbv_descriptor(
+                                visibility, binding,
+                            ));
+                            root_offset += 2;
+                        } else {
+                            // SRV and UAV not implemented so far
+                            unimplemented!()
+                        }
                     } else {
-                        // SRV and UAV not implemented so far
-                        unimplemented!()
-                    }
-                } else {
-                    // Descriptor table ranges
-                    if content.contains(r::DescriptorContent::CBV) {
-                        ranges.push(describe(bind, descriptor::DescriptorRangeType::CBV));
-                    }
-                    if content.contains(r::DescriptorContent::SRV) {
-                        ranges.push(describe(bind, descriptor::DescriptorRangeType::SRV));
-                    }
-                    if content.contains(r::DescriptorContent::UAV) {
-                        ranges.push(describe(bind, descriptor::DescriptorRangeType::UAV));
+                        // Descriptor table ranges
+                        if content.contains(r::DescriptorContent::CBV) {
+                            ranges.push(describe(bind, descriptor::DescriptorRangeType::CBV));
+                        }
+                        if content.contains(r::DescriptorContent::SRV) {
+                            ranges.push(describe(bind, descriptor::DescriptorRangeType::SRV));
+                        }
+                        if content.contains(r::DescriptorContent::UAV) {
+                            ranges.push(describe(bind, descriptor::DescriptorRangeType::UAV));
+                        }
                     }
                 }
-            }
-            if ranges.len() > range_base {
-                parameters.push(descriptor::RootParameter::descriptor_table(
-                    visibility,
-                    &ranges[range_base ..],
-                ));
-                table_type |= r::SRV_CBV_UAV;
-                root_offset += 1;
-            }
-
-            range_base = ranges.len();
-            for bind in set.bindings.iter() {
-                let content = r::DescriptorContent::from(bind.ty);
-                if content.contains(r::DescriptorContent::SAMPLER) {
-                    ranges.push(describe(bind, descriptor::DescriptorRangeType::Sampler));
+                if ranges.len() > range_base {
+                    parameters.push(descriptor::RootParameter::descriptor_table(
+                        visibility,
+                        &ranges[range_base ..],
+                    ));
+                    table_type |= r::SRV_CBV_UAV;
+                    root_offset += 1;
                 }
-            }
-            if ranges.len() > range_base {
-                parameters.push(descriptor::RootParameter::descriptor_table(
-                    visibility,
-                    &ranges[range_base ..],
-                ));
-                table_type |= r::SAMPLERS;
-                root_offset += 1;
-            }
 
-            r::RootElement {
-                table: r::RootTable {
-                    ty: table_type,
-                    offset: root_table_offset as _,
-                },
-                descriptors,
-            }
-        }).collect();
+                range_base = ranges.len();
+                for bind in set.bindings.iter() {
+                    let content = r::DescriptorContent::from(bind.ty);
+                    if content.contains(r::DescriptorContent::SAMPLER) {
+                        ranges.push(describe(bind, descriptor::DescriptorRangeType::Sampler));
+                    }
+                }
+                if ranges.len() > range_base {
+                    parameters.push(descriptor::RootParameter::descriptor_table(
+                        visibility,
+                        &ranges[range_base ..],
+                    ));
+                    table_type |= r::SAMPLERS;
+                    root_offset += 1;
+                }
+
+                r::RootElement {
+                    table: r::RootTable {
+                        ty: table_type,
+                        offset: root_table_offset as _,
+                    },
+                    descriptors,
+                }
+            })
+            .collect();
 
         // Ensure that we didn't reallocate!
         debug_assert_eq!(ranges.len(), total);
@@ -2787,7 +2827,8 @@ impl d::Device<B> for Device {
 
                             // Descriptor sets need to be externally synchronized according to specification
                             let dynamic_descriptors = &mut *bind_info.dynamic_descriptors.get();
-                            dynamic_descriptors[offset as usize].gpu_buffer_location = buffer_address + buffer_offset;
+                            dynamic_descriptors[offset as usize].gpu_buffer_location =
+                                buffer_address + buffer_offset;
                         } else {
                             // Descriptor table
                             if update_pool_index == descriptor_update_pools.len() {
@@ -2810,7 +2851,8 @@ impl d::Device<B> for Device {
                                 // CBVs without going out-of-bounds.
                                 let size = ((end - start) + 255) & !255;
                                 let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
-                                    BufferLocation: (*buffer.resource).GetGPUVirtualAddress() + start,
+                                    BufferLocation: (*buffer.resource).GetGPUVirtualAddress()
+                                        + start,
                                     SizeInBytes: size as _,
                                 };
                                 let handle = heap.alloc_handle();
@@ -3463,7 +3505,7 @@ impl d::Device<B> for Device {
     unsafe fn set_command_buffer_name(
         &self,
         _command_buffer: &mut cmd::CommandBuffer,
-        _name: &str
+        _name: &str,
     ) {
         // TODO
     }
