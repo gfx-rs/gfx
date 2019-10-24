@@ -1,15 +1,18 @@
 use auxil::FastHashMap;
-use std::ffi::CStr;
-use std::sync::Mutex;
-use std::{mem, ptr};
+use std::{ffi::CStr, mem, ptr, sync::Mutex};
 
-use d3d12;
-use winapi::shared::minwindef::{FALSE, TRUE};
-use winapi::shared::{dxgiformat, dxgitype, winerror};
-use winapi::um::d3d12::*;
-use winapi::Interface;
+use winapi::{
+    shared::{
+        dxgiformat,
+        dxgitype,
+        minwindef::{FALSE, TRUE},
+        winerror,
+    },
+    um::d3d12::{self, *},
+    Interface,
+};
 
-use native::{self, descriptor, pso};
+use native::{descriptor, pso};
 
 #[derive(Clone, Debug)]
 pub struct BlitPipe {

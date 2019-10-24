@@ -1,8 +1,16 @@
 use auxil::FastHashMap;
-use hal::format::Aspects;
-use hal::range::RangeArg;
-use hal::{buffer, command as com, format, image, memory, pass, pool, pso, query};
 use hal::{
+    buffer,
+    command as com,
+    format,
+    format::Aspects,
+    image,
+    memory,
+    pass,
+    pool,
+    pso,
+    query,
+    range::RangeArg,
     DrawCount,
     IndexCount,
     IndexType,
@@ -12,27 +20,29 @@ use hal::{
     WorkGroupCount,
 };
 
-use std::borrow::Borrow;
-use std::ops::Range;
-use std::sync::Arc;
-use std::{cmp, fmt, iter, mem, ptr};
+use std::{borrow::Borrow, cmp, fmt, iter, mem, ops::Range, ptr, sync::Arc};
 
-use winapi::shared::minwindef::{FALSE, TRUE, UINT};
-use winapi::shared::{dxgiformat, winerror};
-use winapi::um::{d3d12, d3dcommon};
-use winapi::Interface;
-
-use native::{self, descriptor};
+use winapi::{
+    shared::{
+        dxgiformat,
+        minwindef::{FALSE, TRUE, UINT},
+        winerror,
+    },
+    um::{d3d12, d3dcommon},
+    Interface,
+};
 
 use device::{ViewInfo, IDENTITY_MAPPING};
-use root_constants::RootConstant;
+use native::descriptor;
 use smallvec::SmallVec;
-use {
+
+use crate::{
     conv,
     descriptors_cpu,
     device,
     internal,
     resource as r,
+    root_constants::RootConstant,
     validate_line_width,
     Backend,
     Device,
@@ -294,8 +304,10 @@ impl PipelineCache {
                 let dynamic_descriptors = unsafe { &*binding.dynamic_descriptors.get() };
                 for descriptor in dynamic_descriptors {
                     let root_offset = element.descriptors[descriptor_id].offset;
-                    self.user_data
-                        .set_descriptor_cbv(root_offset, descriptor.gpu_buffer_location + offsets.next().unwrap());
+                    self.user_data.set_descriptor_cbv(
+                        root_offset,
+                        descriptor.gpu_buffer_location + offsets.next().unwrap(),
+                    );
                     descriptor_id += 1;
                 }
             }
@@ -815,18 +827,25 @@ impl CommandBuffer {
             if user_data.is_index_dirty(table_index) {
                 match user_data.data[table_index] {
                     RootElement::TableSrvCbvUav(offset) => {
-                        let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: pipeline.srv_cbv_uav_start + offset as u64 };
+                        let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
+                            ptr: pipeline.srv_cbv_uav_start + offset as u64,
+                        };
                         table_update(i as _, gpu);
                         user_data.clear_dirty(table_index);
                     }
                     RootElement::TableSampler(offset) => {
-                        let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE { ptr: pipeline.sampler_start + offset as u64 };
+                        let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
+                            ptr: pipeline.sampler_start + offset as u64,
+                        };
                         table_update(i as _, gpu);
                         user_data.clear_dirty(table_index);
                     }
                     RootElement::DescriptorCbv { buffer } => {
                         debug_assert!(user_data.is_index_dirty(table_index + 1));
-                        debug_assert_eq!(user_data.data[table_index + 1], RootElement::DescriptorPlaceholder);
+                        debug_assert_eq!(
+                            user_data.data[table_index + 1],
+                            RootElement::DescriptorPlaceholder
+                        );
 
                         descriptor_cbv_update(i as _, buffer);
 
@@ -1109,13 +1128,12 @@ impl CommandBuffer {
         range: &image::SubresourceRange,
         list: &mut impl Extend<d3d12::D3D12_RESOURCE_BARRIER>,
     ) {
-        let mut bar =
-            Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
-                pResource: target.resource.as_mut_ptr(),
-                Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
-                StateBefore: states.start,
-                StateAfter: states.end,
-            });
+        let mut bar = Self::transition_barrier(d3d12::D3D12_RESOURCE_TRANSITION_BARRIER {
+            pResource: target.resource.as_mut_ptr(),
+            Subresource: d3d12::D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES,
+            StateBefore: states.start,
+            StateAfter: states.end,
+        });
 
         if *range == target.to_subresource_range(range.aspects) {
             // Only one barrier if it affects the whole image.
@@ -1327,7 +1345,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     }
 
                     let target = target.expect_bound();
-                    Self::fill_texture_barries(target, state_src .. state_dst, range, &mut raw_barriers);
+                    Self::fill_texture_barries(
+                        target,
+                        state_src .. state_dst,
+                        range,
+                        &mut raw_barriers,
+                    );
                 }
             }
         }

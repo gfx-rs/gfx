@@ -1,14 +1,7 @@
-extern crate gfx_hal as hal;
-extern crate auxil;
-extern crate range_alloc;
 #[macro_use]
 extern crate bitflags;
-extern crate d3d12 as native;
 #[macro_use]
 extern crate log;
-extern crate smallvec;
-extern crate spirv_cross;
-extern crate winapi;
 
 mod command;
 mod conv;
@@ -20,21 +13,25 @@ mod resource;
 mod root_constants;
 mod window;
 
-use hal::pso::PipelineStage;
-use hal::{adapter, format as f, image, memory, queue as q, Features, Limits};
+use hal::{adapter, format as f, image, memory, pso::PipelineStage, queue as q, Features, Limits};
 
-use winapi::shared::minwindef::TRUE;
-use winapi::shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_6, winerror};
-use winapi::um::{d3d12, d3d12sdklayers, dxgidebug, handleapi, synchapi, winbase};
-use winapi::Interface;
+use winapi::{
+    shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_6, minwindef::TRUE, winerror},
+    um::{d3d12, d3d12sdklayers, dxgidebug, handleapi, synchapi, winbase},
+    Interface,
+};
 
-use std::borrow::Borrow;
-use std::ffi::OsString;
-use std::os::windows::ffi::OsStringExt;
-use std::sync::{Arc, Mutex};
-use std::{fmt, mem, ptr};
+use std::{
+    borrow::Borrow,
+    ffi::OsString,
+    fmt,
+    mem,
+    os::windows::ffi::OsStringExt,
+    ptr,
+    sync::{Arc, Mutex},
+};
 
-use descriptors_cpu::DescriptorCpuPool;
+use self::descriptors_cpu::DescriptorCpuPool;
 use native::descriptor;
 
 #[derive(Debug)]
