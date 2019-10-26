@@ -2,8 +2,8 @@
 //!
 //! Screen presentation (fullscreen or window) of images requires two objects:
 //!
-//! * [`Surface`] is the host abstraction of the native screen
-//! * [`Swapchain`] is the device abstraction for a surface, containing multiple presentable images
+//! * [Surface](window::Surface) is the host abstraction of the native screen
+//! * [Swapchain](window::Swapchain) is the device abstraction for a surface, containing multiple presentable images
 //!
 //! ## Window
 //!
@@ -132,7 +132,7 @@ impl Extent2D {
 }
 
 /// Describes information about what a `Surface`'s properties are.
-/// Fetch this with `surface.compatibility(device)`.
+/// Fetch this with [Surface::capabilities].
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SurfaceCapabilities {
