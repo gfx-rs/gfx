@@ -531,12 +531,12 @@ impl PhysicalDevice {
         let inferred_device_type = if vendor_lower.contains("qualcomm")
             || vendor_lower.contains("intel")
             || strings_that_imply_integrated
-                .into_iter()
+                .iter()
                 .any(|&s| renderer_lower.contains(s))
         {
             hal::adapter::DeviceType::IntegratedGpu
         } else if strings_that_imply_cpu
-            .into_iter()
+            .iter()
             .any(|&s| renderer_lower.contains(s))
         {
             hal::adapter::DeviceType::Cpu
