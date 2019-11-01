@@ -1,6 +1,6 @@
 use auxil::FastHashMap;
 use std::ffi::CStr;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::{mem, ptr};
 
 use d3d12;
@@ -9,7 +9,7 @@ use winapi::shared::{dxgiformat, dxgitype, winerror};
 use winapi::um::d3d12::*;
 use winapi::Interface;
 
-use native::{self, descriptor, pso};
+use native;
 
 #[derive(Clone, Debug)]
 pub struct BlitPipe {
@@ -40,13 +40,15 @@ type BlitMap = FastHashMap<BlitKey, BlitPipe>;
 #[derive(Debug)]
 pub(crate) struct ServicePipes {
     pub(crate) device: native::Device,
+    library: Arc<native::D3D12Lib>,
     blits_2d_color: Mutex<BlitMap>,
 }
 
 impl ServicePipes {
-    pub fn new(device: native::Device) -> Self {
+    pub fn new(device: native::Device, library: Arc<native::D3D12Lib>) -> Self {
         ServicePipes {
             device,
+            library,
             blits_2d_color: Mutex::new(FastHashMap::default()),
         }
     }
@@ -67,10 +69,10 @@ impl ServicePipes {
     }
 
     fn create_blit_2d_color(&self, (dst_format, filter): BlitKey) -> BlitPipe {
-        let descriptor_range = [descriptor::DescriptorRange::new(
-            descriptor::DescriptorRangeType::SRV,
+        let descriptor_range = [native::DescriptorRange::new(
+            native::DescriptorRangeType::SRV,
             1,
-            native::descriptor::Binding {
+            native::Binding {
                 register: 0,
                 space: 0,
             },
@@ -78,13 +80,13 @@ impl ServicePipes {
         )];
 
         let root_parameters = [
-            descriptor::RootParameter::descriptor_table(
-                descriptor::ShaderVisibility::All,
+            native::RootParameter::descriptor_table(
+                native::ShaderVisibility::All,
                 &descriptor_range,
             ),
-            descriptor::RootParameter::constants(
-                descriptor::ShaderVisibility::All,
-                native::descriptor::Binding {
+            native::RootParameter::constants(
+                native::ShaderVisibility::All,
+                native::Binding {
                     register: 0,
                     space: 0,
                 },
@@ -92,9 +94,9 @@ impl ServicePipes {
             ),
         ];
 
-        let static_samplers = [descriptor::StaticSampler::new(
-            descriptor::ShaderVisibility::PS,
-            native::descriptor::Binding {
+        let static_samplers = [native::StaticSampler::new(
+            native::ShaderVisibility::PS,
+            native::Binding {
                 register: 0,
                 space: 0,
             },
@@ -107,16 +109,20 @@ impl ServicePipes {
             0.0,
             0,
             d3d12::D3D12_COMPARISON_FUNC_ALWAYS,
-            descriptor::StaticBorderColor::TransparentBlack,
+            native::StaticBorderColor::TransparentBlack,
             0.0 .. d3d12::D3D12_FLOAT32_MAX,
         )];
 
-        let ((signature_raw, error), _hr) = native::RootSignature::serialize(
-            descriptor::RootSignatureVersion::V1_0,
+        let (signature_raw, error) = match self.library.serialize_root_signature(
+            native::RootSignatureVersion::V1_0,
             &root_parameters,
             &static_samplers,
-            descriptor::RootSignatureFlags::empty(),
-        );
+            native::RootSignatureFlags::empty(),
+        ) {
+            Ok((pair, hr)) if winerror::SUCCEEDED(hr) => pair,
+            Ok((_, hr)) => panic!("Can't serialize internal root signature: {:?}", hr),
+            Err(e) => panic!("Can't find serialization function: {:?}", e),
+        };
 
         if !error.is_null() {
             error!("D3D12SerializeRootSignature error: {:?}", unsafe {
@@ -126,21 +132,21 @@ impl ServicePipes {
         }
 
         let (signature, _hr) = self.device.create_root_signature(signature_raw, 0);
-        unsafe { signature_raw.destroy() };
+        unsafe { signature_raw.destroy(); }
 
         let shader_src = include_bytes!("../shaders/blit.hlsl");
         // TODO: check results
-        let ((vs, _), _hr_vs) = pso::Shader::compile(
+        let ((vs, _), _hr_vs) = native::Shader::compile(
             shader_src,
             unsafe { CStr::from_bytes_with_nul_unchecked(b"vs_5_0\0") },
             unsafe { CStr::from_bytes_with_nul_unchecked(b"vs_blit_2d\0") },
-            pso::ShaderCompileFlags::empty(),
+            native::ShaderCompileFlags::empty(),
         );
-        let ((ps, _), _hr_ps) = pso::Shader::compile(
+        let ((ps, _), _hr_ps) = native::Shader::compile(
             shader_src,
             unsafe { CStr::from_bytes_with_nul_unchecked(b"ps_5_0\0") },
             unsafe { CStr::from_bytes_with_nul_unchecked(b"ps_blit_2d\0") },
-            pso::ShaderCompileFlags::empty(),
+            native::ShaderCompileFlags::empty(),
         );
 
         let mut rtvs = [dxgiformat::DXGI_FORMAT_UNKNOWN; 8];
@@ -162,11 +168,11 @@ impl ServicePipes {
 
         let pso_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
             pRootSignature: signature.as_mut_ptr(),
-            VS: *pso::Shader::from_blob(vs),
-            PS: *pso::Shader::from_blob(ps),
-            GS: *pso::Shader::null(),
-            DS: *pso::Shader::null(),
-            HS: *pso::Shader::null(),
+            VS: *native::Shader::from_blob(vs),
+            PS: *native::Shader::from_blob(ps),
+            GS: *native::Shader::null(),
+            DS: *native::Shader::null(),
+            HS: *native::Shader::null(),
             StreamOutput: d3d12::D3D12_STREAM_OUTPUT_DESC {
                 pSODeclaration: ptr::null(),
                 NumEntries: 0,

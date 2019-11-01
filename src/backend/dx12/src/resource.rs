@@ -3,7 +3,6 @@ use winapi::shared::minwindef::UINT;
 use winapi::um::d3d12;
 
 use hal::{buffer, format, image, memory, pass, pso};
-use native::{self, query};
 use range_alloc::RangeAllocator;
 
 use crate::{root_constants::RootConstant, Backend, MAX_VERTEX_BUFFERS};
@@ -753,7 +752,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 #[derive(Debug)]
 pub struct QueryPool {
     pub(crate) raw: native::QueryHeap,
-    pub(crate) ty: query::HeapType,
+    pub(crate) ty: native::QueryHeapType,
 }
 
 unsafe impl Send for QueryPool {}

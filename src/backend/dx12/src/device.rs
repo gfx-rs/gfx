@@ -31,9 +31,6 @@ use hal::{
     window as w,
 };
 
-use descriptor;
-use native::command_list::IndirectArgument;
-use native::pso::{CachedPSO, PipelineStateFlags, PipelineStateSubobject, Subobject};
 use pool::{CommandPool, CommandPoolAllocator};
 use range_alloc::RangeAllocator;
 use root_constants::RootConstant;
@@ -41,7 +38,6 @@ use {
     conv,
     command as cmd,
     descriptors_cpu,
-    native,
     resource as r,
     root_constants,
     window::{Surface, Swapchain},
@@ -51,6 +47,10 @@ use {
     MAX_VERTEX_BUFFERS,
     NUM_HEAP_PROPERTIES,
     QUEUE_FAMILIES,
+};
+use native::{
+    PipelineStateSubobject,
+    Subobject,
 };
 
 // Register space used for root constants.
@@ -474,9 +474,9 @@ impl Device {
         ty: CommandSignature,
     ) -> native::CommandSignature {
         let (arg, stride) = match ty {
-            CommandSignature::Draw => (IndirectArgument::draw(), 16),
-            CommandSignature::DrawIndexed => (IndirectArgument::draw_indexed(), 20),
-            CommandSignature::Dispatch => (IndirectArgument::dispatch(), 12),
+            CommandSignature::Draw => (native::IndirectArgument::draw(), 16),
+            CommandSignature::DrawIndexed => (native::IndirectArgument::draw_indexed(), 20),
+            CommandSignature::Dispatch => (native::IndirectArgument::dispatch(), 12),
         };
 
         let (signature, hr) =
@@ -490,7 +490,7 @@ impl Device {
 
     pub(crate) fn create_descriptor_heap_impl(
         device: native::Device,
-        heap_type: descriptor::HeapType,
+        heap_type: native::DescriptorHeapType,
         shader_visible: bool,
         capacity: usize,
     ) -> r::DescriptorHeap {
@@ -500,9 +500,9 @@ impl Device {
             capacity as _,
             heap_type,
             if shader_visible {
-                descriptor::HeapFlags::SHADER_VISIBLE
+                native::DescriptorHeapFlags::SHADER_VISIBLE
             } else {
-                descriptor::HeapFlags::empty()
+                native::DescriptorHeapFlags::empty()
             },
             0,
         );
@@ -1032,7 +1032,7 @@ impl Device {
         };
         let rtv_heap = Device::create_descriptor_heap_impl(
             self.raw,
-            descriptor::HeapType::Rtv,
+            native::DescriptorHeapType::Rtv,
             false,
             config.image_count as _,
         );
@@ -1497,9 +1497,9 @@ impl d::Device<B> for Device {
                 "\tRoot constant set={} range {:?}",
                 ROOT_CONSTANT_SPACE, root_constant.range
             );
-            parameters.push(descriptor::RootParameter::constants(
+            parameters.push(native::RootParameter::constants(
                 conv::map_shader_visibility(root_constant.stages),
-                descriptor::Binding {
+                native::Binding {
                     register: root_constant.range.start as _,
                     space: ROOT_CONSTANT_SPACE,
                 },
@@ -1550,10 +1550,10 @@ impl d::Device<B> for Device {
             }
 
             let describe = |bind: &pso::DescriptorSetLayoutBinding, ty| {
-                descriptor::DescriptorRange::new(
+                native::DescriptorRange::new(
                     ty,
                     bind.count as _,
-                    descriptor::Binding {
+                    native::Binding {
                         register: bind.binding as _,
                         space,
                     },
@@ -1568,7 +1568,7 @@ impl d::Device<B> for Device {
 
                 if content.is_dynamic() {
                     // Root Descriptor
-                    let binding = descriptor::Binding {
+                    let binding = native::Binding {
                         register: bind.binding as _,
                         space,
                     };
@@ -1577,7 +1577,7 @@ impl d::Device<B> for Device {
                         descriptors.push(r::RootDescriptor {
                             offset: root_offset,
                         });
-                        parameters.push(descriptor::RootParameter::cbv_descriptor(visibility, binding));
+                        parameters.push(native::RootParameter::cbv_descriptor(visibility, binding));
                         root_offset += 2;
                     } else {
                         // SRV and UAV not implemented so far
@@ -1586,18 +1586,18 @@ impl d::Device<B> for Device {
                 } else {
                     // Descriptor table ranges
                     if content.contains(r::DescriptorContent::CBV) {
-                        ranges.push(describe(bind, descriptor::DescriptorRangeType::CBV));
+                        ranges.push(describe(bind, native::DescriptorRangeType::CBV));
                     }
                     if content.contains(r::DescriptorContent::SRV) {
-                        ranges.push(describe(bind, descriptor::DescriptorRangeType::SRV));
+                        ranges.push(describe(bind, native::DescriptorRangeType::SRV));
                     }
                     if content.contains(r::DescriptorContent::UAV) {
-                        ranges.push(describe(bind, descriptor::DescriptorRangeType::UAV));
+                        ranges.push(describe(bind, native::DescriptorRangeType::UAV));
                     }
                 }
             }
             if ranges.len() > range_base {
-                parameters.push(descriptor::RootParameter::descriptor_table(
+                parameters.push(native::RootParameter::descriptor_table(
                     visibility,
                     &ranges[range_base ..],
                 ));
@@ -1609,11 +1609,11 @@ impl d::Device<B> for Device {
             for bind in set.bindings.iter() {
                 let content = r::DescriptorContent::from(bind.ty);
                 if content.contains(r::DescriptorContent::SAMPLER) {
-                    ranges.push(describe(bind, descriptor::DescriptorRangeType::Sampler));
+                    ranges.push(describe(bind, native::DescriptorRangeType::Sampler));
                 }
             }
             if ranges.len() > range_base {
-                parameters.push(descriptor::RootParameter::descriptor_table(
+                parameters.push(native::RootParameter::descriptor_table(
                     visibility,
                     &ranges[range_base ..],
                 ));
@@ -1634,12 +1634,16 @@ impl d::Device<B> for Device {
         debug_assert_eq!(ranges.len(), total);
 
         // TODO: error handling
-        let ((signature_raw, error), _hr) = native::RootSignature::serialize(
-            descriptor::RootSignatureVersion::V1_0,
+        let (signature_raw, error) = match self.library.serialize_root_signature(
+            native::RootSignatureVersion::V1_0,
             &parameters,
             &[],
-            descriptor::RootSignatureFlags::ALLOW_IA_INPUT_LAYOUT,
-        );
+            native::RootSignatureFlags::ALLOW_IA_INPUT_LAYOUT,
+        ) {
+            Ok((pair, hr)) if winerror::SUCCEEDED(hr) => pair,
+            Ok((_, hr)) => panic!("Can't serialize root signature: {:?}", hr),
+            Err(e) => panic!("Can't find serialization function: {:?}", e),
+        };
 
         if !error.is_null() {
             error!(
@@ -1977,8 +1981,8 @@ impl d::Device<B> for Device {
             desc.layout.raw,
             native::Shader::from_blob(cs),
             0,
-            CachedPSO::null(),
-            PipelineStateFlags::empty(),
+            native::CachedPSO::null(),
+            native::PipelineStateFlags::empty(),
         );
 
         if cs_destroy {
@@ -2794,7 +2798,7 @@ impl d::Device<B> for Device {
                                 let max_size = 1u64 << 12; //arbitrary
                                 descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
                                     self.raw,
-                                    descriptor::HeapType::CbvSrvUav,
+                                    native::DescriptorHeapType::CbvSrvUav,
                                     max_size as _,
                                 ));
                             }
@@ -2859,7 +2863,7 @@ impl d::Device<B> for Device {
                                     let max_size = 1u64 << 12; //arbitrary
                                     descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
                                         self.raw,
-                                        descriptor::HeapType::CbvSrvUav,
+                                        native::DescriptorHeapType::CbvSrvUav,
                                         max_size as _,
                                     ));
                                     heap = descriptor_update_pools.last_mut().unwrap();
@@ -3267,9 +3271,9 @@ impl d::Device<B> for Device {
         count: query::Id,
     ) -> Result<r::QueryPool, query::CreationError> {
         let heap_ty = match query_ty {
-            query::Type::Occlusion => native::query::HeapType::Occlusion,
-            query::Type::PipelineStatistics(_) => native::query::HeapType::PipelineStatistics,
-            query::Type::Timestamp => native::query::HeapType::Timestamp,
+            query::Type::Occlusion => native::QueryHeapType::Occlusion,
+            query::Type::PipelineStatistics(_) => native::QueryHeapType::PipelineStatistics,
+            query::Type::Timestamp => native::QueryHeapType::Timestamp,
         };
 
         let (query_heap, hr) = self.raw.create_query_heap(heap_ty, count, 0);
