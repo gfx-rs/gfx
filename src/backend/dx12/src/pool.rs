@@ -4,7 +4,6 @@ use winapi::shared::winerror::SUCCEEDED;
 
 use crate::{command::CommandBuffer, Backend, Shared};
 use hal::{command, pool};
-use native::command_list::CmdListType;
 
 #[derive(Debug)]
 pub enum CommandPoolAllocator {
@@ -15,7 +14,7 @@ pub enum CommandPoolAllocator {
 pub struct CommandPool {
     pub(crate) allocator: CommandPoolAllocator,
     pub(crate) device: native::Device,
-    pub(crate) list_type: CmdListType,
+    pub(crate) list_type: native::CmdListType,
     pub(crate) shared: Arc<Shared>,
     pub(crate) create_flags: pool::CommandPoolCreateFlags,
 }

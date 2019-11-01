@@ -16,8 +16,8 @@ mod window;
 use hal::{adapter, format as f, image, memory, pso::PipelineStage, queue as q, Features, Limits};
 
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_6, minwindef::TRUE, winerror},
-    um::{d3d12, d3d12sdklayers, dxgidebug, handleapi, synchapi, winbase},
+    shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_6, minwindef::TRUE, winerror},
+    um::{d3d12, d3d12sdklayers, handleapi, synchapi, winbase},
     Interface,
 };
 
@@ -27,12 +27,10 @@ use std::{
     fmt,
     mem,
     os::windows::ffi::OsStringExt,
-    ptr,
     sync::{Arc, Mutex},
 };
 
 use self::descriptors_cpu::DescriptorCpuPool;
-use native::descriptor;
 
 #[derive(Debug)]
 pub(crate) struct HeapProperties {
@@ -151,15 +149,15 @@ impl q::QueueFamily for QueueFamily {
 }
 
 impl QueueFamily {
-    fn native_type(&self) -> native::command_list::CmdListType {
+    fn native_type(&self) -> native::CmdListType {
         use hal::queue::QueueFamily as _;
-        use native::command_list::CmdListType;
+        use native::CmdListType as Clt;
 
         let queue_type = self.queue_type();
         match queue_type {
-            q::QueueType::General | q::QueueType::Graphics => CmdListType::Direct,
-            q::QueueType::Compute => CmdListType::Compute,
-            q::QueueType::Transfer => CmdListType::Copy,
+            q::QueueType::General | q::QueueType::Graphics => Clt::Direct,
+            q::QueueType::Compute => Clt::Compute,
+            q::QueueType::Transfer => Clt::Copy,
         }
     }
 }
@@ -172,6 +170,7 @@ static QUEUE_FAMILIES: [QueueFamily; 4] = [
 ];
 
 pub struct PhysicalDevice {
+    library: Arc<native::D3D12Lib>,
     adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
     features: Features,
     limits: Limits,
@@ -209,17 +208,23 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             return Err(hal::device::CreationError::MissingFeature);
         }
 
-        let (device_raw, hr_device) =
-            native::Device::create(self.adapter, native::FeatureLevel::L11_0);
-        if !winerror::SUCCEEDED(hr_device) {
-            error!("error on device creation: {:x}", hr_device);
-        }
+        let device_raw = match self.library.create_device(
+            self.adapter,
+            native::FeatureLevel::L11_0,
+        ) {
+            Ok((device, hr)) if winerror::SUCCEEDED(hr) => device,
+            Ok((_, hr)) => {
+                error!("error on device creation: {:x}", hr);
+                return Err(hal::device::CreationError::InitializationFailed);
+            }
+            Err(e) => panic!("device creation failed with {:?}", e),
+        };
 
         // Always create the presentation queue in case we want to build a swapchain.
         let (present_queue, hr_queue) = device_raw.create_command_queue(
             QueueFamily::Present.native_type(),
-            native::queue::Priority::Normal,
-            native::queue::CommandQueueFlags::empty(),
+            native::Priority::Normal,
+            native::CommandQueueFlags::empty(),
             0,
         );
         if !winerror::SUCCEEDED(hr_queue) {
@@ -254,8 +259,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         for _ in 0 .. priorities.len() {
                             let (queue, hr_queue) = device_raw.create_command_queue(
                                 list_type,
-                                native::queue::Priority::Normal,
-                                native::queue::CommandQueueFlags::empty(),
+                                native::Priority::Normal,
+                                native::CommandQueueFlags::empty(),
                                 0,
                             );
 
@@ -405,7 +410,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 pub struct CommandQueue {
     pub(crate) raw: native::CommandQueue,
     idle_fence: native::Fence,
-    idle_event: native::sync::Event,
+    idle_event: native::Event,
 }
 
 impl fmt::Debug for CommandQueue {
@@ -544,6 +549,7 @@ impl Shared {
 
 pub struct Device {
     raw: native::Device,
+    library: Arc<native::D3D12Lib>,
     private_caps: Capabilities,
     format_properties: Arc<FormatProperties>,
     heap_properties: &'static [HeapProperties],
@@ -584,20 +590,20 @@ impl Device {
         present_queue: native::CommandQueue,
     ) -> Self {
         // Allocate descriptor heaps
-        let rtv_pool = DescriptorCpuPool::new(device, descriptor::HeapType::Rtv);
-        let dsv_pool = DescriptorCpuPool::new(device, descriptor::HeapType::Dsv);
-        let srv_uav_pool = DescriptorCpuPool::new(device, descriptor::HeapType::CbvSrvUav);
-        let sampler_pool = DescriptorCpuPool::new(device, descriptor::HeapType::Sampler);
+        let rtv_pool = DescriptorCpuPool::new(device, native::DescriptorHeapType::Rtv);
+        let dsv_pool = DescriptorCpuPool::new(device, native::DescriptorHeapType::Dsv);
+        let srv_uav_pool = DescriptorCpuPool::new(device, native::DescriptorHeapType::CbvSrvUav);
+        let sampler_pool = DescriptorCpuPool::new(device, native::DescriptorHeapType::Sampler);
 
         let heap_srv_cbv_uav = Self::create_descriptor_heap_impl(
             device,
-            descriptor::HeapType::CbvSrvUav,
+            native::DescriptorHeapType::CbvSrvUav,
             true,
             1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
         );
 
         let heap_sampler =
-            Self::create_descriptor_heap_impl(device, descriptor::HeapType::Sampler, true, 2_048);
+            Self::create_descriptor_heap_impl(device, native::DescriptorHeapType::Sampler, true, 2_048);
 
         let draw_signature = Self::create_command_signature(device, device::CommandSignature::Draw);
         let draw_indexed_signature =
@@ -610,7 +616,10 @@ impl Device {
             draw_indexed: draw_indexed_signature,
             dispatch: dispatch_signature,
         };
-        let service_pipes = internal::ServicePipes::new(device);
+        let service_pipes = internal::ServicePipes::new(
+            device,
+            Arc::clone(&physical_device.library),
+        );
         let shared = Shared {
             signatures,
             service_pipes,
@@ -618,6 +627,7 @@ impl Device {
 
         Device {
             raw: device,
+            library: Arc::clone(&physical_device.library),
             private_caps: physical_device.private_caps,
             format_properties: physical_device.format_properties.clone(),
             heap_properties: physical_device.heap_properties,
@@ -683,7 +693,8 @@ impl Drop for Device {
 
 #[derive(Debug)]
 pub struct Instance {
-    pub(crate) factory: native::WeakPtr<dxgi1_4::IDXGIFactory4>,
+    pub(crate) factory: native::Factory4,
+    library: Arc<native::D3D12Lib>,
 }
 
 impl Drop for Instance {
@@ -699,65 +710,52 @@ unsafe impl Sync for Instance {}
 
 impl hal::Instance<Backend> for Instance {
     fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+        let lib_main = match native::D3D12Lib::new() {
+            Ok(lib) => lib,
+            Err(_) => return Err(hal::UnsupportedBackend),
+        };
+
         #[cfg(debug_assertions)]
         {
             // Enable debug layer
-            let mut debug_controller: *mut d3d12sdklayers::ID3D12Debug = ptr::null_mut();
-            let hr = unsafe {
-                d3d12::D3D12GetDebugInterface(
-                    &d3d12sdklayers::ID3D12Debug::uuidof(),
-                    &mut debug_controller as *mut *mut _ as *mut *mut _,
-                )
-            };
-
-            if winerror::SUCCEEDED(hr) {
-                unsafe {
-                    (*debug_controller).EnableDebugLayer();
-                    (*debug_controller).Release();
+            match lib_main.get_debug_interface() {
+                Ok((debug_controller, hr)) if winerror::SUCCEEDED(hr) => {
+                    debug_controller.enable_layer();
+                    unsafe { debug_controller.Release(); }
+                }
+                _ => {
+                    warn!("Unable to get D3D12 debug interface");
                 }
             }
         }
 
+        let lib_dxgi = native::DxgiLib::new().unwrap();
+
         // The `DXGI_CREATE_FACTORY_DEBUG` flag is only allowed to be passed to
         // `CreateDXGIFactory2` if the debug interface is actually available. So
         // we check for whether it exists first.
-        let mut queue = native::WeakPtr::<dxgidebug::IDXGIInfoQueue>::null();
-        let hr = unsafe {
-            dxgi1_3::DXGIGetDebugInterface1(
-                0,
-                &dxgidebug::IDXGIInfoQueue::uuidof(),
-                queue.mut_void(),
-            )
-        };
-
-        let factory_flags = if winerror::SUCCEEDED(hr) {
-            unsafe {
-                queue.destroy();
+        let factory_flags = match lib_dxgi.get_debug_interface1() {
+            Ok((queue, hr)) if winerror::SUCCEEDED(hr) => {
+                unsafe { queue.destroy() };
+                native::FactoryCreationFlags::DEBUG
             }
-            dxgi1_3::DXGI_CREATE_FACTORY_DEBUG
-        } else {
-            0
+            _ => native::FactoryCreationFlags::empty(),
         };
 
         // Create DXGI factory
-        let mut dxgi_factory = native::WeakPtr::<dxgi1_4::IDXGIFactory4>::null();
-
-        let hr = unsafe {
-            dxgi1_3::CreateDXGIFactory2(
-                factory_flags,
-                &dxgi1_4::IDXGIFactory4::uuidof(),
-                dxgi_factory.mut_void(),
-            )
+        let factory = match lib_dxgi.create_factory2(factory_flags) {
+            Ok((factory, hr)) if winerror::SUCCEEDED(hr) => factory,
+            Ok((_, hr)) => {
+                info!("Failed on dxgi factory creation: {:?}", hr);
+                return Err(hal::UnsupportedBackend)
+            }
+            Err(_) => return Err(hal::UnsupportedBackend),
         };
 
-        if winerror::SUCCEEDED(hr) {
-            Ok(Instance {
-                factory: dxgi_factory,
-            })
-        } else {
-            info!("Failed on dxgi factory creation: {:?}", hr);
-            Err(hal::UnsupportedBackend)
-        }
+        Ok(Instance {
+            factory,
+            library: Arc::new(lib_main),
+        })
     }
 
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
@@ -823,12 +821,9 @@ impl hal::Instance<Backend> for Instance {
 
             // Check for D3D12 support
             // Create temporary device to get physical device information
-            let device = {
-                let (device, hr) = native::Device::create(adapter, native::FeatureLevel::L11_0);
-                if !winerror::SUCCEEDED(hr) {
-                    continue;
-                }
-                device
+            let device = match self.library.create_device(adapter, native::FeatureLevel::L11_0) {
+                Ok((device, hr)) if winerror::SUCCEEDED(hr) => device,
+                _ => continue,
             };
 
             // We have found a possible adapter
@@ -1046,6 +1041,7 @@ impl hal::Instance<Backend> for Instance {
             let sample_count_mask = 0x3F;
 
             let physical_device = PhysicalDevice {
+                library: Arc::clone(&self.library),
                 adapter,
                 features:
                     // TODO: add more features, based on
