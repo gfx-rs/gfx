@@ -22,9 +22,8 @@ use winapi::shared::{dxgiformat, winerror};
 use winapi::um::{d3d12, d3dcommon};
 use winapi::Interface;
 
-use native::{self, descriptor};
+use native;
 
-use device::{ViewInfo, IDENTITY_MAPPING};
 use root_constants::RootConstant;
 use smallvec::SmallVec;
 use {
@@ -664,12 +663,12 @@ impl CommandBuffer {
         stencil: Option<u32>,
         rects: &[d3d12::D3D12_RECT],
     ) {
-        let mut flags = native::command_list::ClearFlags::empty();
+        let mut flags = native::ClearFlags::empty();
         if depth.is_some() {
-            flags |= native::command_list::ClearFlags::DEPTH;
+            flags |= native::ClearFlags::DEPTH;
         }
         if stencil.is_some() {
-            flags |= native::command_list::ClearFlags::STENCIL;
+            flags |= native::ClearFlags::STENCIL;
         }
 
         self.raw.clear_depth_stencil_view(
@@ -1459,7 +1458,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
                     let mut rtv_pool = descriptors_cpu::HeapLinear::new(
                         device,
-                        descriptor::HeapType::Rtv,
+                        native::DescriptorHeapType::Rtv,
                         clear_rects.len(),
                     );
 
@@ -1473,7 +1472,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             caps: image::ViewCapabilities::empty(),
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
-                            component_mapping: IDENTITY_MAPPING,
+                            component_mapping: device::IDENTITY_MAPPING,
                             range: image::SubresourceRange {
                                 aspects: Aspects::COLOR,
                                 levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
@@ -1496,7 +1495,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
                     let mut dsv_pool = descriptors_cpu::HeapLinear::new(
                         device,
-                        descriptor::HeapType::Dsv,
+                        native::DescriptorHeapType::Dsv,
                         clear_rects.len(),
                     );
 
@@ -1510,7 +1509,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             caps: image::ViewCapabilities::empty(),
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
-                            component_mapping: IDENTITY_MAPPING,
+                            component_mapping: device::IDENTITY_MAPPING,
                             range: image::SubresourceRange {
                                 aspects: if depth.is_some() {
                                     Aspects::DEPTH
@@ -1627,17 +1626,17 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         // Descriptor heap for the current blit, only storing the src image
         let (srv_heap, _) = device.create_descriptor_heap(
             1,
-            descriptor::HeapType::CbvSrvUav,
-            descriptor::HeapFlags::SHADER_VISIBLE,
+            native::DescriptorHeapType::CbvSrvUav,
+            native::DescriptorHeapFlags::SHADER_VISIBLE,
             0,
         );
-        let srv_desc = Device::build_image_as_shader_resource_desc(&ViewInfo {
+        let srv_desc = Device::build_image_as_shader_resource_desc(&device::ViewInfo {
             resource: src.resource,
             kind: src.kind,
             caps: src.view_caps,
             view_kind: image::ViewKind::D2Array, // TODO
             format: src.default_view_format.unwrap(),
-            component_mapping: IDENTITY_MAPPING,
+            component_mapping: device::IDENTITY_MAPPING,
             range: image::SubresourceRange {
                 aspects: format::Aspects::COLOR, // TODO
                 levels: 0 .. src.descriptor.MipLevels as _,
@@ -1675,7 +1674,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             // WORKAROUND: renderdoc crashes if we destroy the pool too early
             let rtv_pool = Device::create_descriptor_heap_impl(
                 device,
-                descriptor::HeapType::Rtv,
+                native::DescriptorHeapType::Rtv,
                 false,
                 num_layers as _,
             );
@@ -2503,7 +2502,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn begin_query(&mut self, query: query::Query<Backend>, flags: query::ControlFlags) {
         let query_ty = match query.pool.ty {
-            native::query::HeapType::Occlusion => {
+            native::QueryHeapType::Occlusion => {
                 if flags.contains(query::ControlFlags::PRECISE) {
                     self.occlusion_query = Some(OcclusionQuery::Precise(query.id));
                     d3d12::D3D12_QUERY_TYPE_OCCLUSION
@@ -2514,8 +2513,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION
                 }
             }
-            native::query::HeapType::Timestamp => panic!("Timestap queries are issued via "),
-            native::query::HeapType::PipelineStatistics => {
+            native::QueryHeapType::Timestamp => panic!("Timestap queries are issued via "),
+            native::QueryHeapType::PipelineStatistics => {
                 self.pipeline_stats_query = Some(query.id);
                 d3d12::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
             }
@@ -2529,19 +2528,19 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn end_query(&mut self, query: query::Query<Backend>) {
         let id = query.id;
         let query_ty = match query.pool.ty {
-            native::query::HeapType::Occlusion
+            native::QueryHeapType::Occlusion
                 if self.occlusion_query == Some(OcclusionQuery::Precise(id)) =>
             {
                 self.occlusion_query = None;
                 d3d12::D3D12_QUERY_TYPE_OCCLUSION
             }
-            native::query::HeapType::Occlusion
+            native::QueryHeapType::Occlusion
                 if self.occlusion_query == Some(OcclusionQuery::Binary(id)) =>
             {
                 self.occlusion_query = None;
                 d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION
             }
-            native::query::HeapType::PipelineStatistics
+            native::QueryHeapType::PipelineStatistics
                 if self.pipeline_stats_query == Some(id) =>
             {
                 self.pipeline_stats_query = None;
