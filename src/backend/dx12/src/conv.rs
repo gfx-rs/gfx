@@ -19,7 +19,7 @@ use hal::{
     pso,
 };
 
-use native::descriptor::ShaderVisibility;
+use native::ShaderVisibility;
 
 pub fn map_format(format: Format) -> Option<DXGI_FORMAT> {
     use hal::format::Format::*;
