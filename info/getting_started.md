@@ -4,7 +4,7 @@
 
 Install the newest XCode from the App Store. This installs the required `metal` developer tools.   
 
-Ensure [CMake is installed](https://cmake.org/install/) as it is required for `glsl-to-spirv`.   
+To run the examples, ensure [CMake is installed](https://cmake.org/install/) as it is required for `glsl-to-spirv`.   
 
 ## Vulkan Dependencies
 
