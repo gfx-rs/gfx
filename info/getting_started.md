@@ -2,7 +2,9 @@
 
 ## macOS Dependencies
 
-Install the newest XCode from the App Store. This installs the required `metal` developer tools.
+Install the newest XCode from the App Store. This installs the required `metal` developer tools.   
+
+Ensure [CMake is installed](https://cmake.org/install/) as it is required for `glsl-to-spirv`.   
 
 ## Vulkan Dependencies
 
