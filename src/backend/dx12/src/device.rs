@@ -2635,7 +2635,7 @@ impl d::Device<B> for Device {
                                 max_size as _,
                             ));
                         }
-                        let mut heap = descriptor_update_pools.last_mut().unwrap();
+                        let mut heap = descriptor_update_pools.pop().unwrap();
                         let start = range.start.unwrap_or(0);
                         let end = range.end.unwrap_or(buffer.requirements.size as _);
 
@@ -2694,12 +2694,15 @@ impl d::Device<B> for Device {
                                 // pool is full, move to the next one
                                 update_pool_index += 1;
                                 let max_size = 1u64 << 12; //arbitrary
-                                descriptor_update_pools.push(descriptors_cpu::HeapLinear::new(
-                                    self.raw,
-                                    descriptor::HeapType::CbvSrvUav,
-                                    max_size as _,
-                                ));
-                                heap = descriptor_update_pools.last_mut().unwrap();
+                                let full_heap = mem::replace(
+                                    &mut heap,
+                                    descriptors_cpu::HeapLinear::new(
+                                        self.raw,
+                                        descriptor::HeapType::CbvSrvUav,
+                                        max_size as _,
+                                    ),
+                                );
+                                descriptor_update_pools.push(full_heap);
                             }
                             let handle = heap.alloc_handle();
                             self.raw.CreateUnorderedAccessView(
@@ -2716,6 +2719,7 @@ impl d::Device<B> for Device {
                             // pool is full, move to the next one
                             update_pool_index += 1;
                         }
+                        descriptor_update_pools.push(heap);
                     }
                     pso::Descriptor::Image(image, _layout) => {
                         if bind_info.content.contains(r::DescriptorContent::SRV) {
