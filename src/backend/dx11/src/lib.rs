@@ -5,6 +5,7 @@ extern crate auxil;
 extern crate range_alloc;
 #[macro_use]
 extern crate bitflags;
+extern crate libloading;
 #[macro_use]
 extern crate log;
 extern crate parking_lot;
@@ -39,7 +40,7 @@ use hal::{
 use range_alloc::RangeAllocator;
 
 use winapi::shared::dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain};
-use winapi::shared::minwindef::{FALSE, UINT};
+use winapi::shared::minwindef::{FALSE, UINT, HMODULE};
 use winapi::shared::windef::{HWND, RECT};
 use winapi::shared::{dxgiformat, winerror};
 use winapi::um::winuser::GetClientRect;
@@ -96,6 +97,19 @@ mod dxgi;
 mod internal;
 mod shader;
 
+type CreateFun = extern "system" fn(
+    *mut IDXGIAdapter,
+    UINT,
+    HMODULE,
+    UINT,
+    *const UINT,
+    UINT,
+    UINT,
+    *mut *mut d3d11::ID3D11Device,
+    *mut UINT,
+    *mut *mut d3d11::ID3D11DeviceContext,
+) -> winerror::HRESULT;
+
 #[derive(Clone)]
 pub(crate) struct ViewInfo {
     resource: *mut d3d11::ID3D11Resource,
@@ -116,6 +130,7 @@ impl fmt::Debug for ViewInfo {
 pub struct Instance {
     pub(crate) factory: ComPtr<IDXGIFactory>,
     pub(crate) dxgi_version: dxgi::DxgiVersion,
+    library: Arc<libloading::Library>,
 }
 
 unsafe impl Send for Instance {}
@@ -256,9 +271,14 @@ impl hal::Instance<Backend> for Instance {
         match dxgi::get_dxgi_factory() {
             Ok((factory, dxgi_version)) => {
                 info!("DXGI version: {:?}", dxgi_version);
+                let library = Arc::new(
+                    libloading::Library::new("d3d11.dll")
+                        .map_err(|_| hal::UnsupportedBackend)?
+                );
                 Ok(Instance {
                     factory,
                     dxgi_version,
+                    library,
                 })
             }
             Err(hr) => {
@@ -272,6 +292,16 @@ impl hal::Instance<Backend> for Instance {
         let mut adapters = Vec::new();
         let mut idx = 0;
 
+        let func: libloading::Symbol<CreateFun> = match unsafe {
+            self.library.get(b"D3D11CreateDevice")
+        } {
+            Ok(func) => func,
+            Err(e) => {
+                error!("Unable to get device creation function: {:?}", e);
+                return Vec::new();
+            }
+        };
+
         while let Ok((adapter, info)) =
             dxgi::get_adapter(idx, self.factory.as_raw(), self.dxgi_version)
         {
@@ -281,23 +311,21 @@ impl hal::Instance<Backend> for Instance {
 
             // TODO: move into function?
             let (device, feature_level) = {
-                let feature_level = get_feature_level(adapter.as_raw());
+                let feature_level = get_feature_level(&func, adapter.as_raw());
 
                 let mut device = ptr::null_mut();
-                let hr = unsafe {
-                    d3d11::D3D11CreateDevice(
-                        adapter.as_raw() as *mut _,
-                        d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
-                        ptr::null_mut(),
-                        0,
-                        [feature_level].as_ptr(),
-                        1,
-                        d3d11::D3D11_SDK_VERSION,
-                        &mut device as *mut *mut _ as *mut *mut _,
-                        ptr::null_mut(),
-                        ptr::null_mut(),
-                    )
-                };
+                let hr = func(
+                    adapter.as_raw() as *mut _,
+                    d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
+                    ptr::null_mut(),
+                    0,
+                    [feature_level].as_ptr(),
+                    1,
+                    d3d11::D3D11_SDK_VERSION,
+                    &mut device as *mut *mut _ as *mut *mut _,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                );
 
                 if !winerror::SUCCEEDED(hr) {
                     continue;
@@ -384,6 +412,7 @@ impl hal::Instance<Backend> for Instance {
 
             let physical_device = PhysicalDevice {
                 adapter,
+                library: Arc::clone(&self.library),
                 features,
                 limits,
                 memory_properties,
@@ -421,6 +450,7 @@ impl hal::Instance<Backend> for Instance {
 
 pub struct PhysicalDevice {
     adapter: ComPtr<IDXGIAdapter>,
+    library: Arc<libloading::Library>,
     features: hal::Features,
     limits: hal::Limits,
     memory_properties: adapter::MemoryProperties,
@@ -437,7 +467,7 @@ unsafe impl Send for PhysicalDevice {}
 unsafe impl Sync for PhysicalDevice {}
 
 // TODO: does the adapter we get earlier matter for feature level?
-fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL {
+fn get_feature_level(func: &CreateFun, adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL {
     let requested_feature_levels = [
         d3dcommon::D3D_FEATURE_LEVEL_11_1,
         d3dcommon::D3D_FEATURE_LEVEL_11_0,
@@ -449,40 +479,36 @@ fn get_feature_level(adapter: *mut IDXGIAdapter) -> d3dcommon::D3D_FEATURE_LEVEL
     ];
 
     let mut feature_level = d3dcommon::D3D_FEATURE_LEVEL_9_1;
-    let hr = unsafe {
-        d3d11::D3D11CreateDevice(
-            adapter,
-            d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
-            ptr::null_mut(),
-            0,
-            requested_feature_levels[..].as_ptr(),
-            requested_feature_levels.len() as _,
-            d3d11::D3D11_SDK_VERSION,
-            ptr::null_mut(),
-            &mut feature_level as *mut _,
-            ptr::null_mut(),
-        )
-    };
+    let hr = func(
+        adapter,
+        d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
+        ptr::null_mut(),
+        0,
+        requested_feature_levels[..].as_ptr(),
+        requested_feature_levels.len() as _,
+        d3d11::D3D11_SDK_VERSION,
+        ptr::null_mut(),
+        &mut feature_level as *mut _,
+        ptr::null_mut(),
+    );
 
     if !winerror::SUCCEEDED(hr) {
         // if there is no 11.1 runtime installed, requesting
         // `D3D_FEATURE_LEVEL_11_1` will return E_INVALIDARG so we just retry
         // without that
         if hr == winerror::E_INVALIDARG {
-            let hr = unsafe {
-                d3d11::D3D11CreateDevice(
-                    adapter,
-                    d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
-                    ptr::null_mut(),
-                    0,
-                    requested_feature_levels[1 ..].as_ptr(),
-                    (requested_feature_levels.len() - 1) as _,
-                    d3d11::D3D11_SDK_VERSION,
-                    ptr::null_mut(),
-                    &mut feature_level as *mut _,
-                    ptr::null_mut(),
-                )
-            };
+            let hr = func(
+                adapter,
+                d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
+                ptr::null_mut(),
+                0,
+                requested_feature_levels[1 ..].as_ptr(),
+                (requested_feature_levels.len() - 1) as _,
+                d3d11::D3D11_SDK_VERSION,
+                ptr::null_mut(),
+                &mut feature_level as *mut _,
+                ptr::null_mut(),
+            );
 
             if !winerror::SUCCEEDED(hr) {
                 // TODO: device might not support any feature levels?
@@ -501,12 +527,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         families: &[(&QueueFamily, &[queue::QueuePriority])],
         requested_features: hal::Features,
     ) -> Result<adapter::Gpu<Backend>, hal::device::CreationError> {
+        let func: libloading::Symbol<CreateFun> = self.library
+            .get(b"D3D11CreateDevice")
+            .unwrap();
+
         let (device, cxt) = {
             if !self.features().contains(requested_features) {
                 return Err(hal::device::CreationError::MissingFeature);
             }
 
-            let feature_level = get_feature_level(self.adapter.as_raw());
+            let feature_level = get_feature_level(&func, self.adapter.as_raw());
             let mut returned_level = d3dcommon::D3D_FEATURE_LEVEL_9_1;
 
             #[cfg(debug_assertions)]
@@ -517,7 +547,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             // TODO: request debug device only on debug config?
             let mut device = ptr::null_mut();
             let mut cxt = ptr::null_mut();
-            let hr = d3d11::D3D11CreateDevice(
+            let hr = func(
                 self.adapter.as_raw() as *mut _,
                 d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
                 ptr::null_mut(),
@@ -547,7 +577,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         // TODO: deferred context => 1 cxt/queue?
         let queue_groups = families
             .into_iter()
-            .map(|&(family, prio)| {
+            .map(|&(_family, prio)| {
                 assert_eq!(prio.len(), 1);
                 let mut group = queue::QueueGroup::new(queue::QueueFamilyId(0));
 
@@ -711,7 +741,7 @@ impl window::Surface<Backend> for Surface {
         true
     }
 
-    fn capabilities(&self, physical_device: &PhysicalDevice) -> window::SurfaceCapabilities {
+    fn capabilities(&self, _physical_device: &PhysicalDevice) -> window::SurfaceCapabilities {
         let current_extent = unsafe {
             let mut rect: RECT = mem::zeroed();
             assert_ne!(
