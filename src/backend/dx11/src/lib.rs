@@ -35,7 +35,7 @@ use winapi::{
     shared::{
         dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain},
         dxgiformat,
-        minwindef::{FALSE, UINT},
+        minwindef::{FALSE, UINT, HMODULE},
         windef::{HWND, RECT},
         winerror,
     },
@@ -105,6 +105,7 @@ impl fmt::Debug for ViewInfo {
 pub struct Instance {
     pub(crate) factory: ComPtr<IDXGIFactory>,
     pub(crate) dxgi_version: dxgi::DxgiVersion,
+    library: libloading::Library,
 }
 
 unsafe impl Send for Instance {}
@@ -245,9 +246,12 @@ impl hal::Instance<Backend> for Instance {
         match dxgi::get_dxgi_factory() {
             Ok((factory, dxgi_version)) => {
                 info!("DXGI version: {:?}", dxgi_version);
+                let library = libloading::Library::new("d3d11.dll")
+                    .map_err(|_| hal::UnsupportedBackend)?;
                 Ok(Instance {
                     factory,
                     dxgi_version,
+                    library,
                 })
             }
             Err(hr) => {
@@ -258,8 +262,31 @@ impl hal::Instance<Backend> for Instance {
     }
 
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
+        type Fun = extern "system" fn(
+            *mut IDXGIAdapter,
+            UINT,
+            HMODULE,
+            UINT,
+            *const UINT,
+            UINT,
+            UINT,
+            *mut *mut d3d11::ID3D11Device,
+            *mut UINT,
+            *mut *mut d3d11::ID3D11DeviceContext,
+        ) -> winerror::HRESULT;
+
         let mut adapters = Vec::new();
         let mut idx = 0;
+
+        let func: libloading::Symbol<Fun> = match unsafe {
+            self.library.get(b"D3D11CreateDevice")
+        } {
+            Ok(func) => func,
+            Err(e) => {
+                error!("Unable to get device creation function: {:?}", e);
+                return Vec::new();
+            }
+        };
 
         while let Ok((adapter, info)) =
             dxgi::get_adapter(idx, self.factory.as_raw(), self.dxgi_version)
@@ -273,20 +300,18 @@ impl hal::Instance<Backend> for Instance {
                 let feature_level = get_feature_level(adapter.as_raw());
 
                 let mut device = ptr::null_mut();
-                let hr = unsafe {
-                    d3d11::D3D11CreateDevice(
-                        adapter.as_raw() as *mut _,
-                        d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
-                        ptr::null_mut(),
-                        0,
-                        [feature_level].as_ptr(),
-                        1,
-                        d3d11::D3D11_SDK_VERSION,
-                        &mut device as *mut *mut _ as *mut *mut _,
-                        ptr::null_mut(),
-                        ptr::null_mut(),
-                    )
-                };
+                let hr = func(
+                    adapter.as_raw() as *mut _,
+                    d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
+                    ptr::null_mut(),
+                    0,
+                    [feature_level].as_ptr(),
+                    1,
+                    d3d11::D3D11_SDK_VERSION,
+                    &mut device as *mut *mut _ as *mut *mut _,
+                    ptr::null_mut(),
+                    ptr::null_mut(),
+                );
 
                 if !winerror::SUCCEEDED(hr) {
                     continue;
@@ -536,7 +561,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         // TODO: deferred context => 1 cxt/queue?
         let queue_groups = families
             .into_iter()
-            .map(|&(family, prio)| {
+            .map(|&(_family, prio)| {
                 assert_eq!(prio.len(), 1);
                 let mut group = queue::QueueGroup::new(queue::QueueFamilyId(0));
 
@@ -700,7 +725,7 @@ impl window::Surface<Backend> for Surface {
         true
     }
 
-    fn capabilities(&self, physical_device: &PhysicalDevice) -> window::SurfaceCapabilities {
+    fn capabilities(&self, _physical_device: &PhysicalDevice) -> window::SurfaceCapabilities {
         let current_extent = unsafe {
             let mut rect: RECT = mem::zeroed();
             assert_ne!(

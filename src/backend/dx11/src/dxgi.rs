@@ -1,7 +1,7 @@
 use hal::adapter::{AdapterInfo, DeviceType};
 
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_5, guiddef::GUID, winerror},
+    shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_5, guiddef::{GUID, REFIID}, winerror},
     um::unknwnbase::IUnknown,
     Interface,
 };
@@ -65,10 +65,14 @@ pub(crate) enum DxgiVersion {
     Dxgi1_5,
 }
 
-fn create_dxgi_factory1(guid: &GUID) -> Result<ComPtr<dxgi::IDXGIFactory>, winerror::HRESULT> {
+type DxgiFun = extern "system" fn(REFIID, *mut *mut winapi::ctypes::c_void) -> winerror::HRESULT;
+
+fn create_dxgi_factory1(
+    func: &DxgiFun, guid: &GUID
+) -> Result<ComPtr<dxgi::IDXGIFactory>, winerror::HRESULT> {
     let mut factory: *mut IUnknown = ptr::null_mut();
 
-    let hr = unsafe { dxgi::CreateDXGIFactory1(guid, &mut factory as *mut *mut _ as *mut *mut _) };
+    let hr = func(guid, &mut factory as *mut *mut _ as *mut *mut _);
 
     if winerror::SUCCEEDED(hr) {
         Ok(unsafe { ComPtr::from_raw(factory as *mut _) })
@@ -79,29 +83,35 @@ fn create_dxgi_factory1(guid: &GUID) -> Result<ComPtr<dxgi::IDXGIFactory>, winer
 
 pub(crate) fn get_dxgi_factory(
 ) -> Result<(ComPtr<dxgi::IDXGIFactory>, DxgiVersion), winerror::HRESULT> {
+    let library = libloading::Library::new("dxgi.dll")
+        .map_err(|_| -1)?;
+    let func: libloading::Symbol<DxgiFun> = unsafe {
+        library.get(b"CreateDXGIFactory1")
+    }.map_err(|_| -1)?;
+
     // TODO: do we even need `create_dxgi_factory2`?
-    if let Ok(factory) = create_dxgi_factory1(&dxgi1_5::IDXGIFactory5::uuidof()) {
+    if let Ok(factory) = create_dxgi_factory1(&func, &dxgi1_5::IDXGIFactory5::uuidof()) {
         return Ok((factory, DxgiVersion::Dxgi1_5));
     }
 
-    if let Ok(factory) = create_dxgi_factory1(&dxgi1_4::IDXGIFactory4::uuidof()) {
+    if let Ok(factory) = create_dxgi_factory1(&func, &dxgi1_4::IDXGIFactory4::uuidof()) {
         return Ok((factory, DxgiVersion::Dxgi1_4));
     }
 
-    if let Ok(factory) = create_dxgi_factory1(&dxgi1_3::IDXGIFactory3::uuidof()) {
+    if let Ok(factory) = create_dxgi_factory1(&func, &dxgi1_3::IDXGIFactory3::uuidof()) {
         return Ok((factory, DxgiVersion::Dxgi1_3));
     }
 
-    if let Ok(factory) = create_dxgi_factory1(&dxgi1_2::IDXGIFactory2::uuidof()) {
+    if let Ok(factory) = create_dxgi_factory1(&func, &dxgi1_2::IDXGIFactory2::uuidof()) {
         return Ok((factory, DxgiVersion::Dxgi1_2));
     }
 
-    if let Ok(factory) = create_dxgi_factory1(&dxgi::IDXGIFactory1::uuidof()) {
+    if let Ok(factory) = create_dxgi_factory1(&func, &dxgi::IDXGIFactory1::uuidof()) {
         return Ok((factory, DxgiVersion::Dxgi1_0));
     }
 
     // TODO: any reason why above would fail and this wouldnt?
-    match create_dxgi_factory1(&dxgi::IDXGIFactory::uuidof()) {
+    match create_dxgi_factory1(&func, &dxgi::IDXGIFactory::uuidof()) {
         Ok(factory) => Ok((factory, DxgiVersion::Dxgi1_0)),
         Err(hr) => Err(hr),
     }

@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.4.1, backend-dx11-0.4.1 (01-11-2019)
+  - switch to explicit linking of "d3d12.dll", "d3d11.dll" and "dxgi.dll"
+
 ## hal-0.4.0 (23-10-2019)
   - all strongly typed HAL wrappers are removed
   - all use of `failure` is removed
