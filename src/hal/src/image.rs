@@ -133,7 +133,7 @@ impl std::fmt::Display for CreationError {
         match self {
             CreationError::OutOfMemory(err) => write!(fmt, "Failed to create image: {}", err),
             CreationError::Format(format) => write!(fmt, "Failed to create image: Unsupported format: {:?}", format),
-            CreationError::Kind => write!(fmt, "Failed to create image: Specified kind doesn't support particular operation"), // Room for impruvement.
+            CreationError::Kind => write!(fmt, "Failed to create image: Specified kind doesn't support particular operation"), // Room for improvement.
             CreationError::Samples(samples) => write!(fmt, "Failed to create image: Specified format doesn't support specified sampling {}", samples),
             CreationError::Size(size) => write!(fmt, "Failed to create image: Unsupported size in one of the dimensions {}", size),
             CreationError::Data(data) => write!(fmt, "Failed to create image: The given data has a different size {{{}}} than the target image slice", data), // Actually nothing emits this.
@@ -185,7 +185,7 @@ impl std::fmt::Display for ViewError {
             ViewError::BadFormat(format) => write!(fmt, "Failed to create image view: Incompatible format {:?}", format),
             ViewError::BadKind(kind) => write!(fmt, "Failed to create image view: Incompatible kind {:?}", kind),
             ViewError::OutOfMemory(err) => write!(fmt, "Failed to create image view: {}", err),
-            ViewError::Unsupported => write!(fmt, "Failed to create image view: Implementation specific error ocurred"),
+            ViewError::Unsupported => write!(fmt, "Failed to create image view: Implementation specific error occurred"),
         }
     }
 }
