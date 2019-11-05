@@ -44,7 +44,7 @@ impl std::fmt::Display for CreationError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CreationError::OutOfMemory(err) => write!(fmt, "Failed to create pipeline: {}", err),
-            CreationError::Other => write!(fmt, "Failed to create pipeline: Unsupported usage: Implementation specific error ocurred"),
+            CreationError::Other => write!(fmt, "Failed to create pipeline: Unsupported usage: Implementation specific error occurred"),
             CreationError::InvalidSubpass(subpass) => write!(fmt, "Failed to create pipeline: Invalid subpass: {}", subpass),
             CreationError::Shader(err) => write!(fmt, "Failed to create pipeline: {}", err),
         }
