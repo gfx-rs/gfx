@@ -111,8 +111,8 @@ bitflags!(
         /// All graphics pipeline shader stages.
         const GRAPHICS = Self::VERTEX.bits | Self::HULL.bits |
             Self::DOMAIN.bits | Self::GEOMETRY.bits | Self::FRAGMENT.bits;
-        /// All shader stages.
-        const ALL      = Self::GRAPHICS.bits | Self::COMPUTE.bits;
+        /// All shader stages (matches Vulkan).
+        const ALL      = 0x7FFFFFFF;
     }
 );
 
