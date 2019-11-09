@@ -105,6 +105,24 @@ impl From<DeviceLost> for OomOrDeviceLost {
     }
 }
 
+impl std::fmt::Display for OomOrDeviceLost {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OomOrDeviceLost::DeviceLost(err) => write!(fmt, "Failed querying device: {}", err),
+            OomOrDeviceLost::OutOfMemory(err) => write!(fmt, "Failed querying device: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for OomOrDeviceLost {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            OomOrDeviceLost::DeviceLost(err) => Some(err),
+            OomOrDeviceLost::OutOfMemory(err) => Some(err),
+        }
+    }
+}
+
 /// Possible cause of allocation failure.
 #[derive(Clone, Debug, PartialEq)]
 pub enum AllocationError {
