@@ -451,7 +451,11 @@ pub struct ServicePipes {
 
 impl ServicePipes {
     pub fn new(device: &metal::DeviceRef) -> Self {
-        let data = include_bytes!("./../shaders/gfx_shaders.metallib");
+        let data = if cfg!(target_os = "macos") {
+            &include_bytes!("./../shaders/gfx-shaders-macos.metallib")[..]
+        } else {
+            &include_bytes!("./../shaders/gfx-shaders-ios.metallib")[..]
+        };
         let library = device.new_library_with_data(data).unwrap();
 
         let copy_buffer = Self::create_copy_buffer(&library, device);
