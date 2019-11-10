@@ -80,8 +80,14 @@ quad-wasm:
 
 shader-binaries:
 ifeq ($(UNAME_S),Darwin)
+	# MacOS
 	cd ./src/backend/metal/shaders && \
 	xcrun -sdk macosx metal -c *.metal -mmacosx-version-min=10.11 && \
-	xcrun -sdk macosx metallib *.air -o gfx_shaders.metallib && \
+	xcrun -sdk macosx metallib *.air -o gfx-shaders-macos.metallib && \
+	rm *.air
+	# iOS
+	cd ./src/backend/metal/shaders && \
+	xcrun -sdk iphoneos metal -c *.metal -mios-version-min=11.4 && \
+	xcrun -sdk iphoneos metallib *.air -o gfx-shaders-ios.metallib && \
 	rm *.air
 endif
