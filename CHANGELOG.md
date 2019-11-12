@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-metal-0.4.1 (12-11-2019)
+  - fix missing iOS metallib
+
 ### hal-0.4.1 (04-11-2019)
   - `Error` implementations
   - fix `ShaderStageFlags::ALL`
