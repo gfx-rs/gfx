@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-gl-0.4.1 (16-11-2019)
+  - update glutin version [#3090](https://github.com/gfx-rs/gfx/issues/3090)
+
 ### backend-metal-0.4.1 (12-11-2019)
   - fix missing iOS metallib
 
