@@ -27,7 +27,7 @@ lazy_static = "1"
 shared_library = { version = "0.1.9", optional = true }
 ash = "0.29.0"
 hal = { path = "../../hal", version = "0.4", package = "gfx-hal" }
-smallvec = "0.6"
+smallvec = "1.0"
 raw-window-handle = "0.3"
 
 [target.'cfg(windows)'.dependencies]

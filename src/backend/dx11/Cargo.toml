@@ -25,7 +25,7 @@ range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
 libloading = "0.5"
 log = { version = "0.4" }
-smallvec = "0.6"
+smallvec = "1.0"
 spirv_cross = { version = "0.16", features = ["hlsl"] }
 parking_lot = "0.9"
 winapi = { version = "0.3", features = ["basetsd","d3d11", "d3d11sdklayers", "d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4", "dxgi1_5", "dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
