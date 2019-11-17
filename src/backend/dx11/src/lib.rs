@@ -35,7 +35,7 @@ use winapi::{
     shared::{
         dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain},
         dxgiformat,
-        minwindef::{FALSE, UINT, HMODULE},
+        minwindef::{FALSE, HMODULE, UINT},
         windef::{HWND, RECT},
         winerror,
     },
@@ -261,8 +261,7 @@ impl hal::Instance<Backend> for Instance {
             Ok((library_dxgi, factory, dxgi_version)) => {
                 info!("DXGI version: {:?}", dxgi_version);
                 let library_d3d11 = Arc::new(
-                    libloading::Library::new("d3d11.dll")
-                        .map_err(|_| hal::UnsupportedBackend)?
+                    libloading::Library::new("d3d11.dll").map_err(|_| hal::UnsupportedBackend)?,
                 );
                 Ok(Instance {
                     factory,
@@ -282,15 +281,14 @@ impl hal::Instance<Backend> for Instance {
         let mut adapters = Vec::new();
         let mut idx = 0;
 
-        let func: libloading::Symbol<CreateFun> = match unsafe {
-            self.library_d3d11.get(b"D3D11CreateDevice")
-        } {
-            Ok(func) => func,
-            Err(e) => {
-                error!("Unable to get device creation function: {:?}", e);
-                return Vec::new();
-            }
-        };
+        let func: libloading::Symbol<CreateFun> =
+            match unsafe { self.library_d3d11.get(b"D3D11CreateDevice") } {
+                Ok(func) => func,
+                Err(e) => {
+                    error!("Unable to get device creation function: {:?}", e);
+                    return Vec::new();
+                }
+            };
 
         while let Ok((adapter, info)) =
             dxgi::get_adapter(idx, self.factory.as_raw(), self.dxgi_version)
@@ -471,7 +469,7 @@ fn get_feature_level(func: &CreateFun, adapter: *mut IDXGIAdapter) -> d3dcommon:
     ];
 
     let mut feature_level = d3dcommon::D3D_FEATURE_LEVEL_9_1;
-    let hr =  unsafe{
+    let hr = unsafe {
         func(
             adapter,
             d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
@@ -523,9 +521,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         families: &[(&QueueFamily, &[queue::QueuePriority])],
         requested_features: hal::Features,
     ) -> Result<adapter::Gpu<Backend>, hal::device::CreationError> {
-        let func: libloading::Symbol<CreateFun> = self.library_d3d11
-            .get(b"D3D11CreateDevice")
-            .unwrap();
+        let func: libloading::Symbol<CreateFun> =
+            self.library_d3d11.get(b"D3D11CreateDevice").unwrap();
 
         let (device, cxt) = {
             if !self.features().contains(requested_features) {

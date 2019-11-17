@@ -1,7 +1,15 @@
 use hal::adapter::{AdapterInfo, DeviceType};
 
 use winapi::{
-    shared::{dxgi, dxgi1_2, dxgi1_3, dxgi1_4, dxgi1_5, guiddef::{GUID, REFIID}, winerror},
+    shared::{
+        dxgi,
+        dxgi1_2,
+        dxgi1_3,
+        dxgi1_4,
+        dxgi1_5,
+        guiddef::{GUID, REFIID},
+        winerror,
+    },
     um::unknwnbase::IUnknown,
     Interface,
 };
@@ -65,10 +73,12 @@ pub(crate) enum DxgiVersion {
     Dxgi1_5,
 }
 
-type DxgiFun = unsafe extern "system" fn(REFIID, *mut *mut winapi::ctypes::c_void) -> winerror::HRESULT;
+type DxgiFun =
+    unsafe extern "system" fn(REFIID, *mut *mut winapi::ctypes::c_void) -> winerror::HRESULT;
 
 fn create_dxgi_factory1(
-    func: &DxgiFun, guid: &GUID
+    func: &DxgiFun,
+    guid: &GUID,
 ) -> Result<ComPtr<dxgi::IDXGIFactory>, winerror::HRESULT> {
     let mut factory: *mut IUnknown = ptr::null_mut();
 
@@ -84,11 +94,9 @@ fn create_dxgi_factory1(
 pub(crate) fn get_dxgi_factory(
 ) -> Result<(libloading::Library, ComPtr<dxgi::IDXGIFactory>, DxgiVersion), winerror::HRESULT> {
     // The returned Com-pointer is only safe to use for the lifetime of the Library.
-    let library = libloading::Library::new("dxgi.dll")
-        .map_err(|_| -1)?;
-    let func: libloading::Symbol<DxgiFun> = unsafe {
-        library.get(b"CreateDXGIFactory1")
-    }.map_err(|_| -1)?;
+    let library = libloading::Library::new("dxgi.dll").map_err(|_| -1)?;
+    let func: libloading::Symbol<DxgiFun> =
+        unsafe { library.get(b"CreateDXGIFactory1") }.map_err(|_| -1)?;
 
     // TODO: do we even need `create_dxgi_factory2`?
     if let Ok(factory) = create_dxgi_factory1(&func, &dxgi1_5::IDXGIFactory5::uuidof()) {
