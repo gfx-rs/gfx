@@ -7,7 +7,7 @@
   - `Error` implementations
   - fix `ShaderStageFlags::ALL`
 
-### backend-dx12-0.4.1, backend-dx11-0.4.2 (01-11-2019)
+### backend-dx12-0.4.1, backend-dx11-0.4.3 (01-11-2019)
   - switch to explicit linking of "d3d12.dll", "d3d11.dll" and "dxgi.dll"
 
 ### backend-dx12-0.4.1 (01-11-2019)
