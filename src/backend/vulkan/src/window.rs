@@ -69,7 +69,7 @@ impl SurfaceSwapchain {
         device.destroy_semaphore(self.semaphore.0, None);
         for frame in self.frames {
             device.destroy_image_view(frame.view, None);
-            for framebuffer in frame.framebuffers.0.lock().unwrap().framebuffers.drain() {
+            for framebuffer in frame.framebuffers.0.lock().unwrap().framebuffers.drain(..) {
                 device.destroy_framebuffer(framebuffer, None);
             }
         }
@@ -507,7 +507,7 @@ impl w::PresentationSurface<Backend> for Surface {
                 let frame = &ssc.frames[index as usize];
                 // We have just waited for the frame to be fully available on CPU.
                 // All the associated framebuffers are expected to be destroyed by now.
-                for framebuffer in frame.framebuffers.0.lock().unwrap().framebuffers.drain() {
+                for framebuffer in frame.framebuffers.0.lock().unwrap().framebuffers.drain(..) {
                     ssc.device.0.destroy_framebuffer(framebuffer, None);
                 }
                 let image = Self::SwapchainImage {
