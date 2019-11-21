@@ -67,6 +67,88 @@ pub enum DescriptorType {
     InputAttachment = 10,
 }
 
+impl std::convert::From<RichDescriptorType> for DescriptorType {
+    fn from(ty: RichDescriptorType) -> Self {
+        match ty {
+            RichDescriptorType::Sampler => DescriptorType::Sampler,
+            RichDescriptorType::CombinedImageSampler => DescriptorType::CombinedImageSampler,
+            RichDescriptorType::Image { ty } => match ty {
+                ImageDescriptorType::Storage => DescriptorType::StorageImage,
+                ImageDescriptorType::Sampled => DescriptorType::SampledImage,
+            }
+            RichDescriptorType::Buffer { access, format } => match access {
+                BufferDescriptorAccess::Storage => match format {
+                    BufferDescriptorFormat::Dynamic => DescriptorType::StorageBufferDynamic,
+                    BufferDescriptorFormat::Structured => DescriptorType::StorageBuffer,
+                    BufferDescriptorFormat::Texel => DescriptorType::StorageTexelBuffer,
+                },
+                BufferDescriptorAccess::Uniform => match format {
+                    BufferDescriptorFormat::Dynamic => DescriptorType::UniformBufferDynamic,
+                    BufferDescriptorFormat::Structured => DescriptorType::UniformBuffer,
+                    BufferDescriptorFormat::Texel => DescriptorType::UniformTexelBuffer,
+                },
+            }
+            RichDescriptorType::InputAttachment => DescriptorType::InputAttachment,
+        }
+    }
+}
+
+/// Access type of a buffer.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum BufferDescriptorAccess {
+    /// Storage buffers allow load, store, and atomic operations.
+    Storage,
+    /// Uniform buffers allow only load operations.
+    Uniform,
+}
+
+/// Format of a buffer.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum BufferDescriptorFormat {
+    // TODO: seems to have no effect in hal, ask about removing or documenting that it's a no-op
+    /// TODO
+    Dynamic,
+    /// The buffer is interpreted as a structure defined in a shader.
+    Structured,
+    /// The buffer is interpreted as a 1-D array of texels, which undergo format
+    /// conversion when loaded in a shader.
+    Texel,
+}
+
+/// Specific type of an image descriptor.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum ImageDescriptorType {
+    /// A storage image allows load, store and atomic operations.
+    Storage,
+
+    /// A sampled image allows sampling operations.
+    Sampled,
+}
+
+/// The type of a descriptor. TODO: more specific doc
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum RichDescriptorType {
+    /// A descriptor associated with sampler.
+    Sampler,
+    /// A single descriptor associated with both a sampler and an image to be
+    /// used together.
+    CombinedImageSampler,
+    /// A descriptor associated with an image.
+    Image {
+        /// The specific type of this image descriptor.
+        ty: ImageDescriptorType,
+    },
+    /// A descriptor associated with a buffer.
+    Buffer {
+        /// The access type of this buffer descriptor.
+        access: BufferDescriptorAccess,
+        /// The format of this buffer descriptor.
+        format: BufferDescriptorFormat,
+    },
+    /// A descriptor associated with an input attachment.
+    InputAttachment,
+}
+
 /// Information about the contents of and in which stages descriptors may be bound to a descriptor
 /// set at a certain binding point. Multiple `DescriptorSetLayoutBinding`s are assembled into
 /// a `DescriptorSetLayout`, which is then allocated into a `DescriptorSet` using a
