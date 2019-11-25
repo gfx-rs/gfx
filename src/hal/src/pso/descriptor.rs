@@ -95,6 +95,7 @@ impl std::convert::From<RichDescriptorType> for DescriptorType {
 
 /// Access type of a buffer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BufferDescriptorAccess {
     /// Storage buffers allow load, store, and atomic operations.
     Storage,
@@ -104,6 +105,7 @@ pub enum BufferDescriptorAccess {
 
 /// Format of a buffer.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BufferDescriptorFormat {
     // TODO: seems to have no effect in hal, ask about removing or documenting that it's a no-op
     /// TODO
@@ -117,6 +119,7 @@ pub enum BufferDescriptorFormat {
 
 /// Specific type of an image descriptor.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ImageDescriptorType {
     /// A storage image allows load, store and atomic operations.
     Storage,
@@ -127,6 +130,7 @@ pub enum ImageDescriptorType {
 
 /// The type of a descriptor. TODO: more specific doc
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum RichDescriptorType {
     /// A descriptor associated with sampler.
     Sampler,
