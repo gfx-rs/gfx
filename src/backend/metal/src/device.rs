@@ -179,9 +179,10 @@ impl VisibilityShared {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct Device {
     pub(crate) shared: Arc<Shared>,
+    invalidation_queue: command::QueueInner,
     memory_types: Vec<adapter::MemoryType>,
     features: hal::Features,
     pub online_recording: OnlineRecording,
@@ -327,6 +328,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         let device = Device {
             shared: self.shared.clone(),
+            invalidation_queue: command::QueueInner::new(&*device, Some(1)),
             memory_types: self.memory_types.clone(),
             features: requested_features,
             online_recording: OnlineRecording::default(),
@@ -1785,8 +1787,8 @@ impl hal::device::Device<Backend> for Device {
 
         // temporary command buffer to copy the contents from
         // the given buffers into the allocated CPU-visible buffers
-        let cmd_queue = self.shared.queue.lock();
-        let cmd_buffer = cmd_queue.spawn_temp();
+        // Note: using a separate internal queue in order to avoid a stall
+        let cmd_buffer = self.invalidation_queue.spawn_temp();
         autoreleasepool(|| {
             let encoder = cmd_buffer.new_blit_command_encoder();
 
