@@ -1908,14 +1908,14 @@ impl hal::device::Device<Backend> for Device {
                 // for textures in an argument buffer
                 match desc.ty {
                     pso::DescriptorType::Buffer {
-                        format: pso::BufferDescriptorFormat::Dynamic, ..
+                        format: pso::BufferDescriptorFormat::Structured { dynamic_offset: true }, ..
                     } => {
                         //TODO: apply the offsets somehow at the binding time
                         error!("Dynamic offsets are not yet supported in argument buffers!");
                     }
                     pso::DescriptorType::Image { ty: pso::ImageDescriptorType::Storage }
                     | pso::DescriptorType::Buffer {
-                        access: pso::BufferDescriptorAccess::Storage,
+                        ty: pso::BufferDescriptorType::Storage { .. },
                         format: pso::BufferDescriptorFormat::Texel,
                     } => {
                         //TODO: bind storage images separately

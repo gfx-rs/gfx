@@ -878,7 +878,7 @@ impl device::Device<Backend> for Device {
 
         fn get_descriptor_offset(ty: pso::DescriptorType, s: u32, t: u32, c: u32, u: u32) -> u32 {
             use pso::{
-                BufferDescriptorAccess as Bda,
+                BufferDescriptorType as Bdt,
                 BufferDescriptorFormat as Bdf,
                 ImageDescriptorType as Idt,
             };
@@ -889,10 +889,10 @@ impl device::Device<Backend> for Device {
                     Idt::Sampled => t,
                     Idt::Storage => u,
                 }
-                Buffer { access, format } => match access {
-                    Bda::Storage => u,
-                    Bda::Uniform => match format {
-                        Bdf::Dynamic | Bdf::Structured => c,
+                Buffer { ty: bty, format } => match bty {
+                    Bdt::Storage { .. } => u,
+                    Bdt::Uniform => match format {
+                        Bdf::Structured { .. } => c,
                         Bdf::Texel => t,
                     }
                 }
@@ -2026,7 +2026,7 @@ impl device::Device<Backend> for Device {
         J::Item: Borrow<Sampler>,
     {
         use pso::{
-            BufferDescriptorAccess as Bda,
+            BufferDescriptorType as Bdt,
             BufferDescriptorFormat as Bdf,
             DescriptorType::*,
             ImageDescriptorType as Idt,
@@ -2056,15 +2056,15 @@ impl device::Device<Backend> for Device {
                     num_t
                 }
                 Image { ty: Idt::Sampled }
-                | Buffer { access: Bda::Uniform, format: Bdf::Texel } => {
+                | Buffer { ty: Bdt::Uniform, format: Bdf::Texel } => {
                     num_t += 1;
                     num_t
                 }
-                Buffer { access: Bda::Uniform, .. } => {
+                Buffer { ty: Bdt::Uniform, .. } => {
                     num_c += 1;
                     num_c
                 }
-                Buffer { access: Bda::Storage, .. }
+                Buffer { ty: Bdt::Storage { .. }, .. }
                 | Image { ty: Idt::Storage, .. }
                 | InputAttachment => {
                     num_u += 1;
@@ -2130,8 +2130,8 @@ impl device::Device<Backend> for Device {
         // we sort the internal descriptor's handle (the actual dx interface) by some categories to
         // make it easier to group api calls together
         bindings.sort_unstable_by(|a, b| {
-            (pso::RawDescriptorType::from(b.ty) as u32)
-                .cmp(&(pso::RawDescriptorType::from(a.ty) as u32))
+            (b.ty)
+                .cmp(&a.ty)
                 .then(a.binding_range.start.cmp(&b.binding_range.start))
                 .then(a.stage.cmp(&b.stage))
         });
@@ -2156,15 +2156,15 @@ impl device::Device<Backend> for Device {
                     s += 1;
                 }
                 Image { ty: Idt::Sampled }
-                | Buffer { access: Bda::Uniform, format: Bdf::Texel } => {
+                | Buffer { ty: Bdt::Uniform, format: Bdf::Texel } => {
                     binding.handle_offset = num_s + t;
                     t += 1;
                 }
-                Buffer { access: Bda::Uniform, .. } => {
+                Buffer { ty: Bdt::Uniform, .. } => {
                     binding.handle_offset = num_s + num_t + c;
                     c += 1;
                 }
-                Buffer { access: Bda::Storage, .. }
+                Buffer { ty: Bdt::Storage { .. }, .. }
                 | Image { ty: Idt::Storage, .. }
                 | InputAttachment => {
                     binding.handle_offset = num_s + num_t + num_c + u;
@@ -2194,7 +2194,7 @@ impl device::Device<Backend> for Device {
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
         use pso::{
-            BufferDescriptorAccess as Bda,
+            BufferDescriptorType as Bdt,
             BufferDescriptorFormat as Bdf,
             DescriptorType as Dt,
             ImageDescriptorType as Idt,
@@ -2215,7 +2215,7 @@ impl device::Device<Backend> for Device {
 
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref _range) => match ty {
-                        Dt::Buffer { access: Bda::Uniform, format } if format != Bdf::Texel => {
+                        Dt::Buffer { ty: Bdt::Uniform, format } if format != Bdf::Texel => {
                             if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
                                 let old_buffer = (*handle).0 as *mut _;
 
@@ -2228,7 +2228,10 @@ impl device::Device<Backend> for Device {
                                 Descriptor(buffer.internal.raw as *mut _)
                             };
                         }
-                        Dt::Buffer { access: Bda::Storage, format: Bdf::Structured } => {
+                        Dt::Buffer {
+                            ty: Bdt::Storage { .. },
+                            format: Bdf::Structured { dynamic_offset: false },
+                        } => {
                             if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
                                 let old_buffer = (*handle).0 as *mut _;
 

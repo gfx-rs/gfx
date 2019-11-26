@@ -33,92 +33,36 @@ pub type DescriptorBinding = u32;
 ///
 pub type DescriptorArrayIndex = usize;
 
-/// DOC TODO: Grasping and remembering the differences between these
-///       types is a tough task. We might be able to come up with better names?
-///       Or even use tuples to describe functionality instead of coming up with fancy names.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+/// Specific type of a buffer.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum RawDescriptorType {
-    /// Controls filtering parameters for sampling from images.
-    Sampler = 0,
-    ///
-    CombinedImageSampler = 1,
-    /// Allows sampling (filtered loading) from associated image memory.
-    /// Usually combined with a `Sampler`.
-    SampledImage = 2,
-    /// Allows atomic operations, (non-filtered) loads and stores on image memory.
-    StorageImage = 3,
-    /// Read-only, formatted buffer.
-    UniformTexelBuffer = 4,
-    /// Read-Write, formatted buffer.
-    StorageTexelBuffer = 5,
-    /// Read-only, structured buffer.
-    UniformBuffer = 6,
-    /// Read-Write, structured buffer.
-    StorageBuffer = 7,
-    /// A uniform buffer that can be bound with an offset into its memory with minimal performance impact,
-    /// usually used to store pieces of "uniform" data that change per draw call rather than
-    /// per render pass.
-    UniformBufferDynamic = 8,
-    ///
-    StorageBufferDynamic = 9,
-    /// Allows unfiltered loads of pixel local data in the fragment shader.
-    InputAttachment = 10,
-}
-
-impl std::convert::From<DescriptorType> for RawDescriptorType {
-    fn from(ty: DescriptorType) -> Self {
-        match ty {
-            DescriptorType::Sampler => RawDescriptorType::Sampler,
-            DescriptorType::CombinedImageSampler => RawDescriptorType::CombinedImageSampler,
-            DescriptorType::Image { ty } => match ty {
-                ImageDescriptorType::Storage => RawDescriptorType::StorageImage,
-                ImageDescriptorType::Sampled => RawDescriptorType::SampledImage,
-            }
-            DescriptorType::Buffer { access, format } => match access {
-                BufferDescriptorAccess::Storage => match format {
-                    BufferDescriptorFormat::Dynamic => RawDescriptorType::StorageBufferDynamic,
-                    BufferDescriptorFormat::Structured => RawDescriptorType::StorageBuffer,
-                    BufferDescriptorFormat::Texel => RawDescriptorType::StorageTexelBuffer,
-                },
-                BufferDescriptorAccess::Uniform => match format {
-                    BufferDescriptorFormat::Dynamic => RawDescriptorType::UniformBufferDynamic,
-                    BufferDescriptorFormat::Structured => RawDescriptorType::UniformBuffer,
-                    BufferDescriptorFormat::Texel => RawDescriptorType::UniformTexelBuffer,
-                },
-            }
-            DescriptorType::InputAttachment => RawDescriptorType::InputAttachment,
-        }
-    }
-}
-
-/// Access type of a buffer.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum BufferDescriptorAccess {
+pub enum BufferDescriptorType {
     /// Storage buffers allow load, store, and atomic operations.
-    Storage,
-    /// Uniform buffers allow only load operations.
+    Storage {
+        /// If true, store operations are not permitted on this buffer.
+        read_only: bool,
+    },
+    /// Uniform buffers provide constant data to be accessed in a shader.
     Uniform,
 }
 
 /// Format of a buffer.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum BufferDescriptorFormat {
-    // TODO: seems to have no effect in hal, ask about removing or documenting that it's a no-op
-    /// TODO
-    Dynamic,
     /// The buffer is interpreted as a structure defined in a shader.
-    Structured,
+    Structured {
+        /// If true, the buffer is accessed by an additional offset specified in
+        /// the `offsets` parameter of `CommandBuffer::bind_*_descriptor_sets`.
+        dynamic_offset: bool,
+    },
     /// The buffer is interpreted as a 1-D array of texels, which undergo format
     /// conversion when loaded in a shader.
     Texel,
 }
 
 /// Specific type of an image descriptor.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ImageDescriptorType {
     /// A sampled image allows sampling operations.
@@ -128,7 +72,7 @@ pub enum ImageDescriptorType {
 }
 
 /// The type of a descriptor. TODO: more specific doc
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DescriptorType {
     /// A descriptor associated with sampler.
@@ -143,8 +87,8 @@ pub enum DescriptorType {
     },
     /// A descriptor associated with a buffer.
     Buffer {
-        /// The access type of this buffer descriptor.
-        access: BufferDescriptorAccess,
+        /// The type of this buffer descriptor.
+        ty: BufferDescriptorType,
         /// The format of this buffer descriptor.
         format: BufferDescriptorFormat,
     },

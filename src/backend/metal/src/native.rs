@@ -819,10 +819,10 @@ impl From<pso::DescriptorType> for DescriptorContent {
             }
             pso::DescriptorType::Image { .. } => DescriptorContent::TEXTURE,
             pso::DescriptorType::Buffer { format, .. } => match format {
-                pso::BufferDescriptorFormat::Dynamic => {
-                    DescriptorContent::BUFFER | DescriptorContent::DYNAMIC_BUFFER
+                pso::BufferDescriptorFormat::Structured { dynamic_offset } => match dynamic_offset {
+                    true => DescriptorContent::BUFFER | DescriptorContent::DYNAMIC_BUFFER,
+                    false => DescriptorContent::BUFFER,
                 }
-                pso::BufferDescriptorFormat::Structured => DescriptorContent::BUFFER,
                 pso::BufferDescriptorFormat::Texel => DescriptorContent::TEXTURE,
             }
             pso::DescriptorType::InputAttachment => DescriptorContent::TEXTURE,
@@ -934,11 +934,10 @@ impl ArgumentArray {
                 pso::ImageDescriptorType::Sampled => MTLResourceUsage::Sample,
                 pso::ImageDescriptorType::Storage => MTLResourceUsage::Write,
             }
-            Dt::Buffer { access, format } => match access {
-                pso::BufferDescriptorAccess::Storage => MTLResourceUsage::Write,
-                pso::BufferDescriptorAccess::Uniform => match format {
-                    pso::BufferDescriptorFormat::Dynamic
-                        | pso::BufferDescriptorFormat::Structured => MTLResourceUsage::Read,
+            Dt::Buffer { ty, format } => match ty {
+                pso::BufferDescriptorType::Storage { .. } => MTLResourceUsage::Write,
+                pso::BufferDescriptorType::Uniform => match format {
+                    pso::BufferDescriptorFormat::Structured { .. } => MTLResourceUsage::Read,
                     pso::BufferDescriptorFormat::Texel => MTLResourceUsage::Sample,
                 }
             }

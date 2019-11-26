@@ -9,9 +9,9 @@
 				(
 					binding: 0,
 					ty: Buffer(
-            access: Storage,
-            format: Structured,
-          ),
+						ty: Storage(read_only: false),
+						format: Structured(dynamic_offset: false),
+					),
 					count: 1,
 					stage_flags: (bits: 0x20), //COMPUTE
 					immutable_samplers: false,
@@ -23,9 +23,9 @@
 			ranges: [
 				(
 					ty: Buffer(
-              access: Storage,
-              format: Structured,
-          ),
+							ty: Storage(read_only: false),
+							format: Structured(dynamic_offset: false),
+					),
 					count: 1,
 				),
 			],

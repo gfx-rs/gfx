@@ -459,7 +459,7 @@ impl From<pso::DescriptorType> for DescriptorContent {
         use hal::pso::{
             DescriptorType as Dt,
             ImageDescriptorType as Idt,
-            BufferDescriptorAccess as Bda,
+            BufferDescriptorType as Bdt,
             BufferDescriptorFormat as Bdf
         };
 
@@ -472,14 +472,14 @@ impl From<pso::DescriptorType> for DescriptorContent {
                 Idt::Storage => Dc::SRV | Dc::UAV,
                 Idt::Sampled => Dc::SRV,
             }
-            Dt::Buffer { access, format } => match access {
-                Bda::Storage => match format {
-                    Bdf::Dynamic => Dc::SRV | Dc::UAV | Dc::DYNAMIC,
-                    Bdf::Structured | Bdf::Texel => Dc::SRV | Dc::UAV,
+            Dt::Buffer { ty, format } => match ty {
+                Bdt::Storage { .. } => match format {
+                    Bdf::Structured { dynamic_offset: true } => Dc::SRV | Dc::UAV | Dc::DYNAMIC,
+                    Bdf::Structured { dynamic_offset: false } | Bdf::Texel => Dc::SRV | Dc::UAV,
                 }
-                Bda::Uniform => match format {
-                    Bdf::Dynamic => Dc::CBV | Dc::DYNAMIC,
-                    Bdf::Structured => Dc::CBV,
+                Bdt::Uniform => match format {
+                    Bdf::Structured { dynamic_offset: true } => Dc::CBV | Dc::DYNAMIC,
+                    Bdf::Structured { dynamic_offset: false } => Dc::CBV,
                     Bdf::Texel => Dc::SRV,
                 }
             }

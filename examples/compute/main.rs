@@ -81,8 +81,8 @@ fn main() {
                 &[pso::DescriptorSetLayoutBinding {
                     binding: 0,
                     ty: pso::DescriptorType::Buffer {
-                        access: pso::BufferDescriptorAccess::Storage,
-                        format: pso::BufferDescriptorFormat::Structured,
+                        ty: pso::BufferDescriptorType::Storage { read_only: false },
+                        format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
                     },
                     count: 1,
                     stage_flags: pso::ShaderStageFlags::COMPUTE,
@@ -113,8 +113,8 @@ fn main() {
                 1,
                 &[pso::DescriptorRangeDesc {
                     ty: pso::DescriptorType::Buffer {
-                        access: pso::BufferDescriptorAccess::Storage,
-                        format: pso::BufferDescriptorFormat::Structured,
+                        ty: pso::BufferDescriptorType::Storage { read_only: false },
+                        format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
                     },
                     count: 1,
                 }],

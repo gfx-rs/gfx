@@ -179,8 +179,8 @@ impl<B: Backend> RendererState<B> {
             vec![pso::DescriptorSetLayoutBinding {
                 binding: 0,
                 ty: pso::DescriptorType::Buffer {
-                    access: pso::BufferDescriptorAccess::Uniform,
-                    format: pso::BufferDescriptorFormat::Structured,
+                    ty: pso::BufferDescriptorType::Uniform,
+                    format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
                 },
                 count: 1,
                 stage_flags: pso::ShaderStageFlags::FRAGMENT,
@@ -216,8 +216,8 @@ impl<B: Backend> RendererState<B> {
                 1, // # of sets
                 &[pso::DescriptorRangeDesc {
                     ty: pso::DescriptorType::Buffer {
-                        access: pso::BufferDescriptorAccess::Uniform,
-                        format: pso::BufferDescriptorFormat::Structured,
+                        ty: pso::BufferDescriptorType::Uniform,
+                        format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
                     },
                     count: 1,
                 }],

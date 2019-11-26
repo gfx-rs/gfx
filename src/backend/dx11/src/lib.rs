@@ -1467,7 +1467,7 @@ impl CommandBuffer {
             }
 
             Buffer {
-                access: pso::BufferDescriptorAccess::Uniform , format
+                ty: pso::BufferDescriptorType::Uniform , format
             } if format != pso::BufferDescriptorFormat::Texel => {
                 context.VSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _)
             }
@@ -1504,7 +1504,7 @@ impl CommandBuffer {
             }
 
             Buffer {
-                access: pso::BufferDescriptorAccess::Uniform , format
+                ty: pso::BufferDescriptorType::Uniform , format
             } if format != pso::BufferDescriptorFormat::Texel => {
                 context.PSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _)
             }
@@ -1541,14 +1541,14 @@ impl CommandBuffer {
             }
 
             Buffer {
-                access: pso::BufferDescriptorAccess::Uniform , format
+                ty: pso::BufferDescriptorType::Uniform , format
             } if format != pso::BufferDescriptorFormat::Texel => {
                 context.CSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _)
             }
 
             Image { ty: pso::ImageDescriptorType::Storage } | Buffer {
-                access: pso::BufferDescriptorAccess::Storage,
-                format: pso::BufferDescriptorFormat::Structured
+                ty: pso::BufferDescriptorType::Storage { .. },
+                format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
             } => context.CSSetUnorderedAccessViews(
                 start,
                 len,
@@ -3061,7 +3061,7 @@ unsafe impl Sync for DescriptorSet {}
 impl DescriptorSet {
     fn get_handle_offset(&self, target_binding: u32) -> (pso::DescriptorType, u8, u8) {
         use pso::{
-            BufferDescriptorAccess as Bda,
+            BufferDescriptorType as Bdt,
             BufferDescriptorFormat as Bdf,
             DescriptorType::*,
             ImageDescriptorType as Idt,
@@ -3095,15 +3095,17 @@ impl DescriptorSet {
 
                 (ty, register, self.register_remap.num_s + t_reg)
             }
-            Image { ty: Idt::Sampled } | Buffer { access: Bda::Uniform, format: Bdf::Texel } => {
+            Image { ty: Idt::Sampled } | Buffer { ty: Bdt::Uniform, format: Bdf::Texel } => {
                 (ty, self.register_remap.num_s + register, 0)
             }
-            Buffer { access: Bda::Uniform, .. } => (
+            Buffer { ty: Bdt::Uniform, .. } => (
                 ty,
                 self.register_remap.num_s + self.register_remap.num_t + register,
                 0,
             ),
-            Buffer { access: Bda::Storage, .. } | Image { ty: Idt::Storage } | InputAttachment => (
+            Buffer { ty: Bdt::Storage { .. }, .. }
+            | Image { ty: Idt::Storage }
+            | InputAttachment => (
                 ty,
                 self.register_remap.num_s
                     + self.register_remap.num_t

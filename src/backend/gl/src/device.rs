@@ -685,16 +685,19 @@ impl d::Device<B> for Device {
                         // We need to figure out combos once we get the shaders, until then we
                         // do nothing
                     }
-                    Buffer { access, format: pso::BufferDescriptorFormat::Structured } => {
-                        match access {
-                            pso::BufferDescriptorAccess::Uniform => {
+                    Buffer {
+                        ty,
+                        format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
+                    } => {
+                        match ty {
+                            pso::BufferDescriptorType::Uniform => {
                                 drd.insert_missing_binding_into_spare(
                                     n::BindingTypes::UniformBuffers,
                                     set as _,
                                     binding.binding,
                                 );
                             }
-                            pso::BufferDescriptorAccess::Storage => {
+                            pso::BufferDescriptorType::Storage { .. } => {
                                 drd.insert_missing_binding_into_spare(
                                     n::BindingTypes::StorageBuffers,
                                     set as _,
@@ -1547,11 +1550,11 @@ impl d::Device<B> for Device {
 
                         let ty = set.layout[binding as usize].ty;
                         let ty = match ty {
-                            pso::DescriptorType::Buffer { access, .. } => match access {
-                                pso::BufferDescriptorAccess::Uniform => {
+                            pso::DescriptorType::Buffer { ty, .. } => match ty {
+                                pso::BufferDescriptorType::Uniform => {
                                     n::BindingTypes::UniformBuffers
                                 }
-                                pso::BufferDescriptorAccess::Storage => {
+                                pso::BufferDescriptorType::Storage { .. } => {
                                     n::BindingTypes::StorageBuffers
                                 }
                             }
