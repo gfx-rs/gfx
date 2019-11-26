@@ -168,7 +168,7 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> image::Usage {
 }
 
 pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
-    vk::DescriptorType::from_raw(ty as i32)
+    vk::DescriptorType::from_raw(pso::RawDescriptorType::from(ty) as i32)
 }
 
 pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {

@@ -80,7 +80,10 @@ fn main() {
             device.create_descriptor_set_layout(
                 &[pso::DescriptorSetLayoutBinding {
                     binding: 0,
-                    ty: pso::DescriptorType::StorageBuffer,
+                    ty: pso::DescriptorType::Buffer {
+                        access: pso::BufferDescriptorAccess::Storage,
+                        format: pso::BufferDescriptorFormat::Structured,
+                    },
                     count: 1,
                     stage_flags: pso::ShaderStageFlags::COMPUTE,
                     immutable_samplers: false,
@@ -109,7 +112,10 @@ fn main() {
             device.create_descriptor_pool(
                 1,
                 &[pso::DescriptorRangeDesc {
-                    ty: pso::DescriptorType::StorageBuffer,
+                    ty: pso::DescriptorType::Buffer {
+                        access: pso::BufferDescriptorAccess::Storage,
+                        format: pso::BufferDescriptorFormat::Structured,
+                    },
                     count: 1,
                 }],
                 pso::DescriptorPoolCreateFlags::empty(),

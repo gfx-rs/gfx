@@ -275,7 +275,9 @@ where
                     &[
                         pso::DescriptorSetLayoutBinding {
                             binding: 0,
-                            ty: pso::DescriptorType::SampledImage,
+                            ty: pso::DescriptorType::Image {
+                                ty: pso::ImageDescriptorType::Sampled,
+                            },
                             count: 1,
                             stage_flags: ShaderStageFlags::FRAGMENT,
                             immutable_samplers: false,
@@ -301,7 +303,9 @@ where
                     1, // sets
                     &[
                         pso::DescriptorRangeDesc {
-                            ty: pso::DescriptorType::SampledImage,
+                            ty: pso::DescriptorType::Image {
+                                ty: pso::ImageDescriptorType::Sampled,
+                            },
                             count: 1,
                         },
                         pso::DescriptorRangeDesc {

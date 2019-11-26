@@ -681,26 +681,29 @@ impl d::Device<B> for Device {
                             binding.binding,
                         );
                     }
-                    Sampler | SampledImage => {
+                    Sampler | Image { ty: pso::ImageDescriptorType::Sampled } => {
                         // We need to figure out combos once we get the shaders, until then we
                         // do nothing
                     }
-                    UniformBuffer => {
-                        drd.insert_missing_binding_into_spare(
-                            n::BindingTypes::UniformBuffers,
-                            set as _,
-                            binding.binding,
-                        );
+                    Buffer { access, format: pso::BufferDescriptorFormat::Structured } => {
+                        match access {
+                            pso::BufferDescriptorAccess::Uniform => {
+                                drd.insert_missing_binding_into_spare(
+                                    n::BindingTypes::UniformBuffers,
+                                    set as _,
+                                    binding.binding,
+                                );
+                            }
+                            pso::BufferDescriptorAccess::Storage => {
+                                drd.insert_missing_binding_into_spare(
+                                    n::BindingTypes::StorageBuffers,
+                                    set as _,
+                                    binding.binding,
+                                );
+                            }
+                        }
                     }
-                    StorageBuffer => {
-                        drd.insert_missing_binding_into_spare(
-                            n::BindingTypes::StorageBuffers,
-                            set as _,
-                            binding.binding,
-                        );
-                    }
-                    StorageImage | UniformTexelBuffer | UniformBufferDynamic
-                    | StorageTexelBuffer | StorageBufferDynamic | InputAttachment => unimplemented!(), // 6
+                    _ => unimplemented!(), // 6
                 }
             })
         });
@@ -1544,8 +1547,14 @@ impl d::Device<B> for Device {
 
                         let ty = set.layout[binding as usize].ty;
                         let ty = match ty {
-                            pso::DescriptorType::UniformBuffer => n::BindingTypes::UniformBuffers,
-                            pso::DescriptorType::StorageBuffer => n::BindingTypes::StorageBuffers,
+                            pso::DescriptorType::Buffer { access, .. } => match access {
+                                pso::BufferDescriptorAccess::Uniform => {
+                                    n::BindingTypes::UniformBuffers
+                                }
+                                pso::BufferDescriptorAccess::Storage => {
+                                    n::BindingTypes::StorageBuffers
+                                }
+                            }
                             _ => panic!("Can't write buffer into descriptor of type {:?}", ty),
                         };
 

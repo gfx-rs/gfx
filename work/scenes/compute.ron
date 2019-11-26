@@ -8,7 +8,10 @@
 			bindings: [
 				(
 					binding: 0,
-					ty: StorageBuffer,
+					ty: Buffer(
+            access: Storage,
+            format: Structured,
+          ),
 					count: 1,
 					stage_flags: (bits: 0x20), //COMPUTE
 					immutable_samplers: false,
@@ -19,7 +22,10 @@
 			capacity: 1,
 			ranges: [
 				(
-					ty: StorageBuffer,
+					ty: Buffer(
+              access: Storage,
+              format: Structured,
+          ),
 					count: 1,
 				),
 			],

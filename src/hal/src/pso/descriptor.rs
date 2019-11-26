@@ -39,7 +39,7 @@ pub type DescriptorArrayIndex = usize;
 #[repr(C)]
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum DescriptorType {
+pub enum RawDescriptorType {
     /// Controls filtering parameters for sampling from images.
     Sampler = 0,
     ///
@@ -67,28 +67,28 @@ pub enum DescriptorType {
     InputAttachment = 10,
 }
 
-impl std::convert::From<RichDescriptorType> for DescriptorType {
-    fn from(ty: RichDescriptorType) -> Self {
+impl std::convert::From<DescriptorType> for RawDescriptorType {
+    fn from(ty: DescriptorType) -> Self {
         match ty {
-            RichDescriptorType::Sampler => DescriptorType::Sampler,
-            RichDescriptorType::CombinedImageSampler => DescriptorType::CombinedImageSampler,
-            RichDescriptorType::Image { ty } => match ty {
-                ImageDescriptorType::Storage => DescriptorType::StorageImage,
-                ImageDescriptorType::Sampled => DescriptorType::SampledImage,
+            DescriptorType::Sampler => RawDescriptorType::Sampler,
+            DescriptorType::CombinedImageSampler => RawDescriptorType::CombinedImageSampler,
+            DescriptorType::Image { ty } => match ty {
+                ImageDescriptorType::Storage => RawDescriptorType::StorageImage,
+                ImageDescriptorType::Sampled => RawDescriptorType::SampledImage,
             }
-            RichDescriptorType::Buffer { access, format } => match access {
+            DescriptorType::Buffer { access, format } => match access {
                 BufferDescriptorAccess::Storage => match format {
-                    BufferDescriptorFormat::Dynamic => DescriptorType::StorageBufferDynamic,
-                    BufferDescriptorFormat::Structured => DescriptorType::StorageBuffer,
-                    BufferDescriptorFormat::Texel => DescriptorType::StorageTexelBuffer,
+                    BufferDescriptorFormat::Dynamic => RawDescriptorType::StorageBufferDynamic,
+                    BufferDescriptorFormat::Structured => RawDescriptorType::StorageBuffer,
+                    BufferDescriptorFormat::Texel => RawDescriptorType::StorageTexelBuffer,
                 },
                 BufferDescriptorAccess::Uniform => match format {
-                    BufferDescriptorFormat::Dynamic => DescriptorType::UniformBufferDynamic,
-                    BufferDescriptorFormat::Structured => DescriptorType::UniformBuffer,
-                    BufferDescriptorFormat::Texel => DescriptorType::UniformTexelBuffer,
+                    BufferDescriptorFormat::Dynamic => RawDescriptorType::UniformBufferDynamic,
+                    BufferDescriptorFormat::Structured => RawDescriptorType::UniformBuffer,
+                    BufferDescriptorFormat::Texel => RawDescriptorType::UniformTexelBuffer,
                 },
             }
-            RichDescriptorType::InputAttachment => DescriptorType::InputAttachment,
+            DescriptorType::InputAttachment => RawDescriptorType::InputAttachment,
         }
     }
 }
@@ -121,17 +121,16 @@ pub enum BufferDescriptorFormat {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ImageDescriptorType {
-    /// A storage image allows load, store and atomic operations.
-    Storage,
-
     /// A sampled image allows sampling operations.
     Sampled,
+    /// A storage image allows load, store and atomic operations.
+    Storage,
 }
 
 /// The type of a descriptor. TODO: more specific doc
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-pub enum RichDescriptorType {
+pub enum DescriptorType {
     /// A descriptor associated with sampler.
     Sampler,
     /// A single descriptor associated with both a sampler and an image to be

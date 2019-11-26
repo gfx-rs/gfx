@@ -456,21 +456,34 @@ impl DescriptorContent {
 
 impl From<pso::DescriptorType> for DescriptorContent {
     fn from(ty: pso::DescriptorType) -> Self {
-        use hal::pso::DescriptorType as Dt;
+        use hal::pso::{
+            DescriptorType as Dt,
+            ImageDescriptorType as Idt,
+            BufferDescriptorAccess as Bda,
+            BufferDescriptorFormat as Bdf
+        };
+
+        use DescriptorContent as Dc;
+
         match ty {
-            Dt::Sampler => DescriptorContent::SAMPLER,
-            Dt::CombinedImageSampler => DescriptorContent::SRV | DescriptorContent::SAMPLER,
-            Dt::SampledImage | Dt::InputAttachment | Dt::UniformTexelBuffer => {
-                DescriptorContent::SRV
+            Dt::Sampler => Dc::SAMPLER,
+            Dt::CombinedImageSampler => Dc::SRV | Dc::SAMPLER,
+            Dt::Image { ty } => match ty {
+                Idt::Storage => Dc::SRV | Dc::UAV,
+                Idt::Sampled => Dc::SRV,
             }
-            Dt::StorageImage | Dt::StorageBuffer | Dt::StorageTexelBuffer => {
-                DescriptorContent::SRV | DescriptorContent::UAV
+            Dt::Buffer { access, format } => match access {
+                Bda::Storage => match format {
+                    Bdf::Dynamic => Dc::SRV | Dc::UAV | Dc::DYNAMIC,
+                    Bdf::Structured | Bdf::Texel => Dc::SRV | Dc::UAV,
+                }
+                Bda::Uniform => match format {
+                    Bdf::Dynamic => Dc::CBV | Dc::DYNAMIC,
+                    Bdf::Structured => Dc::CBV,
+                    Bdf::Texel => Dc::SRV,
+                }
             }
-            Dt::StorageBufferDynamic => {
-                DescriptorContent::SRV | DescriptorContent::UAV | DescriptorContent::DYNAMIC
-            }
-            Dt::UniformBuffer => DescriptorContent::CBV,
-            Dt::UniformBufferDynamic => DescriptorContent::CBV | DescriptorContent::DYNAMIC,
+            Dt::InputAttachment => Dc::SRV,
         }
     }
 }

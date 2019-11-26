@@ -157,7 +157,9 @@ impl<B: Backend> RendererState<B> {
             vec![
                 pso::DescriptorSetLayoutBinding {
                     binding: 0,
-                    ty: pso::DescriptorType::SampledImage,
+                    ty: pso::DescriptorType::Image {
+                        ty: pso::ImageDescriptorType::Sampled,
+                    },
                     count: 1,
                     stage_flags: pso::ShaderStageFlags::FRAGMENT,
                     immutable_samplers: false,
@@ -176,7 +178,10 @@ impl<B: Backend> RendererState<B> {
             Rc::clone(&device),
             vec![pso::DescriptorSetLayoutBinding {
                 binding: 0,
-                ty: pso::DescriptorType::UniformBuffer,
+                ty: pso::DescriptorType::Buffer {
+                    access: pso::BufferDescriptorAccess::Uniform,
+                    format: pso::BufferDescriptorFormat::Structured,
+                },
                 count: 1,
                 stage_flags: pso::ShaderStageFlags::FRAGMENT,
                 immutable_samplers: false,
@@ -190,7 +195,9 @@ impl<B: Backend> RendererState<B> {
                 1, // # of sets
                 &[
                     pso::DescriptorRangeDesc {
-                        ty: pso::DescriptorType::SampledImage,
+                        ty: pso::DescriptorType::Image {
+                            ty: pso::ImageDescriptorType::Sampled,
+                        },
                         count: 1,
                     },
                     pso::DescriptorRangeDesc {
@@ -208,7 +215,10 @@ impl<B: Backend> RendererState<B> {
             .create_descriptor_pool(
                 1, // # of sets
                 &[pso::DescriptorRangeDesc {
-                    ty: pso::DescriptorType::UniformBuffer,
+                    ty: pso::DescriptorType::Buffer {
+                        access: pso::BufferDescriptorAccess::Uniform,
+                        format: pso::BufferDescriptorFormat::Structured,
+                    },
                     count: 1,
                 }],
                 pso::DescriptorPoolCreateFlags::empty(),
