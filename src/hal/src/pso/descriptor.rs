@@ -66,20 +66,21 @@ pub enum BufferDescriptorFormat {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum ImageDescriptorType {
     /// A sampled image allows sampling operations.
-    Sampled,
+    Sampled {
+        /// If true, this descriptor corresponds to both a sampled image and a
+        /// sampler to be used with that image.
+        with_sampler: bool,
+    },
     /// A storage image allows load, store and atomic operations.
     Storage,
 }
 
-/// The type of a descriptor. TODO: more specific doc
+/// The type of a descriptor.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DescriptorType {
     /// A descriptor associated with sampler.
     Sampler,
-    /// A single descriptor associated with both a sampler and an image to be
-    /// used together.
-    CombinedImageSampler,
     /// A descriptor associated with an image.
     Image {
         /// The specific type of this image descriptor.

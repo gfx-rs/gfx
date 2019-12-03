@@ -1453,7 +1453,7 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.VSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            CombinedImageSampler => {
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: true }} => {
                 context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
                 context.VSSetSamplers(
                     start,
@@ -1462,7 +1462,7 @@ impl CommandBuffer {
                 );
             }
 
-            Image { ty: pso::ImageDescriptorType::Sampled } | InputAttachment => {
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: false }} | InputAttachment => {
                 context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
             }
 
@@ -1490,7 +1490,7 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.PSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            CombinedImageSampler => {
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: true }} => {
                 context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
                 context.PSSetSamplers(
                     start,
@@ -1499,7 +1499,7 @@ impl CommandBuffer {
                 );
             }
 
-            Image { ty: pso::ImageDescriptorType::Sampled } | InputAttachment => {
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: false }} | InputAttachment => {
                 context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
             }
 
@@ -1527,7 +1527,7 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.CSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            CombinedImageSampler => {
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: true }} => {
                 context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
                 context.CSSetSamplers(
                     start,
@@ -1536,7 +1536,8 @@ impl CommandBuffer {
                 );
             }
 
-            Image { ty: pso::ImageDescriptorType::Sampled } | InputAttachment => {
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: false }}
+            | InputAttachment => {
                 context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
             }
 
@@ -3084,18 +3085,22 @@ impl DescriptorSet {
                         .mapping
                         .iter()
                         .find(|&mapping| {
-                            mapping.ty == Image { ty: Idt::Sampled }
+                            mapping.ty == Image { ty: Idt::Sampled { with_sampler: false } }
                                 && target_binding == mapping.spirv_binding
                         })
                         .unwrap();
-                    (CombinedImageSampler, combined_mapping.hlsl_register)
+                    (
+                        Image { ty: Idt::Sampled { with_sampler: true }},
+                        combined_mapping.hlsl_register
+                    )
                 } else {
                     (ty, 0)
                 };
 
                 (ty, register, self.register_remap.num_s + t_reg)
             }
-            Image { ty: Idt::Sampled } | Buffer { ty: Bdt::Uniform, format: Bdf::Texel } => {
+            Image { ty: Idt::Sampled { with_sampler: false } }
+            | Buffer { ty: Bdt::Uniform, format: Bdf::Texel } => {
                 (ty, self.register_remap.num_s + register, 0)
             }
             Buffer { ty: Bdt::Uniform, .. } => (
@@ -3113,7 +3118,7 @@ impl DescriptorSet {
                     + register,
                 0,
             ),
-            CombinedImageSampler => unreachable!(),
+            Image { ty: Idt::Sampled { with_sampler: true }} => unreachable!(),
         }
     }
 

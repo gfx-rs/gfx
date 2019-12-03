@@ -23,8 +23,8 @@
 			ranges: [
 				(
 					ty: Buffer(
-							ty: Storage(read_only: false),
-							format: Structured(dynamic_offset: false),
+						ty: Storage(read_only: false),
+						format: Structured(dynamic_offset: false),
 					),
 					count: 1,
 				),

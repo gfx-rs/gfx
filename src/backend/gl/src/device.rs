@@ -674,16 +674,16 @@ impl d::Device<B> for Device {
                 assert!(!binding.immutable_samplers); //TODO: Implement immutable_samplers
                 use crate::pso::DescriptorType::*;
                 match binding.ty {
-                    CombinedImageSampler => {
+                    Sampler | Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: false }} => {
+                        // We need to figure out combos once we get the shaders, until then we
+                        // do nothing
+                    }
+                    Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: true }} => {
                         drd.insert_missing_binding_into_spare(
                             n::BindingTypes::Images,
                             set as _,
                             binding.binding,
                         );
-                    }
-                    Sampler | Image { ty: pso::ImageDescriptorType::Sampled } => {
-                        // We need to figure out combos once we get the shaders, until then we
-                        // do nothing
                     }
                     Buffer {
                         ty,

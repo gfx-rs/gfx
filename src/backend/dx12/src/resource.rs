@@ -467,10 +467,12 @@ impl From<pso::DescriptorType> for DescriptorContent {
 
         match ty {
             Dt::Sampler => Dc::SAMPLER,
-            Dt::CombinedImageSampler => Dc::SRV | Dc::SAMPLER,
             Dt::Image { ty } => match ty {
                 Idt::Storage => Dc::SRV | Dc::UAV,
-                Idt::Sampled => Dc::SRV,
+                Idt::Sampled { with_sampler } => match with_sampler {
+                    true => Dc::SRV | Dc::SAMPLER,
+                    false => Dc::SRV,
+                }
             }
             Dt::Buffer { ty, format } => match ty {
                 Bdt::Storage { .. } => match format {

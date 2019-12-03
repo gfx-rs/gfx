@@ -158,7 +158,7 @@ impl<B: Backend> RendererState<B> {
                 pso::DescriptorSetLayoutBinding {
                     binding: 0,
                     ty: pso::DescriptorType::Image {
-                        ty: pso::ImageDescriptorType::Sampled,
+                        ty: pso::ImageDescriptorType::Sampled { with_sampler: false },
                     },
                     count: 1,
                     stage_flags: pso::ShaderStageFlags::FRAGMENT,
@@ -196,7 +196,7 @@ impl<B: Backend> RendererState<B> {
                 &[
                     pso::DescriptorRangeDesc {
                         ty: pso::DescriptorType::Image {
-                            ty: pso::ImageDescriptorType::Sampled,
+                            ty: pso::ImageDescriptorType::Sampled { with_sampler: false },
                         },
                         count: 1,
                     },

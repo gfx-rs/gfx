@@ -814,10 +814,14 @@ impl From<pso::DescriptorType> for DescriptorContent {
     fn from(ty: pso::DescriptorType) -> Self {
         match ty {
             pso::DescriptorType::Sampler => DescriptorContent::SAMPLER,
-            pso::DescriptorType::CombinedImageSampler => {
-                DescriptorContent::TEXTURE | DescriptorContent::SAMPLER
+            pso::DescriptorType::Image { ty } => {
+                match ty {
+                    pso::ImageDescriptorType::Sampled { with_sampler: true } => {
+                        DescriptorContent::TEXTURE | DescriptorContent::SAMPLER
+                    }
+                    _ => DescriptorContent::TEXTURE,
+                }
             }
-            pso::DescriptorType::Image { .. } => DescriptorContent::TEXTURE,
             pso::DescriptorType::Buffer { format, .. } => match format {
                 pso::BufferDescriptorFormat::Structured { dynamic_offset } => match dynamic_offset {
                     true => DescriptorContent::BUFFER | DescriptorContent::DYNAMIC_BUFFER,
@@ -929,9 +933,8 @@ impl ArgumentArray {
 
         match ty {
             Dt::Sampler => MTLResourceUsage::empty(),
-            Dt::CombinedImageSampler => MTLResourceUsage::Sample,
             Dt::Image { ty } => match ty {
-                pso::ImageDescriptorType::Sampled => MTLResourceUsage::Sample,
+                pso::ImageDescriptorType::Sampled { .. } => MTLResourceUsage::Sample,
                 pso::ImageDescriptorType::Storage => MTLResourceUsage::Write,
             }
             Dt::Buffer { ty, format } => match ty {

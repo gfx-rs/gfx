@@ -170,9 +170,11 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> image::Usage {
 pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
     match ty {
         pso::DescriptorType::Sampler => vk::DescriptorType::SAMPLER,
-        pso::DescriptorType::CombinedImageSampler => vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
         pso::DescriptorType::Image { ty } => match ty {
-            pso::ImageDescriptorType::Sampled => vk::DescriptorType::SAMPLED_IMAGE,
+            pso::ImageDescriptorType::Sampled { with_sampler } => match with_sampler {
+                true => vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                false => vk::DescriptorType::SAMPLED_IMAGE,
+            }
             pso::ImageDescriptorType::Storage => vk::DescriptorType::STORAGE_IMAGE,
         }
         pso::DescriptorType::Buffer { ty, format } => match ty {
