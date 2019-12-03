@@ -33,38 +33,68 @@ pub type DescriptorBinding = u32;
 ///
 pub type DescriptorArrayIndex = usize;
 
-/// DOC TODO: Grasping and remembering the differences between these
-///       types is a tough task. We might be able to come up with better names?
-///       Or even use tuples to describe functionality instead of coming up with fancy names.
-#[repr(C)]
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
+/// Specific type of a buffer.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum BufferDescriptorType {
+    /// Storage buffers allow load, store, and atomic operations.
+    Storage {
+        /// If true, store operations are not permitted on this buffer.
+        read_only: bool,
+    },
+    /// Uniform buffers provide constant data to be accessed in a shader.
+    Uniform,
+}
+
+/// Format of a buffer.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum BufferDescriptorFormat {
+    /// The buffer is interpreted as a structure defined in a shader.
+    Structured {
+        /// If true, the buffer is accessed by an additional offset specified in
+        /// the `offsets` parameter of `CommandBuffer::bind_*_descriptor_sets`.
+        dynamic_offset: bool,
+    },
+    /// The buffer is interpreted as a 1-D array of texels, which undergo format
+    /// conversion when loaded in a shader.
+    Texel,
+}
+
+/// Specific type of an image descriptor.
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub enum ImageDescriptorType {
+    /// A sampled image allows sampling operations.
+    Sampled {
+        /// If true, this descriptor corresponds to both a sampled image and a
+        /// sampler to be used with that image.
+        with_sampler: bool,
+    },
+    /// A storage image allows load, store and atomic operations.
+    Storage,
+}
+
+/// The type of a descriptor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub enum DescriptorType {
-    /// Controls filtering parameters for sampling from images.
-    Sampler = 0,
-    ///
-    CombinedImageSampler = 1,
-    /// Allows sampling (filtered loading) from associated image memory.
-    /// Usually combined with a `Sampler`.
-    SampledImage = 2,
-    /// Allows atomic operations, (non-filtered) loads and stores on image memory.
-    StorageImage = 3,
-    /// Read-only, formatted buffer.
-    UniformTexelBuffer = 4,
-    /// Read-Write, formatted buffer.
-    StorageTexelBuffer = 5,
-    /// Read-only, structured buffer.
-    UniformBuffer = 6,
-    /// Read-Write, structured buffer.
-    StorageBuffer = 7,
-    /// A uniform buffer that can be bound with an offset into its memory with minimal performance impact,
-    /// usually used to store pieces of "uniform" data that change per draw call rather than
-    /// per render pass.
-    UniformBufferDynamic = 8,
-    ///
-    StorageBufferDynamic = 9,
-    /// Allows unfiltered loads of pixel local data in the fragment shader.
-    InputAttachment = 10,
+    /// A descriptor associated with sampler.
+    Sampler,
+    /// A descriptor associated with an image.
+    Image {
+        /// The specific type of this image descriptor.
+        ty: ImageDescriptorType,
+    },
+    /// A descriptor associated with a buffer.
+    Buffer {
+        /// The type of this buffer descriptor.
+        ty: BufferDescriptorType,
+        /// The format of this buffer descriptor.
+        format: BufferDescriptorFormat,
+    },
+    /// A descriptor associated with an input attachment.
+    InputAttachment,
 }
 
 /// Information about the contents of and in which stages descriptors may be bound to a descriptor

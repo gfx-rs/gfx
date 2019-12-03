@@ -814,21 +814,22 @@ impl From<pso::DescriptorType> for DescriptorContent {
     fn from(ty: pso::DescriptorType) -> Self {
         match ty {
             pso::DescriptorType::Sampler => DescriptorContent::SAMPLER,
-            pso::DescriptorType::CombinedImageSampler => {
-                DescriptorContent::TEXTURE | DescriptorContent::SAMPLER
+            pso::DescriptorType::Image { ty } => {
+                match ty {
+                    pso::ImageDescriptorType::Sampled { with_sampler: true } => {
+                        DescriptorContent::TEXTURE | DescriptorContent::SAMPLER
+                    }
+                    _ => DescriptorContent::TEXTURE,
+                }
             }
-            pso::DescriptorType::SampledImage
-            | pso::DescriptorType::StorageImage
-            | pso::DescriptorType::UniformTexelBuffer
-            | pso::DescriptorType::StorageTexelBuffer
-            | pso::DescriptorType::InputAttachment => DescriptorContent::TEXTURE,
-            pso::DescriptorType::UniformBuffer | pso::DescriptorType::StorageBuffer => {
-                DescriptorContent::BUFFER
+            pso::DescriptorType::Buffer { format, .. } => match format {
+                pso::BufferDescriptorFormat::Structured { dynamic_offset } => match dynamic_offset {
+                    true => DescriptorContent::BUFFER | DescriptorContent::DYNAMIC_BUFFER,
+                    false => DescriptorContent::BUFFER,
+                }
+                pso::BufferDescriptorFormat::Texel => DescriptorContent::TEXTURE,
             }
-            pso::DescriptorType::UniformBufferDynamic
-            | pso::DescriptorType::StorageBufferDynamic => {
-                DescriptorContent::BUFFER | DescriptorContent::DYNAMIC_BUFFER
-            }
+            pso::DescriptorType::InputAttachment => DescriptorContent::TEXTURE,
         }
     }
 }
@@ -932,15 +933,18 @@ impl ArgumentArray {
 
         match ty {
             Dt::Sampler => MTLResourceUsage::empty(),
-            Dt::CombinedImageSampler | Dt::SampledImage | Dt::InputAttachment => {
-                MTLResourceUsage::Sample
+            Dt::Image { ty } => match ty {
+                pso::ImageDescriptorType::Sampled { .. } => MTLResourceUsage::Sample,
+                pso::ImageDescriptorType::Storage => MTLResourceUsage::Write,
             }
-            Dt::UniformTexelBuffer => MTLResourceUsage::Sample,
-            Dt::UniformBuffer | Dt::UniformBufferDynamic => MTLResourceUsage::Read,
-            Dt::StorageImage
-            | Dt::StorageBuffer
-            | Dt::StorageBufferDynamic
-            | Dt::StorageTexelBuffer => MTLResourceUsage::Write,
+            Dt::Buffer { ty, format } => match ty {
+                pso::BufferDescriptorType::Storage { .. } => MTLResourceUsage::Write,
+                pso::BufferDescriptorType::Uniform => match format {
+                    pso::BufferDescriptorFormat::Structured { .. } => MTLResourceUsage::Read,
+                    pso::BufferDescriptorFormat::Texel => MTLResourceUsage::Sample,
+                }
+            }
+            Dt::InputAttachment => MTLResourceUsage::Sample,
         }
     }
 

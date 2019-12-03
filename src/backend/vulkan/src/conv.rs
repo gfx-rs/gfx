@@ -168,7 +168,33 @@ pub fn map_vk_image_usage(usage: vk::ImageUsageFlags) -> image::Usage {
 }
 
 pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
-    vk::DescriptorType::from_raw(ty as i32)
+    match ty {
+        pso::DescriptorType::Sampler => vk::DescriptorType::SAMPLER,
+        pso::DescriptorType::Image { ty } => match ty {
+            pso::ImageDescriptorType::Sampled { with_sampler } => match with_sampler {
+                true => vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
+                false => vk::DescriptorType::SAMPLED_IMAGE,
+            }
+            pso::ImageDescriptorType::Storage => vk::DescriptorType::STORAGE_IMAGE,
+        }
+        pso::DescriptorType::Buffer { ty, format } => match ty {
+            pso::BufferDescriptorType::Storage { .. } => match format {
+                pso::BufferDescriptorFormat::Structured { dynamic_offset } => match dynamic_offset {
+                    true => vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
+                    false => vk::DescriptorType::STORAGE_BUFFER,
+                }
+                pso::BufferDescriptorFormat::Texel => vk::DescriptorType::STORAGE_TEXEL_BUFFER,
+            }
+            pso::BufferDescriptorType::Uniform => match format {
+                pso::BufferDescriptorFormat::Structured { dynamic_offset } => match dynamic_offset {
+                    true => vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+                    false => vk::DescriptorType::UNIFORM_BUFFER,
+                }
+                pso::BufferDescriptorFormat::Texel => vk::DescriptorType::UNIFORM_TEXEL_BUFFER,
+            }
+        }
+        pso::DescriptorType::InputAttachment => vk::DescriptorType::INPUT_ATTACHMENT,
+    }
 }
 
 pub fn map_stage_flags(stages: pso::ShaderStageFlags) -> vk::ShaderStageFlags {

@@ -674,33 +674,39 @@ impl d::Device<B> for Device {
                 assert!(!binding.immutable_samplers); //TODO: Implement immutable_samplers
                 use crate::pso::DescriptorType::*;
                 match binding.ty {
-                    CombinedImageSampler => {
+                    Sampler | Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: false }} => {
+                        // We need to figure out combos once we get the shaders, until then we
+                        // do nothing
+                    }
+                    Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: true }} => {
                         drd.insert_missing_binding_into_spare(
                             n::BindingTypes::Images,
                             set as _,
                             binding.binding,
                         );
                     }
-                    Sampler | SampledImage => {
-                        // We need to figure out combos once we get the shaders, until then we
-                        // do nothing
+                    Buffer {
+                        ty,
+                        format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
+                    } => {
+                        match ty {
+                            pso::BufferDescriptorType::Uniform => {
+                                drd.insert_missing_binding_into_spare(
+                                    n::BindingTypes::UniformBuffers,
+                                    set as _,
+                                    binding.binding,
+                                );
+                            }
+                            pso::BufferDescriptorType::Storage { .. } => {
+                                drd.insert_missing_binding_into_spare(
+                                    n::BindingTypes::StorageBuffers,
+                                    set as _,
+                                    binding.binding,
+                                );
+                            }
+                        }
                     }
-                    UniformBuffer => {
-                        drd.insert_missing_binding_into_spare(
-                            n::BindingTypes::UniformBuffers,
-                            set as _,
-                            binding.binding,
-                        );
-                    }
-                    StorageBuffer => {
-                        drd.insert_missing_binding_into_spare(
-                            n::BindingTypes::StorageBuffers,
-                            set as _,
-                            binding.binding,
-                        );
-                    }
-                    StorageImage | UniformTexelBuffer | UniformBufferDynamic
-                    | StorageTexelBuffer | StorageBufferDynamic | InputAttachment => unimplemented!(), // 6
+                    _ => unimplemented!(), // 6
                 }
             })
         });
@@ -1544,8 +1550,14 @@ impl d::Device<B> for Device {
 
                         let ty = set.layout[binding as usize].ty;
                         let ty = match ty {
-                            pso::DescriptorType::UniformBuffer => n::BindingTypes::UniformBuffers,
-                            pso::DescriptorType::StorageBuffer => n::BindingTypes::StorageBuffers,
+                            pso::DescriptorType::Buffer { ty, .. } => match ty {
+                                pso::BufferDescriptorType::Uniform => {
+                                    n::BindingTypes::UniformBuffers
+                                }
+                                pso::BufferDescriptorType::Storage { .. } => {
+                                    n::BindingTypes::StorageBuffers
+                                }
+                            }
                             _ => panic!("Can't write buffer into descriptor of type {:?}", ty),
                         };
 

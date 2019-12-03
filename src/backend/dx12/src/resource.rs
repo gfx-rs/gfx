@@ -456,21 +456,36 @@ impl DescriptorContent {
 
 impl From<pso::DescriptorType> for DescriptorContent {
     fn from(ty: pso::DescriptorType) -> Self {
-        use hal::pso::DescriptorType as Dt;
+        use hal::pso::{
+            DescriptorType as Dt,
+            ImageDescriptorType as Idt,
+            BufferDescriptorType as Bdt,
+            BufferDescriptorFormat as Bdf
+        };
+
+        use DescriptorContent as Dc;
+
         match ty {
-            Dt::Sampler => DescriptorContent::SAMPLER,
-            Dt::CombinedImageSampler => DescriptorContent::SRV | DescriptorContent::SAMPLER,
-            Dt::SampledImage | Dt::InputAttachment | Dt::UniformTexelBuffer => {
-                DescriptorContent::SRV
+            Dt::Sampler => Dc::SAMPLER,
+            Dt::Image { ty } => match ty {
+                Idt::Storage => Dc::SRV | Dc::UAV,
+                Idt::Sampled { with_sampler } => match with_sampler {
+                    true => Dc::SRV | Dc::SAMPLER,
+                    false => Dc::SRV,
+                }
             }
-            Dt::StorageImage | Dt::StorageBuffer | Dt::StorageTexelBuffer => {
-                DescriptorContent::SRV | DescriptorContent::UAV
+            Dt::Buffer { ty, format } => match ty {
+                Bdt::Storage { .. } => match format {
+                    Bdf::Structured { dynamic_offset: true } => Dc::SRV | Dc::UAV | Dc::DYNAMIC,
+                    Bdf::Structured { dynamic_offset: false } | Bdf::Texel => Dc::SRV | Dc::UAV,
+                }
+                Bdt::Uniform => match format {
+                    Bdf::Structured { dynamic_offset: true } => Dc::CBV | Dc::DYNAMIC,
+                    Bdf::Structured { dynamic_offset: false } => Dc::CBV,
+                    Bdf::Texel => Dc::SRV,
+                }
             }
-            Dt::StorageBufferDynamic => {
-                DescriptorContent::SRV | DescriptorContent::UAV | DescriptorContent::DYNAMIC
-            }
-            Dt::UniformBuffer => DescriptorContent::CBV,
-            Dt::UniformBufferDynamic => DescriptorContent::CBV | DescriptorContent::DYNAMIC,
+            Dt::InputAttachment => Dc::SRV,
         }
     }
 }

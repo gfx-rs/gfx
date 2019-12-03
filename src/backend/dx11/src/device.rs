@@ -877,13 +877,29 @@ impl device::Device<Backend> for Device {
         let mut u_offset = 0;
 
         fn get_descriptor_offset(ty: pso::DescriptorType, s: u32, t: u32, c: u32, u: u32) -> u32 {
+            use pso::{
+                BufferDescriptorType as Bdt,
+                BufferDescriptorFormat as Bdf,
+                ImageDescriptorType as Idt,
+            };
+
             match ty {
                 Sampler => s,
-                SampledImage | UniformTexelBuffer => t,
-                UniformBuffer | UniformBufferDynamic => c,
-                StorageTexelBuffer | StorageBuffer | InputAttachment | StorageBufferDynamic
-                | StorageImage => u,
-                CombinedImageSampler => unreachable!(),
+                Image { ty } => match ty {
+                    Idt::Sampled { with_sampler } => match with_sampler {
+                        true => unreachable!(),
+                        false => t,
+                    },
+                    Idt::Storage => u,
+                }
+                Buffer { ty: bty, format } => match bty {
+                    Bdt::Storage { .. } => u,
+                    Bdt::Uniform => match format {
+                        Bdf::Structured { .. } => c,
+                        Bdf::Texel => t,
+                    }
+                }
+                InputAttachment => u,
             }
         }
 
@@ -1991,7 +2007,9 @@ impl device::Device<Backend> for Device {
 
                 r.count
                     * match r.ty {
-                        pso::DescriptorType::CombinedImageSampler => 2,
+                        pso::DescriptorType::Image {
+                            ty: pso::ImageDescriptorType::Sampled { with_sampler: true }
+                        } => 2,
                         _ => 1,
                     }
             })
@@ -2011,7 +2029,12 @@ impl device::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<Sampler>,
     {
-        use pso::DescriptorType::*;
+        use pso::{
+            BufferDescriptorType as Bdt,
+            BufferDescriptorFormat as Bdf,
+            DescriptorType::*,
+            ImageDescriptorType as Idt,
+        };
 
         let mut bindings = Vec::new();
 
@@ -2025,33 +2048,38 @@ impl device::Device<Backend> for Device {
         for binding in layout_bindings {
             let binding = binding.borrow();
 
+
             let hlsl_reg = match binding.ty {
                 Sampler => {
                     num_s += 1;
                     num_s
                 }
-                CombinedImageSampler => {
+                Image { ty: Idt::Sampled { with_sampler: true }} => {
                     num_t += 1;
                     num_s += 1;
                     num_t
                 }
-                SampledImage | UniformTexelBuffer => {
+                Image { ty: Idt::Sampled { with_sampler: false }}
+                | Buffer { ty: Bdt::Uniform, format: Bdf::Texel } => {
                     num_t += 1;
                     num_t
                 }
-                UniformBuffer | UniformBufferDynamic => {
+                Buffer { ty: Bdt::Uniform, .. } => {
                     num_c += 1;
                     num_c
                 }
-                StorageTexelBuffer | StorageBuffer | InputAttachment | StorageBufferDynamic
-                | StorageImage => {
+                Buffer { ty: Bdt::Storage { .. }, .. }
+                | Image { ty: Idt::Storage, .. }
+                | InputAttachment => {
                     num_u += 1;
                     num_u
                 }
             } - 1;
 
             // we decompose combined image samplers into a separate sampler and image internally
-            if binding.ty == pso::DescriptorType::CombinedImageSampler {
+            if binding.ty == (pso::DescriptorType::Image {
+                ty: Idt::Sampled { with_sampler: true }
+            }) {
                 // TODO: for now we have to make combined image samplers share registers since
                 //       spirv-cross doesn't support setting the register of the sampler/texture
                 //       pair to separate values (only one `DescriptorSet` decorator)
@@ -2070,7 +2098,9 @@ impl device::Device<Backend> for Device {
                     combined: true,
                 });
                 mapping.push(RegisterMapping {
-                    ty: pso::DescriptorType::SampledImage,
+                    ty: pso::DescriptorType::Image {
+                        ty: pso::ImageDescriptorType::Sampled { with_sampler: false },
+                    },
                     spirv_binding: binding.binding,
                     hlsl_register: image_reg as u8,
                     combined: true,
@@ -2084,7 +2114,9 @@ impl device::Device<Backend> for Device {
                 });
                 bindings.push(PipelineBinding {
                     stage: binding.stage_flags,
-                    ty: pso::DescriptorType::SampledImage,
+                    ty: pso::DescriptorType::Image {
+                        ty: pso::ImageDescriptorType::Sampled { with_sampler: false },
+                    },
                     binding_range: image_reg .. (image_reg + 1),
                     handle_offset: 0,
                 });
@@ -2108,8 +2140,8 @@ impl device::Device<Backend> for Device {
         // we sort the internal descriptor's handle (the actual dx interface) by some categories to
         // make it easier to group api calls together
         bindings.sort_unstable_by(|a, b| {
-            (b.ty as u32)
-                .cmp(&(a.ty as u32))
+            (b.ty)
+                .cmp(&a.ty)
                 .then(a.binding_range.start.cmp(&b.binding_range.start))
                 .then(a.stage.cmp(&b.stage))
         });
@@ -2133,21 +2165,23 @@ impl device::Device<Backend> for Device {
                     binding.handle_offset = s;
                     s += 1;
                 }
-                SampledImage | UniformTexelBuffer => {
+                Image { ty: Idt::Sampled { with_sampler: false }}
+                | Buffer { ty: Bdt::Uniform, format: Bdf::Texel } => {
                     binding.handle_offset = num_s + t;
                     t += 1;
                 }
-                UniformBuffer | UniformBufferDynamic => {
+                Buffer { ty: Bdt::Uniform, .. } => {
                     binding.handle_offset = num_s + num_t + c;
                     c += 1;
                 }
-                StorageTexelBuffer | StorageBuffer | InputAttachment | StorageBufferDynamic
-                | StorageImage => {
+                Buffer { ty: Bdt::Storage { .. }, .. }
+                | Image { ty: Idt::Storage }
+                | InputAttachment => {
                     binding.handle_offset = num_s + num_t + num_c + u;
                     u += 1;
                 }
-                CombinedImageSampler => unreachable!(),
-            }
+                Image { ty: Idt::Sampled { with_sampler: true }} => unreachable!(),
+            };
         }
 
         Ok(DescriptorSetLayout {
@@ -2169,6 +2203,13 @@ impl device::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
+        use pso::{
+            BufferDescriptorType as Bdt,
+            BufferDescriptorFormat as Bdf,
+            DescriptorType as Dt,
+            ImageDescriptorType as Idt,
+        };
+
         for write in write_iter {
             //println!("WriteDescriptorSets({:?})", write.set.handles);
             let target_binding = write.binding;
@@ -2184,8 +2225,7 @@ impl device::Device<Backend> for Device {
 
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref _range) => match ty {
-                        pso::DescriptorType::UniformBuffer
-                        | pso::DescriptorType::UniformBufferDynamic => {
+                        Dt::Buffer { ty: Bdt::Uniform, format } if format != Bdf::Texel => {
                             if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
                                 let old_buffer = (*handle).0 as *mut _;
 
@@ -2198,7 +2238,10 @@ impl device::Device<Backend> for Device {
                                 Descriptor(buffer.internal.raw as *mut _)
                             };
                         }
-                        pso::DescriptorType::StorageBuffer => {
+                        Dt::Buffer {
+                            ty: Bdt::Storage { .. },
+                            format: Bdf::Structured { dynamic_offset: false },
+                        } => {
                             if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
                                 let old_buffer = (*handle).0 as *mut _;
 
@@ -2210,21 +2253,17 @@ impl device::Device<Backend> for Device {
                         }
                         _ => unreachable!(),
                     },
-                    pso::Descriptor::Image(image, _layout) => match ty {
-                        pso::DescriptorType::SampledImage => {
-                            *handle =
-                                Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _);
-                        }
-                        pso::DescriptorType::StorageImage => {
-                            *handle =
-                                Descriptor(image.uav_handle.clone().unwrap().as_raw() as *mut _);
-                        }
-                        pso::DescriptorType::InputAttachment => {
-                            *handle =
-                                Descriptor(image.srv_handle.clone().unwrap().as_raw() as *mut _);
-                        }
+                    pso::Descriptor::Image(image, _layout) => *handle = Descriptor(match ty {
+                        Dt::Image { ty: img_ty } => match img_ty {
+                            Idt::Sampled { with_sampler } => match with_sampler {
+                                true => unreachable!(),
+                                false => image.srv_handle.clone().unwrap().as_raw() as *mut _,
+                            }
+                            Idt::Storage => image.uav_handle.clone().unwrap().as_raw() as *mut _,
+                        },
+                        Dt::InputAttachment => image.srv_handle.clone().unwrap().as_raw() as *mut _,
                         _ => unreachable!(),
-                    },
+                    }),
                     pso::Descriptor::Sampler(sampler) => {
                         *handle = Descriptor(sampler.sampler_handle.as_raw() as *mut _);
                     }
@@ -2261,7 +2300,9 @@ impl device::Device<Backend> for Device {
                 let src_handle = copy.dst_set.handles.offset(src_handle_offset as isize);
 
                 match dst_ty {
-                    pso::DescriptorType::CombinedImageSampler => {
+                    pso::DescriptorType::Image {
+                        ty: pso::ImageDescriptorType::Sampled { with_sampler: true }
+                    } => {
                         let dst_second_handle = copy
                             .dst_set
                             .handles

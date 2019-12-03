@@ -1453,10 +1453,7 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.VSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            SampledImage | InputAttachment => {
-                context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
-            }
-            CombinedImageSampler => {
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: true }} => {
                 context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
                 context.VSSetSamplers(
                     start,
@@ -1464,10 +1461,18 @@ impl CommandBuffer {
                     handles.offset(1) as *const *mut _ as *const *mut _,
                 );
             }
-            UniformBuffer | UniformBufferDynamic => {
+
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: false }} | InputAttachment => {
+                context.VSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
+            }
+
+            Buffer {
+                ty: pso::BufferDescriptorType::Uniform , format
+            } if format != pso::BufferDescriptorFormat::Texel => {
                 context.VSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _)
             }
-            _ => {}
+
+            _ => (),
         }
     }
 
@@ -1485,10 +1490,7 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.PSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            SampledImage | InputAttachment => {
-                context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
-            }
-            CombinedImageSampler => {
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: true }} => {
                 context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
                 context.PSSetSamplers(
                     start,
@@ -1496,10 +1498,18 @@ impl CommandBuffer {
                     handles.offset(1) as *const *mut _ as *const *mut _,
                 );
             }
-            UniformBuffer | UniformBufferDynamic => {
+
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: false }} | InputAttachment => {
+                context.PSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
+            }
+
+            Buffer {
+                ty: pso::BufferDescriptorType::Uniform , format
+            } if format != pso::BufferDescriptorFormat::Texel => {
                 context.PSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _)
             }
-            _ => {}
+
+            _ => (),
         }
     }
 
@@ -1517,10 +1527,7 @@ impl CommandBuffer {
 
         match binding.ty {
             Sampler => context.CSSetSamplers(start, len, handles as *const *mut _ as *const *mut _),
-            SampledImage | InputAttachment => {
-                context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
-            }
-            CombinedImageSampler => {
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: true }} => {
                 context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _);
                 context.CSSetSamplers(
                     start,
@@ -1528,15 +1535,28 @@ impl CommandBuffer {
                     handles.offset(1) as *const *mut _ as *const *mut _,
                 );
             }
-            UniformBuffer | UniformBufferDynamic => {
+
+            Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: false }}
+            | InputAttachment => {
+                context.CSSetShaderResources(start, len, handles as *const *mut _ as *const *mut _)
+            }
+
+            Buffer {
+                ty: pso::BufferDescriptorType::Uniform , format
+            } if format != pso::BufferDescriptorFormat::Texel => {
                 context.CSSetConstantBuffers(start, len, handles as *const *mut _ as *const *mut _)
             }
-            StorageImage | StorageBuffer => context.CSSetUnorderedAccessViews(
+
+            Image { ty: pso::ImageDescriptorType::Storage } | Buffer {
+                ty: pso::BufferDescriptorType::Storage { .. },
+                format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
+            } => context.CSSetUnorderedAccessViews(
                 start,
                 len,
                 handles as *const *mut _ as *const *mut _,
                 ptr::null_mut(),
             ),
+
             _ => unimplemented!(),
         }
     }
@@ -3041,7 +3061,12 @@ unsafe impl Sync for DescriptorSet {}
 
 impl DescriptorSet {
     fn get_handle_offset(&self, target_binding: u32) -> (pso::DescriptorType, u8, u8) {
-        use pso::DescriptorType::*;
+        use pso::{
+            BufferDescriptorType as Bdt,
+            BufferDescriptorFormat as Bdf,
+            DescriptorType::*,
+            ImageDescriptorType as Idt,
+        };
 
         let mapping = self
             .register_remap
@@ -3060,24 +3085,32 @@ impl DescriptorSet {
                         .mapping
                         .iter()
                         .find(|&mapping| {
-                            mapping.ty == SampledImage && target_binding == mapping.spirv_binding
+                            mapping.ty == Image { ty: Idt::Sampled { with_sampler: false } }
+                                && target_binding == mapping.spirv_binding
                         })
                         .unwrap();
-                    (CombinedImageSampler, combined_mapping.hlsl_register)
+                    (
+                        Image { ty: Idt::Sampled { with_sampler: true }},
+                        combined_mapping.hlsl_register
+                    )
                 } else {
                     (ty, 0)
                 };
 
                 (ty, register, self.register_remap.num_s + t_reg)
             }
-            SampledImage | UniformTexelBuffer => (ty, self.register_remap.num_s + register, 0),
-            UniformBuffer | UniformBufferDynamic => (
+            Image { ty: Idt::Sampled { with_sampler: false } }
+            | Buffer { ty: Bdt::Uniform, format: Bdf::Texel } => {
+                (ty, self.register_remap.num_s + register, 0)
+            }
+            Buffer { ty: Bdt::Uniform, .. } => (
                 ty,
                 self.register_remap.num_s + self.register_remap.num_t + register,
                 0,
             ),
-            StorageTexelBuffer | StorageBuffer | InputAttachment | StorageBufferDynamic
-            | StorageImage => (
+            Buffer { ty: Bdt::Storage { .. }, .. }
+            | Image { ty: Idt::Storage }
+            | InputAttachment => (
                 ty,
                 self.register_remap.num_s
                     + self.register_remap.num_t
@@ -3085,7 +3118,7 @@ impl DescriptorSet {
                     + register,
                 0,
             ),
-            CombinedImageSampler => unreachable!(),
+            Image { ty: Idt::Sampled { with_sampler: true }} => unreachable!(),
         }
     }
 
