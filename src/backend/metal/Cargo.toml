@@ -37,7 +37,7 @@ cocoa = "0.19"
 core-graphics = "0.17"
 smallvec = "1.0"
 spirv_cross = { version = "0.16", features = ["msl"] }
-parking_lot = "0.9"
+parking_lot = "0.10"
 storage-map = "0.2"
 lazy_static = "1"
 raw-window-handle = "0.3"
