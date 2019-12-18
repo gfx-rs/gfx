@@ -1,7 +1,8 @@
 # Change Log
 
-### backend-metal-0.4.1 (12-11-2019)
+### backend-metal-0.4.2 (18-11-2019)
   - fix missing iOS metallib
+  - fix viewport/scissor after `clear_attachments` call
 
 ### hal-0.4.1 (04-11-2019)
   - `Error` implementations
