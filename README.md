@@ -2,25 +2,20 @@
   <img src="info/logo.png">
 </p>
 <p align="center">
-  <a href="https://travis-ci.org/gfx-rs/gfx">
-      <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?style=flat-square" alt="Travis Build Status">
+  <a href="https://matrix.to/#/#gfx:matrix.org">
+    <img src="https://img.shields.io/badge/Matrix-%23gfx%3Amatrix.org-blueviolet.svg" alt="Matrix room">
   </a>
   <a href="https://crates.io/crates/gfx-hal">
       <img src="http://img.shields.io/crates/v/gfx-hal.svg?label=gfx-hal" alt = "gfx-hal on crates.io">
   </a>
-  <a href="https://gitter.im/gfx-rs/gfx">
-    <img src="https://img.shields.io/badge/gitter-join%20chat-green.svg?style=flat-square" alt="Gitter Chat">
-  </a>
-  <a href="https://gfx.zulipchat.com">
-    <img src="https://img.shields.io/badge/zulip-join_chat-brightgreen.svg" alt="Zulip Chat">
+  <a href="https://travis-ci.org/gfx-rs/gfx">
+      <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?style=flat-square" alt="Travis Build Status">
   </a>
   <br>
   <strong><a href="info/getting_started.md">Getting Started</a> | <a href="http://docs.rs/gfx-hal">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
 </p>
 
 # gfx-rs
-
-**PLEASE BE AWARE: this is home to the gfx-hal crate/API. The Old gfx Crate Is Now Deprecated.**
 
 gfx-rs is a low-level, cross-platform graphics and compute abstraction library in Rust. It consists of the following components:
 
@@ -31,6 +26,8 @@ gfx-rs is a low-level, cross-platform graphics and compute abstraction library i
   * [Metal](src/backend/metal) (confirmed to run on macOS and iOS)
   * [OpenGL 2.1+/ES2+](src/backend/gl)
 * `gfx-warden` which is a data-driven reference test framework, used to verify consistency across all graphics backends.
+
+gfx-rs is hard to use, it's recommended for performance-sensitive libraries and engines. If that's not your domain, take a look at [wgpu-rs](https://github.com/gfx-rs/wgpu-rs) for a safe and simple alternative.
 
 ## The `gfx` crate
 
