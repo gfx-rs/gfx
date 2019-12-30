@@ -1014,8 +1014,8 @@ impl hal::device::Device<Backend> for Device {
                 }
             }
             if let Some((id, ref mut ops)) = sub.depth_stencil {
-                if use_mask & 1 << id == 0 {
-                    *ops |= n::SubpassOps::LOAD;
+                if use_mask & 1 << id != 0 {
+                    *ops |= n::SubpassOps::STORE;
                     use_mask ^= 1 << id;
                 }
             }
