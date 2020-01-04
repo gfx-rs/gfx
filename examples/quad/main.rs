@@ -195,7 +195,7 @@ fn main() {
                 }
                 _ => {}
             },
-            winit::event::Event::EventsCleared => {
+            winit::event::Event::RedrawEventsCleared => {
                 renderer.render();
             }
             _ => {}

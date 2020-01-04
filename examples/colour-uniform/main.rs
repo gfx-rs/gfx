@@ -1671,16 +1671,16 @@ fn main() {
                             renderer_state.input(virtual_keycode);
                         }
                     }
-                    winit::event::WindowEvent::RedrawRequested => {
-                        println!("RedrawRequested");
-                        renderer_state.draw();
-                    }
                     _ => (),
                 }
             }
-            winit::event::Event::EventsCleared => {
+            winit::event::Event::RedrawRequested(_) => {
+                println!("RedrawRequested");
+                        renderer_state.draw();
+            }
+            winit::event::Event::RedrawEventsCleared => {
                 renderer_state.backend.window.request_redraw();
-                println!("EventsCleared");
+                println!("RedrawEventsCleared");
             }
             _ => (),
         }
