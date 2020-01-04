@@ -1896,7 +1896,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             let idx = i + first_binding as usize;
             let buf = buf.borrow();
 
-            if buf.ty == MemoryHeapFlags::HOST_COHERENT {
+            if buf.properties.contains(memory::Properties::COHERENT) {
                 self.defer_coherent_flush(buf);
             }
 
@@ -2146,7 +2146,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
     {
-        if src.ty == MemoryHeapFlags::HOST_COHERENT {
+        if src.properties.contains(memory::Properties::COHERENT) {
             self.defer_coherent_flush(src);
         }
 
@@ -2212,7 +2212,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
+        if buffer.properties.contains(memory::Properties::COHERENT) {
             self.defer_coherent_flush(buffer);
         }
 
@@ -2230,7 +2230,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
+        if buffer.properties.contains(memory::Properties::COHERENT) {
             self.defer_coherent_invalidate(buffer);
         }
 
@@ -2356,14 +2356,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 }
 
-bitflags! {
-    struct MemoryHeapFlags: u64 {
-        const DEVICE_LOCAL = 0x1;
-        const HOST_VISIBLE = 0x2 | 0x4;
-        const HOST_COHERENT = 0x2;
-    }
-}
-
 #[derive(Clone, Debug)]
 enum SyncRange {
     Whole,
@@ -2408,17 +2400,16 @@ impl MemoryFlush {
         let src = self.host_memory;
 
         debug_marker!(context, "Flush({:?})", self.sync_range);
-        let region = if let SyncRange::Partial(range) = &self.sync_range {
-            Some(d3d11::D3D11_BOX {
-                left: range.start as _,
+        let region = match self.sync_range {
+            SyncRange::Partial(ref range) if range.start < range.end => Some(d3d11::D3D11_BOX {
+                left: range.start as u32,
                 top: 0,
                 front: 0,
-                right: range.end as _,
+                right: range.end as u32,
                 bottom: 1,
                 back: 1,
-            })
-        } else {
-            None
+            }),
+            _ => None,
         };
 
         unsafe {
@@ -2526,7 +2517,6 @@ impl MemoryInvalidate {
 // abstraction acts as a "cache" since the "staging buffer" vec is disjoint
 // from all the dx11 resources we store in the struct.
 pub struct Memory {
-    ty: MemoryHeapFlags,
     properties: memory::Properties,
     size: u64,
 
@@ -2539,7 +2529,7 @@ pub struct Memory {
     local_buffers: RefCell<Vec<(Range<u64>, InternalBuffer)>>,
 
     // list of all images bound to this memory
-    local_images: RefCell<Vec<(Range<u64>, InternalImage)>>,
+    _local_images: RefCell<Vec<(Range<u64>, InternalImage)>>,
 }
 
 impl fmt::Debug for Memory {
@@ -2727,7 +2717,7 @@ pub struct InternalBuffer {
 
 pub struct Buffer {
     internal: InternalBuffer,
-    ty: MemoryHeapFlags,     // empty if unbound
+    properties: memory::Properties, // empty if unbound
     host_ptr: *mut u8,       // null if unbound
     bound_range: Range<u64>, // 0 if unbound
     requirements: memory::Requirements,
@@ -2754,7 +2744,6 @@ pub struct Image {
     decomposed_format: conv::DecomposedDxgiFormat,
     mip_levels: image::Level,
     internal: InternalImage,
-    tiling: image::Tiling,
     bind: d3d11::D3D11_BIND_FLAG,
     requirements: memory::Requirements,
 }
