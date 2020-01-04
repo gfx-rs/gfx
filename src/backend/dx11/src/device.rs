@@ -56,7 +56,6 @@ use crate::{
     InternalBuffer,
     InternalImage,
     Memory,
-    MemoryHeapFlags,
     PipelineBinding,
     PipelineLayout,
     QueryPool,
@@ -73,6 +72,9 @@ use crate::{
     ViewInfo,
 };
 
+//TODO: expose coherent type 0x2 when it's properly supported
+const BUFFER_TYPE_MASK: u64 = 0x1 | 0x4;
+
 struct InputLayout {
     raw: ComPtr<d3d11::ID3D11InputLayout>,
     required_bindings: u32,
@@ -85,7 +87,6 @@ pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     memory_properties: MemoryProperties,
-    memory_heap_flags: [MemoryHeapFlags; 3],
     pub(crate) internal: internal::Internal,
 }
 
@@ -122,11 +123,6 @@ impl Device {
             raw: device.clone(),
             context,
             memory_properties,
-            memory_heap_flags: [
-                MemoryHeapFlags::DEVICE_LOCAL,
-                MemoryHeapFlags::HOST_COHERENT,
-                MemoryHeapFlags::HOST_VISIBLE,
-            ],
             internal: internal::Internal::new(&device),
         }
     }
@@ -779,13 +775,12 @@ impl device::Device<Backend> for Device {
     ) -> Result<Memory, device::AllocationError> {
         let vec = Vec::with_capacity(size as usize);
         Ok(Memory {
-            ty: self.memory_heap_flags[mem_type.0],
             properties: self.memory_properties.memory_types[mem_type.0].properties,
             size,
             mapped_ptr: vec.as_ptr() as *mut _,
             host_visible: Some(RefCell::new(vec)),
             local_buffers: RefCell::new(Vec::new()),
-            local_images: RefCell::new(Vec::new()),
+            _local_images: RefCell::new(Vec::new()),
         })
     }
 
@@ -1052,7 +1047,7 @@ impl device::Device<Backend> for Device {
         Ok(())
     }
 
-    unsafe fn get_pipeline_cache_data(&self, cache: &()) -> Result<Vec<u8>, device::OutOfMemory> {
+    unsafe fn get_pipeline_cache_data(&self, _cache: &()) -> Result<Vec<u8>, device::OutOfMemory> {
         //empty
         Ok(Vec::new())
     }
@@ -1248,14 +1243,14 @@ impl device::Device<Backend> for Device {
                 uav: None,
                 usage,
             },
-            ty: MemoryHeapFlags::empty(),
+            properties: memory::Properties::empty(),
             bound_range: 0 .. 0,
             host_ptr: ptr::null_mut(),
             bind,
             requirements: memory::Requirements {
                 size,
                 alignment: 1,
-                type_mask: MemoryHeapFlags::all().bits(),
+                type_mask: BUFFER_TYPE_MASK,
             },
         })
     }
@@ -1294,80 +1289,76 @@ impl device::Device<Backend> for Device {
                 SysMemSlicePitch: 0,
             });
 
-        let raw = match memory.ty {
-            MemoryHeapFlags::DEVICE_LOCAL => {
-                // device local memory
-                let desc = d3d11::D3D11_BUFFER_DESC {
-                    ByteWidth: buffer.requirements.size as _,
-                    Usage: d3d11::D3D11_USAGE_DEFAULT,
-                    BindFlags: buffer.bind,
-                    CPUAccessFlags: 0,
-                    MiscFlags,
-                    StructureByteStride: if buffer
-                        .internal
-                        .usage
-                        .contains(buffer::Usage::TRANSFER_SRC)
-                    {
-                        4
-                    } else {
-                        0
-                    },
-                };
+        let raw = if memory.properties.contains(memory::Properties::DEVICE_LOCAL) {
+            // device local memory
+            let desc = d3d11::D3D11_BUFFER_DESC {
+                ByteWidth: buffer.requirements.size as _,
+                Usage: d3d11::D3D11_USAGE_DEFAULT,
+                BindFlags: buffer.bind,
+                CPUAccessFlags: 0,
+                MiscFlags,
+                StructureByteStride: if buffer
+                    .internal
+                    .usage
+                    .contains(buffer::Usage::TRANSFER_SRC)
+                {
+                    4
+                } else {
+                    0
+                },
+            };
 
-                let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
-                let hr = self.raw.CreateBuffer(
-                    &desc,
-                    if let Some(data) = initial_data {
-                        &data
-                    } else {
-                        ptr::null_mut()
-                    },
-                    &mut buffer as *mut *mut _ as *mut *mut _,
-                );
+            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+            let hr = self.raw.CreateBuffer(
+                &desc,
+                if let Some(data) = initial_data {
+                    &data
+                } else {
+                    ptr::null_mut()
+                },
+                &mut buffer as *mut *mut _ as *mut *mut _,
+            );
 
-                if !winerror::SUCCEEDED(hr) {
-                    return Err(device::BindError::WrongMemory);
-                }
-
-                ComPtr::from_raw(buffer)
+            if !winerror::SUCCEEDED(hr) {
+                return Err(device::BindError::WrongMemory);
             }
-            MemoryHeapFlags::HOST_VISIBLE | MemoryHeapFlags::HOST_COHERENT => {
-                let desc = d3d11::D3D11_BUFFER_DESC {
-                    ByteWidth: buffer.requirements.size as _,
-                    // TODO: dynamic?
-                    Usage: d3d11::D3D11_USAGE_DEFAULT,
-                    BindFlags: buffer.bind,
-                    CPUAccessFlags: 0,
-                    MiscFlags,
-                    StructureByteStride: if buffer
-                        .internal
-                        .usage
-                        .contains(buffer::Usage::TRANSFER_SRC)
-                    {
-                        4
-                    } else {
-                        0
-                    },
-                };
 
-                let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
-                let hr = self.raw.CreateBuffer(
-                    &desc,
-                    if let Some(data) = initial_data {
-                        &data
-                    } else {
-                        ptr::null_mut()
-                    },
-                    &mut buffer as *mut *mut _ as *mut *mut _,
-                );
+            ComPtr::from_raw(buffer)
+        } else {
+            let desc = d3d11::D3D11_BUFFER_DESC {
+                ByteWidth: buffer.requirements.size as _,
+                // TODO: dynamic?
+                Usage: d3d11::D3D11_USAGE_DEFAULT,
+                BindFlags: buffer.bind,
+                CPUAccessFlags: 0,
+                MiscFlags,
+                StructureByteStride: if buffer
+                    .internal
+                    .usage
+                    .contains(buffer::Usage::TRANSFER_SRC)
+                {
+                    4
+                } else {
+                    0
+                },
+            };
 
-                if !winerror::SUCCEEDED(hr) {
-                    return Err(device::BindError::WrongMemory);
-                }
+            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
+            let hr = self.raw.CreateBuffer(
+                &desc,
+                if let Some(data) = initial_data {
+                    &data
+                } else {
+                    ptr::null_mut()
+                },
+                &mut buffer as *mut *mut _ as *mut *mut _,
+            );
 
-                ComPtr::from_raw(buffer)
+            if !winerror::SUCCEEDED(hr) {
+                return Err(device::BindError::WrongMemory);
             }
-            _ => unimplemented!(),
+
+            ComPtr::from_raw(buffer)
         };
 
         let disjoint_cb = if buffer.internal.disjoint_cb.is_some() {
@@ -1464,7 +1455,7 @@ impl device::Device<Backend> for Device {
             uav,
             usage: buffer.internal.usage,
         };
-        let range = offset .. buffer.requirements.size;
+        let range = offset .. offset + buffer.requirements.size;
 
         memory.bind_buffer(range.clone(), internal.clone());
 
@@ -1475,7 +1466,7 @@ impl device::Device<Backend> for Device {
         };
 
         buffer.internal = internal;
-        buffer.ty = memory.ty;
+        buffer.properties = memory.properties;
         buffer.host_ptr = host_ptr;
         buffer.bound_range = range;
 
@@ -1496,7 +1487,7 @@ impl device::Device<Backend> for Device {
         kind: image::Kind,
         mip_levels: image::Level,
         format: format::Format,
-        tiling: image::Tiling,
+        _tiling: image::Tiling,
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
     ) -> Result<Image, image::CreationError> {
@@ -1548,13 +1539,12 @@ impl device::Device<Backend> for Device {
             mip_levels,
             format,
             usage,
-            tiling,
             view_caps,
             bind,
             requirements: memory::Requirements {
                 size: size,
                 alignment: 1,
-                type_mask: MemoryHeapFlags::DEVICE_LOCAL.bits(),
+                type_mask: 0x1, // device-local only
             },
         })
     }
@@ -2226,9 +2216,8 @@ impl device::Device<Backend> for Device {
                 match *descriptor.borrow() {
                     pso::Descriptor::Buffer(buffer, ref _range) => match ty {
                         Dt::Buffer { ty: Bdt::Uniform, format } if format != Bdf::Texel => {
-                            if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
+                            if buffer.properties.contains(memory::Properties::COHERENT) {
                                 let old_buffer = (*handle).0 as *mut _;
-
                                 write.set.add_flush(old_buffer, buffer);
                             }
 
@@ -2242,9 +2231,8 @@ impl device::Device<Backend> for Device {
                             ty: Bdt::Storage { .. },
                             format: Bdf::Structured { dynamic_offset: false },
                         } => {
-                            if buffer.ty == MemoryHeapFlags::HOST_COHERENT {
+                            if buffer.properties.contains(memory::Properties::COHERENT) {
                                 let old_buffer = (*handle).0 as *mut _;
-
                                 write.set.add_flush(old_buffer, buffer);
                                 write.set.add_invalidate(old_buffer, buffer);
                             }
@@ -2447,15 +2435,15 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn get_event_status(&self, event: &()) -> Result<bool, device::OomOrDeviceLost> {
+    unsafe fn get_event_status(&self, _event: &()) -> Result<bool, device::OomOrDeviceLost> {
         unimplemented!()
     }
 
-    unsafe fn set_event(&self, event: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn set_event(&self, _event: &()) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
-    unsafe fn reset_event(&self, event: &()) -> Result<(), device::OutOfMemory> {
+    unsafe fn reset_event(&self, _event: &()) -> Result<(), device::OutOfMemory> {
         unimplemented!()
     }
 
@@ -2615,11 +2603,10 @@ impl device::Device<Backend> for Device {
                     bind: 0, // TODO: ?
                     requirements: memory::Requirements {
                         // values don't really matter
-                        size: 1,
-                        alignment: 1,
-                        type_mask: MemoryHeapFlags::DEVICE_LOCAL.bits(),
+                        size: 0,
+                        alignment: 0,
+                        type_mask: 0,
                     },
-                    tiling: image::Tiling::Optimal,
                 }
             })
             .collect();
