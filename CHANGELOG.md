@@ -1,5 +1,9 @@
 # Change Log
 
+### backend-dx11-0.4.4, backend-dx11-0.4.5 (06-01-2020)
+  - disable coherent memory for being broken
+  - rewrite the binding model completely
+
 ### backend-metal-0.4.2 (18-11-2019)
   - fix missing iOS metallib
   - fix viewport/scissor after `clear_attachments` call
