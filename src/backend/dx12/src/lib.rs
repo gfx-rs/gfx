@@ -695,6 +695,7 @@ impl Drop for Device {
 pub struct Instance {
     pub(crate) factory: native::Factory4,
     library: Arc<native::D3D12Lib>,
+    lib_dxgi: native::DxgiLib,
 }
 
 impl Drop for Instance {
@@ -755,6 +756,7 @@ impl hal::Instance<Backend> for Instance {
         Ok(Instance {
             factory,
             library: Arc::new(lib_main),
+            lib_dxgi,
         })
     }
 
@@ -1020,10 +1022,10 @@ impl hal::Instance<Backend> for Instance {
                 };
 
                 let query_memory = |segment: dxgi1_4::DXGI_MEMORY_SEGMENT_GROUP| unsafe {
-                    let mut mem_info: dxgi1_4::DXGI_QUERY_VIDEO_MEMORY_INFO = mem::uninitialized();
+                    let mut mem_info: dxgi1_4::DXGI_QUERY_VIDEO_MEMORY_INFO = mem::zeroed();
                     assert_eq!(
                         winerror::S_OK,
-                        adapter.QueryVideoMemoryInfo(0, segment, &mut mem_info,)
+                        adapter.QueryVideoMemoryInfo(0, segment, &mut mem_info)
                     );
                     mem_info.Budget
                 };
