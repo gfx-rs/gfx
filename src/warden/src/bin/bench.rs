@@ -4,7 +4,8 @@
         feature = "dx12",
         feature = "dx11",
         feature = "metal",
-        feature = "gl"
+        feature = "gl",
+        feature = "gl-ci"
     )),
     allow(dead_code)
 )]
@@ -72,6 +73,7 @@ impl Harness {
         Harness { base_path, suite }
     }
 
+    #[cfg_attr(any(feature = "gl", feature = "gl-ci"), allow(dead_code))]
     fn run<B: hal::Backend>(&self, name: &str, disabilities: Disabilities) {
         println!("Benching {}:", name);
         let instance = B::Instance::create("warden", 1).unwrap();
@@ -174,32 +176,14 @@ fn main() {
     }
     #[cfg(feature = "gl")]
     {
-        use gfx_backend_gl::glutin;
         println!("Benching GL:");
-        let events_loop = glutin::event_loop::EventLoop::new();
-        let windowed_context = glutin::ContextBuilder::new()
-            .with_gl_profile(glutin::GlProfile::Core)
-            .build_windowed(glutin::window::WindowBuilder::new(), &events_loop)
-            .unwrap();
-        let (context, _window) = unsafe {
-            windowed_context
-                .make_current()
-                .expect("Unable to make window current")
-                .split()
-        };
-        let instance = gfx_backend_gl::Surface::from_context(context);
+        let instance = warden::init_gl_surface();
         harness.run_instance(instance, Disabilities::default());
     }
-    #[cfg(feature = "gl-headless")]
+    #[cfg(feature = "gl-ci")]
     {
-        use gfx_backend_gl::glutin;
-        println!("Benching GL headless:");
-        let events_loop = glutin::event_loop::EventLoop::new();
-        let context = glutin::ContextBuilder::new()
-            .build_headless(&events_loop, glutin::dpi::PhysicalSize::new(0.0, 0.0))
-            .unwrap();
-        let context = unsafe { context.make_current() }.expect("Unable to make context current");
-        let instance = gfx_backend_gl::Headless::from_context(context);
+        println!("Benching GL on CI:");
+        let instance = warden::init_gl_on_ci();
         harness.run_instance(instance, Disabilities::default());
     }
     #[cfg(not(any(
@@ -207,7 +191,8 @@ fn main() {
         feature = "dx12",
         feature = "dx11",
         feature = "metal",
-        feature = "gl"
+        feature = "gl",
+        feature = "gl-ci"
     )))]
     {
         println!("No backend selected!");

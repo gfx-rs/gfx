@@ -24,7 +24,7 @@ dx12 = ["gfx-backend-dx12"]
 dx11 = ["gfx-backend-dx11"]
 metal = ["gfx-backend-metal"]
 gl = ["gfx-backend-gl"]
-gl-headless = ["gfx-backend-gl"] # "glsl-to-spirv"
+gl-ci = ["gfx-backend-gl"] # "glsl-to-spirv"
 
 #TODO: keep Warden backend-agnostic?
 

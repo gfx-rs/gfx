@@ -54,7 +54,7 @@ check:
 	cd examples && cargo check $(CHECK_TARGET_FLAG) --features "$(FEATURES_HAL2)"
 	cd examples && cargo check $(CHECK_TARGET_FLAG) --features "$(FEATURES_HAL3)"
 	cd src/warden && cargo check $(CHECK_TARGET_FLAG) --no-default-features
-	cd src/warden && cargo check $(CHECK_TARGET_FLAG) --features "env_logger gl gl-headless $(FEATURES_HAL) $(FEATURES_HAL2)"
+	cd src/warden && cargo check $(CHECK_TARGET_FLAG) --features "env_logger gl gl-ci $(FEATURES_HAL) $(FEATURES_HAL2)"
 
 test:
 	cargo test --all $(EXCLUDES)
@@ -69,8 +69,8 @@ benches:
 	cd src/warden && cargo run --release --bin bench --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- blit
 
 reftests-ci:
-	cd src/warden && cargo test --features "gl"
-	cd src/warden && cargo run --features "gl" -- ci #TODO: "gl-headless"
+	cd src/warden && cargo test
+	cd src/warden && cargo run --features "gl-ci" -- ci
 
 quad:
 	cd examples && cargo run --bin quad --features ${FEATURES_HAL}
