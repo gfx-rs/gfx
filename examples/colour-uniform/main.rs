@@ -1607,10 +1607,11 @@ fn main() {
 
     let event_loop = winit::event_loop::EventLoop::new();
     let window_builder = winit::window::WindowBuilder::new()
-        .with_min_inner_size(winit::dpi::LogicalSize::new(1.0, 1.0))
-        .with_inner_size(winit::dpi::LogicalSize::new(
-            DIMS.width as _,
-            DIMS.height as _,
+        .with_min_inner_size(
+            winit::dpi::Size::Logical(winit::dpi::LogicalSize::new(64.0, 64.0))
+        )
+        .with_inner_size(winit::dpi::Size::Physical(
+            winit::dpi::PhysicalSize::new(DIMS.width, DIMS.height)
         ))
         .with_title("colour-uniform".to_string());
 
@@ -1653,7 +1654,7 @@ fn main() {
                             .backend
                             .surface
                             .get_context_t()
-                            .resize(dims.to_physical(renderer_state.backend.window.hidpi_factor()));
+                            .resize(dims);
                         println!("RESIZE EVENT");
                         renderer_state.recreate_swapchain = true;
                     }
