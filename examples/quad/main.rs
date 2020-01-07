@@ -101,12 +101,12 @@ fn main() {
 
     let event_loop = winit::event_loop::EventLoop::new();
 
-    let dpi = event_loop.primary_monitor().hidpi_factor();
     let wb = winit::window::WindowBuilder::new()
-        .with_min_inner_size(winit::dpi::LogicalSize::new(1.0, 1.0))
-        .with_inner_size(winit::dpi::LogicalSize::from_physical(
-            winit::dpi::PhysicalSize::new(DIMS.width as _, DIMS.height as _),
-            dpi,
+        .with_min_inner_size(
+            winit::dpi::Size::Logical(winit::dpi::LogicalSize::new(64.0, 64.0))
+        )
+        .with_inner_size(winit::dpi::Size::Physical(
+            winit::dpi::PhysicalSize::new(DIMS.width, DIMS.height),
         ))
         .with_title("quad".to_string());
 
@@ -124,7 +124,7 @@ fn main() {
         (window, Some(instance), adapters, surface)
     };
     #[cfg(feature = "gl")]
-    let (window, instance, mut adapters, surface) = {
+    let (_window, instance, mut adapters, surface) = {
         #[cfg(not(target_arch = "wasm32"))]
         let (window, surface) = {
             let builder =
@@ -185,11 +185,11 @@ fn main() {
                     #[cfg(all(feature = "gl", not(target_arch = "wasm32")))]
                     {
                         let context = renderer.surface.context();
-                        context.resize(dims.to_physical(window.hidpi_factor()));
+                        context.resize(dims);
                     }
                     renderer.dimensions = window::Extent2D {
-                        width: (dims.width * dpi) as u32,
-                        height: (dims.height * dpi) as u32,
+                        width: dims.width,
+                        height: dims.height,
                     };
                     renderer.recreate_swapchain();
                 }
