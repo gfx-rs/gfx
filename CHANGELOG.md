@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.4.3 (07-01-2020)
+  - fix a crash at initialization time
+
 ### backend-dx11-0.4.4, backend-dx11-0.4.5 (06-01-2020)
   - disable coherent memory for being broken
   - rewrite the binding model completely
