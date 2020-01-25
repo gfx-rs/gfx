@@ -70,14 +70,14 @@ use core_graphics::geometry::CGRect;
 #[cfg(feature = "dispatch")]
 use dispatch;
 use foreign_types::ForeignTypeRef;
+use lazy_static::lazy_static;
 use metal::MTLFeatureSet;
 use metal::MTLLanguageVersion;
 use objc::{
     declare::ClassDecl,
-    runtime::{Object, BOOL, YES, Sel, Class}
+    runtime::{Class, Object, Sel, BOOL, YES},
 };
 use parking_lot::{Condvar, Mutex};
-use lazy_static::lazy_static;
 
 use std::mem;
 use std::os::raw::c_void;
@@ -97,7 +97,6 @@ pub use crate::device::{Device, LanguageVersion, PhysicalDevice};
 pub use crate::window::{AcquireMode, CAMetalLayer, Surface, Swapchain};
 
 pub type GraphicsCommandPool = CommandPool;
-
 
 //TODO: investigate why exactly using `u8` here is slower (~5% total).
 /// A type representing Metal binding's resource index.
@@ -216,7 +215,7 @@ impl hal::Instance<Backend> for Instance {
     fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
         Ok(Instance {
             experiments: Experiments::default(),
-            gfx_managed_metal_layer_delegate: GfxManagedMetalLayerDelegate::new()
+            gfx_managed_metal_layer_delegate: GfxManagedMetalLayerDelegate::new(),
         })
     }
 
@@ -292,7 +291,7 @@ extern "C" fn layer_should_inherit_contents_scale_from_window(
     _: Sel,
     _layer: *mut Object,
     _new_scale: CGFloat,
-    _from_window: *mut Object
+    _from_window: *mut Object,
 ) -> BOOL {
     return YES;
 }
@@ -303,7 +302,8 @@ struct GfxManagedMetalLayerDelegate(*mut Object);
 impl GfxManagedMetalLayerDelegate {
     pub fn new() -> Self {
         unsafe {
-            let mut delegate: *mut Object = msg_send![*GFX_MANAGED_METAL_LAYER_DELEGATE_CLASS, alloc];
+            let mut delegate: *mut Object =
+                msg_send![*GFX_MANAGED_METAL_LAYER_DELEGATE_CLASS, alloc];
             delegate = msg_send![delegate, init];
             Self(delegate)
         }

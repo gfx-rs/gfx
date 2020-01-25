@@ -6,7 +6,10 @@ use crate::{
     pso::{
         input_assembler::{AttributeDesc, InputAssemblerDesc, Primitive, VertexBufferDesc},
         output_merger::{ColorBlendDesc, DepthStencilDesc, Face},
-        BasePipeline, EntryPoint, PipelineCreationFlags, State,
+        BasePipeline,
+        EntryPoint,
+        PipelineCreationFlags,
+        State,
     },
     Backend,
 };

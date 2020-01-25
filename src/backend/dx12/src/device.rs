@@ -63,10 +63,7 @@ use crate::{
     NUM_HEAP_PROPERTIES,
     QUEUE_FAMILIES,
 };
-use native::{
-    PipelineStateSubobject,
-    Subobject,
-};
+use native::{PipelineStateSubobject, Subobject};
 
 // Register space used for root constants.
 const ROOT_CONSTANT_SPACE: u32 = 0;
@@ -1613,9 +1610,8 @@ impl d::Device<B> for Device {
                             descriptors.push(r::RootDescriptor {
                                 offset: root_offset,
                             });
-                            parameters.push(native::RootParameter::cbv_descriptor(
-                                visibility, binding,
-                            ));
+                            parameters
+                                .push(native::RootParameter::cbv_descriptor(visibility, binding));
                             root_offset += 2;
                         } else {
                             // SRV and UAV not implemented so far
@@ -2927,7 +2923,7 @@ impl d::Device<B> for Device {
                                 // pool is full, move to the next one
                                 update_pool_index += 1;
                             }
-                             descriptor_update_pools.push(heap);
+                            descriptor_update_pools.push(heap);
                         }
                     }
                     pso::Descriptor::Image(image, _layout) => {

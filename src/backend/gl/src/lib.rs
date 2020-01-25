@@ -41,7 +41,7 @@ pub use window::web::{Surface, Swapchain};
 use window::wgl::DeviceContext;
 
 #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
-pub use window::wgl::{Surface, Swapchain, Instance};
+pub use window::wgl::{Instance, Surface, Swapchain};
 
 #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
 pub use window::dummy::{Surface, Swapchain};
@@ -50,7 +50,6 @@ pub use glow::Context as GlContext;
 use glow::HasContext;
 
 type ColorSlot = u8;
-
 
 pub(crate) struct GlContainer {
     context: GlContext,
@@ -113,10 +112,7 @@ impl Deref for GlContainer {
 pub enum Backend {}
 
 impl hal::Backend for Backend {
-    #[cfg(any(
-        all(not(target_arch = "wasm32"), feature = "glutin"),
-        feature = "wgl"
-    ))]
+    #[cfg(any(all(not(target_arch = "wasm32"), feature = "glutin"), feature = "wgl"))]
     type Instance = Instance;
 
     #[cfg(all(target_arch = "wasm32", not(feature = "wgl")))]
@@ -350,7 +346,6 @@ impl<T> Starc<T> {
             thread: thread,
         })
     }
-
 }
 
 impl<T> Starc<T>
@@ -523,10 +518,7 @@ impl PhysicalDevice {
             "mali",
             "intel",
         ];
-        let strings_that_imply_cpu = [
-            "mesa offscreen",
-            "swiftshader",
-        ];
+        let strings_that_imply_cpu = ["mesa offscreen", "swiftshader"];
         // todo: Intel will release a discrete gpu soon, and we will need to update this logic when they do
         let inferred_device_type = if vendor_lower.contains("qualcomm")
             || vendor_lower.contains("intel")
@@ -737,7 +729,6 @@ impl hal::Instance<Backend> for DummyInstance {
     }
 }
 
-
 #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
 #[derive(Debug)]
 pub enum Instance {
@@ -748,8 +739,7 @@ pub enum Instance {
 #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
 impl hal::Instance<Backend> for Instance {
     fn create(name: &str, version: u32) -> Result<Instance, hal::UnsupportedBackend> {
-        Headless::create(name, version)
-            .map(Instance::Headless)
+        Headless::create(name, version).map(Instance::Headless)
     }
 
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {

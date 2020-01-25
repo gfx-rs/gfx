@@ -56,7 +56,6 @@ use glutin;
 
 use std::iter;
 
-
 #[derive(Debug)]
 pub struct Swapchain {
     // Underlying window, required for presentation
@@ -280,11 +279,10 @@ impl hal::Instance<B> for Headless {
             use glutin::platform::unix::HeadlessContextExt;
             let size = glutin::dpi::PhysicalSize::from((800, 600));
             let builder = glutin::ContextBuilder::new().with_hardware_acceleration(Some(false));
-            context = HeadlessContextExt::build_osmesa(builder, size)
-                .map_err(|e| {
-                    info!("Headless context error {:?}", e);
-                    hal::UnsupportedBackend
-                })?;
+            context = HeadlessContextExt::build_osmesa(builder, size).map_err(|e| {
+                info!("Headless context error {:?}", e);
+                hal::UnsupportedBackend
+            })?;
         }
         #[cfg(not(target_os = "linux"))]
         {

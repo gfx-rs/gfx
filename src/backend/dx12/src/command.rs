@@ -101,7 +101,6 @@ enum OcclusionQuery {
     Precise(UINT),
 }
 
-
 /// Strongly-typed root signature element
 ///
 /// Could be removed for an unsafer variant to occupy less memory
@@ -2562,9 +2561,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 self.occlusion_query = None;
                 d3d12::D3D12_QUERY_TYPE_BINARY_OCCLUSION
             }
-            native::QueryHeapType::PipelineStatistics
-                if self.pipeline_stats_query == Some(id) =>
-            {
+            native::QueryHeapType::PipelineStatistics if self.pipeline_stats_query == Some(id) => {
                 self.pipeline_stats_query = None;
                 d3d12::D3D12_QUERY_TYPE_PIPELINE_STATISTICS
             }

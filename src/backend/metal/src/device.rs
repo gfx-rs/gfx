@@ -17,10 +17,7 @@ use crate::{
 };
 
 use arrayvec::ArrayVec;
-use auxil::{
-    FastHashMap,
-    spirv_cross_specialize_ast,
-};
+use auxil::{spirv_cross_specialize_ast, FastHashMap};
 use cocoa::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
@@ -80,7 +77,6 @@ use std::sync::{
     Arc,
 };
 use std::{cmp, iter, mem, ptr, thread, time};
-
 
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
@@ -465,13 +461,18 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             max_sampler_allocation_count: !0,
             max_bound_descriptor_sets: MAX_BOUND_DESCRIPTOR_SETS as _,
             max_descriptor_set_samplers: pc.max_samplers_per_stage as usize * SHADER_STAGE_COUNT,
-            max_descriptor_set_uniform_buffers: pc.max_buffers_per_stage as usize * SHADER_STAGE_COUNT,
-            max_descriptor_set_storage_buffers: pc.max_buffers_per_stage as usize * SHADER_STAGE_COUNT,
-            max_descriptor_set_sampled_images: pc.max_textures_per_stage as usize * SHADER_STAGE_COUNT,
-            max_descriptor_set_storage_images: pc.max_textures_per_stage as usize * SHADER_STAGE_COUNT,
-            max_descriptor_set_input_attachments: pc.max_textures_per_stage as usize * SHADER_STAGE_COUNT,
+            max_descriptor_set_uniform_buffers: pc.max_buffers_per_stage as usize
+                * SHADER_STAGE_COUNT,
+            max_descriptor_set_storage_buffers: pc.max_buffers_per_stage as usize
+                * SHADER_STAGE_COUNT,
+            max_descriptor_set_sampled_images: pc.max_textures_per_stage as usize
+                * SHADER_STAGE_COUNT,
+            max_descriptor_set_storage_images: pc.max_textures_per_stage as usize
+                * SHADER_STAGE_COUNT,
+            max_descriptor_set_input_attachments: pc.max_textures_per_stage as usize
+                * SHADER_STAGE_COUNT,
             max_fragment_input_components: pc.max_fragment_input_components as usize,
-            max_framebuffer_layers: 2048,      // TODO: Determine is this is the correct value
+            max_framebuffer_layers: 2048, // TODO: Determine is this is the correct value
             max_memory_allocation_count: 4096, // TODO: Determine is this is the correct value
 
             max_per_stage_descriptor_samplers: pc.max_samplers_per_stage as usize,
@@ -621,7 +622,8 @@ impl Device {
 
         spirv_cross_specialize_ast(&mut ast, specialization)?;
 
-        ast.set_compiler_options(compiler_options).map_err(gen_unexpected_error)?;
+        ast.set_compiler_options(compiler_options)
+            .map_err(gen_unexpected_error)?;
 
         let entry_points = ast.get_entry_points().map_err(|err| {
             ShaderError::CompilationFailed(match err {
@@ -868,9 +870,7 @@ impl Device {
                 image::Filter::Linear => msl::SamplerFilter::Linear,
             },
             mip_filter: match info.min_filter {
-                image::Filter::Nearest if info.lod_range.end.0 < 0.5 => {
-                    msl::SamplerMipFilter::None
-                }
+                image::Filter::Nearest if info.lod_range.end.0 < 0.5 => msl::SamplerMipFilter::None,
                 image::Filter::Nearest => msl::SamplerMipFilter::Nearest,
                 image::Filter::Linear => msl::SamplerMipFilter::Linear,
             },
@@ -1689,6 +1689,7 @@ impl hal::device::Device<Backend> for Device {
     ) -> Result<n::ShaderModule, ShaderError> {
         //TODO: we can probably at least parse here and save the `Ast`
         let depends_on_pipeline_layout = true; //TODO: !self.private_caps.argument_buffers
+
         // TODO: also depends on pipeline layout if there are specialization constants that
         // SPIRV-Cross generates macros for, which occurs when MSL version is older than 1.2 or the
         // constant is used as an array size (see
@@ -1910,12 +1911,18 @@ impl hal::device::Device<Backend> for Device {
                 // for textures in an argument buffer
                 match desc.ty {
                     pso::DescriptorType::Buffer {
-                        format: pso::BufferDescriptorFormat::Structured { dynamic_offset: true }, ..
+                        format:
+                            pso::BufferDescriptorFormat::Structured {
+                                dynamic_offset: true,
+                            },
+                        ..
                     } => {
                         //TODO: apply the offsets somehow at the binding time
                         error!("Dynamic offsets are not yet supported in argument buffers!");
                     }
-                    pso::DescriptorType::Image { ty: pso::ImageDescriptorType::Storage }
+                    pso::DescriptorType::Image {
+                        ty: pso::ImageDescriptorType::Storage,
+                    }
                     | pso::DescriptorType::Buffer {
                         ty: pso::BufferDescriptorType::Storage { .. },
                         format: pso::BufferDescriptorFormat::Texel,
@@ -2261,7 +2268,11 @@ impl hal::device::Device<Backend> for Device {
         usage: buffer::Usage,
     ) -> Result<n::Buffer, buffer::CreationError> {
         debug!("create_buffer of size {} and usage {:?}", size, usage);
-        Ok(n::Buffer::Unbound { usage, size, name: String::new() })
+        Ok(n::Buffer::Unbound {
+            usage,
+            size,
+            name: String::new(),
+        })
     }
 
     unsafe fn get_buffer_requirements(&self, buffer: &n::Buffer) -> memory::Requirements {
@@ -2343,7 +2354,13 @@ impl hal::device::Device<Backend> for Device {
                 if offset == 0x0 && size == cpu_buffer.length() {
                     cpu_buffer.set_label(name);
                 } else {
-                    cpu_buffer.add_debug_marker(name, NSRange { location: offset, length: size });
+                    cpu_buffer.add_debug_marker(
+                        name,
+                        NSRange {
+                            location: offset,
+                            length: size,
+                        },
+                    );
                 }
                 n::Buffer::Bound {
                     raw: cpu_buffer.clone(),
@@ -2671,7 +2688,13 @@ impl hal::device::Device<Backend> for Device {
                     if offset == 0x0 && cpu_buffer.length() == mip_sizes[0] {
                         cpu_buffer.set_label(name);
                     } else {
-                        cpu_buffer.add_debug_marker(name, NSRange { location: offset, length: mip_sizes[0] });
+                        cpu_buffer.add_debug_marker(
+                            name,
+                            NSRange {
+                                location: offset,
+                                length: mip_sizes[0],
+                            },
+                        );
                     }
                     n::ImageLike::Buffer(n::Buffer::Bound {
                         raw: cpu_buffer.clone(),
@@ -2986,9 +3009,22 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn set_image_name(&self, image: &mut n::Image, name: &str) {
         match image {
-            n::Image { like: n::ImageLike::Buffer(ref mut buf), .. } => self.set_buffer_name(buf, name),
-            n::Image { like: n::ImageLike::Texture(ref tex), .. } => tex.set_label(name),
-            n::Image { like: n::ImageLike::Unbound { name: ref mut unbound_name, .. }, .. } => {
+            n::Image {
+                like: n::ImageLike::Buffer(ref mut buf),
+                ..
+            } => self.set_buffer_name(buf, name),
+            n::Image {
+                like: n::ImageLike::Texture(ref tex),
+                ..
+            } => tex.set_label(name),
+            n::Image {
+                like:
+                    n::ImageLike::Unbound {
+                        name: ref mut unbound_name,
+                        ..
+                    },
+                ..
+            } => {
                 *unbound_name = name.to_string();
             }
         };
@@ -2996,13 +3032,21 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn set_buffer_name(&self, buffer: &mut n::Buffer, name: &str) {
         match buffer {
-            n::Buffer::Unbound { name: ref mut unbound_name, .. } => {
+            n::Buffer::Unbound {
+                name: ref mut unbound_name,
+                ..
+            } => {
                 *unbound_name = name.to_string();
-            },
-            n::Buffer::Bound { ref raw, ref range, .. } => {
+            }
+            n::Buffer::Bound {
+                ref raw, ref range, ..
+            } => {
                 raw.add_debug_marker(
                     name,
-                    NSRange { location: range.start, length: range.end - range.start }
+                    NSRange {
+                        location: range.start,
+                        length: range.end - range.start,
+                    },
                 );
             }
         }
@@ -3016,14 +3060,11 @@ impl hal::device::Device<Backend> for Device {
         command_buffer.name = name.to_string();
     }
 
-    unsafe fn set_semaphore_name(&self, _semaphore: &mut n::Semaphore, _name: &str) {
-    }
+    unsafe fn set_semaphore_name(&self, _semaphore: &mut n::Semaphore, _name: &str) {}
 
-    unsafe fn set_fence_name(&self, _fence: &mut n::Fence, _name: &str) {
-    }
+    unsafe fn set_fence_name(&self, _fence: &mut n::Fence, _name: &str) {}
 
-    unsafe fn set_framebuffer_name(&self, _framebuffer: &mut n::Framebuffer, _name: &str) {
-    }
+    unsafe fn set_framebuffer_name(&self, _framebuffer: &mut n::Framebuffer, _name: &str) {}
 
     unsafe fn set_render_pass_name(&self, render_pass: &mut n::RenderPass, name: &str) {
         render_pass.name = name.to_string();

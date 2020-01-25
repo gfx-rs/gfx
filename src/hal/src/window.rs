@@ -102,10 +102,18 @@ impl From<device::WindowInUse> for CreationError {
 impl std::fmt::Display for CreationError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            CreationError::OutOfMemory(err) => write!(fmt, "Failed to create or configure swapchain: {}", err),
-            CreationError::DeviceLost(err) => write!(fmt, "Failed to create or configure swapchain: {}", err),
-            CreationError::SurfaceLost(err) => write!(fmt, "Failed to create or configure swapchain: {}", err),
-            CreationError::WindowInUse(err) => write!(fmt, "Failed to create or configure swapchain: {}", err),
+            CreationError::OutOfMemory(err) => {
+                write!(fmt, "Failed to create or configure swapchain: {}", err)
+            }
+            CreationError::DeviceLost(err) => {
+                write!(fmt, "Failed to create or configure swapchain: {}", err)
+            }
+            CreationError::SurfaceLost(err) => {
+                write!(fmt, "Failed to create or configure swapchain: {}", err)
+            }
+            CreationError::WindowInUse(err) => {
+                write!(fmt, "Failed to create or configure swapchain: {}", err)
+            }
         }
     }
 }
@@ -283,7 +291,6 @@ pub trait PresentationSurface<B: Backend>: Surface<B> {
 /// to a particular image in the swapchain.
 pub type SwapImageIndex = u32;
 
-
 bitflags!(
     /// Specifies the mode regulating how a swapchain presents frames.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -390,9 +397,15 @@ impl SwapchainConfig {
     /// returned from a physical device query. If the surface does not
     /// specify a current size, default_extent is clamped and used instead.
     pub fn from_caps(caps: &SurfaceCapabilities, format: Format, default_extent: Extent2D) -> Self {
-        let composite_alpha_mode = if caps.composite_alpha_modes.contains(CompositeAlphaMode::INHERIT) {
+        let composite_alpha_mode = if caps
+            .composite_alpha_modes
+            .contains(CompositeAlphaMode::INHERIT)
+        {
             CompositeAlphaMode::INHERIT
-        } else if caps.composite_alpha_modes.contains(CompositeAlphaMode::OPAQUE) {
+        } else if caps
+            .composite_alpha_modes
+            .contains(CompositeAlphaMode::OPAQUE)
+        {
             CompositeAlphaMode::OPAQUE
         } else {
             panic!("neither INHERIT or OPAQUE CompositeAlphaMode(s) are supported")
@@ -467,9 +480,17 @@ impl std::fmt::Display for AcquireError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AcquireError::OutOfMemory(err) => write!(fmt, "Failed to acqure image: {}", err),
-            AcquireError::NotReady => write!(fmt, "Failed to acqure image: No image ready (timeout wasn't specified)"),
-            AcquireError::Timeout => write!(fmt, "Failed to acqure image: No image ready (timeout)"),
-            AcquireError::OutOfDate => write!(fmt, "Failed to acqure image: Swapchain is out of date and needs to be re-created"),
+            AcquireError::NotReady => write!(
+                fmt,
+                "Failed to acqure image: No image ready (timeout wasn't specified)"
+            ),
+            AcquireError::Timeout => {
+                write!(fmt, "Failed to acqure image: No image ready (timeout)")
+            }
+            AcquireError::OutOfDate => write!(
+                fmt,
+                "Failed to acqure image: Swapchain is out of date and needs to be re-created"
+            ),
             AcquireError::SurfaceLost(err) => write!(fmt, "Failed to acqure image: {}", err),
             AcquireError::DeviceLost(err) => write!(fmt, "Failed to acqure image: {}", err),
         }
@@ -504,7 +525,10 @@ impl std::fmt::Display for PresentError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PresentError::OutOfMemory(err) => write!(fmt, "Failed to present image: {}", err),
-            PresentError::OutOfDate => write!(fmt, "Failed to present image: Swapchain is out of date and needs to be re-created"),
+            PresentError::OutOfDate => write!(
+                fmt,
+                "Failed to present image: Swapchain is out of date and needs to be re-created"
+            ),
             PresentError::SurfaceLost(err) => write!(fmt, "Failed to present image: {}", err),
             PresentError::DeviceLost(err) => write!(fmt, "Failed to present image: {}", err),
         }
@@ -593,11 +617,13 @@ pub enum InitError {
     UnsupportedWindowHandle,
 }
 
-
 impl std::fmt::Display for InitError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            InitError::UnsupportedWindowHandle => write!(fmt, "Failed to create surface: Specified window handle is unsupported"),
+            InitError::UnsupportedWindowHandle => write!(
+                fmt,
+                "Failed to create surface: Specified window handle is unsupported"
+            ),
         }
     }
 }

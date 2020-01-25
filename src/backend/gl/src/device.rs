@@ -9,10 +9,7 @@ use std::sync::Arc;
 
 use glow::HasContext;
 
-use auxil::{
-    FastHashMap,
-    spirv_cross_specialize_ast,
-};
+use auxil::{spirv_cross_specialize_ast, FastHashMap};
 
 use hal::{
     buffer,
@@ -30,8 +27,8 @@ use hal::{
 };
 
 use crate::{
-    conv,
     command as cmd,
+    conv,
     info::LegacyFeatures,
     native as n,
     pool::{BufferMemory, CommandPool, OwnedBuffer},
@@ -56,7 +53,9 @@ fn gen_unexpected_error(err: SpirvErrorCode) -> d::ShaderError {
     d::ShaderError::CompilationFailed(msg)
 }
 
-fn create_fbo_internal(share: &Starc<Share>) -> Option<<GlContext as glow::HasContext>::Framebuffer> {
+fn create_fbo_internal(
+    share: &Starc<Share>,
+) -> Option<<GlContext as glow::HasContext>::Framebuffer> {
     if share.private_caps.framebuffer {
         let gl = &share.context;
         let name = unsafe { gl.create_framebuffer() }.unwrap();
@@ -674,11 +673,19 @@ impl d::Device<B> for Device {
                 assert!(!binding.immutable_samplers); //TODO: Implement immutable_samplers
                 use crate::pso::DescriptorType::*;
                 match binding.ty {
-                    Sampler | Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: false }} => {
+                    Sampler
+                    | Image {
+                        ty:
+                            pso::ImageDescriptorType::Sampled {
+                                with_sampler: false,
+                            },
+                    } => {
                         // We need to figure out combos once we get the shaders, until then we
                         // do nothing
                     }
-                    Image { ty: pso::ImageDescriptorType::Sampled { with_sampler: true }} => {
+                    Image {
+                        ty: pso::ImageDescriptorType::Sampled { with_sampler: true },
+                    } => {
                         drd.insert_missing_binding_into_spare(
                             n::BindingTypes::Images,
                             set as _,
@@ -687,25 +694,26 @@ impl d::Device<B> for Device {
                     }
                     Buffer {
                         ty,
-                        format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
-                    } => {
-                        match ty {
-                            pso::BufferDescriptorType::Uniform => {
-                                drd.insert_missing_binding_into_spare(
-                                    n::BindingTypes::UniformBuffers,
-                                    set as _,
-                                    binding.binding,
-                                );
-                            }
-                            pso::BufferDescriptorType::Storage { .. } => {
-                                drd.insert_missing_binding_into_spare(
-                                    n::BindingTypes::StorageBuffers,
-                                    set as _,
-                                    binding.binding,
-                                );
-                            }
+                        format:
+                            pso::BufferDescriptorFormat::Structured {
+                                dynamic_offset: false,
+                            },
+                    } => match ty {
+                        pso::BufferDescriptorType::Uniform => {
+                            drd.insert_missing_binding_into_spare(
+                                n::BindingTypes::UniformBuffers,
+                                set as _,
+                                binding.binding,
+                            );
                         }
-                    }
+                        pso::BufferDescriptorType::Storage { .. } => {
+                            drd.insert_missing_binding_into_spare(
+                                n::BindingTypes::StorageBuffers,
+                                set as _,
+                                binding.binding,
+                            );
+                        }
+                    },
                     _ => unimplemented!(), // 6
                 }
             })
@@ -1084,9 +1092,7 @@ impl d::Device<B> for Device {
         );
 
         if let Err(_) = self.share.check() {
-            Err(d::AllocationError::OutOfMemory(
-                d::OutOfMemory::Host,
-            ))
+            Err(d::AllocationError::OutOfMemory(d::OutOfMemory::Host))
         } else {
             Ok(n::FatSampler::Sampler(name))
         }
@@ -1557,7 +1563,7 @@ impl d::Device<B> for Device {
                                 pso::BufferDescriptorType::Storage { .. } => {
                                     n::BindingTypes::StorageBuffers
                                 }
-                            }
+                            },
                             _ => panic!("Can't write buffer into descriptor of type {:?}", ty),
                         };
 
@@ -2004,7 +2010,7 @@ impl d::Device<B> for Device {
     unsafe fn set_command_buffer_name(
         &self,
         _command_buffer: &mut cmd::CommandBuffer,
-        _name: &str
+        _name: &str,
     ) {
         // TODO
     }

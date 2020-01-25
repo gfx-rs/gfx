@@ -62,8 +62,8 @@ use crate::{
     PipelineLayout,
     QueryPool,
     RawFence,
-    RegisterData,
     RegisterAccumulator,
+    RegisterData,
     RenderPass,
     ResourceIndex,
     Sampler,
@@ -868,13 +868,11 @@ impl device::Device<Backend> for Device {
                 bindings: Arc::clone(&layout.bindings),
                 registers: res_offsets.advance(&layout.pool_mapping),
             });
-        };
+        }
 
         //TODO: assert that res_offsets are within supported range
 
-        Ok(PipelineLayout {
-            sets,
-        })
+        Ok(PipelineLayout { sets })
     }
 
     unsafe fn create_pipeline_cache(
@@ -1134,10 +1132,7 @@ impl device::Device<Backend> for Device {
                 BindFlags: buffer.bind,
                 CPUAccessFlags: 0,
                 MiscFlags,
-                StructureByteStride: if buffer
-                    .internal
-                    .usage
-                    .contains(buffer::Usage::TRANSFER_SRC)
+                StructureByteStride: if buffer.internal.usage.contains(buffer::Usage::TRANSFER_SRC)
                 {
                     4
                 } else {
@@ -1169,10 +1164,7 @@ impl device::Device<Backend> for Device {
                 BindFlags: buffer.bind,
                 CPUAccessFlags: 0,
                 MiscFlags,
-                StructureByteStride: if buffer
-                    .internal
-                    .usage
-                    .contains(buffer::Usage::TRANSFER_SRC)
+                StructureByteStride: if buffer.internal.usage.contains(buffer::Usage::TRANSFER_SRC)
                 {
                     4
                 } else {
@@ -1879,9 +1871,15 @@ impl device::Device<Backend> for Device {
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
         for write in write_iter {
-            let mut mapping = write.set.layout.pool_mapping
+            let mut mapping = write
+                .set
+                .layout
+                .pool_mapping
                 .map_register(|mapping| mapping.offset);
-            let binding_start = write.set.layout.bindings
+            let binding_start = write
+                .set
+                .layout
+                .bindings
                 .iter()
                 .position(|binding| binding.binding == write.binding)
                 .unwrap();
@@ -1906,8 +1904,14 @@ impl device::Device<Backend> for Device {
                     },
                     pso::Descriptor::Image(image, _layout) => RegisterData {
                         c: ptr::null_mut(),
-                        t: image.srv_handle.clone().map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
-                        u: image.uav_handle.clone().map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                        t: image
+                            .srv_handle
+                            .clone()
+                            .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                        u: image
+                            .uav_handle
+                            .clone()
+                            .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
                         s: ptr::null_mut(),
                     },
                     pso::Descriptor::Sampler(sampler) => RegisterData {
@@ -1916,12 +1920,20 @@ impl device::Device<Backend> for Device {
                         u: ptr::null_mut(),
                         s: sampler.sampler_handle.as_raw() as *mut _,
                     },
-                    pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => RegisterData {
-                        c: ptr::null_mut(),
-                        t: image.srv_handle.clone().map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
-                        u: image.uav_handle.clone().map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
-                        s: sampler.sampler_handle.as_raw() as *mut _,
-                    },
+                    pso::Descriptor::CombinedImageSampler(image, _layout, sampler) => {
+                        RegisterData {
+                            c: ptr::null_mut(),
+                            t: image
+                                .srv_handle
+                                .clone()
+                                .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                            u: image
+                                .uav_handle
+                                .clone()
+                                .map_or(ptr::null_mut(), |h| h.as_raw() as *mut _),
+                            s: sampler.sampler_handle.as_raw() as *mut _,
+                        }
+                    }
                     pso::Descriptor::UniformTexelBuffer(_buffer_view) => unimplemented!(),
                     pso::Descriptor::StorageTexelBuffer(_buffer_view) => unimplemented!(),
                 };
@@ -1929,19 +1941,27 @@ impl device::Device<Backend> for Device {
                 let content = DescriptorContent::from(binding.ty);
                 if content.contains(DescriptorContent::CBV) {
                     let offsets = mapping.map_other(|map| map.c);
-                    write.set.assign_stages(&offsets, binding.stage_flags, handles.c);
+                    write
+                        .set
+                        .assign_stages(&offsets, binding.stage_flags, handles.c);
                 };
                 if content.contains(DescriptorContent::SRV) {
                     let offsets = mapping.map_other(|map| map.t);
-                    write.set.assign_stages(&offsets, binding.stage_flags, handles.t);
+                    write
+                        .set
+                        .assign_stages(&offsets, binding.stage_flags, handles.t);
                 };
                 if content.contains(DescriptorContent::UAV) {
                     let offsets = mapping.map_other(|map| map.u);
-                    write.set.assign_stages(&offsets, binding.stage_flags, handles.u);
+                    write
+                        .set
+                        .assign_stages(&offsets, binding.stage_flags, handles.u);
                 };
                 if content.contains(DescriptorContent::SAMPLER) {
                     let offsets = mapping.map_other(|map| map.s);
-                    write.set.assign_stages(&offsets, binding.stage_flags, handles.s);
+                    write
+                        .set
+                        .assign_stages(&offsets, binding.stage_flags, handles.s);
                 };
 
                 mapping.add_content(content, binding.stage_flags);

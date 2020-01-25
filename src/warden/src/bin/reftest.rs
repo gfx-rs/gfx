@@ -14,7 +14,7 @@ extern crate gfx_warden as warden;
 #[macro_use]
 extern crate serde;
 
-use hal::{Instance as _, adapter::PhysicalDevice as _};
+use hal::{adapter::PhysicalDevice as _, Instance as _};
 use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
@@ -62,7 +62,10 @@ impl Harness {
         let base_path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../work"));
         println!("Parsing test suite '{}'...", suite_name);
 
-        let suite_path = base_path.join("reftests").join(suite_name).with_extension("ron");
+        let suite_path = base_path
+            .join("reftests")
+            .join(suite_name)
+            .with_extension("ron");
         let suite = File::open(&suite_path)
             .map_err(de::Error::from)
             .and_then(de::from_reader::<_, Suite>)
@@ -119,12 +122,9 @@ impl Harness {
                 }
             }
 
-            let mut scene = warden::gpu::Scene::<B>::new(
-                adapter,
-                &tg.scene,
-                self.base_path.join("data"),
-            )
-            .unwrap();
+            let mut scene =
+                warden::gpu::Scene::<B>::new(adapter, &tg.scene, self.base_path.join("data"))
+                    .unwrap();
 
             for (test_name, test) in &tg.tests {
                 print!("\t\tTest '{}' ...", test_name);
@@ -198,7 +198,8 @@ fn main() {
     let harness = Harness::new(&suite_name);
     #[cfg(feature = "vulkan")]
     {
-        num_failures += harness.run::<gfx_backend_vulkan::Backend>("Vulkan", Disabilities::default());
+        num_failures +=
+            harness.run::<gfx_backend_vulkan::Backend>("Vulkan", Disabilities::default());
     }
     #[cfg(feature = "dx12")]
     {

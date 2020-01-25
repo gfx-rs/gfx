@@ -44,7 +44,7 @@ pub fn wrap_to_gl(w: i::WrapMode) -> u32 {
     }
 }
 
-pub fn input_assember_to_gl_primitive(ia : &pso::InputAssemblerDesc) -> u32 {
+pub fn input_assember_to_gl_primitive(ia: &pso::InputAssemblerDesc) -> u32 {
     match (ia.primitive, ia.with_adjacency) {
         (pso::Primitive::PointList, false) => glow::POINTS,
         (pso::Primitive::PointList, true) => panic!("Points can't have adjacency info"),

@@ -331,7 +331,6 @@ impl window::PresentationSurface<Backend> for Surface {
     }
 }
 
-
 #[derive(Debug)]
 pub struct Swapchain {
     pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,

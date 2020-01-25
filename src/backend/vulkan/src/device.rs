@@ -23,7 +23,7 @@ use std::sync::Arc;
 use std::{mem, ptr};
 
 use crate::pool::RawCommandPool;
-use crate::{conv, native as n, window as w, command as cmd};
+use crate::{command as cmd, conv, native as n, window as w};
 use crate::{Backend as B, DebugMessenger, Device};
 
 #[derive(Debug, Default)]
@@ -55,7 +55,11 @@ struct GraphicsPipelineInfoBuf {
     scissor: vk::Rect2D,
 }
 impl GraphicsPipelineInfoBuf {
-    unsafe fn add_stage<'a>(&mut self, stage: vk::ShaderStageFlags, source: &pso::EntryPoint<'a, B>) {
+    unsafe fn add_stage<'a>(
+        &mut self,
+        stage: vk::ShaderStageFlags,
+        source: &pso::EntryPoint<'a, B>,
+    ) {
         let string = CString::new(source.entry).unwrap();
         let p_name = string.as_ptr();
         self.c_strings.push(string);
@@ -225,7 +229,8 @@ impl GraphicsPipelineInfoBuf {
         };
 
         this.tessellation_state = {
-            if let pso::Primitive::PatchList(patch_control_points) = desc.input_assembler.primitive {
+            if let pso::Primitive::PatchList(patch_control_points) = desc.input_assembler.primitive
+            {
                 Some(vk::PipelineTessellationStateCreateInfo {
                     s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
                     p_next: ptr::null(),
@@ -430,10 +435,7 @@ struct ComputePipelineInfoBuf {
     entries: SmallVec<[vk::SpecializationMapEntry; 4]>,
 }
 impl ComputePipelineInfoBuf {
-    unsafe fn initialize<'a>(
-        this: &mut Pin<&mut Self>,
-        desc: &pso::ComputePipelineDesc<'a, B>,
-    ) {
+    unsafe fn initialize<'a>(this: &mut Pin<&mut Self>, desc: &pso::ComputePipelineDesc<'a, B>) {
         let mut this = Pin::get_mut(this.as_mut()); // use into_inner when it gets stable
 
         this.c_string = CString::new(desc.shader.entry).unwrap();
@@ -1290,11 +1292,7 @@ impl d::Device<B> for Device {
                     vk::BorderColor::FLOAT_TRANSPARENT_BLACK
                 }
             },
-            unnormalized_coordinates: if desc.normalized {
-                vk::FALSE
-            } else {
-                vk::TRUE
-            },
+            unnormalized_coordinates: if desc.normalized { vk::FALSE } else { vk::TRUE },
         };
 
         let result = self.raw.0.create_sampler(&info, None);
@@ -2241,12 +2239,12 @@ impl d::Device<B> for Device {
         self.set_object_name(vk::ObjectType::BUFFER, buffer.raw.as_raw(), name)
     }
 
-    unsafe fn set_command_buffer_name(
-        &self,
-        command_buffer: &mut cmd::CommandBuffer,
-        name: &str
-    ) {
-        self.set_object_name(vk::ObjectType::COMMAND_BUFFER, command_buffer.raw.as_raw(), name)
+    unsafe fn set_command_buffer_name(&self, command_buffer: &mut cmd::CommandBuffer, name: &str) {
+        self.set_object_name(
+            vk::ObjectType::COMMAND_BUFFER,
+            command_buffer.raw.as_raw(),
+            name,
+        )
     }
 
     unsafe fn set_semaphore_name(&self, semaphore: &mut n::Semaphore, name: &str) {
@@ -2266,11 +2264,23 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn set_descriptor_set_name(&self, descriptor_set: &mut n::DescriptorSet, name: &str) {
-        self.set_object_name(vk::ObjectType::DESCRIPTOR_SET, descriptor_set.raw.as_raw(), name)
+        self.set_object_name(
+            vk::ObjectType::DESCRIPTOR_SET,
+            descriptor_set.raw.as_raw(),
+            name,
+        )
     }
 
-    unsafe fn set_descriptor_set_layout_name(&self, descriptor_set_layout: &mut n::DescriptorSetLayout, name: &str) {
-        self.set_object_name(vk::ObjectType::DESCRIPTOR_SET_LAYOUT, descriptor_set_layout.raw.as_raw(), name)
+    unsafe fn set_descriptor_set_layout_name(
+        &self,
+        descriptor_set_layout: &mut n::DescriptorSetLayout,
+        name: &str,
+    ) {
+        self.set_object_name(
+            vk::ObjectType::DESCRIPTOR_SET_LAYOUT,
+            descriptor_set_layout.raw.as_raw(),
+            name,
+        )
     }
 }
 
@@ -2283,7 +2293,7 @@ impl Device {
             std::ptr::copy_nonoverlapping(
                 name.as_ptr(),
                 &mut NAME_BUF[0],
-                name.len().min(NAME_BUF.len())
+                name.len().min(NAME_BUF.len()),
             );
             NAME_BUF[name.len()] = 0;
             let _result = debug_utils_ext.debug_utils_set_object_name(
@@ -2294,7 +2304,7 @@ impl Device {
                     object_type,
                     object_handle,
                     p_object_name: NAME_BUF.as_ptr() as *mut _,
-                }
+                },
             );
         }
     }

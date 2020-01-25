@@ -253,7 +253,6 @@ impl<T> State<T> {
     }
 }
 
-
 /// Safely read SPIR-V
 ///
 /// Converts to native endianness and returns correctly aligned storage without unnecessary
