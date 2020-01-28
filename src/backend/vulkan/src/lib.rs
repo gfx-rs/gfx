@@ -567,11 +567,10 @@ impl hal::Instance<Backend> for Instance {
             RawWindowHandle::Xcb(handle) if self.extensions.contains(&extensions::khr::XcbSurface::name()) => {
                 Ok(self.create_surface_from_xcb(handle.connection as *mut _, handle.window))
             }
-            // #[cfg(target_os = "android")]
-            // RawWindowHandle::ANativeWindowHandle(handle) => {
-            //     let native_window = unimplemented!();
-            //     self.create_surface_android(native_window)
-            //}
+            #[cfg(target_os = "android")]
+            RawWindowHandle::Android(handle) => {
+                Ok(self.create_surface_android(handle.a_native_window))
+            }
             #[cfg(windows)]
             RawWindowHandle::Windows(handle) => {
                 use winapi::um::libloaderapi::GetModuleHandleW;
