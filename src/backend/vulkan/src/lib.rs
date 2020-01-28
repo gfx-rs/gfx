@@ -536,13 +536,11 @@ impl hal::Instance<Backend> for Instance {
         use raw_window_handle::RawWindowHandle;
 
         match has_handle.raw_window_handle() {
-            #[cfg(all(
-                unix,
-                not(target_os = "android"),
-                not(target_os = "macos")
-            ))]
+            #[cfg(all(unix, not(target_os = "android"), not(target_os = "macos")))]
             RawWindowHandle::Wayland(handle)
-                if self.extensions.contains(&extensions::khr::WaylandSurface::name()) =>
+                if self
+                    .extensions
+                    .contains(&extensions::khr::WaylandSurface::name()) =>
             {
                 Ok(self.create_surface_from_wayland(handle.display, handle.surface))
             }
@@ -553,7 +551,9 @@ impl hal::Instance<Backend> for Instance {
                 not(target_os = "macos")
             ))]
             RawWindowHandle::Xlib(handle)
-                if self.extensions.contains(&extensions::khr::XlibSurface::name()) =>
+                if self
+                    .extensions
+                    .contains(&extensions::khr::XlibSurface::name()) =>
             {
                 Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
             }
@@ -564,7 +564,11 @@ impl hal::Instance<Backend> for Instance {
                 not(target_os = "macos"),
                 not(target_os = "ios")
             ))]
-            RawWindowHandle::Xcb(handle) if self.extensions.contains(&extensions::khr::XcbSurface::name()) => {
+            RawWindowHandle::Xcb(handle)
+                if self
+                    .extensions
+                    .contains(&extensions::khr::XcbSurface::name()) =>
+            {
                 Ok(self.create_surface_from_xcb(handle.connection as *mut _, handle.window))
             }
             #[cfg(target_os = "android")]
@@ -579,15 +583,16 @@ impl hal::Instance<Backend> for Instance {
                 Ok(self.create_surface_from_hwnd(hinstance as *mut _, handle.hwnd))
             }
             #[cfg(target_os = "macos")]
-            RawWindowHandle::MacOS(handle) => {
-                Ok(self.create_surface_from_ns_view(handle.ns_view))
-            }
+            RawWindowHandle::MacOS(handle) => Ok(self.create_surface_from_ns_view(handle.ns_view)),
             _ => Err(hal::window::InitError::UnsupportedWindowHandle),
         }
     }
 
     unsafe fn destroy_surface(&self, surface: window::Surface) {
-        surface.raw.functor.destroy_surface(surface.raw.handle, None);
+        surface
+            .raw
+            .functor
+            .destroy_surface(surface.raw.handle, None);
     }
 }
 
@@ -670,14 +675,22 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
             match self.instance.0.create_device(self.handle, &info, None) {
                 Ok(device) => device,
-                Err(e) => return Err(match e {
-                    vk::Result::ERROR_OUT_OF_HOST_MEMORY => DeviceCreationError::OutOfMemory(OutOfMemory::Host),
-                    vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => DeviceCreationError::OutOfMemory(OutOfMemory::Device),
-                    vk::Result::ERROR_INITIALIZATION_FAILED => DeviceCreationError::InitializationFailed,
-                    vk::Result::ERROR_DEVICE_LOST => DeviceCreationError::DeviceLost,
-                    vk::Result::ERROR_TOO_MANY_OBJECTS => DeviceCreationError::TooManyObjects,
-                    _ => unreachable!(),
-                }),
+                Err(e) => {
+                    return Err(match e {
+                        vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+                            DeviceCreationError::OutOfMemory(OutOfMemory::Host)
+                        }
+                        vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+                            DeviceCreationError::OutOfMemory(OutOfMemory::Device)
+                        }
+                        vk::Result::ERROR_INITIALIZATION_FAILED => {
+                            DeviceCreationError::InitializationFailed
+                        }
+                        vk::Result::ERROR_DEVICE_LOST => DeviceCreationError::DeviceLost,
+                        vk::Result::ERROR_TOO_MANY_OBJECTS => DeviceCreationError::TooManyObjects,
+                        _ => unreachable!(),
+                    })
+                }
             }
         };
 
@@ -690,7 +703,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         });
 
         let device = Device {
-            raw: Arc::new(RawDevice(device_raw, requested_features, self.instance.clone())),
+            raw: Arc::new(RawDevice(
+                device_raw,
+                requested_features,
+                self.instance.clone(),
+            )),
         };
 
         let device_arc = device.raw.clone();
@@ -1181,11 +1198,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 }
 
 #[doc(hidden)]
-pub struct RawDevice(
-    pub ash::Device,
-    Features,
-    Arc<RawInstance>,
-);
+pub struct RawDevice(pub ash::Device, Features, Arc<RawInstance>);
 
 impl fmt::Debug for RawDevice {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {

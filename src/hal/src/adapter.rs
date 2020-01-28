@@ -9,8 +9,14 @@
 use std::{any::Any, fmt};
 
 use crate::{
+    device,
+    format,
+    image,
+    memory,
     queue::{QueueGroup, QueuePriority},
-    device, format, image, memory, Backend, Features, Limits,
+    Backend,
+    Features,
+    Limits,
 };
 
 /// A description for a single chunk of memory in a heap.

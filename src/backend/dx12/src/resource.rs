@@ -457,10 +457,10 @@ impl DescriptorContent {
 impl From<pso::DescriptorType> for DescriptorContent {
     fn from(ty: pso::DescriptorType) -> Self {
         use hal::pso::{
+            BufferDescriptorFormat as Bdf,
+            BufferDescriptorType as Bdt,
             DescriptorType as Dt,
             ImageDescriptorType as Idt,
-            BufferDescriptorType as Bdt,
-            BufferDescriptorFormat as Bdf
         };
 
         use DescriptorContent as Dc;
@@ -472,19 +472,28 @@ impl From<pso::DescriptorType> for DescriptorContent {
                 Idt::Sampled { with_sampler } => match with_sampler {
                     true => Dc::SRV | Dc::SAMPLER,
                     false => Dc::SRV,
-                }
-            }
+                },
+            },
             Dt::Buffer { ty, format } => match ty {
                 Bdt::Storage { .. } => match format {
-                    Bdf::Structured { dynamic_offset: true } => Dc::SRV | Dc::UAV | Dc::DYNAMIC,
-                    Bdf::Structured { dynamic_offset: false } | Bdf::Texel => Dc::SRV | Dc::UAV,
-                }
+                    Bdf::Structured {
+                        dynamic_offset: true,
+                    } => Dc::SRV | Dc::UAV | Dc::DYNAMIC,
+                    Bdf::Structured {
+                        dynamic_offset: false,
+                    }
+                    | Bdf::Texel => Dc::SRV | Dc::UAV,
+                },
                 Bdt::Uniform => match format {
-                    Bdf::Structured { dynamic_offset: true } => Dc::CBV | Dc::DYNAMIC,
-                    Bdf::Structured { dynamic_offset: false } => Dc::CBV,
+                    Bdf::Structured {
+                        dynamic_offset: true,
+                    } => Dc::CBV | Dc::DYNAMIC,
+                    Bdf::Structured {
+                        dynamic_offset: false,
+                    } => Dc::CBV,
                     Bdf::Texel => Dc::SRV,
-                }
-            }
+                },
+            },
             Dt::InputAttachment => Dc::SRV,
         }
     }

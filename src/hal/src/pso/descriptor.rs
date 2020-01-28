@@ -19,12 +19,7 @@
 use smallvec::SmallVec;
 use std::{borrow::Borrow, fmt, iter, ops::Range};
 
-use crate::{
-    buffer::Offset,
-    image::Layout,
-    pso::ShaderStageFlags,
-    Backend,
-};
+use crate::{buffer::Offset, image::Layout, pso::ShaderStageFlags, Backend};
 
 ///
 pub type DescriptorSetIndex = u16;
@@ -158,11 +153,23 @@ pub enum AllocationError {
 impl std::fmt::Display for AllocationError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            AllocationError::Host => write!(fmt, "Failed to allocate descriptor set: Out of host memory"),
-            AllocationError::Device => write!(fmt, "Failed to allocate descriptor set: Out of device memory"),
-            AllocationError::OutOfPoolMemory => write!(fmt, "Failed to allocate descriptor set: Out of pool memory"),
-            AllocationError::FragmentedPool => write!(fmt, "Failed to allocate descriptor set: Pool is fragmented"),
-            AllocationError::IncompatibleLayout => write!(fmt, "Failed to allocate descriptor set: Incompatible layout"),
+            AllocationError::Host => {
+                write!(fmt, "Failed to allocate descriptor set: Out of host memory")
+            }
+            AllocationError::Device => write!(
+                fmt,
+                "Failed to allocate descriptor set: Out of device memory"
+            ),
+            AllocationError::OutOfPoolMemory => {
+                write!(fmt, "Failed to allocate descriptor set: Out of pool memory")
+            }
+            AllocationError::FragmentedPool => {
+                write!(fmt, "Failed to allocate descriptor set: Pool is fragmented")
+            }
+            AllocationError::IncompatibleLayout => write!(
+                fmt,
+                "Failed to allocate descriptor set: Incompatible layout"
+            ),
         }
     }
 }

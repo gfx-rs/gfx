@@ -17,14 +17,20 @@ use std::ops::Range;
 use std::{fmt, iter};
 
 use crate::{
-    buffer, format, image, pass, pso, query,
+    buffer,
+    format,
+    image,
     memory::Requirements,
+    pass,
     pool::CommandPoolCreateFlags,
+    pso,
     pso::DescriptorPoolCreateFlags,
+    query,
     queue::QueueFamilyId,
     range::RangeArg,
     window::{self, SwapchainConfig},
-    Backend, MemoryTypeId,
+    Backend,
+    MemoryTypeId,
 };
 
 /// Error occurred caused device to be lost.
@@ -143,7 +149,9 @@ impl std::fmt::Display for AllocationError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             AllocationError::OutOfMemory(err) => write!(fmt, "Failed to allocate object: {}", err),
-            AllocationError::TooManyObjects => write!(fmt, "Failed to allocate object: Too many objects"),
+            AllocationError::TooManyObjects => {
+                write!(fmt, "Failed to allocate object: Too many objects")
+            }
         }
     }
 }
@@ -190,11 +198,24 @@ impl std::fmt::Display for CreationError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CreationError::OutOfMemory(err) => write!(fmt, "Failed to create device: {}", err),
-            CreationError::InitializationFailed => write!(fmt, "Failed to create device: Implementation specific error occurred"),
-            CreationError::MissingExtension => write!(fmt, "Failed to create device: Requested extension is missing"),
-            CreationError::MissingFeature => write!(fmt, "Failed to create device: Requested feature is missing"),
-            CreationError::TooManyObjects => write!(fmt, "Failed to create device: Too many objects"),
-            CreationError::DeviceLost => write!(fmt, "Failed to create device: Logical or Physical device was lost during creation"),
+            CreationError::InitializationFailed => write!(
+                fmt,
+                "Failed to create device: Implementation specific error occurred"
+            ),
+            CreationError::MissingExtension => write!(
+                fmt,
+                "Failed to create device: Requested extension is missing"
+            ),
+            CreationError::MissingFeature => {
+                write!(fmt, "Failed to create device: Requested feature is missing")
+            }
+            CreationError::TooManyObjects => {
+                write!(fmt, "Failed to create device: Too many objects")
+            }
+            CreationError::DeviceLost => write!(
+                fmt,
+                "Failed to create device: Logical or Physical device was lost during creation"
+            ),
         }
     }
 }
@@ -264,9 +285,16 @@ impl From<OutOfMemory> for BindError {
 impl std::fmt::Display for BindError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            BindError::OutOfMemory(err) => write!(fmt, "Failed to bind object to memory range: {}", err),
-            BindError::OutOfBounds => write!(fmt, "Failed to bind object to memory range: Requested range is outside the resource"),
-            BindError::WrongMemory => write!(fmt, "Failed to bind object to memory range: Wrong memory"),
+            BindError::OutOfMemory(err) => {
+                write!(fmt, "Failed to bind object to memory range: {}", err)
+            }
+            BindError::OutOfBounds => write!(
+                fmt,
+                "Failed to bind object to memory range: Requested range is outside the resource"
+            ),
+            BindError::WrongMemory => {
+                write!(fmt, "Failed to bind object to memory range: Wrong memory")
+            }
         }
     }
 }
@@ -315,10 +343,18 @@ impl std::fmt::Display for ShaderError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ShaderError::OutOfMemory(err) => write!(fmt, "Shader error: {}", err),
-            ShaderError::CompilationFailed(string) => write!(fmt, "Shader error: Compilation failed: {}", string),
-            ShaderError::MissingEntryPoint(string) => write!(fmt, "Shader error: Missing entry point: {}", string),
-            ShaderError::InterfaceMismatch(string) => write!(fmt, "Shader error: Interface mismatch: {}", string),
-            ShaderError::UnsupportedStage(stage) => write!(fmt, "Shader error: Unsupported stage: {:?}", stage),
+            ShaderError::CompilationFailed(string) => {
+                write!(fmt, "Shader error: Compilation failed: {}", string)
+            }
+            ShaderError::MissingEntryPoint(string) => {
+                write!(fmt, "Shader error: Missing entry point: {}", string)
+            }
+            ShaderError::InterfaceMismatch(string) => {
+                write!(fmt, "Shader error: Interface mismatch: {}", string)
+            }
+            ShaderError::UnsupportedStage(stage) => {
+                write!(fmt, "Shader error: Unsupported stage: {:?}", stage)
+            }
         }
     }
 }

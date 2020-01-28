@@ -37,17 +37,15 @@ pub fn init_gl_on_ci() -> gfx_backend_gl::Headless {
     #[cfg(all(unix, not(target_vendor = "apple")))]
     {
         use gfx_backend_gl::glutin::platform::unix::HeadlessContextExt as _;
-        context = glutin::ContextBuilder::new()
-            .build_surfaceless(&events_loop);
+        context = glutin::ContextBuilder::new().build_surfaceless(&events_loop);
     }
     #[cfg(any(not(unix), target_vendor = "apple"))]
     {
         context = glutin::ContextBuilder::new()
             .build_headless(&events_loop, glutin::dpi::PhysicalSize::new(0, 0));
     }
-    let current_context = unsafe {
-        context.unwrap().make_current()
-    }.expect("Unable to make context current");
+    let current_context =
+        unsafe { context.unwrap().make_current() }.expect("Unable to make context current");
 
     gfx_backend_gl::Headless::from_context(current_context)
 }

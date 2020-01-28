@@ -158,7 +158,9 @@ impl<B: Backend> RendererState<B> {
                 pso::DescriptorSetLayoutBinding {
                     binding: 0,
                     ty: pso::DescriptorType::Image {
-                        ty: pso::ImageDescriptorType::Sampled { with_sampler: false },
+                        ty: pso::ImageDescriptorType::Sampled {
+                            with_sampler: false,
+                        },
                     },
                     count: 1,
                     stage_flags: pso::ShaderStageFlags::FRAGMENT,
@@ -180,7 +182,9 @@ impl<B: Backend> RendererState<B> {
                 binding: 0,
                 ty: pso::DescriptorType::Buffer {
                     ty: pso::BufferDescriptorType::Uniform,
-                    format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
+                    format: pso::BufferDescriptorFormat::Structured {
+                        dynamic_offset: false,
+                    },
                 },
                 count: 1,
                 stage_flags: pso::ShaderStageFlags::FRAGMENT,
@@ -196,7 +200,9 @@ impl<B: Backend> RendererState<B> {
                 &[
                     pso::DescriptorRangeDesc {
                         ty: pso::DescriptorType::Image {
-                            ty: pso::ImageDescriptorType::Sampled { with_sampler: false },
+                            ty: pso::ImageDescriptorType::Sampled {
+                                with_sampler: false,
+                            },
                         },
                         count: 1,
                     },
@@ -217,7 +223,9 @@ impl<B: Backend> RendererState<B> {
                 &[pso::DescriptorRangeDesc {
                     ty: pso::DescriptorType::Buffer {
                         ty: pso::BufferDescriptorType::Uniform,
-                        format: pso::BufferDescriptorFormat::Structured { dynamic_offset: false },
+                        format: pso::BufferDescriptorFormat::Structured {
+                            dynamic_offset: false,
+                        },
                     },
                     count: 1,
                 }],
@@ -588,10 +596,12 @@ fn create_backend(
     event_loop: &winit::event_loop::EventLoop<()>,
 ) -> BackendState<back::Backend> {
     let window = wb.build(event_loop).unwrap();
-    let instance = back::Instance::create("gfx-rs colour-uniform", 1)
-        .expect("Failed to create an instance!");
+    let instance =
+        back::Instance::create("gfx-rs colour-uniform", 1).expect("Failed to create an instance!");
     let surface = unsafe {
-        instance.create_surface(&window).expect("Failed to create a surface!")
+        instance
+            .create_surface(&window)
+            .expect("Failed to create a surface!")
     };
     let mut adapters = instance.enumerate_adapters();
     BackendState {
@@ -784,7 +794,9 @@ impl<B: Backend> BufferState<B> {
                 .enumerate()
                 .position(|(id, mem_type)| {
                     mem_req.type_mask & (1 << id) != 0
-                        && mem_type.properties.contains(m::Properties::CPU_VISIBLE | m::Properties::COHERENT)
+                        && mem_type
+                            .properties
+                            .contains(m::Properties::CPU_VISIBLE | m::Properties::COHERENT)
                 })
                 .unwrap()
                 .into();
@@ -855,7 +867,9 @@ impl<B: Backend> BufferState<B> {
                 .enumerate()
                 .position(|(id, mem_type)| {
                     mem_reqs.type_mask & (1 << id) != 0
-                        && mem_type.properties.contains(m::Properties::CPU_VISIBLE | m::Properties::COHERENT)
+                        && mem_type
+                            .properties
+                            .contains(m::Properties::CPU_VISIBLE | m::Properties::COHERENT)
                 })
                 .unwrap()
                 .into();
@@ -867,8 +881,8 @@ impl<B: Backend> BufferState<B> {
             // copy image data into staging buffer
             let mapping = device.map_memory(&memory, 0 .. size).unwrap();
             for y in 0 .. height as usize {
-                let data_source_slice = &(**img)
-                    [y * (width as usize) * stride .. (y + 1) * (width as usize) * stride];
+                let data_source_slice =
+                    &(**img)[y * (width as usize) * stride .. (y + 1) * (width as usize) * stride];
                 ptr::copy_nonoverlapping(
                     data_source_slice.as_ptr(),
                     mapping.offset(y as isize * row_pitch as isize),
@@ -1362,8 +1376,12 @@ struct SwapchainState<B: Backend> {
 
 impl<B: Backend> SwapchainState<B> {
     unsafe fn new(backend: &mut BackendState<B>, device: Rc<RefCell<DeviceState<B>>>) -> Self {
-        let caps = backend.surface.capabilities(&device.borrow().physical_device);
-        let formats = backend.surface.supported_formats(&device.borrow().physical_device);
+        let caps = backend
+            .surface
+            .capabilities(&device.borrow().physical_device);
+        let formats = backend
+            .surface
+            .supported_formats(&device.borrow().physical_device);
         println!("formats: {:?}", formats);
         let format = formats.map_or(f::Format::Rgba8Srgb, |formats| {
             formats
@@ -1607,12 +1625,13 @@ fn main() {
 
     let event_loop = winit::event_loop::EventLoop::new();
     let window_builder = winit::window::WindowBuilder::new()
-        .with_min_inner_size(
-            winit::dpi::Size::Logical(winit::dpi::LogicalSize::new(64.0, 64.0))
-        )
-        .with_inner_size(winit::dpi::Size::Physical(
-            winit::dpi::PhysicalSize::new(DIMS.width, DIMS.height)
-        ))
+        .with_min_inner_size(winit::dpi::Size::Logical(winit::dpi::LogicalSize::new(
+            64.0, 64.0,
+        )))
+        .with_inner_size(winit::dpi::Size::Physical(winit::dpi::PhysicalSize::new(
+            DIMS.width,
+            DIMS.height,
+        )))
         .with_title("colour-uniform".to_string());
 
     let backend = create_backend(window_builder, &event_loop);
@@ -1650,11 +1669,7 @@ fn main() {
                     }
                     winit::event::WindowEvent::Resized(dims) => {
                         #[cfg(feature = "gl")]
-                        renderer_state
-                            .backend
-                            .surface
-                            .get_context_t()
-                            .resize(dims);
+                        renderer_state.backend.surface.get_context_t().resize(dims);
                         println!("RESIZE EVENT");
                         renderer_state.recreate_swapchain = true;
                     }
@@ -1677,7 +1692,7 @@ fn main() {
             }
             winit::event::Event::RedrawRequested(_) => {
                 println!("RedrawRequested");
-                        renderer_state.draw();
+                renderer_state.draw();
             }
             winit::event::Event::RedrawEventsCleared => {
                 renderer_state.backend.window.request_redraw();

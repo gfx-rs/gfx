@@ -1,4 +1,13 @@
-use crate::{conv, device::Device, native, Backend as B, GlContainer, PhysicalDevice, QueueFamily, Starc};
+use crate::{
+    conv,
+    device::Device,
+    native,
+    Backend as B,
+    GlContainer,
+    PhysicalDevice,
+    QueueFamily,
+    Starc,
+};
 use arrayvec::ArrayVec;
 use glow::HasContext;
 use hal::{adapter::Adapter, format as f, image, window};

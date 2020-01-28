@@ -38,7 +38,6 @@ use crate::{
 pub use self::clear::*;
 pub use self::structs::*;
 
-
 /// Offset for dynamic descriptors.
 pub type DescriptorSetOffset = u32;
 

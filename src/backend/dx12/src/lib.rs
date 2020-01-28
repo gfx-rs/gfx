@@ -208,10 +208,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             return Err(hal::device::CreationError::MissingFeature);
         }
 
-        let device_raw = match self.library.create_device(
-            self.adapter,
-            native::FeatureLevel::L11_0,
-        ) {
+        let device_raw = match self
+            .library
+            .create_device(self.adapter, native::FeatureLevel::L11_0)
+        {
             Ok((device, hr)) if winerror::SUCCEEDED(hr) => device,
             Ok((_, hr)) => {
                 error!("error on device creation: {:x}", hr);
@@ -602,8 +602,12 @@ impl Device {
             1_000_000, // maximum number of CBV/SRV/UAV descriptors in heap for Tier 1
         );
 
-        let heap_sampler =
-            Self::create_descriptor_heap_impl(device, native::DescriptorHeapType::Sampler, true, 2_048);
+        let heap_sampler = Self::create_descriptor_heap_impl(
+            device,
+            native::DescriptorHeapType::Sampler,
+            true,
+            2_048,
+        );
 
         let draw_signature = Self::create_command_signature(device, device::CommandSignature::Draw);
         let draw_indexed_signature =
@@ -616,10 +620,8 @@ impl Device {
             draw_indexed: draw_indexed_signature,
             dispatch: dispatch_signature,
         };
-        let service_pipes = internal::ServicePipes::new(
-            device,
-            Arc::clone(&physical_device.library),
-        );
+        let service_pipes =
+            internal::ServicePipes::new(device, Arc::clone(&physical_device.library));
         let shared = Shared {
             signatures,
             service_pipes,
@@ -722,7 +724,9 @@ impl hal::Instance<Backend> for Instance {
             match lib_main.get_debug_interface() {
                 Ok((debug_controller, hr)) if winerror::SUCCEEDED(hr) => {
                     debug_controller.enable_layer();
-                    unsafe { debug_controller.Release(); }
+                    unsafe {
+                        debug_controller.Release();
+                    }
                 }
                 _ => {
                     warn!("Unable to get D3D12 debug interface");
@@ -748,7 +752,7 @@ impl hal::Instance<Backend> for Instance {
             Ok((factory, hr)) if winerror::SUCCEEDED(hr) => factory,
             Ok((_, hr)) => {
                 info!("Failed on dxgi factory creation: {:?}", hr);
-                return Err(hal::UnsupportedBackend)
+                return Err(hal::UnsupportedBackend);
             }
             Err(_) => return Err(hal::UnsupportedBackend),
         };
@@ -823,7 +827,10 @@ impl hal::Instance<Backend> for Instance {
 
             // Check for D3D12 support
             // Create temporary device to get physical device information
-            let device = match self.library.create_device(adapter, native::FeatureLevel::L11_0) {
+            let device = match self
+                .library
+                .create_device(adapter, native::FeatureLevel::L11_0)
+            {
                 Ok((device, hr)) if winerror::SUCCEEDED(hr) => device,
                 _ => continue,
             };

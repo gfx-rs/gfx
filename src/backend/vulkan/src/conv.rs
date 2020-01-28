@@ -174,25 +174,29 @@ pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
             pso::ImageDescriptorType::Sampled { with_sampler } => match with_sampler {
                 true => vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 false => vk::DescriptorType::SAMPLED_IMAGE,
-            }
+            },
             pso::ImageDescriptorType::Storage => vk::DescriptorType::STORAGE_IMAGE,
-        }
+        },
         pso::DescriptorType::Buffer { ty, format } => match ty {
             pso::BufferDescriptorType::Storage { .. } => match format {
-                pso::BufferDescriptorFormat::Structured { dynamic_offset } => match dynamic_offset {
-                    true => vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
-                    false => vk::DescriptorType::STORAGE_BUFFER,
+                pso::BufferDescriptorFormat::Structured { dynamic_offset } => {
+                    match dynamic_offset {
+                        true => vk::DescriptorType::STORAGE_BUFFER_DYNAMIC,
+                        false => vk::DescriptorType::STORAGE_BUFFER,
+                    }
                 }
                 pso::BufferDescriptorFormat::Texel => vk::DescriptorType::STORAGE_TEXEL_BUFFER,
-            }
+            },
             pso::BufferDescriptorType::Uniform => match format {
-                pso::BufferDescriptorFormat::Structured { dynamic_offset } => match dynamic_offset {
-                    true => vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
-                    false => vk::DescriptorType::UNIFORM_BUFFER,
+                pso::BufferDescriptorFormat::Structured { dynamic_offset } => {
+                    match dynamic_offset {
+                        true => vk::DescriptorType::UNIFORM_BUFFER_DYNAMIC,
+                        false => vk::DescriptorType::UNIFORM_BUFFER,
+                    }
                 }
                 pso::BufferDescriptorFormat::Texel => vk::DescriptorType::UNIFORM_TEXEL_BUFFER,
-            }
-        }
+            },
+        },
         pso::DescriptorType::InputAttachment => vk::DescriptorType::INPUT_ATTACHMENT,
     }
 }
@@ -239,7 +243,9 @@ pub fn map_topology(ia: &pso::InputAssemblerDesc) -> vk::PrimitiveTopology {
         (pso::Primitive::TriangleList, false) => vk::PrimitiveTopology::TRIANGLE_LIST,
         (pso::Primitive::TriangleList, true) => vk::PrimitiveTopology::TRIANGLE_LIST_WITH_ADJACENCY,
         (pso::Primitive::TriangleStrip, false) => vk::PrimitiveTopology::TRIANGLE_STRIP,
-        (pso::Primitive::TriangleStrip, true) => vk::PrimitiveTopology::TRIANGLE_STRIP_WITH_ADJACENCY,
+        (pso::Primitive::TriangleStrip, true) => {
+            vk::PrimitiveTopology::TRIANGLE_STRIP_WITH_ADJACENCY
+        }
         (pso::Primitive::PatchList(_), false) => vk::PrimitiveTopology::PATCH_LIST,
         (pso::Primitive::PatchList(_), true) => panic!("Patches can't have adjacency info"),
     }
@@ -598,7 +604,9 @@ pub fn map_vk_present_mode(mode: vk::PresentModeKHR) -> PresentMode {
     }
 }
 
-pub fn map_composite_alpha_mode(composite_alpha_mode: CompositeAlphaMode) -> vk::CompositeAlphaFlagsKHR {
+pub fn map_composite_alpha_mode(
+    composite_alpha_mode: CompositeAlphaMode,
+) -> vk::CompositeAlphaFlagsKHR {
     vk::CompositeAlphaFlagsKHR::from_raw(composite_alpha_mode.bits())
 }
 

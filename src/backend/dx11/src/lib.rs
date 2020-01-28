@@ -735,7 +735,6 @@ pub struct Surface {
     presentation: Option<Presentation>,
 }
 
-
 impl fmt::Debug for Surface {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
         fmt.write_str("Surface")
@@ -892,11 +891,9 @@ impl window::PresentationSurface<Backend> for Surface {
     }
 }
 
-
 pub struct Swapchain {
     dxgi_swapchain: ComPtr<IDXGISwapChain>,
 }
-
 
 impl fmt::Debug for Swapchain {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -1145,7 +1142,6 @@ pub struct CommandBufferState {
     stencil_write_mask: Option<pso::StencilValue>,
     current_blend: Option<*mut d3d11::ID3D11BlendState>,
 }
-
 
 impl fmt::Debug for CommandBufferState {
     fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
@@ -1877,10 +1873,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         //let offsets: Vec<command::DescriptorSetOffset> = offsets.into_iter().map(|o| *o.borrow()).collect();
 
-        for (set, info) in sets
-            .into_iter()
-            .zip(&layout.sets[first_set ..])
-        {
+        for (set, info) in sets.into_iter().zip(&layout.sets[first_set ..]) {
             let set = set.borrow();
 
             {
@@ -1990,10 +1983,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             [ptr::null_mut(); 16].as_ptr(),
             ptr::null_mut(),
         );
-        for (set, info) in sets
-            .into_iter()
-            .zip(&layout.sets[first_set ..])
-        {
+        for (set, info) in sets.into_iter().zip(&layout.sets[first_set ..]) {
             let set = set.borrow();
 
             {
@@ -2659,8 +2649,8 @@ pub struct InternalBuffer {
 pub struct Buffer {
     internal: InternalBuffer,
     properties: memory::Properties, // empty if unbound
-    host_ptr: *mut u8,       // null if unbound
-    bound_range: Range<u64>, // 0 if unbound
+    host_ptr: *mut u8,              // null if unbound
+    bound_range: Range<u64>,        // 0 if unbound
     requirements: memory::Requirements,
     bind: d3d11::D3D11_BIND_FLAG,
 }
@@ -2850,10 +2840,7 @@ struct RegisterData<T> {
 }
 
 impl<T> RegisterData<T> {
-    fn map<U, F: Fn(&T) -> U>(
-        &self,
-        fun: F,
-    ) -> RegisterData<U> {
+    fn map<U, F: Fn(&T) -> U>(&self, fun: F) -> RegisterData<U> {
         RegisterData {
             c: fun(&self.c),
             t: fun(&self.t),
@@ -2901,16 +2888,13 @@ impl<T> MultiStageData<T> {
             pso::Stage::Vertex => self.vs,
             pso::Stage::Fragment => self.ps,
             pso::Stage::Compute => self.cs,
-            _ => panic!("Unsupported stage {:?}", stage)
+            _ => panic!("Unsupported stage {:?}", stage),
         }
     }
 }
 
 impl<T> MultiStageData<RegisterData<T>> {
-    fn map_register<U, F: Fn(&T) -> U>(
-        &self,
-        fun: F,
-    ) -> MultiStageData<RegisterData<U>> {
+    fn map_register<U, F: Fn(&T) -> U>(&self, fun: F) -> MultiStageData<RegisterData<U>> {
         MultiStageData {
             vs: self.vs.map(&fun),
             ps: self.ps.map(&fun),
@@ -2918,10 +2902,7 @@ impl<T> MultiStageData<RegisterData<T>> {
         }
     }
 
-    fn map_other<U, F: Fn(&RegisterData<T>) -> U>(
-        &self,
-        fun: F,
-    ) -> MultiStageData<U> {
+    fn map_other<U, F: Fn(&RegisterData<T>) -> U>(&self, fun: F) -> MultiStageData<U> {
         MultiStageData {
             vs: fun(&self.vs),
             ps: fun(&self.ps),
@@ -2977,10 +2958,7 @@ struct RegisterAccumulator {
 }
 
 impl RegisterAccumulator {
-    fn to_mapping(
-        &self,
-        cur_offset: &mut DescriptorIndex,
-    ) -> RegisterPoolMapping {
+    fn to_mapping(&self, cur_offset: &mut DescriptorIndex) -> RegisterPoolMapping {
         let offset = *cur_offset;
         *cur_offset += self.res_index as DescriptorIndex;
 
@@ -2990,10 +2968,7 @@ impl RegisterAccumulator {
         }
     }
 
-    fn advance(
-        &mut self,
-        mapping: &RegisterPoolMapping,
-    ) -> RegisterInfo {
+    fn advance(&mut self, mapping: &RegisterPoolMapping) -> RegisterInfo {
         let res_index = self.res_index;
         self.res_index += mapping.count;
         RegisterInfo {
@@ -3005,10 +2980,7 @@ impl RegisterAccumulator {
 }
 
 impl RegisterData<RegisterAccumulator> {
-    fn to_mapping(
-        &self,
-        pool_offset: &mut DescriptorIndex,
-    ) -> RegisterData<RegisterPoolMapping> {
+    fn to_mapping(&self, pool_offset: &mut DescriptorIndex) -> RegisterData<RegisterPoolMapping> {
         RegisterData {
             c: self.c.to_mapping(pool_offset),
             t: self.t.to_mapping(pool_offset),
@@ -3064,13 +3036,14 @@ impl DescriptorSetInfo {
         stage: pso::Stage,
         binding_index: pso::DescriptorBinding,
     ) -> (DescriptorContent, RegisterData<ResourceIndex>) {
-        let mut res_offsets = self.registers
+        let mut res_offsets = self
+            .registers
             .map_register(|info| info.res_index as DescriptorIndex)
             .select(stage);
         for binding in self.bindings.iter() {
             let content = DescriptorContent::from(binding.ty);
             if binding.binding == binding_index {
-                return (content, res_offsets.map(|offset| *offset as ResourceIndex))
+                return (content, res_offsets.map(|offset| *offset as ResourceIndex));
             }
             res_offsets.add_content(content);
         }
@@ -3203,33 +3176,55 @@ bitflags! {
 impl From<pso::DescriptorType> for DescriptorContent {
     fn from(ty: pso::DescriptorType) -> Self {
         use hal::pso::{
-            DescriptorType as Dt,
             BufferDescriptorFormat as Bdf,
             BufferDescriptorType as Bdt,
+            DescriptorType as Dt,
             ImageDescriptorType as Idt,
         };
         match ty {
-            Dt::Sampler =>
-                DescriptorContent::SAMPLER,
-            Dt::Image { ty: Idt::Sampled { with_sampler: true } } =>
-                DescriptorContent::SRV | DescriptorContent::SAMPLER,
-            Dt::Image { ty: Idt::Sampled { with_sampler: false } } |
-            Dt::InputAttachment =>
-                DescriptorContent::SRV,
-            Dt::Image { ty: Idt::Storage } =>
-                DescriptorContent::SRV | DescriptorContent::UAV,
-            Dt::Buffer { ty: Bdt::Uniform, format: Bdf::Structured { dynamic_offset: true } } =>
-                DescriptorContent::CBV | DescriptorContent::DYNAMIC,
-            Dt::Buffer { ty: Bdt::Uniform, .. } =>
-                DescriptorContent::CBV,
-            Dt::Buffer { ty: Bdt::Storage { read_only: true }, format: Bdf::Structured { dynamic_offset: true } } =>
-                DescriptorContent::SRV | DescriptorContent::DYNAMIC,
-            Dt::Buffer { ty: Bdt::Storage { read_only: false }, format: Bdf::Structured { dynamic_offset: true } } =>
-                DescriptorContent::SRV | DescriptorContent::UAV | DescriptorContent::DYNAMIC,
-            Dt::Buffer { ty: Bdt::Storage { read_only: true }, .. } =>
-                DescriptorContent::SRV,
-            Dt::Buffer { ty: Bdt::Storage { read_only: false }, .. } =>
-                DescriptorContent::SRV | DescriptorContent::UAV,
+            Dt::Sampler => DescriptorContent::SAMPLER,
+            Dt::Image {
+                ty: Idt::Sampled { with_sampler: true },
+            } => DescriptorContent::SRV | DescriptorContent::SAMPLER,
+            Dt::Image {
+                ty: Idt::Sampled {
+                    with_sampler: false,
+                },
+            }
+            | Dt::InputAttachment => DescriptorContent::SRV,
+            Dt::Image { ty: Idt::Storage } => DescriptorContent::SRV | DescriptorContent::UAV,
+            Dt::Buffer {
+                ty: Bdt::Uniform,
+                format:
+                    Bdf::Structured {
+                        dynamic_offset: true,
+                    },
+            } => DescriptorContent::CBV | DescriptorContent::DYNAMIC,
+            Dt::Buffer {
+                ty: Bdt::Uniform, ..
+            } => DescriptorContent::CBV,
+            Dt::Buffer {
+                ty: Bdt::Storage { read_only: true },
+                format:
+                    Bdf::Structured {
+                        dynamic_offset: true,
+                    },
+            } => DescriptorContent::SRV | DescriptorContent::DYNAMIC,
+            Dt::Buffer {
+                ty: Bdt::Storage { read_only: false },
+                format:
+                    Bdf::Structured {
+                        dynamic_offset: true,
+                    },
+            } => DescriptorContent::SRV | DescriptorContent::UAV | DescriptorContent::DYNAMIC,
+            Dt::Buffer {
+                ty: Bdt::Storage { read_only: true },
+                ..
+            } => DescriptorContent::SRV,
+            Dt::Buffer {
+                ty: Bdt::Storage { read_only: false },
+                ..
+            } => DescriptorContent::SRV | DescriptorContent::UAV,
         }
     }
 }
@@ -3313,7 +3308,8 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         &mut self,
         layout: &DescriptorSetLayout,
     ) -> Result<DescriptorSet, pso::AllocationError> {
-        let len = layout.pool_mapping
+        let len = layout
+            .pool_mapping
             .map_register(|mapping| mapping.count as DescriptorIndex)
             .sum()
             .max(1);

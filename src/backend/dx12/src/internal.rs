@@ -1,5 +1,10 @@
 use auxil::FastHashMap;
-use std::{ffi::CStr, mem, ptr, sync::{Arc, Mutex}};
+use std::{
+    ffi::CStr,
+    mem,
+    ptr,
+    sync::{Arc, Mutex},
+};
 
 use winapi::{
     shared::{
@@ -135,7 +140,9 @@ impl ServicePipes {
         }
 
         let (signature, _hr) = self.device.create_root_signature(signature_raw, 0);
-        unsafe { signature_raw.destroy(); }
+        unsafe {
+            signature_raw.destroy();
+        }
 
         let shader_src = include_bytes!("../shaders/blit.hlsl");
         // TODO: check results

@@ -68,7 +68,6 @@ use std::{
     time,
 };
 
-
 const WORD_SIZE: usize = 4;
 const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
 /// Number of frames to average when reporting the performance counters.
@@ -197,7 +196,6 @@ impl QueueBlocker {
         }
     }
 }
-
 
 #[derive(Debug)]
 struct PoolShared {
@@ -379,10 +377,10 @@ impl State {
     }
 
     fn make_viewport_and_scissor_commands(
-        &self
+        &self,
     ) -> (
         Option<soft::RenderCommand<&soft::Ref>>,
-        Option<soft::RenderCommand<&soft::Ref>>,    
+        Option<soft::RenderCommand<&soft::Ref>>,
     ) {
         let com_vp = self
             .viewport
@@ -504,7 +502,6 @@ impl State {
                 .iter()
                 .map(|&(resource, usage)| soft::ComputeCommand::UseResource { resource, usage })
         });
-
 
         com_pso
             .into_iter()
@@ -832,8 +829,12 @@ impl EncodePass {
 
     fn update(&self, capacity: &mut Capacity) {
         match &self {
-            EncodePass::Render(ref list, _, _, _) => capacity.render = capacity.render.max(list.len()),
-            EncodePass::Compute(ref list, _, _) => capacity.compute = capacity.compute.max(list.len()),
+            EncodePass::Render(ref list, _, _, _) => {
+                capacity.render = capacity.render.max(list.len())
+            }
+            EncodePass::Compute(ref list, _, _) => {
+                capacity.compute = capacity.compute.max(list.len())
+            }
             EncodePass::Blit(ref list, _) => capacity.blit = capacity.blit.max(list.len()),
         }
     }
@@ -921,9 +922,11 @@ impl Journal {
                     soft::Pass::Compute => self.compute_commands.len(),
                     soft::Pass::Blit => self.blit_commands.len(),
                 };
-                self.passes
-                    .alloc()
-                    .init((pass.clone(), range.start + offset .. range.end + offset, label.clone()));
+                self.passes.alloc().init((
+                    pass.clone(),
+                    range.start + offset .. range.end + offset,
+                    label.clone(),
+                ));
             }
         }
 
@@ -1063,7 +1066,9 @@ impl<'a> PreCompute<'a> {
 impl CommandSink {
     fn label(&mut self, label: &str) -> &Self {
         match self {
-            CommandSink::Immediate { label: l, .. } | CommandSink::Deferred { label: l, .. } => *l = label.to_string(),
+            CommandSink::Immediate { label: l, .. } | CommandSink::Deferred { label: l, .. } => {
+                *l = label.to_string()
+            }
             #[cfg(feature = "dispatch")]
             CommandSink::Remote { label: l, .. } => *l = label.to_string(),
         }
@@ -1172,7 +1177,12 @@ impl CommandSink {
                 ..
             } => {
                 let list = Vec::with_capacity(capacity.render);
-                *pass = Some(EncodePass::Render(list, soft::Own::default(), descriptor, label.clone()));
+                *pass = Some(EncodePass::Render(
+                    list,
+                    soft::Own::default(),
+                    descriptor,
+                    label.clone(),
+                ));
                 match *pass {
                     Some(EncodePass::Render(ref mut list, ref mut resources, _, _)) => {
                         PreRender::Deferred(resources, list)
@@ -1241,10 +1251,11 @@ impl CommandSink {
                 if let Some(&(soft::Pass::Blit, _, _)) = journal.passes.last() {
                 } else {
                     journal.stop();
-                    journal
-                        .passes
-                        .alloc()
-                        .init((soft::Pass::Blit, journal.blit_commands.len() .. 0, label.clone()));
+                    journal.passes.alloc().init((
+                        soft::Pass::Blit,
+                        journal.blit_commands.len() .. 0,
+                        label.clone(),
+                    ));
                 }
                 PreBlit::Deferred(&mut journal.blit_commands)
             }
@@ -1348,10 +1359,11 @@ impl CommandSink {
                     false
                 } else {
                     journal.stop();
-                    journal
-                        .passes
-                        .alloc()
-                        .init((soft::Pass::Compute, journal.compute_commands.len() .. 0, label.clone()));
+                    journal.passes.alloc().init((
+                        soft::Pass::Compute,
+                        journal.compute_commands.len() .. 0,
+                        label.clone(),
+                    ));
                     true
                 };
                 (
@@ -1378,7 +1390,11 @@ impl CommandSink {
                     pass.schedule(queue, cmd_buffer);
                 }
                 let list = Vec::with_capacity(capacity.compute);
-                *pass = Some(EncodePass::Compute(list, soft::Own::default(), label.clone()));
+                *pass = Some(EncodePass::Compute(
+                    list,
+                    soft::Own::default(),
+                    label.clone(),
+                ));
                 match *pass {
                     Some(EncodePass::Compute(ref mut list, ref mut resources, _)) => {
                         (PreCompute::Deferred(resources, list), true)
@@ -1983,7 +1999,6 @@ where
     }
 }
 
-
 #[derive(Default, Debug)]
 struct PerformanceCounters {
     immediate_command_buffers: usize,
@@ -2566,10 +2581,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 }) => {
                     *is_encoding = true;
                     let pass_desc = metal::RenderPassDescriptor::new().to_owned();
-                    journal
-                        .passes
-                        .alloc()
-                        .init((soft::Pass::Render(pass_desc), 0 .. 0, label.clone()));
+                    journal.passes.alloc().init((
+                        soft::Pass::Render(pass_desc),
+                        0 .. 0,
+                        label.clone(),
+                    ));
                 }
                 _ => {
                     warn!("Unexpected inheritance info on a primary command buffer");

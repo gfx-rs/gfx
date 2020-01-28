@@ -14,7 +14,6 @@ use storage_map::{StorageMap, StorageMapGuard};
 
 use std::mem;
 
-
 pub type FastStorageMap<K, V> = StorageMap<RawRwLock, FastHashMap<K, V>>;
 pub type FastStorageGuard<'a, V> = StorageMapGuard<'a, RawRwLock, V>;
 

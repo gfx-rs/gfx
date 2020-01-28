@@ -153,7 +153,8 @@ impl std::error::Error for CreationError {
 
 /// Error creating an `ImageView`.
 #[derive(Clone, Debug, PartialEq)]
-pub enum ViewError { // TODO: Rename this or `buffer::ViewCreationError`
+// TODO: Rename this or `buffer::ViewCreationError`
+pub enum ViewError {
     /// The required usage flag is not present in the image.
     Usage(Usage),
     /// Selected mip level doesn't exist.
@@ -211,8 +212,14 @@ pub enum LayerError {
 impl std::fmt::Display for LayerError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LayerError::NotExpected(kind) => write!(fmt, "Kind {{{:?}}} does not support arrays", kind),
-            LayerError::OutOfBounds(layers) => write!(fmt, "Out of bounds layers {} .. {}", layers.start, layers.end),
+            LayerError::NotExpected(kind) => {
+                write!(fmt, "Kind {{{:?}}} does not support arrays", kind)
+            }
+            LayerError::OutOfBounds(layers) => write!(
+                fmt,
+                "Out of bounds layers {} .. {}",
+                layers.start, layers.end
+            ),
         }
     }
 }

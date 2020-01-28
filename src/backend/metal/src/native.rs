@@ -36,7 +36,6 @@ use std::{
     sync::{atomic::AtomicBool, Arc},
 };
 
-
 pub type EntryPointMap = FastHashMap<String, spirv::EntryPoint>;
 /// An index of a resource within descriptor pool.
 pub type PoolResourceIndex = u32;
@@ -107,7 +106,6 @@ pub struct Framebuffer {
 
 unsafe impl Send for Framebuffer {}
 unsafe impl Sync for Framebuffer {}
-
 
 #[derive(Clone, Debug)]
 pub struct ResourceData<T> {
@@ -814,21 +812,21 @@ impl From<pso::DescriptorType> for DescriptorContent {
     fn from(ty: pso::DescriptorType) -> Self {
         match ty {
             pso::DescriptorType::Sampler => DescriptorContent::SAMPLER,
-            pso::DescriptorType::Image { ty } => {
-                match ty {
-                    pso::ImageDescriptorType::Sampled { with_sampler: true } => {
-                        DescriptorContent::TEXTURE | DescriptorContent::SAMPLER
-                    }
-                    _ => DescriptorContent::TEXTURE,
+            pso::DescriptorType::Image { ty } => match ty {
+                pso::ImageDescriptorType::Sampled { with_sampler: true } => {
+                    DescriptorContent::TEXTURE | DescriptorContent::SAMPLER
                 }
-            }
+                _ => DescriptorContent::TEXTURE,
+            },
             pso::DescriptorType::Buffer { format, .. } => match format {
-                pso::BufferDescriptorFormat::Structured { dynamic_offset } => match dynamic_offset {
-                    true => DescriptorContent::BUFFER | DescriptorContent::DYNAMIC_BUFFER,
-                    false => DescriptorContent::BUFFER,
+                pso::BufferDescriptorFormat::Structured { dynamic_offset } => {
+                    match dynamic_offset {
+                        true => DescriptorContent::BUFFER | DescriptorContent::DYNAMIC_BUFFER,
+                        false => DescriptorContent::BUFFER,
+                    }
                 }
                 pso::BufferDescriptorFormat::Texel => DescriptorContent::TEXTURE,
-            }
+            },
             pso::DescriptorType::InputAttachment => DescriptorContent::TEXTURE,
         }
     }
@@ -936,14 +934,14 @@ impl ArgumentArray {
             Dt::Image { ty } => match ty {
                 pso::ImageDescriptorType::Sampled { .. } => MTLResourceUsage::Sample,
                 pso::ImageDescriptorType::Storage => MTLResourceUsage::Write,
-            }
+            },
             Dt::Buffer { ty, format } => match ty {
                 pso::BufferDescriptorType::Storage { .. } => MTLResourceUsage::Write,
                 pso::BufferDescriptorType::Uniform => match format {
                     pso::BufferDescriptorFormat::Structured { .. } => MTLResourceUsage::Read,
                     pso::BufferDescriptorFormat::Texel => MTLResourceUsage::Sample,
-                }
-            }
+                },
+            },
             Dt::InputAttachment => MTLResourceUsage::Sample,
         }
     }

@@ -24,7 +24,6 @@ use crate::{
     VK_ENTRY,
 };
 
-
 #[derive(Debug, Default)]
 pub struct FramebufferCache {
     // We expect exactly one framebuffer per frame, but can support more.
@@ -383,7 +382,9 @@ impl w::Surface<Backend> for Surface {
         w::SurfaceCapabilities {
             present_modes: raw_present_modes
                 .into_iter()
-                .fold(w::PresentMode::empty(), |u, m| { u | conv::map_vk_present_mode(m) }),
+                .fold(w::PresentMode::empty(), |u, m| {
+                    u | conv::map_vk_present_mode(m)
+                }),
             composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
             image_count: caps.min_image_count ..= max_images,
             current_extent,
@@ -533,9 +534,9 @@ impl w::PresentationSurface<Backend> for Surface {
             Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
                 Err(w::AcquireError::SurfaceLost(hal::device::SurfaceLost))
             }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(w::AcquireError::OutOfMemory(
-                hal::device::OutOfMemory::Host,
-            )),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(w::AcquireError::OutOfMemory(hal::device::OutOfMemory::Host))
+            }
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(w::AcquireError::OutOfMemory(
                 hal::device::OutOfMemory::Device,
             )),
@@ -582,9 +583,9 @@ impl w::Swapchain<Backend> for Swapchain {
             Err(vk::Result::ERROR_SURFACE_LOST_KHR) => {
                 Err(w::AcquireError::SurfaceLost(hal::device::SurfaceLost))
             }
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => Err(w::AcquireError::OutOfMemory(
-                hal::device::OutOfMemory::Host,
-            )),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                Err(w::AcquireError::OutOfMemory(hal::device::OutOfMemory::Host))
+            }
             Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => Err(w::AcquireError::OutOfMemory(
                 hal::device::OutOfMemory::Device,
             )),
