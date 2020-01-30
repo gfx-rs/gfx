@@ -83,7 +83,7 @@ pub fn init_headless_raw(context: Context<NotCurrent>, dim: Dimensions, color: F
     (context, device, factory, color_view, ds_view)
 }
 
-#[cfg(all(test, unix))]
+#[cfg(all(test, target_os = "linux"))]
 mod tests {
     use super::*;
 
