@@ -27,9 +27,9 @@ use core::format;
 use core::memory::Typed;
 
 #[cfg(unix)]
-use winit::os::unix::WindowExt;
-#[cfg(target_os = "windows")]
-use winit::os::windows::WindowExt;
+use winit::platform::unix::WindowExtUnix;
+#[cfg(windows)]
+use winit::platform::windows::WindowExtWindows;
 
 pub type TargetHandle<T> = core::handle::RenderTargetView<device_vulkan::Resources, T>;
 
@@ -40,7 +40,7 @@ pub struct SwapTarget<T> {
 }
 
 pub struct Window<T> {
-    window: winit::Window,
+    window: winit::window::Window,
     _debug_callback: Option<vk::DebugReportCallbackEXT>,
     swapchain: vk::SwapchainKHR,
     targets: Vec<SwapTarget<T>>,
@@ -101,12 +101,12 @@ impl<T: Clone> Window<T> {
         self.targets[0].target.clone()
     }
 
-    pub fn get_window(&mut self) -> &mut winit::Window {
+    pub fn get_window(&mut self) -> &mut winit::window::Window {
         &mut self.window
     }
 
     pub fn get_size(&self) -> (u32, u32) {
-        self.window.get_inner_size().unwrap().into()
+        self.window.inner_size().into()
     }
 }
 
@@ -137,7 +137,7 @@ extern "system" fn callback(flags: vk::DebugReportFlagsEXT,
     vk::FALSE
 }
 
-pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop)
+pub fn init<T: core::format::RenderFormat>(wb: winit::window::WindowBuilder, events_loop: &winit::event_loop::EventLoop<()>)
                 -> (Window<T>, device_vulkan::Factory) {
     let title = wb.window.title.clone();
     let window = wb.build(events_loop).unwrap();
@@ -226,11 +226,7 @@ pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder, events_loop
         modes
     };
 
-    let (width, height): (u32, u32) = window
-        .get_inner_size()
-        .unwrap()
-        .to_physical(window.get_hidpi_factor())
-        .into();
+    let (width, height): (u32, u32) = window.inner_size().into();
 
     // TODO: Use the queried information to check if our values are supported before creating the swapchain
     let swapchain_info = vk::SwapchainCreateInfoKHR {
@@ -291,14 +287,14 @@ pub fn init<T: core::format::RenderFormat>(wb: winit::WindowBuilder, events_loop
 }
 
 #[cfg(target_os = "windows")]
-fn create_surface(backend: device_vulkan::SharePointer, window: &winit::Window) -> vk::SurfaceKHR {
+fn create_surface(backend: device_vulkan::SharePointer, window: &winit::window::Window) -> vk::SurfaceKHR {
     let (inst, vk) = backend.get_instance();
     let info = vk::Win32SurfaceCreateInfoKHR {
         sType: vk::STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR,
         pNext: ptr::null(),
         flags: 0,
         hinstance: unsafe { kernel32::GetModuleHandleW(ptr::null()) } as *mut _,
-        hwnd: window.get_hwnd() as *mut _,
+        hwnd: window.hwnd() as *mut _,
     };
     let mut out = 0;
     assert_eq!(vk::SUCCESS, unsafe {
@@ -308,14 +304,14 @@ fn create_surface(backend: device_vulkan::SharePointer, window: &winit::Window) 
 }
 
 #[cfg(unix)]
-fn create_surface(backend: device_vulkan::SharePointer, window: &winit::Window) -> vk::SurfaceKHR {
+fn create_surface(backend: device_vulkan::SharePointer, window: &winit::window::Window) -> vk::SurfaceKHR {
     let (inst, vk) = backend.get_instance();
     let info = vk::XcbSurfaceCreateInfoKHR {
         sType: vk::STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR,
         pNext: ptr::null(),
         flags: 0,
-        connection: window.get_xcb_connection().unwrap() as *const _,
-        window: window.get_xlib_window().unwrap() as *const _,
+        connection: window.xcb_connection().unwrap() as *const _,
+        window: window.xlib_window().unwrap() as *const _,
     };
     let mut out = 0;
     assert_eq!(vk::SUCCESS, unsafe {

@@ -476,14 +476,14 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
         encoder.draw(&self.tilemap_plane.slice, &self.pso, &self.tilemap_plane.params);
     }
 
-    fn on(&mut self, event: winit::WindowEvent) {
-        if let winit::WindowEvent::KeyboardInput {
-            input: winit::KeyboardInput {
-                state: winit::ElementState::Pressed,
+    fn on(&mut self, event: winit::event::WindowEvent) {
+        if let winit::event::WindowEvent::KeyboardInput {
+            input: winit::event::KeyboardInput {
+                state: winit::event::ElementState::Pressed,
                 virtual_keycode: Some(key),
                 .. },
             .. } = event {
-            use winit::VirtualKeyCode::*;
+            use winit::event::VirtualKeyCode::*;
             let i = self.input.clone();
 
             match key {
@@ -511,6 +511,6 @@ impl<R: gfx::Resources> gfx_app::Application<R> for TileMap<R> {
 
 pub fn main() {
     use gfx_app::Application;
-    let wb = winit::WindowBuilder::new().with_title("Tilemap example");
+    let wb = winit::window::WindowBuilder::new().with_title("Tilemap example");
     TileMap::launch_default(wb);
 }

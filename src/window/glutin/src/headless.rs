@@ -38,15 +38,15 @@ use core::texture::Dimensions;
 /// use gfx_core::format::{DepthStencil, Rgba8};
 /// use gfx_core::texture::AaMode;
 /// use gfx_window_glutin::init_headless;
-/// use glutin::{Context, ContextBuilder, EventsLoop};
+/// use glutin::{Context, ContextBuilder, event_loop::EventLoop};
 ///
 /// # fn main() {
 /// let dim = (256, 256, 8, AaMode::Multi(4));
 ///
-/// let events_loop = EventsLoop::new();
+/// let event_loop = EventLoop::new();
 /// let context = ContextBuilder::new()
 ///     .with_hardware_acceleration(Some(false))
-///     .build_headless(&events_loop, (256, 256).into())
+///     .build_headless(&event_loop, (256, 256).into())
 ///     .expect("Failed to build headless context");
 ///
 /// let (context, device, factory, color, depth) = init_headless::<Rgba8, DepthStencil>(context, dim);
@@ -83,7 +83,7 @@ pub fn init_headless_raw(context: Context<NotCurrent>, dim: Dimensions, color: F
     (context, device, factory, color_view, ds_view)
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 mod tests {
     use super::*;
 
@@ -93,14 +93,14 @@ mod tests {
 
     #[test]
     fn test_headless() {
-        use glutin::{ContextBuilder, EventsLoop};
+        use glutin::{ContextBuilder, event_loop::EventLoop, platform::unix::EventLoopExtUnix};
 
         let dim = (256, 256, 8, AaMode::Multi(4));
 
-        let events_loop = EventsLoop::new();
+        let event_loop: EventLoop<()> = EventLoop::new_any_thread();
         let context = ContextBuilder::new()
             .with_hardware_acceleration(Some(false))
-            .build_headless(&events_loop, (dim.0 as u32, dim.1 as u32).into())
+            .build_headless(&event_loop, (dim.0 as u32, dim.1 as u32).into())
             .expect("Failed to build headless context");
 
         let (_, mut device, _, _, _) = init_headless::<Rgba8, DepthStencil>(context, dim);

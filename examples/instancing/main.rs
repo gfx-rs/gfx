@@ -177,6 +177,6 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
 pub fn main() {
     use gfx_app::Application;
-    let wb = winit::WindowBuilder::new().with_title("Instancing example");
+    let wb = winit::window::WindowBuilder::new().with_title("Instancing example");
     App::launch_default(wb);
 }

@@ -621,11 +621,11 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
         self.encoder.flush(device);
     }
 
-    fn get_exit_key() -> Option<winit::VirtualKeyCode> {
-        Some(winit::VirtualKeyCode::Escape)
+    fn get_exit_key() -> Option<winit::event::VirtualKeyCode> {
+        Some(winit::event::VirtualKeyCode::Escape)
     }
 
-    fn on(&mut self, event: winit::WindowEvent) {
+    fn on(&mut self, event: winit::event::WindowEvent) {
         match event {
             _ => () //TODO
         }
@@ -646,7 +646,7 @@ impl<R, C> gfx_app::ApplicationBase<R, C> for App<R, C> where
 // Section-6: main entry point
 
 pub fn main() {
-    let wb = winit::WindowBuilder::new().with_title(
+    let wb = winit::window::WindowBuilder::new().with_title(
         "Multi-threaded shadow rendering example with gfx-rs");
     gfx_app::launch_gl3::<App<_, _>>(wb);
 }

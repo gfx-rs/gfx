@@ -9,8 +9,8 @@ Make sure you have the following in your `Cargo.toml`:
 ```toml
 gfx_core = "0.9"
 gfx_device_gl = "0.16"
-gfx_window_glutin = "0.30.0"
-glutin = "0.20"
+gfx_window_glutin = "0.32"
+glutin = "0.22"
 ```
 
 Then, initialize `gfx` as follows:
@@ -24,11 +24,11 @@ extern crate glutin;
 use gfx_core::format::{DepthStencil, Rgba8};
 
 fn main() {
-    let events_loop = glutin::EventsLoop::new();
-    let window_builder = glutin::WindowBuilder::new().with_title("Example".to_owned());
-    let context = glutin::ContextBuilder::new();
+    let event_loop = EventLoop::new();
+    let window_builder = WindowBuilder::new().with_title("Example".to_owned());
+    let context = ContextBuilder::new();
     let (window, device, factory, rtv, stv) =
-        gfx_window_glutin::init::<Rgba8, DepthStencil>(window_builder, context, &events_loop);
+        gfx_window_glutin::init::<Rgba8, DepthStencil, _>(window_builder, context, &event_loop);
 
     // your code
 }

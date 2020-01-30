@@ -24,7 +24,7 @@ extern crate gfx_device_dx11 as device_dx11;
 use std::error::Error;
 use std::fmt;
 use std::ptr;
-use winit::os::windows::WindowExt;
+use winit::platform::windows::WindowExtWindows;
 use winapi::shared::{dxgi, dxgiformat, dxgitype, winerror};
 use winapi::um::{d3d11, d3dcommon};
 
@@ -34,7 +34,7 @@ use device_dx11::{Device, Factory, Resources};
 
 
 pub struct Window {
-    pub inner: winit::Window,
+    pub inner: winit::window::Window,
     swap_chain: *mut dxgi::IDXGISwapChain,
     driver_type: d3dcommon::D3D_DRIVER_TYPE,
     color_format: format::Format,
@@ -124,7 +124,7 @@ impl Error for InitError {
 }
 
 /// Initialize with a given size. Typed format version.
-pub fn init<Cf>(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop)
+pub fn init<Cf>(wb: winit::window::WindowBuilder, events_loop: &winit::event_loop::EventLoop<()>)
            -> Result<(Window, Device, Factory, h::RenderTargetView<Resources, Cf>), InitError>
 where Cf: format::RenderFormat
 {
@@ -133,7 +133,7 @@ where Cf: format::RenderFormat
 }
 
 /// Initialize with a given size. Raw format version.
-pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color_format: format::Format)
+pub fn init_raw(wb: winit::window::WindowBuilder, events_loop: &winit::event_loop::EventLoop<()>, color_format: format::Format)
                 -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError>
 {
     let inner = match wb.build(events_loop) {
@@ -143,14 +143,10 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
     init_existing_raw(inner, color_format)
 }
 
-pub fn init_existing_raw(inner: winit::Window, color_format: format::Format)
+pub fn init_existing_raw(inner: winit::window::Window, color_format: format::Format)
                          -> Result<(Window, Device, Factory, h::RawRenderTargetView<Resources>), InitError>
 {
-    let (width, height): (u32, u32) = inner
-        .get_inner_size()
-        .unwrap()
-        .to_physical(inner.get_hidpi_factor())
-        .into();
+    let (width, height): (u32, u32) = inner.inner_size().into();
 
     let driver_types = [
         d3dcommon::D3D_DRIVER_TYPE_HARDWARE,
@@ -179,7 +175,7 @@ pub fn init_existing_raw(inner: winit::Window, color_format: format::Format)
         },
         BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
         BufferCount: 1,
-        OutputWindow: inner.get_hwnd() as _,
+        OutputWindow: inner.hwnd() as _,
         Windowed: true as _,
         SwapEffect: dxgi::DXGI_SWAP_EFFECT_DISCARD,
         Flags: 0,
