@@ -20,9 +20,9 @@ extern crate glutin;
 
 use gfx::traits::FactoryExt;
 use gfx::Device;
-use glutin::{Event, KeyboardInput, VirtualKeyCode, WindowEvent};
+use glutin::{window::WindowBuilder, event_loop::{ControlFlow, EventLoop}, event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent}};
 
-pub type ColorFormat = gfx::format::Rgba8;
+pub type ColorFormat = gfx::format::Srgba8;
 pub type DepthFormat = gfx::format::DepthStencil;
 
 gfx_defines!{
@@ -46,10 +46,10 @@ const TRIANGLE: [Vertex; 3] = [
 const CLEAR_COLOR: [f32; 4] = [0.1, 0.2, 0.3, 1.0];
 
 pub fn main() {
-    let mut events_loop = glutin::EventsLoop::new();
-    let window_config = glutin::WindowBuilder::new()
+    let event_loop = EventLoop::new();
+    let window_config = WindowBuilder::new()
         .with_title("Triangle example".to_string())
-        .with_dimensions((1024, 768).into());
+        .with_inner_size(glutin::dpi::PhysicalSize::new(1024, 768));
 
     let (api, version, vs_code, fs_code) = if cfg!(target_os = "emscripten") {
         (
@@ -69,7 +69,7 @@ pub fn main() {
         .with_gl(glutin::GlRequest::Specific(api, version))
         .with_vsync(true);
     let (window_ctx, mut device, mut factory, main_color, mut main_depth) =
-        gfx_window_glutin::init::<ColorFormat, DepthFormat>(window_config, context, &events_loop)
+        gfx_window_glutin::init::<ColorFormat, DepthFormat, _>(window_config, context, &event_loop)
             .expect("Failed to create window");
     let mut encoder = gfx::Encoder::from(factory.create_command_buffer());
 
@@ -81,33 +81,35 @@ pub fn main() {
         out: main_color
     };
 
-    let mut running = true;
-    while running {
-        events_loop.poll_events(|event| {
-            if let Event::WindowEvent { event, .. } = event {
-                match event {
-                    WindowEvent::CloseRequested |
-                    WindowEvent::KeyboardInput {
-                        input: KeyboardInput {
-                            virtual_keycode: Some(VirtualKeyCode::Escape),
-                            ..
-                        },
-                        ..
-                    } => running = false,
-                    WindowEvent::Resized(size) => {
-                        window_ctx.resize(size.to_physical(window_ctx.window().get_hidpi_factor()));
-                        gfx_window_glutin::update_views(&window_ctx, &mut data.out, &mut main_depth);
-                    },
-                    _ => (),
-                }
-            }
-        });
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
 
-        // draw a frame
-        encoder.clear(&data.out, CLEAR_COLOR);
-        encoder.draw(&slice, &pso, &data);
-        encoder.flush(&mut device);
-        window_ctx.swap_buffers().unwrap();
-        device.cleanup();
-    }
+        match event {
+            Event::LoopDestroyed => return,
+            Event::MainEventsCleared => window_ctx.window().request_redraw(),
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::Resized(physical) => {
+                    window_ctx.resize(physical);
+                    gfx_window_glutin::update_views(&window_ctx, &mut data.out, &mut main_depth);
+                }
+                WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
+                    input: KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
+                        ..
+                    },
+                    ..
+                } => *control_flow = ControlFlow::Exit,
+                _ => (),
+            },
+            Event::RedrawRequested(_) => {
+                // draw a frame
+                encoder.clear(&data.out, CLEAR_COLOR);
+                encoder.draw(&slice, &pso, &data);
+                encoder.flush(&mut device);
+                window_ctx.swap_buffers().unwrap();
+                device.cleanup();
+            }
+            _ => (),
+        }
+    });
 }

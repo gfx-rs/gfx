@@ -50,7 +50,7 @@ use std::fmt;
 use std::mem;
 
 pub struct MetalWindow {
-    window: winit::Window,
+    window: winit::window::Window,
     layer: CAMetalLayer,
     drawable: *mut CAMetalDrawable,
     backbuffer: *mut MTLTexture,
@@ -58,9 +58,9 @@ pub struct MetalWindow {
 }
 
 impl Deref for MetalWindow {
-    type Target = winit::Window;
+    type Target = winit::window::Window;
 
-    fn deref(&self) -> &winit::Window {
+    fn deref(&self) -> &winit::window::Window {
         &self.window
     }
 }
@@ -120,7 +120,7 @@ impl Error for InitError {
     }
 }
 
-pub fn init<C: RenderFormat>(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop)
+pub fn init<C: RenderFormat>(wb: winit::window::WindowBuilder, events_loop: &winit::EventsLoop)
         -> Result<(MetalWindow, Device, Factory, RenderTargetView<Resources, C>), InitError>
 {
     init_raw(wb, events_loop, C::get_format())
@@ -128,7 +128,7 @@ pub fn init<C: RenderFormat>(wb: winit::WindowBuilder, events_loop: &winit::Even
 }
 
 /// Initialize with a given size. Raw format version.
-pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color_format: Format)
+pub fn init_raw(wb: winit::window::WindowBuilder, events_loop: &winit::EventsLoop, color_format: Format)
         -> Result<(MetalWindow, Device, Factory, RawRenderTargetView<Resources>), InitError>
 {
     use device_metal::map_format;
@@ -149,11 +149,7 @@ pub fn init_raw(wb: winit::WindowBuilder, events_loop: &winit::EventsLoop, color
             },
             _ => return Err(InitError::BackbufferFormat(color_format)),
         }
-        let draw_size: (f64, f64) = winit_window
-            .get_inner_size()
-            .unwrap()
-            .to_physical(winit_window.get_hidpi_factor())
-            .into();
+        let draw_size: (f64, f64) = winit_window.inner_size()into();
         layer.set_edge_antialiasing_mask(0);
         layer.set_masks_to_bounds(true);
         //layer.set_magnification_filter(kCAFilterNearest);

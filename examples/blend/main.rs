@@ -153,11 +153,11 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
         self.bundle.encode(encoder);
     }
 
-    fn on(&mut self, event: winit::WindowEvent) {
-        if let winit::WindowEvent::KeyboardInput {
-                input: winit::KeyboardInput {
-                    state: winit::ElementState::Pressed,
-                    virtual_keycode: Some(winit::VirtualKeyCode::B),
+    fn on(&mut self, event: winit::event::WindowEvent) {
+        if let winit::event::WindowEvent::KeyboardInput {
+                input: winit::event::KeyboardInput {
+                    state: winit::event::ElementState::Pressed,
+                    virtual_keycode: Some(winit::event::VirtualKeyCode::B),
                     ..
                 },
                 .. } = event {
@@ -176,6 +176,6 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
 pub fn main() {
     use gfx_app::Application;
-    let wb = winit::WindowBuilder::new().with_title("Blending example");
+    let wb = winit::window::WindowBuilder::new().with_title("Blending example");
     App::launch_default(wb);
 }

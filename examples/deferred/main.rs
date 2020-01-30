@@ -50,7 +50,7 @@ use genmesh::generators::{SharedVertex, IndexedPolygon};
 use noise::{Seed, perlin2};
 use rand::Rng;
 use std::time::{Instant};
-use winit::{WindowEvent, WindowBuilder};
+use winit::{event::WindowEvent, window::WindowBuilder};
 
 // Remember to also change the constants in the shaders
 const NUM_LIGHTS: usize = 250;
@@ -555,12 +555,12 @@ impl<R: gfx::Resources> gfx_app::Application<R> for App<R> {
 
     fn on(&mut self, event: WindowEvent) {
         if let WindowEvent::KeyboardInput {
-            input: winit::KeyboardInput {
+            input: winit::event::KeyboardInput {
                 virtual_keycode: Some(key),
                 ..
             },
             .. } = event {
-            use winit::VirtualKeyCode::*;
+            use winit::event::VirtualKeyCode::*;
             match key {
                 Key1 => self.debug_buf = Some(self.light.data.tex_pos.0.clone()),
                 Key2 => self.debug_buf = Some(self.light.data.tex_normal.0.clone()),

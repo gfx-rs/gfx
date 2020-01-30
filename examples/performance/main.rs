@@ -21,7 +21,7 @@ extern crate gfx_gl as gl;
 extern crate gfx_window_glutin;
 extern crate glutin;
 
-pub use gfx::format::{DepthStencil, Rgba8 as ColorFormat};
+pub use gfx::format::{DepthStencil, Srgba8 as ColorFormat};
 
 use cgmath::{Deg, Matrix, Matrix3, Matrix4, Point3, Vector3, Vector4, SquareMatrix};
 use gl::Gl;
@@ -86,7 +86,7 @@ fn transform(x: i16, y: i16, proj_view: &Matrix4<f32>) -> Matrix4<f32> {
 
 trait Renderer: Drop {
     fn render(&mut self, proj_view: &Matrix4<f32>);
-    fn window(&mut self) -> &glutin::Window;
+    fn window(&mut self) -> &glutin::window::Window;
 }
 
 struct GFX {
@@ -113,14 +113,14 @@ struct GL {
 
 
 impl GFX {
-    fn new(window: glutin::WindowBuilder,
+    fn new(window: glutin::window::WindowBuilder,
            context: glutin::ContextBuilder<glutin::NotCurrent>,
-           events_loop: &glutin::EventsLoop,
+           event_loop: &glutin::event_loop::EventLoop<()>,
            dimension: i16) -> Self {
         use gfx::traits::FactoryExt;
 
         let (window, device, mut factory, main_color, _) =
-            gfx_window_glutin::init::<ColorFormat, DepthStencil>(window, context, events_loop)
+            gfx_window_glutin::init::<ColorFormat, DepthStencil, _>(window, context, event_loop)
 	        .expect("Failed to create window");
         let encoder: gfx::Encoder<_,_> = factory.create_command_buffer().into();
 
@@ -176,7 +176,7 @@ impl Renderer for GFX {
         println!("\tsubmit:\t\t{0:4.2}ms", duration_to_ms(post_submit - pre_submit));
         println!("\tgpu wait:\t{0:4.2}ms", duration_to_ms(swap - post_submit));
     }
-    fn window(&mut self) -> &glutin::Window { &self.window.window() }
+    fn window(&mut self) -> &glutin::window::Window { &self.window.window() }
 }
 
 impl Drop for GFX {
@@ -187,9 +187,9 @@ impl Drop for GFX {
 
 
 impl GL {
-    fn new(builder: glutin::WindowBuilder,
+    fn new(builder: glutin::window::WindowBuilder,
            context: glutin::ContextBuilder<glutin::NotCurrent>,
-           events_loop: &glutin::EventsLoop,
+           event_loop: &glutin::event_loop::EventLoop<()>,
            dimension: i16) -> Self {
         fn compile_shader (gl:&Gl, src: &[u8], ty: GLenum) -> GLuint {
             unsafe {
@@ -218,7 +218,7 @@ impl GL {
             }
         };
 
-        let window = context.build_windowed(builder, &events_loop).unwrap();
+        let window = context.build_windowed(builder, &event_loop).unwrap();
         let window = unsafe { window.make_current().unwrap() };
         let gl = Gl::load_with(|s| window.get_proc_address(s) as *const _);
 
@@ -338,7 +338,7 @@ impl Renderer for GL {
         println!("\tsubmit:\t\t{0:4.2}ms", duration_to_ms(submit));
         println!("\tgpu wait:\t{0:4.2}ms", duration_to_ms(swap - submit));
     }
-    fn window(&mut self) -> &glutin::Window { &self.window.window() }
+    fn window(&mut self) -> &glutin::window::Window { &self.window.window() }
 }
 
 impl Drop for GL {
@@ -354,6 +354,8 @@ impl Drop for GL {
 }
 
 fn main() {
+    use glutin::{event_loop::{ControlFlow}, event::{Event, KeyboardInput, VirtualKeyCode, WindowEvent}};
+
     let ref mut args = env::args();
     let args_count = env::args().count();
     if args_count == 1 {
@@ -377,17 +379,17 @@ fn main() {
 
     let count = ((count as f64).sqrt() / 2.) as i16;
 
-    let mut events_loop = glutin::EventsLoop::new();
-    let builder = glutin::WindowBuilder::new()
+    let event_loop = glutin::event_loop::EventLoop::new();
+    let builder = glutin::window::WindowBuilder::new()
         .with_title("Performance example".to_string())
-        .with_dimensions((800, 600).into());
+        .with_inner_size(winit::dpi::PhysicalSize::new(800, 600));
     let context = glutin::ContextBuilder::new()
         .with_vsync(false);
 
-    let mut r: Box<Renderer>;
+    let mut r: Box<dyn Renderer>;
     match mode.as_ref() {
-        "gfx" => r = Box::new(GFX::new(builder, context, &events_loop, count)),
-        "gl" => r = Box::new(GL::new(builder, context, &events_loop, count)),
+        "gfx" => r = Box::new(GFX::new(builder, context, &event_loop, count)),
+        "gl" => r = Box::new(GL::new(builder, context, &event_loop, count)),
         x => {
             panic!("{} is not a known mode", x)
         }
@@ -402,7 +404,7 @@ fn main() {
 
         let proj = {
             let aspect = {
-                let (w, h): (u32, u32) = r.window().get_inner_size().unwrap().into();
+                let (w, h): (u32, u32) = r.window().inner_size().into();
                 w as f32 / h as f32
             };
             cgmath::perspective(Deg(45.0f32), aspect, 1.0, 10.0)
@@ -412,25 +414,24 @@ fn main() {
 
     println!("count is {}", count*count*4);
 
-    let mut running = true;
-    loop {
-        events_loop.poll_events(|event| {
-            if let glutin::Event::WindowEvent { event, .. } = event {
-                match event {
-                    glutin::WindowEvent::KeyboardInput {
-                        input: glutin::KeyboardInput {
-                            virtual_keycode: Some(glutin::VirtualKeyCode::Escape),
-                            ..
-                        },
+    event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
+
+        match event {
+            Event::LoopDestroyed => return,
+            Event::MainEventsCleared => r.window().request_redraw(),
+            Event::WindowEvent { event, .. } => match event {
+                WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
+                    input: KeyboardInput {
+                        virtual_keycode: Some(VirtualKeyCode::Escape),
                         ..
-                    } | glutin::WindowEvent::CloseRequested => running = false,
-                    _ => ()
-                }
-            }
-        });
-        if !running {
-            break;
+                    },
+                    ..
+                } => *control_flow = ControlFlow::Exit,
+                _ => (),
+            },
+            Event::RedrawRequested(_) => r.render(&proj_view),
+            _ => (),
         }
-        r.render(&proj_view);
-    }
+    });
 }
