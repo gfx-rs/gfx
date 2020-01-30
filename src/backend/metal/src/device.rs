@@ -896,6 +896,21 @@ impl Device {
                 image::Anisotropic::On(aniso) => aniso as i32,
                 image::Anisotropic::Off => 0,
             },
+            planes: 0,
+            resolution: msl::FormatResolution::_444,
+            chroma_filter: msl::SamplerFilter::Nearest,
+            x_chroma_offset: msl::ChromaLocation::CositedEven,
+            y_chroma_offset: msl::ChromaLocation::CositedEven,
+            swizzle: [
+                msl::ComponentSwizzle::Identity,
+                msl::ComponentSwizzle::Identity,
+                msl::ComponentSwizzle::Identity,
+                msl::ComponentSwizzle::Identity
+            ],
+            ycbcr_conversion_enable: false,
+            ycbcr_model: msl::SamplerYCbCrModelConversion::RgbIdentity,
+            ycbcr_range: msl::SamplerYCbCrRange::ItuFull,
+            bpc: 8,
         }
     }
 }
