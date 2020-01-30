@@ -99,7 +99,7 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then export LD_LIBRARY_PATH=$LIBRARY_PATH ; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo build --features vulkan; else cargo build; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo build --features metal; else cargo build; fi
+  # - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo build --features metal; else cargo build; fi
   - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then HEADLESS_FEATURE="--features headless"; fi
   - cargo test --all
   - cargo test -p gfx -p gfx_core --features "mint serialize"
@@ -108,5 +108,5 @@ script:
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test -p gfx_window_sdl --features "sdl"; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test -p gfx_window_glfw --features "glfw"; fi
   - if [[ "$TRAVIS_OS_NAME" == "linux" ]]; then cargo test --all --features vulkan; fi
-  - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --all --features metal; fi
+  # - if [[ "$TRAVIS_OS_NAME" == "osx" ]]; then cargo test --all --features metal; fi
   #- if [[ "$TRAVIS_OS_NAME" == "windows" ]]; then cargo test --all --features d3d11; fi
