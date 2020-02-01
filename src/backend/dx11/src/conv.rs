@@ -511,7 +511,7 @@ pub fn map_topology(ia: &InputAssemblerDesc) -> D3D11_PRIMITIVE_TOPOLOGY {
 fn map_fill_mode(mode: PolygonMode) -> D3D11_FILL_MODE {
     match mode {
         PolygonMode::Fill => D3D11_FILL_SOLID,
-        PolygonMode::Line(_) => D3D11_FILL_WIREFRAME,
+        PolygonMode::Line => D3D11_FILL_WIREFRAME,
         // TODO: return error
         _ => unimplemented!(),
     }
@@ -532,6 +532,9 @@ pub(crate) fn map_rasterizer_desc(desc: &Rasterizer) -> D3D11_RASTERIZER_DESC {
         Some(State::Static(db)) => db,
         Some(_) | None => DepthBias::default(),
     };
+    if let State::Static(w) = desc.line_width {
+        super::validate_line_width(w);
+    }
     D3D11_RASTERIZER_DESC {
         FillMode: map_fill_mode(desc.polygon_mode),
         CullMode: map_cull_mode(desc.cull_face),

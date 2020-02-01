@@ -177,19 +177,18 @@ impl GraphicsPipelineInfoBuf {
             None => pso::DepthBias::default(),
         };
 
-        let (polygon_mode, line_width) = match desc.rasterizer.polygon_mode {
-            pso::PolygonMode::Point => (vk::PolygonMode::POINT, 1.0),
-            pso::PolygonMode::Line(width) => (
-                vk::PolygonMode::LINE,
-                match width {
-                    pso::State::Static(w) => w,
-                    pso::State::Dynamic => {
-                        this.dynamic_states.push(vk::DynamicState::LINE_WIDTH);
-                        1.0
-                    }
-                },
-            ),
-            pso::PolygonMode::Fill => (vk::PolygonMode::FILL, 1.0),
+        let polygon_mode = match desc.rasterizer.polygon_mode {
+            pso::PolygonMode::Point => vk::PolygonMode::POINT,
+            pso::PolygonMode::Line => vk::PolygonMode::LINE,
+            pso::PolygonMode::Fill => vk::PolygonMode::FILL,
+        };
+
+        let line_width = match desc.rasterizer.line_width {
+            pso::State::Static(w) => w,
+            pso::State::Dynamic => {
+                this.dynamic_states.push(vk::DynamicState::LINE_WIDTH);
+                1.0
+            }
         };
 
         this.rasterization_state = vk::PipelineRasterizationStateCreateInfo {

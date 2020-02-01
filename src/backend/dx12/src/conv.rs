@@ -223,18 +223,17 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
         Some(_) | None => pso::DepthBias::default(),
     };
 
+    if let pso::State::Static(w) = rasterizer.line_width {
+        validate_line_width(w);
+    }
+
     D3D12_RASTERIZER_DESC {
         FillMode: match rasterizer.polygon_mode {
             Point => {
                 error!("Point rasterization is not supported");
                 D3D12_FILL_MODE_WIREFRAME
             }
-            Line(width) => {
-                if let pso::State::Static(w) = width {
-                    validate_line_width(w);
-                }
-                D3D12_FILL_MODE_WIREFRAME
-            }
+            Line => D3D12_FILL_MODE_WIREFRAME,
             Fill => D3D12_FILL_MODE_SOLID,
         },
         CullMode: match rasterizer.cull_face {

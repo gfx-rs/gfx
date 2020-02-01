@@ -964,14 +964,13 @@ impl CommandQueue {
 
                 let (gl_draw, gl_offset) = match rasterizer.polygon_mode {
                     Point => (glow::POINT, glow::POLYGON_OFFSET_POINT),
-                    Line(width) => {
-                        if let hal::pso::State::Static(w) = width {
-                            unsafe { gl.line_width(w) };
-                        }
-                        (glow::LINE, glow::POLYGON_OFFSET_LINE)
-                    }
+                    Line => (glow::LINE, glow::POLYGON_OFFSET_LINE),
                     Fill => (glow::FILL, glow::POLYGON_OFFSET_FILL),
                 };
+
+                if let hal::pso::State::Static(w) = rasterizer.line_width {
+                    unsafe { gl.line_width(w) };
+                }
 
                 unsafe { gl.polygon_mode(glow::FRONT_AND_BACK, gl_draw) };
 

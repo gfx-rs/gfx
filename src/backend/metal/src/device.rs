@@ -1567,6 +1567,12 @@ impl hal::device::Device<Backend> for Device {
             pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
         }
 
+        if let pso::State::Static(w) = pipeline_desc.rasterizer.line_width {
+            if w != 1.0 {
+                warn!("Unsupported line width: {:?}", w);
+            }
+        }
+
         let rasterizer_state = Some(n::RasterizerState {
             front_winding: conv::map_winding(pipeline_desc.rasterizer.front_face),
             fill_mode: conv::map_polygon_mode(pipeline_desc.rasterizer.polygon_mode),
