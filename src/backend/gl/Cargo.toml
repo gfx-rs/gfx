@@ -29,7 +29,7 @@ auxil = { path = "../../auxil/auxil", version = "0.2", package = "gfx-auxil", fe
 smallvec = "1.0"
 glow = "0.3.0-alpha3"
 parking_lot = "0.10"
-spirv_cross = { version = "0.16", features = ["glsl"] }
+spirv_cross = { version = "0.17", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
 

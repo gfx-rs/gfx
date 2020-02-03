@@ -166,7 +166,7 @@ impl window::PresentationSurface<B> for Surface {
 }
 
 impl hal::Instance<B> for Surface {
-    fn create(_name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(_name: &str, _version: u32) -> Result<Self, hal::UnsupportedBackend> {
         unimplemented!()
     }
 

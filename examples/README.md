@@ -38,7 +38,7 @@ Next, generate bindings and copy across some dependencies: an `index.html` file 
 wasm-bindgen ../target/wasm32-unknown-unknown/debug/quad.wasm --out-dir ../examples/generated-wasm --web
 cd generated-wasm # Set the working directory to the newly created generated-wasm directory
 cp ../quad/data/index.html ./ # Copy the index page
-cp ../../../../spirv_cross/wasm/spirv_cross*.* ./ # Copy (or symlink) the spirv_cross bundle
+cp ../../../spirv_cross/wasm/spirv_cross*.* ./ # Copy (or symlink) the spirv_cross bundle
 ```
 
 Afterwards, run any HTTP server supporting `application/wasm` from the `generated-wasm` directory. You may need to add `application/wasm` MIME type to your web server in order for WebAssembly to be served correctly. While the web server is running, open the `index.html` file in your web browser to see the quad render.
