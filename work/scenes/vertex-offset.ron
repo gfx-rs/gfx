@@ -67,6 +67,7 @@
                 depth_clamping: false,
                 depth_bias: None,
                 conservative: false,
+                line_width: Static(1.0),
             ),
             vertex_buffers: [
                 VertexBufferDesc(
@@ -115,6 +116,7 @@
                 depth_clamping: false,
                 depth_bias: None,
                 conservative: false,
+                line_width: Static(1.0),
             ),
             vertex_buffers: [
                 VertexBufferDesc(
