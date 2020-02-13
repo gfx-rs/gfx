@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-vulkan-0.4.2 (13-02-2020)
+  - work around Intel swapchain bug when acquiring images
+
 ### backend-dx12-0.4.3 (07-01-2020)
   - fix a crash at initialization time
 
