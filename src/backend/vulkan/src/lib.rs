@@ -708,6 +708,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 requested_features,
                 self.instance.clone(),
             )),
+            vendor_id: self.properties.vendor_id,
         };
 
         let device_arc = device.raw.clone();
@@ -1402,6 +1403,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
 #[derive(Debug)]
 pub struct Device {
     raw: Arc<RawDevice>,
+    vendor_id: u32,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]
