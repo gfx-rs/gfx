@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-metal-0.4.3 (22-02-2020)
+  - support version 2.2 of the Metal shading language
+
 ### backend-vulkan-0.4.2 (13-02-2020)
   - work around Intel swapchain bug when acquiring images
 
