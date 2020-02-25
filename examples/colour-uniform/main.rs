@@ -105,18 +105,6 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     layers: 0 .. 1,
 };
 
-trait SurfaceTrait {
-    #[cfg(feature = "gl")]
-    fn get_context_t(&self) -> &back::glutin::RawContext<back::glutin::PossiblyCurrent>;
-}
-
-impl SurfaceTrait for <back::Backend as Backend>::Surface {
-    #[cfg(feature = "gl")]
-    fn get_context_t(&self) -> &back::glutin::RawContext<back::glutin::PossiblyCurrent> {
-        self.context()
-    }
-}
-
 struct RendererState<B: Backend> {
     uniform_desc_pool: Option<B::DescriptorPool>,
     img_desc_pool: Option<B::DescriptorPool>,
@@ -362,10 +350,7 @@ impl<B: Backend> RendererState<B> {
         }
     }
 
-    fn draw(&mut self)
-    where
-        B::Surface: SurfaceTrait,
-    {
+    fn draw(&mut self) {
         if self.recreate_swapchain {
             self.recreate_swapchain();
             self.recreate_swapchain = false;
@@ -592,7 +577,8 @@ impl<B: Backend> Drop for BackendState<B> {
     feature = "vulkan",
     feature = "dx11",
     feature = "dx12",
-    feature = "metal"
+    feature = "metal",
+    feature = "gl",
 ))]
 fn create_backend(
     wb: winit::window::WindowBuilder,
@@ -609,34 +595,6 @@ fn create_backend(
     let mut adapters = instance.enumerate_adapters();
     BackendState {
         instance: Some(instance),
-        adapter: AdapterState::new(&mut adapters),
-        surface: ManuallyDrop::new(surface),
-        window,
-    }
-}
-
-#[cfg(feature = "gl")]
-fn create_backend(
-    wb: winit::window::WindowBuilder,
-    event_loop: &winit::event_loop::EventLoop<()>,
-) -> BackendState<back::Backend> {
-    let (context, window) = {
-        let builder =
-            back::config_context(back::glutin::ContextBuilder::new(), ColorFormat::SELF, None)
-                .with_vsync(true);
-        let windowed_context = builder.build_windowed(wb, event_loop).unwrap();
-        unsafe {
-            windowed_context
-                .make_current()
-                .expect("Unable to make context current")
-                .split()
-        }
-    };
-
-    let surface = back::Surface::from_context(context);
-    let mut adapters = surface.enumerate_adapters();
-    BackendState {
-        instance: None,
         adapter: AdapterState::new(&mut adapters),
         surface: ManuallyDrop::new(surface),
         window,
@@ -1672,8 +1630,6 @@ fn main() {
                         *control_flow = winit::event_loop::ControlFlow::Exit
                     }
                     winit::event::WindowEvent::Resized(dims) => {
-                        #[cfg(feature = "gl")]
-                        renderer_state.backend.surface.get_context_t().resize(dims);
                         println!("RESIZE EVENT");
                         renderer_state.recreate_swapchain = true;
                     }

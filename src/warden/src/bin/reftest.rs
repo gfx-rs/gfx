@@ -237,15 +237,7 @@ fn main() {
     }
     #[cfg(feature = "gl")]
     {
-        println!("Testing GL:");
-        let instance = warden::init_gl_surface();
-        num_failures += harness.run_instance(instance, Disabilities::default());
-    }
-    #[cfg(feature = "gl-ci")]
-    {
-        println!("Testing GL on CI:");
-        let instance = warden::init_gl_on_ci();
-        num_failures += harness.run_instance(instance, Disabilities::default());
+        num_failures += harness.run::<gfx_backend_gl::Backend>("GL", Disabilities::default());
     }
     let _ = harness;
     num_failures += 0; // mark as mutated

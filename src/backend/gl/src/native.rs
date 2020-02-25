@@ -21,7 +21,9 @@ pub type Program = <GlContext as glow::HasContext>::Program;
 pub type Renderbuffer = <GlContext as glow::HasContext>::Renderbuffer;
 pub type Texture = <GlContext as glow::HasContext>::Texture;
 pub type Sampler = <GlContext as glow::HasContext>::Sampler;
-pub type UniformLocation = <GlContext as glow::HasContext>::UniformLocation;
+// TODO: UniformLocation was copy in glow 0.3, but in 0.4 it isn't. Wrap it in a Starc for now
+// to make it `Sync + Send` instead.
+pub type UniformLocation = crate::Starc<<GlContext as glow::HasContext>::UniformLocation>;
 pub type DescriptorSetLayout = Vec<pso::DescriptorSetLayoutBinding>;
 
 pub type RawFrameBuffer = <GlContext as glow::HasContext>::Framebuffer;
@@ -312,7 +314,7 @@ pub struct AttributeDesc {
     pub(crate) vertex_attrib_fn: VertexAttribFunction,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct UniformDesc {
     pub(crate) location: UniformLocation,
     pub(crate) offset: u32,
