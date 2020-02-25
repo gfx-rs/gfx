@@ -874,7 +874,7 @@ impl d::Device<B> for Device {
                     // Sampler2D won't show up in UniformLocation and the only other uniforms
                     // should be push constants
                     uniforms.push(n::UniformDesc {
-                        location: location as _,
+                        location: Starc::new(location),
                         offset,
                         utype,
                     });
@@ -1669,7 +1669,7 @@ impl d::Device<B> for Device {
         }
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(wasm)]
     unsafe fn wait_for_fences<I>(
         &self,
         fences: I,
@@ -1860,9 +1860,10 @@ impl d::Device<B> for Device {
         config: SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
     ) -> Result<(Swapchain, Vec<n::Image>), hal::window::CreationError> {
+
         let gl = &self.share.context;
 
-        #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
+        #[cfg(wgl)]
         let context = {
             use crate::window::wgl::PresentContext;
 
@@ -1926,17 +1927,17 @@ impl d::Device<B> for Device {
             images.push(image);
         }
 
-        #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
-        let swapchain = {
-            self.share.instance_context.make_current();
-            Swapchain {
-                fbos,
-                context,
-                extent: config.extent,
-            }
+        // Web
+        #[cfg(wasm)]
+        let _ = surface;
+        #[cfg(wasm)]
+        let swapchain = Swapchain {
+            fbos,
+            extent: config.extent,
         };
 
-        #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
+        // Glutin
+        #[cfg(glutin)]
         let swapchain = Swapchain {
             fbos,
             extent: config.extent,
@@ -1949,16 +1950,28 @@ impl d::Device<B> for Device {
             },
         };
 
-        #[cfg(target_arch = "wasm32")]
-        let _ = surface;
-
-        #[cfg(target_arch = "wasm32")]
+        // Surfman
+        #[cfg(surfman)]
         let swapchain = Swapchain {
             fbos,
             extent: config.extent,
+            // TODO: Resize the context to the extent
+            context: surface.context.clone(),
         };
 
-        #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+        // WGL
+        #[cfg(wgl)]
+        let swapchain = {
+            self.share.instance_context.make_current();
+            Swapchain {
+                fbos,
+                context,
+                extent: config.extent,
+            }
+        };
+
+        // Dummy
+        #[cfg(dummy)]
         let swapchain = Swapchain {
             extent: {
                 let _ = surface;

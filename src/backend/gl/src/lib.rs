@@ -3,13 +3,18 @@
 
 #![allow(missing_docs, missing_copy_implementations)]
 
+// Check for incompatible feature flags
+#[cfg(all(surfman, glutin))]
+compile_error!("You cannot specify both `surfman` and `glutin` features at the same time.");
+
 #[macro_use]
 extern crate bitflags;
 #[macro_use]
 extern crate log;
 extern crate gfx_hal as hal;
-#[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
-pub extern crate glutin;
+
+#[cfg(surfman)]
+use parking_lot::RwLock;
 
 use std::cell::Cell;
 use std::fmt;
@@ -32,18 +37,29 @@ mod queue;
 mod state;
 mod window;
 
-#[cfg(all(not(target_arch = "wasm32"), feature = "glutin"))]
-pub use crate::window::glutin::{config_context, Headless, Surface, Swapchain};
-#[cfg(target_arch = "wasm32")]
+// Web implementation
+#[cfg(wasm)]
 pub use window::web::{Surface, Swapchain};
 
-#[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
-use window::wgl::DeviceContext;
+// Glutin implementation
+#[cfg(glutin)]
+pub use crate::window::glutin::{Instance, Surface, Swapchain};
 
-#[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
+// Surfman implementation
+#[cfg(surfman)]
+pub use crate::window::surfman::{Instance, Surface, Swapchain};
+// Helps windows detect discrete GPUs
+#[cfg(surfman)]
+surfman::declare_surfman!();
+
+// WGL implementation
+#[cfg(wgl)]
+use window::wgl::DeviceContext;
+#[cfg(wgl)]
 pub use window::wgl::{Instance, Surface, Swapchain};
 
-#[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+// Catch-all dummy implementation
+#[cfg(dummy)]
 pub use window::dummy::{Surface, Swapchain};
 
 pub use glow::Context as GlContext;
@@ -53,15 +69,23 @@ type ColorSlot = u8;
 
 pub(crate) struct GlContainer {
     context: GlContext,
+
+    #[cfg(surfman)]
+    surfman_device: Starc<RwLock<surfman::Device>>,
+
+    #[cfg(surfman)]
+    surfman_context: Starc<RwLock<surfman::Context>>,
 }
 
 impl GlContainer {
-    #[cfg(feature = "glutin")]
+    #[cfg(not(wasm))]
     fn make_current(&self) {
-        // Unimplemented
+        // TODO:
+        // NOTE: Beware, calling this on dereference breaks the surfman backend
+        // I'm not sure if there would be similar concequences with other backends.
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(any(glutin, wgl))]
     fn from_fn_proc<F>(fn_proc: F) -> GlContainer
     where
         F: FnMut(&str) -> *const std::os::raw::c_void,
@@ -70,7 +94,24 @@ impl GlContainer {
         GlContainer { context }
     }
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(surfman)]
+    fn from_fn_proc<F>(
+        fn_proc: F,
+        surfman_device: Starc<RwLock<surfman::Device>>,
+        surfman_context: Starc<RwLock<surfman::Context>>,
+    ) -> GlContainer
+    where
+        F: FnMut(&str) -> *const std::os::raw::c_void,
+    {
+        let context = glow::Context::from_loader_function(fn_proc);
+        GlContainer {
+            context,
+            surfman_device,
+            surfman_context,
+        }
+    }
+
+    #[cfg(wasm)]
     fn from_canvas(canvas: &web_sys::HtmlCanvasElement) -> GlContainer {
         let context = {
             use wasm_bindgen::JsCast;
@@ -102,9 +143,20 @@ impl GlContainer {
 impl Deref for GlContainer {
     type Target = GlContext;
     fn deref(&self) -> &GlContext {
-        #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
+        #[cfg(not(wasm))]
         self.make_current();
         &self.context
+    }
+}
+
+#[cfg(surfman)]
+impl Drop for GlContainer {
+    fn drop(&mut self) {
+        // Contexts must be manually destroyed to prevent a panic
+        self.surfman_device
+            .read()
+            .destroy_context(&mut self.surfman_context.write())
+            .expect("TODO");
     }
 }
 
@@ -112,13 +164,13 @@ impl Deref for GlContainer {
 pub enum Backend {}
 
 impl hal::Backend for Backend {
-    #[cfg(any(all(not(target_arch = "wasm32"), feature = "glutin"), feature = "wgl"))]
+    #[cfg(not(any(wasm, dummy)))]
     type Instance = Instance;
 
-    #[cfg(all(target_arch = "wasm32", not(feature = "wgl")))]
+    #[cfg(wasm)]
     type Instance = Surface;
 
-    #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+    #[cfg(dummy)]
     type Instance = DummyInstance;
 
     type PhysicalDevice = PhysicalDevice;
@@ -183,6 +235,7 @@ impl Error {
     }
 }
 
+#[cfg(not(wasm))]
 fn debug_message_callback(source: u32, gltype: u32, id: u32, severity: u32, message: &str) {
     let source_str = match source {
         glow::DEBUG_SOURCE_API => "API",
@@ -397,7 +450,7 @@ unsafe impl<T: ?Sized> Sync for Wstarc<T> {}
 #[derive(Debug)]
 pub struct PhysicalDevice(Starc<Share>);
 
-#[cfg(any(target_arch = "wasm32", not(feature = "wgl")))]
+#[cfg(not(wgl))]
 type DeviceContext = ();
 
 impl PhysicalDevice {
@@ -595,7 +648,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         // initialize permanent states
         let gl = &self.0.context;
 
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(wasm))]
         {
             if cfg!(debug_assertions) && gl.supports_debug() {
                 gl.enable(glow::DEBUG_OUTPUT);
@@ -714,10 +767,10 @@ impl q::QueueFamily for QueueFamily {
     }
 }
 
-#[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+#[cfg(dummy)]
 pub struct DummyInstance;
 
-#[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
+#[cfg(dummy)]
 impl hal::Instance<Backend> for DummyInstance {
     fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
         unimplemented!()
@@ -733,38 +786,6 @@ impl hal::Instance<Backend> for DummyInstance {
     }
     unsafe fn destroy_surface(&self, _surface: Surface) {
         unimplemented!()
-    }
-}
-
-#[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
-#[derive(Debug)]
-pub enum Instance {
-    Headless(Headless),
-    Surface(Surface),
-}
-
-#[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
-impl hal::Instance<Backend> for Instance {
-    fn create(name: &str, version: u32) -> Result<Instance, hal::UnsupportedBackend> {
-        Headless::create(name, version).map(Instance::Headless)
-    }
-
-    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
-        match self {
-            Instance::Headless(instance) => instance.enumerate_adapters(),
-            Instance::Surface(instance) => instance.enumerate_adapters(),
-        }
-    }
-
-    unsafe fn create_surface(
-        &self,
-        _: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Result<Surface, hal::window::InitError> {
-        unimplemented!()
-    }
-
-    unsafe fn destroy_surface(&self, _surface: Surface) {
-        // TODO: Implement Surface cleanup
     }
 }
 
