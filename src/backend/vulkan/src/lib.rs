@@ -293,6 +293,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
             message
         );
 
+        #[allow(array_into_iter)]
         for (info_label, info) in additional_info.into_iter() {
             match info {
                 Some(data) => {
