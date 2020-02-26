@@ -48,14 +48,6 @@ branches:
   except:
     - staging.tmp
 
-notifications:
-  webhooks:
-    urls:
-      - https://webhooks.gitter.im/e/7479b6691b7e5e40716a
-    on_success: always
-    on_failure: always
-    on_start: false
-
 before_install:
   # Do not run bors builds against the nightly compiler.
   # We want to find out about nightly bugs, so they're done in master, but we don't block on them.

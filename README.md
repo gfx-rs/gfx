@@ -76,7 +76,7 @@ The previously released crates (`gfx_core`, `gfx`, `gfx_device_*`, `gfx_window_`
 
 ## Contributing
 
-We are actively looking for new contributors and aim to be welcoming and helpful to anyone that is interested! We know the code base can be a bit intimidating in size and depth at first, and to this end we have a [label](https://github.com/gfx-rs/gfx/issues?q=is%3Aissue+is%3Aopen+label%3Acontributor-friendly) on the issue tracker which marks issues that are new contributor friendly and have some basic direction for completion in the issue comments. If you have any questions about any of these issues (or any other issues) you may want to work on, please comment on GitHub and/or drop a message in our [Gitter chat](https://gitter.im/gfx-rs/gfx)!
+We are actively looking for new contributors and aim to be welcoming and helpful to anyone that is interested! We know the code base can be a bit intimidating in size and depth at first, and to this end we have a [label](https://github.com/gfx-rs/gfx/issues?q=is%3Aissue+is%3Aopen+label%3Acontributor-friendly) on the issue tracker which marks issues that are new contributor friendly and have some basic direction for completion in the issue comments. If you have any questions about any of these issues (or any other issues) you may want to work on, please comment on GitHub and/or drop a message in our [Matrix chat](https://matrix.to/#/#gfx:matrix.org)!
 
 ## License
 
