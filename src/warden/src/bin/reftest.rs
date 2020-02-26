@@ -87,7 +87,7 @@ impl Harness {
     #[cfg_attr(any(feature = "gl", feature = "gl-ci"), allow(dead_code))]
     fn run<B: hal::Backend>(&self, name: &str, disabilities: Disabilities) -> usize {
         println!("Testing {}:", name);
-        let instance = B::Instance::create("warden", 1).unwrap();
+        let instance = B::Instance::create("warden", 1, hal::ApiVersion::dummy()).unwrap();
         self.run_instance(instance, disabilities)
     }
 

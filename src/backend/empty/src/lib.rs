@@ -1000,7 +1000,11 @@ impl window::Swapchain<Backend> for Swapchain {
 pub struct Instance;
 
 impl hal::Instance<Backend> for Instance {
-    fn create(_name: &str, _version: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(
+        _name: &str,
+        _app_version: u32,
+        _api_version: hal::ApiVersion,
+    ) -> Result<Self, hal::UnsupportedBackend> {
         Ok(Instance)
     }
 

@@ -41,8 +41,8 @@ fn main() {
         .collect();
     let stride = std::mem::size_of::<u32>() as u64;
 
-    let instance =
-        back::Instance::create("gfx-rs compute", 1).expect("Failed to create an instance!");
+    let instance = back::Instance::create("gfx-rs compute", 1, hal::ApiVersion::new(1, 1, 1))
+        .expect("Failed to create an instance!");
 
     let adapter = instance
         .enumerate_adapters()

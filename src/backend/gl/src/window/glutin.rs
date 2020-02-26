@@ -216,7 +216,7 @@ impl window::Surface<B> for Surface {
 }
 
 impl hal::Instance<B> for Surface {
-    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(_: &str, _: u32, _: hal::ApiVersion) -> Result<Self, hal::UnsupportedBackend> {
         panic!("Unable to create a surface")
     }
 
@@ -271,7 +271,7 @@ impl Headless {
 }
 
 impl hal::Instance<B> for Headless {
-    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(_: &str, _: u32, _: hal::ApiVersion) -> Result<Self, hal::UnsupportedBackend> {
         let context: glutin::Context<glutin::NotCurrent>;
         #[cfg(target_os = "linux")]
         {

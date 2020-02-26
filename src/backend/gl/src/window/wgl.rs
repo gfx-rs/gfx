@@ -166,7 +166,7 @@ impl Instance {
 }
 
 impl hal::Instance<Backend> for Instance {
-    fn create(_name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(_name: &str, _: u32, _: hal::ApiVersion) -> Result<Self, hal::UnsupportedBackend> {
         unsafe {
             let glrc = WGL_ENTRY.wgl.CreateContextAttribsARB(
                 WGL_ENTRY.hdc as *const _,

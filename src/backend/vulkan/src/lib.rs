@@ -333,7 +333,11 @@ unsafe extern "system" fn debug_report_callback(
 }
 
 impl hal::Instance<Backend> for Instance {
-    fn create(name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(
+        name: &str,
+        app_version: u32,
+        api_version: hal::ApiVersion,
+    ) -> Result<Self, hal::UnsupportedBackend> {
         // TODO: return errors instead of panic
         let entry = VK_ENTRY.as_ref().map_err(|e| {
             info!("Missing Vulkan entry points: {:?}", e);
@@ -345,10 +349,10 @@ impl hal::Instance<Backend> for Instance {
             s_type: vk::StructureType::APPLICATION_INFO,
             p_next: ptr::null(),
             p_application_name: app_name.as_ptr(),
-            application_version: version,
+            application_version: app_version,
             p_engine_name: b"gfx-rs\0".as_ptr() as *const _,
             engine_version: 1,
-            api_version: vk_make_version!(1, 0, 0),
+            api_version: vk_make_version!(api_version.major, api_version.minor, api_version.patch),
         };
 
         let instance_extensions = entry

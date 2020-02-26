@@ -115,8 +115,8 @@ fn main() {
     #[cfg(not(feature = "gl"))]
     let (_window, instance, mut adapters, surface) = {
         let window = wb.build(&event_loop).unwrap();
-        let instance =
-            back::Instance::create("gfx-rs quad", 1).expect("Failed to create an instance!");
+        let instance = back::Instance::create("gfx-rs quad", 1, hal::ApiVersion::new(1, 1, 1))
+            .expect("Failed to create an instance!");
         let surface = unsafe {
             instance
                 .create_surface(&window)

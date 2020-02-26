@@ -712,7 +712,7 @@ pub struct DummyInstance;
 
 #[cfg(not(any(target_arch = "wasm32", feature = "glutin", feature = "wgl")))]
 impl hal::Instance<Backend> for DummyInstance {
-    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(_: &str, _: u32, _: hal::ApiVersion) -> Result<Self, hal::UnsupportedBackend> {
         unimplemented!()
     }
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
@@ -738,8 +738,12 @@ pub enum Instance {
 
 #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
 impl hal::Instance<Backend> for Instance {
-    fn create(name: &str, version: u32) -> Result<Instance, hal::UnsupportedBackend> {
-        Headless::create(name, version).map(Instance::Headless)
+    fn create(
+        name: &str,
+        app_version: u32,
+        api_version: hal::ApiVersion,
+    ) -> Result<Instance, hal::UnsupportedBackend> {
+        Headless::create(name, app_version, api_version).map(Instance::Headless)
     }
 
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {

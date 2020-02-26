@@ -597,7 +597,8 @@ fn create_backend(
 ) -> BackendState<back::Backend> {
     let window = wb.build(event_loop).unwrap();
     let instance =
-        back::Instance::create("gfx-rs colour-uniform", 1).expect("Failed to create an instance!");
+        back::Instance::create("gfx-rs colour-uniform", 1, hal::ApiVersion::new(1, 1, 1))
+            .expect("Failed to create an instance!");
     let surface = unsafe {
         instance
             .create_surface(&window)

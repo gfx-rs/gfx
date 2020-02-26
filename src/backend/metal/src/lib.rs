@@ -212,7 +212,7 @@ pub struct Instance {
 }
 
 impl hal::Instance<Backend> for Instance {
-    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(_: &str, _: u32, _: hal::ApiVersion) -> Result<Self, hal::UnsupportedBackend> {
         Ok(Instance {
             experiments: Experiments::default(),
             gfx_managed_metal_layer_delegate: GfxManagedMetalLayerDelegate::new(),

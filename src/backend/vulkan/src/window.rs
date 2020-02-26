@@ -577,7 +577,9 @@ impl w::Swapchain<Backend> for Swapchain {
 
         match index {
             // special case for Intel Vulkan returning bizzare values (ugh)
-            Ok((i, _)) if self.vendor_id == info::intel::VENDOR && i > 0x100 => Err(w::AcquireError::OutOfDate),
+            Ok((i, _)) if self.vendor_id == info::intel::VENDOR && i > 0x100 => {
+                Err(w::AcquireError::OutOfDate)
+            }
             Ok((i, true)) => Ok((i, Some(w::Suboptimal))),
             Ok((i, false)) => Ok((i, None)),
             Err(vk::Result::NOT_READY) => Err(w::AcquireError::NotReady),

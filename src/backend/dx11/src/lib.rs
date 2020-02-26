@@ -270,7 +270,7 @@ fn get_format_properties(
 }
 
 impl hal::Instance<Backend> for Instance {
-    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(_: &str, _: u32, _: hal::ApiVersion) -> Result<Self, hal::UnsupportedBackend> {
         // TODO: get the latest factory we can find
 
         match dxgi::get_dxgi_factory() {

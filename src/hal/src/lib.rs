@@ -364,6 +364,37 @@ pub enum IndexType {
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnsupportedBackend;
 
+/// API version information given to `Instance::create`.
+/// Versioning semantics are based on [Vulkan specification](/// Versioning is based on [Vulkan](https://www.khronos.org/registry/vulkan/specs/1.1/html/vkspec.html#extendingvulkan-coreversions-versionnumbers).
+#[derive(Clone, Copy, Debug)]
+pub struct ApiVersion {
+    /// Major version. Example: "1" in "1.2.3".
+    pub major: u32,
+    /// Minor version. Example: "2" in "1.2.3".
+    pub minor: u32,
+    /// Patch version. Example: "3" in "1.2.3".
+    pub patch: u32,
+}
+
+impl ApiVersion {
+    /// Creates `ApiVersion` structure using given `major`, `minor` and `patch` information.
+    pub fn new(major: u32, minor: u32, patch: u32) -> ApiVersion {
+        ApiVersion {
+            major,
+            minor,
+            patch,
+        }
+    }
+    /// Creates a dummy `ApiVersion` structure for those backends which do not use it.
+    pub fn dummy() -> ApiVersion {
+        ApiVersion {
+            major: 0,
+            minor: 0,
+            patch: 0,
+        }
+    }
+}
+
 /// An instantiated backend.
 ///
 /// Any startup the backend needs to perform will be done when creating the type that implements
@@ -389,7 +420,11 @@ pub struct UnsupportedBackend;
 /// ```
 pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     /// Create a new instance.
-    fn create(name: &str, version: u32) -> Result<Self, UnsupportedBackend>;
+    fn create(
+        name: &str,
+        app_version: u32,
+        api_version: ApiVersion,
+    ) -> Result<Self, UnsupportedBackend>;
     /// Return all available adapters.
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<B>>;
     /// Create a new surface.

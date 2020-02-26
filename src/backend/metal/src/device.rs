@@ -905,7 +905,7 @@ impl Device {
                 msl::ComponentSwizzle::Identity,
                 msl::ComponentSwizzle::Identity,
                 msl::ComponentSwizzle::Identity,
-                msl::ComponentSwizzle::Identity
+                msl::ComponentSwizzle::Identity,
             ],
             ycbcr_conversion_enable: false,
             ycbcr_model: msl::SamplerYCbCrModelConversion::RgbIdentity,

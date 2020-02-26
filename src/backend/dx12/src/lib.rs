@@ -712,7 +712,7 @@ unsafe impl Send for Instance {}
 unsafe impl Sync for Instance {}
 
 impl hal::Instance<Backend> for Instance {
-    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(_: &str, _: u32, _: hal::ApiVersion) -> Result<Self, hal::UnsupportedBackend> {
         let lib_main = match native::D3D12Lib::new() {
             Ok(lib) => lib,
             Err(_) => return Err(hal::UnsupportedBackend),
