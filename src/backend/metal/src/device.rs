@@ -114,10 +114,9 @@ fn get_final_function(
     })?;
 
     if !function_specialization {
-        assert!(
-            specialization.data.is_empty() && specialization.constants.is_empty(),
-            "platform does not support specialization",
-        );
+        if !specialization.data.is_empty() || !specialization.constants.is_empty() {
+            error!("platform does not support specialization");
+        }
         return Ok(mtl_function);
     }
 
@@ -905,7 +904,7 @@ impl Device {
                 msl::ComponentSwizzle::Identity,
                 msl::ComponentSwizzle::Identity,
                 msl::ComponentSwizzle::Identity,
-                msl::ComponentSwizzle::Identity
+                msl::ComponentSwizzle::Identity,
             ],
             ycbcr_conversion_enable: false,
             ycbcr_model: msl::SamplerYCbCrModelConversion::RgbIdentity,
@@ -2374,7 +2373,7 @@ impl hal::device::Device<Backend> for Device {
                 let options = conv::resource_options_from_storage_and_cache(storage, cache);
                 if offset == 0x0 && size == cpu_buffer.length() {
                     cpu_buffer.set_label(name);
-                } else {
+                } else if self.shared.private_caps.supports_debug_markers {
                     cpu_buffer.add_debug_marker(
                         name,
                         NSRange {
@@ -2708,7 +2707,7 @@ impl hal::device::Device<Backend> for Device {
                     assert_eq!(mip_sizes.len(), 1);
                     if offset == 0x0 && cpu_buffer.length() == mip_sizes[0] {
                         cpu_buffer.set_label(name);
-                    } else {
+                    } else if self.shared.private_caps.supports_debug_markers {
                         cpu_buffer.add_debug_marker(
                             name,
                             NSRange {
@@ -3062,13 +3061,15 @@ impl hal::device::Device<Backend> for Device {
             n::Buffer::Bound {
                 ref raw, ref range, ..
             } => {
-                raw.add_debug_marker(
-                    name,
-                    NSRange {
-                        location: range.start,
-                        length: range.end - range.start,
-                    },
-                );
+                if self.shared.private_caps.supports_debug_markers {
+                    raw.add_debug_marker(
+                        name,
+                        NSRange {
+                            location: range.start,
+                            length: range.end - range.start,
+                        },
+                    );
+                }
             }
         }
     }
