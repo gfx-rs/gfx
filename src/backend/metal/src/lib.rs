@@ -713,6 +713,7 @@ struct PrivateCapabilities {
     max_texture_layers: u64,
     max_fragment_input_components: u64,
     sample_count_mask: u8,
+    supports_debug_markers: bool,
 }
 
 impl PrivateCapabilities {
@@ -958,6 +959,20 @@ impl PrivateCapabilities {
             max_texture_layers: 2048,
             max_fragment_input_components: if os_is_mac { 128 } else { 60 },
             sample_count_mask,
+            supports_debug_markers: Self::supports_any(
+                &device,
+                &[
+                    MTLFeatureSet::macOS_GPUFamily1_v2,
+                    MTLFeatureSet::macOS_GPUFamily2_v1,
+                    MTLFeatureSet::iOS_GPUFamily1_v3,
+                    MTLFeatureSet::iOS_GPUFamily2_v3,
+                    MTLFeatureSet::iOS_GPUFamily3_v2,
+                    MTLFeatureSet::iOS_GPUFamily4_v1,
+                    MTLFeatureSet::iOS_GPUFamily5_v1,
+                    MTLFeatureSet::tvOS_GPUFamily1_v2,
+                    MTLFeatureSet::tvOS_GPUFamily2_v1,
+                ],
+            ),
         }
     }
 
