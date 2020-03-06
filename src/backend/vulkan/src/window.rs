@@ -1,5 +1,6 @@
 use std::{
     borrow::Borrow,
+    collections::HashMap,
     fmt,
     hash,
     os::raw::c_void,
@@ -94,6 +95,7 @@ pub struct RawSurface {
     pub(crate) handle: vk::SurfaceKHR,
     pub(crate) functor: khr::Surface,
     pub(crate) instance: Arc<RawInstance>,
+    formats_cache: Mutex<HashMap<vk::PhysicalDevice, Option<Vec<Format>>>>,
 }
 
 impl Instance {
@@ -316,6 +318,7 @@ impl Instance {
             handle: surface,
             functor,
             instance: self.raw.clone(),
+            formats_cache: Mutex::new(HashMap::new()),
         });
 
         Surface {
@@ -394,26 +397,36 @@ impl w::Surface<Backend> for Surface {
     }
 
     fn supported_formats(&self, physical_device: &PhysicalDevice) -> Option<Vec<Format>> {
-        // Swapchain formats
-        let raw_formats = unsafe {
-            self.raw
-                .functor
-                .get_physical_device_surface_formats(physical_device.handle, self.raw.handle)
-        }
-        .expect("Unable to query surface formats");
+        // Some device/drivers have significant overhead when querying supported surface
+        // formats. This can result in choppy window resizing due to slow swapchain re-creation.
+        // By caching the formats, we can achieve extremely smoothe window resizing.
+        let mut formats_cache_guard = self.raw.formats_cache.lock().unwrap();
+        let formats = formats_cache_guard
+            .entry(physical_device.handle)
+            .or_insert_with(|| {
+                // Swapchain formats
+                let raw_formats = unsafe {
+                    self.raw.functor.get_physical_device_surface_formats(
+                        physical_device.handle,
+                        self.raw.handle,
+                    )
+                }
+                .expect("Unable to query surface formats");
 
-        match raw_formats[0].format {
-            // If pSurfaceFormats includes just one entry, whose value for format is
-            // VK_FORMAT_UNDEFINED, surface has no preferred format. In this case, the application
-            // can use any valid VkFormat value.
-            vk::Format::UNDEFINED => None,
-            _ => Some(
-                raw_formats
-                    .into_iter()
-                    .filter_map(|sf| conv::map_vk_format(sf.format))
-                    .collect(),
-            ),
-        }
+                match raw_formats[0].format {
+                    // If pSurfaceFormats includes just one entry, whose value for format is
+                    // VK_FORMAT_UNDEFINED, surface has no preferred format. In this case, the application
+                    // can use any valid VkFormat value.
+                    vk::Format::UNDEFINED => None,
+                    _ => Some(
+                        raw_formats
+                            .into_iter()
+                            .filter_map(|sf| conv::map_vk_format(sf.format))
+                            .collect(),
+                    ),
+                }
+            });
+        formats.clone()
     }
 }
 
