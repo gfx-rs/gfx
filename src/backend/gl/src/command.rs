@@ -617,8 +617,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         // TODO
     }
 
-    unsafe fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: buffer::SubRange, _data: u32)
-    {
+    unsafe fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: buffer::SubRange, _data: u32) {
         unimplemented!()
     }
 
@@ -809,7 +808,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
         let (raw_buffer, range) = ibv.buffer.as_bound();
 
-        self.cache.index_type_range = Some((ibv.index_type, crate::resolve_sub_range(&ibv.range, range)));
+        self.cache.index_type_range =
+            Some((ibv.index_type, crate::resolve_sub_range(&ibv.range, range)));
         self.push_cmd(Command::BindIndexBuffer(raw_buffer));
     }
 

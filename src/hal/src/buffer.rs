@@ -23,7 +23,10 @@ pub struct SubRange {
 
 impl SubRange {
     /// Whole buffer subrange.
-    pub const WHOLE: Self = SubRange { offset: 0, size: None };
+    pub const WHOLE: Self = SubRange {
+        offset: 0,
+        size: None,
+    };
 
     /// Return the stored size, if present, or computed size based on the limit.
     pub fn size_to(&self, limit: Offset) -> Offset {

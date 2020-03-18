@@ -308,9 +308,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn fill_buffer(&mut self, buffer: &n::Buffer, range: buffer::SubRange, data: u32) {
-        self.device
-            .0
-            .cmd_fill_buffer(self.raw, buffer.raw, range.offset, range.size.unwrap_or(vk::WHOLE_SIZE), data);
+        self.device.0.cmd_fill_buffer(
+            self.raw,
+            buffer.raw,
+            range.offset,
+            range.size.unwrap_or(vk::WHOLE_SIZE),
+            data,
+        );
     }
 
     unsafe fn update_buffer(&mut self, buffer: &n::Buffer, offset: buffer::Offset, data: &[u8]) {

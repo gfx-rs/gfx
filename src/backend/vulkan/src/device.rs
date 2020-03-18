@@ -1766,11 +1766,17 @@ impl d::Device<B> for Device {
         self.raw.0.update_descriptor_sets(&[], &copies);
     }
 
-    unsafe fn map_memory(&self, memory: &n::Memory, segment: Segment) -> Result<*mut u8, d::MapError> {
-        let result = self
-            .raw
-            .0
-            .map_memory(memory.raw, segment.offset, segment.size.unwrap_or(vk::WHOLE_SIZE), vk::MemoryMapFlags::empty());
+    unsafe fn map_memory(
+        &self,
+        memory: &n::Memory,
+        segment: Segment,
+    ) -> Result<*mut u8, d::MapError> {
+        let result = self.raw.0.map_memory(
+            memory.raw,
+            segment.offset,
+            segment.size.unwrap_or(vk::WHOLE_SIZE),
+            vk::MemoryMapFlags::empty(),
+        );
 
         match result {
             Ok(ptr) => Ok(ptr as *mut _),

@@ -169,7 +169,10 @@ fn main() {
             set: &desc_set,
             binding: 0,
             array_offset: 0,
-            descriptors: Some(pso::Descriptor::Buffer(&device_buffer, buffer::SubRange::WHOLE)),
+            descriptors: Some(pso::Descriptor::Buffer(
+                &device_buffer,
+                buffer::SubRange::WHOLE,
+            )),
         }));
     };
 

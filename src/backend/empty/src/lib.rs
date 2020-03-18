@@ -426,11 +426,7 @@ impl device::Device<Backend> for Device {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn map_memory(
-        &self,
-        _: &(),
-        _: memory::Segment,
-    ) -> Result<*mut u8, device::MapError> {
+    unsafe fn map_memory(&self, _: &(), _: memory::Segment) -> Result<*mut u8, device::MapError> {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
@@ -631,8 +627,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn fill_buffer(&mut self, _: &(), _: buffer::SubRange, _: u32)
-    {
+    unsafe fn fill_buffer(&mut self, _: &(), _: buffer::SubRange, _: u32) {
         panic!(DO_NOT_USE_MESSAGE)
     }
 

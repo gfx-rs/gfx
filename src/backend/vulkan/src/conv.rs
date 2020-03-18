@@ -18,11 +18,7 @@ use hal::{
 
 use smallvec::SmallVec;
 
-use std::{
-    borrow::Borrow,
-    mem,
-    ptr,
-};
+use std::{borrow::Borrow, mem, ptr};
 
 
 pub fn map_format(format: format::Format) -> vk::Format {

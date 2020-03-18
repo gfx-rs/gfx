@@ -2017,19 +2017,14 @@ impl device::Device<Backend> for Device {
     ) -> Result<*mut u8, device::MapError> {
         assert_eq!(memory.host_visible.is_some(), true);
 
-        Ok(memory
-            .mapped_ptr
-            .offset(segment.offset as isize))
+        Ok(memory.mapped_ptr.offset(segment.offset as isize))
     }
 
     unsafe fn unmap_memory(&self, memory: &Memory) {
         assert_eq!(memory.host_visible.is_some(), true);
     }
 
-    unsafe fn flush_mapped_memory_ranges<'a, I>(
-        &self,
-        ranges: I,
-    ) -> Result<(), device::OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a Memory, memory::Segment)>,

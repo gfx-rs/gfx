@@ -426,7 +426,10 @@ impl<B: Backend> RendererState<B> {
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
             cmd_buffer.set_scissors(0, &[self.viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
-            cmd_buffer.bind_vertex_buffers(0, Some((self.vertex_buffer.get_buffer(), buffer::SubRange::WHOLE)));
+            cmd_buffer.bind_vertex_buffers(
+                0,
+                Some((self.vertex_buffer.get_buffer(), buffer::SubRange::WHOLE)),
+            );
             cmd_buffer.bind_graphics_descriptor_sets(
                 self.pipeline.pipeline_layout.as_ref().unwrap(),
                 0,
@@ -832,7 +835,9 @@ impl<B: Backend> BufferState<B> {
         let memory = self.memory.as_ref().unwrap();
 
         unsafe {
-            let mapping = device.map_memory(memory, m::Segment { offset, size: None }).unwrap();
+            let mapping = device
+                .map_memory(memory, m::Segment { offset, size: None })
+                .unwrap();
             ptr::copy_nonoverlapping(data_source.as_ptr() as *const u8, mapping, upload_size);
             device.unmap_memory(memory);
         }

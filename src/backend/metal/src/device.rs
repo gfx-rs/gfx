@@ -2124,7 +2124,9 @@ impl hal::device::Device<Backend> for Device {
                             }
                             pso::Descriptor::Buffer(buf, ref sub) => {
                                 let (raw, range) = buf.as_bound();
-                                debug_assert!(range.start + sub.offset + sub.size.unwrap_or(0) <= range.end);
+                                debug_assert!(
+                                    range.start + sub.offset + sub.size.unwrap_or(0) <= range.end
+                                );
                                 let pair = (AsNative::from(raw), range.start + sub.offset);
                                 data.buffers[counters.buffers as usize] = Some(pair);
                             }

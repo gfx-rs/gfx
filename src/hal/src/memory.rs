@@ -112,5 +112,8 @@ pub struct Segment {
 
 impl Segment {
     /// All the memory available.
-    pub const ALL: Self = Segment { offset: 0, size: None };
+    pub const ALL: Self = Segment {
+        offset: 0,
+        size: None,
+    };
 }

@@ -2096,7 +2096,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
         let bytes_per_unit = 4;
         let start = range.offset as i32;
-        let end = range.size.map_or(buffer.requirements.size, |s| range.offset + s) as i32;
+        let end = range
+            .size
+            .map_or(buffer.requirements.size, |s| range.offset + s) as i32;
         if start % 4 != 0 || end % 4 != 0 {
             warn!("Fill buffer bounds have to be multiples of 4");
         }

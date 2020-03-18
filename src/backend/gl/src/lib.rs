@@ -767,7 +767,10 @@ impl hal::Instance<Backend> for Instance {
     }
 }
 
-fn resolve_sub_range(sub: &buffer::SubRange, whole: Range<buffer::Offset>) -> Range<buffer::Offset> {
+fn resolve_sub_range(
+    sub: &buffer::SubRange,
+    whole: Range<buffer::Offset>,
+) -> Range<buffer::Offset> {
     let end = sub.size.map_or(whole.end, |s| whole.start + sub.offset + s);
     whole.start + sub.offset .. end
 }
