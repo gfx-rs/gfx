@@ -34,7 +34,6 @@ use hal::{
     pso,
     query,
     queue,
-    range::RangeArg,
     window,
     DrawCount,
     IndexCount,
@@ -2068,10 +2067,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn fill_buffer<R>(&mut self, _buffer: &Buffer, _range: R, _data: u32)
-    where
-        R: RangeArg<buffer::Offset>,
-    {
+    unsafe fn fill_buffer(&mut self, _buffer: &Buffer, _sub: buffer::SubRange, _data: u32) {
         unimplemented!()
     }
 
@@ -2480,8 +2476,8 @@ unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
 
 impl Memory {
-    pub fn resolve<R: RangeArg<u64>>(&self, range: &R) -> Range<u64> {
-        *range.start().unwrap_or(&0) .. *range.end().unwrap_or(&self.size)
+    pub fn resolve(&self, segment: &memory::Segment) -> Range<u64> {
+        segment.offset .. segment.size.map_or(self.size, |s| segment.offset + s)
     }
 
     pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) {

@@ -22,7 +22,6 @@ use hal::{
     pso,
     query,
     queue,
-    range::RangeArg,
     window::{Extent2D, SwapchainConfig},
 };
 
@@ -1152,16 +1151,16 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn map_memory<R: RangeArg<u64>>(
+    unsafe fn map_memory(
         &self,
         memory: &n::Memory,
-        range: R,
+        segment: memory::Segment,
     ) -> Result<*mut u8, d::MapError> {
         let gl = &self.share.context;
         let caps = &self.share.private_caps;
 
-        let offset = *range.start().unwrap_or(&0);
-        let size = *range.end().unwrap_or(&memory.size) - offset;
+        let offset = segment.offset;
+        let size = segment.size.unwrap_or(memory.size - segment.offset);
 
         let (buffer, target) = memory.buffer.expect("cannot map image memory");
         let ptr = if caps.emulate_map {
@@ -1209,21 +1208,20 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), d::OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
     {
         let gl = &self.share.context;
 
         for i in ranges {
-            let (mem, range) = i.borrow();
+            let (mem, segment) = i.borrow();
             let (buffer, target) = mem.buffer.expect("cannot flush image memory");
             gl.bind_buffer(target, Some(buffer));
 
-            let offset = *range.start().unwrap_or(&0);
-            let size = *range.end().unwrap_or(&mem.size) - offset;
+            let offset = segment.offset;
+            let size = segment.size.unwrap_or(mem.size - segment.offset);
 
             if self.share.private_caps.emulate_map {
                 let ptr = mem.emulate_map_allocation.get().unwrap();
@@ -1244,24 +1242,20 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
-        &self,
-        ranges: I,
-    ) -> Result<(), d::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
     {
         let gl = &self.share.context;
 
         for i in ranges {
-            let (mem, range) = i.borrow();
+            let (mem, segment) = i.borrow();
             let (buffer, target) = mem.buffer.expect("cannot invalidate image memory");
             gl.bind_buffer(target, Some(buffer));
 
-            let offset = *range.start().unwrap_or(&0);
-            let size = *range.end().unwrap_or(&mem.size) - offset;
+            let offset = segment.offset;
+            let size = segment.size.unwrap_or(mem.size - segment.offset);
 
             if self.share.private_caps.emulate_map {
                 let ptr = mem.emulate_map_allocation.get().unwrap();
@@ -1283,11 +1277,11 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn create_buffer_view<R: RangeArg<u64>>(
+    unsafe fn create_buffer_view(
         &self,
         _: &n::Buffer,
         _: Option<Format>,
-        _: R,
+        _: buffer::SubRange,
     ) -> Result<n::BufferView, buffer::ViewCreationError> {
         unimplemented!()
     }

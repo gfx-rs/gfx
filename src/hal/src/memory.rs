@@ -99,3 +99,18 @@ pub struct Requirements {
     /// Supported memory types.
     pub type_mask: u64,
 }
+
+/// A linear segment within a memory block.
+#[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Segment {
+    /// Offset to the segment.
+    pub offset: u64,
+    /// Size of the segment, or None if unbound.
+    pub size: Option<u64>,
+}
+
+impl Segment {
+    /// All the memory available.
+    pub const ALL: Self = Segment { offset: 0, size: None };
+}

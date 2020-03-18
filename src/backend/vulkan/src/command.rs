@@ -15,7 +15,6 @@ use hal::{
     memory,
     pso,
     query,
-    range::RangeArg,
     DrawCount,
     IndexCount,
     InstanceCount,
@@ -308,14 +307,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn fill_buffer<R>(&mut self, buffer: &n::Buffer, range: R, data: u32)
-    where
-        R: RangeArg<buffer::Offset>,
-    {
-        let (offset, size) = conv::map_range_arg(&range);
+    unsafe fn fill_buffer(&mut self, buffer: &n::Buffer, range: buffer::SubRange, data: u32) {
         self.device
             .0
-            .cmd_fill_buffer(self.raw, buffer.raw, offset, size, data);
+            .cmd_fill_buffer(self.raw, buffer.raw, range.offset, range.size.unwrap_or(vk::WHOLE_SIZE), data);
     }
 
     unsafe fn update_buffer(&mut self, buffer: &n::Buffer, offset: buffer::Offset, data: &[u8]) {

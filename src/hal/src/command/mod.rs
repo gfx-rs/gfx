@@ -23,7 +23,6 @@ use std::ops::Range;
 
 use crate::image::{Filter, Layout, SubresourceRange};
 use crate::memory::{Barrier, Dependencies};
-use crate::range::RangeArg;
 use crate::{buffer, pass, pso, query};
 use crate::{
     Backend,
@@ -144,9 +143,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         T::Item: Borrow<Barrier<'a, B>>;
 
     /// Fill a buffer with the given `u32` value.
-    unsafe fn fill_buffer<R>(&mut self, buffer: &B::Buffer, range: R, data: u32)
-    where
-        R: RangeArg<buffer::Offset>;
+    unsafe fn fill_buffer(&mut self, buffer: &B::Buffer, range: buffer::SubRange, data: u32);
 
     /// Copy data from the given slice into a buffer.
     unsafe fn update_buffer(&mut self, buffer: &B::Buffer, offset: buffer::Offset, data: &[u8]);

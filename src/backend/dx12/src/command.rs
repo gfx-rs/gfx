@@ -10,7 +10,6 @@ use hal::{
     pool,
     pso,
     query,
-    range::RangeArg,
     DrawCount,
     IndexCount,
     IndexType,
@@ -2089,18 +2088,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
-    unsafe fn fill_buffer<R>(&mut self, buffer: &r::Buffer, range: R, _data: u32)
-    where
-        R: RangeArg<buffer::Offset>,
-    {
+    unsafe fn fill_buffer(&mut self, buffer: &r::Buffer, range: buffer::SubRange, _data: u32) {
         let buffer = buffer.expect_bound();
         assert!(
             buffer.clear_uav.is_some(),
             "Buffer needs to be created with usage `TRANSFER_DST`"
         );
         let bytes_per_unit = 4;
-        let start = *range.start().unwrap_or(&0) as i32;
-        let end = *range.end().unwrap_or(&(buffer.requirements.size as u64)) as i32;
+        let start = range.offset as i32;
+        let end = range.size.map_or(buffer.requirements.size, |s| range.offset + s) as i32;
         if start % 4 != 0 || end % 4 != 0 {
             warn!("Fill buffer bounds have to be multiples of 4");
         }

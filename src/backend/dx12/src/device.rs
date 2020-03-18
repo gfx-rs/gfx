@@ -43,7 +43,6 @@ use hal::{
     pso::VertexInputRate,
     query,
     queue::{CommandQueue as _, QueueFamilyId},
-    range::RangeArg,
     window as w,
 };
 
@@ -2184,11 +2183,11 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn create_buffer_view<R: RangeArg<u64>>(
+    unsafe fn create_buffer_view(
         &self,
         buffer: &r::Buffer,
         format: Option<format::Format>,
-        range: R,
+        sub: buffer::SubRange,
     ) -> Result<r::BufferView, buffer::ViewCreationError> {
         let buffer = buffer.expect_bound();
         let buffer_features = {
@@ -2200,14 +2199,14 @@ impl d::Device<B> for Device {
             None => return Err(buffer::ViewCreationError::UnsupportedFormat { format }),
         };
 
-        let start = *range.start().unwrap_or(&0);
-        let end = *range.end().unwrap_or(&(buffer.requirements.size as _));
+        let start = sub.offset;
+        let size = sub.size.unwrap_or(buffer.requirements.size - start);
 
         let bytes_per_texel = (format_desc.bits / 8) as u64;
         // Check if it adheres to the texel buffer offset limit
         assert_eq!(start % bytes_per_texel, 0);
         let first_element = start / bytes_per_texel;
-        let num_elements = (end - start) / bytes_per_texel; // rounds down to next smaller size
+        let num_elements = size / bytes_per_texel; // rounds down to next smaller size
 
         let handle_srv = if buffer_features.contains(format::BufferFeature::UNIFORM_TEXEL) {
             let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
@@ -3095,25 +3094,21 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn map_memory<R>(&self, memory: &r::Memory, range: R) -> Result<*mut u8, d::MapError>
-    where
-        R: RangeArg<u64>,
-    {
-        if let Some(mem) = memory.resource {
-            let start = range.start().unwrap_or(&0);
-            let end = range.end().unwrap_or(&memory.size);
-            assert!(start <= end);
-
-            let mut ptr = ptr::null_mut();
-            assert_eq!(
-                winerror::S_OK,
-                (*mem).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, &mut ptr)
-            );
-            ptr = ptr.offset(*start as _);
-            Ok(ptr as *mut _)
-        } else {
-            panic!("Memory not created with a memory type exposing `CPU_VISIBLE`.")
-        }
+    unsafe fn map_memory(
+        &self,
+        memory: &r::Memory,
+        segment: memory::Segment,
+    ) -> Result<*mut u8, d::MapError> {
+        let mem = memory
+            .resource
+            .expect("Memory not created with a memory type exposing `CPU_VISIBLE`");
+        let mut ptr = ptr::null_mut();
+        assert_eq!(
+            winerror::S_OK,
+            (*mem).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, &mut ptr)
+        );
+        ptr = ptr.offset(segment.offset as isize);
+        Ok(ptr as *mut _)
     }
 
     unsafe fn unmap_memory(&self, memory: &r::Memory) {
@@ -3122,14 +3117,13 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), d::OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a r::Memory, R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a r::Memory, memory::Segment)>,
     {
         for range in ranges {
-            let &(ref memory, ref range) = range.borrow();
+            let &(ref memory, ref segment) = range.borrow();
             if let Some(mem) = memory.resource {
                 // map and immediately unmap, hoping that dx12 drivers internally cache
                 // currently mapped buffers.
@@ -3138,8 +3132,8 @@ impl d::Device<B> for Device {
                     (*mem).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, ptr::null_mut())
                 );
 
-                let start = *range.start().unwrap_or(&0);
-                let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
+                let start = segment.offset;
+                let end = segment.size.map_or(memory.size, |s| start + s); // TODO: only need to be end of current mapping
 
                 (*mem).Unmap(
                     0,
@@ -3154,20 +3148,16 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
-        &self,
-        ranges: I,
-    ) -> Result<(), d::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a r::Memory, R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a r::Memory, memory::Segment)>,
     {
         for range in ranges {
-            let &(ref memory, ref range) = range.borrow();
+            let &(ref memory, ref segment) = range.borrow();
             if let Some(mem) = memory.resource {
-                let start = *range.start().unwrap_or(&0);
-                let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
+                let start = segment.offset;
+                let end = segment.size.map_or(memory.size, |s| start + s); // TODO: only need to be end of current mapping
 
                 // map and immediately unmap, hoping that dx12 drivers internally cache
                 // currently mapped buffers.

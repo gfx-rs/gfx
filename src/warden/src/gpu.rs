@@ -371,7 +371,7 @@ impl<B: hal::Backend> Scene<B> {
                         // write the data
                         unsafe {
                             let mapping =
-                                device.map_memory(&upload_memory, 0 .. size as u64).unwrap();
+                                device.map_memory(&upload_memory, memory::Segment::ALL).unwrap();
                             File::open(data_path.join(data))
                                 .unwrap()
                                 .read_exact(slice::from_raw_parts_mut(mapping, size))
@@ -528,7 +528,7 @@ impl<B: hal::Backend> Scene<B> {
                         unsafe {
                             let mut file = File::open(data_path.join(data)).unwrap();
                             let mapping =
-                                device.map_memory(&upload_memory, 0 .. upload_size).unwrap();
+                                device.map_memory(&upload_memory, memory::Segment::ALL).unwrap();
                             for y in 0 .. (h as usize * d as usize) {
                                 let slice = slice::from_raw_parts_mut(
                                     mapping.offset(y as isize * row_pitch as isize),
@@ -1186,7 +1186,7 @@ impl<B: hal::Backend> Scene<B> {
                             Tc::FillBuffer {
                                 ref buffer,
                                 offset,
-                                ref size,
+                                size,
                                 data,
                             } => unsafe {
                                 let buf = resources
@@ -1198,8 +1198,7 @@ impl<B: hal::Backend> Scene<B> {
                                     memory::Dependencies::empty(),
                                     buf.barrier(buffers.entry(buffer), b::State::TRANSFER_WRITE),
                                 );
-                                let end = size.map_or(buf.size as b::Offset, |s| offset + s);
-                                command_buf.fill_buffer(&buf.handle, offset .. end, data);
+                                command_buf.fill_buffer(&buf.handle, b::SubRange { offset, size }, data);
                             },
                         }
                     }
@@ -1563,7 +1562,7 @@ impl<B: hal::Backend> Scene<B> {
             self.device.destroy_command_pool(command_pool);
         }
 
-        let mapping = unsafe { self.device.map_memory(&down_memory, 0 .. down_size) }.unwrap();
+        let mapping = unsafe { self.device.map_memory(&down_memory, memory::Segment::ALL) }.unwrap();
 
         FetchGuard {
             device: &mut self.device,
@@ -1693,7 +1692,7 @@ impl<B: hal::Backend> Scene<B> {
             self.device.destroy_command_pool(command_pool);
         }
 
-        let mapping = unsafe { self.device.map_memory(&down_memory, 0 .. down_size) }.unwrap();
+        let mapping = unsafe { self.device.map_memory(&down_memory, memory::Segment::ALL) }.unwrap();
 
         FetchGuard {
             device: &mut self.device,

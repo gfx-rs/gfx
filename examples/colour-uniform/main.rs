@@ -806,7 +806,7 @@ impl<B: Backend> BufferState<B> {
             size = mem_req.size;
 
             // TODO: check transitions: read/write mapping and vertex buffer read
-            let mapping = device.map_memory(&memory, 0 .. size).unwrap();
+            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
             ptr::copy_nonoverlapping(data_source.as_ptr() as *const u8, mapping, upload_size);
             device.unmap_memory(&memory);
         }
@@ -832,7 +832,7 @@ impl<B: Backend> BufferState<B> {
         let memory = self.memory.as_ref().unwrap();
 
         unsafe {
-            let mapping = device.map_memory(memory, offset .. self.size).unwrap();
+            let mapping = device.map_memory(memory, m::Segment { offset, size: None }).unwrap();
             ptr::copy_nonoverlapping(data_source.as_ptr() as *const u8, mapping, upload_size);
             device.unmap_memory(memory);
         }
@@ -879,7 +879,7 @@ impl<B: Backend> BufferState<B> {
             size = mem_reqs.size;
 
             // copy image data into staging buffer
-            let mapping = device.map_memory(&memory, 0 .. size).unwrap();
+            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
             for y in 0 .. height as usize {
                 let data_source_slice =
                     &(**img)[y * (width as usize) * stride .. (y + 1) * (width as usize) * stride];

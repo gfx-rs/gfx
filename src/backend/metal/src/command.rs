@@ -27,7 +27,6 @@ use hal::{
     pass::AttachmentLoadOp,
     pso,
     query,
-    range::RangeArg,
     window::{PresentError, Suboptimal, SwapImageIndex},
     DrawCount,
     IndexCount,
@@ -2616,23 +2615,17 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     {
     }
 
-    unsafe fn fill_buffer<R>(&mut self, buffer: &native::Buffer, range: R, data: u32)
-    where
-        R: RangeArg<buffer::Offset>,
-    {
+    unsafe fn fill_buffer(&mut self, buffer: &native::Buffer, sub: buffer::SubRange, data: u32) {
         let (raw, base_range) = buffer.as_bound();
         let mut inner = self.inner.borrow_mut();
 
-        let start = base_range.start + *range.start().unwrap_or(&0);
+        let start = base_range.start + sub.offset;
         assert_eq!(start % WORD_ALIGNMENT, 0);
 
-        let end = match range.end() {
-            Some(&e) => {
-                assert_eq!(e % WORD_ALIGNMENT, 0);
-                base_range.start + e
-            }
-            None => base_range.end,
-        };
+        let end = sub.size.map_or(base_range.end, |s| {
+            assert_eq!(s % WORD_ALIGNMENT, 0);
+            base_range.start + s
+        });
 
         if (data & 0xFF) * 0x0101_0101 == data {
             let command = soft::BlitCommand::FillBuffer {

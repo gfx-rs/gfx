@@ -11,7 +11,7 @@ use crate::{device, format, Backend, IndexType};
 /// An offset inside a buffer, in bytes.
 pub type Offset = u64;
 
-/// A subrange of the bufer.
+/// A subrange of the buffer.
 #[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubRange {

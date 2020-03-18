@@ -1,3 +1,5 @@
+use crate::native as n;
+
 use ash::vk;
 
 use hal::{
@@ -5,19 +7,23 @@ use hal::{
     command,
     format,
     image,
+    memory::Segment,
     pass,
     pso,
     query,
-    range::RangeArg,
     window::{CompositeAlphaMode, PresentMode},
     Features,
     IndexType,
 };
 
-use crate::native as n;
-use std::borrow::Borrow;
-use std::mem;
-use std::ptr;
+use smallvec::SmallVec;
+
+use std::{
+    borrow::Borrow,
+    mem,
+    ptr,
+};
+
 
 pub fn map_format(format: format::Format) -> vk::Format {
     vk::Format::from_raw(format as i32)
@@ -466,43 +472,24 @@ pub fn map_device_features(features: Features) -> vk::PhysicalDeviceFeatures {
         .build()
 }
 
-pub fn map_memory_ranges<'a, I, R>(ranges: I) -> Vec<vk::MappedMemoryRange>
+pub fn map_memory_ranges<'a, I>(ranges: I) -> SmallVec<[vk::MappedMemoryRange; 4]>
 where
     I: IntoIterator,
-    I::Item: Borrow<(&'a n::Memory, R)>,
-    R: RangeArg<u64>,
+    I::Item: Borrow<(&'a n::Memory, Segment)>,
 {
     ranges
         .into_iter()
         .map(|range| {
-            let &(ref memory, ref range) = range.borrow();
-            let (offset, size) = map_range_arg(range);
+            let &(ref memory, ref segment) = range.borrow();
             vk::MappedMemoryRange {
                 s_type: vk::StructureType::MAPPED_MEMORY_RANGE,
                 p_next: ptr::null(),
                 memory: memory.raw,
-                offset,
-                size,
+                offset: segment.offset,
+                size: segment.size.unwrap_or(vk::WHOLE_SIZE),
             }
         })
         .collect()
-}
-
-/// Returns (offset, size) of the range.
-///
-/// Unbound start indices will be mapped to 0.
-/// Unbound end indices will be mapped to VK_WHOLE_SIZE.
-pub fn map_range_arg<R>(range: &R) -> (u64, u64)
-where
-    R: RangeArg<u64>,
-{
-    let offset = *range.start().unwrap_or(&0);
-    let size = match range.end() {
-        Some(end) => end - offset,
-        None => vk::WHOLE_SIZE,
-    };
-
-    (offset, size)
 }
 
 pub fn map_command_buffer_flags(flags: command::CommandBufferFlags) -> vk::CommandBufferUsageFlags {

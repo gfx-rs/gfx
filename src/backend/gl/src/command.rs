@@ -3,7 +3,6 @@
 use crate::GlContext;
 
 use hal::format::ChannelType;
-use hal::range::RangeArg;
 use hal::{self, buffer, command, image, memory, pass, pso, query};
 
 use crate::info;
@@ -618,9 +617,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         // TODO
     }
 
-    unsafe fn fill_buffer<R>(&mut self, _buffer: &n::Buffer, _range: R, _data: u32)
-    where
-        R: RangeArg<buffer::Offset>,
+    unsafe fn fill_buffer(&mut self, _buffer: &n::Buffer, _range: buffer::SubRange, _data: u32)
     {
         unimplemented!()
     }
