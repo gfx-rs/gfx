@@ -357,6 +357,7 @@ impl CommandQueue {
             } => {
                 let gl = &self.share.context;
                 let legacy = &self.share.legacy_features;
+                let hints = &self.share.hints;
 
                 if instances == &(0u32 .. 1) {
                     if base_vertex == 0 {
@@ -407,7 +408,7 @@ impl CommandQueue {
                         }
                     } else if instances.start == 0 {
                         error!("Base vertex with instanced indexed drawing is not supported");
-                    } else if legacy.contains(LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE) {
+                    } else if hints.contains(hal::Hints::BASE_VERTEX_INSTANCE_DRAWING) {
                         unsafe {
                             gl.draw_elements_instanced_base_vertex_base_instance(
                                 primitive,

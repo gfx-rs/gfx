@@ -101,6 +101,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
+    fn hints(&self) -> hal::Hints {
+        panic!(DO_NOT_USE_MESSAGE)
+    }
+
     fn limits(&self) -> hal::Limits {
         panic!(DO_NOT_USE_MESSAGE)
     }
