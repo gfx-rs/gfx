@@ -17,9 +17,9 @@
 //! [`DescriptorSetCopy`]: struct.DescriptorSetWrite.html
 
 use smallvec::SmallVec;
-use std::{borrow::Borrow, fmt, iter, ops::Range};
+use std::{borrow::Borrow, fmt, iter};
 
-use crate::{buffer::Offset, image::Layout, pso::ShaderStageFlags, Backend};
+use crate::{buffer::SubRange, image::Layout, pso::ShaderStageFlags, Backend};
 
 ///
 pub type DescriptorSetIndex = u16;
@@ -275,9 +275,8 @@ pub enum Descriptor<'a, B: Backend> {
     Sampler(&'a B::Sampler),
     Image(&'a B::ImageView, Layout),
     CombinedImageSampler(&'a B::ImageView, Layout, &'a B::Sampler),
-    Buffer(&'a B::Buffer, Range<Option<Offset>>),
-    UniformTexelBuffer(&'a B::BufferView),
-    StorageTexelBuffer(&'a B::BufferView),
+    Buffer(&'a B::Buffer, SubRange),
+    TexelBuffer(&'a B::BufferView),
 }
 
 /// Copies a range of descriptors to be bound from one descriptor set to another Should be

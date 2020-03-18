@@ -13,7 +13,7 @@ pub extern crate glutin;
 
 use std::cell::Cell;
 use std::fmt;
-use std::ops::Deref;
+use std::ops::{Deref, Range};
 use std::sync::{Arc, Weak};
 use std::thread::{self, ThreadId};
 
@@ -765,4 +765,9 @@ impl hal::Instance<Backend> for Instance {
     unsafe fn destroy_surface(&self, _surface: Surface) {
         // TODO: Implement Surface cleanup
     }
+}
+
+fn resolve_sub_range(sub: &buffer::SubRange, whole: Range<buffer::Offset>) -> Range<buffer::Offset> {
+    let end = sub.size.map_or(whole.end, |s| whole.start + sub.offset + s);
+    whole.start + sub.offset .. end
 }

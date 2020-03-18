@@ -110,10 +110,8 @@ where
                     src_queue_family_index: families.start,
                     dst_queue_family_index: families.end,
                     buffer: target.raw,
-                    offset: range.start.unwrap_or(0),
-                    size: range
-                        .end
-                        .map_or(vk::WHOLE_SIZE, |end| end - range.start.unwrap_or(0)),
+                    offset: range.offset,
+                    size: range.size.unwrap_or(vk::WHOLE_SIZE),
                 });
             }
             memory::Barrier::Image {
@@ -513,20 +511,20 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         self.device.0.cmd_bind_index_buffer(
             self.raw,
             ibv.buffer.raw,
-            ibv.offset,
+            ibv.range.offset,
             conv::map_index_type(ibv.index_type),
         );
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
     where
-        I: IntoIterator<Item = (T, buffer::Offset)>,
+        I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<n::Buffer>,
     {
         let (buffers, offsets): (SmallVec<[vk::Buffer; 16]>, SmallVec<[vk::DeviceSize; 16]>) =
             buffers
                 .into_iter()
-                .map(|(buffer, offset)| (buffer.borrow().raw, offset))
+                .map(|(buffer, sub)| (buffer.borrow().raw, sub.offset))
                 .unzip();
 
         self.device

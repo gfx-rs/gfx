@@ -808,7 +808,7 @@ impl<B: hal::Backend> Scene<B> {
                                             .buffers
                                             .get(s)
                                             .expect(&format!("Missing buffer: {}", s));
-                                        hal::pso::Descriptor::Buffer(&buf.handle, None .. None)
+                                        hal::pso::Descriptor::Buffer(&buf.handle, b::SubRange::WHOLE)
                                     })
                                     .collect::<Vec<_>>(),
                                 raw::DescriptorRange::Images(ref names_and_layouts) => {
@@ -1185,8 +1185,8 @@ impl<B: hal::Backend> Scene<B> {
                             },
                             Tc::FillBuffer {
                                 ref buffer,
-                                start,
-                                end,
+                                offset,
+                                ref size,
                                 data,
                             } => unsafe {
                                 let buf = resources
@@ -1198,7 +1198,8 @@ impl<B: hal::Backend> Scene<B> {
                                     memory::Dependencies::empty(),
                                     buf.barrier(buffers.entry(buffer), b::State::TRANSFER_WRITE),
                                 );
-                                command_buf.fill_buffer(&buf.handle, (start, end), data);
+                                let end = size.map_or(buf.size as b::Offset, |s| offset + s);
+                                command_buf.fill_buffer(&buf.handle, offset .. end, data);
                             },
                         }
                     }
@@ -1301,7 +1302,7 @@ impl<B: hal::Backend> Scene<B> {
                             match *command {
                                 Dc::BindIndexBuffer {
                                     ref buffer,
-                                    offset,
+                                    ref range,
                                     index_type,
                                 } => {
                                     let view = b::IndexBufferView {
@@ -1310,19 +1311,19 @@ impl<B: hal::Backend> Scene<B> {
                                             .get(buffer)
                                             .expect(&format!("Missing index buffer: {}", buffer))
                                             .handle,
-                                        offset,
+                                        range: range.clone(),
                                         index_type,
                                     };
                                     command_buf.bind_index_buffer(view);
                                 }
                                 Dc::BindVertexBuffers(ref buffers) => {
-                                    let buffers_raw = buffers.iter().map(|&(ref name, offset)| {
+                                    let buffers_raw = buffers.iter().map(|&(ref name, ref sub)| {
                                         let buf = &resources
                                             .buffers
                                             .get(name)
                                             .expect(&format!("Missing vertex buffer: {}", name))
                                             .handle;
-                                        (buf, offset)
+                                        (buf, sub.clone())
                                     });
                                     command_buf.bind_vertex_buffers(0, buffers_raw);
                                 }

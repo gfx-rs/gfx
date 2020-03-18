@@ -1857,27 +1857,27 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         };
         let location = buffer.resource.gpu_virtual_address();
         self.raw.set_index_buffer(
-            location + ibv.offset,
-            (buffer.requirements.size - ibv.offset) as u32,
+            location + ibv.range.offset,
+            ibv.range.size_to(buffer.requirements.size) as u32,
             format,
         );
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
     where
-        I: IntoIterator<Item = (T, buffer::Offset)>,
+        I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<r::Buffer>,
     {
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
 
-        for (view, (buffer, offset)) in self.vertex_buffer_views[first_binding as _ ..]
+        for (view, (buffer, sub)) in self.vertex_buffer_views[first_binding as _ ..]
             .iter_mut()
             .zip(buffers)
         {
             let b = buffer.borrow().expect_bound();
             let base = (*b.resource).GetGPUVirtualAddress();
-            view.BufferLocation = base + offset;
-            view.SizeInBytes = (b.requirements.size - offset) as u32;
+            view.BufferLocation = base + sub.offset;
+            view.SizeInBytes = sub.size_to(b.requirements.size) as u32;
         }
         self.set_vertex_buffers();
     }

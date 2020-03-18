@@ -812,16 +812,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn bind_index_buffer(&mut self, ibv: buffer::IndexBufferView<Backend>) {
         let (raw_buffer, range) = ibv.buffer.as_bound();
 
-        self.cache.index_type_range = Some((ibv.index_type, range.start + ibv.offset .. range.end));
+        self.cache.index_type_range = Some((ibv.index_type, crate::resolve_sub_range(&ibv.range, range)));
         self.push_cmd(Command::BindIndexBuffer(raw_buffer));
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
     where
-        I: IntoIterator<Item = (T, buffer::Offset)>,
+        I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<n::Buffer>,
     {
-        for (i, (buffer, offset)) in buffers.into_iter().enumerate() {
+        for (i, (buffer, sub)) in buffers.into_iter().enumerate() {
             let index = first_binding as usize + i;
             if self.cache.vertex_buffers.len() <= index {
                 self.cache.vertex_buffers.resize(index + 1, None);
@@ -829,7 +829,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
             let (raw_buffer, range) = buffer.borrow().as_bound();
             self.cache.vertex_buffers[index] =
-                Some((raw_buffer, range.start + offset .. range.end));
+                Some((raw_buffer, crate::resolve_sub_range(&sub, range)));
         }
     }
 

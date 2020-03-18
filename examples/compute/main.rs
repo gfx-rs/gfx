@@ -169,7 +169,7 @@ fn main() {
             set: &desc_set,
             binding: 0,
             array_offset: 0,
-            descriptors: Some(pso::Descriptor::Buffer(&device_buffer, None .. None)),
+            descriptors: Some(pso::Descriptor::Buffer(&device_buffer, buffer::SubRange::WHOLE)),
         }));
     };
 
@@ -197,7 +197,7 @@ fn main() {
                     .. buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
                 families: None,
                 target: &device_buffer,
-                range: None .. None,
+                range: buffer::SubRange::WHOLE,
             }),
         );
         command_buffer.bind_compute_pipeline(&pipeline);
@@ -211,7 +211,7 @@ fn main() {
                     .. buffer::Access::TRANSFER_READ,
                 families: None,
                 target: &device_buffer,
-                range: None .. None,
+                range: buffer::SubRange::WHOLE,
             }),
         );
         command_buffer.copy_buffer(

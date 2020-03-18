@@ -215,12 +215,11 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// It needs to match with the `VertexBufferDesc` and `AttributeDesc`s to which the
     /// data from each bound vertex buffer should flow.
     ///
-    /// The `buffers` iterator should yield the `Buffer` to bind, as well as an
-    /// offset, in bytes, into that buffer where the vertex data that should be bound
-    /// starts.
+    /// The `buffers` iterator should yield the `Buffer` to bind, as well as a subrange,
+    /// in bytes, into that buffer where the vertex data that should be bound.
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
     where
-        I: IntoIterator<Item = (T, buffer::Offset)>,
+        I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<B::Buffer>;
 
     /// Set the viewport parameters for the rasterizer.

@@ -2816,18 +2816,16 @@ impl d::Device<B> for Device {
                 let mut src_sampler = None;
 
                 match *descriptor.borrow() {
-                    pso::Descriptor::Buffer(buffer, ref range) => {
+                    pso::Descriptor::Buffer(buffer, ref sub) => {
                         let buffer = buffer.expect_bound();
 
                         if bind_info.content.is_dynamic() {
                             // Root Descriptor
-                            let buffer_offset = range.start.unwrap_or(0);
                             let buffer_address = (*buffer.resource).GetGPUVirtualAddress();
-
                             // Descriptor sets need to be externally synchronized according to specification
                             let dynamic_descriptors = &mut *bind_info.dynamic_descriptors.get();
                             dynamic_descriptors[offset as usize].gpu_buffer_location =
-                                buffer_address + buffer_offset;
+                                buffer_address + sub.offset;
                         } else {
                             // Descriptor table
                             if update_pool_index == descriptor_update_pools.len() {
@@ -2839,8 +2837,7 @@ impl d::Device<B> for Device {
                                 ));
                             }
                             let mut heap = descriptor_update_pools.pop().unwrap();
-                            let start = range.start.unwrap_or(0);
-                            let end = range.end.unwrap_or(buffer.requirements.size as _);
+                            let size = sub.size_to(buffer.requirements.size);
 
                             if bind_info.content.contains(r::DescriptorContent::CBV) {
                                 // Making the size field of buffer requirements for uniform
@@ -2848,18 +2845,17 @@ impl d::Device<B> for Device {
                                 // alignment to 256 allows us to patch the size here.
                                 // We can always enforce the size to be aligned to 256 for
                                 // CBVs without going out-of-bounds.
-                                let size = ((end - start) + 255) & !255;
                                 let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
                                     BufferLocation: (*buffer.resource).GetGPUVirtualAddress()
-                                        + start,
-                                    SizeInBytes: size as _,
+                                        + sub.offset,
+                                    SizeInBytes: ((size + 0xFF) & !0xFF) as _,
                                 };
                                 let handle = heap.alloc_handle();
                                 self.raw.CreateConstantBufferView(&desc, handle);
                                 src_cbv = Some(handle);
                             }
                             if bind_info.content.contains(r::DescriptorContent::SRV) {
-                                assert_eq!((end - start) % 4, 0);
+                                assert_eq!(size % 4, 0);
                                 let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
                                     Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
                                     Shader4ComponentMapping: IDENTITY_MAPPING,
@@ -2867,8 +2863,8 @@ impl d::Device<B> for Device {
                                     u: mem::zeroed(),
                                 };
                                 *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
-                                    FirstElement: start as _,
-                                    NumElements: ((end - start) / 4) as _,
+                                    FirstElement: sub.offset as _,
+                                    NumElements: (size / 4) as _,
                                     StructureByteStride: 0,
                                     Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
                                 };
@@ -2881,15 +2877,15 @@ impl d::Device<B> for Device {
                                 src_srv = Some(handle);
                             }
                             if bind_info.content.contains(r::DescriptorContent::UAV) {
-                                assert_eq!((end - start) % 4, 0);
+                                assert_eq!(size % 4, 0);
                                 let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                                     Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
                                     ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
                                     u: mem::zeroed(),
                                 };
                                 *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
-                                    FirstElement: start as _,
-                                    NumElements: ((end - start) / 4) as _,
+                                    FirstElement: sub.offset as _,
+                                    NumElements: (size / 4) as _,
                                     StructureByteStride: 0,
                                     CounterOffsetInBytes: 0,
                                     Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
@@ -2941,14 +2937,7 @@ impl d::Device<B> for Device {
                     pso::Descriptor::Sampler(sampler) => {
                         src_sampler = Some(sampler.handle);
                     }
-                    pso::Descriptor::UniformTexelBuffer(buffer_view) => {
-                        let handle = buffer_view.handle_srv;
-                        src_srv = Some(handle);
-                        if handle.ptr == 0 {
-                            error!("SRV handle of the uniform texel buffer is zero (not supported by specified format).");
-                        }
-                    }
-                    pso::Descriptor::StorageTexelBuffer(buffer_view) => {
+                    pso::Descriptor::TexelBuffer(buffer_view) => {
                         if bind_info.content.contains(r::DescriptorContent::SRV) {
                             let handle = buffer_view.handle_srv;
                             src_srv = Some(handle);

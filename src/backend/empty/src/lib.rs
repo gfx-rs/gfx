@@ -695,7 +695,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, _: u32, _: I)
     where
-        I: IntoIterator<Item = (T, buffer::Offset)>,
+        I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<()>,
     {
         panic!(DO_NOT_USE_MESSAGE)

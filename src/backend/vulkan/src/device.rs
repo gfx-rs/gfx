@@ -1687,19 +1687,14 @@ impl d::Device<B> for Device {
                             image_layout: conv::map_image_layout(layout),
                         });
                     }
-                    pso::Descriptor::Buffer(buffer, ref range) => {
-                        let offset = range.start.unwrap_or(0);
+                    pso::Descriptor::Buffer(buffer, ref sub) => {
                         buffer_infos.push(vk::DescriptorBufferInfo {
                             buffer: buffer.raw,
-                            offset,
-                            range: match range.end {
-                                Some(end) => end - offset,
-                                None => vk::WHOLE_SIZE,
-                            },
+                            offset: sub.offset,
+                            range: sub.size.unwrap_or(vk::WHOLE_SIZE),
                         });
                     }
-                    pso::Descriptor::UniformTexelBuffer(view)
-                    | pso::Descriptor::StorageTexelBuffer(view) => {
+                    pso::Descriptor::TexelBuffer(view) => {
                         texel_buffer_views.push(view.raw);
                     }
                 }

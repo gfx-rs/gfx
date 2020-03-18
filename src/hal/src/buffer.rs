@@ -11,6 +11,26 @@ use crate::{device, format, Backend, IndexType};
 /// An offset inside a buffer, in bytes.
 pub type Offset = u64;
 
+/// A subrange of the bufer.
+#[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct SubRange {
+    /// Offset to the subrange.
+    pub offset: Offset,
+    /// Size of the subrange, or None for the remaining size of the buffer.
+    pub size: Option<Offset>,
+}
+
+impl SubRange {
+    /// Whole buffer subrange.
+    pub const WHOLE: Self = SubRange { offset: 0, size: None };
+
+    /// Return the stored size, if present, or computed size based on the limit.
+    pub fn size_to(&self, limit: Offset) -> Offset {
+        self.size.unwrap_or(limit - self.offset)
+    }
+}
+
 /// Buffer state.
 pub type State = Access;
 
@@ -182,8 +202,8 @@ bitflags!(
 pub struct IndexBufferView<'a, B: Backend> {
     /// The buffer to bind.
     pub buffer: &'a B::Buffer,
-    /// The offset into the buffer to start at.
-    pub offset: u64,
+    /// The subrange of the buffer.
+    pub range: SubRange,
     /// The type of the table elements (`u16` or `u32`).
     pub index_type: IndexType,
 }

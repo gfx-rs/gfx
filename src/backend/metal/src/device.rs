@@ -2119,20 +2119,16 @@ impl hal::device::Device<Backend> for Device {
                                 data.textures[counters.textures as usize] =
                                     Some((AsNative::from(view.texture.as_ref()), il));
                             }
-                            pso::Descriptor::UniformTexelBuffer(view)
-                            | pso::Descriptor::StorageTexelBuffer(view) => {
+                            pso::Descriptor::TexelBuffer(view) => {
                                 data.textures[counters.textures as usize] = Some((
                                     AsNative::from(view.raw.as_ref()),
                                     image::Layout::General,
                                 ));
                             }
-                            pso::Descriptor::Buffer(buf, ref desc_range) => {
+                            pso::Descriptor::Buffer(buf, ref sub) => {
                                 let (raw, range) = buf.as_bound();
-                                if let Some(end) = desc_range.end {
-                                    debug_assert!(range.start + end <= range.end);
-                                }
-                                let start = range.start + desc_range.start.unwrap_or(0);
-                                let pair = (AsNative::from(raw), start);
+                                debug_assert!(range.start + sub.offset + sub.size.unwrap_or(0) <= range.end);
+                                let pair = (AsNative::from(raw), range.start + sub.offset);
                                 data.buffers[counters.buffers as usize] = Some(pair);
                             }
                         }
@@ -2199,17 +2195,16 @@ impl hal::device::Device<Backend> for Device {
                                 encoder.set_texture(tex_ref, arg_index);
                                 data.ptr = (&**tex_ref).as_ptr();
                             }
-                            pso::Descriptor::UniformTexelBuffer(view)
-                            | pso::Descriptor::StorageTexelBuffer(view) => {
+                            pso::Descriptor::TexelBuffer(view) => {
                                 encoder.set_texture(&view.raw, arg_index);
                                 data.ptr = (&**view.raw).as_ptr();
                                 arg_index += 1;
                             }
-                            pso::Descriptor::Buffer(buffer, ref desc_range) => {
+                            pso::Descriptor::Buffer(buffer, ref sub) => {
                                 let (buf_raw, buf_range) = buffer.as_bound();
                                 encoder.set_buffer(
                                     buf_raw,
-                                    buf_range.start + desc_range.start.unwrap_or(0),
+                                    buf_range.start + sub.offset,
                                     arg_index,
                                 );
                                 data.ptr = (&**buf_raw).as_ptr();

@@ -1761,16 +1761,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         self.context.IASetIndexBuffer(
             ibv.buffer.internal.raw,
             conv::map_index_type(ibv.index_type),
-            ibv.offset as u32,
+            ibv.range.offset as u32,
         );
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
     where
-        I: IntoIterator<Item = (T, buffer::Offset)>,
+        I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<Buffer>,
     {
-        for (i, (buf, offset)) in buffers.into_iter().enumerate() {
+        for (i, (buf, sub)) in buffers.into_iter().enumerate() {
             let idx = i + first_binding as usize;
             let buf = buf.borrow();
 
@@ -1779,7 +1779,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             }
 
             self.cache
-                .set_vertex_buffer(idx, offset as u32, buf.internal.raw);
+                .set_vertex_buffer(idx, sub.offset as u32, buf.internal.raw);
         }
 
         self.cache.bind_vertex_buffers(&self.context);

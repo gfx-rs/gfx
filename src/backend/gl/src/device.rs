@@ -1540,19 +1540,12 @@ impl d::Device<B> for Device {
             let set = &mut write.set;
             let mut bindings = set.bindings.lock();
             let binding = write.binding;
-            let mut offset = write.array_offset as i32;
 
             for descriptor in write.descriptors {
                 match descriptor.borrow() {
-                    pso::Descriptor::Buffer(buffer, ref range) => {
+                    pso::Descriptor::Buffer(buffer, ref sub) => {
                         let (raw_buffer, buffer_range) = buffer.as_bound();
-                        let start = buffer_range.start as i32 + range.start.unwrap_or(0) as i32;
-                        let end = buffer_range.start as i32
-                            + range
-                                .end
-                                .unwrap_or((buffer_range.end - buffer_range.start) as u64)
-                                as i32;
-                        let size = end - start;
+                        let range = crate::resolve_sub_range(sub, buffer_range);
 
                         let ty = set.layout[binding as usize].ty;
                         let ty = match ty {
@@ -1571,11 +1564,9 @@ impl d::Device<B> for Device {
                             ty,
                             binding,
                             buffer: raw_buffer,
-                            offset: offset + start,
-                            size,
+                            offset: range.start as i32,
+                            size: (range.end - range.start) as i32,
                         });
-
-                        offset += size;
                     }
                     pso::Descriptor::CombinedImageSampler(view, _layout, sampler) => {
                         match view {
@@ -1610,8 +1601,7 @@ impl d::Device<B> for Device {
                             bindings.push(n::DescSetBindings::SamplerDesc(binding, info.clone()))
                         }
                     },
-                    pso::Descriptor::UniformTexelBuffer(_view) => unimplemented!(),
-                    pso::Descriptor::StorageTexelBuffer(_view) => unimplemented!(),
+                    pso::Descriptor::TexelBuffer(_view) => unimplemented!(),
                 }
             }
         }

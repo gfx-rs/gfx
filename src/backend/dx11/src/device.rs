@@ -1893,7 +1893,7 @@ impl device::Device<Backend> for Device {
                 .zip(write.descriptors)
             {
                 let handles = match *descriptor.borrow() {
-                    pso::Descriptor::Buffer(buffer, ref _range) => RegisterData {
+                    pso::Descriptor::Buffer(buffer, ref _sub) => RegisterData {
                         c: match buffer.internal.disjoint_cb {
                             Some(dj_buf) => dj_buf as *mut _,
                             None => buffer.internal.raw as *mut _,
@@ -1934,8 +1934,7 @@ impl device::Device<Backend> for Device {
                             s: sampler.sampler_handle.as_raw() as *mut _,
                         }
                     }
-                    pso::Descriptor::UniformTexelBuffer(_buffer_view) => unimplemented!(),
-                    pso::Descriptor::StorageTexelBuffer(_buffer_view) => unimplemented!(),
+                    pso::Descriptor::TexelBuffer(_buffer_view) => unimplemented!(),
                 };
 
                 let content = DescriptorContent::from(binding.ty);

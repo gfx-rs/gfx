@@ -426,7 +426,7 @@ impl<B: Backend> RendererState<B> {
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
             cmd_buffer.set_scissors(0, &[self.viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
-            cmd_buffer.bind_vertex_buffers(0, Some((self.vertex_buffer.get_buffer(), 0)));
+            cmd_buffer.bind_vertex_buffers(0, Some((self.vertex_buffer.get_buffer(), buffer::SubRange::WHOLE)));
             cmd_buffer.bind_graphics_descriptor_sets(
                 self.pipeline.pipeline_layout.as_ref().unwrap(),
                 0,
@@ -946,7 +946,7 @@ impl<B: Backend> Uniform<B> {
                 array_offset: 0,
                 descriptors: Some(pso::Descriptor::Buffer(
                     buffer.as_ref().unwrap().get_buffer(),
-                    None .. None,
+                    buffer::SubRange::WHOLE,
                 )),
             }],
             &mut device.borrow_mut().device,
