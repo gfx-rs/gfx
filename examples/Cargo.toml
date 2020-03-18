@@ -28,14 +28,13 @@ name = "compute"
 path = "compute/main.rs"
 
 [dependencies]
+env_logger = "0.6"
 image = "0.21"
 log = "0.4"
 hal = { path = "../src/hal", version = "0.4", package = "gfx-hal" }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.4" }
 winit = { version = "0.21.0", features = ["web-sys"] }
 
-[target.'cfg(debug_assertions)'.dependencies]
-env_logger = "0.6"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 glsl-to-spirv = "0.1.4"

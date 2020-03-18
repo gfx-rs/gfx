@@ -96,7 +96,6 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 fn main() {
     #[cfg(target_arch = "wasm32")]
     console_log::init_with_level(log::Level::Debug).unwrap();
-    #[cfg(all(debug_assertions, not(target_arch = "wasm32")))]
     env_logger::init();
 
     let event_loop = winit::event_loop::EventLoop::new();
