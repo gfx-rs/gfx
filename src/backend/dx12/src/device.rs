@@ -43,7 +43,6 @@ use hal::{
     pso::VertexInputRate,
     query,
     queue::{CommandQueue as _, QueueFamilyId},
-    range::RangeArg,
     window as w,
 };
 
@@ -713,9 +712,7 @@ impl Device {
                     ArraySize,
                 }
             }
-            image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => {
-                unimplemented!()
-            }
+            image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => unimplemented!(),
         };
 
         unsafe {
@@ -2184,11 +2181,11 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn create_buffer_view<R: RangeArg<u64>>(
+    unsafe fn create_buffer_view(
         &self,
         buffer: &r::Buffer,
         format: Option<format::Format>,
-        range: R,
+        sub: buffer::SubRange,
     ) -> Result<r::BufferView, buffer::ViewCreationError> {
         let buffer = buffer.expect_bound();
         let buffer_features = {
@@ -2200,14 +2197,14 @@ impl d::Device<B> for Device {
             None => return Err(buffer::ViewCreationError::UnsupportedFormat { format }),
         };
 
-        let start = *range.start().unwrap_or(&0);
-        let end = *range.end().unwrap_or(&(buffer.requirements.size as _));
+        let start = sub.offset;
+        let size = sub.size.unwrap_or(buffer.requirements.size - start);
 
         let bytes_per_texel = (format_desc.bits / 8) as u64;
         // Check if it adheres to the texel buffer offset limit
         assert_eq!(start % bytes_per_texel, 0);
         let first_element = start / bytes_per_texel;
-        let num_elements = (end - start) / bytes_per_texel; // rounds down to next smaller size
+        let num_elements = size / bytes_per_texel; // rounds down to next smaller size
 
         let handle_srv = if buffer_features.contains(format::BufferFeature::UNIFORM_TEXEL) {
             let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
@@ -2816,18 +2813,16 @@ impl d::Device<B> for Device {
                 let mut src_sampler = None;
 
                 match *descriptor.borrow() {
-                    pso::Descriptor::Buffer(buffer, ref range) => {
+                    pso::Descriptor::Buffer(buffer, ref sub) => {
                         let buffer = buffer.expect_bound();
 
                         if bind_info.content.is_dynamic() {
                             // Root Descriptor
-                            let buffer_offset = range.start.unwrap_or(0);
                             let buffer_address = (*buffer.resource).GetGPUVirtualAddress();
-
                             // Descriptor sets need to be externally synchronized according to specification
                             let dynamic_descriptors = &mut *bind_info.dynamic_descriptors.get();
                             dynamic_descriptors[offset as usize].gpu_buffer_location =
-                                buffer_address + buffer_offset;
+                                buffer_address + sub.offset;
                         } else {
                             // Descriptor table
                             if update_pool_index == descriptor_update_pools.len() {
@@ -2839,8 +2834,7 @@ impl d::Device<B> for Device {
                                 ));
                             }
                             let mut heap = descriptor_update_pools.pop().unwrap();
-                            let start = range.start.unwrap_or(0);
-                            let end = range.end.unwrap_or(buffer.requirements.size as _);
+                            let size = sub.size_to(buffer.requirements.size);
 
                             if bind_info.content.contains(r::DescriptorContent::CBV) {
                                 // Making the size field of buffer requirements for uniform
@@ -2848,18 +2842,17 @@ impl d::Device<B> for Device {
                                 // alignment to 256 allows us to patch the size here.
                                 // We can always enforce the size to be aligned to 256 for
                                 // CBVs without going out-of-bounds.
-                                let size = ((end - start) + 255) & !255;
                                 let desc = d3d12::D3D12_CONSTANT_BUFFER_VIEW_DESC {
                                     BufferLocation: (*buffer.resource).GetGPUVirtualAddress()
-                                        + start,
-                                    SizeInBytes: size as _,
+                                        + sub.offset,
+                                    SizeInBytes: ((size + 0xFF) & !0xFF) as _,
                                 };
                                 let handle = heap.alloc_handle();
                                 self.raw.CreateConstantBufferView(&desc, handle);
                                 src_cbv = Some(handle);
                             }
                             if bind_info.content.contains(r::DescriptorContent::SRV) {
-                                assert_eq!((end - start) % 4, 0);
+                                assert_eq!(size % 4, 0);
                                 let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
                                     Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
                                     Shader4ComponentMapping: IDENTITY_MAPPING,
@@ -2867,8 +2860,8 @@ impl d::Device<B> for Device {
                                     u: mem::zeroed(),
                                 };
                                 *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_SRV {
-                                    FirstElement: start as _,
-                                    NumElements: ((end - start) / 4) as _,
+                                    FirstElement: sub.offset as _,
+                                    NumElements: (size / 4) as _,
                                     StructureByteStride: 0,
                                     Flags: d3d12::D3D12_BUFFER_SRV_FLAG_RAW,
                                 };
@@ -2881,15 +2874,15 @@ impl d::Device<B> for Device {
                                 src_srv = Some(handle);
                             }
                             if bind_info.content.contains(r::DescriptorContent::UAV) {
-                                assert_eq!((end - start) % 4, 0);
+                                assert_eq!(size % 4, 0);
                                 let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
                                     Format: dxgiformat::DXGI_FORMAT_R32_TYPELESS,
                                     ViewDimension: d3d12::D3D12_UAV_DIMENSION_BUFFER,
                                     u: mem::zeroed(),
                                 };
                                 *desc.u.Buffer_mut() = d3d12::D3D12_BUFFER_UAV {
-                                    FirstElement: start as _,
-                                    NumElements: ((end - start) / 4) as _,
+                                    FirstElement: sub.offset as _,
+                                    NumElements: (size / 4) as _,
                                     StructureByteStride: 0,
                                     CounterOffsetInBytes: 0,
                                     Flags: d3d12::D3D12_BUFFER_UAV_FLAG_RAW,
@@ -2941,14 +2934,7 @@ impl d::Device<B> for Device {
                     pso::Descriptor::Sampler(sampler) => {
                         src_sampler = Some(sampler.handle);
                     }
-                    pso::Descriptor::UniformTexelBuffer(buffer_view) => {
-                        let handle = buffer_view.handle_srv;
-                        src_srv = Some(handle);
-                        if handle.ptr == 0 {
-                            error!("SRV handle of the uniform texel buffer is zero (not supported by specified format).");
-                        }
-                    }
-                    pso::Descriptor::StorageTexelBuffer(buffer_view) => {
+                    pso::Descriptor::TexelBuffer(buffer_view) => {
                         if bind_info.content.contains(r::DescriptorContent::SRV) {
                             let handle = buffer_view.handle_srv;
                             src_srv = Some(handle);
@@ -3106,25 +3092,21 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn map_memory<R>(&self, memory: &r::Memory, range: R) -> Result<*mut u8, d::MapError>
-    where
-        R: RangeArg<u64>,
-    {
-        if let Some(mem) = memory.resource {
-            let start = range.start().unwrap_or(&0);
-            let end = range.end().unwrap_or(&memory.size);
-            assert!(start <= end);
-
-            let mut ptr = ptr::null_mut();
-            assert_eq!(
-                winerror::S_OK,
-                (*mem).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, &mut ptr)
-            );
-            ptr = ptr.offset(*start as _);
-            Ok(ptr as *mut _)
-        } else {
-            panic!("Memory not created with a memory type exposing `CPU_VISIBLE`.")
-        }
+    unsafe fn map_memory(
+        &self,
+        memory: &r::Memory,
+        segment: memory::Segment,
+    ) -> Result<*mut u8, d::MapError> {
+        let mem = memory
+            .resource
+            .expect("Memory not created with a memory type exposing `CPU_VISIBLE`");
+        let mut ptr = ptr::null_mut();
+        assert_eq!(
+            winerror::S_OK,
+            (*mem).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, &mut ptr)
+        );
+        ptr = ptr.offset(segment.offset as isize);
+        Ok(ptr as *mut _)
     }
 
     unsafe fn unmap_memory(&self, memory: &r::Memory) {
@@ -3133,14 +3115,13 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), d::OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a r::Memory, R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a r::Memory, memory::Segment)>,
     {
         for range in ranges {
-            let &(ref memory, ref range) = range.borrow();
+            let &(ref memory, ref segment) = range.borrow();
             if let Some(mem) = memory.resource {
                 // map and immediately unmap, hoping that dx12 drivers internally cache
                 // currently mapped buffers.
@@ -3149,8 +3130,8 @@ impl d::Device<B> for Device {
                     (*mem).Map(0, &d3d12::D3D12_RANGE { Begin: 0, End: 0 }, ptr::null_mut())
                 );
 
-                let start = *range.start().unwrap_or(&0);
-                let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
+                let start = segment.offset;
+                let end = segment.size.map_or(memory.size, |s| start + s); // TODO: only need to be end of current mapping
 
                 (*mem).Unmap(
                     0,
@@ -3165,20 +3146,16 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
-        &self,
-        ranges: I,
-    ) -> Result<(), d::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a r::Memory, R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a r::Memory, memory::Segment)>,
     {
         for range in ranges {
-            let &(ref memory, ref range) = range.borrow();
+            let &(ref memory, ref segment) = range.borrow();
             if let Some(mem) = memory.resource {
-                let start = *range.start().unwrap_or(&0);
-                let end = *range.end().unwrap_or(&memory.size); // TODO: only need to be end of current mapping
+                let start = segment.offset;
+                let end = segment.size.map_or(memory.size, |s| start + s); // TODO: only need to be end of current mapping
 
                 // map and immediately unmap, hoping that dx12 drivers internally cache
                 // currently mapped buffers.

@@ -26,7 +26,6 @@ pub mod pool;
 pub mod pso;
 pub mod query;
 pub mod queue;
-pub mod range;
 pub mod window;
 
 /// Prelude module re-exports all the traits necessary to use gfx-hal.

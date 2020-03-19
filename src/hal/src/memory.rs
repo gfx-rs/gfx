@@ -60,8 +60,8 @@ pub enum Barrier<'a, B: Backend> {
         /// The source and destination Queue family IDs, for a [queue family ownership transfer](https://www.khronos.org/registry/vulkan/specs/1.0/html/vkspec.html#synchronization-queue-transfers)
         /// Can be `None` to indicate no ownership transfer.
         families: Option<Range<queue::QueueFamilyId>>,
-        /// Range of the buffer the barrier applies to.
-        range: Range<Option<u64>>,
+        /// Subrange of the buffer the barrier applies to.
+        range: buffer::SubRange,
     },
     /// A memory barrier that defines access to (a subset of) an image.
     Image {
@@ -84,7 +84,7 @@ impl<'a, B: Backend> Barrier<'a, B> {
             states,
             target,
             families: None,
-            range: None .. None,
+            range: buffer::SubRange::WHOLE,
         }
     }
 }
@@ -98,4 +98,22 @@ pub struct Requirements {
     pub alignment: u64,
     /// Supported memory types.
     pub type_mask: u64,
+}
+
+/// A linear segment within a memory block.
+#[derive(Clone, Debug, Default, Hash, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+pub struct Segment {
+    /// Offset to the segment.
+    pub offset: u64,
+    /// Size of the segment, or None if unbound.
+    pub size: Option<u64>,
+}
+
+impl Segment {
+    /// All the memory available.
+    pub const ALL: Self = Segment {
+        offset: 0,
+        size: None,
+    };
 }

@@ -426,7 +426,10 @@ impl<B: Backend> RendererState<B> {
             cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
             cmd_buffer.set_scissors(0, &[self.viewport.rect]);
             cmd_buffer.bind_graphics_pipeline(self.pipeline.pipeline.as_ref().unwrap());
-            cmd_buffer.bind_vertex_buffers(0, Some((self.vertex_buffer.get_buffer(), 0)));
+            cmd_buffer.bind_vertex_buffers(
+                0,
+                Some((self.vertex_buffer.get_buffer(), buffer::SubRange::WHOLE)),
+            );
             cmd_buffer.bind_graphics_descriptor_sets(
                 self.pipeline.pipeline_layout.as_ref().unwrap(),
                 0,
@@ -806,7 +809,7 @@ impl<B: Backend> BufferState<B> {
             size = mem_req.size;
 
             // TODO: check transitions: read/write mapping and vertex buffer read
-            let mapping = device.map_memory(&memory, 0 .. size).unwrap();
+            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
             ptr::copy_nonoverlapping(data_source.as_ptr() as *const u8, mapping, upload_size);
             device.unmap_memory(&memory);
         }
@@ -832,7 +835,9 @@ impl<B: Backend> BufferState<B> {
         let memory = self.memory.as_ref().unwrap();
 
         unsafe {
-            let mapping = device.map_memory(memory, offset .. self.size).unwrap();
+            let mapping = device
+                .map_memory(memory, m::Segment { offset, size: None })
+                .unwrap();
             ptr::copy_nonoverlapping(data_source.as_ptr() as *const u8, mapping, upload_size);
             device.unmap_memory(memory);
         }
@@ -879,7 +884,7 @@ impl<B: Backend> BufferState<B> {
             size = mem_reqs.size;
 
             // copy image data into staging buffer
-            let mapping = device.map_memory(&memory, 0 .. size).unwrap();
+            let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
             for y in 0 .. height as usize {
                 let data_source_slice =
                     &(**img)[y * (width as usize) * stride .. (y + 1) * (width as usize) * stride];
@@ -946,7 +951,7 @@ impl<B: Backend> Uniform<B> {
                 array_offset: 0,
                 descriptors: Some(pso::Descriptor::Buffer(
                     buffer.as_ref().unwrap().get_buffer(),
-                    None .. None,
+                    buffer::SubRange::WHOLE,
                 )),
             }],
             &mut device.borrow_mut().device,

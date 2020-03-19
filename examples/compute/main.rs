@@ -127,7 +127,7 @@ fn main() {
         (pipeline_layout, pipeline, set_layout, desc_pool)
     };
 
-    let (staging_memory, staging_buffer, staging_size) = unsafe {
+    let (staging_memory, staging_buffer, _staging_size) = unsafe {
         create_buffer::<back::Backend>(
             &device,
             &memory_properties.memory_types,
@@ -140,7 +140,7 @@ fn main() {
 
     unsafe {
         let mapping = device
-            .map_memory(&staging_memory, 0 .. staging_size)
+            .map_memory(&staging_memory, memory::Segment::ALL)
             .unwrap();
         ptr::copy_nonoverlapping(
             numbers.as_ptr() as *const u8,
@@ -169,7 +169,10 @@ fn main() {
             set: &desc_set,
             binding: 0,
             array_offset: 0,
-            descriptors: Some(pso::Descriptor::Buffer(&device_buffer, None .. None)),
+            descriptors: Some(pso::Descriptor::Buffer(
+                &device_buffer,
+                buffer::SubRange::WHOLE,
+            )),
         }));
     };
 
@@ -197,7 +200,7 @@ fn main() {
                     .. buffer::Access::SHADER_READ | buffer::Access::SHADER_WRITE,
                 families: None,
                 target: &device_buffer,
-                range: None .. None,
+                range: buffer::SubRange::WHOLE,
             }),
         );
         command_buffer.bind_compute_pipeline(&pipeline);
@@ -211,7 +214,7 @@ fn main() {
                     .. buffer::Access::TRANSFER_READ,
                 families: None,
                 target: &device_buffer,
-                range: None .. None,
+                range: buffer::SubRange::WHOLE,
             }),
         );
         command_buffer.copy_buffer(
@@ -233,7 +236,7 @@ fn main() {
 
     unsafe {
         let mapping = device
-            .map_memory(&staging_memory, 0 .. staging_size)
+            .map_memory(&staging_memory, memory::Segment::ALL)
             .unwrap();
         println!(
             "Times: {:?}",

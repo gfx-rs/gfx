@@ -27,7 +27,6 @@ use hal::{
     pass::AttachmentLoadOp,
     pso,
     query,
-    range::RangeArg,
     window::{PresentError, Suboptimal, SwapImageIndex},
     DrawCount,
     IndexCount,
@@ -628,7 +627,7 @@ impl State {
         disabilities: PrivateDisabilities,
     ) -> soft::RenderCommand<&'a soft::Ref> {
         let depth = vp.depth.start .. if disabilities.broken_viewport_near_depth {
-            (vp.depth.end - vp.depth.start)
+            vp.depth.end - vp.depth.start
         } else {
             vp.depth.end
         };
@@ -2616,23 +2615,17 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     {
     }
 
-    unsafe fn fill_buffer<R>(&mut self, buffer: &native::Buffer, range: R, data: u32)
-    where
-        R: RangeArg<buffer::Offset>,
-    {
+    unsafe fn fill_buffer(&mut self, buffer: &native::Buffer, sub: buffer::SubRange, data: u32) {
         let (raw, base_range) = buffer.as_bound();
         let mut inner = self.inner.borrow_mut();
 
-        let start = base_range.start + *range.start().unwrap_or(&0);
+        let start = base_range.start + sub.offset;
         assert_eq!(start % WORD_ALIGNMENT, 0);
 
-        let end = match range.end() {
-            Some(&e) => {
-                assert_eq!(e % WORD_ALIGNMENT, 0);
-                base_range.start + e
-            }
-            None => base_range.end,
-        };
+        let end = sub.size.map_or(base_range.end, |s| {
+            assert_eq!(s % WORD_ALIGNMENT, 0);
+            base_range.start + s
+        });
 
         if (data & 0xFF) * 0x0101_0101 == data {
             let command = soft::BlitCommand::FillBuffer {
@@ -3307,10 +3300,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
         let (raw, range) = view.buffer.as_bound();
-        assert!(range.start + view.offset < range.end); // conservative
+        assert!(range.start + view.range.offset + view.range.size.unwrap_or(0) < range.end); // conservative
         self.state.index_buffer = Some(IndexBuffer {
             buffer: AsNative::from(raw),
-            offset: (range.start + view.offset) as _,
+            offset: (range.start + view.range.offset) as _,
             stride: match view.index_type {
                 IndexType::U16 => 2,
                 IndexType::U32 => 4,
@@ -3320,7 +3313,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
     where
-        I: IntoIterator<Item = (T, buffer::Offset)>,
+        I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<native::Buffer>,
     {
         if self.state.vertex_buffers.len() <= first_binding as usize {
@@ -3328,7 +3321,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 .vertex_buffers
                 .resize(first_binding as usize + 1, None);
         }
-        for (i, (buffer, offset)) in buffers.into_iter().enumerate() {
+        for (i, (buffer, sub)) in buffers.into_iter().enumerate() {
             let b = buffer.borrow();
             let (raw, range) = b.as_bound();
             let buffer_ptr = AsNative::from(raw);
@@ -3336,7 +3329,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.state
                 .vertex_buffers
                 .entry(index)
-                .set(Some((buffer_ptr, range.start + offset)));
+                .set(Some((buffer_ptr, range.start + sub.offset)));
         }
 
         if let Some(command) = self

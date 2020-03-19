@@ -163,7 +163,7 @@
             pass: ("pass", {
                 "main": (commands: [
                     BindPipeline("pipe.vertex-offset"),
-                    BindVertexBuffers([("buffer.vertex", 0)]),
+                    BindVertexBuffers([("buffer.vertex", (offset: 0, size: None))]),
                     Draw(
                         vertices: (start: 0, end: 3),
                     ),
@@ -178,7 +178,7 @@
             pass: ("pass", {
                 "main": (commands: [
                     BindPipeline("pipe.vertex-offset-overlap"),
-                    BindVertexBuffers([("buffer.vertex", 0)]),
+                    BindVertexBuffers([("buffer.vertex", (offset: 0, size: None))]),
                     Draw(
                         vertices: (start: 0, end: 3),
                     ),

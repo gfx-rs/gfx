@@ -34,7 +34,6 @@ use hal::{
     pso,
     query,
     queue,
-    range::RangeArg,
     window,
     DrawCount,
     IndexCount,
@@ -1761,16 +1760,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         self.context.IASetIndexBuffer(
             ibv.buffer.internal.raw,
             conv::map_index_type(ibv.index_type),
-            ibv.offset as u32,
+            ibv.range.offset as u32,
         );
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
     where
-        I: IntoIterator<Item = (T, buffer::Offset)>,
+        I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<Buffer>,
     {
-        for (i, (buf, offset)) in buffers.into_iter().enumerate() {
+        for (i, (buf, sub)) in buffers.into_iter().enumerate() {
             let idx = i + first_binding as usize;
             let buf = buf.borrow();
 
@@ -1779,7 +1778,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             }
 
             self.cache
-                .set_vertex_buffer(idx, offset as u32, buf.internal.raw);
+                .set_vertex_buffer(idx, sub.offset as u32, buf.internal.raw);
         }
 
         self.cache.bind_vertex_buffers(&self.context);
@@ -2068,10 +2067,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
-    unsafe fn fill_buffer<R>(&mut self, _buffer: &Buffer, _range: R, _data: u32)
-    where
-        R: RangeArg<buffer::Offset>,
-    {
+    unsafe fn fill_buffer(&mut self, _buffer: &Buffer, _sub: buffer::SubRange, _data: u32) {
         unimplemented!()
     }
 
@@ -2480,8 +2476,8 @@ unsafe impl Send for Memory {}
 unsafe impl Sync for Memory {}
 
 impl Memory {
-    pub fn resolve<R: RangeArg<u64>>(&self, range: &R) -> Range<u64> {
-        *range.start().unwrap_or(&0) .. *range.end().unwrap_or(&self.size)
+    pub fn resolve(&self, segment: &memory::Segment) -> Range<u64> {
+        segment.offset .. segment.size.map_or(self.size, |s| segment.offset + s)
     }
 
     pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) {

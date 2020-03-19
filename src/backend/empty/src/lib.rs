@@ -3,7 +3,6 @@
 
 extern crate gfx_hal as hal;
 
-use hal::range::RangeArg;
 use hal::{
     adapter,
     buffer,
@@ -283,11 +282,11 @@ impl device::Device<Backend> for Device {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn create_buffer_view<R: RangeArg<u64>>(
+    unsafe fn create_buffer_view(
         &self,
         _: &(),
         _: Option<format::Format>,
-        _: R,
+        _: buffer::SubRange,
     ) -> Result<(), buffer::ViewCreationError> {
         panic!(DO_NOT_USE_MESSAGE)
     }
@@ -427,11 +426,7 @@ impl device::Device<Backend> for Device {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn map_memory<R: RangeArg<u64>>(
-        &self,
-        _: &(),
-        _: R,
-    ) -> Result<*mut u8, device::MapError> {
+    unsafe fn map_memory(&self, _: &(), _: memory::Segment) -> Result<*mut u8, device::MapError> {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
@@ -439,23 +434,18 @@ impl device::Device<Backend> for Device {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, _: I) -> Result<(), device::OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a (), R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a (), memory::Segment)>,
     {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
-        &self,
-        _: I,
-    ) -> Result<(), device::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a (), R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a (), memory::Segment)>,
     {
         panic!(DO_NOT_USE_MESSAGE)
     }
@@ -637,10 +627,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn fill_buffer<R>(&mut self, _: &(), _: R, _: u32)
-    where
-        R: RangeArg<buffer::Offset>,
-    {
+    unsafe fn fill_buffer(&mut self, _: &(), _: buffer::SubRange, _: u32) {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
@@ -695,7 +682,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, _: u32, _: I)
     where
-        I: IntoIterator<Item = (T, buffer::Offset)>,
+        I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<()>,
     {
         panic!(DO_NOT_USE_MESSAGE)

@@ -20,14 +20,13 @@ use crate::{
     buffer,
     format,
     image,
-    memory::Requirements,
+    memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
     pso,
     pso::DescriptorPoolCreateFlags,
     query,
     queue::QueueFamilyId,
-    range::RangeArg,
     window::{self, SwapchainConfig},
     Backend,
     MemoryTypeId,
@@ -617,11 +616,11 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn destroy_buffer(&self, buffer: B::Buffer);
 
     /// Create a new buffer view object
-    unsafe fn create_buffer_view<R: RangeArg<u64>>(
+    unsafe fn create_buffer_view(
         &self,
         buf: &B::Buffer,
         fmt: Option<format::Format>,
-        range: R,
+        range: buffer::SubRange,
     ) -> Result<B::BufferView, buffer::ViewCreationError>;
 
     /// Destroy a buffer view object
@@ -741,26 +740,19 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Map a memory object into application address space
     ///
     /// Call `map_memory()` to retrieve a host virtual address pointer to a region of a mappable memory object
-    unsafe fn map_memory<R>(&self, memory: &B::Memory, range: R) -> Result<*mut u8, MapError>
-    where
-        R: RangeArg<u64>;
+    unsafe fn map_memory(&self, memory: &B::Memory, segment: Segment) -> Result<*mut u8, MapError>;
 
     /// Flush mapped memory ranges
-    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a B::Memory, R)>,
-        R: RangeArg<u64>;
+        I::Item: Borrow<(&'a B::Memory, Segment)>;
 
     /// Invalidate ranges of non-coherent memory from the host caches
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
-        &self,
-        ranges: I,
-    ) -> Result<(), OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a B::Memory, R)>,
-        R: RangeArg<u64>;
+        I::Item: Borrow<(&'a B::Memory, Segment)>;
 
     /// Unmap a memory object once host access to it is no longer needed by the application
     unsafe fn unmap_memory(&self, memory: &B::Memory);

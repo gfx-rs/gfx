@@ -44,7 +44,6 @@ use hal::{
     pso::VertexInputRate,
     query,
     queue::{QueueFamilyId, QueueGroup, QueuePriority},
-    range::RangeArg,
     window,
 };
 use metal::{
@@ -1756,12 +1755,12 @@ impl hal::device::Device<Backend> for Device {
 
     unsafe fn destroy_sampler(&self, _sampler: n::Sampler) {}
 
-    unsafe fn map_memory<R: RangeArg<u64>>(
+    unsafe fn map_memory(
         &self,
         memory: &n::Memory,
-        generic_range: R,
+        segment: memory::Segment,
     ) -> Result<*mut u8, MapError> {
-        let range = memory.resolve(&generic_range);
+        let range = memory.resolve(&segment);
         debug!("map_memory of size {} at {:?}", memory.size, range);
 
         let base_ptr = match memory.heap {
@@ -1775,16 +1774,15 @@ impl hal::device::Device<Backend> for Device {
         debug!("unmap_memory of size {}", memory.size);
     }
 
-    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, iter: I) -> Result<(), OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I>(&self, iter: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
     {
         debug!("flush_mapped_memory_ranges");
         for item in iter {
-            let (memory, ref generic_range) = *item.borrow();
-            let range = memory.resolve(generic_range);
+            let (memory, ref segment) = *item.borrow();
+            let range = memory.resolve(segment);
             debug!("\trange {:?}", range);
 
             match memory.heap {
@@ -1805,11 +1803,10 @@ impl hal::device::Device<Backend> for Device {
         Ok(())
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(&self, iter: I) -> Result<(), OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, iter: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a n::Memory, memory::Segment)>,
     {
         let mut num_syncs = 0;
         debug!("invalidate_mapped_memory_ranges");
@@ -1822,8 +1819,8 @@ impl hal::device::Device<Backend> for Device {
             let encoder = cmd_buffer.new_blit_command_encoder();
 
             for item in iter {
-                let (memory, ref generic_range) = *item.borrow();
-                let range = memory.resolve(generic_range);
+                let (memory, ref segment) = *item.borrow();
+                let range = memory.resolve(segment);
                 debug!("\trange {:?}", range);
 
                 match memory.heap {
@@ -2119,20 +2116,18 @@ impl hal::device::Device<Backend> for Device {
                                 data.textures[counters.textures as usize] =
                                     Some((AsNative::from(view.texture.as_ref()), il));
                             }
-                            pso::Descriptor::UniformTexelBuffer(view)
-                            | pso::Descriptor::StorageTexelBuffer(view) => {
+                            pso::Descriptor::TexelBuffer(view) => {
                                 data.textures[counters.textures as usize] = Some((
                                     AsNative::from(view.raw.as_ref()),
                                     image::Layout::General,
                                 ));
                             }
-                            pso::Descriptor::Buffer(buf, ref desc_range) => {
+                            pso::Descriptor::Buffer(buf, ref sub) => {
                                 let (raw, range) = buf.as_bound();
-                                if let Some(end) = desc_range.end {
-                                    debug_assert!(range.start + end <= range.end);
-                                }
-                                let start = range.start + desc_range.start.unwrap_or(0);
-                                let pair = (AsNative::from(raw), start);
+                                debug_assert!(
+                                    range.start + sub.offset + sub.size.unwrap_or(0) <= range.end
+                                );
+                                let pair = (AsNative::from(raw), range.start + sub.offset);
                                 data.buffers[counters.buffers as usize] = Some(pair);
                             }
                         }
@@ -2199,17 +2194,16 @@ impl hal::device::Device<Backend> for Device {
                                 encoder.set_texture(tex_ref, arg_index);
                                 data.ptr = (&**tex_ref).as_ptr();
                             }
-                            pso::Descriptor::UniformTexelBuffer(view)
-                            | pso::Descriptor::StorageTexelBuffer(view) => {
+                            pso::Descriptor::TexelBuffer(view) => {
                                 encoder.set_texture(&view.raw, arg_index);
                                 data.ptr = (&**view.raw).as_ptr();
                                 arg_index += 1;
                             }
-                            pso::Descriptor::Buffer(buffer, ref desc_range) => {
+                            pso::Descriptor::Buffer(buffer, ref sub) => {
                                 let (buf_raw, buf_range) = buffer.as_bound();
                                 encoder.set_buffer(
                                     buf_raw,
-                                    buf_range.start + desc_range.start.unwrap_or(0),
+                                    buf_range.start + sub.offset,
                                     arg_index,
                                 );
                                 data.ptr = (&**buf_raw).as_ptr();
@@ -2423,11 +2417,11 @@ impl hal::device::Device<Backend> for Device {
         }
     }
 
-    unsafe fn create_buffer_view<R: RangeArg<u64>>(
+    unsafe fn create_buffer_view(
         &self,
         buffer: &n::Buffer,
         format_maybe: Option<format::Format>,
-        range: R,
+        sub: buffer::SubRange,
     ) -> Result<n::BufferView, buffer::ViewCreationError> {
         let (raw, base_range, options) = match *buffer {
             n::Buffer::Bound {
@@ -2437,11 +2431,8 @@ impl hal::device::Device<Backend> for Device {
             } => (raw, range, options),
             n::Buffer::Unbound { .. } => panic!("Unexpected Buffer::Unbound"),
         };
-        let start = base_range.start + *range.start().unwrap_or(&0);
-        let end_rough = match range.end() {
-            Some(end) => base_range.start + end,
-            None => base_range.end,
-        };
+        let start = base_range.start + sub.offset;
+        let size_rough = sub.size.unwrap_or(base_range.end - start);
         let format = match format_maybe {
             Some(fmt) => fmt,
             None => {
@@ -2459,7 +2450,7 @@ impl hal::device::Device<Backend> for Device {
         }
 
         //Note: we rely on SPIRV-Cross to use the proper 2D texel indexing here
-        let texel_count = (end_rough - start) * 8 / format_desc.bits as u64;
+        let texel_count = size_rough * 8 / format_desc.bits as u64;
         let col_count = cmp::min(texel_count, self.shared.private_caps.max_texture_size);
         let row_count = (texel_count + self.shared.private_caps.max_texture_size - 1)
             / self.shared.private_caps.max_texture_size;

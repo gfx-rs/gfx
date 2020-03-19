@@ -6,10 +6,9 @@ use ash::vk::Handle;
 use smallvec::SmallVec;
 
 use hal::{
-    memory::Requirements,
+    memory::{Requirements, Segment},
     pool::CommandPoolCreateFlags,
     pso::VertexInputRate,
-    range::RangeArg,
     window::SwapchainConfig,
     {buffer, device as d, format, image, pass, pso, query, queue},
     {Features, MemoryTypeId},
@@ -1361,21 +1360,20 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn create_buffer_view<R: RangeArg<u64>>(
+    unsafe fn create_buffer_view(
         &self,
         buffer: &n::Buffer,
         format: Option<format::Format>,
-        range: R,
+        range: buffer::SubRange,
     ) -> Result<n::BufferView, buffer::ViewCreationError> {
-        let (offset, size) = conv::map_range_arg(&range);
         let info = vk::BufferViewCreateInfo {
             s_type: vk::StructureType::BUFFER_VIEW_CREATE_INFO,
             p_next: ptr::null(),
             flags: vk::BufferViewCreateFlags::empty(),
             buffer: buffer.raw,
             format: format.map_or(vk::Format::UNDEFINED, conv::map_format),
-            offset,
-            range: size,
+            offset: range.offset,
+            range: range.size.unwrap_or(vk::WHOLE_SIZE),
         };
 
         let result = self.raw.0.create_buffer_view(&info, None);
@@ -1687,19 +1685,14 @@ impl d::Device<B> for Device {
                             image_layout: conv::map_image_layout(layout),
                         });
                     }
-                    pso::Descriptor::Buffer(buffer, ref range) => {
-                        let offset = range.start.unwrap_or(0);
+                    pso::Descriptor::Buffer(buffer, ref sub) => {
                         buffer_infos.push(vk::DescriptorBufferInfo {
                             buffer: buffer.raw,
-                            offset,
-                            range: match range.end {
-                                Some(end) => end - offset,
-                                None => vk::WHOLE_SIZE,
-                            },
+                            offset: sub.offset,
+                            range: sub.size.unwrap_or(vk::WHOLE_SIZE),
                         });
                     }
-                    pso::Descriptor::UniformTexelBuffer(view)
-                    | pso::Descriptor::StorageTexelBuffer(view) => {
+                    pso::Descriptor::TexelBuffer(view) => {
                         texel_buffer_views.push(view.raw);
                     }
                 }
@@ -1773,15 +1766,17 @@ impl d::Device<B> for Device {
         self.raw.0.update_descriptor_sets(&[], &copies);
     }
 
-    unsafe fn map_memory<R>(&self, memory: &n::Memory, range: R) -> Result<*mut u8, d::MapError>
-    where
-        R: RangeArg<u64>,
-    {
-        let (offset, size) = conv::map_range_arg(&range);
-        let result = self
-            .raw
-            .0
-            .map_memory(memory.raw, offset, size, vk::MemoryMapFlags::empty());
+    unsafe fn map_memory(
+        &self,
+        memory: &n::Memory,
+        segment: Segment,
+    ) -> Result<*mut u8, d::MapError> {
+        let result = self.raw.0.map_memory(
+            memory.raw,
+            segment.offset,
+            segment.size.unwrap_or(vk::WHOLE_SIZE),
+            vk::MemoryMapFlags::empty(),
+        );
 
         match result {
             Ok(ptr) => Ok(ptr as *mut _),
@@ -1796,11 +1791,10 @@ impl d::Device<B> for Device {
         self.raw.0.unmap_memory(memory.raw)
     }
 
-    unsafe fn flush_mapped_memory_ranges<'a, I, R>(&self, ranges: I) -> Result<(), d::OutOfMemory>
+    unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a n::Memory, Segment)>,
     {
         let ranges = conv::map_memory_ranges(ranges);
         let result = self.raw.0.flush_mapped_memory_ranges(&ranges);
@@ -1813,14 +1807,10 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn invalidate_mapped_memory_ranges<'a, I, R>(
-        &self,
-        ranges: I,
-    ) -> Result<(), d::OutOfMemory>
+    unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), d::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a n::Memory, R)>,
-        R: RangeArg<u64>,
+        I::Item: Borrow<(&'a n::Memory, Segment)>,
     {
         let ranges = conv::map_memory_ranges(ranges);
         let result = self.raw.0.invalidate_mapped_memory_ranges(&ranges);

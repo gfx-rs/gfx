@@ -370,8 +370,9 @@ impl<B: hal::Backend> Scene<B> {
                             .unwrap();
                         // write the data
                         unsafe {
-                            let mapping =
-                                device.map_memory(&upload_memory, 0 .. size as u64).unwrap();
+                            let mapping = device
+                                .map_memory(&upload_memory, memory::Segment::ALL)
+                                .unwrap();
                             File::open(data_path.join(data))
                                 .unwrap()
                                 .read_exact(slice::from_raw_parts_mut(mapping, size))
@@ -527,8 +528,9 @@ impl<B: hal::Backend> Scene<B> {
                         // write the data
                         unsafe {
                             let mut file = File::open(data_path.join(data)).unwrap();
-                            let mapping =
-                                device.map_memory(&upload_memory, 0 .. upload_size).unwrap();
+                            let mapping = device
+                                .map_memory(&upload_memory, memory::Segment::ALL)
+                                .unwrap();
                             for y in 0 .. (h as usize * d as usize) {
                                 let slice = slice::from_raw_parts_mut(
                                     mapping.offset(y as isize * row_pitch as isize),
@@ -808,7 +810,10 @@ impl<B: hal::Backend> Scene<B> {
                                             .buffers
                                             .get(s)
                                             .expect(&format!("Missing buffer: {}", s));
-                                        hal::pso::Descriptor::Buffer(&buf.handle, None .. None)
+                                        hal::pso::Descriptor::Buffer(
+                                            &buf.handle,
+                                            b::SubRange::WHOLE,
+                                        )
                                     })
                                     .collect::<Vec<_>>(),
                                 raw::DescriptorRange::Images(ref names_and_layouts) => {
@@ -1185,8 +1190,8 @@ impl<B: hal::Backend> Scene<B> {
                             },
                             Tc::FillBuffer {
                                 ref buffer,
-                                start,
-                                end,
+                                offset,
+                                size,
                                 data,
                             } => unsafe {
                                 let buf = resources
@@ -1198,7 +1203,11 @@ impl<B: hal::Backend> Scene<B> {
                                     memory::Dependencies::empty(),
                                     buf.barrier(buffers.entry(buffer), b::State::TRANSFER_WRITE),
                                 );
-                                command_buf.fill_buffer(&buf.handle, (start, end), data);
+                                command_buf.fill_buffer(
+                                    &buf.handle,
+                                    b::SubRange { offset, size },
+                                    data,
+                                );
                             },
                         }
                     }
@@ -1301,7 +1310,7 @@ impl<B: hal::Backend> Scene<B> {
                             match *command {
                                 Dc::BindIndexBuffer {
                                     ref buffer,
-                                    offset,
+                                    ref range,
                                     index_type,
                                 } => {
                                     let view = b::IndexBufferView {
@@ -1310,19 +1319,19 @@ impl<B: hal::Backend> Scene<B> {
                                             .get(buffer)
                                             .expect(&format!("Missing index buffer: {}", buffer))
                                             .handle,
-                                        offset,
+                                        range: range.clone(),
                                         index_type,
                                     };
                                     command_buf.bind_index_buffer(view);
                                 }
                                 Dc::BindVertexBuffers(ref buffers) => {
-                                    let buffers_raw = buffers.iter().map(|&(ref name, offset)| {
+                                    let buffers_raw = buffers.iter().map(|&(ref name, ref sub)| {
                                         let buf = &resources
                                             .buffers
                                             .get(name)
                                             .expect(&format!("Missing vertex buffer: {}", name))
                                             .handle;
-                                        (buf, offset)
+                                        (buf, sub.clone())
                                     });
                                     command_buf.bind_vertex_buffers(0, buffers_raw);
                                 }
@@ -1562,7 +1571,8 @@ impl<B: hal::Backend> Scene<B> {
             self.device.destroy_command_pool(command_pool);
         }
 
-        let mapping = unsafe { self.device.map_memory(&down_memory, 0 .. down_size) }.unwrap();
+        let mapping =
+            unsafe { self.device.map_memory(&down_memory, memory::Segment::ALL) }.unwrap();
 
         FetchGuard {
             device: &mut self.device,
@@ -1692,7 +1702,8 @@ impl<B: hal::Backend> Scene<B> {
             self.device.destroy_command_pool(command_pool);
         }
 
-        let mapping = unsafe { self.device.map_memory(&down_memory, 0 .. down_size) }.unwrap();
+        let mapping =
+            unsafe { self.device.map_memory(&down_memory, memory::Segment::ALL) }.unwrap();
 
         FetchGuard {
             device: &mut self.device,

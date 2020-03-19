@@ -14,9 +14,9 @@ use hal::{
     buffer,
     format::FormatDesc,
     image,
+    memory::Segment,
     pass::{Attachment, AttachmentId},
     pso,
-    range::RangeArg,
     MemoryTypeId,
 };
 use range_alloc::RangeAllocator;
@@ -903,8 +903,8 @@ impl Memory {
         Memory { heap, size }
     }
 
-    pub(crate) fn resolve<R: RangeArg<u64>>(&self, range: &R) -> Range<u64> {
-        *range.start().unwrap_or(&0) .. *range.end().unwrap_or(&self.size)
+    pub(crate) fn resolve(&self, range: &Segment) -> Range<u64> {
+        range.offset .. range.size.map_or(self.size, |s| range.offset + s)
     }
 }
 
