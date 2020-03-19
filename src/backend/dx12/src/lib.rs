@@ -13,7 +13,7 @@ mod resource;
 mod root_constants;
 mod window;
 
-use hal::{adapter, format as f, image, memory, pso::PipelineStage, queue as q, Features, Limits};
+use hal::{adapter, format as f, image, memory, pso::PipelineStage, queue as q, Features, Hints, Limits};
 
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_6, minwindef::TRUE, winerror},
@@ -173,6 +173,7 @@ pub struct PhysicalDevice {
     library: Arc<native::D3D12Lib>,
     adapter: native::WeakPtr<dxgi1_2::IDXGIAdapter2>,
     features: Features,
+    hints: Hints,
     limits: Limits,
     format_properties: Arc<FormatProperties>,
     private_caps: Capabilities,
@@ -401,6 +402,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     fn features(&self) -> Features {
         self.features
     }
+
+    fn hints(&self) -> Hints {
+        self.hints
+    }
+
     fn limits(&self) -> Limits {
         self.limits
     }
@@ -1067,6 +1073,8 @@ impl hal::Instance<Backend> for Instance {
                     Features::INSTANCE_RATE |
                     Features::SAMPLER_MIP_LOD_BIAS |
                     Features::SAMPLER_ANISOTROPY,
+                hints:
+                    Hints::BASE_VERTEX_INSTANCE_DRAWING,
                 limits: Limits { // TODO
                     max_image_1d_size: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION as _,
                     max_image_2d_size: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,

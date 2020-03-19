@@ -415,11 +415,13 @@ impl hal::Instance<Backend> for Instance {
 
             let features = get_features(device.clone(), feature_level);
             let format_properties = get_format_properties(device.clone());
+            let hints = hal::Hints::BASE_VERTEX_INSTANCE_DRAWING;
 
             let physical_device = PhysicalDevice {
                 adapter,
                 library_d3d11: Arc::clone(&self.library_d3d11),
                 features,
+                hints,
                 limits,
                 memory_properties,
                 format_properties,
@@ -458,6 +460,7 @@ pub struct PhysicalDevice {
     adapter: ComPtr<IDXGIAdapter>,
     library_d3d11: Arc<libloading::Library>,
     features: hal::Features,
+    hints: hal::Hints,
     limits: hal::Limits,
     memory_properties: adapter::MemoryProperties,
     format_properties: [format::Properties; format::NUM_FORMATS],
@@ -715,6 +718,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn features(&self) -> hal::Features {
         self.features
+    }
+
+    fn hints(&self) -> hal::Hints {
+        self.hints
     }
 
     fn limits(&self) -> Limits {

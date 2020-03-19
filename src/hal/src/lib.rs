@@ -197,6 +197,15 @@ bitflags! {
     }
 }
 
+bitflags! {
+    /// Features that the device supports natively, but is able to emulate.
+    #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+    pub struct Hints: u32 {
+        /// Support indexed, instanced drawing with base vertex and instance.
+        const BASE_VERTEX_INSTANCE_DRAWING = 0x0001;
+    }
+}
+
 /// Resource limits of a particular graphics device.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

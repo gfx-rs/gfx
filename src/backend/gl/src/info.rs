@@ -1,5 +1,5 @@
 use crate::{Error, GlContainer};
-use hal::{Features, Limits};
+use hal::{Features, Hints, Limits};
 use std::collections::HashSet;
 use std::{fmt, str};
 
@@ -234,8 +234,6 @@ bitflags! {
         const DRAW_INDEXED_INSTANCED = 0x00000010;
         /// Support indexed, instanced drawing with base vertex only.
         const DRAW_INDEXED_INSTANCED_BASE_VERTEX = 0x00000020;
-        /// Support indexed, instanced drawing with base vertex and instance.
-        const DRAW_INDEXED_INSTANCED_BASE = 0x00000040;
         /// Support base vertex offset for indexed drawing.
         const VERTEX_BASE = 0x00000080;
         /// Support sRGB textures and rendertargets.
@@ -341,7 +339,7 @@ const IS_WEBGL: bool = cfg!(target_arch = "wasm32");
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
-pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Limits, PrivateCaps) {
+pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Hints, Limits, PrivateCaps) {
     use self::Requirement::*;
     let info = Info::get(gl);
     let max_texture_size = get_usize(gl, glow::MAX_TEXTURE_SIZE).unwrap_or(64) as u32;
@@ -446,10 +444,6 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         // TODO: extension
         legacy |= LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE_VERTEX;
     }
-    if info.is_supported(&[Core(4, 2)]) {
-        // TODO: extension
-        legacy |= LegacyFeatures::DRAW_INDEXED_INSTANCED_BASE;
-    }
     if info.is_supported(&[
         Core(3, 2),
         Es(3, 2),
@@ -492,6 +486,12 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         features |= Features::INDEPENDENT_BLENDING;
     }
 
+    let mut hints = Hints::empty();
+    if info.is_supported(&[Core(4, 2)]) {
+        // TODO: extension
+        hints |= Hints::BASE_VERTEX_INSTANCE_DRAWING;
+    }
+
     let emulate_map = info.version.is_embedded;
 
     let private = PrivateCaps {
@@ -517,7 +517,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Li
         per_draw_buffer_blending,
     };
 
-    (info, features, legacy, limits, private)
+    (info, features, legacy, hints, limits, private)
 }
 
 #[cfg(test)]

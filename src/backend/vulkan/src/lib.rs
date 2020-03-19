@@ -30,6 +30,7 @@ use hal::{
     queue,
     window::{PresentError, Suboptimal, SwapImageIndex},
     Features,
+    Hints,
     Limits,
 };
 
@@ -1038,6 +1039,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         bits
+    }
+
+    fn hints(&self) -> Hints {
+        Hints::BASE_VERTEX_INSTANCE_DRAWING
     }
 
     fn limits(&self) -> Limits {

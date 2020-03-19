@@ -444,6 +444,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             | hal::Features::SHADER_CLIP_DISTANCE
     }
 
+    fn hints(&self) -> hal::Hints {
+        if self.shared.private_caps.base_vertex_instance_drawing {
+            hal::Hints::BASE_VERTEX_INSTANCE_DRAWING
+        } else {
+            hal::Hints::empty()
+        }
+    }
+
     fn limits(&self) -> hal::Limits {
         let pc = &self.shared.private_caps;
         hal::Limits {

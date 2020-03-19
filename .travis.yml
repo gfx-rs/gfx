@@ -44,6 +44,9 @@ matrix:
       rust: nightly
       compiler: gcc
 
+  allow_failures: # temp
+    - env: WASM=1
+
 branches:
   except:
     - staging.tmp
