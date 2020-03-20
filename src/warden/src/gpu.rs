@@ -286,11 +286,13 @@ impl<B: hal::Backend> Scene<B> {
                     query::Query { pool, id: 1 },
                 );
             }
+            finish_cmd.insert_debug_marker("_done", 0x0000FF00);
             finish_cmd.finish();
         }
         unsafe {
             init_cmd = command_pool.allocate_one(c::Level::Primary);
             init_cmd.begin_primary(c::CommandBufferFlags::empty());
+            init_cmd.begin_debug_marker("_init", 0x0000FF00);
             if let Ok(ref pool) = query_pool {
                 init_cmd.reset_query_pool(pool, 0 .. 2);
                 init_cmd.write_timestamp(
@@ -976,6 +978,7 @@ impl<B: hal::Backend> Scene<B> {
         }
 
         unsafe {
+            init_cmd.end_debug_marker();
             init_cmd.finish();
         }
 
@@ -987,6 +990,7 @@ impl<B: hal::Backend> Scene<B> {
             unsafe {
                 command_buf = command_pool.allocate_one(c::Level::Primary);
                 command_buf.begin_primary(c::CommandBufferFlags::SIMULTANEOUS_USE);
+                command_buf.begin_debug_marker(name, 0x00FF0000);
             }
             match *job {
                 raw::Job::Transfer { ref commands } => {
@@ -1438,6 +1442,7 @@ impl<B: hal::Backend> Scene<B> {
             }
 
             unsafe {
+                command_buf.end_debug_marker();
                 command_buf.finish();
             }
             jobs.insert(
@@ -1528,6 +1533,7 @@ impl<B: hal::Backend> Scene<B> {
         unsafe {
             cmd_buffer = command_pool.allocate_one(c::Level::Primary);
             cmd_buffer.begin_primary(c::CommandBufferFlags::ONE_TIME_SUBMIT);
+            cmd_buffer.begin_debug_marker("_fetch_buffer", 0x0000FF00);
             let pre_barrier = memory::Barrier::whole_buffer(
                 &buffer.handle,
                 buffer.stable_state .. b::Access::TRANSFER_READ,
@@ -1554,6 +1560,7 @@ impl<B: hal::Backend> Scene<B> {
                 memory::Dependencies::empty(),
                 &[post_barrier],
             );
+            cmd_buffer.end_debug_marker();
             cmd_buffer.finish()
         }
 
@@ -1637,6 +1644,7 @@ impl<B: hal::Backend> Scene<B> {
         unsafe {
             cmd_buffer = command_pool.allocate_one(c::Level::Primary);
             cmd_buffer.begin_primary(c::CommandBufferFlags::ONE_TIME_SUBMIT);
+            cmd_buffer.begin_debug_marker("_fetch_image", 0x0000FF00);
             let pre_barrier = memory::Barrier::Image {
                 states: image.stable_state
                     .. (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
@@ -1685,6 +1693,7 @@ impl<B: hal::Backend> Scene<B> {
                 memory::Dependencies::empty(),
                 &[post_barrier],
             );
+            cmd_buffer.end_debug_marker();
             cmd_buffer.finish();
         }
 

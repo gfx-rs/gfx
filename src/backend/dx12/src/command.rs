@@ -2632,4 +2632,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             error!("TODO: execute_commands");
         }
     }
+
+    unsafe fn insert_debug_marker(&mut self, _name: &str, _color: u32) {
+        //TODO
+    }
+    unsafe fn begin_debug_marker(&mut self, _name: &str, _color: u32) {
+        //TODO
+    }
+    unsafe fn end_debug_marker(&mut self) {
+        //TODO
+    }
 }

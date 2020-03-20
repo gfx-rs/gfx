@@ -916,6 +916,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     {
         panic!(DO_NOT_USE_MESSAGE)
     }
+
+    unsafe fn insert_debug_marker(&mut self, _: &str, _: u32) {
+        panic!(DO_NOT_USE_MESSAGE)
+    }
+    unsafe fn begin_debug_marker(&mut self, _: &str, _: u32) {
+        panic!(DO_NOT_USE_MESSAGE)
+    }
+    unsafe fn end_debug_marker(&mut self) {
+        panic!(DO_NOT_USE_MESSAGE)
+    }
 }
 
 // Dummy descriptor pool.

@@ -2288,6 +2288,16 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     {
         unimplemented!()
     }
+
+    unsafe fn insert_debug_marker(&mut self, _name: &str, _color: u32) {
+        //TODO
+    }
+    unsafe fn begin_debug_marker(&mut self, _name: &str, _color: u32) {
+        //TODO
+    }
+    unsafe fn end_debug_marker(&mut self) {
+        //TODO
+    }
 }
 
 #[derive(Clone, Debug)]
