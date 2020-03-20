@@ -21,6 +21,7 @@ use std::path::PathBuf;
 
 use ron::de;
 
+
 #[derive(Debug, Deserialize)]
 enum Expectation {
     Buffer(String, Vec<u8>),
@@ -29,17 +30,23 @@ enum Expectation {
 
 #[derive(Debug, Deserialize)]
 struct Test {
-    features: hal::Features,
     jobs: Vec<String>,
     expect: Expectation,
 }
 
-type Suite = HashMap<String, HashMap<String, Test>>;
+#[derive(Debug, Deserialize)]
+struct RawTestGroup {
+    features: Vec<warden::Feature>,
+    tests: HashMap<String, Test>,
+}
+
+type Suite = HashMap<String, RawTestGroup>;
 
 struct TestGroup {
     name: String,
     scene: warden::raw::Scene,
     tests: HashMap<String, Test>,
+    features: hal::Features,
 }
 
 #[derive(Debug)]
@@ -71,13 +78,16 @@ impl Harness {
             .and_then(de::from_reader::<_, Suite>)
             .expect(&format!("failed to open/parse the suite: {:?}", suite_path))
             .into_iter()
-            .map(|(name, tests)| {
+            .map(|(name, raw_group)| {
                 let path = base_path.join("scenes").join(&name).with_extension("ron");
                 let scene = File::open(path)
                     .map_err(de::Error::from)
                     .and_then(de::from_reader)
                     .expect(&format!("failed to open/parse the scene '{:?}'", name));
-                TestGroup { name, scene, tests }
+                let features = raw_group.features
+                    .into_iter()
+                    .fold(hal::Features::empty(), |u, f| u | f.into_hal());
+                TestGroup { name, scene, tests: raw_group.tests, features }
             })
             .collect();
 
@@ -104,7 +114,7 @@ impl Harness {
         for tg in &self.suite {
             let mut adapters = instance.enumerate_adapters();
             let adapter = adapters.remove(0);
-            let features = adapter.physical_device.features();
+            let supported_features = adapter.physical_device.features();
             let limits = adapter.physical_device.limits();
             //println!("\t{:?}", adapter.info);
             println!("\tScene '{}':", tg.name);
@@ -122,19 +132,21 @@ impl Harness {
                 }
             }
 
+            if !supported_features.contains(tg.features) {
+                println!(
+                    "\tskipped (features missing: {:?})",
+                    tg.features - supported_features
+                );
+                results.skip += tg.tests.len();
+                continue
+            }
+
             let mut scene =
-                warden::gpu::Scene::<B>::new(adapter, &tg.scene, self.base_path.join("data"))
+                warden::gpu::Scene::<B>::new(adapter, tg.features, &tg.scene, self.base_path.join("data"))
                     .unwrap();
 
             for (test_name, test) in &tg.tests {
                 print!("\t\tTest '{}' ...", test_name);
-                if !features.contains(test.features) {
-                    println!(
-                        "\tskipped (features missing: {:?})",
-                        test.features - features
-                    );
-                    results.skip += 1;
-                }
                 let mut max_compute_work_groups = [0; 3];
                 for job_name in &test.jobs {
                     if let warden::raw::Job::Compute { dispatch, .. } = tg.scene.jobs[job_name] {

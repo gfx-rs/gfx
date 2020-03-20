@@ -1,14 +1,15 @@
 {
-	"basic": {
-		"render-pass-clear": (
-			features: (bits: 0),
-			jobs: ["empty"],
-			expect: ImageRow("image.color", 0, [204,204,204,255]),
-		),
-		"pass-through": (
-			features: (bits: 0),
-			jobs: ["pass-through"],
-			expect: ImageRow("image.color", 0, [0,255,0,255]),
-		),
-	},
+	"basic": (
+		features: [],
+		tests: {
+			"render-pass-clear": (
+				jobs: ["empty"],
+				expect: ImageRow("image.color", 0, [204,204,204,255]),
+			),
+			"pass-through": (
+				jobs: ["pass-through"],
+				expect: ImageRow("image.color", 0, [0,255,0,255]),
+			),
+		},
+	),
 }

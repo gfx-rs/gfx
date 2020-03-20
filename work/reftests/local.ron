@@ -1,92 +1,88 @@
 {
-	"transfer": {
-		"copy-buf": (
-			features: (bits: 0),
-			jobs: ["copy-buf"],
-			expect: Buffer("buffer.output", [72, 65, 76, 80]),
-		),
-		"copy-buf-cut": (
-			features: (bits: 0),
-			jobs: ["copy-buf-cut"],
-			expect: Buffer("buffer.large", [48, 49, 50, 51, 72, 65, 54, 55]),
-		),
-		"copy-image": (
-			features: (bits: 0),
-			jobs: ["copy-image"],
-			expect: ImageRow("image.output", 0, [48, 49, 50, 51]),
-		),
-		"copy-buf-image": (
-			features: (bits: 0),
-			jobs: ["copy-buf-image"],
-			expect: ImageRow("image.output", 0, [72, 65, 76, 80]),
-		),
-		"copy-image-buf": (
-			features: (bits: 0),
-			jobs: ["copy-image-buf"],
-			expect: Buffer("buffer.output", [52, 53, 54, 55]),
-		),
-		"clear-image": (
-			features: (bits: 0),
-			jobs: ["clear-image"],
-			expect: ImageRow("image.output", 0, [128, 128, 128, 128]),
-		),
-		"blit-image": (
-			features: (bits: 0),
-			jobs: ["blit-image"],
-			expect: ImageRow("image.output", 0, [50, 51, 52, 53]),
-		),
-		"fill-whole": (
-			features: (bits: 0),
-			jobs: ["fill-whole"],
-			expect: Buffer("buffer.fill-8-bytes", [0, 0, 255, 0, 0, 0, 255, 0]),
-		),
-		"fill-first": (
-			features: (bits: 0),
-			jobs: ["fill-first"],
-			expect: Buffer("buffer.fill-8-bytes", [0, 255, 0, 0, 84, 69, 83, 33]),
-		),
-		"fill-last": (
-			features: (bits: 0),
-			jobs: ["fill-last"],
-			expect: Buffer("buffer.fill-8-bytes", [56, 32, 66, 89, 255, 0, 0, 0]),
-		),
-		/*
-		Diabled temporarily because of Vulkan driver support
-		"fill-whole-nearest-multiple": (
-			features: (bits: 0),
-			jobs: ["fill-whole-nearest-multiple"],
-			expect: Buffer("buffer.fill-10-bytes", [255, 0, 0, 0, 255, 0, 0, 0, 63, 33]),
-		),*/
-	},
-	"basic": {
-		"render-pass-clear": (
-			features: (bits: 0),
-			jobs: ["empty"],
-			expect: ImageRow("image.color", 0, [204,204,204,255]),
-		),
-		"pass-through": (
-			features: (bits: 0),
-			jobs: ["pass-through"],
-			expect: ImageRow("image.color", 0, [0,255,0,255]),
-		),
-	},
-	"compute": {
-		"fill": (
-			features: (bits: 0),
-			jobs: ["fill"],
-			expect: Buffer("buffer.output", [1, 0, 0, 0]),
-		),
-	},
-	"vertex-offset": {
-		"offset-aligned": (
-			features: (bits: 0),
-			jobs: ["offset-aligned"],
-			expect: ImageRow("image.color", 0, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
-		),
-		"offset-overlap": (
-			features: (bits: 0),
-			jobs: ["offset-overlap"],
-			expect: ImageRow("image.color", 0, [8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7]),
-		),
-	},
+	"transfer": (
+		features: [],
+		tests: {
+			"copy-buf": (
+				jobs: ["copy-buf"],
+				expect: Buffer("buffer.output", [72, 65, 76, 80]),
+			),
+			"copy-buf-cut": (
+				jobs: ["copy-buf-cut"],
+				expect: Buffer("buffer.large", [48, 49, 50, 51, 72, 65, 54, 55]),
+			),
+			"copy-image": (
+				jobs: ["copy-image"],
+				expect: ImageRow("image.output", 0, [48, 49, 50, 51]),
+			),
+			"copy-buf-image": (
+				jobs: ["copy-buf-image"],
+				expect: ImageRow("image.output", 0, [72, 65, 76, 80]),
+			),
+			"copy-image-buf": (
+				jobs: ["copy-image-buf"],
+				expect: Buffer("buffer.output", [52, 53, 54, 55]),
+			),
+			"clear-image": (
+				jobs: ["clear-image"],
+				expect: ImageRow("image.output", 0, [128, 128, 128, 128]),
+			),
+			"blit-image": (
+				jobs: ["blit-image"],
+				expect: ImageRow("image.output", 0, [50, 51, 52, 53]),
+			),
+			"fill-whole": (
+				jobs: ["fill-whole"],
+				expect: Buffer("buffer.fill-8-bytes", [0, 0, 255, 0, 0, 0, 255, 0]),
+			),
+			"fill-first": (
+				jobs: ["fill-first"],
+				expect: Buffer("buffer.fill-8-bytes", [0, 255, 0, 0, 84, 69, 83, 33]),
+			),
+			"fill-last": (
+				jobs: ["fill-last"],
+				expect: Buffer("buffer.fill-8-bytes", [56, 32, 66, 89, 255, 0, 0, 0]),
+			),
+			/*
+			Diabled temporarily because of Vulkan driver support
+			"fill-whole-nearest-multiple": (
+				jobs: ["fill-whole-nearest-multiple"],
+				expect: Buffer("buffer.fill-10-bytes", [255, 0, 0, 0, 255, 0, 0, 0, 63, 33]),
+			),*/
+		},
+	),
+	"basic": (
+		features: [],
+		tests: {
+			"render-pass-clear": (
+				jobs: ["empty"],
+				expect: ImageRow("image.color", 0, [204,204,204,255]),
+			),
+			"pass-through": (
+				jobs: ["pass-through"],
+				expect: ImageRow("image.color", 0, [0,255,0,255]),
+			),
+		},
+	),
+	"compute": (
+		features: [],
+		tests: {
+			"fill": (
+				jobs: ["fill"],
+				expect: Buffer("buffer.output", [1, 0, 0, 0]),
+			),
+		},
+	),
+	"vertex-offset": (
+		features: [],
+		tests: {
+			"offset-aligned": (
+				jobs: ["offset-aligned"],
+				expect: ImageRow("image.color", 0, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]),
+			),
+			"offset-overlap": (
+				jobs: ["offset-overlap"],
+				expect: ImageRow("image.color", 0, [8, 9, 10, 11, 12, 13, 14, 15, 0, 1, 2, 3, 4, 5, 6, 7]),
+			),
+		},
+	),
 }
