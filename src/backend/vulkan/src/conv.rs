@@ -177,7 +177,7 @@ pub fn map_descriptor_type(ty: pso::DescriptorType) -> vk::DescriptorType {
                 true => vk::DescriptorType::COMBINED_IMAGE_SAMPLER,
                 false => vk::DescriptorType::SAMPLED_IMAGE,
             },
-            pso::ImageDescriptorType::Storage => vk::DescriptorType::STORAGE_IMAGE,
+            pso::ImageDescriptorType::Storage { .. } => vk::DescriptorType::STORAGE_IMAGE,
         },
         pso::DescriptorType::Buffer { ty, format } => match ty {
             pso::BufferDescriptorType::Storage { .. } => match format {

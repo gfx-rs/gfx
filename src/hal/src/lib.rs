@@ -61,11 +61,13 @@ bitflags! {
     /// Features that the device supports.
     /// These only include features of the core interface and not API extensions.
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-    pub struct Features: u64 {
+    pub struct Features: u128 {
         /// Bit mask of Vulkan Core features.
-        const CORE_MASK   = 0x0FFF_FFFF_FFFF_FFFF;
+        const CORE_MASK = 0xFFFF_FFFF_FFFF_FFFF;
         /// Bit mask of Vulkan Portability features.
-        const PORTABILITY_MASK  = 0xF000_0000_0000_0000;
+        const PORTABILITY_MASK  = 0x0000_FFFF_0000_0000_0000_0000;
+        /// Bit mask for extra WebGPU features.
+        const WEBGPU_MASK = 0xFFFF_0000_0000_0000_0000_0000;
 
         /// Support for robust buffer access.
         /// Buffer access by SPIR-V shaders is checked against the buffer/image boundaries.
@@ -186,13 +188,16 @@ bitflags! {
         const INHERITED_QUERIES = 0x040_0000_0000_0000;
 
         /// Support triangle fan primitive topology.
-        const TRIANGLE_FAN = 0x1000_0000_0000_0000;
+        const TRIANGLE_FAN = 0x0001 << 64;
         /// Support separate stencil reference values for front and back sides.
-        const SEPARATE_STENCIL_REF_VALUES = 0x2000_0000_0000_0000;
+        const SEPARATE_STENCIL_REF_VALUES = 0x0002 << 64;
         /// Support manually specified vertex attribute rates (divisors).
-        const INSTANCE_RATE = 0x4000_0000_0000_0000;
+        const INSTANCE_RATE = 0x0004 << 64;
         /// Support non-zero mipmap bias on samplers.
-        const SAMPLER_MIP_LOD_BIAS = 0x8000_0000_0000_0000;
+        const SAMPLER_MIP_LOD_BIAS = 0x0008 << 64;
+
+        /// Support for `read_only` flags in `DescriptorType` variants
+        const READ_ONLY_STORAGE_DESCRIPTORS = 0x0001 << 80;
     }
 }
 

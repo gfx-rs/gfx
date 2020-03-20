@@ -35,6 +35,8 @@ pub enum BufferDescriptorType {
     /// Storage buffers allow load, store, and atomic operations.
     Storage {
         /// If true, store operations are not permitted on this buffer.
+        ///
+        /// This flag is ignored if `Features::READ_ONLY_STORAGE_DESCRIPTORS` is disabled.
         read_only: bool,
     },
     /// Uniform buffers provide constant data to be accessed in a shader.
@@ -67,7 +69,12 @@ pub enum ImageDescriptorType {
         with_sampler: bool,
     },
     /// A storage image allows load, store and atomic operations.
-    Storage,
+    Storage {
+        /// If true, store operations are not permitted on this image.
+        ///
+        /// This flag is ignored if `Features::READ_ONLY_STORAGE_DESCRIPTORS` is disabled.
+        read_only: bool,
+    },
 }
 
 /// The type of a descriptor.
