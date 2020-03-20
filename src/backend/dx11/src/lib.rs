@@ -3193,9 +3193,12 @@ impl From<pso::DescriptorType> for DescriptorContent {
                 ty: Idt::Sampled {
                     with_sampler: false,
                 },
-            }
-            | Dt::InputAttachment => DescriptorContent::SRV,
-            Dt::Image { ty: Idt::Storage } => DescriptorContent::SRV | DescriptorContent::UAV,
+            } |
+            Dt::Image { ty: Idt::Storage { read_only: true } } |
+            Dt::InputAttachment => DescriptorContent::SRV,
+            Dt::Image {
+                ty: Idt::Storage { read_only: false }
+            } => DescriptorContent::SRV | DescriptorContent::UAV,
             Dt::Buffer {
                 ty: Bdt::Uniform,
                 format:

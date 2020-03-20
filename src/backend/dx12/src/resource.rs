@@ -468,14 +468,24 @@ impl From<pso::DescriptorType> for DescriptorContent {
         match ty {
             Dt::Sampler => Dc::SAMPLER,
             Dt::Image { ty } => match ty {
-                Idt::Storage => Dc::SRV | Dc::UAV,
+                Idt::Storage { read_only: true } => Dc::SRV,
+                Idt::Storage { read_only: false } => Dc::SRV | Dc::UAV,
                 Idt::Sampled { with_sampler } => match with_sampler {
                     true => Dc::SRV | Dc::SAMPLER,
                     false => Dc::SRV,
                 },
             },
             Dt::Buffer { ty, format } => match ty {
-                Bdt::Storage { .. } => match format {
+                Bdt::Storage { read_only: true } => match format {
+                    Bdf::Structured {
+                        dynamic_offset: true,
+                    } => Dc::SRV | Dc::DYNAMIC,
+                    Bdf::Structured {
+                        dynamic_offset: false,
+                    }
+                    | Bdf::Texel => Dc::SRV,
+                },
+                Bdt::Storage { read_only: false } => match format {
                     Bdf::Structured {
                         dynamic_offset: true,
                     } => Dc::SRV | Dc::UAV | Dc::DYNAMIC,

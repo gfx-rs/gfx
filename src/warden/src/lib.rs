@@ -52,13 +52,11 @@ pub fn init_gl_on_ci() -> gfx_backend_gl::Headless {
 
 #[derive(Debug, serde::Deserialize)]
 pub enum Feature {
-    ReadOnlyStorageDescriptors,
 }
 
 impl Feature {
     pub fn into_hal(self) -> hal::Features {
         match self {
-            Feature::ReadOnlyStorageDescriptors => hal::Features::READ_ONLY_STORAGE_DESCRIPTORS,
         }
     }
 }

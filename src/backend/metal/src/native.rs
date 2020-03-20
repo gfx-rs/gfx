@@ -925,7 +925,7 @@ pub(crate) struct ArgumentArray {
 }
 
 impl ArgumentArray {
-    pub fn describe_usage(ty: pso::DescriptorType, features: &hal::Features) -> metal::MTLResourceUsage {
+    pub fn describe_usage(ty: pso::DescriptorType) -> metal::MTLResourceUsage {
         use hal::pso::DescriptorType as Dt;
         use metal::MTLResourceUsage;
 
@@ -933,15 +933,11 @@ impl ArgumentArray {
             Dt::Sampler => MTLResourceUsage::empty(),
             Dt::Image { ty } => match ty {
                 pso::ImageDescriptorType::Sampled { .. } => MTLResourceUsage::Sample,
-                pso::ImageDescriptorType::Storage { read_only: true }
-                    if features.contains(hal::Features::READ_ONLY_STORAGE_DESCRIPTORS) =>
-                    MTLResourceUsage::Read,
+                pso::ImageDescriptorType::Storage { read_only: true } => MTLResourceUsage::Read,
                 pso::ImageDescriptorType::Storage { .. } => MTLResourceUsage::Write,
             },
             Dt::Buffer { ty, format } => match ty {
-                pso::BufferDescriptorType::Storage { read_only: true }
-                    if features.contains(hal::Features::READ_ONLY_STORAGE_DESCRIPTORS) =>
-                    MTLResourceUsage::Read,
+                pso::BufferDescriptorType::Storage { read_only: true } => MTLResourceUsage::Read,
                 pso::BufferDescriptorType::Storage { .. } => MTLResourceUsage::Write,
                 pso::BufferDescriptorType::Uniform => match format {
                     pso::BufferDescriptorFormat::Structured { .. } => MTLResourceUsage::Read,

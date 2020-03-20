@@ -195,9 +195,6 @@ bitflags! {
         const INSTANCE_RATE = 0x0004 << 64;
         /// Support non-zero mipmap bias on samplers.
         const SAMPLER_MIP_LOD_BIAS = 0x0008 << 64;
-
-        /// Support for `read_only` flags in `DescriptorType` variants
-        const READ_ONLY_STORAGE_DESCRIPTORS = 0x0001 << 80;
     }
 }
 

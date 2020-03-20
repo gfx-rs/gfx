@@ -441,7 +441,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 hal::Features::empty()
             }
             | hal::Features::SHADER_CLIP_DISTANCE
-            | hal::Features::READ_ONLY_STORAGE_DESCRIPTORS
     }
 
     fn hints(&self) -> hal::Hints {
@@ -1877,7 +1876,7 @@ impl hal::device::Device<Backend> for Device {
             for desc_range in descriptor_ranges {
                 let dr = desc_range.borrow();
                 let content = n::DescriptorContent::from(dr.ty);
-                let usage = n::ArgumentArray::describe_usage(dr.ty, &self.features);
+                let usage = n::ArgumentArray::describe_usage(dr.ty);
                 if content.contains(n::DescriptorContent::BUFFER) {
                     arguments.push(metal::MTLDataType::Pointer, dr.count, usage);
                 }
@@ -1961,7 +1960,7 @@ impl hal::device::Device<Backend> for Device {
 
                 stage_flags |= desc.stage_flags;
                 let content = n::DescriptorContent::from(desc.ty);
-                let usage = n::ArgumentArray::describe_usage(desc.ty, &self.features);
+                let usage = n::ArgumentArray::describe_usage(desc.ty);
                 let res = msl::ResourceBinding {
                     buffer_id: if content.contains(n::DescriptorContent::BUFFER) {
                         arguments.push(metal::MTLDataType::Pointer, desc.count, usage) as u32
