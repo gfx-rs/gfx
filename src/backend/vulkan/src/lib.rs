@@ -652,12 +652,20 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         let enabled_features = conv::map_device_features(requested_features);
+        let enabled_extensions = DEVICE_EXTENSIONS
+            .iter()
+            .cloned()
+            .chain(if requested_features.contains(Features::NDC_Y_UP) {
+                //TODO: try also `VK_AMD_negative_viewport_height`?
+                CStr::from_bytes_with_nul(b"VK_KHR_maintenance1\0").ok()
+            } else {
+                None
+            });
 
         // Create device
         let device_raw = {
-            let cstrings = DEVICE_EXTENSIONS
-                .iter()
-                .map(|&s| CString::from(s))
+            let cstrings = enabled_extensions
+                .map(CString::from)
                 .collect::<Vec<_>>();
 
             let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
@@ -868,9 +876,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     == info::intel::DEVICE_SKY_LAKE_MASK);
 
         let features = unsafe { self.instance.0.get_physical_device_features(self.handle) };
-        let mut bits = Features::TRIANGLE_FAN
+        let mut bits = Features::empty()
+            | Features::TRIANGLE_FAN
             | Features::SEPARATE_STENCIL_REF_VALUES
-            | Features::SAMPLER_MIP_LOD_BIAS;
+            | Features::SAMPLER_MIP_LOD_BIAS
+            | Features::NDC_Y_UP; //TODO: check for the extension!
 
         if features.robust_buffer_access != 0 {
             bits |= Features::ROBUST_BUFFER_ACCESS;

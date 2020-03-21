@@ -195,8 +195,6 @@ pub struct PrivateCaps {
     /// - In OpenGL ES 2 it may be available behind optional extensions
     /// - In WebGL 1 and WebGL 2 it is never available
     pub emulate_map: bool,
-    /// Indicates if we only have support via the EXT.
-    pub sampler_anisotropy_ext: bool,
     /// Whether f64 precision is supported for depth ranges
     pub depth_range_f64_precision: bool,
     /// Whether draw buffers are supported
@@ -400,7 +398,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Hi
         }
     }
 
-    let mut features = Features::empty();
+    let mut features = Features::NDC_Y_UP;
     let mut legacy = LegacyFeatures::empty();
 
     if info.is_supported(&[
@@ -508,9 +506,6 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Hi
         frag_data_location: !info.version.is_embedded,
         sync: !info.is_webgl() && info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]), // TODO
         map: !info.version.is_embedded, //TODO: OES extension
-        sampler_anisotropy_ext: !info
-            .is_supported(&[Core(4, 6), Ext("GL_ARB_texture_filter_anisotropic")])
-            && info.is_supported(&[Ext("GL_EXT_texture_filter_anisotropic")]),
         emulate_map,                                          // TODO
         depth_range_f64_precision: !info.version.is_embedded, // TODO
         draw_buffers: info.is_supported(&[Core(2, 0), Es(3, 0)]),

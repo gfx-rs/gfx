@@ -37,13 +37,14 @@ pub(crate) fn compile_spirv_entrypoint(
     stage: pso::Stage,
     source: &pso::EntryPoint<Backend>,
     layout: &PipelineLayout,
+    features: &hal::Features,
 ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, device::ShaderError> {
     let mut ast = parse_spirv(raw_data)?;
     spirv_cross_specialize_ast(&mut ast, &source.specialization)?;
 
     patch_spirv_resources(&mut ast, stage, layout)?;
     let shader_model = hlsl::ShaderModel::V5_0;
-    let shader_code = translate_spirv(&mut ast, shader_model, layout, stage)?;
+    let shader_code = translate_spirv(&mut ast, shader_model, layout, stage, features)?;
     log::debug!(
         "Generated {:?} shader:\n{:?}",
         stage,
@@ -251,10 +252,11 @@ fn translate_spirv(
     shader_model: hlsl::ShaderModel,
     _layout: &PipelineLayout,
     _stage: pso::Stage,
+    features: &hal::Features,
 ) -> Result<String, device::ShaderError> {
     let mut compile_options = hlsl::CompilerOptions::default();
     compile_options.shader_model = shader_model;
-    compile_options.vertex.invert_y = true;
+    compile_options.vertex.invert_y = !features.contains(hal::Features::NDC_Y_UP);
 
     //let stage_flag = stage.into();
 

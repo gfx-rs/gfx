@@ -88,6 +88,7 @@ struct InputLayout {
 pub struct Device {
     raw: ComPtr<d3d11::ID3D11Device>,
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
+    features: hal::Features,
     memory_properties: MemoryProperties,
     pub(crate) internal: internal::Internal,
 }
@@ -120,10 +121,12 @@ impl Device {
         device: ComPtr<d3d11::ID3D11Device>,
         context: ComPtr<d3d11::ID3D11DeviceContext>,
         memory_properties: MemoryProperties,
+        requested_features: hal::Features,
     ) -> Self {
         Device {
             raw: device.clone(),
             context,
+            features: hal::Features::empty(),
             memory_properties,
             internal: internal::Internal::new(&device),
         }
@@ -420,6 +423,7 @@ impl Device {
         stage: pso::Stage,
         source: &pso::EntryPoint<Backend>,
         layout: &PipelineLayout,
+        features: &hal::Features,
     ) -> Result<Option<ComPtr<d3dcommon::ID3DBlob>>, device::ShaderError> {
         // TODO: entrypoint stuff
         match *source.module {
@@ -429,7 +433,7 @@ impl Device {
                 // Ok(Some(shader))
             }
             ShaderModule::Spirv(ref raw_data) => Ok(shader::compile_spirv_entrypoint(
-                raw_data, stage, source, layout,
+                raw_data, stage, source, layout, features,
             )?),
         }
     }
@@ -904,13 +908,14 @@ impl device::Device<Backend> for Device {
         desc: &pso::GraphicsPipelineDesc<'a, Backend>,
         _cache: Option<&()>,
     ) -> Result<GraphicsPipeline, pso::CreationError> {
+        let features = &self.features;
         let build_shader = |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, Backend>>| {
             let source = match source {
                 Some(src) => src,
                 None => return Ok(None),
             };
 
-            Self::extract_entry_point(stage, source, desc.layout)
+            Self::extract_entry_point(stage, source, desc.layout, features)
                 .map_err(|err| pso::CreationError::Shader(err))
         };
 
@@ -975,13 +980,14 @@ impl device::Device<Backend> for Device {
         desc: &pso::ComputePipelineDesc<'a, Backend>,
         _cache: Option<&()>,
     ) -> Result<ComputePipeline, pso::CreationError> {
+        let features = &self.features;
         let build_shader = |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, Backend>>| {
             let source = match source {
                 Some(src) => src,
                 None => return Ok(None),
             };
 
-            Self::extract_entry_point(stage, source, desc.layout)
+            Self::extract_entry_point(stage, source, desc.layout, features)
                 .map_err(|err| pso::CreationError::Shader(err))
         };
 
