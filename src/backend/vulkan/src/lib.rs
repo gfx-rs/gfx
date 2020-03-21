@@ -92,6 +92,10 @@ lazy_static! {
         #[cfg(target_os = "macos")]
         extensions::mvk::MacOSSurface::name(),
     ];
+    static ref AMD_NEGATIVE_VIEWPORT_HEIGHT: &'static CStr =
+        CStr::from_bytes_with_nul(b"VK_AMD_negative_viewport_height\0").unwrap();
+    static ref KHR_MAINTENANCE1: &'static CStr =
+        CStr::from_bytes_with_nul(b"VK_KHR_maintenance1\0").unwrap();
 }
 
 #[cfg(not(feature = "use-rtld-next"))]
@@ -369,8 +373,7 @@ impl hal::Instance<Backend> for Instance {
                 instance_extensions
                     .iter()
                     .find(|inst_ext| unsafe {
-                        CStr::from_ptr(inst_ext.extension_name.as_ptr()).to_bytes()
-                            == ext.to_bytes()
+                        CStr::from_ptr(inst_ext.extension_name.as_ptr()) == ext
                     })
                     .map(|_| ext)
                     .or_else(|| {
@@ -387,8 +390,7 @@ impl hal::Instance<Backend> for Instance {
                 instance_layers
                     .iter()
                     .find(|inst_layer| unsafe {
-                        CStr::from_ptr(inst_layer.layer_name.as_ptr()).to_bytes()
-                            == layer.to_bytes()
+                        CStr::from_ptr(inst_layer.layer_name.as_ptr()) == layer
                     })
                     .map(|_| layer)
                     .or_else(|| {
@@ -480,6 +482,9 @@ impl hal::Instance<Backend> for Instance {
         devices
             .into_iter()
             .map(|device| {
+                let extensions = unsafe {
+                    self.raw.0.enumerate_device_extension_properties(device)
+                }.unwrap();
                 let properties = unsafe { self.raw.0.get_physical_device_properties(device) };
                 let info = adapter::AdapterInfo {
                     name: unsafe {
@@ -506,6 +511,7 @@ impl hal::Instance<Backend> for Instance {
                 let physical_device = PhysicalDevice {
                     instance: self.raw.clone(),
                     handle: device,
+                    extensions,
                     properties,
                 };
                 let queue_families = unsafe {
@@ -620,7 +626,16 @@ impl queue::QueueFamily for QueueFamily {
 pub struct PhysicalDevice {
     instance: Arc<RawInstance>,
     handle: vk::PhysicalDevice,
+    extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
+}
+
+impl PhysicalDevice {
+    fn supports_extension(&self, extension: &CStr) -> bool {
+        self.extensions
+            .iter()
+            .any(|ep| unsafe { CStr::from_ptr(ep.extension_name.as_ptr()) } == extension)
+    }
 }
 
 impl fmt::Debug for PhysicalDevice {
@@ -657,7 +672,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .cloned()
             .chain(if requested_features.contains(Features::NDC_Y_UP) {
                 //TODO: try also `VK_AMD_negative_viewport_height`?
-                CStr::from_bytes_with_nul(b"VK_KHR_maintenance1\0").ok()
+                Some(if self.supports_extension(*AMD_NEGATIVE_VIEWPORT_HEIGHT) {
+                    *AMD_NEGATIVE_VIEWPORT_HEIGHT
+                } else {
+                    *KHR_MAINTENANCE1
+                })
             } else {
                 None
             });
@@ -879,8 +898,13 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let mut bits = Features::empty()
             | Features::TRIANGLE_FAN
             | Features::SEPARATE_STENCIL_REF_VALUES
-            | Features::SAMPLER_MIP_LOD_BIAS
-            | Features::NDC_Y_UP; //TODO: check for the extension!
+            | Features::SAMPLER_MIP_LOD_BIAS;
+
+        if self.supports_extension(*AMD_NEGATIVE_VIEWPORT_HEIGHT) ||
+            self.supports_extension(*KHR_MAINTENANCE1)
+        {
+            bits |= Features::NDC_Y_UP;
+        }
 
         if features.robust_buffer_access != 0 {
             bits |= Features::ROBUST_BUFFER_ACCESS;
