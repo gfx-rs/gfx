@@ -1946,13 +1946,13 @@ impl hal::device::Device<Backend> for Device {
                         error!("Dynamic offsets are not yet supported in argument buffers!");
                     }
                     pso::DescriptorType::Image {
-                        ty: pso::ImageDescriptorType::Storage,
+                        ty: pso::ImageDescriptorType::Storage { .. },
                     }
                     | pso::DescriptorType::Buffer {
                         ty: pso::BufferDescriptorType::Storage { .. },
                         format: pso::BufferDescriptorFormat::Texel,
                     } => {
-                        //TODO: bind storage images separately
+                        //TODO: bind storage buffers and images separately
                         error!("Storage images are not yet supported in argument buffers!");
                     }
                     _ => {}

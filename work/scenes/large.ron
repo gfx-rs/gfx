@@ -129,7 +129,7 @@
 			bindings: [
 				(
 					binding: 0,
-					ty: SampledImage,
+					ty: Image(ty: Sampled(with_sampler: false)),
 					count: 1,
 					stage_flags: (bits: 16),
 					immutable_samplers: false,
@@ -147,7 +147,7 @@
 			capacity: 1,
 			ranges: [
 				(
-					ty: SampledImage,
+					ty: Image(ty: Sampled(with_sampler: false)),
 					count: 1,
 				),
 				(

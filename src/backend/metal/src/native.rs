@@ -933,9 +933,11 @@ impl ArgumentArray {
             Dt::Sampler => MTLResourceUsage::empty(),
             Dt::Image { ty } => match ty {
                 pso::ImageDescriptorType::Sampled { .. } => MTLResourceUsage::Sample,
-                pso::ImageDescriptorType::Storage => MTLResourceUsage::Write,
+                pso::ImageDescriptorType::Storage { read_only: true } => MTLResourceUsage::Read,
+                pso::ImageDescriptorType::Storage { .. } => MTLResourceUsage::Write,
             },
             Dt::Buffer { ty, format } => match ty {
+                pso::BufferDescriptorType::Storage { read_only: true } => MTLResourceUsage::Read,
                 pso::BufferDescriptorType::Storage { .. } => MTLResourceUsage::Write,
                 pso::BufferDescriptorType::Uniform => match format {
                     pso::BufferDescriptorFormat::Structured { .. } => MTLResourceUsage::Read,

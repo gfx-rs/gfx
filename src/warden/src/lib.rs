@@ -49,3 +49,14 @@ pub fn init_gl_on_ci() -> gfx_backend_gl::Headless {
 
     gfx_backend_gl::Headless::from_context(current_context)
 }
+
+#[derive(Debug, serde::Deserialize)]
+pub enum Feature {
+}
+
+impl Feature {
+    pub fn into_hal(self) -> hal::Features {
+        match self {
+        }
+    }
+}

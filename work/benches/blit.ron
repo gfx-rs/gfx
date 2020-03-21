@@ -1,16 +1,16 @@
 {
-	"large": {
-		"copy": (
-			features: (bits: 0),
-			jobs: ["init", "copy", "copy", "copy", "copy"],
-		),
-		"blit": (
-			features: (bits: 0),
-			jobs: ["init", "blit", "blit", "blit", "blit"],
-		),
-		"shader-copy": (
-			features: (bits: 0),
-			jobs: ["init", "shader", "shader", "shader", "shader"],
-		),
-	},
+	"large": (
+		features: [],
+		tests: { 
+			"copy": (
+				jobs: ["init", "copy", "copy", "copy", "copy"],
+			),
+			"blit": (
+				jobs: ["init", "blit", "blit", "blit", "blit"],
+			),
+			"shader-copy": (
+				jobs: ["init", "shader", "shader", "shader", "shader"],
+			),
+		},
+	),
 }

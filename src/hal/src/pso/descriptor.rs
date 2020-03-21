@@ -67,7 +67,10 @@ pub enum ImageDescriptorType {
         with_sampler: bool,
     },
     /// A storage image allows load, store and atomic operations.
-    Storage,
+    Storage {
+        /// If true, store operations are not permitted on this image.
+        read_only: bool,
+    },
 }
 
 /// The type of a descriptor.

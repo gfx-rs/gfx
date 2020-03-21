@@ -200,6 +200,7 @@ fn align(x: u64, y: u64) -> u64 {
 impl<B: hal::Backend> Scene<B> {
     pub fn new(
         adapter: adapter::Adapter<B>,
+        featues: hal::Features,
         raw: &raw::Scene,
         data_path: PathBuf,
     ) -> Result<Self, ()> {
@@ -213,7 +214,7 @@ impl<B: hal::Backend> Scene<B> {
                 .physical_device
                 .open(
                     &[(&adapter.queue_families[0], &[1.0])],
-                    hal::Features::empty(),
+                    featues,
                 )
                 .unwrap()
         };
@@ -256,7 +257,7 @@ impl<B: hal::Backend> Scene<B> {
                 )
                 .unwrap()
         };
-        let query_pool = unsafe { device.create_query_pool(query::Type::Timestamp, 2).unwrap() };
+        let query_pool = unsafe { device.create_query_pool(query::Type::Timestamp, 2) };
 
         // create resources
         let mut resources = Resources::<B> {
@@ -275,31 +276,28 @@ impl<B: hal::Backend> Scene<B> {
             compute_pipelines: HashMap::new(),
         };
         let mut upload_buffers = HashMap::new();
-        let mut finish_cmd;
+        let (mut finish_cmd, mut init_cmd);
         unsafe {
             finish_cmd = command_pool.allocate_one(c::Level::Primary);
             finish_cmd.begin_primary(c::CommandBufferFlags::empty());
-            finish_cmd.write_timestamp(
-                pso::PipelineStage::BOTTOM_OF_PIPE,
-                query::Query {
-                    pool: &query_pool,
-                    id: 1,
-                },
-            );
+            if let Ok(ref pool) = query_pool {
+                finish_cmd.write_timestamp(
+                    pso::PipelineStage::BOTTOM_OF_PIPE,
+                    query::Query { pool, id: 1 },
+                );
+            }
             finish_cmd.finish();
         }
-        let mut init_cmd;
         unsafe {
             init_cmd = command_pool.allocate_one(c::Level::Primary);
             init_cmd.begin_primary(c::CommandBufferFlags::empty());
-            init_cmd.reset_query_pool(&query_pool, 0 .. 2);
-            init_cmd.write_timestamp(
-                pso::PipelineStage::TOP_OF_PIPE,
-                query::Query {
-                    pool: &query_pool,
-                    id: 0,
-                },
-            );
+            if let Ok(ref pool) = query_pool {
+                init_cmd.reset_query_pool(pool, 0 .. 2);
+                init_cmd.write_timestamp(
+                    pso::PipelineStage::TOP_OF_PIPE,
+                    query::Query { pool, id: 0 },
+                );
+            }
         }
         // Pass[1]: images, samplers, buffers, passes, descriptor set layouts/pools
         for (name, resource) in &raw.resources {
@@ -1459,7 +1457,7 @@ impl<B: hal::Backend> Scene<B> {
             device,
             queue_group,
             command_pool: Some(command_pool),
-            query_pool: Some(query_pool),
+            query_pool: query_pool.ok(),
             upload_buffers,
             download_types,
             limits,
@@ -1717,20 +1715,21 @@ impl<B: hal::Backend> Scene<B> {
 
     pub fn measure_time(&self) -> u32 {
         let mut results = vec![0u32; 2];
-        unsafe {
-            self.device.wait_idle().unwrap();
-            let raw_data = slice::from_raw_parts_mut(results.as_mut_ptr() as *mut u8, 4 * 2);
-            self.device
-                .get_query_pool_results(
-                    self.query_pool.as_ref().unwrap(),
-                    0 .. 2,
-                    raw_data,
-                    4,
-                    query::ResultFlags::empty(),
-                )
-                .unwrap();
+        if let Some(ref pool) = self.query_pool {
+            unsafe {
+                self.device.wait_idle().unwrap();
+                let raw_data = slice::from_raw_parts_mut(results.as_mut_ptr() as *mut u8, 4 * 2);
+                self.device
+                    .get_query_pool_results(
+                        pool,
+                        0 .. 2,
+                        raw_data,
+                        4,
+                        query::ResultFlags::empty(),
+                    )
+                    .unwrap();
+            }
         }
-
         results[1] - results[0]
     }
 }
@@ -1746,8 +1745,10 @@ impl<B: hal::Backend> Drop for Scene<B> {
             let _ = &self.queue_group;
             self.device
                 .destroy_command_pool(self.command_pool.take().unwrap());
-            self.device
-                .destroy_query_pool(self.query_pool.take().unwrap());
+            if let Some(pool) = self.query_pool.take() {
+                self.device
+                    .destroy_query_pool(pool);
+            }
         }
     }
 }
