@@ -1058,7 +1058,7 @@ pub struct RenderPassCache {
     pub framebuffer: Framebuffer,
     pub attachment_clear_values: Vec<AttachmentClear>,
     pub target_rect: pso::Rect,
-    pub current_subpass: usize,
+    pub current_subpass: pass::SubpassId,
 }
 
 impl RenderPassCache {
@@ -1087,7 +1087,7 @@ impl RenderPassCache {
             &self,
         );
 
-        let subpass = &self.render_pass.subpasses[self.current_subpass];
+        let subpass = &self.render_pass.subpasses[self.current_subpass as usize];
         let color_views = subpass
             .color_attachments
             .iter()
@@ -1547,7 +1547,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             //let attachment = render_pass.attachments[attachment_ref];
             let format = attachment.format.unwrap();
 
-            let subpass_id = render_pass.subpasses.iter().position(|sp| sp.is_using(idx));
+            let subpass_id = render_pass.subpasses
+                .iter()
+                .position(|sp| sp.is_using(idx))
+                .map(|i| i as pass::SubpassId);
 
             if attachment.has_clears() {
                 let value = *clear_iter.next().unwrap().borrow();

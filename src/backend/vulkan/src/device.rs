@@ -533,11 +533,6 @@ impl d::Device<B> for Device {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
     {
-        let map_subpass_ref = |pass: pass::SubpassRef| match pass {
-            pass::SubpassRef::External => vk::SUBPASS_EXTERNAL,
-            pass::SubpassRef::Pass(id) => id as u32,
-        };
-
         let attachments = attachments
             .into_iter()
             .map(|attachment| {
@@ -629,8 +624,8 @@ impl d::Device<B> for Device {
                 let sdep = subpass_dep.borrow();
                 // TODO: checks
                 vk::SubpassDependency {
-                    src_subpass: map_subpass_ref(sdep.passes.start),
-                    dst_subpass: map_subpass_ref(sdep.passes.end),
+                    src_subpass: sdep.passes.start.map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
+                    dst_subpass: sdep.passes.end.map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
                     src_stage_mask: conv::map_pipeline_stage(sdep.stages.start),
                     dst_stage_mask: conv::map_pipeline_stage(sdep.stages.end),
                     src_access_mask: conv::map_image_access(sdep.accesses.start),

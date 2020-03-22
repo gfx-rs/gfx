@@ -262,7 +262,7 @@ pub struct CommandBuffer {
     cache: Cache,
 
     pass_cache: Option<RenderPassCache>,
-    cur_subpass: usize,
+    cur_subpass: pass::SubpassId,
 
     limits: Limits,
     legacy_featues: info::LegacyFeatures,
@@ -447,13 +447,13 @@ impl CommandBuffer {
 
     fn begin_subpass(&mut self) {
         let state = self.pass_cache.as_ref().unwrap();
-        let subpass = &state.render_pass.subpasses[self.cur_subpass];
+        let subpass = &state.render_pass.subpasses[self.cur_subpass as usize];
 
         // See `begin_renderpass_cache` for clearing strategy
 
         // Bind draw buffers for mapping color output locations with
         // framebuffer attachments.
-        let draw_buffers = if state.framebuffer.fbos[self.cur_subpass].is_none() {
+        let draw_buffers = if state.framebuffer.fbos[self.cur_subpass as usize].is_none() {
             // The default framebuffer is created by the driver
             // We don't have influence on its layout and we treat it as single image.
             //
@@ -544,7 +544,7 @@ impl CommandBuffer {
 
         let cmd = Command::BindFrameBuffer(
             glow::DRAW_FRAMEBUFFER,
-            state.framebuffer.fbos[self.cur_subpass],
+            state.framebuffer.fbos[self.cur_subpass as usize],
         );
 
         self.push_cmd(cmd);
@@ -673,7 +673,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     })
                     .next()?;
                 Some(AttachmentClear {
-                    subpass_id: subpass,
+                    subpass_id: subpass as pass::SubpassId,
                     index,
                     value: *cv.borrow(),
                 })

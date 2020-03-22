@@ -1375,7 +1375,7 @@ impl hal::device::Device<Backend> for Device {
         let pipeline_layout = &pipeline_desc.layout;
         let (rp_attachments, subpass) = {
             let pass::Subpass { main_pass, index } = pipeline_desc.subpass;
-            (&main_pass.attachments, &main_pass.subpasses[index])
+            (&main_pass.attachments, &main_pass.subpasses[index as usize])
         };
 
         let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {

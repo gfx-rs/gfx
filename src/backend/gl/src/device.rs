@@ -418,7 +418,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
 {
     let (min, mag) = conv::filter_to_gl(info.mag_filter, info.min_filter, info.mip_filter);
     if let Some(fac) = info.anisotropy_clamp {
-        if share.features.contains(hal::Features::SAMPLER_ANISOTROPY) {
+        if features.contains(hal::Features::SAMPLER_ANISOTROPY) {
             set_param_float(glow::TEXTURE_MAX_ANISOTROPY, fac as f32);
         }
     }
@@ -749,7 +749,7 @@ impl d::Device<B> for Device {
         let desc = desc.borrow();
         let subpass = {
             let subpass = desc.subpass;
-            match subpass.main_pass.subpasses.get(subpass.index) {
+            match subpass.main_pass.subpasses.get(subpass.index as usize) {
                 Some(sp) => sp,
                 None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
             }

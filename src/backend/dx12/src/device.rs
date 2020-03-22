@@ -1263,34 +1263,21 @@ impl d::Device<B> for Device {
             .collect::<SmallVec<[_; 5]>>();
 
         for dep in &dependencies {
-            use hal::pass::SubpassRef as Sr;
             let dep = dep.borrow();
             match dep.passes {
-                Range {
-                    start: Sr::External,
-                    end: Sr::External,
-                } => {
+                Range { start: None, end: None } => {
                     error!("Unexpected external-external dependency!");
                 }
-                Range {
-                    start: Sr::External,
-                    end: Sr::Pass(sid),
-                } => {
-                    sub_infos[sid].external_dependencies.start |= dep.accesses.start;
+                Range { start: None, end: Some(sid) } => {
+                    sub_infos[sid as usize].external_dependencies.start |= dep.accesses.start;
                 }
-                Range {
-                    start: Sr::Pass(sid),
-                    end: Sr::External,
-                } => {
-                    sub_infos[sid].external_dependencies.end |= dep.accesses.end;
+                Range { start: Some(sid), end: None } => {
+                    sub_infos[sid as usize].external_dependencies.end |= dep.accesses.end;
                 }
-                Range {
-                    start: Sr::Pass(from_sid),
-                    end: Sr::Pass(sid),
-                } => {
+                Range { start: Some(from_sid), end: Some(sid) } => {
                     //Note: self-dependencies are ignored
                     if from_sid != sid {
-                        sub_infos[sid].unresolved_dependencies += 1;
+                        sub_infos[sid as usize].unresolved_dependencies += 1;
                     }
                 }
             }
@@ -1354,10 +1341,10 @@ impl d::Device<B> for Device {
             for dep in &dependencies {
                 let dep = dep.borrow();
                 if dep.passes.start != dep.passes.end
-                    && dep.passes.start == pass::SubpassRef::Pass(sid)
+                    && dep.passes.start == Some(sid as pass::SubpassId)
                 {
-                    if let pass::SubpassRef::Pass(other) = dep.passes.end {
-                        sub_infos[other].unresolved_dependencies -= 1;
+                    if let Some(other) = dep.passes.end {
+                        sub_infos[other as usize].unresolved_dependencies -= 1;
                     }
                 }
             }
@@ -1855,7 +1842,7 @@ impl d::Device<B> for Device {
         // Get associated subpass information
         let pass = {
             let subpass = &desc.subpass;
-            match subpass.main_pass.subpasses.get(subpass.index) {
+            match subpass.main_pass.subpasses.get(subpass.index as usize) {
                 Some(subpass) => subpass,
                 None => return Err(pso::CreationError::InvalidSubpass(subpass.index)),
             }

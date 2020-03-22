@@ -75,7 +75,7 @@ pub struct GraphicsShaderSet {
 #[derive(Debug, Deserialize)]
 pub struct SubpassRef {
     pub parent: String,
-    pub index: usize,
+    pub index: hal::pass::SubpassId,
 }
 
 #[derive(Debug, Deserialize)]
