@@ -87,10 +87,7 @@ pub enum ViewCreationError {
     OutOfMemory(device::OutOfMemory),
 
     /// Buffer view format is not supported.
-    UnsupportedFormat {
-        /// Unsupported format passed on view creation.
-        format: Option<format::Format>,
-    },
+    UnsupportedFormat(Option<format::Format>),
 }
 
 impl From<device::OutOfMemory> for ViewCreationError {
@@ -105,14 +102,14 @@ impl std::fmt::Display for ViewCreationError {
             ViewCreationError::OutOfMemory(err) => {
                 write!(fmt, "Failed to create buffer view: {}", err)
             }
-            ViewCreationError::UnsupportedFormat {
-                format: Some(format),
-            } => write!(
-                fmt,
-                "Failed to create buffer view: Unsupported format {:?}",
-                format
-            ),
-            ViewCreationError::UnsupportedFormat { format: None } => {
+            ViewCreationError::UnsupportedFormat(Some(format)) => {
+                write!(
+                    fmt,
+                    "Failed to create buffer view: Unsupported format {:?}",
+                    format
+                )
+            }
+            ViewCreationError::UnsupportedFormat(None) => {
                 write!(fmt, "Failed to create buffer view: Unspecified format")
             }
         }

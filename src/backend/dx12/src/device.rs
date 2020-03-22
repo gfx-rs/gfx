@@ -543,7 +543,7 @@ impl Device {
         device: native::Device,
         handle: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
         info: ViewInfo,
-    ) -> Result<(), image::ViewError> {
+    ) -> Result<(), image::ViewCreationError> {
         #![allow(non_snake_case)]
 
         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
@@ -557,10 +557,10 @@ impl Device {
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
         let is_msaa = info.kind.num_samples() > 1;
         if info.range.levels.start + 1 != info.range.levels.end {
-            return Err(image::ViewError::Level(info.range.levels.start));
+            return Err(image::ViewCreationError::Level(info.range.levels.start));
         }
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(
+            return Err(image::ViewCreationError::Layer(image::LayerError::OutOfBounds(
                 info.range.layers,
             )));
         }
@@ -641,7 +641,7 @@ impl Device {
     fn view_image_as_render_target(
         &self,
         info: ViewInfo,
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
         let handle = self.rtv_pool.lock().unwrap().alloc_handle();
         Self::view_image_as_render_target_impl(self.raw, handle, info).map(|_| handle)
     }
@@ -650,7 +650,7 @@ impl Device {
         device: native::Device,
         handle: d3d12::D3D12_CPU_DESCRIPTOR_HANDLE,
         info: ViewInfo,
-    ) -> Result<(), image::ViewError> {
+    ) -> Result<(), image::ViewCreationError> {
         #![allow(non_snake_case)]
 
         let mut desc = d3d12::D3D12_DEPTH_STENCIL_VIEW_DESC {
@@ -665,10 +665,10 @@ impl Device {
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
         let is_msaa = info.kind.num_samples() > 1;
         if info.range.levels.start + 1 != info.range.levels.end {
-            return Err(image::ViewError::Level(info.range.levels.start));
+            return Err(image::ViewCreationError::Level(info.range.levels.start));
         }
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(
+            return Err(image::ViewCreationError::Layer(image::LayerError::OutOfBounds(
                 info.range.layers,
             )));
         }
@@ -727,14 +727,14 @@ impl Device {
     fn view_image_as_depth_stencil(
         &self,
         info: ViewInfo,
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
         let handle = self.dsv_pool.lock().unwrap().alloc_handle();
         Self::view_image_as_depth_stencil_impl(self.raw, handle, info).map(|_| handle)
     }
 
     pub(crate) fn build_image_as_shader_resource_desc(
         info: &ViewInfo,
-    ) -> Result<d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC, image::ViewError> {
+    ) -> Result<d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC, image::ViewCreationError> {
         #![allow(non_snake_case)]
 
         let mut desc = d3d12::D3D12_SHADER_RESOURCE_VIEW_DESC {
@@ -750,7 +750,7 @@ impl Device {
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(
+            return Err(image::ViewCreationError::Layer(image::LayerError::OutOfBounds(
                 info.range.layers.clone(),
             )));
         }
@@ -845,7 +845,7 @@ impl Device {
                     "Cube views are not supported for the image, kind: {:?}",
                     info.kind
                 );
-                return Err(image::ViewError::BadKind(info.view_kind));
+                return Err(image::ViewCreationError::BadKind(info.view_kind));
             }
         }
 
@@ -855,7 +855,7 @@ impl Device {
     fn view_image_as_shader_resource(
         &self,
         mut info: ViewInfo,
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
         #![allow(non_snake_case)]
 
         // Depth-stencil formats can't be used for SRVs.
@@ -878,7 +878,7 @@ impl Device {
     fn view_image_as_storage(
         &self,
         info: ViewInfo,
-    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewError> {
+    ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
         #![allow(non_snake_case)]
         assert_eq!(info.range.levels.start + 1, info.range.levels.end);
 
@@ -893,13 +893,13 @@ impl Device {
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewError::Layer(image::LayerError::OutOfBounds(
+            return Err(image::ViewCreationError::Layer(image::LayerError::OutOfBounds(
                 info.range.layers,
             )));
         }
         if info.kind.num_samples() > 1 {
             error!("MSAA images can't be viewed as UAV");
-            return Err(image::ViewError::Unsupported);
+            return Err(image::ViewCreationError::Unsupported);
         }
 
         match info.view_kind {
@@ -944,7 +944,7 @@ impl Device {
             }
             image::ViewKind::Cube | image::ViewKind::CubeArray => {
                 error!("Cubic images can't be viewed as UAV");
-                return Err(image::ViewError::Unsupported);
+                return Err(image::ViewCreationError::Unsupported);
             }
         }
 
@@ -2197,7 +2197,7 @@ impl d::Device<B> for Device {
         };
         let (format, format_desc) = match format.and_then(conv::map_format) {
             Some(fmt) => (fmt, format.unwrap().surface_desc()),
-            None => return Err(buffer::ViewCreationError::UnsupportedFormat { format }),
+            None => return Err(buffer::ViewCreationError::UnsupportedFormat(format)),
         };
 
         let start = sub.offset;
@@ -2563,7 +2563,7 @@ impl d::Device<B> for Device {
         format: format::Format,
         swizzle: format::Swizzle,
         range: image::SubresourceRange,
-    ) -> Result<r::ImageView, image::ViewError> {
+    ) -> Result<r::ImageView, image::ViewCreationError> {
         let image = image.expect_bound();
         let is_array = image.kind.num_layers() > 1;
         let mip_levels = (range.levels.start, range.levels.end);
@@ -2581,7 +2581,7 @@ impl d::Device<B> for Device {
             } else {
                 view_kind
             },
-            format: conv::map_format(format).ok_or(image::ViewError::BadFormat(format))?,
+            format: conv::map_format(format).ok_or(image::ViewCreationError::BadFormat(format))?,
             component_mapping: conv::map_swizzle(swizzle),
             range,
         };
@@ -2648,7 +2648,7 @@ impl d::Device<B> for Device {
                 info.min_filter,
                 info.mip_filter,
                 op,
-                info.anisotropic,
+                info.anisotropy_clamp,
             ),
             [
                 conv::map_wrap(info.wrap_mode.0),
@@ -2656,10 +2656,7 @@ impl d::Device<B> for Device {
                 conv::map_wrap(info.wrap_mode.2),
             ],
             info.lod_bias.0,
-            match info.anisotropic {
-                image::Anisotropic::On(max) => max as _, // TODO: check support here?
-                image::Anisotropic::Off => 0,
-            },
+            info.anisotropy_clamp.map_or(0, |aniso| aniso as u32),
             conv::map_comparison(info.comparison.unwrap_or(pso::Comparison::Always)),
             info.border.into(),
             info.lod_range.start.0 .. info.lod_range.end.0,

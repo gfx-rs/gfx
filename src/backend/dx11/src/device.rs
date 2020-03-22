@@ -441,7 +441,7 @@ impl Device {
     fn view_image_as_shader_resource(
         &self,
         info: &ViewInfo,
-    ) -> Result<ComPtr<d3d11::ID3D11ShaderResourceView>, image::ViewError> {
+    ) -> Result<ComPtr<d3d11::ID3D11ShaderResourceView>, image::ViewCreationError> {
         let mut desc: d3d11::D3D11_SHADER_RESOURCE_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
         if desc.Format == dxgiformat::DXGI_FORMAT_D32_FLOAT_S8X24_UINT {
@@ -527,14 +527,14 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(srv) })
         } else {
-            Err(image::ViewError::Unsupported)
+            Err(image::ViewCreationError::Unsupported)
         }
     }
 
     fn view_image_as_unordered_access(
         &self,
         info: &ViewInfo,
-    ) -> Result<ComPtr<d3d11::ID3D11UnorderedAccessView>, image::ViewError> {
+    ) -> Result<ComPtr<d3d11::ID3D11UnorderedAccessView>, image::ViewCreationError> {
         let mut desc: d3d11::D3D11_UNORDERED_ACCESS_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
 
@@ -597,14 +597,14 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(uav) })
         } else {
-            Err(image::ViewError::Unsupported)
+            Err(image::ViewCreationError::Unsupported)
         }
     }
 
     pub(crate) fn view_image_as_render_target(
         &self,
         info: &ViewInfo,
-    ) -> Result<ComPtr<d3d11::ID3D11RenderTargetView>, image::ViewError> {
+    ) -> Result<ComPtr<d3d11::ID3D11RenderTargetView>, image::ViewCreationError> {
         let mut desc: d3d11::D3D11_RENDER_TARGET_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
 
@@ -663,14 +663,14 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(rtv) })
         } else {
-            Err(image::ViewError::Unsupported)
+            Err(image::ViewCreationError::Unsupported)
         }
     }
 
     fn view_image_as_depth_stencil(
         &self,
         info: &ViewInfo,
-    ) -> Result<ComPtr<d3d11::ID3D11DepthStencilView>, image::ViewError> {
+    ) -> Result<ComPtr<d3d11::ID3D11DepthStencilView>, image::ViewCreationError> {
         #![allow(non_snake_case)]
 
         let MipSlice = info.range.levels.start as _;
@@ -710,7 +710,7 @@ impl Device {
         if winerror::SUCCEEDED(hr) {
             Ok(unsafe { ComPtr::from_raw(dsv) })
         } else {
-            Err(image::ViewError::Unsupported)
+            Err(image::ViewCreationError::Unsupported)
         }
     }
 
@@ -1719,7 +1719,7 @@ impl device::Device<Backend> for Device {
         format: format::Format,
         _swizzle: format::Swizzle,
         range: image::SubresourceRange,
-    ) -> Result<ImageView, image::ViewError> {
+    ) -> Result<ImageView, image::ViewCreationError> {
         let is_array = image.kind.num_layers() > 1;
 
         let info = ViewInfo {
@@ -1734,7 +1734,7 @@ impl device::Device<Backend> for Device {
             } else {
                 view_kind
             },
-            format: conv::map_format(format).ok_or(image::ViewError::BadFormat(format))?,
+            format: conv::map_format(format).ok_or(image::ViewCreationError::BadFormat(format))?,
             range,
         };
 
@@ -1785,16 +1785,13 @@ impl device::Device<Backend> for Device {
                 info.mag_filter,
                 info.mip_filter,
                 op,
-                info.anisotropic,
+                info.anisotropy_clamp,
             ),
             AddressU: conv::map_wrapping(info.wrap_mode.0),
             AddressV: conv::map_wrapping(info.wrap_mode.1),
             AddressW: conv::map_wrapping(info.wrap_mode.2),
             MipLODBias: info.lod_bias.0,
-            MaxAnisotropy: match info.anisotropic {
-                image::Anisotropic::Off => 0,
-                image::Anisotropic::On(aniso) => aniso as _,
-            },
+            MaxAnisotropy: info.anisotropy_clamp.map_or(0, |aniso| aniso as u32),
             ComparisonFunc: info.comparison.map_or(0, |comp| conv::map_comparison(comp)),
             BorderColor: info.border.into(),
             MinLOD: info.lod_range.start.0,

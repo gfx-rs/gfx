@@ -417,11 +417,10 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     SetParamInt: FnMut(u32, i32),
 {
     let (min, mag) = conv::filter_to_gl(info.mag_filter, info.min_filter, info.mip_filter);
-    match info.anisotropic {
-        i::Anisotropic::On(fac) if fac > 1 && features.contains(hal::Features::SAMPLER_ANISOTROPY) => {
+    if let Some(fac) = info.anisotropy_clamp {
+        if share.features.contains(hal::Features::SAMPLER_ANISOTROPY) {
             set_param_float(glow::TEXTURE_MAX_ANISOTROPY, fac as f32);
         }
-        _ => (),
     }
 
     set_param_int(glow::TEXTURE_MIN_FILTER, min as i32);
@@ -1451,7 +1450,7 @@ impl d::Device<B> for Device {
         _format: Format,
         swizzle: Swizzle,
         range: i::SubresourceRange,
-    ) -> Result<n::ImageView, i::ViewError> {
+    ) -> Result<n::ImageView, i::ViewCreationError> {
         //TODO: check if `layers.end` covers all the layers
         let level = range.levels.start;
         assert_eq!(level + 1, range.levels.end);
@@ -1463,9 +1462,9 @@ impl d::Device<B> for Device {
                 if range.levels.start == 0 && range.layers.start == 0 {
                     Ok(n::ImageView::Renderbuffer(renderbuffer))
                 } else if level != 0 {
-                    Err(i::ViewError::Level(level)) //TODO
+                    Err(i::ViewCreationError::Level(level)) //TODO
                 } else {
-                    Err(i::ViewError::Layer(i::LayerError::OutOfBounds(
+                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds(
                         range.layers,
                     )))
                 }
@@ -1484,7 +1483,7 @@ impl d::Device<B> for Device {
                         range.layers.start,
                     ))
                 } else {
-                    Err(i::ViewError::Layer(i::LayerError::OutOfBounds(
+                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds(
                         range.layers,
                     )))
                 }

@@ -1,6 +1,6 @@
 use hal::{
     format::Format,
-    image::{Anisotropic, Filter, WrapMode},
+    image::{Filter, WrapMode},
     pso::{
         BlendDesc,
         BlendOp,
@@ -798,13 +798,6 @@ pub fn map_wrapping(wrap: WrapMode) -> D3D11_TEXTURE_ADDRESS_MODE {
     }
 }
 
-pub fn map_anisotropic(anisotropic: Anisotropic) -> D3D11_FILTER {
-    match anisotropic {
-        Anisotropic::On(_) => D3D11_FILTER_ANISOTROPIC,
-        Anisotropic::Off => 0,
-    }
-}
-
 fn map_filter_type(filter: Filter) -> D3D11_FILTER_TYPE {
     match filter {
         Filter::Nearest => D3D11_FILTER_TYPE_POINT,
@@ -818,7 +811,7 @@ pub fn map_filter(
     min_filter: Filter,
     mip_filter: Filter,
     reduction: D3D11_FILTER_REDUCTION_TYPE,
-    anisotropic: Anisotropic,
+    anisotropy_clamp: Option<u8>,
 ) -> D3D11_FILTER {
     let mag = map_filter_type(mag_filter);
     let min = map_filter_type(min_filter);
@@ -828,5 +821,5 @@ pub fn map_filter(
         | (mag & D3D11_FILTER_TYPE_MASK) << D3D11_MAG_FILTER_SHIFT
         | (mip & D3D11_FILTER_TYPE_MASK) << D3D11_MIP_FILTER_SHIFT
         | (reduction & D3D11_FILTER_REDUCTION_TYPE_MASK) << D3D11_FILTER_REDUCTION_TYPE_SHIFT
-        | map_anisotropic(anisotropic)
+        | anisotropy_clamp.map(|_| D3D11_FILTER_ANISOTROPIC).unwrap_or(0)
 }
