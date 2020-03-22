@@ -442,6 +442,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 hal::Features::empty()
             }
             | hal::Features::SHADER_CLIP_DISTANCE
+            //| hal::Features::SAMPLER_MIRROR_CLAMP_EDGE
             | hal::Features::NDC_Y_UP
     }
 
@@ -859,6 +860,7 @@ impl Device {
                 image::WrapMode::Mirror => msl::SamplerAddress::MirroredRepeat,
                 image::WrapMode::Clamp => msl::SamplerAddress::ClampToEdge,
                 image::WrapMode::Border => msl::SamplerAddress::ClampToBorder,
+                image::WrapMode::MirrorClamp => unimplemented!("https://github.com/grovesNL/spirv_cross/issues/138"),
             }
         }
 

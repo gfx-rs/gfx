@@ -422,6 +422,7 @@ pub fn map_wrap(wrap: image::WrapMode) -> D3D12_TEXTURE_ADDRESS_MODE {
         Mirror => D3D12_TEXTURE_ADDRESS_MODE_MIRROR,
         Clamp => D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         Border => D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        MirrorClamp => D3D12_TEXTURE_ADDRESS_MODE_MIRROR_ONCE,
     }
 }
 

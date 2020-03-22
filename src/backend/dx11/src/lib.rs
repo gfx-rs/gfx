@@ -160,6 +160,7 @@ fn get_features(
         | hal::Features::FORMAT_BC
         | hal::Features::INSTANCE_RATE
         | hal::Features::SAMPLER_MIP_LOD_BIAS
+        | hal::Features::SAMPLER_MIRROR_CLAMP_EDGE
         | hal::Features::NDC_Y_UP
 }
 

@@ -222,6 +222,7 @@ pub fn map_wrap(wrap: image::WrapMode) -> vk::SamplerAddressMode {
         Wm::Mirror => vk::SamplerAddressMode::MIRRORED_REPEAT,
         Wm::Clamp => vk::SamplerAddressMode::CLAMP_TO_EDGE,
         Wm::Border => vk::SamplerAddressMode::CLAMP_TO_BORDER,
+        Wm::MirrorClamp => unimplemented!("https://github.com/MaikKlein/ash/issues/281"),
     }
 }
 

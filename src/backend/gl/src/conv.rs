@@ -41,6 +41,7 @@ pub fn wrap_to_gl(w: i::WrapMode) -> u32 {
         i::WrapMode::Mirror => glow::MIRRORED_REPEAT,
         i::WrapMode::Clamp => glow::CLAMP_TO_EDGE,
         i::WrapMode::Border => glow::CLAMP_TO_BORDER,
+        i::WrapMode::MirrorClamp => glow::MIRROR_CLAMP_TO_EDGE,
     }
 }
 

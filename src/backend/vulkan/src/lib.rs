@@ -906,6 +906,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             bits |= Features::NDC_Y_UP;
         }
 
+        //TODO: check for "VK_KHR_sampler_mirror_clamp_to_edge"
+
         if features.robust_buffer_access != 0 {
             bits |= Features::ROBUST_BUFFER_ACCESS;
         }
