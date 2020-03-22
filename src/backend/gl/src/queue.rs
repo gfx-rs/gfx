@@ -590,7 +590,11 @@ impl CommandQueue {
                 state::set_blend(&self.share.context, blend);
             }
             com::Command::SetBlendSlot(slot, ref blend) => {
-                state::set_blend_slot(&self.share, slot, blend);
+                if self.share.private_caps.draw_buffers {
+                    state::set_blend_slot(&self.share.context, slot, blend, &self.features);
+                } else {
+                    warn!("Draw buffers are not supported");
+                }
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
                 use crate::native::VertexAttribFunction::*;
