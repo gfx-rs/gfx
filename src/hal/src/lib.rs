@@ -430,6 +430,16 @@ impl From<usize> for MemoryTypeId {
     }
 }
 
+struct PseudoVec<T>(Option<T>);
+
+impl<T> std::iter::Extend<T> for &'_ mut PseudoVec<T> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        let mut iter = iter.into_iter();
+        self.0 = iter.next();
+        assert!(iter.next().is_none());
+    }
+}
+
 /// The `Backend` trait wraps together all the types needed
 /// for a graphics backend. Each backend module, such as OpenGL
 /// or Metal, will implement this trait with its own concrete types.

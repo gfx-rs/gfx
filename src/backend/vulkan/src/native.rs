@@ -1,7 +1,6 @@
 use crate::{window::FramebufferCachePtr, Backend, RawDevice};
 use ash::{version::DeviceV1_0, vk};
 use hal::{image::SubresourceRange, pso};
-use smallvec::SmallVec;
 use std::{borrow::Borrow, sync::Arc};
 
 #[derive(Debug, Hash)]
@@ -110,14 +109,15 @@ pub struct DescriptorPool {
 }
 
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    unsafe fn allocate_sets<I>(
+    unsafe fn allocate<I, E>(
         &mut self,
         layout_iter: I,
-        output: &mut SmallVec<[DescriptorSet; 1]>,
+        mut list: E,
     ) -> Result<(), pso::AllocationError>
     where
         I: IntoIterator,
         I::Item: Borrow<DescriptorSetLayout>,
+        E: Extend<DescriptorSet>,
     {
         use std::ptr;
 
@@ -140,7 +140,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
             .0
             .allocate_descriptor_sets(&info)
             .map(|sets| {
-                output.extend(
+                list.extend(
                     sets.into_iter()
                         .zip(layout_bindings)
                         .map(|(raw, bindings)| DescriptorSet { raw, bindings }),
