@@ -556,4 +556,11 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     where
         T: 'a + Borrow<B::CommandBuffer>,
         I: IntoIterator<Item = &'a T>;
+
+    /// Debug mark the current spot in the command buffer.
+    unsafe fn insert_debug_marker(&mut self, name: &str, color: u32);
+    /// Start a debug marker at the current place in the command buffer.
+    unsafe fn begin_debug_marker(&mut self, name: &str, color: u32);
+    /// End the last started debug marker scope.
+    unsafe fn end_debug_marker(&mut self);
 }

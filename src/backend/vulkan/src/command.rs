@@ -2,11 +2,12 @@ use ash::version::DeviceV1_0;
 use ash::vk;
 use smallvec::SmallVec;
 use std::borrow::Borrow;
+use std::ffi::CString;
 use std::ops::Range;
 use std::sync::Arc;
 use std::{mem, ptr, slice};
 
-use crate::{conv, native as n, Backend, RawDevice};
+use crate::{conv, native as n, Backend, DebugMessenger, RawDevice};
 use hal::{
     buffer,
     command as com,
@@ -27,6 +28,14 @@ use hal::{
 pub struct CommandBuffer {
     pub raw: vk::CommandBuffer,
     pub device: Arc<RawDevice>,
+}
+
+fn debug_color(color: u32) -> [f32; 4] {
+    let mut result = [0.0; 4];
+    for (i, c) in result.iter_mut().enumerate() {
+        *c = ((color >> (24 + i*8)) & 0xFF) as f32 / 255.0;
+    }
+    result
 }
 
 fn map_subpass_contents(contents: com::SubpassContents) -> vk::SubpassContents {
@@ -964,5 +973,31 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         self.device
             .0
             .cmd_execute_commands(self.raw, &command_buffers);
+    }
+
+    unsafe fn insert_debug_marker(&mut self, name: &str, color: u32) {
+        if let Some(&DebugMessenger::Utils(ref ext, _)) = self.device.debug_messenger() {
+            let cstr = CString::new(name).unwrap();
+            let label = vk::DebugUtilsLabelEXT::builder()
+                .label_name(&cstr)
+                .color(debug_color(color))
+                .build();
+            ext.cmd_insert_debug_utils_label(self.raw, &label);
+        }
+    }
+    unsafe fn begin_debug_marker(&mut self, name: &str, color: u32) {
+        if let Some(&DebugMessenger::Utils(ref ext, _)) = self.device.debug_messenger() {
+            let cstr = CString::new(name).unwrap();
+            let label = vk::DebugUtilsLabelEXT::builder()
+                .label_name(&cstr)
+                .color(debug_color(color))
+                .build();
+            ext.cmd_begin_debug_utils_label(self.raw, &label);
+        }
+    }
+    unsafe fn end_debug_marker(&mut self) {
+        if let Some(&DebugMessenger::Utils(ref ext, _)) = self.device.debug_messenger() {
+            ext.cmd_end_debug_utils_label(self.raw);
+        }
     }
 }

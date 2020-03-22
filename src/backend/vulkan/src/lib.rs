@@ -113,7 +113,7 @@ lazy_static! {
         );
 }
 
-pub struct RawInstance(pub ash::Instance, Option<DebugMessenger>);
+pub struct RawInstance(ash::Instance, Option<DebugMessenger>);
 
 pub enum DebugMessenger {
     Utils(DebugUtils, vk::DebugUtilsMessengerEXT),
@@ -1205,7 +1205,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 }
 
 #[doc(hidden)]
-pub struct RawDevice(pub ash::Device, Features, Arc<RawInstance>);
+pub struct RawDevice(ash::Device, Features, Arc<RawInstance>);
 
 impl fmt::Debug for RawDevice {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -1217,6 +1217,12 @@ impl Drop for RawDevice {
         unsafe {
             self.0.destroy_device(None);
         }
+    }
+}
+
+impl RawDevice {
+    fn debug_messenger(&self) -> Option<&DebugMessenger> {
+        (self.2).1.as_ref()
     }
 }
 
