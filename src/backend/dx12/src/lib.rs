@@ -233,6 +233,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         let mut device = Device::new(device_raw, &self, present_queue);
+        device.features = requested_features;
 
         let queue_groups = families
             .into_iter()
@@ -557,6 +558,7 @@ pub struct Device {
     raw: native::Device,
     library: Arc<native::D3D12Lib>,
     private_caps: Capabilities,
+    features: Features,
     format_properties: Arc<FormatProperties>,
     heap_properties: &'static [HeapProperties],
     // CPU only pools
@@ -637,6 +639,7 @@ impl Device {
             raw: device,
             library: Arc::clone(&physical_device.library),
             private_caps: physical_device.private_caps,
+            features: Features::empty(),
             format_properties: physical_device.format_properties.clone(),
             heap_properties: physical_device.heap_properties,
             rtv_pool: Mutex::new(rtv_pool),
@@ -1072,7 +1075,8 @@ impl hal::Instance<Backend> for Instance {
                     Features::FORMAT_BC |
                     Features::INSTANCE_RATE |
                     Features::SAMPLER_MIP_LOD_BIAS |
-                    Features::SAMPLER_ANISOTROPY,
+                    Features::SAMPLER_ANISOTROPY |
+                    Features::NDC_Y_UP,
                 hints:
                     Hints::BASE_VERTEX_INSTANCE_DRAWING,
                 limits: Limits { // TODO

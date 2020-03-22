@@ -68,15 +68,21 @@ impl State {
 #[derive(Debug)]
 pub struct CommandQueue {
     pub(crate) share: Starc<Share>,
+    features: hal::Features,
     vao: Option<native::VertexArray>,
     state: State,
 }
 
 impl CommandQueue {
     /// Create a new command queue.
-    pub(crate) fn new(share: &Starc<Share>, vao: Option<native::VertexArray>) -> Self {
+    pub(crate) fn new(
+        share: &Starc<Share>,
+        features: hal::Features,
+        vao: Option<native::VertexArray>,
+    ) -> Self {
         CommandQueue {
             share: share.clone(),
+            features,
             vao,
             state: State::new(),
         }
@@ -584,7 +590,11 @@ impl CommandQueue {
                 state::set_blend(&self.share.context, blend);
             }
             com::Command::SetBlendSlot(slot, ref blend) => {
-                state::set_blend_slot(&self.share, slot, blend);
+                if self.share.private_caps.draw_buffers {
+                    state::set_blend_slot(&self.share.context, slot, blend, &self.features);
+                } else {
+                    warn!("Draw buffers are not supported");
+                }
             }
             com::Command::BindAttribute(ref attribute, handle, stride, rate) => unsafe {
                 use crate::native::VertexAttribFunction::*;
@@ -824,8 +834,9 @@ impl CommandQueue {
 
                 // TODO: Optimization: only change texture properties that have changed.
                 device::set_sampler_info(
-                    &self.share,
                     &sinfo,
+                    &self.features,
+                    &self.share.legacy_features,
                     |a, b| gl.tex_parameter_f32(textype, a, b),
                     |a, b| gl.tex_parameter_f32_slice(textype, a, &b),
                     |a, b| gl.tex_parameter_i32(textype, a, b),

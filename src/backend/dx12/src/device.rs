@@ -382,10 +382,11 @@ impl Device {
         shader_model: hlsl::ShaderModel,
         layout: &r::PipelineLayout,
         stage: pso::Stage,
+        features: &hal::Features,
     ) -> Result<String, d::ShaderError> {
         let mut compile_options = hlsl::CompilerOptions::default();
         compile_options.shader_model = shader_model;
-        compile_options.vertex.invert_y = true;
+        compile_options.vertex.invert_y = !features.contains(hal::Features::NDC_Y_UP);
 
         let stage_flag = stage.into();
         let root_constant_layout = layout
@@ -424,6 +425,7 @@ impl Device {
         stage: pso::Stage,
         source: &pso::EntryPoint<B>,
         layout: &r::PipelineLayout,
+        features: &hal::Features,
     ) -> Result<(native::Blob, bool), d::ShaderError> {
         match *source.module {
             r::ShaderModule::Compiled(ref shaders) => {
@@ -440,7 +442,7 @@ impl Device {
                 Self::patch_spirv_resources(&mut ast, Some(layout))?;
 
                 let shader_model = hlsl::ShaderModel::V5_1;
-                let shader_code = Self::translate_spirv(&mut ast, shader_model, layout, stage)?;
+                let shader_code = Self::translate_spirv(&mut ast, shader_model, layout, stage, features)?;
                 debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
                 let real_name = ast
@@ -1729,6 +1731,7 @@ impl d::Device<B> for Device {
             Borrowed(native::Blob),
             None,
         }
+        let features = &self.features;
         impl ShaderBc {
             pub fn shader(&self) -> native::Shader {
                 match *self {
@@ -1746,7 +1749,7 @@ impl d::Device<B> for Device {
                 None => return Ok(ShaderBc::None),
             };
 
-            match Self::extract_entry_point(stage, source, desc.layout) {
+            match Self::extract_entry_point(stage, source, desc.layout, features) {
                 Ok((shader, true)) => Ok(ShaderBc::Owned(shader)),
                 Ok((shader, false)) => Ok(ShaderBc::Borrowed(shader)),
                 Err(err) => Err(pso::CreationError::Shader(err)),
@@ -2006,7 +2009,7 @@ impl d::Device<B> for Device {
         _cache: Option<&()>,
     ) -> Result<r::ComputePipeline, pso::CreationError> {
         let (cs, cs_destroy) =
-            Self::extract_entry_point(pso::Stage::Compute, &desc.shader, desc.layout)
+            Self::extract_entry_point(pso::Stage::Compute, &desc.shader, desc.layout, &self.features)
                 .map_err(|err| pso::CreationError::Shader(err))?;
 
         let (pipeline, hr) = self.raw.create_compute_pipeline_state(

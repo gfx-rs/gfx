@@ -1,6 +1,6 @@
 #![allow(dead_code)] //TODO: remove
 
-use crate::{ColorSlot, GlContainer, Share};
+use crate::{ColorSlot, GlContainer};
 use glow::HasContext;
 use hal::pso;
 use smallvec::SmallVec;
@@ -163,11 +163,10 @@ pub(crate) fn set_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
     }
 }
 
-pub(crate) fn set_blend_slot(share: &Share, slot: ColorSlot, desc: &pso::ColorBlendDesc) {
+pub(crate) fn set_blend_slot(gl: &GlContainer, slot: ColorSlot, desc: &pso::ColorBlendDesc, features: &hal::Features) {
     use hal::pso::ColorMask as Cm;
 
-    let gl = &share.context;
-    if !share.private_caps.draw_buffers || !share.private_caps.per_draw_buffer_blending {
+    if !features.contains(hal::Features::INDEPENDENT_BLENDING) {
         warn!("independent blending is not supported");
         return;
     }

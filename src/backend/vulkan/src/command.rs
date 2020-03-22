@@ -545,9 +545,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
     {
+        let flip_y = self.device.1.contains(hal::Features::NDC_Y_UP);
         let viewports: SmallVec<[vk::Viewport; 16]> = viewports
             .into_iter()
-            .map(|viewport| conv::map_viewport(viewport.borrow()))
+            .map(|viewport| conv::map_viewport(viewport.borrow(), flip_y))
             .collect();
 
         self.device

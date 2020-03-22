@@ -419,7 +419,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn features(&self) -> hal::Features {
-        hal::Features::ROBUST_BUFFER_ACCESS
+        hal::Features::empty()
+            | hal::Features::ROBUST_BUFFER_ACCESS
             | hal::Features::DRAW_INDIRECT_FIRST_INSTANCE
             | hal::Features::DEPTH_CLAMP
             | hal::Features::SAMPLER_ANISOTROPY
@@ -441,6 +442,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 hal::Features::empty()
             }
             | hal::Features::SHADER_CLIP_DISTANCE
+            | hal::Features::NDC_Y_UP
     }
 
     fn hints(&self) -> hal::Hints {
@@ -1726,7 +1728,7 @@ impl hal::device::Device<Backend> for Device {
         } else {
             let mut options = msl::CompilerOptions::default();
             options.enable_point_size_builtin = false;
-            options.vertex.invert_y = true;
+            options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);
             let info = Self::compile_shader_library(
                 &self.shared.device,
                 raw_data,

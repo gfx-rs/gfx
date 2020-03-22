@@ -195,14 +195,10 @@ pub struct PrivateCaps {
     /// - In OpenGL ES 2 it may be available behind optional extensions
     /// - In WebGL 1 and WebGL 2 it is never available
     pub emulate_map: bool,
-    /// Indicates if we only have support via the EXT.
-    pub sampler_anisotropy_ext: bool,
     /// Whether f64 precision is supported for depth ranges
     pub depth_range_f64_precision: bool,
     /// Whether draw buffers are supported
     pub draw_buffers: bool,
-    /// Whether or not glColorMaski / glBlendEquationi / glBlendFunci are available
-    pub per_draw_buffer_blending: bool,
 }
 
 /// OpenGL implementation information
@@ -400,7 +396,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Hi
         }
     }
 
-    let mut features = Features::empty();
+    let mut features = Features::NDC_Y_UP;
     let mut legacy = LegacyFeatures::empty();
 
     if info.is_supported(&[
@@ -419,6 +415,9 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Hi
     if info.is_supported(&[Core(3, 3)]) {
         // TODO: extension
         features |= Features::SAMPLER_MIP_LOD_BIAS;
+    }
+    if info.is_supported(&[Core(4, 0), Es(3, 2), Ext("GL_EXT_draw_buffers2")]) && !info.is_webgl() {
+        features |= Features::INDEPENDENT_BLENDING;
     }
 
     // TODO
@@ -480,12 +479,6 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Hi
         legacy |= LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING;
     }
 
-    let per_draw_buffer_blending =
-        info.is_supported(&[Core(4, 0), Es(3, 2), Ext("GL_EXT_draw_buffers2")]) && !info.is_webgl();
-    if per_draw_buffer_blending {
-        features |= Features::INDEPENDENT_BLENDING;
-    }
-
     let mut hints = Hints::empty();
     if info.is_supported(&[Core(4, 2)]) {
         // TODO: extension
@@ -508,13 +501,9 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Hi
         frag_data_location: !info.version.is_embedded,
         sync: !info.is_webgl() && info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]), // TODO
         map: !info.version.is_embedded, //TODO: OES extension
-        sampler_anisotropy_ext: !info
-            .is_supported(&[Core(4, 6), Ext("GL_ARB_texture_filter_anisotropic")])
-            && info.is_supported(&[Ext("GL_EXT_texture_filter_anisotropic")]),
         emulate_map,                                          // TODO
         depth_range_f64_precision: !info.version.is_embedded, // TODO
         draw_buffers: info.is_supported(&[Core(2, 0), Es(3, 0)]),
-        per_draw_buffer_blending,
     };
 
     (info, features, legacy, hints, limits, private)

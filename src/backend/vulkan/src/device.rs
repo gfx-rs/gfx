@@ -258,7 +258,8 @@ impl GraphicsPipelineInfoBuf {
             viewport_count: 1, // TODO
             p_viewports: match desc.baked_states.viewport {
                 Some(ref vp) => {
-                    this.viewport = conv::map_viewport(vp);
+                    let flip_y = device.raw.1.contains(hal::Features::NDC_Y_UP);
+                    this.viewport = conv::map_viewport(vp, flip_y);
                     &this.viewport
                 }
                 None => {

@@ -69,6 +69,7 @@ fn create_fbo_internal(
 #[derive(Debug)]
 pub struct Device {
     pub(crate) share: Starc<Share>,
+    features: hal::Features,
 }
 
 impl Drop for Device {
@@ -79,8 +80,8 @@ impl Drop for Device {
 
 impl Device {
     /// Create a new `Device`.
-    pub(crate) fn new(share: Starc<Share>) -> Self {
-        Device { share: share }
+    pub(crate) fn new(share: Starc<Share>, features: hal::Features,) -> Self {
+        Device { share: share, features }
     }
 
     pub fn create_shader_module_from_source(
@@ -220,7 +221,7 @@ impl Device {
                 other => panic!("GLSL version is not recognized: {:?}", other),
             }
         };
-        compile_options.vertex.invert_y = true;
+        compile_options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);
         debug!("SPIR-V options {:?}", compile_options);
 
         ast.set_compiler_options(&compile_options)
@@ -403,8 +404,9 @@ impl Device {
 }
 
 pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamInt>(
-    share: &Starc<Share>,
     info: &i::SamplerDesc,
+    features: &hal::Features,
+    legacy_features: &LegacyFeatures,
     mut set_param_float: SetParamFloat,
     mut set_param_float_vec: SetParamFloatVec,
     mut set_param_int: SetParamInt,
@@ -416,12 +418,8 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
 {
     let (min, mag) = conv::filter_to_gl(info.mag_filter, info.min_filter, info.mip_filter);
     match info.anisotropic {
-        i::Anisotropic::On(fac) if fac > 1 => {
-            if share.private_caps.sampler_anisotropy_ext {
-                set_param_float(glow::TEXTURE_MAX_ANISOTROPY, fac as f32);
-            } else if share.features.contains(hal::Features::SAMPLER_ANISOTROPY) {
-                set_param_float(glow::TEXTURE_MAX_ANISOTROPY, fac as f32);
-            }
+        i::Anisotropic::On(fac) if fac > 1 && features.contains(hal::Features::SAMPLER_ANISOTROPY) => {
+            set_param_float(glow::TEXTURE_MAX_ANISOTROPY, fac as f32);
         }
         _ => (),
     }
@@ -434,13 +432,10 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     set_param_int(glow::TEXTURE_WRAP_T, conv::wrap_to_gl(t) as i32);
     set_param_int(glow::TEXTURE_WRAP_R, conv::wrap_to_gl(r) as i32);
 
-    if share.features.contains(hal::Features::SAMPLER_MIP_LOD_BIAS) {
+    if features.contains(hal::Features::SAMPLER_MIP_LOD_BIAS) {
         set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.0);
     }
-    if share
-        .legacy_features
-        .contains(LegacyFeatures::SAMPLER_BORDER_COLOR)
-    {
+    if legacy_features.contains(LegacyFeatures::SAMPLER_BORDER_COLOR) {
         let mut border: [f32; 4] = info.border.into();
         set_param_float_vec(glow::TEXTURE_BORDER_COLOR, &mut border);
     }
@@ -1083,8 +1078,9 @@ impl d::Device<B> for Device {
 
         let name = gl.create_sampler().unwrap();
         set_sampler_info(
-            &self.share,
             &info,
+            &self.features,
+            &self.share.legacy_features,
             |a, b| gl.sampler_parameter_f32(name, a, b),
             |a, b| gl.sampler_parameter_f32_slice(name, a, b),
             |a, b| gl.sampler_parameter_i32(name, a, b),
