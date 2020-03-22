@@ -281,6 +281,8 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn set_depth_bounds(&mut self, bounds: Range<f32>);
 
     /// Set the line width dynamically.
+    ///
+    /// Only valid to call if `Features::LINE_WIDTH` is enabled.
     unsafe fn set_line_width(&mut self, width: f32);
 
     /// Set the depth bias dynamically.

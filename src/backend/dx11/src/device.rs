@@ -113,23 +113,23 @@ unsafe impl Send for Device {}
 unsafe impl Sync for Device {}
 
 impl Device {
-    pub fn as_raw(&self) -> *mut d3d11::ID3D11Device {
-        self.raw.as_raw()
-    }
-
     pub fn new(
         device: ComPtr<d3d11::ID3D11Device>,
         context: ComPtr<d3d11::ID3D11DeviceContext>,
+        features: hal::Features,
         memory_properties: MemoryProperties,
-        requested_features: hal::Features,
     ) -> Self {
         Device {
             raw: device.clone(),
             context,
-            features: hal::Features::empty(),
+            features,
             memory_properties,
             internal: internal::Internal::new(&device),
         }
+    }
+
+    pub fn as_raw(&self) -> *mut d3d11::ID3D11Device {
+        self.raw.as_raw()
     }
 
     fn create_rasterizer_state(

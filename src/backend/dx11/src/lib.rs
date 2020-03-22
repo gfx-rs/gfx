@@ -589,8 +589,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let device = device::Device::new(
             device,
             cxt,
-            self.memory_properties.clone(),
             requested_features,
+            self.memory_properties.clone(),
         );
 
         // TODO: deferred context => 1 cxt/queue?
