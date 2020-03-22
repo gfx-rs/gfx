@@ -3,8 +3,6 @@
 #[macro_use]
 extern crate log;
 #[macro_use]
-extern crate ash;
-#[macro_use]
 extern crate lazy_static;
 
 #[cfg(target_os = "macos")]
@@ -96,6 +94,8 @@ lazy_static! {
         CStr::from_bytes_with_nul(b"VK_AMD_negative_viewport_height\0").unwrap();
     static ref KHR_MAINTENANCE1: &'static CStr =
         CStr::from_bytes_with_nul(b"VK_KHR_maintenance1\0").unwrap();
+    static ref KHR_SAMPLER_MIRROR_MIRROR_CLAMP_TO_EDGE : &'static CStr =
+        CStr::from_bytes_with_nul(b"KHR_sampler_mirror_clamp_to_edge\0").unwrap();
 }
 
 #[cfg(not(feature = "use-rtld-next"))]
@@ -354,7 +354,7 @@ impl hal::Instance<Backend> for Instance {
             application_version: version,
             p_engine_name: b"gfx-rs\0".as_ptr() as *const _,
             engine_version: 1,
-            api_version: vk_make_version!(1, 0, 0),
+            api_version: vk::make_version(1, 0, 0),
         };
 
         let instance_extensions = entry
@@ -904,6 +904,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             self.supports_extension(*KHR_MAINTENANCE1)
         {
             bits |= Features::NDC_Y_UP;
+        }
+        if self.supports_extension(*KHR_SAMPLER_MIRROR_MIRROR_CLAMP_TO_EDGE) {
+            bits |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
         }
 
         if features.robust_buffer_access != 0 {

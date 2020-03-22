@@ -459,6 +459,10 @@ pub enum WrapMode {
     Clamp,
     /// Use border color.
     Border,
+    /// Mirror once and clamp to edge otherwise.
+    ///
+    /// Only valid if `Features::SAMPLER_MIRROR_CLAMP_EDGE` is enabled.
+    MirrorClamp,
 }
 
 /// A wrapper for the LOD level of an image. Needed so that we can

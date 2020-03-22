@@ -25,7 +25,7 @@ byteorder = "1"
 log = { version = "0.4" }
 lazy_static = "1"
 shared_library = { version = "0.1.9", optional = true }
-ash = "0.29.0"
+ash = "0.30"
 hal = { path = "../../hal", version = "0.4", package = "gfx-hal" }
 smallvec = "1.0"
 raw-window-handle = "0.3"

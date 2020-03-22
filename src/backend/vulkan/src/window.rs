@@ -326,12 +326,18 @@ impl Instance {
 
 impl w::Surface<Backend> for Surface {
     fn supports_queue_family(&self, queue_family: &QueueFamily) -> bool {
-        unsafe {
+        match unsafe {
             self.raw.functor.get_physical_device_surface_support(
                 queue_family.device,
                 queue_family.index,
                 self.raw.handle,
             )
+        } {
+            Ok(ok) => ok,
+            Err(e) => {
+                error!("get_physical_device_surface_support error {:?}", e);
+                false
+            }
         }
     }
 

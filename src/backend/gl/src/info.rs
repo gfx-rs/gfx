@@ -416,6 +416,9 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Hi
         // TODO: extension
         features |= Features::SAMPLER_MIP_LOD_BIAS;
     }
+    if info.is_supported(&[Core(4, 4), Ext("ARB_texture_mirror_clamp_to_edge")]) {
+        features |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
+    }
     if info.is_supported(&[Core(4, 0), Es(3, 2), Ext("GL_EXT_draw_buffers2")]) && !info.is_webgl() {
         features |= Features::INDEPENDENT_BLENDING;
     }

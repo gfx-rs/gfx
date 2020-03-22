@@ -1163,6 +1163,7 @@ pub fn map_wrap_mode(wrap: image::WrapMode) -> MTLSamplerAddressMode {
         image::WrapMode::Mirror => MTLSamplerAddressMode::MirrorRepeat,
         image::WrapMode::Clamp => MTLSamplerAddressMode::ClampToEdge,
         image::WrapMode::Border => MTLSamplerAddressMode::ClampToBorderColor,
+        image::WrapMode::MirrorClamp => MTLSamplerAddressMode::MirrorClampToEdge,
     }
 }
 

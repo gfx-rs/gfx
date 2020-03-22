@@ -794,6 +794,7 @@ pub fn map_wrapping(wrap: WrapMode) -> D3D11_TEXTURE_ADDRESS_MODE {
         WrapMode::Mirror => D3D11_TEXTURE_ADDRESS_MIRROR,
         WrapMode::Clamp => D3D11_TEXTURE_ADDRESS_CLAMP,
         WrapMode::Border => D3D11_TEXTURE_ADDRESS_BORDER,
+        WrapMode::MirrorClamp => D3D11_TEXTURE_ADDRESS_MIRROR_ONCE,
     }
 }
 

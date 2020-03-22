@@ -1913,8 +1913,8 @@ impl d::Device<B> for Device {
     unsafe fn get_fence_status(&self, fence: &n::Fence) -> Result<bool, d::DeviceLost> {
         let result = self.raw.0.get_fence_status(fence.0);
         match result {
-            Ok(()) => Ok(true),
-            Err(vk::Result::NOT_READY) => Ok(false),
+            Ok(ok) => Ok(ok),
+            Err(vk::Result::NOT_READY) => Ok(false), //TODO: shouldn't be needed
             Err(vk::Result::ERROR_DEVICE_LOST) => Err(d::DeviceLost),
             _ => unreachable!(),
         }
