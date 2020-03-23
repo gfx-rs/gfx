@@ -1219,7 +1219,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 };
 
                 AttachmentClear {
-                    subpass_id: render_pass.subpasses
+                    subpass_id: render_pass
+                        .subpasses
                         .iter()
                         .position(|sp| sp.is_using(i))
                         .map(|i| i as pass::SubpassId),

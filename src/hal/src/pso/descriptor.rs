@@ -18,12 +18,7 @@
 
 use std::{borrow::Borrow, fmt, iter};
 
-use crate::{
-    buffer::SubRange,
-    image::Layout,
-    pso::ShaderStageFlags,
-    Backend, PseudoVec,
-};
+use crate::{buffer::SubRange, image::Layout, pso::ShaderStageFlags, Backend, PseudoVec};
 
 ///
 pub type DescriptorSetIndex = u16;
@@ -217,7 +212,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     ///
     /// [`DescriptorSetWrite`]: struct.DescriptorSetWrite.html
     /// [`DescriptorSetCopy`]: struct.DescriptorSetCopy.html
-    unsafe fn allocate<I, E>(&mut self, layouts: I, mut list: E) -> Result<(), AllocationError>
+    unsafe fn allocate<I, E>(&mut self, layouts: I, list: &mut E) -> Result<(), AllocationError>
     where
         I: IntoIterator,
         I::Item: Borrow<B::DescriptorSetLayout>,

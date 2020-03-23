@@ -212,10 +212,7 @@ impl<B: hal::Backend> Scene<B> {
         let mut gpu = unsafe {
             adapter
                 .physical_device
-                .open(
-                    &[(&adapter.queue_families[0], &[1.0])],
-                    featues,
-                )
+                .open(&[(&adapter.queue_families[0], &[1.0])], featues)
                 .unwrap()
         };
         let device = gpu.device;
@@ -1731,13 +1728,7 @@ impl<B: hal::Backend> Scene<B> {
                 self.device.wait_idle().unwrap();
                 let raw_data = slice::from_raw_parts_mut(results.as_mut_ptr() as *mut u8, 4 * 2);
                 self.device
-                    .get_query_pool_results(
-                        pool,
-                        0 .. 2,
-                        raw_data,
-                        4,
-                        query::ResultFlags::empty(),
-                    )
+                    .get_query_pool_results(pool, 0 .. 2, raw_data, 4, query::ResultFlags::empty())
                     .unwrap();
             }
         }
@@ -1757,8 +1748,7 @@ impl<B: hal::Backend> Drop for Scene<B> {
             self.device
                 .destroy_command_pool(self.command_pool.take().unwrap());
             if let Some(pool) = self.query_pool.take() {
-                self.device
-                    .destroy_query_pool(pool);
+                self.device.destroy_query_pool(pool);
             }
         }
     }

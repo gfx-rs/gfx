@@ -821,5 +821,7 @@ pub fn map_filter(
         | (mag & D3D11_FILTER_TYPE_MASK) << D3D11_MAG_FILTER_SHIFT
         | (mip & D3D11_FILTER_TYPE_MASK) << D3D11_MIP_FILTER_SHIFT
         | (reduction & D3D11_FILTER_REDUCTION_TYPE_MASK) << D3D11_FILTER_REDUCTION_TYPE_SHIFT
-        | anisotropy_clamp.map(|_| D3D11_FILTER_ANISOTROPIC).unwrap_or(0)
+        | anisotropy_clamp
+            .map(|_| D3D11_FILTER_ANISOTROPIC)
+            .unwrap_or(0)
 }

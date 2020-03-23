@@ -163,7 +163,12 @@ pub(crate) fn set_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
     }
 }
 
-pub(crate) fn set_blend_slot(gl: &GlContainer, slot: ColorSlot, desc: &pso::ColorBlendDesc, features: &hal::Features) {
+pub(crate) fn set_blend_slot(
+    gl: &GlContainer,
+    slot: ColorSlot,
+    desc: &pso::ColorBlendDesc,
+    features: &hal::Features,
+) {
     use hal::pso::ColorMask as Cm;
 
     if !features.contains(hal::Features::INDEPENDENT_BLENDING) {

@@ -1547,7 +1547,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             //let attachment = render_pass.attachments[attachment_ref];
             let format = attachment.format.unwrap();
 
-            let subpass_id = render_pass.subpasses
+            let subpass_id = render_pass
+                .subpasses
                 .iter()
                 .position(|sp| sp.is_using(idx))
                 .map(|i| i as pass::SubpassId);
@@ -3214,11 +3215,13 @@ impl From<pso::DescriptorType> for DescriptorContent {
                 ty: Idt::Sampled {
                     with_sampler: false,
                 },
-            } |
-            Dt::Image { ty: Idt::Storage { read_only: true } } |
-            Dt::InputAttachment => DescriptorContent::SRV,
+            }
+            | Dt::Image {
+                ty: Idt::Storage { read_only: true },
+            }
+            | Dt::InputAttachment => DescriptorContent::SRV,
             Dt::Image {
-                ty: Idt::Storage { read_only: false }
+                ty: Idt::Storage { read_only: false },
             } => DescriptorContent::SRV | DescriptorContent::UAV,
             Dt::Buffer {
                 ty: Bdt::Uniform,

@@ -186,7 +186,7 @@ bitflags! {
         const VARIABLE_MULTISAMPLE_RATE = 0x0020_0000_0000_0000;
         ///
         const INHERITED_QUERIES = 0x0040_0000_0000_0000;
-        /// Support for 
+        /// Support for
         const SAMPLER_MIRROR_CLAMP_EDGE = 0x0100_0000_0000_0000;
 
         /// Support triangle fan primitive topology.
@@ -432,7 +432,7 @@ impl From<usize> for MemoryTypeId {
 
 struct PseudoVec<T>(Option<T>);
 
-impl<T> std::iter::Extend<T> for &'_ mut PseudoVec<T> {
+impl<T> std::iter::Extend<T> for PseudoVec<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         let mut iter = iter.into_iter();
         self.0 = iter.next();

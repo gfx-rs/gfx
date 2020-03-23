@@ -102,13 +102,11 @@ impl std::fmt::Display for ViewCreationError {
             ViewCreationError::OutOfMemory(err) => {
                 write!(fmt, "Failed to create buffer view: {}", err)
             }
-            ViewCreationError::UnsupportedFormat(Some(format)) => {
-                write!(
-                    fmt,
-                    "Failed to create buffer view: Unsupported format {:?}",
-                    format
-                )
-            }
+            ViewCreationError::UnsupportedFormat(Some(format)) => write!(
+                fmt,
+                "Failed to create buffer view: Unsupported format {:?}",
+                format
+            ),
             ViewCreationError::UnsupportedFormat(None) => {
                 write!(fmt, "Failed to create buffer view: Unspecified format")
             }

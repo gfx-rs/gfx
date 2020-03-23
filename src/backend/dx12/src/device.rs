@@ -442,7 +442,8 @@ impl Device {
                 Self::patch_spirv_resources(&mut ast, Some(layout))?;
 
                 let shader_model = hlsl::ShaderModel::V5_1;
-                let shader_code = Self::translate_spirv(&mut ast, shader_model, layout, stage, features)?;
+                let shader_code =
+                    Self::translate_spirv(&mut ast, shader_model, layout, stage, features)?;
                 debug!("SPIRV-Cross generated shader:\n{}", shader_code);
 
                 let real_name = ast
@@ -560,9 +561,9 @@ impl Device {
             return Err(image::ViewCreationError::Level(info.range.levels.start));
         }
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewCreationError::Layer(image::LayerError::OutOfBounds(
-                info.range.layers,
-            )));
+            return Err(image::ViewCreationError::Layer(
+                image::LayerError::OutOfBounds(info.range.layers),
+            ));
         }
 
         match info.view_kind {
@@ -668,9 +669,9 @@ impl Device {
             return Err(image::ViewCreationError::Level(info.range.levels.start));
         }
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewCreationError::Layer(image::LayerError::OutOfBounds(
-                info.range.layers,
-            )));
+            return Err(image::ViewCreationError::Layer(
+                image::LayerError::OutOfBounds(info.range.layers),
+            ));
         }
 
         match info.view_kind {
@@ -714,7 +715,9 @@ impl Device {
                     ArraySize,
                 }
             }
-            image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => unimplemented!(),
+            image::ViewKind::D3 | image::ViewKind::Cube | image::ViewKind::CubeArray => {
+                unimplemented!()
+            }
         };
 
         unsafe {
@@ -750,9 +753,9 @@ impl Device {
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewCreationError::Layer(image::LayerError::OutOfBounds(
-                info.range.layers.clone(),
-            )));
+            return Err(image::ViewCreationError::Layer(
+                image::LayerError::OutOfBounds(info.range.layers.clone()),
+            ));
         }
         let is_msaa = info.kind.num_samples() > 1;
         let is_cube = info.caps.contains(image::ViewCapabilities::KIND_CUBE);
@@ -893,9 +896,9 @@ impl Device {
         let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
 
         if info.range.layers.end > info.kind.num_layers() {
-            return Err(image::ViewCreationError::Layer(image::LayerError::OutOfBounds(
-                info.range.layers,
-            )));
+            return Err(image::ViewCreationError::Layer(
+                image::LayerError::OutOfBounds(info.range.layers),
+            ));
         }
         if info.kind.num_samples() > 1 {
             error!("MSAA images can't be viewed as UAV");
@@ -1265,16 +1268,28 @@ impl d::Device<B> for Device {
         for dep in &dependencies {
             let dep = dep.borrow();
             match dep.passes {
-                Range { start: None, end: None } => {
+                Range {
+                    start: None,
+                    end: None,
+                } => {
                     error!("Unexpected external-external dependency!");
                 }
-                Range { start: None, end: Some(sid) } => {
+                Range {
+                    start: None,
+                    end: Some(sid),
+                } => {
                     sub_infos[sid as usize].external_dependencies.start |= dep.accesses.start;
                 }
-                Range { start: Some(sid), end: None } => {
+                Range {
+                    start: Some(sid),
+                    end: None,
+                } => {
                     sub_infos[sid as usize].external_dependencies.end |= dep.accesses.end;
                 }
-                Range { start: Some(from_sid), end: Some(sid) } => {
+                Range {
+                    start: Some(from_sid),
+                    end: Some(sid),
+                } => {
                     //Note: self-dependencies are ignored
                     if from_sid != sid {
                         sub_infos[sid as usize].unresolved_dependencies += 1;
@@ -1995,9 +2010,13 @@ impl d::Device<B> for Device {
         desc: &pso::ComputePipelineDesc<'a, B>,
         _cache: Option<&()>,
     ) -> Result<r::ComputePipeline, pso::CreationError> {
-        let (cs, cs_destroy) =
-            Self::extract_entry_point(pso::Stage::Compute, &desc.shader, desc.layout, &self.features)
-                .map_err(|err| pso::CreationError::Shader(err))?;
+        let (cs, cs_destroy) = Self::extract_entry_point(
+            pso::Stage::Compute,
+            &desc.shader,
+            desc.layout,
+            &self.features,
+        )
+        .map_err(|err| pso::CreationError::Shader(err))?;
 
         let (pipeline, hr) = self.raw.create_compute_pipeline_state(
             desc.layout.raw,

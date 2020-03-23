@@ -860,7 +860,9 @@ impl Device {
                 image::WrapMode::Mirror => msl::SamplerAddress::MirroredRepeat,
                 image::WrapMode::Clamp => msl::SamplerAddress::ClampToEdge,
                 image::WrapMode::Border => msl::SamplerAddress::ClampToBorder,
-                image::WrapMode::MirrorClamp => unimplemented!("https://github.com/grovesNL/spirv_cross/issues/138"),
+                image::WrapMode::MirrorClamp => {
+                    unimplemented!("https://github.com/grovesNL/spirv_cross/issues/138")
+                }
             }
         }
 
@@ -2451,7 +2453,9 @@ impl hal::device::Device<Backend> for Device {
         let col_count = cmp::min(texel_count, self.shared.private_caps.max_texture_size);
         let row_count = (texel_count + self.shared.private_caps.max_texture_size - 1)
             / self.shared.private_caps.max_texture_size;
-        let mtl_format = self.shared.private_caps
+        let mtl_format = self
+            .shared
+            .private_caps
             .map_format(format)
             .ok_or(buffer::ViewCreationError::UnsupportedFormat(format_maybe))?;
 

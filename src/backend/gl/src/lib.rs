@@ -404,7 +404,8 @@ impl PhysicalDevice {
     #[allow(unused)]
     fn new_adapter(instance_context: DeviceContext, gl: GlContainer) -> adapter::Adapter<Backend> {
         // query information
-        let (info, supported_features, legacy_features, hints, limits, private_caps) = info::query_all(&gl);
+        let (info, supported_features, legacy_features, hints, limits, private_caps) =
+            info::query_all(&gl);
         info!("Vendor: {:?}", info.platform_name.vendor);
         info!("Renderer: {:?}", info.platform_name.renderer);
         info!("Version: {:?}", info.version);
