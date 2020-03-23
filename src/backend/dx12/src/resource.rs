@@ -141,13 +141,14 @@ pub struct RootDescriptor {
     pub offset: RootSignatureOffset,
 }
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub struct RootElement {
     pub table: RootTable,
     pub descriptors: Vec<RootDescriptor>,
+    pub mutable_bindings: auxil::FastHashSet<pso::DescriptorBinding>,
 }
 
-#[derive(Debug, Hash)]
+#[derive(Debug)]
 pub struct PipelineLayout {
     pub(crate) raw: native::RootSignature,
     // Disjunct, sorted vector of root constant ranges.
