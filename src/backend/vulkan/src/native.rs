@@ -112,7 +112,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
     unsafe fn allocate<I, E>(
         &mut self,
         layout_iter: I,
-        mut list: E,
+        list: &mut E,
     ) -> Result<(), pso::AllocationError>
     where
         I: IntoIterator,

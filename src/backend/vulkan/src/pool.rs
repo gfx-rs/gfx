@@ -30,7 +30,7 @@ impl pool::CommandPool<Backend> for RawCommandPool {
         &mut self,
         num: usize,
         level: command::Level,
-        mut list: E,
+        list: &mut E,
     ) where
         E: Extend<CommandBuffer>,
     {

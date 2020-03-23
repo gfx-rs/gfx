@@ -432,7 +432,7 @@ impl From<usize> for MemoryTypeId {
 
 struct PseudoVec<T>(Option<T>);
 
-impl<T> std::iter::Extend<T> for &'_ mut PseudoVec<T> {
+impl<T> std::iter::Extend<T> for PseudoVec<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         let mut iter = iter.into_iter();
         self.0 = iter.next();
