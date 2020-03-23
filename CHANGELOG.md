@@ -1,5 +1,17 @@
 # Change Log
 
+## hal-0.5.0 (23-03-2020)
+  - API changes:
+    - allocating command buffers or descriptor sets no longer touches the heap
+    - `DescriptorType` is now a rich enum
+    - `RangeArg` trait is removed, instead the offsets are required, and the sizes are optional
+    - Removed `Anisotropic` and `SubpassRef` enums in favor of options
+  - Features:
+    - debug markers
+    - new `WrapMode::MirrorClamp`
+    - Y-flipped NDC space
+    - read-only storage descriptors
+
 ### backend-metal-0.4.3 (22-02-2020)
   - support version 2.2 of the Metal shading language
 
