@@ -298,7 +298,7 @@ impl ImageClearPipes {
             for (i, &format) in key.color_formats.iter().enumerate() {
                 pipeline
                     .color_attachments()
-                    .object_at(i)
+                    .object_at(i as u64)
                     .unwrap()
                     .set_pixel_format(format);
             }
@@ -332,7 +332,7 @@ impl ImageClearPipes {
                 .object_at(i)
                 .expect("too many vertex attributes");
             mtl_attribute_desc.set_buffer_index(0);
-            mtl_attribute_desc.set_offset((i * mem::size_of::<[f32; 4]>()) as _);
+            mtl_attribute_desc.set_offset(i * mem::size_of::<[f32; 4]>() as u64);
             mtl_attribute_desc.set_format(metal::MTLVertexFormat::Float4);
         }
         pipeline.set_vertex_descriptor(Some(&vertex_descriptor));
@@ -428,7 +428,7 @@ impl ImageBlitPipes {
                 .object_at(i)
                 .expect("too many vertex attributes");
             mtl_attribute_desc.set_buffer_index(0);
-            mtl_attribute_desc.set_offset((i * mem::size_of::<[f32; 4]>()) as _);
+            mtl_attribute_desc.set_offset(i * mem::size_of::<[f32; 4]>() as u64);
             mtl_attribute_desc.set_format(metal::MTLVertexFormat::Float4);
         }
         pipeline.set_vertex_descriptor(Some(&vertex_descriptor));

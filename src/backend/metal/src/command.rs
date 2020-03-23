@@ -794,7 +794,7 @@ unsafe impl Send for SharedCommandBuffer {}
 impl EncodePass {
     fn schedule(self, queue: &dispatch::Queue, cmd_buffer_arc: &Arc<Mutex<metal::CommandBuffer>>) {
         let cmd_buffer = SharedCommandBuffer(Arc::clone(cmd_buffer_arc));
-        queue.r#async(move || match self {
+        queue.exec_async(move || match self {
             EncodePass::Render(list, resources, desc, label) => {
                 let encoder = cmd_buffer
                     .0
@@ -2195,7 +2195,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                         cmd_buffer.lock().enqueue();
                         let shared_cb = SharedCommandBuffer(Arc::clone(cmd_buffer));
                         //TODO: make this compatible with events
-                        queue.sync(move || {
+                        queue.exec_sync(move || {
                             shared_cb.0.lock().commit();
                         });
                     }

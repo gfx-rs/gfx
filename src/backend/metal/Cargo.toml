@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-metal"
-version = "0.4.3"
+version = "0.5.0"
 description = "Metal API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -21,21 +21,21 @@ signpost = []
 name = "gfx_backend_metal"
 
 [dependencies]
-auxil = { path = "../../auxil/auxil", version = "0.2", package = "gfx-auxil", features = ["spirv_cross"] }
-hal = { path = "../../hal", version = "0.4", package = "gfx-hal" }
+auxil = { path = "../../auxil/auxil", version = "0.3", package = "gfx-auxil", features = ["spirv_cross"] }
+hal = { path = "../../hal", version = "0.5", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 arrayvec = "0.5"
 bitflags = "1.0"
 copyless = "0.1.4"
 log = { version = "0.4" }
-dispatch = { version = "0.1", optional = true }
-metal = { version = "0.17", features = ["private"] }
+dispatch = { version = "0.2", optional = true }
+metal = { version = "0.18", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
-cocoa = "0.19"
-core-graphics = "0.17"
-smallvec = "1.0"
+cocoa = "0.20"
+core-graphics = "0.19"
+smallvec = "1"
 spirv_cross = { version = "0.18", features = ["msl"] }
 parking_lot = "0.10"
 storage-map = "0.2"

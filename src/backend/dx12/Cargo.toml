@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-dx12"
-version = "0.4.0"
+version = "0.5.0"
 description = "DirectX-12 API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -19,8 +19,8 @@ default = []
 name = "gfx_backend_dx12"
 
 [dependencies]
-auxil = { path = "../../auxil/auxil", version = "0.2", package = "gfx-auxil", features = ["spirv_cross"] }
-hal = { path = "../../hal", version = "0.4", package = "gfx-hal" }
+auxil = { path = "../../auxil/auxil", version = "0.3", package = "gfx-auxil", features = ["spirv_cross"] }
+hal = { path = "../../hal", version = "0.5", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
 native = { package = "d3d12", version = "0.3", features = ["libloading"] }

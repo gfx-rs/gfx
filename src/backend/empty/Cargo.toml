@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-empty"
-version = "0.4.0"
+version = "0.5.0"
 description = "Empty backend for gfx-rs"
 license = "MIT OR Apache-2.0"
 authors = ["The Gfx-rs Developers"]
@@ -12,5 +12,5 @@ edition = "2018"
 name = "gfx_backend_empty"
 
 [dependencies]
-gfx-hal = { path = "../../hal", version = "0.4" }
+gfx-hal = { path = "../../hal", version = "0.5" }
 raw-window-handle = "0.3"
