@@ -26,12 +26,8 @@ impl pool::CommandPool<Backend> for RawCommandPool {
         assert_eq!(Ok(()), self.device.0.reset_command_pool(self.raw, flags));
     }
 
-    unsafe fn allocate<E>(
-        &mut self,
-        num: usize,
-        level: command::Level,
-        list: &mut E,
-    ) where
+    unsafe fn allocate<E>(&mut self, num: usize, level: command::Level, list: &mut E)
+    where
         E: Extend<CommandBuffer>,
     {
         let info = vk::CommandBufferAllocateInfo {
@@ -46,14 +42,14 @@ impl pool::CommandPool<Backend> for RawCommandPool {
 
         list.extend(
             device
-            .0
-            .allocate_command_buffers(&info)
-            .expect("Error on command buffer allocation")
-            .into_iter()
-            .map(|buffer| CommandBuffer {
-                raw: buffer,
-                device: Arc::clone(device),
-            })
+                .0
+                .allocate_command_buffers(&info)
+                .expect("Error on command buffer allocation")
+                .into_iter()
+                .map(|buffer| CommandBuffer {
+                    raw: buffer,
+                    device: Arc::clone(device),
+                }),
         );
     }
 

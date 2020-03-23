@@ -80,8 +80,11 @@ impl Drop for Device {
 
 impl Device {
     /// Create a new `Device`.
-    pub(crate) fn new(share: Starc<Share>, features: hal::Features,) -> Self {
-        Device { share: share, features }
+    pub(crate) fn new(share: Starc<Share>, features: hal::Features) -> Self {
+        Device {
+            share: share,
+            features,
+        }
     }
 
     pub fn create_shader_module_from_source(

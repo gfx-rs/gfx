@@ -335,7 +335,9 @@ const IS_WEBGL: bool = cfg!(target_arch = "wasm32");
 
 /// Load the information pertaining to the driver and the corresponding device
 /// capabilities.
-pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Hints, Limits, PrivateCaps) {
+pub(crate) fn query_all(
+    gl: &GlContainer,
+) -> (Info, Features, LegacyFeatures, Hints, Limits, PrivateCaps) {
     use self::Requirement::*;
     let info = Info::get(gl);
     let max_texture_size = get_usize(gl, glow::MAX_TEXTURE_SIZE).unwrap_or(64) as u32;
@@ -504,7 +506,7 @@ pub(crate) fn query_all(gl: &GlContainer) -> (Info, Features, LegacyFeatures, Hi
         frag_data_location: !info.version.is_embedded,
         sync: !info.is_webgl() && info.is_supported(&[Core(3, 2), Es(3, 0), Ext("GL_ARB_sync")]), // TODO
         map: !info.version.is_embedded, //TODO: OES extension
-        emulate_map,                                          // TODO
+        emulate_map,                    // TODO
         depth_range_f64_precision: !info.version.is_embedded, // TODO
         draw_buffers: info.is_supported(&[Core(2, 0), Es(3, 0)]),
     };

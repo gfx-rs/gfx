@@ -624,7 +624,10 @@ impl d::Device<B> for Device {
                 let sdep = subpass_dep.borrow();
                 // TODO: checks
                 vk::SubpassDependency {
-                    src_subpass: sdep.passes.start.map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
+                    src_subpass: sdep
+                        .passes
+                        .start
+                        .map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
                     dst_subpass: sdep.passes.end.map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
                     src_stage_mask: conv::map_pipeline_stage(sdep.stages.start),
                     dst_stage_mask: conv::map_pipeline_stage(sdep.stages.end),
@@ -1244,8 +1247,8 @@ impl d::Device<B> for Device {
     ) -> Result<n::Sampler, d::AllocationError> {
         use hal::pso::Comparison;
 
-        let (anisotropy_enable, max_anisotropy) = desc.anisotropy_clamp
-            .map_or((vk::FALSE, 1.0), |aniso| {
+        let (anisotropy_enable, max_anisotropy) =
+            desc.anisotropy_clamp.map_or((vk::FALSE, 1.0), |aniso| {
                 if self.raw.1.contains(Features::SAMPLER_ANISOTROPY) {
                     (vk::TRUE, aniso as f32)
                 } else {

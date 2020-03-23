@@ -75,10 +75,16 @@ impl Harness {
                     .map_err(de::Error::from)
                     .and_then(de::from_reader)
                     .expect("failed to open/parse the scene");
-                let features = raw_group.features
+                let features = raw_group
+                    .features
                     .into_iter()
                     .fold(hal::Features::empty(), |u, f| u | f.into_hal());
-                TestGroup { name, scene, tests: raw_group.tests, features }
+                TestGroup {
+                    name,
+                    scene,
+                    tests: raw_group.tests,
+                    features,
+                }
             })
             .collect();
 
@@ -122,12 +128,16 @@ impl Harness {
                     "\tskipped (features missing: {:?})",
                     tg.features - supported_features
                 );
-                continue
+                continue;
             }
 
-            let mut scene =
-                warden::gpu::Scene::<B>::new(adapter, tg.features, &tg.scene, self.base_path.join("data"))
-                    .unwrap();
+            let mut scene = warden::gpu::Scene::<B>::new(
+                adapter,
+                tg.features,
+                &tg.scene,
+                self.base_path.join("data"),
+            )
+            .unwrap();
 
             for (test_name, test) in &tg.tests {
                 print!("\t\tTest '{}' ...", test_name);

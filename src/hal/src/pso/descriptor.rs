@@ -18,12 +18,7 @@
 
 use std::{borrow::Borrow, fmt, iter};
 
-use crate::{
-    buffer::SubRange,
-    image::Layout,
-    pso::ShaderStageFlags,
-    Backend, PseudoVec,
-};
+use crate::{buffer::SubRange, image::Layout, pso::ShaderStageFlags, Backend, PseudoVec};
 
 ///
 pub type DescriptorSetIndex = u16;

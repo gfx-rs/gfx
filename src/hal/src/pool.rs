@@ -35,7 +35,7 @@ pub trait CommandPool<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Allocate new command buffers from the pool.
     unsafe fn allocate<E>(&mut self, num: usize, level: Level, list: &mut E)
     where
-        E: Extend<B::CommandBuffer>
+        E: Extend<B::CommandBuffer>,
     {
         list.extend((0 .. num).map(|_| self.allocate_one(level)));
     }

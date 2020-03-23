@@ -186,7 +186,7 @@ bitflags! {
         const VARIABLE_MULTISAMPLE_RATE = 0x0020_0000_0000_0000;
         ///
         const INHERITED_QUERIES = 0x0040_0000_0000_0000;
-        /// Support for 
+        /// Support for
         const SAMPLER_MIRROR_CLAMP_EDGE = 0x0100_0000_0000_0000;
 
         /// Support triangle fan primitive topology.

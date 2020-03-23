@@ -13,7 +13,17 @@ mod resource;
 mod root_constants;
 mod window;
 
-use hal::{adapter, format as f, image, memory, pso::PipelineStage, queue as q, Features, Hints, Limits};
+use hal::{
+    adapter,
+    format as f,
+    image,
+    memory,
+    pso::PipelineStage,
+    queue as q,
+    Features,
+    Hints,
+    Limits,
+};
 
 use winapi::{
     shared::{dxgi, dxgi1_2, dxgi1_4, dxgi1_6, minwindef::TRUE, winerror},

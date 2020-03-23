@@ -547,7 +547,11 @@ pub fn map_clear_rect(rect: &pso::ClearRect) -> vk::ClearRect {
 pub fn map_viewport(vp: &pso::Viewport, flip_y: bool) -> vk::Viewport {
     vk::Viewport {
         x: vp.rect.x as _,
-        y: if flip_y { vp.rect.y + vp.rect.h } else { vp.rect.y } as _,
+        y: if flip_y {
+            vp.rect.y + vp.rect.h
+        } else {
+            vp.rect.y
+        } as _,
         width: vp.rect.w as _,
         height: if flip_y { -vp.rect.h } else { vp.rect.h } as _,
         min_depth: vp.depth.start,

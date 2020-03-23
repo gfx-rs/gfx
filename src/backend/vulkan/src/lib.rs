@@ -482,9 +482,8 @@ impl hal::Instance<Backend> for Instance {
         devices
             .into_iter()
             .map(|device| {
-                let extensions = unsafe {
-                    self.raw.0.enumerate_device_extension_properties(device)
-                }.unwrap();
+                let extensions =
+                    unsafe { self.raw.0.enumerate_device_extension_properties(device) }.unwrap();
                 let properties = unsafe { self.raw.0.get_physical_device_properties(device) };
                 let info = adapter::AdapterInfo {
                     name: unsafe {
@@ -667,10 +666,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         let enabled_features = conv::map_device_features(requested_features);
-        let enabled_extensions = DEVICE_EXTENSIONS
-            .iter()
-            .cloned()
-            .chain(if requested_features.contains(Features::NDC_Y_UP) {
+        let enabled_extensions = DEVICE_EXTENSIONS.iter().cloned().chain(
+            if requested_features.contains(Features::NDC_Y_UP) {
                 //TODO: try also `VK_AMD_negative_viewport_height`?
                 Some(if self.supports_extension(*AMD_NEGATIVE_VIEWPORT_HEIGHT) {
                     *AMD_NEGATIVE_VIEWPORT_HEIGHT
@@ -679,13 +676,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 })
             } else {
                 None
-            });
+            },
+        );
 
         // Create device
         let device_raw = {
-            let cstrings = enabled_extensions
-                .map(CString::from)
-                .collect::<Vec<_>>();
+            let cstrings = enabled_extensions.map(CString::from).collect::<Vec<_>>();
 
             let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
 
@@ -900,8 +896,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             | Features::SEPARATE_STENCIL_REF_VALUES
             | Features::SAMPLER_MIP_LOD_BIAS;
 
-        if self.supports_extension(*AMD_NEGATIVE_VIEWPORT_HEIGHT) ||
-            self.supports_extension(*KHR_MAINTENANCE1)
+        if self.supports_extension(*AMD_NEGATIVE_VIEWPORT_HEIGHT)
+            || self.supports_extension(*KHR_MAINTENANCE1)
         {
             bits |= Features::NDC_Y_UP;
         }

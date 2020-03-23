@@ -448,7 +448,9 @@ pub fn map_filter(
         | (mag & D3D12_FILTER_TYPE_MASK) << D3D12_MAG_FILTER_SHIFT
         | (mip & D3D12_FILTER_TYPE_MASK) << D3D12_MIP_FILTER_SHIFT
         | (reduction & D3D12_FILTER_REDUCTION_TYPE_MASK) << D3D12_FILTER_REDUCTION_TYPE_SHIFT
-        | anisotropy_clamp.map(|_| D3D12_FILTER_ANISOTROPIC).unwrap_or(0)
+        | anisotropy_clamp
+            .map(|_| D3D12_FILTER_ANISOTROPIC)
+            .unwrap_or(0)
 }
 
 pub fn map_buffer_resource_state(access: buffer::Access) -> D3D12_RESOURCE_STATES {
