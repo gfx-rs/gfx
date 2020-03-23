@@ -279,100 +279,131 @@ impl Device {
 
     fn patch_spirv_resources(
         ast: &mut spirv::Ast<hlsl::Target>,
-        layout: Option<&r::PipelineLayout>,
+        layout: &r::PipelineLayout,
     ) -> Result<(), d::ShaderError> {
         // Move the descriptor sets away to yield for the root constants at "space0".
-        let space_offset = match layout {
-            Some(layout) if !layout.constants.is_empty() => 1,
-            _ => return Ok(()),
-        };
-
+        let space_offset = if layout.constants.is_empty() { 0 } else { 1 };
         let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
-        for image in &shader_resources.separate_images {
-            let set = ast
-                .get_decoration(image.id, spirv::Decoration::DescriptorSet)
-                .map_err(gen_query_error)?;
-            ast.set_decoration(
-                image.id,
-                spirv::Decoration::DescriptorSet,
-                space_offset + set,
-            )
-            .map_err(gen_unexpected_error)?;
+
+        if space_offset != 0 {
+            for image in &shader_resources.separate_images {
+                let set = ast
+                    .get_decoration(image.id, spirv::Decoration::DescriptorSet)
+                    .map_err(gen_query_error)?;
+                ast.set_decoration(
+                    image.id,
+                    spirv::Decoration::DescriptorSet,
+                    space_offset + set,
+                )
+                .map_err(gen_unexpected_error)?;
+            }
         }
 
-        for uniform_buffer in &shader_resources.uniform_buffers {
-            let set = ast
-                .get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet)
-                .map_err(gen_query_error)?;
-            ast.set_decoration(
-                uniform_buffer.id,
-                spirv::Decoration::DescriptorSet,
-                space_offset + set,
-            )
-            .map_err(gen_unexpected_error)?;
+        if space_offset != 0 {
+            for uniform_buffer in &shader_resources.uniform_buffers {
+                let set = ast
+                    .get_decoration(uniform_buffer.id, spirv::Decoration::DescriptorSet)
+                    .map_err(gen_query_error)?;
+                ast.set_decoration(
+                    uniform_buffer.id,
+                    spirv::Decoration::DescriptorSet,
+                    space_offset + set,
+                )
+                .map_err(gen_unexpected_error)?;
+            }
         }
 
         for storage_buffer in &shader_resources.storage_buffers {
             let set = ast
                 .get_decoration(storage_buffer.id, spirv::Decoration::DescriptorSet)
                 .map_err(gen_query_error)?;
-            ast.set_decoration(
-                storage_buffer.id,
-                spirv::Decoration::DescriptorSet,
-                space_offset + set,
-            )
-            .map_err(gen_unexpected_error)?;
+            let binding = ast
+                .get_decoration(storage_buffer.id, spirv::Decoration::Binding)
+                .map_err(gen_query_error)?;
+            if space_offset != 0 {
+                ast.set_decoration(
+                    storage_buffer.id,
+                    spirv::Decoration::DescriptorSet,
+                    space_offset + set,
+                )
+                .map_err(gen_unexpected_error)?;
+            }
+            if !layout.elements[set as usize].mutable_bindings.contains(&binding) {
+                ast.set_decoration(
+                    storage_buffer.id,
+                    spirv::Decoration::NonWritable,
+                    0,
+                )
+                .map_err(gen_unexpected_error)?
+            }
         }
 
         for image in &shader_resources.storage_images {
             let set = ast
                 .get_decoration(image.id, spirv::Decoration::DescriptorSet)
                 .map_err(gen_query_error)?;
-            ast.set_decoration(
-                image.id,
-                spirv::Decoration::DescriptorSet,
-                space_offset + set,
-            )
-            .map_err(gen_unexpected_error)?;
-        }
-
-        for sampler in &shader_resources.separate_samplers {
-            let set = ast
-                .get_decoration(sampler.id, spirv::Decoration::DescriptorSet)
+            let binding = ast
+                .get_decoration(image.id, spirv::Decoration::Binding)
                 .map_err(gen_query_error)?;
-            ast.set_decoration(
-                sampler.id,
-                spirv::Decoration::DescriptorSet,
-                space_offset + set,
-            )
-            .map_err(gen_unexpected_error)?;
+            if space_offset != 0 {
+                ast.set_decoration(
+                    image.id,
+                    spirv::Decoration::DescriptorSet,
+                    space_offset + set,
+                )
+                .map_err(gen_unexpected_error)?;
+            }
+            if !layout.elements[set as usize].mutable_bindings.contains(&binding) {
+                ast.set_decoration(
+                    image.id,
+                    spirv::Decoration::NonWritable,
+                    0,
+                )
+                .map_err(gen_unexpected_error)?
+            }
         }
 
-        for image in &shader_resources.sampled_images {
-            let set = ast
-                .get_decoration(image.id, spirv::Decoration::DescriptorSet)
-                .map_err(gen_query_error)?;
-            ast.set_decoration(
-                image.id,
-                spirv::Decoration::DescriptorSet,
-                space_offset + set,
-            )
-            .map_err(gen_unexpected_error)?;
+        if space_offset != 0 {
+            for sampler in &shader_resources.separate_samplers {
+                let set = ast
+                    .get_decoration(sampler.id, spirv::Decoration::DescriptorSet)
+                    .map_err(gen_query_error)?;
+                ast.set_decoration(
+                    sampler.id,
+                    spirv::Decoration::DescriptorSet,
+                    space_offset + set,
+                )
+                .map_err(gen_unexpected_error)?;
+            }
         }
 
-        for input in &shader_resources.subpass_inputs {
-            let set = ast
-                .get_decoration(input.id, spirv::Decoration::DescriptorSet)
-                .map_err(gen_query_error)?;
-            ast.set_decoration(
-                input.id,
-                spirv::Decoration::DescriptorSet,
-                space_offset + set,
-            )
-            .map_err(gen_unexpected_error)?;
+        if space_offset != 0 {
+            for image in &shader_resources.sampled_images {
+                let set = ast
+                    .get_decoration(image.id, spirv::Decoration::DescriptorSet)
+                    .map_err(gen_query_error)?;
+                ast.set_decoration(
+                    image.id,
+                    spirv::Decoration::DescriptorSet,
+                    space_offset + set,
+                )
+                .map_err(gen_unexpected_error)?;
+            }
         }
 
-        // TODO: other resources
+        if space_offset != 0 {
+            for input in &shader_resources.subpass_inputs {
+                let set = ast
+                    .get_decoration(input.id, spirv::Decoration::DescriptorSet)
+                    .map_err(gen_query_error)?;
+                ast.set_decoration(
+                    input.id,
+                    spirv::Decoration::DescriptorSet,
+                    space_offset + set,
+                )
+                .map_err(gen_unexpected_error)?;
+            }
+        }
 
         Ok(())
     }
@@ -439,7 +470,7 @@ impl Device {
             r::ShaderModule::Spirv(ref raw_data) => {
                 let mut ast = Self::parse_spirv(raw_data)?;
                 spirv_cross_specialize_ast(&mut ast, &source.specialization)?;
-                Self::patch_spirv_resources(&mut ast, Some(layout))?;
+                Self::patch_spirv_resources(&mut ast, layout)?;
 
                 let shader_model = hlsl::ShaderModel::V5_1;
                 let shader_code = Self::translate_spirv(&mut ast, shader_model, layout, stage, features)?;
@@ -1581,6 +1612,7 @@ impl d::Device<B> for Device {
                 };
 
                 let mut descriptors = Vec::new();
+                let mut mutable_bindings = auxil::FastHashSet::default();
                 let mut range_base = ranges.len();
                 for bind in set.bindings.iter() {
                     let content = r::DescriptorContent::from(bind.ty);
@@ -1613,6 +1645,7 @@ impl d::Device<B> for Device {
                         }
                         if content.contains(r::DescriptorContent::UAV) {
                             ranges.push(describe(bind, native::DescriptorRangeType::UAV));
+                            mutable_bindings.insert(bind.binding);
                         }
                     }
                 }
@@ -1647,6 +1680,7 @@ impl d::Device<B> for Device {
                         offset: root_table_offset as _,
                     },
                     descriptors,
+                    mutable_bindings,
                 }
             })
             .collect();
