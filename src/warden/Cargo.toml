@@ -29,7 +29,7 @@ gl-ci = ["gfx-backend-gl"] # "glsl-to-spirv"
 #TODO: keep Warden backend-agnostic?
 
 [dependencies]
-hal = { path = "../hal", version = "0.4", package = "gfx-hal", features = ["serde"] }
+hal = { path = "../hal", version = "0.5", package = "gfx-hal", features = ["serde"] }
 log = "0.4"
 ron = "0.5"
 serde = { version = "1", features = ["serde_derive"] }
@@ -38,29 +38,29 @@ glsl-to-spirv = { version = "0.1", optional = true }
 
 [dependencies.gfx-backend-vulkan]
 path = "../../src/backend/vulkan"
-version = "0.4"
+version = "0.5"
 features = ["x11"]
 optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx12]
 path = "../../src/backend/dx12"
-version = "0.4"
+version = "0.5"
 optional = true
 
 [target.'cfg(windows)'.dependencies.gfx-backend-dx11]
 path = "../../src/backend/dx11"
-version = "0.4"
+version = "0.5"
 optional = true
 
 [target.'cfg(any(target_os = "macos", all(target_os = "ios", target_arch = "aarch64")))'.dependencies.gfx-backend-metal]
 path = "../../src/backend/metal"
-version = "0.4"
+version = "0.5"
 features = ["auto-capture"]
 optional = true
 
 [dependencies.gfx-backend-gl]
 path = "../../src/backend/gl"
-version = "0.4"
+version = "0.5"
 features = ["glutin"]
 optional = true
 

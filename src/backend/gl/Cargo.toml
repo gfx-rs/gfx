@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-gl"
-version = "0.4.0"
+version = "0.5.0"
 description = "OpenGL backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -24,10 +24,10 @@ wgl = []
 arrayvec = "0.5"
 bitflags = "1"
 log = { version = "0.4" }
-gfx-hal = { path = "../../hal", version = "0.4" }
-auxil = { path = "../../auxil/auxil", version = "0.2", package = "gfx-auxil", features = ["spirv_cross"] }
+gfx-hal = { path = "../../hal", version = "0.5" }
+auxil = { path = "../../auxil/auxil", version = "0.3", package = "gfx-auxil", features = ["spirv_cross"] }
 smallvec = "1.0"
-glow = "0.3.0-alpha3"
+glow = "0.4"
 parking_lot = "0.10"
 spirv_cross = { version = "0.18", features = ["glsl"] }
 lazy_static = "1"
