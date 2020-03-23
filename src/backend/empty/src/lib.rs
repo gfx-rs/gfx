@@ -331,7 +331,7 @@ impl device::Device<Backend> for Device {
         _: format::Format,
         _: format::Swizzle,
         _: image::SubresourceRange,
-    ) -> Result<(), image::ViewError> {
+    ) -> Result<(), image::ViewCreationError> {
         panic!(DO_NOT_USE_MESSAGE)
     }
 

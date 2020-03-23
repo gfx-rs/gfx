@@ -533,11 +533,6 @@ impl d::Device<B> for Device {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
     {
-        let map_subpass_ref = |pass: pass::SubpassRef| match pass {
-            pass::SubpassRef::External => vk::SUBPASS_EXTERNAL,
-            pass::SubpassRef::Pass(id) => id as u32,
-        };
-
         let attachments = attachments
             .into_iter()
             .map(|attachment| {
@@ -629,8 +624,8 @@ impl d::Device<B> for Device {
                 let sdep = subpass_dep.borrow();
                 // TODO: checks
                 vk::SubpassDependency {
-                    src_subpass: map_subpass_ref(sdep.passes.start),
-                    dst_subpass: map_subpass_ref(sdep.passes.end),
+                    src_subpass: sdep.passes.start.map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
+                    dst_subpass: sdep.passes.end.map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
                     src_stage_mask: conv::map_pipeline_stage(sdep.stages.start),
                     dst_stage_mask: conv::map_pipeline_stage(sdep.stages.end),
                     src_access_mask: conv::map_image_access(sdep.accesses.start),
@@ -1249,9 +1244,8 @@ impl d::Device<B> for Device {
     ) -> Result<n::Sampler, d::AllocationError> {
         use hal::pso::Comparison;
 
-        let (anisotropy_enable, max_anisotropy) = match desc.anisotropic {
-            image::Anisotropic::Off => (vk::FALSE, 1.0),
-            image::Anisotropic::On(aniso) => {
+        let (anisotropy_enable, max_anisotropy) = desc.anisotropy_clamp
+            .map_or((vk::FALSE, 1.0), |aniso| {
                 if self.raw.1.contains(Features::SAMPLER_ANISOTROPY) {
                     (vk::TRUE, aniso as f32)
                 } else {
@@ -1261,8 +1255,7 @@ impl d::Device<B> for Device {
                     );
                     (vk::FALSE, 1.0)
                 }
-            }
-        };
+            });
         let info = vk::SamplerCreateInfo {
             s_type: vk::StructureType::SAMPLER_CREATE_INFO,
             p_next: ptr::null(),
@@ -1490,7 +1483,7 @@ impl d::Device<B> for Device {
         format: format::Format,
         swizzle: format::Swizzle,
         range: image::SubresourceRange,
-    ) -> Result<n::ImageView, image::ViewError> {
+    ) -> Result<n::ImageView, image::ViewCreationError> {
         let is_cube = image
             .flags
             .intersects(vk::ImageCreateFlags::CUBE_COMPATIBLE);
@@ -1501,7 +1494,7 @@ impl d::Device<B> for Device {
             image: image.raw,
             view_type: match conv::map_view_kind(kind, image.ty, is_cube) {
                 Some(ty) => ty,
-                None => return Err(image::ViewError::BadKind(kind)),
+                None => return Err(image::ViewCreationError::BadKind(kind)),
             },
             format: conv::map_format(format),
             components: conv::map_swizzle(swizzle),

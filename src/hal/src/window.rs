@@ -62,6 +62,12 @@ use std::fmt;
 use std::iter;
 use std::ops::RangeInclusive;
 
+
+/// Default image usage for the swapchain.
+pub const DEFAULT_USAGE: image::Usage = image::Usage::COLOR_ATTACHMENT;
+/// Default image count for the swapchain.
+pub const DEFAULT_IMAGE_COUNT: SwapImageIndex = 3;
+
 /// Error occurred during swapchain creation.
 #[derive(Clone, Debug, PartialEq)]
 pub enum CreationError {
@@ -389,13 +395,15 @@ impl SwapchainConfig {
             extent: Extent2D { width, height },
             image_count,
             image_layers: 1,
-            image_usage: image::Usage::COLOR_ATTACHMENT,
+            image_usage: DEFAULT_USAGE,
         }
     }
 
     /// Create a swapchain configuration based on the capabilities
     /// returned from a physical device query. If the surface does not
     /// specify a current size, default_extent is clamped and used instead.
+    ///
+    /// The default values are taken from `DEFAULT_USAGE` and `DEFAULT_IMAGE_COUNT`.
     pub fn from_caps(caps: &SurfaceCapabilities, format: Format, default_extent: Extent2D) -> Self {
         let composite_alpha_mode = if caps
             .composite_alpha_modes
@@ -410,7 +418,9 @@ impl SwapchainConfig {
         } else {
             panic!("neither INHERIT or OPAQUE CompositeAlphaMode(s) are supported")
         };
-        let present_mode = if caps.present_modes.contains(PresentMode::FIFO) {
+        let present_mode = if caps.present_modes.contains(PresentMode::MAILBOX) {
+            PresentMode::MAILBOX
+        } else if caps.present_modes.contains(PresentMode::FIFO) {
             PresentMode::FIFO
         } else {
             panic!("FIFO PresentMode is not supported")
@@ -421,33 +431,35 @@ impl SwapchainConfig {
             composite_alpha_mode,
             format,
             extent: caps.clamped_extent(default_extent),
-            image_count: *caps.image_count.start(),
+            image_count: DEFAULT_IMAGE_COUNT
+                .max(*caps.image_count.start())
+                .min(*caps.image_count.end()),
             image_layers: 1,
-            image_usage: image::Usage::COLOR_ATTACHMENT,
+            image_usage: DEFAULT_USAGE,
         }
     }
 
     /// Specify the presentation mode.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
     pub fn with_present_mode(mut self, mode: PresentMode) -> Self {
         self.present_mode = mode;
         self
     }
 
+    /// Specify the presentation mode.
+    pub fn with_composite_alpha_mode(mut self, mode: CompositeAlphaMode) -> Self {
+        self.composite_alpha_mode = mode;
+        self
+    }
+
     /// Specify the usage of backbuffer images.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
     pub fn with_image_usage(mut self, usage: image::Usage) -> Self {
         self.image_usage = usage;
+        self
+    }
+
+    /// Specify the count of backbuffer image.
+    pub fn with_image_count(mut self, count: SwapImageIndex) -> Self {
+        self.image_count = count;
         self
     }
 

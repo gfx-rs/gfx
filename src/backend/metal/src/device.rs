@@ -799,7 +799,7 @@ impl Device {
             image::Filter::Linear => MTLSamplerMipFilter::Linear,
         });
 
-        if let image::Anisotropic::On(aniso) = info.anisotropic {
+        if let Some(aniso) = info.anisotropy_clamp {
             descriptor.set_max_anisotropy(aniso as _);
         }
 
@@ -902,10 +902,7 @@ impl Device {
             },
             lod_clamp_min: lods.start.into(),
             lod_clamp_max: lods.end.into(),
-            max_anisotropy: match info.anisotropic {
-                image::Anisotropic::On(aniso) => aniso as i32,
-                image::Anisotropic::Off => 0,
-            },
+            max_anisotropy: info.anisotropy_clamp.map_or(0, |aniso| aniso as i32),
             planes: 0,
             resolution: msl::FormatResolution::_444,
             chroma_filter: msl::SamplerFilter::Nearest,
@@ -1378,7 +1375,7 @@ impl hal::device::Device<Backend> for Device {
         let pipeline_layout = &pipeline_desc.layout;
         let (rp_attachments, subpass) = {
             let pass::Subpass { main_pass, index } = pipeline_desc.subpass;
-            (&main_pass.attachments, &main_pass.subpasses[index])
+            (&main_pass.attachments, &main_pass.subpasses[index as usize])
         };
 
         let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {
@@ -2440,17 +2437,13 @@ impl hal::device::Device<Backend> for Device {
         let format = match format_maybe {
             Some(fmt) => fmt,
             None => {
-                return Err(buffer::ViewCreationError::UnsupportedFormat {
-                    format: format_maybe,
-                });
+                return Err(buffer::ViewCreationError::UnsupportedFormat(format_maybe));
             }
         };
         let format_desc = format.surface_desc();
         if format_desc.aspects != format::Aspects::COLOR || format_desc.is_compressed() {
             // Vadlidator says "Linear texture: cannot create compressed, depth, or stencil textures"
-            return Err(buffer::ViewCreationError::UnsupportedFormat {
-                format: format_maybe,
-            });
+            return Err(buffer::ViewCreationError::UnsupportedFormat(format_maybe));
         }
 
         //Note: we rely on SPIRV-Cross to use the proper 2D texel indexing here
@@ -2458,11 +2451,9 @@ impl hal::device::Device<Backend> for Device {
         let col_count = cmp::min(texel_count, self.shared.private_caps.max_texture_size);
         let row_count = (texel_count + self.shared.private_caps.max_texture_size - 1)
             / self.shared.private_caps.max_texture_size;
-        let mtl_format = self.shared.private_caps.map_format(format).ok_or(
-            buffer::ViewCreationError::UnsupportedFormat {
-                format: format_maybe,
-            },
-        )?;
+        let mtl_format = self.shared.private_caps
+            .map_format(format)
+            .ok_or(buffer::ViewCreationError::UnsupportedFormat(format_maybe))?;
 
         let descriptor = metal::TextureDescriptor::new();
         descriptor.set_texture_type(MTLTextureType::D2);
@@ -2748,7 +2739,7 @@ impl hal::device::Device<Backend> for Device {
         format: format::Format,
         swizzle: format::Swizzle,
         range: image::SubresourceRange,
-    ) -> Result<n::ImageView, image::ViewError> {
+    ) -> Result<n::ImageView, image::ViewCreationError> {
         let mtl_format = match self
             .shared
             .private_caps
@@ -2757,7 +2748,7 @@ impl hal::device::Device<Backend> for Device {
             Some(f) => f,
             None => {
                 error!("failed to swizzle format {:?} with {:?}", format, swizzle);
-                return Err(image::ViewError::BadFormat(format));
+                return Err(image::ViewCreationError::BadFormat(format));
             }
         };
         let raw = image.like.as_texture();

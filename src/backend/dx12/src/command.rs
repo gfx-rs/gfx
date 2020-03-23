@@ -340,7 +340,7 @@ pub struct CommandBuffer {
 
     // Cache renderpasses for graphics operations
     pass_cache: Option<RenderPassCache>,
-    cur_subpass: usize,
+    cur_subpass: pass::SubpassId,
 
     // Cache current graphics root signature and pipeline to minimize rebinding and support two
     // bindpoints.
@@ -509,7 +509,7 @@ impl CommandBuffer {
 
     fn insert_subpass_barriers(&self, insertion: BarrierPoint) {
         let state = self.pass_cache.as_ref().unwrap();
-        let proto_barriers = match state.render_pass.subpasses.get(self.cur_subpass) {
+        let proto_barriers = match state.render_pass.subpasses.get(self.cur_subpass as usize) {
             Some(subpass) => match insertion {
                 BarrierPoint::Pre => &subpass.pre_barriers,
                 BarrierPoint::Post => &subpass.post_barriers,
@@ -551,7 +551,7 @@ impl CommandBuffer {
 
     fn bind_targets(&mut self) {
         let state = self.pass_cache.as_ref().unwrap();
-        let subpass = &state.render_pass.subpasses[self.cur_subpass];
+        let subpass = &state.render_pass.subpasses[self.cur_subpass as usize];
 
         // collect render targets
         let color_views = subpass
@@ -605,7 +605,7 @@ impl CommandBuffer {
     fn resolve_attachments(&self) {
         let state = self.pass_cache.as_ref().unwrap();
         let framebuffer = &state.framebuffer;
-        let subpass = &state.render_pass.subpasses[self.cur_subpass];
+        let subpass = &state.render_pass.subpasses[self.cur_subpass as usize];
 
         for (&(src_attachment, _), &(dst_attachment, _)) in subpass
             .color_attachments
@@ -1219,7 +1219,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 };
 
                 AttachmentClear {
-                    subpass_id: render_pass.subpasses.iter().position(|sp| sp.is_using(i)),
+                    subpass_id: render_pass.subpasses
+                        .iter()
+                        .position(|sp| sp.is_using(i))
+                        .map(|i| i as pass::SubpassId),
                     value: if attachment.ops.load == pass::AttachmentLoadOp::Clear {
                         assert!(cv.is_some());
                         cv
@@ -1459,7 +1462,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             Some(ref cache) => cache,
             None => panic!("`clear_attachments` can only be called inside a renderpass"),
         };
-        let sub_pass = &pass_cache.render_pass.subpasses[self.cur_subpass];
+        let sub_pass = &pass_cache.render_pass.subpasses[self.cur_subpass as usize];
 
         let clear_rects: SmallVec<[pso::ClearRect; 4]> = rects
             .into_iter()

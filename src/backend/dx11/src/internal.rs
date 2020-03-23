@@ -1189,7 +1189,7 @@ impl Internal {
             context.PSSetConstantBuffers(0, 1, [self.internal_buffer.as_raw()].as_ptr());
         }
 
-        let subpass = &cache.render_pass.subpasses[cache.current_subpass];
+        let subpass = &cache.render_pass.subpasses[cache.current_subpass as usize];
 
         for clear in clears {
             let clear = clear.borrow();

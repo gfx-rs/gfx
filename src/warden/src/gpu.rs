@@ -625,10 +625,12 @@ impl<B: hal::Backend> Scene<B> {
                     };
                     let subpass_ref = |s: &String| {
                         if s.is_empty() {
-                            hal::pass::SubpassRef::External
+                            None
                         } else {
-                            let id = subpasses.keys().position(|sp| s == sp).unwrap();
-                            hal::pass::SubpassRef::Pass(id)
+                            subpasses
+                                .keys()
+                                .position(|sp| s == sp)
+                                .map(|id| id as hal::pass::SubpassId)
                         }
                     };
 

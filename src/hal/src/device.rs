@@ -669,7 +669,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         format: format::Format,
         swizzle: format::Swizzle,
         range: image::SubresourceRange,
-    ) -> Result<B::ImageView, image::ViewError>;
+    ) -> Result<B::ImageView, image::ViewCreationError>;
 
     /// Destroy an image view object
     unsafe fn destroy_image_view(&self, view: B::ImageView);

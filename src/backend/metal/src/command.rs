@@ -2558,7 +2558,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.state.target_extent = framebuffer.extent;
         }
         if let Some(sp) = info.subpass {
-            let subpass = &sp.main_pass.subpasses[sp.index];
+            let subpass = &sp.main_pass.subpasses[sp.index as usize];
             self.state.target_formats.copy_from(&subpass.target_formats);
 
             self.state.target_aspects = Aspects::empty();
