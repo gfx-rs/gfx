@@ -3300,7 +3300,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_index_buffer(&mut self, view: buffer::IndexBufferView<Backend>) {
         let (raw, range) = view.buffer.as_bound();
-        assert!(range.start + view.range.offset + view.range.size.unwrap_or(0) < range.end); // conservative
+        assert!(range.start + view.range.offset + view.range.size.unwrap_or(0) <= range.end); // conservative
         self.state.index_buffer = Some(IndexBuffer {
             buffer: AsNative::from(raw),
             offset: (range.start + view.range.offset) as _,
