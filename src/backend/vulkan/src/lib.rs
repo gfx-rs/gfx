@@ -95,7 +95,7 @@ lazy_static! {
     static ref KHR_MAINTENANCE1: &'static CStr =
         CStr::from_bytes_with_nul(b"VK_KHR_maintenance1\0").unwrap();
     static ref KHR_SAMPLER_MIRROR_MIRROR_CLAMP_TO_EDGE : &'static CStr =
-        CStr::from_bytes_with_nul(b"KHR_sampler_mirror_clamp_to_edge\0").unwrap();
+        CStr::from_bytes_with_nul(b"VK_KHR_sampler_mirror_clamp_to_edge\0").unwrap();
 }
 
 #[cfg(not(feature = "use-rtld-next"))]
@@ -668,7 +668,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let enabled_features = conv::map_device_features(requested_features);
         let enabled_extensions = DEVICE_EXTENSIONS.iter().cloned().chain(
             if requested_features.contains(Features::NDC_Y_UP) {
-                //TODO: try also `VK_AMD_negative_viewport_height`?
                 Some(if self.supports_extension(*AMD_NEGATIVE_VIEWPORT_HEIGHT) {
                     *AMD_NEGATIVE_VIEWPORT_HEIGHT
                 } else {
