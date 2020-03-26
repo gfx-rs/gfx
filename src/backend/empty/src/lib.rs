@@ -932,7 +932,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 #[derive(Debug)]
 pub struct DescriptorPool;
 impl pso::DescriptorPool<Backend> for DescriptorPool {
-    unsafe fn free_sets<I>(&mut self, _descriptor_sets: I)
+    unsafe fn free<I>(&mut self, _descriptor_sets: I)
     where
         I: IntoIterator<Item = ()>,
     {
