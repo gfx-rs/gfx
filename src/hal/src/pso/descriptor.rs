@@ -226,7 +226,7 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     }
 
     /// Free the given descriptor sets provided as an iterator.
-    unsafe fn free_sets<I>(&mut self, descriptor_sets: I)
+    unsafe fn free<I>(&mut self, descriptor_sets: I)
     where
         I: IntoIterator<Item = B::DescriptorSet>;
 
