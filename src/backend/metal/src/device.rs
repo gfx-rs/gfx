@@ -1276,7 +1276,7 @@ impl hal::device::Device<Backend> for Device {
             MTLLanguageVersion::V2_2 => msl::Version::V2_2,
         };
         shader_compiler_options.enable_point_size_builtin = false;
-        shader_compiler_options.vertex.invert_y = true;
+        shader_compiler_options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);
         shader_compiler_options.resource_binding_overrides = res_overrides;
         shader_compiler_options.const_samplers = const_samplers;
         shader_compiler_options.enable_argument_buffers = self.shared.private_caps.argument_buffers;

@@ -1,5 +1,13 @@
 # Change Log
 
+### backend-metal-0.5.1 (26-02-2020)
+  - fix debug assertion for the index buffer range
+  - fix `NDC_Y_FLIP` feature
+
+### backend-vulkan-0.5.1 (26-02-2020)
+  - fix debug color markers
+  - fix detection of the `MirrorClamp` mode
+
 ## hal-0.5.0 (23-03-2020)
   - API changes:
     - allocating command buffers or descriptor sets no longer touches the heap
