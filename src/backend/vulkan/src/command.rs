@@ -33,7 +33,7 @@ pub struct CommandBuffer {
 fn debug_color(color: u32) -> [f32; 4] {
     let mut result = [0.0; 4];
     for (i, c) in result.iter_mut().enumerate() {
-        *c = ((color >> (24 + i * 8)) & 0xFF) as f32 / 255.0;
+        *c = ((color >> (24 - i * 8)) & 0xFF) as f32 / 255.0;
     }
     result
 }
