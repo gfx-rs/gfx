@@ -1,3 +1,10 @@
+#![warn(
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    unused_import_braces,
+    unused_qualifications
+)]
 #![deny(missing_debug_implementations, missing_docs, unused)]
 
 //! Low-level graphics abstraction for Rust. Mostly operates on data, not types.
@@ -432,7 +439,7 @@ impl From<usize> for MemoryTypeId {
 
 struct PseudoVec<T>(Option<T>);
 
-impl<T> std::iter::Extend<T> for PseudoVec<T> {
+impl<T> Extend<T> for PseudoVec<T> {
     fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
         let mut iter = iter.into_iter();
         self.0 = iter.next();

@@ -1,6 +1,16 @@
-use std::fmt::Debug;
-use std::iter::Sum;
-use std::ops::{Add, AddAssign, Range, Sub};
+#![warn(
+    trivial_casts,
+    trivial_numeric_casts,
+    unused_extern_crates,
+    unused_import_braces,
+    unused_qualifications
+)]
+
+use std::{
+    fmt::Debug,
+    iter::Sum,
+    ops::{Add, AddAssign, Range, Sub},
+};
 
 #[derive(Debug)]
 pub struct RangeAllocator<T> {
