@@ -172,7 +172,7 @@ impl<'a, B: Backend> Clone for Subpass<'a, B> {
 
 impl<'a, B: Backend> PartialEq for Subpass<'a, B> {
     fn eq(&self, other: &Self) -> bool {
-        self.index == other.index && self.main_pass as *const _ == other.main_pass as *const _
+        self.index == other.index && std::ptr::eq(self.main_pass, other.main_pass)
     }
 }
 
