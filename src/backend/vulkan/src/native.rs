@@ -1,6 +1,6 @@
 use crate::{window::FramebufferCachePtr, Backend, RawDevice};
 use ash::{version::DeviceV1_0, vk};
-use hal::{image::SubresourceRange, pso};
+use hal::{device::OutOfMemory, image::SubresourceRange, pso};
 use std::{borrow::Borrow, sync::Arc};
 
 #[derive(Debug, Hash)]
@@ -147,9 +147,12 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
                 )
             })
             .map_err(|err| match err {
-                vk::Result::ERROR_OUT_OF_HOST_MEMORY => pso::AllocationError::Host,
-                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => pso::AllocationError::Device,
-                vk::Result::ERROR_OUT_OF_POOL_MEMORY => pso::AllocationError::OutOfPoolMemory,
+                vk::Result::ERROR_OUT_OF_HOST_MEMORY =>
+                    pso::AllocationError::OutOfMemory(OutOfMemory::Host),
+                vk::Result::ERROR_OUT_OF_DEVICE_MEMORY =>
+                    pso::AllocationError::OutOfMemory(OutOfMemory::Device),
+                vk::Result::ERROR_OUT_OF_POOL_MEMORY =>
+                    pso::AllocationError::OutOfPoolMemory,
                 _ => pso::AllocationError::FragmentedPool,
             })
     }
