@@ -237,6 +237,8 @@ pub enum MapError {
     OutOfBounds,
     /// Failed to allocate an appropriately sized contiguous virtual address range
     MappingFailed,
+    /// Memory is not CPU visible
+    Access,
 }
 
 impl From<OutOfMemory> for MapError {
@@ -250,7 +252,11 @@ impl std::fmt::Display for MapError {
         match self {
             MapError::OutOfMemory(err) => write!(fmt, "Failed to map memory: {}", err),
             MapError::OutOfBounds => write!(fmt, "Failed to map memory: Requested range is outside the resource"),
-            MapError::MappingFailed => write!(fmt, "Failed to map memory: Unable to allocate an appropriately sized contiguous virtual address range"),
+            MapError::MappingFailed => write!(
+                fmt,
+                "Failed to map memory: Unable to allocate an appropriately sized contiguous virtual address range"
+            ),
+            MapError::Access => write!(fmt, "Failed to map memory: Memory is not CPU visible"),
         }
     }
 }
