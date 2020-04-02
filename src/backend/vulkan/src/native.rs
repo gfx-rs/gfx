@@ -137,7 +137,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         };
 
         self.device
-            .0
+            .raw
             .allocate_descriptor_sets(&info)
             .map(|sets| {
                 list.extend(
@@ -162,7 +162,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         self.set_free_vec
             .extend(descriptor_sets.into_iter().map(|d| d.raw));
         self.device
-            .0
+            .raw
             .free_descriptor_sets(self.raw, &self.set_free_vec);
     }
 
@@ -170,7 +170,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         assert_eq!(
             Ok(()),
             self.device
-                .0
+                .raw
                 .reset_descriptor_pool(self.raw, vk::DescriptorPoolResetFlags::empty())
         );
     }
