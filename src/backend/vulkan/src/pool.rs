@@ -23,7 +23,7 @@ impl pool::CommandPool<Backend> for RawCommandPool {
             vk::CommandPoolResetFlags::empty()
         };
 
-        assert_eq!(Ok(()), self.device.0.reset_command_pool(self.raw, flags));
+        assert_eq!(Ok(()), self.device.raw.reset_command_pool(self.raw, flags));
     }
 
     unsafe fn allocate<E>(&mut self, num: usize, level: command::Level, list: &mut E)
@@ -42,7 +42,7 @@ impl pool::CommandPool<Backend> for RawCommandPool {
 
         list.extend(
             device
-                .0
+                .raw
                 .allocate_command_buffers(&info)
                 .expect("Error on command buffer allocation")
                 .into_iter()
@@ -59,6 +59,6 @@ impl pool::CommandPool<Backend> for RawCommandPool {
     {
         let buffers: SmallVec<[vk::CommandBuffer; 16]> =
             cbufs.into_iter().map(|buffer| buffer.raw).collect();
-        self.device.0.free_command_buffers(self.raw, &buffers);
+        self.device.raw.free_command_buffers(self.raw, &buffers);
     }
 }
