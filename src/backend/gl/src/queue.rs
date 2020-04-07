@@ -528,28 +528,18 @@ impl CommandQueue {
                     .clear_buffer_i32_slice(glow::COLOR, draw_buffer, &mut cv);
             },
             com::Command::ClearBufferDepthStencil(depth, stencil) => unsafe {
+                let gl = &self.share.context;
                 match (depth, stencil) {
                     (Some(depth), Some(stencil)) => {
-                        self.share.context.clear_buffer_depth_stencil(
-                            glow::DEPTH_STENCIL,
-                            0,
-                            depth,
-                            stencil as _,
-                        );
+                        gl.clear_buffer_depth_stencil(glow::DEPTH_STENCIL, 0, depth, stencil as _);
                     }
                     (Some(depth), None) => {
                         let mut depths = [depth];
-                        self.share
-                            .context
-                            .clear_buffer_f32_slice(glow::DEPTH, 0, &mut depths);
+                        gl.clear_buffer_f32_slice(glow::DEPTH, 0, &mut depths);
                     }
                     (None, Some(stencil)) => {
                         let mut stencils = [stencil as i32];
-                        self.share.context.clear_buffer_i32_slice(
-                            glow::STENCIL,
-                            0,
-                            &mut stencils[..],
-                        );
+                        gl.clear_buffer_i32_slice(glow::STENCIL, 0, &mut stencils[..]);
                     }
                     _ => unreachable!(),
                 };
@@ -1002,16 +992,16 @@ impl CommandQueue {
                     }
                 }
             }
-            com::Command::BindDepth { depth } => {
+            com::Command::BindDepth(depth_fun) => {
                 use hal::pso::Comparison::*;
 
                 let gl = &self.share.context;
 
-                match depth {
-                    Some(depth) => unsafe {
+                match depth_fun {
+                    Some(depth_fun) => unsafe {
                         gl.enable(glow::DEPTH_TEST);
 
-                        let cmp = match depth.fun {
+                        let cmp = match depth_fun {
                             Never => glow::NEVER,
                             Less => glow::LESS,
                             LessEqual => glow::LEQUAL,
@@ -1023,65 +1013,97 @@ impl CommandQueue {
                         };
 
                         gl.depth_func(cmp);
-                        gl.depth_mask(depth.write as _);
                     },
                     None => unsafe {
                         gl.disable(glow::DEPTH_TEST);
                     },
                 }
-            } /*
-              com::Command::SetRasterizer(rast) => {
-                  state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
-              },
-              com::Command::SetDepthState(depth) => {
-                  state::bind_depth(&self.share.context, &depth);
-              },
-              com::Command::SetStencilState(stencil, refs, cull) => {
-                  state::bind_stencil(&self.share.context, &stencil, refs, cull);
-              },
-              com::Command::SetBlendState(slot, color) => {
-                  if self.share.capabilities.separate_blending_slots {
-                      state::bind_blend_slot(&self.share.context, slot, color);
-                  }else if slot == 0 {
-                      //self.temp.color = color; //TODO
-                      state::bind_blend(&self.share.context, color);
-                  }else if false {
-                      error!("Separate blending slots are not supported");
-                  }
-              },
-              com::Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
-                  let gl = &self.share.context;
+            }
+            com::Command::SetColorMask(slot, mask) => unsafe {
+                use hal::pso::ColorMask as Cm;
+                if let Some(slot) = slot {
+                    self.share.context.color_mask_draw_buffer(
+                        slot,
+                        mask.contains(Cm::RED) as _,
+                        mask.contains(Cm::GREEN) as _,
+                        mask.contains(Cm::BLUE) as _,
+                        mask.contains(Cm::ALPHA) as _,
+                    );
+                } else {
+                    self.share.context.color_mask(
+                        mask.contains(Cm::RED) as _,
+                        mask.contains(Cm::GREEN) as _,
+                        mask.contains(Cm::BLUE) as _,
+                        mask.contains(Cm::ALPHA) as _,
+                    );
+                }
+            },
+            com::Command::SetDepthMask(write) => unsafe {
+                self.share.context.depth_mask(write);
+            },
+            com::Command::SetStencilMask(value) => unsafe {
+                self.share.context.stencil_mask(value);
+            },
+            com::Command::SetStencilMaskSeparate(values) => unsafe {
+                self.share
+                    .context
+                    .stencil_mask_separate(glow::FRONT, values.front);
+                self.share
+                    .context
+                    .stencil_mask_separate(glow::BACK, values.back);
+            }, /*
+               com::Command::SetRasterizer(rast) => {
+                   state::bind_rasterizer(&self.share.context, &rast, self.share.info.version.is_embedded);
+               },
+               com::Command::SetDepthState(depth) => {
+                   state::bind_depth(&self.share.context, &depth);
+               },
+               com::Command::SetStencilState(stencil, refs, cull) => {
+                   state::bind_stencil(&self.share.context, &stencil, refs, cull);
+               },
+               com::Command::SetBlendState(slot, color) => {
+                   if self.share.capabilities.separate_blending_slots {
+                       state::bind_blend_slot(&self.share.context, slot, color);
+                   }else if slot == 0 {
+                       //self.temp.color = color; //TODO
+                       state::bind_blend(&self.share.context, color);
+                   }else if false {
+                       error!("Separate blending slots are not supported");
+                   }
+               },
+               com::Command::CopyBuffer(src, dst, src_offset, dst_offset, size) => {
+                   let gl = &self.share.context;
 
-                  if self.share.capabilities.copy_buffer {
-                      unsafe {
-                          gl.BindBuffer(gl::COPY_READ_BUFFER, src);
-                          gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
-                          gl.CopyBufferSubData(gl::COPY_READ_BUFFER,
-                                              gl::COPY_WRITE_BUFFER,
-                                              src_offset,
-                                              dst_offset,
-                                              size);
-                      }
-                  } else {
-                      debug_assert!(self.share.private_caps.buffer_storage == false);
+                   if self.share.capabilities.copy_buffer {
+                       unsafe {
+                           gl.BindBuffer(gl::COPY_READ_BUFFER, src);
+                           gl.BindBuffer(gl::COPY_WRITE_BUFFER, dst);
+                           gl.CopyBufferSubData(gl::COPY_READ_BUFFER,
+                                               gl::COPY_WRITE_BUFFER,
+                                               src_offset,
+                                               dst_offset,
+                                               size);
+                       }
+                   } else {
+                       debug_assert!(self.share.private_caps.buffer_storage == false);
 
-                      unsafe {
-                          let mut src_ptr = 0 as *mut ::std::os::raw::c_void;
-                          device::temporary_ensure_mapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, memory::READ, gl);
-                          src_ptr.offset(src_offset);
+                       unsafe {
+                           let mut src_ptr = 0 as *mut ::std::os::raw::c_void;
+                           device::temporary_ensure_mapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, memory::READ, gl);
+                           src_ptr.offset(src_offset);
 
-                          let mut dst_ptr = 0 as *mut ::std::os::raw::c_void;
-                          device::temporary_ensure_mapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, memory::WRITE, gl);
-                          dst_ptr.offset(dst_offset);
+                           let mut dst_ptr = 0 as *mut ::std::os::raw::c_void;
+                           device::temporary_ensure_mapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, memory::WRITE, gl);
+                           dst_ptr.offset(dst_offset);
 
-                          ::std::ptr::copy(src_ptr, dst_ptr, size as usize);
+                           ::std::ptr::copy(src_ptr, dst_ptr, size as usize);
 
-                          device::temporary_ensure_unmapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, gl);
-                          device::temporary_ensure_unmapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, gl);
-                      }
-                  }
-              },
-              */
+                           device::temporary_ensure_unmapped(&mut src_ptr, gl::COPY_READ_BUFFER, src, gl);
+                           device::temporary_ensure_unmapped(&mut dst_ptr, gl::COPY_WRITE_BUFFER, dst, gl);
+                       }
+                   }
+               },
+               */
         }
         if let Err(err) = self.share.check() {
             panic!("Error {:?} executing command: {:?}", err, cmd)
@@ -1104,7 +1126,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         use crate::pool::BufferMemory;
         {
             for buf in submit_info.command_buffers {
-                let cb = buf.borrow();
+                let cb = &buf.borrow().data;
                 let memory = cb
                     .memory
                     .try_lock()

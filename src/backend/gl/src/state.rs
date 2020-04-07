@@ -87,7 +87,7 @@ pub(crate) fn bind_stencil(gl: &GlContainer, stencil: &Option<pso::StencilTest>,
                 );
                 if let pso::State::Static(values) = stencil.write_masks {
                     unsafe {
-                        gl.stencil_mask_separate(glow::FRONT, values.back);
+                        gl.stencil_mask_separate(glow::BACK, values.back);
                     }
                 }
             }
@@ -137,10 +137,8 @@ fn map_blend_op(operation: pso::BlendOp) -> (u32, u32, u32) {
     }
 }
 
-pub(crate) fn set_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
-    use hal::pso::ColorMask as Cm;
-
-    match desc.blend {
+pub(crate) fn set_blend(gl: &GlContainer, blend: &Option<pso::BlendState>) {
+    match blend {
         Some(ref blend) => unsafe {
             let (color_eq, color_src, color_dst) = map_blend_op(blend.color);
             let (alpha_eq, alpha_src, alpha_dst) = map_blend_op(blend.alpha);
@@ -152,31 +150,20 @@ pub(crate) fn set_blend(gl: &GlContainer, desc: &pso::ColorBlendDesc) {
             gl.disable(glow::BLEND);
         },
     };
-
-    unsafe {
-        gl.color_mask(
-            desc.mask.contains(Cm::RED) as _,
-            desc.mask.contains(Cm::GREEN) as _,
-            desc.mask.contains(Cm::BLUE) as _,
-            desc.mask.contains(Cm::ALPHA) as _,
-        );
-    }
 }
 
 pub(crate) fn set_blend_slot(
     gl: &GlContainer,
     slot: ColorSlot,
-    desc: &pso::ColorBlendDesc,
+    blend: &Option<pso::BlendState>,
     features: &hal::Features,
 ) {
-    use hal::pso::ColorMask as Cm;
-
     if !features.contains(hal::Features::INDEPENDENT_BLENDING) {
         warn!("independent blending is not supported");
         return;
     }
 
-    match desc.blend {
+    match blend {
         Some(ref blend) => unsafe {
             let (color_eq, color_src, color_dst) = map_blend_op(blend.color);
             let (alpha_eq, alpha_src, alpha_dst) = map_blend_op(blend.alpha);
@@ -190,16 +177,6 @@ pub(crate) fn set_blend_slot(
             gl.disable_draw_buffer(glow::BLEND, slot as _);
         },
     };
-
-    unsafe {
-        gl.color_mask_draw_buffer(
-            slot as _,
-            desc.mask.contains(Cm::RED) as _,
-            desc.mask.contains(Cm::GREEN) as _,
-            desc.mask.contains(Cm::BLUE) as _,
-            desc.mask.contains(Cm::ALPHA) as _,
-        );
-    }
 }
 
 pub(crate) fn unlock_color_mask(gl: &GlContainer) {
