@@ -419,31 +419,35 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn features(&self) -> hal::Features {
-        hal::Features::empty()
-            | hal::Features::ROBUST_BUFFER_ACCESS
-            | hal::Features::DRAW_INDIRECT_FIRST_INSTANCE
-            | hal::Features::DEPTH_CLAMP
-            | hal::Features::SAMPLER_ANISOTROPY
-            | hal::Features::FORMAT_BC
-            | hal::Features::PRECISE_OCCLUSION_QUERY
-            | hal::Features::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING
-            | hal::Features::VERTEX_STORES_AND_ATOMICS
-            | hal::Features::FRAGMENT_STORES_AND_ATOMICS
+        use hal::Features as F;
+        F::empty()
+            | F::ROBUST_BUFFER_ACCESS
+            | F::FULL_DRAW_INDEX_U32
+            | F::INDEPENDENT_BLENDING
             | if self.shared.private_caps.dual_source_blending {
-                hal::Features::DUAL_SRC_BLENDING
+                F::DUAL_SRC_BLENDING
             } else {
-                hal::Features::empty()
+                F::empty()
             }
-            | hal::Features::INSTANCE_RATE
-            | hal::Features::SEPARATE_STENCIL_REF_VALUES
+            | F::DRAW_INDIRECT_FIRST_INSTANCE
+            | F::DEPTH_CLAMP
+            //| F::DEPTH_BOUNDS
+            | F::SAMPLER_ANISOTROPY
+            | F::FORMAT_BC
+            | F::PRECISE_OCCLUSION_QUERY
+            | F::SHADER_STORAGE_BUFFER_ARRAY_DYNAMIC_INDEXING
+            | F::VERTEX_STORES_AND_ATOMICS
+            | F::FRAGMENT_STORES_AND_ATOMICS
+            | F::INSTANCE_RATE
+            | F::SEPARATE_STENCIL_REF_VALUES
             | if self.shared.private_caps.expose_line_mode {
-                hal::Features::NON_FILL_POLYGON_MODE
+                F::NON_FILL_POLYGON_MODE
             } else {
-                hal::Features::empty()
+                F::empty()
             }
-            | hal::Features::SHADER_CLIP_DISTANCE
-            //| hal::Features::SAMPLER_MIRROR_CLAMP_EDGE
-            | hal::Features::NDC_Y_UP
+            | F::SHADER_CLIP_DISTANCE
+            //| F::SAMPLER_MIRROR_CLAMP_EDGE
+            | F::NDC_Y_UP
     }
 
     fn hints(&self) -> hal::Hints {
@@ -474,7 +478,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 * SHADER_STAGE_COUNT,
             max_descriptor_set_storage_buffers: pc.max_buffers_per_stage as usize
                 * SHADER_STAGE_COUNT,
-            max_descriptor_set_sampled_images: pc.max_textures_per_stage as usize
+            max_descriptor_set_sampled_images: pc.max_textures_per_stage.min(pc.max_samplers_per_stage) as usize
                 * SHADER_STAGE_COUNT,
             max_descriptor_set_storage_images: pc.max_textures_per_stage as usize
                 * SHADER_STAGE_COUNT,
@@ -487,7 +491,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             max_per_stage_descriptor_samplers: pc.max_samplers_per_stage as usize,
             max_per_stage_descriptor_uniform_buffers: pc.max_buffers_per_stage as usize,
             max_per_stage_descriptor_storage_buffers: pc.max_buffers_per_stage as usize,
-            max_per_stage_descriptor_sampled_images: pc.max_textures_per_stage as usize,
+            max_per_stage_descriptor_sampled_images: pc.max_textures_per_stage.min(pc.max_samplers_per_stage) as usize,
             max_per_stage_descriptor_storage_images: pc.max_textures_per_stage as usize,
             max_per_stage_descriptor_input_attachments: pc.max_textures_per_stage as usize, //TODO
             max_per_stage_resources: 0x100,                                                 //TODO
