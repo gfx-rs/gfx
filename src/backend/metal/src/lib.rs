@@ -122,7 +122,7 @@ impl Default for OnlineRecording {
 
 const MAX_ACTIVE_COMMAND_BUFFERS: usize = 1 << 14;
 const MAX_VISIBILITY_QUERIES: usize = 1 << 14;
-const MAX_COLOR_ATTACHMENTS: usize = 4;
+const MAX_COLOR_ATTACHMENTS: usize = 8;
 const MAX_BOUND_DESCRIPTOR_SETS: usize = 8;
 
 #[derive(Debug, Clone, Copy)]
@@ -713,6 +713,7 @@ struct PrivateCapabilities {
     max_texture_3d_size: u64,
     max_texture_layers: u64,
     max_fragment_input_components: u64,
+    max_color_render_targets: u8,
     sample_count_mask: u8,
     supports_debug_markers: bool,
 }
@@ -970,6 +971,23 @@ impl PrivateCapabilities {
             max_texture_3d_size: 2048,
             max_texture_layers: 2048,
             max_fragment_input_components: if os_is_mac { 128 } else { 60 },
+            max_color_render_targets: if Self::supports_any(
+                &device,
+                &[
+                    MTLFeatureSet::iOS_GPUFamily2_v1,
+                    MTLFeatureSet::iOS_GPUFamily3_v1,
+                    MTLFeatureSet::iOS_GPUFamily4_v1,
+                    MTLFeatureSet::iOS_GPUFamily5_v1,
+                    MTLFeatureSet::tvOS_GPUFamily1_v1,
+                    MTLFeatureSet::tvOS_GPUFamily2_v1,
+                    MTLFeatureSet::macOS_GPUFamily1_v1,
+                    MTLFeatureSet::macOS_GPUFamily2_v1,
+                ],
+            ) {
+                8
+            } else {
+                4
+            },
             sample_count_mask,
             supports_debug_markers: Self::supports_any(
                 &device,
