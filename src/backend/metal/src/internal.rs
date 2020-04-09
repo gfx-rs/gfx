@@ -1,4 +1,4 @@
-use crate::{conversions as conv, PrivateCapabilities};
+use crate::{conversions as conv, PrivateCapabilities, MAX_COLOR_ATTACHMENTS};
 
 use auxil::FastHashMap;
 use hal::{
@@ -257,7 +257,7 @@ impl DepthStencilStates {
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct ClearKey {
     pub framebuffer_aspects: Aspects,
-    pub color_formats: [metal::MTLPixelFormat; 1],
+    pub color_formats: [metal::MTLPixelFormat; MAX_COLOR_ATTACHMENTS],
     pub depth_stencil_format: metal::MTLPixelFormat,
     pub target_index: Option<(u8, Channel)>,
 }
