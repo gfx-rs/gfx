@@ -714,6 +714,7 @@ struct PrivateCapabilities {
     max_texture_layers: u64,
     max_fragment_input_components: u64,
     max_color_render_targets: u8,
+    max_total_threadgroup_memory: u32,
     sample_count_mask: u8,
     supports_debug_markers: bool,
 }
@@ -987,6 +988,26 @@ impl PrivateCapabilities {
                 8
             } else {
                 4
+            },
+            max_total_threadgroup_memory: if Self::supports_any(
+                &device,
+                &[
+                    MTLFeatureSet::iOS_GPUFamily4_v2,
+                    MTLFeatureSet::iOS_GPUFamily5_v1,
+                ]
+            ) {
+                64 << 10
+            } else if Self::supports_any(
+                &device,
+                &[
+                    MTLFeatureSet::iOS_GPUFamily4_v1,
+                    MTLFeatureSet::macOS_GPUFamily1_v2,
+                    MTLFeatureSet::macOS_GPUFamily2_v1,
+                ]
+            ) {
+                32 << 10
+            } else {
+                16 << 10
             },
             sample_count_mask,
             supports_debug_markers: Self::supports_any(

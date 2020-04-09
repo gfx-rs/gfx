@@ -524,6 +524,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 let size = device.max_threads_per_threadgroup();
                 [size.width as u32, size.height as u32, size.depth as u32]
             },
+            max_compute_shared_memory_size: pc.max_total_threadgroup_memory as usize,
 
             max_vertex_input_attributes: 31,
             max_vertex_input_bindings: 31,
