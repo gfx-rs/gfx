@@ -293,7 +293,7 @@ unsafe extern "system" fn debug_utils_messenger_callback(
             message
         );
 
-        for (info_label, info) in additional_info.into_iter() {
+        for (info_label, info) in additional_info.iter() {
             match info {
                 Some(data) => {
                     msg = format!("{}\n{}: {}", msg, info_label, data);

@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-metal-0.4.4, backend-vulkan-0.4.3 (09-04-2020)
+  - updated "core-foundation" and "cocoa" dependencies
+
 ### backend-metal-0.4.3 (22-02-2020)
   - support version 2.2 of the Metal shading language
 

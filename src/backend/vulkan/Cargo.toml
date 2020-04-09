@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-vulkan"
-version = "0.4.2"
+version = "0.4.3"
 description = "Vulkan API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -32,9 +32,10 @@ raw-window-handle = "0.3"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.5"
-core-graphics = "0.17"
+core-graphics = "0.19"
 
 [target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
 x11 = { version = "2.15", features = ["xlib"], optional = true }
