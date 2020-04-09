@@ -4487,6 +4487,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 let com = self.state.set_visibility_query(mode, offset);
                 self.inner.borrow_mut().sink().pre_render().issue(com);
             }
+            native::QueryPool::Timestamp => {}
         }
     }
 
@@ -4504,6 +4505,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     .set_visibility_query(metal::MTLVisibilityResultMode::Disabled, 0);
                 inner.sink().pre_render().issue(com);
             }
+            native::QueryPool::Timestamp => {}
         }
     }
 
@@ -4539,6 +4541,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 let commands = iter::once(command_data).chain(iter::once(command_meta));
                 inner.sink().blit_commands(commands);
             }
+            native::QueryPool::Timestamp => {}
         }
     }
 
@@ -4639,6 +4642,16 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     });
                     self.inner.borrow_mut().sink().blit_commands(commands);
                 }
+            }
+            native::QueryPool::Timestamp => {
+                let start = range.start + offset + queries.start as buffer::Offset * stride;
+                let end = range.start + offset + (queries.end - 1) as buffer::Offset * stride + 4;
+                let command = soft::BlitCommand::FillBuffer {
+                    dst: AsNative::from(raw),
+                    range: start .. end,
+                    value: 0,
+                };
+                self.inner.borrow_mut().sink().blit_commands(iter::once(command));
             }
         }
     }

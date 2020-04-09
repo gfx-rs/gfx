@@ -2933,8 +2933,11 @@ impl hal::device::Device<Backend> for Device {
                     })?;
                 Ok(n::QueryPool::Occlusion(range))
             }
-            _ => {
-                error!("Only occlusion queries are currently supported");
+            query::Type::Timestamp => {
+                warn!("Timestamp queries are not really useful yet");
+                Ok(n::QueryPool::Timestamp)
+            }
+            query::Type::PipelineStatistics(..) => {
                 Err(query::CreationError::Unsupported(ty))
             }
         }
@@ -2945,6 +2948,7 @@ impl hal::device::Device<Backend> for Device {
             n::QueryPool::Occlusion(range) => {
                 self.shared.visibility.allocator.lock().free_range(range);
             }
+            n::QueryPool::Timestamp => {}
         }
     }
 
@@ -3007,6 +3011,12 @@ impl hal::device::Device<Backend> for Device {
                 }
 
                 is_ready
+            }
+            n::QueryPool::Timestamp => {
+                for d in data.iter_mut() {
+                    *d = 0;
+                }
+                true
             }
         };
 
