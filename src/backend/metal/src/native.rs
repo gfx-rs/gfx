@@ -985,6 +985,7 @@ impl ArgumentArray {
 #[derive(Debug)]
 pub enum QueryPool {
     Occlusion(Range<u32>),
+    Timestamp,
 }
 
 #[derive(Debug)]
