@@ -2495,8 +2495,8 @@ impl hal::device::Device<Backend> for Device {
         view_caps: image::ViewCapabilities,
     ) -> Result<n::Image, image::CreationError> {
         debug!(
-            "create_image {:?} with {} mips of {:?} {:?} and usage {:?}",
-            kind, mip_levels, format, tiling, usage
+            "create_image {:?} with {} mips of {:?} {:?} and usage {:?} with {:?}",
+            kind, mip_levels, format, tiling, usage, view_caps
         );
 
         let is_cube = view_caps.contains(image::ViewCapabilities::KIND_CUBE);
@@ -2542,7 +2542,10 @@ impl hal::device::Device<Backend> for Device {
                 return Err(image::CreationError::Kind);
             }
             image::Kind::D3(..) => {
-                assert!(!is_cube && !view_caps.contains(image::ViewCapabilities::KIND_2D_ARRAY));
+                assert!(!is_cube);
+                if view_caps.contains(image::ViewCapabilities::KIND_2D_ARRAY) {
+                    warn!("Unable to support 2D array views of 3D textures");
+                }
                 (MTLTextureType::D3, None)
             }
         };

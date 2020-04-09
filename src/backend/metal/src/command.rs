@@ -15,6 +15,7 @@ use crate::{
     Shared,
     TexturePtr,
     MAX_BOUND_DESCRIPTOR_SETS,
+    MAX_COLOR_ATTACHMENTS,
 };
 
 use hal::{
@@ -2878,7 +2879,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         //  issue a PSO+color switch and a draw for each requested clear
         let mut key = ClearKey {
             framebuffer_aspects: self.state.target_aspects,
-            color_formats: [metal::MTLPixelFormat::Invalid; 1],
+            color_formats: [metal::MTLPixelFormat::Invalid; MAX_COLOR_ATTACHMENTS],
             depth_stencil_format: self
                 .state
                 .target_formats
