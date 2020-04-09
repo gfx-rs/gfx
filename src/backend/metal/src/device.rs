@@ -460,6 +460,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn limits(&self) -> hal::Limits {
         let pc = &self.shared.private_caps;
+        let device = self.shared.device.lock();
         hal::Limits {
             max_image_1d_size: pc.max_texture_size as _,
             max_image_2d_size: pc.max_texture_size as _,
@@ -476,8 +477,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             max_descriptor_set_samplers: pc.max_samplers_per_stage as usize * SHADER_STAGE_COUNT,
             max_descriptor_set_uniform_buffers: pc.max_buffers_per_stage as usize
                 * SHADER_STAGE_COUNT,
+            max_descriptor_set_uniform_buffers_dynamic: 8 * SHADER_STAGE_COUNT,
             max_descriptor_set_storage_buffers: pc.max_buffers_per_stage as usize
                 * SHADER_STAGE_COUNT,
+            max_descriptor_set_storage_buffers_dynamic: 4 * SHADER_STAGE_COUNT,
             max_descriptor_set_sampled_images: pc.max_textures_per_stage.min(pc.max_samplers_per_stage) as usize
                 * SHADER_STAGE_COUNT,
             max_descriptor_set_storage_images: pc.max_textures_per_stage as usize
@@ -508,6 +511,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 height: pc.max_texture_size as _,
                 depth: pc.max_texture_layers as _,
             },
+            min_memory_map_alignment: 4,
 
             optimal_buffer_copy_offset_alignment: pc.buffer_alignment,
             optimal_buffer_copy_pitch_alignment: 4,
@@ -515,8 +519,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             min_uniform_buffer_offset_alignment: pc.buffer_alignment,
             min_storage_buffer_offset_alignment: pc.buffer_alignment,
 
-            max_compute_work_group_count: [16; 3], // TODO
-            max_compute_work_group_size: [64; 3],  // TODO
+            max_compute_work_group_count: [!0; 3], // really undefined
+            max_compute_work_group_size: {
+                let size = device.max_threads_per_threadgroup();
+                [size.width as u32, size.height as u32, size.depth as u32]
+            },
+            max_compute_shared_memory_size: pc.max_total_threadgroup_memory as usize,
 
             max_vertex_input_attributes: 31,
             max_vertex_input_bindings: 31,
@@ -527,7 +535,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             framebuffer_color_sample_counts: 0b101,   // TODO
             framebuffer_depth_sample_counts: 0b101,   // TODO
             framebuffer_stencil_sample_counts: 0b101, // TODO
-            max_color_attachments: MAX_COLOR_ATTACHMENTS,
+            max_color_attachments: pc.max_color_render_targets as usize,
 
             buffer_image_granularity: 1,
             // Note: we issue Metal buffer-to-buffer copies on memory flush/invalidate,
