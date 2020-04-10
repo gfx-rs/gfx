@@ -2,9 +2,9 @@
 
 ## macOS Dependencies
 
-Install the newest XCode from the App Store. This installs the required `metal` developer tools.   
+Install the newest XCode from the App Store. This installs the required `metal` developer tools.
 
-To run the examples, ensure [CMake is installed](https://cmake.org/install/) as it is required for `glsl-to-spirv`.   
+To run the examples, ensure [CMake is installed](https://cmake.org/install/) as it is required for `glsl-to-spirv`.
 
 ## Vulkan Dependencies
 
@@ -20,6 +20,12 @@ sudo apt install -y libx11-dev libvulkan-dev libxcb1-dev xorg-dev
 For Linux, a Vulkan compatible driver must also be installed. For example, the open source `mesa-vulkan-drivers` for Intel or Radeon gpu's. The proprietary Nvidia drivers support Vulkan out of the box but, as of time of writing, Nouveau users are currenty limited to OpenGL.
 
 ## Usage
+
+As mentioned befored, gfx is a low-level library, not necessarily intended for beginners.
+You might want to get a grasp on the fundamental graphics concepts by using [wgpu-rs](https://github.com/gfx-rs/wgpu-rs).
+
+Some good tutorials for learning how to use gfx  are [mistodon/gfx-hal-tutorials](https://github.com/mistodon/gfx-hal-tutorials)
+and [rust-tutorials/learn-gfx-hal](https://github.com/rust-tutorials/learn-gfx-hal).
 
 The gfx repository contains a number of examples. Those examples are automatically downloaded when the repository is cloned.
 
