@@ -90,7 +90,6 @@ impl Harness {
         Harness { base_path, suite }
     }
 
-    #[cfg_attr(any(feature = "gl", feature = "gl-ci"), allow(dead_code))]
     fn run<B: hal::Backend>(&self, name: &str, disabilities: Disabilities) {
         println!("Benching {}:", name);
         let instance = B::Instance::create("warden", 1).unwrap();

@@ -64,14 +64,14 @@ doc:
 	cargo doc --all $(EXCLUDES)
 
 reftests:
-	cd src/warden && cargo run --bin reftest --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- local #TODO: gl
+	cd src/warden && cargo run --bin reftest --features "$(FEATURES_GL) $(FEATURES_HAL) $(FEATURES_HAL2)" -- local
 
 benches:
-	cd src/warden && cargo run --release --bin bench --features "$(FEATURES_HAL) $(FEATURES_HAL2)" -- blit
+	cd src/warden && cargo run --release --bin bench --features "$(FEATURES_GL) $(FEATURES_HAL) $(FEATURES_HAL2)" -- blit
 
 reftests-ci:
 	cd src/warden && cargo test
-	cd src/warden && cargo run --features "gl-ci" -- ci
+	cd src/warden && cargo run --features "gl" -- ci
 
 quad:
 	cd examples && cargo run --bin quad --features ${FEATURES_HAL}

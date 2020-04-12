@@ -59,11 +59,9 @@ impl Instance {
     fn get_default_context_attributes() -> sm::ContextAttributes {
         sm::ContextAttributes {
             version: sm::GLVersion::new(3, 3), // TODO: Figure out how to determine GL version
-            // TODO: Determine flags to provide. At least ALPH I think, but probably all of them.
-            // skipping COMPATIBILITY_PROFILE for now, because it panics with a TODO.
-            flags: sm::ContextAttributeFlags::ALPHA
-                | sm::ContextAttributeFlags::DEPTH
-                | sm::ContextAttributeFlags::STENCIL,
+            // TODO: Skipping COMPATIBILITY_PROFILE for now, because it panics with a TODO, but
+            // that is probably something we want to provide later.
+            flags: sm::ContextAttributeFlags::ALPHA,
         }
     }
 
@@ -186,10 +184,7 @@ impl hal::Instance<B> for Instance {
         Ok(self.create_surface_from_rwh(has_handle.raw_window_handle()))
     }
 
-    unsafe fn destroy_surface(&self, surface: Surface) {
-        // Surface implments Drop and will clean up the surface when it gets dropped
-        drop(surface);
-    }
+    unsafe fn destroy_surface(&self, _surface: Surface) {}
 }
 
 #[derive(Debug)]
