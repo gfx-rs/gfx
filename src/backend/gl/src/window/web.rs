@@ -14,9 +14,6 @@ use hal::{adapter::Adapter, format as f, image, window};
 use std::iter;
 use wasm_bindgen::JsCast;
 
-#[cfg(feature = "winit")]
-use winit::{platform::web::WindowExtWebSys, window::Window};
-
 #[derive(Clone, Debug)]
 pub struct Swapchain {
     pub(crate) extent: window::Extent2D,

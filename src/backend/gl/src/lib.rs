@@ -3,10 +3,6 @@
 
 #![allow(missing_docs, missing_copy_implementations)]
 
-// Check for incompatible feature flags
-#[cfg(all(surfman, glutin))]
-compile_error!("You cannot specify both `surfman` and `glutin` features at the same time.");
-
 #[macro_use]
 extern crate bitflags;
 #[macro_use]

@@ -2,11 +2,10 @@ use gl_generator::{Api, Fallbacks, Profile, Registry};
 use std::env;
 use std::fs::File;
 use std::path::PathBuf;
-use cfg_aliases::cfg_aliases;
 
 fn main() {
     // Setup cfg aliases
-    cfg_aliases! {
+    cfg_aliases::cfg_aliases! {
         // Platforms
         wasm: { target_arch = "wasm32" },
         android: { target_os = "android" },
@@ -15,8 +14,8 @@ fn main() {
         linux: { target_os = "linux" },
         // Backends
         surfman: { all(unix, feature = "surfman", not(ios)) },
-        glutin: { all(feature = "glutin", not(wasm)) },
         wgl: { all(windows, feature = "wgl") },
+        glutin: { all(feature = "glutin", not(any(wasm, surfman))) },
         dummy: { not(any(wasm, glutin, wgl, surfman)) },
     }
 
