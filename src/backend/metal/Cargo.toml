@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-metal"
-version = "0.4.4"
+version = "0.4.5"
 description = "Metal API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -37,7 +37,7 @@ cocoa = "0.20"
 core-graphics = "0.19"
 smallvec = "0.6"
 spirv_cross = { version = "0.16", features = ["msl"] }
-parking_lot = "0.9"
+parking_lot = "0.10"
 storage-map = "0.2"
 lazy_static = "1"
 raw-window-handle = "0.3"

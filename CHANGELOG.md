@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-metal-0.4.5, backend-dx11-0.4.6 (11-04-2020)
+  - updated "parking_lot" dependency
+
 ### backend-metal-0.4.4, backend-vulkan-0.4.3 (09-04-2020)
   - updated "core-foundation" and "cocoa" dependencies
 
