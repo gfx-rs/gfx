@@ -108,7 +108,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
         {
             // Expecting that the buffers actually are allocated from this pool.
             for buffer in buffers {
-                storage.remove(&buffer.id);
+                storage.remove(&buffer.data.id);
             }
         }
         // Linear: Freeing doesn't really matter here as everything is backed by

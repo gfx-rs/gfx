@@ -77,9 +77,7 @@ pub enum Command {
     BindRasterizer {
         rasterizer: pso::Rasterizer,
     },
-    BindDepth {
-        depth: Option<pso::DepthTest>,
-    },
+    BindDepth(Option<pso::Comparison>),
     SetViewports {
         first_viewport: u32,
         viewport_ptr: BufferSlice,
@@ -108,8 +106,8 @@ pub enum Command {
     SetDrawColorBuffers(usize),
     SetPatchSize(i32),
     BindProgram(<GlContext as glow::HasContext>::Program),
-    SetBlend(pso::ColorBlendDesc),
-    SetBlendSlot(ColorSlot, pso::ColorBlendDesc),
+    SetBlend(Option<pso::BlendState>),
+    SetBlendSlot(ColorSlot, Option<pso::BlendState>),
     BindAttribute(n::AttributeDesc, n::RawBuffer, i32, u32),
     //UnbindAttribute(n::AttributeDesc),
     CopyBufferToBuffer(n::RawBuffer, n::RawBuffer, command::BufferCopy),
@@ -148,6 +146,11 @@ pub enum Command {
     BindTexture(u32, n::Texture, n::TextureTarget),
     BindSampler(u32, n::Sampler),
     SetTextureSamplerSettings(u32, n::Texture, n::TextureTarget, image::SamplerDesc),
+
+    SetColorMask(Option<DrawBuffer>, pso::ColorMask),
+    SetDepthMask(bool),
+    SetStencilMask(pso::StencilValue),
+    SetStencilMaskSeparate(pso::Sided<pso::StencilValue>),
 }
 
 pub type FrameBufferTarget = u32;
@@ -198,6 +201,10 @@ struct Cache {
     attributes: Vec<n::AttributeDesc>,
     // Active uniforms
     uniforms: Vec<n::UniformDesc>,
+    // Current depth mask
+    depth_mask: Option<bool>,
+    // Current stencil mask
+    stencil_mask: Option<pso::Sided<pso::StencilValue>>,
 }
 
 impl Cache {
@@ -216,6 +223,8 @@ impl Cache {
             vertex_buffer_descs: Vec::new(),
             attributes: Vec::new(),
             uniforms: Vec::new(),
+            depth_mask: None,
+            stencil_mask: None,
         }
     }
 }
@@ -235,17 +244,96 @@ impl From<hal::Limits> for Limits {
     }
 }
 
+#[derive(Debug)]
+pub struct CommandStorage {
+    pub(crate) memory: Arc<Mutex<BufferMemory>>,
+    pub(crate) buf: BufferSlice,
+    // Buffer id for the owning command pool.
+    // Only relevant if individual resets are allowed.
+    pub(crate) id: u64,
+}
+
+impl CommandStorage {
+    fn push_cmd(&mut self, cmd: Command) {
+        let mut memory = self
+            .memory
+            .try_lock()
+            .expect("Trying to record a command buffers, while memory is in-use.");
+
+        let cmd_buffer = &mut match *memory {
+            BufferMemory::Linear(ref mut buffer) => buffer,
+            BufferMemory::Individual {
+                ref mut storage, ..
+            } => storage.get_mut(&self.id).unwrap(),
+        }
+        .commands;
+
+        cmd_buffer.push(cmd);
+
+        self.buf.append(BufferSlice {
+            offset: cmd_buffer.len() as u32 - 1,
+            size: 1,
+        });
+    }
+
+    /// Copy a given vector slice into the data buffer.
+    fn add<T>(&mut self, data: &[T]) -> BufferSlice {
+        self.add_raw(unsafe {
+            slice::from_raw_parts(data.as_ptr() as *const _, data.len() * mem::size_of::<T>())
+        })
+    }
+
+    /// Copy a given u8 slice into the data buffer.
+    fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
+        let mut memory = self
+            .memory
+            .try_lock()
+            .expect("Trying to record a command buffers, while memory is in-use.");
+
+        let data_buffer = &mut match *memory {
+            BufferMemory::Linear(ref mut buffer) => buffer,
+            BufferMemory::Individual {
+                ref mut storage, ..
+            } => storage.get_mut(&self.id).unwrap(),
+        }
+        .data;
+        data_buffer.extend_from_slice(data);
+        let slice = BufferSlice {
+            offset: (data_buffer.len() - data.len()) as u32,
+            size: data.len() as u32,
+        };
+        slice
+    }
+
+    fn reset(&mut self) {
+        let mut memory = self
+            .memory
+            .try_lock()
+            .expect("Trying to reset a command buffer, while memory is in-use.");
+
+        match *memory {
+            // Linear` can't have individual reset ability.
+            BufferMemory::Linear(_) => unreachable!(),
+            BufferMemory::Individual {
+                ref mut storage, ..
+            } => {
+                // TODO: should use the `release_resources` and shrink the buffers?
+                storage.get_mut(&self.id).map(|buffer| {
+                    buffer.commands.clear();
+                    buffer.data.clear();
+                });
+            }
+        }
+    }
+}
+
 /// A command buffer abstraction for OpenGL.
 ///
 /// If you want to display your rendered results to a framebuffer created externally, see the
 /// `display_fb` field.
 #[derive(Debug)]
 pub struct CommandBuffer {
-    pub(crate) memory: Arc<Mutex<BufferMemory>>,
-    pub(crate) buf: BufferSlice,
-    // Buffer id for the owning command pool.
-    // Only relevant if individual resets are allowed.
-    pub(crate) id: u64,
+    pub(crate) data: CommandStorage,
     individual_reset: bool,
 
     fbo: Option<n::RawFrameBuffer>,
@@ -297,9 +385,11 @@ impl CommandBuffer {
         };
 
         CommandBuffer {
-            memory,
-            buf: BufferSlice::new(),
-            id,
+            data: CommandStorage {
+                memory,
+                buf: BufferSlice::new(),
+                id,
+            },
             individual_reset,
             fbo,
             display_fb: None,
@@ -315,42 +405,10 @@ impl CommandBuffer {
     // Soft reset only the buffers, but doesn't free any memory or clears memory
     // of the owning pool.
     pub(crate) fn soft_reset(&mut self) {
-        self.buf = BufferSlice::new();
+        self.data.buf = BufferSlice::new();
         self.cache = Cache::new();
         self.pass_cache = None;
         self.cur_subpass = !0;
-    }
-
-    fn push_cmd(&mut self, cmd: Command) {
-        push_cmd_internal(&self.id, &mut self.memory, &mut self.buf, cmd);
-    }
-
-    /// Copy a given vector slice into the data buffer.
-    fn add<T>(&mut self, data: &[T]) -> BufferSlice {
-        self.add_raw(unsafe {
-            slice::from_raw_parts(data.as_ptr() as *const _, data.len() * mem::size_of::<T>())
-        })
-    }
-
-    /// Copy a given u8 slice into the data buffer.
-    fn add_raw(&mut self, data: &[u8]) -> BufferSlice {
-        let mut memory = self
-            .memory
-            .try_lock()
-            .expect("Trying to record a command buffers, while memory is in-use.");
-
-        let data_buffer = match *memory {
-            BufferMemory::Linear(ref mut buffer) => &mut buffer.data,
-            BufferMemory::Individual {
-                ref mut storage, ..
-            } => &mut storage.get_mut(&self.id).unwrap().data,
-        };
-        data_buffer.extend_from_slice(data);
-        let slice = BufferSlice {
-            offset: (data_buffer.len() - data.len()) as u32,
-            size: data.len() as u32,
-        };
-        slice
     }
 
     fn update_blend_targets(&mut self, blend_targets: &[pso::ColorBlendDesc]) {
@@ -376,7 +434,10 @@ impl CommandBuffer {
                 }
             }
             if update_blend {
-                self.push_cmd(Command::SetBlend(blend_targets[0]));
+                self.data
+                    .push_cmd(Command::SetBlend(blend_targets[0].blend));
+                self.data
+                    .push_cmd(Command::SetColorMask(None, blend_targets[0].mask));
             }
         } else {
             for (slot, (blend_target, cached_target)) in blend_targets
@@ -391,12 +452,10 @@ impl CommandBuffer {
 
                 if update_blend {
                     *cached_target = Some(*blend_target);
-                    push_cmd_internal(
-                        &self.id,
-                        &mut self.memory,
-                        &mut self.buf,
-                        Command::SetBlendSlot(slot as _, *blend_target),
-                    );
+                    self.data
+                        .push_cmd(Command::SetBlendSlot(slot as _, (*blend_target).blend));
+                    self.data
+                        .push_cmd(Command::SetColorMask(Some(slot as _), (*blend_target).mask));
                 }
             }
         }
@@ -428,17 +487,12 @@ impl CommandBuffer {
                         attribute.offset += desc.stride * first_instance as u32;
                     }
 
-                    push_cmd_internal(
-                        &self.id,
-                        &mut self.memory,
-                        &mut self.buf,
-                        Command::BindAttribute(
-                            attribute,
-                            *handle,
-                            desc.stride as _,
-                            desc.rate.as_uint() as u32,
-                        ),
-                    );
+                    self.data.push_cmd(Command::BindAttribute(
+                        attribute,
+                        *handle,
+                        desc.stride as _,
+                        desc.rate.as_uint() as u32,
+                    ));
                 }
                 _ => error!("No vertex buffer description bound at {}", binding),
             }
@@ -450,6 +504,11 @@ impl CommandBuffer {
         let subpass = &state.render_pass.subpasses[self.cur_subpass as usize];
 
         // See `begin_renderpass_cache` for clearing strategy
+
+        self.data.push_cmd(Command::BindFrameBuffer(
+            glow::DRAW_FRAMEBUFFER,
+            state.framebuffer.fbos[self.cur_subpass as usize],
+        ));
 
         // Bind draw buffers for mapping color output locations with
         // framebuffer attachments.
@@ -468,93 +527,122 @@ impl CommandBuffer {
                 .collect::<Vec<_>>()
         };
 
-        let clear_cmds = state
+        // Record commands
+        let draw_buffers = self.data.add(&draw_buffers);
+        self.data.push_cmd(Command::DrawBuffers(draw_buffers));
+
+        let clears = state
             .render_pass
             .attachments
             .iter()
-            .zip(state.attachment_clears.iter())
-            .filter_map(|(attachment, clear)| {
-                if let Some(clear) = clear {
-                    // Check if the attachment is first used in this subpass
-                    if clear.subpass_id != self.cur_subpass {
-                        return None;
-                    }
+            .zip(state.attachment_clears.iter());
+        for (attachment, clear) in clears {
+            let clear = match clear {
+                Some(c) => c,
+                None => continue,
+            };
 
-                    // View format needs to be known at this point.
-                    // All attachments specified in the renderpass must have a valid,
-                    // matching image view bound in the framebuffer.
-                    let view_format = attachment.format.unwrap();
+            // Check if the attachment is first used in this subpass
+            if clear.subpass_id != self.cur_subpass {
+                continue;
+            }
 
-                    // Clear color target
-                    if view_format.is_color() {
-                        assert!(
-                            clear.index >= glow::COLOR_ATTACHMENT0
-                                && clear.index <= glow::COLOR_ATTACHMENT31
-                        );
-                        assert_eq!(attachment.ops.load, pass::AttachmentLoadOp::Clear);
+            // View format needs to be known at this point.
+            // All attachments specified in the renderpass must have a valid,
+            // matching image view bound in the framebuffer.
+            let view_format = attachment.format.unwrap();
 
-                        let channel = view_format.base_format().1;
-                        let index = clear.index - glow::COLOR_ATTACHMENT0;
+            // Clear color target
+            if view_format.is_color() {
+                assert!(
+                    clear.index >= glow::COLOR_ATTACHMENT0
+                        && clear.index <= glow::COLOR_ATTACHMENT31
+                );
+                assert_eq!(attachment.ops.load, pass::AttachmentLoadOp::Clear);
 
-                        let cmd = match channel {
-                            ChannelType::Unorm
-                            | ChannelType::Snorm
-                            | ChannelType::Ufloat
-                            | ChannelType::Sfloat
-                            | ChannelType::Srgb
-                            | ChannelType::Uscaled
-                            | ChannelType::Sscaled => Command::ClearBufferColorF(index, unsafe {
-                                clear.value.color.float32
-                            }),
-                            ChannelType::Uint => Command::ClearBufferColorU(index, unsafe {
-                                clear.value.color.uint32
-                            }),
-                            ChannelType::Sint => Command::ClearBufferColorI(index, unsafe {
-                                clear.value.color.sint32
-                            }),
-                        };
+                let channel = view_format.base_format().1;
+                let index = clear.index - glow::COLOR_ATTACHMENT0;
 
-                        return Some(cmd);
-                    }
-
-                    // Clear depth-stencil target
-                    let depth = if view_format.is_depth()
-                        && attachment.ops.load == pass::AttachmentLoadOp::Clear
-                    {
-                        Some(unsafe { clear.value.depth_stencil.depth })
-                    } else {
-                        None
-                    };
-
-                    let stencil = if view_format.is_stencil()
-                        && attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear
-                    {
-                        Some(unsafe { clear.value.depth_stencil.stencil })
-                    } else {
-                        None
-                    };
-
-                    if depth.is_some() || stencil.is_some() {
-                        return Some(Command::ClearBufferDepthStencil(depth, stencil));
-                    }
+                // Temporarily reset color mask if it was not ColorMask::ALL
+                let blend_target = self.cache.blend_targets.get(index as usize);
+                let color_mask = blend_target
+                    .map(Option::as_ref)
+                    .flatten()
+                    .map(|blend_target| blend_target.mask)
+                    .filter(|mask| *mask != pso::ColorMask::ALL);
+                if color_mask.is_some() || blend_target.is_none() {
+                    self.data
+                        .push_cmd(Command::SetColorMask(Some(index), pso::ColorMask::ALL));
                 }
-                None
-            })
-            .collect::<Vec<_>>();
 
-        let cmd = Command::BindFrameBuffer(
-            glow::DRAW_FRAMEBUFFER,
-            state.framebuffer.fbos[self.cur_subpass as usize],
-        );
+                self.data.push_cmd(match channel {
+                    ChannelType::Unorm
+                    | ChannelType::Snorm
+                    | ChannelType::Ufloat
+                    | ChannelType::Sfloat
+                    | ChannelType::Srgb
+                    | ChannelType::Uscaled
+                    | ChannelType::Sscaled => {
+                        Command::ClearBufferColorF(index, unsafe { clear.value.color.float32 })
+                    }
+                    ChannelType::Uint => {
+                        Command::ClearBufferColorU(index, unsafe { clear.value.color.uint32 })
+                    }
+                    ChannelType::Sint => {
+                        Command::ClearBufferColorI(index, unsafe { clear.value.color.sint32 })
+                    }
+                });
 
-        self.push_cmd(cmd);
+                if let Some(mask) = color_mask {
+                    self.data.push_cmd(Command::SetColorMask(Some(index), mask));
+                }
+            } else {
+                // Clear depth-stencil target
+                let depth = if view_format.is_depth()
+                    && attachment.ops.load == pass::AttachmentLoadOp::Clear
+                {
+                    Some(unsafe { clear.value.depth_stencil.depth })
+                } else {
+                    None
+                };
 
-        // Record commands
-        let draw_buffers = self.add(&draw_buffers);
-        self.push_cmd(Command::DrawBuffers(draw_buffers));
+                // Only reset depth mask if it was non writable
+                let depth_mask = self.cache.depth_mask.filter(|mask| !mask);
 
-        for cmd in clear_cmds {
-            self.push_cmd(cmd);
+                let stencil = if view_format.is_stencil()
+                    && attachment.stencil_ops.load == pass::AttachmentLoadOp::Clear
+                {
+                    Some(unsafe { clear.value.depth_stencil.stencil })
+                } else {
+                    None
+                };
+
+                let stencil_mask = self
+                    .cache
+                    .stencil_mask
+                    .filter(|mask| mask.front != !0 || mask.back != !0);
+
+                // Temporarily reset masks as they may prevent buffer clear in gl
+                if depth_mask.is_some() || self.cache.depth_mask.is_none() {
+                    self.data.push_cmd(Command::SetDepthMask(true));
+                }
+                if stencil_mask.is_some() || self.cache.stencil_mask.is_none() {
+                    self.data.push_cmd(Command::SetStencilMask(!0));
+                }
+
+                if depth.is_some() || stencil.is_some() {
+                    self.data
+                        .push_cmd(Command::ClearBufferDepthStencil(depth, stencil));
+                }
+
+                // Restore masks if they were reset
+                if let Some(mask) = depth_mask {
+                    self.data.push_cmd(Command::SetDepthMask(mask));
+                }
+                if let Some(mask) = stencil_mask {
+                    self.data.push_cmd(Command::SetStencilMaskSeparate(mask));
+                }
+            }
         }
     }
 }
@@ -585,24 +673,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         self.soft_reset();
-        let mut memory = self
-            .memory
-            .try_lock()
-            .expect("Trying to reset a command buffer, while memory is in-use.");
-
-        match *memory {
-            // Linear` can't have individual reset ability.
-            BufferMemory::Linear(_) => unreachable!(),
-            BufferMemory::Individual {
-                ref mut storage, ..
-            } => {
-                // TODO: should use the `release_resources` and shrink the buffers?
-                storage.get_mut(&self.id).map(|buffer| {
-                    buffer.commands.clear();
-                    buffer.data.clear();
-                });
-            }
-        }
+        self.data.reset();
     }
 
     unsafe fn pipeline_barrier<'a, T>(
@@ -729,26 +800,41 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                         n::ImageView::Texture(texture, target, 0) //TODO
                     }
                 };
-                self.push_cmd(Command::BindFrameBuffer(glow::DRAW_FRAMEBUFFER, Some(fbo)));
-                self.push_cmd(Command::BindTargetView(
+                self.data
+                    .push_cmd(Command::BindFrameBuffer(glow::DRAW_FRAMEBUFFER, Some(fbo)));
+                self.data.push_cmd(Command::BindTargetView(
                     glow::DRAW_FRAMEBUFFER,
                     glow::COLOR_ATTACHMENT0,
                     view,
                 ));
-                self.push_cmd(Command::SetDrawColorBuffers(1));
+                self.data.push_cmd(Command::SetDrawColorBuffers(1));
 
-                match image.channel {
+                // Temporarily reset color mask if it was not ColorMask::ALL
+                let blend_target = self.cache.blend_targets.get(0);
+                let color_mask = blend_target
+                    .map(Option::as_ref)
+                    .flatten()
+                    .map(|blend_target| blend_target.mask)
+                    .filter(|mask| *mask != pso::ColorMask::ALL);
+                if color_mask.is_some() || blend_target.is_none() {
+                    self.data
+                        .push_cmd(Command::SetColorMask(Some(0), pso::ColorMask::ALL));
+                }
+
+                self.data.push_cmd(match image.channel {
                     ChannelType::Unorm
                     | ChannelType::Snorm
                     | ChannelType::Ufloat
                     | ChannelType::Sfloat
                     | ChannelType::Srgb
                     | ChannelType::Uscaled
-                    | ChannelType::Sscaled => {
-                        self.push_cmd(Command::ClearBufferColorF(0, color.float32))
-                    }
-                    ChannelType::Uint => self.push_cmd(Command::ClearBufferColorU(0, color.uint32)),
-                    ChannelType::Sint => self.push_cmd(Command::ClearBufferColorI(0, color.sint32)),
+                    | ChannelType::Sscaled => Command::ClearBufferColorF(0, color.float32),
+                    ChannelType::Uint => Command::ClearBufferColorU(0, color.uint32),
+                    ChannelType::Sint => Command::ClearBufferColorI(0, color.sint32),
+                });
+
+                if let Some(mask) = color_mask {
+                    self.data.push_cmd(Command::SetColorMask(Some(0), mask));
                 }
             }
             None => {
@@ -760,8 +846,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     n::ImageKind::Renderbuffer { .. } => unimplemented!(),
                 };
 
-                self.push_cmd(Command::BindTexture(0, tex, target));
-                self.push_cmd(Command::ClearTexture(color.float32));
+                self.data.push_cmd(Command::BindTexture(0, tex, target));
+                self.data.push_cmd(Command::ClearTexture(color.float32));
             }
         }
     }
@@ -810,7 +896,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         self.cache.index_type_range =
             Some((ibv.index_type, crate::resolve_sub_range(&ibv.range, range)));
-        self.push_cmd(Command::BindIndexBuffer(raw_buffer));
+        self.data.push_cmd(Command::BindIndexBuffer(raw_buffer));
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, first_binding: pso::BufferIndex, buffers: I)
@@ -852,9 +938,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 viewport.rect.w as f32,
                 viewport.rect.h as f32,
             ];
-            viewport_ptr.append(self.add::<f32>(viewport_rect));
+            viewport_ptr.append(self.data.add::<f32>(viewport_rect));
             let depth_range = &[viewport.depth.start as f64, viewport.depth.end as f64];
-            depth_range_ptr.append(self.add::<f64>(depth_range));
+            depth_range_ptr.append(self.data.add::<f64>(depth_range));
             len += 1;
         }
 
@@ -864,7 +950,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 self.cache.error_state = true;
             }
             n if n + first_viewport as usize <= self.limits.max_viewports => {
-                self.push_cmd(Command::SetViewports {
+                self.data.push_cmd(Command::SetViewports {
                     first_viewport,
                     viewport_ptr,
                     depth_range_ptr,
@@ -892,7 +978,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 scissor.w as i32,
                 scissor.h as i32,
             ];
-            scissors_ptr.append(self.add::<i32>(scissor));
+            scissors_ptr.append(self.data.add::<i32>(scissor));
             len += 1;
         }
 
@@ -902,7 +988,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                 self.cache.error_state = true;
             }
             n if n + first_scissor as usize <= self.limits.max_viewports => {
-                self.push_cmd(Command::SetScissors(first_scissor, scissors_ptr));
+                self.data
+                    .push_cmd(Command::SetScissors(first_scissor, scissors_ptr));
             }
             _ => {
                 error!("Number of scissors and first scissor index exceed the maximum number of viewports");
@@ -941,13 +1028,14 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn set_stencil_write_mask(&mut self, _faces: pso::Face, _value: pso::StencilValue) {
+        // set self.cache.stencil_mask once implemented
         unimplemented!();
     }
 
     unsafe fn set_blend_constants(&mut self, cv: pso::ColorValue) {
         if self.cache.blend_color != Some(cv) {
             self.cache.blend_color = Some(cv);
-            self.push_cmd(Command::SetBlendColor(cv));
+            self.data.push_cmd(Command::SetBlendColor(cv));
         }
     }
 
@@ -983,13 +1071,13 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         if self.cache.patch_size != patch_size {
             self.cache.patch_size = patch_size;
             if let Some(size) = patch_size {
-                self.push_cmd(Command::SetPatchSize(size));
+                self.data.push_cmd(Command::SetPatchSize(size));
             }
         }
 
         if self.cache.program != Some(program) {
             self.cache.program = Some(program);
-            self.push_cmd(Command::BindProgram(program));
+            self.data.push_cmd(Command::BindProgram(program));
         }
 
         self.cache.attributes = attributes.clone();
@@ -1000,8 +1088,12 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         self.update_blend_targets(blend_targets);
 
-        self.push_cmd(Command::BindRasterizer { rasterizer });
-        self.push_cmd(Command::BindDepth { depth });
+        self.data.push_cmd(Command::BindRasterizer { rasterizer });
+        self.data.push_cmd(Command::BindDepth(depth.map(|d| d.fun)));
+        self.data.push_cmd(Command::SetDepthMask(
+            depth.map(|d| d.write).unwrap_or(true),
+        ));
+        self.cache.depth_mask = depth.map(|d| d.write);
     }
 
     unsafe fn bind_graphics_descriptor_sets<I, J>(
@@ -1038,7 +1130,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                             n::BindingTypes::Images => panic!("Wrong desc set binding"),
                         };
                         for binding in drd.get_binding(*btype, set, *binding).unwrap() {
-                            self.push_cmd(Command::BindBufferRange(
+                            self.data.push_cmd(Command::BindBufferRange(
                                 glow_btype,
                                 *binding,
                                 *buffer,
@@ -1052,7 +1144,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                             .get_binding(n::BindingTypes::Images, set, *binding)
                             .unwrap()
                         {
-                            self.push_cmd(Command::BindTexture(*binding, *texture, *textype))
+                            self.data
+                                .push_cmd(Command::BindTexture(*binding, *texture, *textype))
                         }
                     }
                     n::DescSetBindings::Sampler(binding, sampler) => {
@@ -1060,7 +1153,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                             .get_binding(n::BindingTypes::Images, set, *binding)
                             .unwrap()
                         {
-                            self.push_cmd(Command::BindSampler(*binding, *sampler))
+                            self.data.push_cmd(Command::BindSampler(*binding, *sampler))
                         }
                     }
                     n::DescSetBindings::SamplerDesc(binding, sinfo) => {
@@ -1093,7 +1186,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                         all_txts.dedup_by(|a, b| a.1 == b.1);
 
                         for (binding, txt, textype) in all_txts {
-                            self.push_cmd(Command::SetTextureSamplerSettings(
+                            self.data.push_cmd(Command::SetTextureSamplerSettings(
                                 binding,
                                 txt,
                                 textype,
@@ -1113,7 +1206,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         if self.cache.program != Some(program) {
             self.cache.program = Some(program);
-            self.push_cmd(Command::BindProgram(program));
+            self.data.push_cmd(Command::BindProgram(program));
         }
     }
 
@@ -1133,12 +1226,13 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn dispatch(&mut self, count: hal::WorkGroupCount) {
-        self.push_cmd(Command::Dispatch(count));
+        self.data.push_cmd(Command::Dispatch(count));
     }
 
     unsafe fn dispatch_indirect(&mut self, buffer: &n::Buffer, offset: buffer::Offset) {
         let (raw_buffer, range) = buffer.borrow().as_bound();
-        self.push_cmd(Command::DispatchIndirect(raw_buffer, range.start + offset));
+        self.data
+            .push_cmd(Command::DispatchIndirect(raw_buffer, range.start + offset));
     }
 
     unsafe fn copy_buffer<T>(&mut self, src: &n::Buffer, dst: &n::Buffer, regions: T)
@@ -1146,7 +1240,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
     {
-        let old_size = self.buf.size;
+        let old_size = self.data.buf.size;
 
         let (src_raw, src_range) = src.as_bound();
         let (dst_raw, dst_range) = dst.as_bound();
@@ -1155,10 +1249,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             r.src += src_range.start;
             r.dst += dst_range.start;
             let cmd = Command::CopyBufferToBuffer(src_raw, dst_raw, r);
-            self.push_cmd(cmd);
+            self.data.push_cmd(cmd);
         }
 
-        if self.buf.size == old_size {
+        if self.data.buf.size == old_size {
             error!("At least one region must be specified");
         }
     }
@@ -1174,7 +1268,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ImageCopy>,
     {
-        let old_size = self.buf.size;
+        let old_size = self.data.buf.size;
 
         for region in regions {
             let r = region.borrow().clone();
@@ -1192,10 +1286,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     texture, target, ..
                 } => Command::CopyImageToTexture(src.kind, texture, target, r),
             };
-            self.push_cmd(cmd);
+            self.data.push_cmd(cmd);
         }
 
-        if self.buf.size == old_size {
+        if self.data.buf.size == old_size {
             error!("At least one region must be specified");
         }
     }
@@ -1210,7 +1304,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        let old_size = self.buf.size;
+        let old_size = self.data.buf.size;
 
         let (src_raw, src_range) = src.as_bound();
         for region in regions {
@@ -1234,10 +1328,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     data: r,
                 },
             };
-            self.push_cmd(cmd);
+            self.data.push_cmd(cmd);
         }
 
-        if self.buf.size == old_size {
+        if self.data.buf.size == old_size {
             error!("At least one region must be specified");
         }
     }
@@ -1252,7 +1346,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        let old_size = self.buf.size;
+        let old_size = self.data.buf.size;
         let (dst_raw, dst_range) = dst.as_bound();
 
         for region in regions {
@@ -1276,10 +1370,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
                     data: r,
                 },
             };
-            self.push_cmd(cmd);
+            self.data.push_cmd(cmd);
         }
 
-        if self.buf.size == old_size {
+        if self.data.buf.size == old_size {
             error!("At least one region must be specified");
         }
     }
@@ -1302,7 +1396,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         match self.cache.primitive {
             Some(primitive) => {
-                self.push_cmd(Command::Draw {
+                self.data.push_cmd(Command::Draw {
                     primitive,
                     vertices,
                     instances,
@@ -1354,7 +1448,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         match self.cache.primitive {
             Some(primitive) => {
-                self.push_cmd(Command::DrawIndexed {
+                self.data.push_cmd(Command::DrawIndexed {
                     primitive,
                     index_type,
                     index_count: indices.end - indices.start,
@@ -1443,7 +1537,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         offset: u32,
         constants: &[u32],
     ) {
-        let buffer = self.add(constants);
+        let buffer = self.data.add(constants);
 
         let uniforms = &self.cache.uniforms;
         if uniforms.is_empty() {
@@ -1462,7 +1556,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
         .clone();
 
-        self.push_cmd(Command::BindUniform { uniform, buffer });
+        self.data.push_cmd(Command::BindUniform { uniform, buffer });
     }
 
     unsafe fn push_compute_constants(
@@ -1491,34 +1585,4 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn end_debug_marker(&mut self) {
         //TODO
     }
-}
-
-/// Avoids creating second mutable borrows of `self` by requiring mutable
-/// references only to the fields it needs. Many functions will simply use
-/// `push_cmd`, but this is needed when the caller would like to perform a
-/// partial borrow to `self`. For example, iterating through a field on
-/// `self` and calling `self.push_cmd` per iteration.
-fn push_cmd_internal(
-    id: &u64,
-    memory: &mut Arc<Mutex<BufferMemory>>,
-    buffer: &mut BufferSlice,
-    cmd: Command,
-) {
-    let mut memory = memory
-        .try_lock()
-        .expect("Trying to record a command buffers, while memory is in-use.");
-
-    let cmd_buffer = match *memory {
-        BufferMemory::Linear(ref mut buffer) => &mut buffer.commands,
-        BufferMemory::Individual {
-            ref mut storage, ..
-        } => &mut storage.get_mut(id).unwrap().commands,
-    };
-
-    cmd_buffer.push(cmd);
-
-    buffer.append(BufferSlice {
-        offset: cmd_buffer.len() as u32 - 1,
-        size: 1,
-    });
 }
