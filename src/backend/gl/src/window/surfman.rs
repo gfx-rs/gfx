@@ -136,9 +136,8 @@ impl hal::Instance<B> for Instance {
 
         for surfman_adapter in &[
             &self.hardware_adapter,
-            // TODO: Enabling these causes a segfault for an unknown reason
-            // &self.low_power_adapter,
-            // &self.software_adapter,
+            &self.low_power_adapter,
+            &self.software_adapter,
         ] {
             // Create a surfman device
             let mut device =
@@ -151,6 +150,8 @@ impl hal::Instance<B> for Instance {
 
             // Create context
             let context = device.create_context(&context_descriptor).expect("TODO");
+            // Make context current
+            device.make_context_current(&context).expect("TODO");
 
             // Wrap in Starc<RwLock<T>>
             let context = Starc::new(RwLock::new(context));
@@ -196,6 +197,14 @@ pub struct Surface {
 }
 
 impl Surface {
+    /// Make the surface's gl context the current context
+    pub fn make_context_current(&self) {
+        self.device
+            .write()
+            .make_context_current(&self.context.read())
+            .expect("TODO");
+    }
+
     pub fn context(&self) -> Starc<RwLock<sm::Context>> {
         self.context.clone()
     }
@@ -241,7 +250,6 @@ impl window::PresentationSurface<B> for Surface {
         config: window::SwapchainConfig,
     ) -> Result<(), window::CreationError> {
         let gl = &device.share.context;
-        // let surface_info = self.device.read().surface_info(&self.surface.read());
 
         if let Some(old) = self.swapchain.take() {
             for fbo in old.fbos {
@@ -304,6 +312,7 @@ impl window::PresentationSurface<B> for Surface {
 
 impl window::Surface<B> for Surface {
     fn supports_queue_family(&self, _: &QueueFamily) -> bool {
+        self.make_context_current();
         true
     }
 
