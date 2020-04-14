@@ -5,7 +5,6 @@
         feature = "dx11",
         feature = "metal",
         feature = "gl",
-        feature = "gl-ci"
     )),
     allow(dead_code)
 )]
@@ -91,7 +90,6 @@ impl Harness {
         Harness { base_path, suite }
     }
 
-    #[cfg_attr(any(feature = "gl", feature = "gl-ci"), allow(dead_code))]
     fn run<B: hal::Backend>(&self, name: &str, disabilities: Disabilities) {
         println!("Benching {}:", name);
         let instance = B::Instance::create("warden", 1).unwrap();
@@ -199,15 +197,7 @@ fn main() {
     }
     #[cfg(feature = "gl")]
     {
-        println!("Benching GL:");
-        let instance = warden::init_gl_surface();
-        harness.run_instance(instance, Disabilities::default());
-    }
-    #[cfg(feature = "gl-ci")]
-    {
-        println!("Benching GL on CI:");
-        let instance = warden::init_gl_on_ci();
-        harness.run_instance(instance, Disabilities::default());
+        harness.run::<gfx_backend_gl::Backend>("GL", Disabilities::default());
     }
     #[cfg(not(any(
         feature = "vulkan",
@@ -215,7 +205,6 @@ fn main() {
         feature = "dx11",
         feature = "metal",
         feature = "gl",
-        feature = "gl-ci"
     )))]
     {
         println!("No backend selected!");

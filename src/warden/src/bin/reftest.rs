@@ -5,7 +5,6 @@
         feature = "dx11",
         feature = "metal",
         feature = "gl",
-        feature = "gl-ci"
     )),
     allow(dead_code)
 )]
@@ -100,7 +99,6 @@ impl Harness {
         Harness { base_path, suite }
     }
 
-    #[cfg_attr(any(feature = "gl", feature = "gl-ci"), allow(dead_code))]
     fn run<B: hal::Backend>(&self, name: &str, disabilities: Disabilities) -> usize {
         println!("Testing {}:", name);
         let instance = B::Instance::create("warden", 1).unwrap();
@@ -237,15 +235,7 @@ fn main() {
     }
     #[cfg(feature = "gl")]
     {
-        println!("Testing GL:");
-        let instance = warden::init_gl_surface();
-        num_failures += harness.run_instance(instance, Disabilities::default());
-    }
-    #[cfg(feature = "gl-ci")]
-    {
-        println!("Testing GL on CI:");
-        let instance = warden::init_gl_on_ci();
-        num_failures += harness.run_instance(instance, Disabilities::default());
+        num_failures += harness.run::<gfx_backend_gl::Backend>("GL", Disabilities::default());
     }
     let _ = harness;
     num_failures += 0; // mark as mutated

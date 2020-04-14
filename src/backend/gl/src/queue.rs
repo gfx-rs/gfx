@@ -5,17 +5,8 @@ use glow::HasContext;
 use smallvec::SmallVec;
 
 use crate::{
-    command as com,
-    device,
-    info::LegacyFeatures,
-    native,
-    state,
-    Backend,
-    GlContext,
-    Share,
-    Starc,
-    Surface,
-    Swapchain,
+    command as com, device, info::LegacyFeatures, native, state, Backend, GlContext, Share, Starc,
+    Surface, Swapchain,
 };
 
 // State caching system for command queue.
@@ -209,19 +200,44 @@ impl CommandQueue {
     /// Return a reference to a stored data object.
     fn get_raw(data: &[u8], ptr: com::BufferSlice) -> &[u8] {
         assert!(data.len() >= (ptr.offset + ptr.size) as usize);
-        &data[ptr.offset as usize .. (ptr.offset + ptr.size) as usize]
+        &data[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
     }
 
     fn present_by_copy(&self, swapchain: &Swapchain, index: hal::window::SwapImageIndex) {
         let gl = &self.share.context;
         let extent = swapchain.extent;
 
-        #[cfg(feature = "wgl")]
+        #[cfg(wgl)]
         swapchain.make_current();
+
+        #[cfg(surfman)]
+        gl.surfman_device
+            .write()
+            .make_context_current(&swapchain.context.read())
+            .unwrap();
+
+        // Use the framebuffer from the surfman context
+        #[cfg(surfman)]
+        let fbo = gl
+            .surfman_device
+            .read()
+            .context_surface_info(&swapchain.context.read())
+            .unwrap()
+            .unwrap()
+            .framebuffer_object;
 
         unsafe {
             gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.fbos[index as usize]));
-            gl.bind_framebuffer(glow::DRAW_FRAMEBUFFER, None);
+            gl.bind_framebuffer(
+                glow::DRAW_FRAMEBUFFER,
+                #[cfg(surfman)]
+                match fbo {
+                    0 => None,
+                    other => Some(other),
+                },
+                #[cfg(not(surfman))]
+                None,
+            );
             gl.blit_framebuffer(
                 0,
                 0,
@@ -236,9 +252,29 @@ impl CommandQueue {
             );
         }
 
-        #[cfg(all(feature = "glutin", not(target_arch = "wasm32")))]
+        // Present the surfman surface
+        #[cfg(surfman)]
+        {
+            let mut surface = gl
+                .surfman_device
+                .read()
+                .unbind_surface_from_context(&mut swapchain.context.write())
+                .expect("TODO")
+                .expect("TODO");
+            gl.surfman_device
+                .read()
+                .present_surface(&gl.surfman_context.read(), &mut surface)
+                .expect("TODO");
+            gl.surfman_device
+                .read()
+                .bind_surface_to_context(&mut swapchain.context.write(), surface)
+                .expect("TODO")
+        }
+
+        #[cfg(glutin)]
         swapchain.context.swap_buffers().unwrap();
-        #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
+
+        #[cfg(wgl)]
         swapchain.swap_buffers();
     }
 
@@ -277,12 +313,11 @@ impl CommandQueue {
             };
         } else if self.state.num_viewports > 1 {
             // 16 viewports is a common limit set in drivers.
-            let viewports: SmallVec<[[f32; 4]; 16]> = (0 .. self.state.num_viewports)
+            let viewports: SmallVec<[[f32; 4]; 16]> = (0..self.state.num_viewports)
                 .map(|_| [0.0, 0.0, 0.0, 0.0])
                 .collect();
-            let depth_ranges: SmallVec<[[f64; 2]; 16]> = (0 .. self.state.num_viewports)
-                .map(|_| [0.0, 0.0])
-                .collect();
+            let depth_ranges: SmallVec<[[f64; 2]; 16]> =
+                (0..self.state.num_viewports).map(|_| [0.0, 0.0]).collect();
             unsafe {
                 gl.viewport_f32_slice(0, viewports.len() as i32, &viewports);
                 gl.depth_range_f64_slice(0, depth_ranges.len() as i32, &depth_ranges);
@@ -294,9 +329,8 @@ impl CommandQueue {
             unsafe { gl.scissor(0, 0, 0, 0) };
         } else if self.state.num_scissors > 1 {
             // 16 viewports is a common limit set in drivers.
-            let scissors: SmallVec<[[i32; 4]; 16]> = (0 .. self.state.num_scissors)
-                .map(|_| [0, 0, 0, 0])
-                .collect();
+            let scissors: SmallVec<[[i32; 4]; 16]> =
+                (0..self.state.num_scissors).map(|_| [0, 0, 0, 0]).collect();
             unsafe { gl.scissor_slice(0, scissors.len() as i32, scissors.as_slice()) };
         }
     }
@@ -316,7 +350,7 @@ impl CommandQueue {
             } => {
                 let gl = &self.share.context;
                 let legacy = &self.share.legacy_features;
-                if instances == &(0u32 .. 1) {
+                if instances == &(0u32..1) {
                     unsafe {
                         gl.draw_arrays(
                             primitive,
@@ -365,7 +399,7 @@ impl CommandQueue {
                 let legacy = &self.share.legacy_features;
                 let hints = &self.share.hints;
 
-                if instances == &(0u32 .. 1) {
+                if instances == &(0u32..1) {
                     if base_vertex == 0 {
                         unsafe {
                             gl.draw_elements(
@@ -877,60 +911,60 @@ impl CommandQueue {
             com::Command::UnbindAttribute(slot) => unsafe {
             self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
             },*/
-            com::Command::BindUniform { uniform, buffer } => {
+            com::Command::BindUniform { ref uniform, buffer } => {
                 let gl = &self.share.context;
 
                 unsafe {
                     match uniform.utype {
                         glow::FLOAT => {
                             let data = Self::get::<f32>(data_buf, buffer)[0];
-                            gl.uniform_1_f32(Some(uniform.location), data);
+                            gl.uniform_1_f32(Some((*uniform.location).clone()), data);
                         }
                         glow::FLOAT_VEC2 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[f32; 2]>(data_buf, buffer)[0];
-                            gl.uniform_2_f32_slice(Some(uniform.location), &mut data);
+                            gl.uniform_2_f32_slice(Some((*uniform.location).clone()), &mut data);
                         }
                         glow::FLOAT_VEC3 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[f32; 3]>(data_buf, buffer)[0];
-                            gl.uniform_3_f32_slice(Some(uniform.location), &mut data);
+                            gl.uniform_3_f32_slice(Some((*uniform.location).clone()), &mut data);
                         }
                         glow::FLOAT_VEC4 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[f32; 4]>(data_buf, buffer)[0];
-                            gl.uniform_4_f32_slice(Some(uniform.location), &mut data);
+                            gl.uniform_4_f32_slice(Some((*uniform.location).clone()), &mut data);
                         }
                         glow::INT => {
                             let data = Self::get::<i32>(data_buf, buffer)[0];
-                            gl.uniform_1_i32(Some(uniform.location), data);
+                            gl.uniform_1_i32(Some((*uniform.location).clone()), data);
                         }
                         glow::INT_VEC2 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[i32; 2]>(data_buf, buffer)[0];
-                            gl.uniform_2_i32_slice(Some(uniform.location), &mut data);
+                            gl.uniform_2_i32_slice(Some((*uniform.location).clone()), &mut data);
                         }
                         glow::INT_VEC3 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[i32; 3]>(data_buf, buffer)[0];
-                            gl.uniform_3_i32_slice(Some(uniform.location), &mut data);
+                            gl.uniform_3_i32_slice(Some((*uniform.location).clone()), &mut data);
                         }
                         glow::INT_VEC4 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[i32; 4]>(data_buf, buffer)[0];
-                            gl.uniform_4_i32_slice(Some(uniform.location), &mut data);
+                            gl.uniform_4_i32_slice(Some((*uniform.location).clone()), &mut data);
                         }
                         glow::FLOAT_MAT2 => {
                             let data = Self::get::<[f32; 4]>(data_buf, buffer)[0];
-                            gl.uniform_matrix_2_f32_slice(Some(uniform.location), false, &data);
+                            gl.uniform_matrix_2_f32_slice(Some((*uniform.location).clone()), false, &data);
                         }
                         glow::FLOAT_MAT3 => {
                             let data = Self::get::<[f32; 9]>(data_buf, buffer)[0];
-                            gl.uniform_matrix_3_f32_slice(Some(uniform.location), false, &data);
+                            gl.uniform_matrix_3_f32_slice(Some((*uniform.location).clone()), false, &data);
                         }
                         glow::FLOAT_MAT4 => {
                             let data = Self::get::<[f32; 16]>(data_buf, buffer)[0];
-                            gl.uniform_matrix_4_f32_slice(Some(uniform.location), false, &data);
+                            gl.uniform_matrix_4_f32_slice(Some((*uniform.location).clone()), false, &data);
                         }
                         _ => panic!("Unsupported uniform datatype!"),
                     }
@@ -1139,7 +1173,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
 
                 assert!(buffer.commands.len() >= (cb.buf.offset + cb.buf.size) as usize);
                 let commands = &buffer.commands
-                    [cb.buf.offset as usize .. (cb.buf.offset + cb.buf.size) as usize];
+                    [cb.buf.offset as usize..(cb.buf.offset + cb.buf.size) as usize];
                 self.reset_state();
                 for com in commands {
                     self.process(com, &buffer.data);
@@ -1177,7 +1211,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
             self.present_by_copy(swapchain.borrow(), index);
         }
 
-        #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
+        #[cfg(wgl)]
         self.share.instance_context.make_current();
 
         Ok(None)
@@ -1195,7 +1229,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
             .expect("No swapchain is configured!");
         self.present_by_copy(swapchain, 0);
 
-        #[cfg(all(feature = "wgl", not(target_arch = "wasm32")))]
+        #[cfg(wgl)]
         self.share.instance_context.make_current();
 
         Ok(None)

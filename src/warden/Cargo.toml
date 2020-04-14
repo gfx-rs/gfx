@@ -24,7 +24,6 @@ dx12 = ["gfx-backend-dx12"]
 dx11 = ["gfx-backend-dx11"]
 metal = ["gfx-backend-metal"]
 gl = ["gfx-backend-gl"]
-gl-ci = ["gfx-backend-gl"] # "glsl-to-spirv"
 
 #TODO: keep Warden backend-agnostic?
 
@@ -61,7 +60,6 @@ optional = true
 [dependencies.gfx-backend-gl]
 path = "../../src/backend/gl"
 version = "0.5"
-features = ["glutin"]
 optional = true
 
 [[example]]

@@ -50,9 +50,13 @@
 use crate::{conv, native, Backend as B, Device, GlContainer, PhysicalDevice, QueueFamily, Starc};
 use hal::{adapter::Adapter, format as f, image, window};
 
+use std::ffi::c_void;
+use std::os::raw::c_ulong;
+use std::sync::Arc;
+
 use arrayvec::ArrayVec;
 use glow::HasContext;
-use glutin;
+use glutin::{self, platform::unix::RawContextExt};
 
 use std::iter;
 
@@ -75,6 +79,128 @@ impl window::Swapchain<B> for Swapchain {
     ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
         // TODO: sync
         Ok((0, None))
+    }
+}
+
+#[derive(Debug)]
+pub enum Instance {
+    Headless(Headless),
+    Surface(Surface),
+}
+
+impl Instance {
+    pub fn create_surface_from_wayland(
+        &self,
+        display: *mut c_void,
+        surface: *mut c_void,
+    ) -> Surface {
+        log::trace!("Creating GL surface from wayland");
+        let context = unsafe {
+            glutin::ContextBuilder::new()
+                .with_vsync(true)
+                .build_raw_wayland_context(
+                    display as _,
+                    surface,
+                    /*TODO: do something with these dimensions*/
+                    400,
+                    400,
+                )
+                .expect("TODO: handle this error")
+        };
+        let context = unsafe { context.make_current().expect("TODO: handle this error") };
+        Surface::from_context(context)
+    }
+
+    pub fn create_surface_from_xlib(&self, window: c_ulong, display: *mut c_void) -> Surface {
+        log::trace!("Creating GL surface from Xlib");
+        let xconn = {
+            // This is taken from `glutin::platform::unix::x11::XConnection::new except with tweaks
+            // that allow us to create the connection with an existing display pointer
+            use glutin::platform::unix::x11::{ffi, XConnection};
+            // opening the libraries
+            let xlib = ffi::Xlib::open().expect("TODO: Handle error");
+            let xcursor = ffi::Xcursor::open().expect("TODO: Handle error");
+            let xrandr = ffi::Xrandr_2_2_0::open().expect("TODO: Handle error");
+            let xrandr_1_5 = ffi::Xrandr::open().ok();
+            let xinput2 = ffi::XInput2::open().expect("TODO: Handle error");
+            let xlib_xcb = ffi::Xlib_xcb::open().expect("TODO: Handle error");
+            let xrender = ffi::Xrender::open().expect("TODO: Handle error");
+
+            unsafe { (xlib.XInitThreads)() };
+            // unsafe { (xlib.XSetErrorHandler)(error_handler) };
+
+            // Get X11 socket file descriptor
+            let fd = unsafe { (xlib.XConnectionNumber)(display as *mut ffi::_XDisplay) };
+
+            XConnection {
+                xlib,
+                xrandr,
+                xrandr_1_5,
+                xcursor,
+                xinput2,
+                xlib_xcb,
+                xrender,
+                display: display as _,
+                x11_fd: fd,
+                latest_error: parking_lot::Mutex::new(None),
+                cursor_cache: Default::default(),
+            }
+        };
+        let xconn = Arc::new(xconn);
+
+        let context = unsafe {
+            glutin::ContextBuilder::new()
+                .with_vsync(true)
+                .build_raw_x11_context(xconn, window)
+                .expect("TODO: handle this error")
+        };
+        let context = unsafe { context.make_current().expect("TODO: handle this error") };
+        Surface::from_context(context)
+    }
+}
+
+impl hal::Instance<B> for Instance {
+    fn create(name: &str, version: u32) -> Result<Instance, hal::UnsupportedBackend> {
+        Headless::create(name, version).map(Instance::Headless)
+    }
+
+    fn enumerate_adapters(&self) -> Vec<Adapter<B>> {
+        match self {
+            Instance::Headless(instance) => instance.enumerate_adapters(),
+            Instance::Surface(instance) => instance.enumerate_adapters(),
+        }
+    }
+
+    unsafe fn create_surface(
+        &self,
+        has_handle: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, hal::window::InitError> {
+        use raw_window_handle::RawWindowHandle;
+
+        match self {
+            Instance::Headless(instance) => instance.create_surface(has_handle),
+            Instance::Surface(instance) => instance.create_surface(has_handle),
+        }
+        .expect("TODO");
+
+        match has_handle.raw_window_handle() {
+            #[cfg(all(unix, not(android), not(macos)))]
+            RawWindowHandle::Wayland(handle) => {
+                Ok(self.create_surface_from_wayland(handle.display, handle.surface))
+            }
+            #[cfg(all(unix, not(android), not(macos)))]
+            RawWindowHandle::Xlib(handle) => {
+                Ok(self.create_surface_from_xlib(handle.window, handle.display))
+            }
+            _ => Err(hal::window::InitError::UnsupportedWindowHandle),
+        }
+    }
+
+    unsafe fn destroy_surface(&self, surface: Surface) {
+        match self {
+            Instance::Headless(instance) => instance.destroy_surface(surface),
+            Instance::Surface(instance) => instance.destroy_surface(surface),
+        }
     }
 }
 
@@ -193,15 +319,15 @@ impl window::Surface<B> for Surface {
             present_modes: window::PresentMode::FIFO, //TODO
             composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
             image_count: if self.context.get_pixel_format().double_buffer {
-                2 ..= 2
+                2..=2
             } else {
-                1 ..= 1
+                1..=1
             },
             current_extent: None,
             extents: window::Extent2D {
                 width: 4,
                 height: 4,
-            } ..= window::Extent2D {
+            }..=window::Extent2D {
                 width: 4096,
                 height: 4096,
             },
@@ -240,6 +366,7 @@ impl hal::Instance<B> for Surface {
     }
 }
 
+// This isn't used anymore according to the linter. Keeping it commented just in case.
 pub fn config_context<C>(
     builder: glutin::ContextBuilder<C>,
     color_format: f::Format,
@@ -273,7 +400,7 @@ impl Headless {
 impl hal::Instance<B> for Headless {
     fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
         let context: glutin::Context<glutin::NotCurrent>;
-        #[cfg(target_os = "linux")]
+        #[cfg(linux)]
         {
             /// TODO: Update portability to make this more flexible
             use glutin::platform::unix::HeadlessContextExt;
@@ -284,7 +411,7 @@ impl hal::Instance<B> for Headless {
                 hal::UnsupportedBackend
             })?;
         }
-        #[cfg(not(target_os = "linux"))]
+        #[cfg(not(linux))]
         {
             context = unimplemented!();
         }
