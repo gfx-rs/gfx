@@ -190,7 +190,7 @@ impl hal::Instance<B> for Instance {
             }
             #[cfg(all(unix, not(android), not(macos)))]
             RawWindowHandle::Xlib(handle) => {
-                Ok(self.create_surface_from_xlib(handle.display as *mut _, handle.window))
+                Ok(self.create_surface_from_xlib(handle.window, handle.display))
             }
             _ => Err(hal::window::InitError::UnsupportedWindowHandle),
         }
@@ -367,27 +367,26 @@ impl hal::Instance<B> for Surface {
 }
 
 // This isn't used anymore according to the linter. Keeping it commented just in case.
-//
-// pub fn config_context<C>(
-//     builder: glutin::ContextBuilder<C>,
-//     color_format: f::Format,
-//     ds_format: Option<f::Format>,
-// ) -> glutin::ContextBuilder<C>
-// where
-//     C: glutin::ContextCurrentState,
-// {
-//     let color_base = color_format.base_format();
-//     let color_bits = color_base.0.describe_bits();
-//     let depth_bits = match ds_format {
-//         Some(fm) => fm.base_format().0.describe_bits(),
-//         None => f::BITS_ZERO,
-//     };
-//     builder
-//         .with_depth_buffer(depth_bits.depth)
-//         .with_stencil_buffer(depth_bits.stencil)
-//         .with_pixel_format(color_bits.color, color_bits.alpha)
-//         .with_srgb(color_base.1 == f::ChannelType::Srgb)
-// }
+pub fn config_context<C>(
+    builder: glutin::ContextBuilder<C>,
+    color_format: f::Format,
+    ds_format: Option<f::Format>,
+) -> glutin::ContextBuilder<C>
+where
+    C: glutin::ContextCurrentState,
+{
+    let color_base = color_format.base_format();
+    let color_bits = color_base.0.describe_bits();
+    let depth_bits = match ds_format {
+        Some(fm) => fm.base_format().0.describe_bits(),
+        None => f::BITS_ZERO,
+    };
+    builder
+        .with_depth_buffer(depth_bits.depth)
+        .with_stencil_buffer(depth_bits.stencil)
+        .with_pixel_format(color_bits.color, color_bits.alpha)
+        .with_srgb(color_base.1 == f::ChannelType::Srgb)
+}
 
 #[derive(Debug)]
 pub struct Headless(pub Starc<glutin::Context<glutin::PossiblyCurrent>>);
