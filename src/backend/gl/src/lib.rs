@@ -41,7 +41,7 @@ pub use window::web::{Surface, Swapchain};
 #[cfg(glutin)]
 pub use crate::window::glutin::config_context;
 #[cfg(glutin)]
-pub use crate::window::glutin::{Instance, Surface, Swapchain};
+pub use crate::window::glutin::{Headless, Instance, Surface, Swapchain};
 #[cfg(glutin)]
 pub use glutin;
 
