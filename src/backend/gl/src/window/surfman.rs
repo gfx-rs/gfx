@@ -326,12 +326,12 @@ impl window::Surface<B> for Surface {
             // } else {
             //     1..=1
             // },
-            image_count: 2..=2,
+            image_count: 2 ..= 2,
             current_extent: None,
             extents: window::Extent2D {
                 width: 4,
                 height: 4,
-            }..=window::Extent2D {
+            } ..= window::Extent2D {
                 width: 4096,
                 height: 4096,
             },

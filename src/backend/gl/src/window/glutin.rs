@@ -319,15 +319,15 @@ impl window::Surface<B> for Surface {
             present_modes: window::PresentMode::FIFO, //TODO
             composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
             image_count: if self.context.get_pixel_format().double_buffer {
-                2..=2
+                2 ..= 2
             } else {
-                1..=1
+                1 ..= 1
             },
             current_extent: None,
             extents: window::Extent2D {
                 width: 4,
                 height: 4,
-            }..=window::Extent2D {
+            } ..= window::Extent2D {
                 width: 4096,
                 height: 4096,
             },

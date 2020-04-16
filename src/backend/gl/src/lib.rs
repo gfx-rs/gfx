@@ -39,11 +39,11 @@ pub use window::web::{Surface, Swapchain};
 
 // Glutin implementation
 #[cfg(glutin)]
+pub use crate::window::glutin::config_context;
+#[cfg(glutin)]
 pub use crate::window::glutin::{Instance, Surface, Swapchain};
 #[cfg(glutin)]
 pub use glutin;
-#[cfg(glutin)]
-pub use crate::window::glutin::config_context;
 
 // Surfman implementation
 #[cfg(surfman)]

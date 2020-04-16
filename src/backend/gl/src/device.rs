@@ -1860,7 +1860,6 @@ impl d::Device<B> for Device {
         config: SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
     ) -> Result<(Swapchain, Vec<n::Image>), hal::window::CreationError> {
-
         let gl = &self.share.context;
 
         #[cfg(wgl)]

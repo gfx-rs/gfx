@@ -5,8 +5,17 @@ use glow::HasContext;
 use smallvec::SmallVec;
 
 use crate::{
-    command as com, device, info::LegacyFeatures, native, state, Backend, GlContext, Share, Starc,
-    Surface, Swapchain,
+    command as com,
+    device,
+    info::LegacyFeatures,
+    native,
+    state,
+    Backend,
+    GlContext,
+    Share,
+    Starc,
+    Surface,
+    Swapchain,
 };
 
 // State caching system for command queue.
@@ -200,7 +209,7 @@ impl CommandQueue {
     /// Return a reference to a stored data object.
     fn get_raw(data: &[u8], ptr: com::BufferSlice) -> &[u8] {
         assert!(data.len() >= (ptr.offset + ptr.size) as usize);
-        &data[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
+        &data[ptr.offset as usize .. (ptr.offset + ptr.size) as usize]
     }
 
     fn present_by_copy(&self, swapchain: &Swapchain, index: hal::window::SwapImageIndex) {
@@ -313,11 +322,12 @@ impl CommandQueue {
             };
         } else if self.state.num_viewports > 1 {
             // 16 viewports is a common limit set in drivers.
-            let viewports: SmallVec<[[f32; 4]; 16]> = (0..self.state.num_viewports)
+            let viewports: SmallVec<[[f32; 4]; 16]> = (0 .. self.state.num_viewports)
                 .map(|_| [0.0, 0.0, 0.0, 0.0])
                 .collect();
-            let depth_ranges: SmallVec<[[f64; 2]; 16]> =
-                (0..self.state.num_viewports).map(|_| [0.0, 0.0]).collect();
+            let depth_ranges: SmallVec<[[f64; 2]; 16]> = (0 .. self.state.num_viewports)
+                .map(|_| [0.0, 0.0])
+                .collect();
             unsafe {
                 gl.viewport_f32_slice(0, viewports.len() as i32, &viewports);
                 gl.depth_range_f64_slice(0, depth_ranges.len() as i32, &depth_ranges);
@@ -329,8 +339,9 @@ impl CommandQueue {
             unsafe { gl.scissor(0, 0, 0, 0) };
         } else if self.state.num_scissors > 1 {
             // 16 viewports is a common limit set in drivers.
-            let scissors: SmallVec<[[i32; 4]; 16]> =
-                (0..self.state.num_scissors).map(|_| [0, 0, 0, 0]).collect();
+            let scissors: SmallVec<[[i32; 4]; 16]> = (0 .. self.state.num_scissors)
+                .map(|_| [0, 0, 0, 0])
+                .collect();
             unsafe { gl.scissor_slice(0, scissors.len() as i32, scissors.as_slice()) };
         }
     }
@@ -350,7 +361,7 @@ impl CommandQueue {
             } => {
                 let gl = &self.share.context;
                 let legacy = &self.share.legacy_features;
-                if instances == &(0u32..1) {
+                if instances == &(0u32 .. 1) {
                     unsafe {
                         gl.draw_arrays(
                             primitive,
@@ -399,7 +410,7 @@ impl CommandQueue {
                 let legacy = &self.share.legacy_features;
                 let hints = &self.share.hints;
 
-                if instances == &(0u32..1) {
+                if instances == &(0u32 .. 1) {
                     if base_vertex == 0 {
                         unsafe {
                             gl.draw_elements(
@@ -921,7 +932,10 @@ impl CommandQueue {
             com::Command::UnbindAttribute(slot) => unsafe {
             self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
             },*/
-            com::Command::BindUniform { ref uniform, buffer } => {
+            com::Command::BindUniform {
+                ref uniform,
+                buffer,
+            } => {
                 let gl = &self.share.context;
 
                 unsafe {
@@ -966,15 +980,27 @@ impl CommandQueue {
                         }
                         glow::FLOAT_MAT2 => {
                             let data = Self::get::<[f32; 4]>(data_buf, buffer)[0];
-                            gl.uniform_matrix_2_f32_slice(Some((*uniform.location).clone()), false, &data);
+                            gl.uniform_matrix_2_f32_slice(
+                                Some((*uniform.location).clone()),
+                                false,
+                                &data,
+                            );
                         }
                         glow::FLOAT_MAT3 => {
                             let data = Self::get::<[f32; 9]>(data_buf, buffer)[0];
-                            gl.uniform_matrix_3_f32_slice(Some((*uniform.location).clone()), false, &data);
+                            gl.uniform_matrix_3_f32_slice(
+                                Some((*uniform.location).clone()),
+                                false,
+                                &data,
+                            );
                         }
                         glow::FLOAT_MAT4 => {
                             let data = Self::get::<[f32; 16]>(data_buf, buffer)[0];
-                            gl.uniform_matrix_4_f32_slice(Some((*uniform.location).clone()), false, &data);
+                            gl.uniform_matrix_4_f32_slice(
+                                Some((*uniform.location).clone()),
+                                false,
+                                &data,
+                            );
                         }
                         _ => panic!("Unsupported uniform datatype!"),
                     }
@@ -1151,7 +1177,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
 
                 assert!(buffer.commands.len() >= (cb.buf.offset + cb.buf.size) as usize);
                 let commands = &buffer.commands
-                    [cb.buf.offset as usize..(cb.buf.offset + cb.buf.size) as usize];
+                    [cb.buf.offset as usize .. (cb.buf.offset + cb.buf.size) as usize];
                 self.reset_state();
                 for com in commands {
                     self.process(com, &buffer.data);
