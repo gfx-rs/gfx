@@ -2274,14 +2274,30 @@ impl Device {
     unsafe fn set_object_name(&self, object_type: vk::ObjectType, object_handle: u64, name: &str) {
         let instance = &self.shared.instance;
         if let Some(DebugMessenger::Utils(ref debug_utils_ext, _)) = instance.1 {
-            // Append a null terminator to the string while avoiding allocating memory
-            static mut NAME_BUF: [u8; 64] = [0u8; 64];
-            std::ptr::copy_nonoverlapping(
-                name.as_ptr(),
-                &mut NAME_BUF[0],
-                name.len().min(NAME_BUF.len()),
-            );
-            NAME_BUF[name.len()] = 0;
+            // Keep variables outside the if-else block to ensure they do not
+            // go out of scope while we hold a pointer to them
+            let mut buffer: [u8; 64] = [0u8; 64];
+            let mut buffer_vec: Vec<u8>;
+
+            // Append a null terminator to the string
+            let name_ptr = if name.len() < 64 {
+                // Common case, string is very small. Allocate a copy on the stack.
+                std::ptr::copy_nonoverlapping(name.as_ptr(), buffer.as_mut_ptr(), name.len());
+                // Add null terminator
+                buffer[name.len()] = 0;
+                buffer.as_mut_ptr()
+            } else {
+                // Less common case, the string is large.
+                // This requires a heap allocation.
+                buffer_vec = name
+                    .as_bytes()
+                    .iter()
+                    .cloned()
+                    .chain(std::iter::once(0))
+                    .collect::<Vec<u8>>();
+                buffer_vec.as_mut_ptr()
+            };
+
             let _result = debug_utils_ext.debug_utils_set_object_name(
                 self.shared.raw.handle(),
                 &vk::DebugUtilsObjectNameInfoEXT {
@@ -2289,7 +2305,7 @@ impl Device {
                     p_next: std::ptr::null_mut(),
                     object_type,
                     object_handle,
-                    p_object_name: NAME_BUF.as_ptr() as *mut _,
+                    p_object_name: name_ptr as *const i8,
                 },
             );
         }
