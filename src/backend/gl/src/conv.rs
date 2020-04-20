@@ -125,6 +125,7 @@ pub fn describe_format(format: Format) -> Option<FormatDescription> {
         Rgba8Unorm => {
             FormatDescription::new(glow::RGBA8, glow::RGBA, glow::UNSIGNED_BYTE, 4, Float)
         }
+        Rgb8Srgb => FormatDescription::new(glow::SRGB8, glow::RGB, glow::UNSIGNED_BYTE, 3, Float),
         Rgba8Srgb => FormatDescription::new(
             glow::SRGB8_ALPHA8,
             glow::RGBA,
