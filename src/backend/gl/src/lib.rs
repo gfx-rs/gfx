@@ -114,12 +114,16 @@ impl GlContainer {
         let context = {
             use wasm_bindgen::JsCast;
             // TODO: Remove hardcoded width/height
-            canvas
-                .set_attribute("width", "640")
-                .expect("Cannot set width");
-            canvas
-                .set_attribute("height", "480")
-                .expect("Cannot set height");
+            if canvas.get_attribute("width").is_none() {
+                canvas
+                    .set_attribute("width", "640")
+                    .expect("Cannot set width");
+            }
+            if canvas.get_attribute("height").is_none() {
+                canvas
+                    .set_attribute("height", "480")
+                    .expect("Cannot set height");
+            }
             let context_options = js_sys::Object::new();
             js_sys::Reflect::set(
                 &context_options,
