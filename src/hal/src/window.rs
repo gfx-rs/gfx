@@ -226,12 +226,6 @@ impl SurfaceCapabilities {
 /// A `Surface` abstracts the surface of a native window.
 pub trait Surface<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Check if the queue family supports presentation to this surface.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
     fn supports_queue_family(&self, family: &B::QueueFamily) -> bool;
 
     /// Query surface capabilities for this physical device.
@@ -277,12 +271,6 @@ pub trait PresentationSurface<B: Backend>: Surface<B> {
     /// # Synchronization
     ///
     /// The acquired image is available to render. No synchronization is required.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
     unsafe fn acquire_image(
         &mut self,
         timeout_ns: u64,
@@ -381,12 +369,6 @@ pub struct SwapchainConfig {
 
 impl SwapchainConfig {
     /// Create a new default configuration (color images only).
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
     pub fn new(width: u32, height: u32, format: Format, image_count: SwapImageIndex) -> Self {
         SwapchainConfig {
             present_mode: PresentMode::FIFO,
@@ -570,12 +552,6 @@ pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// The acquired image will not be immediately available when the function returns.
     /// Once available the provided [`Semaphore`](../trait.Resources.html#associatedtype.Semaphore)
     /// and [`Fence`](../trait.Resources.html#associatedtype.Fence) will be signaled.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
     unsafe fn acquire_image(
         &mut self,
         timeout_ns: u64,
@@ -589,12 +565,6 @@ pub trait Swapchain<B: Backend>: fmt::Debug + Any + Send + Sync {
     ///
     /// The passed queue _must_ support presentation on the surface, which is
     /// used for creating this swapchain.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    ///
-    /// ```
     unsafe fn present<'a, S, Iw>(
         &'a self,
         present_queue: &mut B::CommandQueue,
