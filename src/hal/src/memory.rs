@@ -1,4 +1,4 @@
-//! Types to describe the properties of memory allocated for gfx resources.
+//! Types to describe the properties of memory allocated for graphics resources.
 
 use crate::{buffer, image, queue, Backend};
 use std::ops::Range;

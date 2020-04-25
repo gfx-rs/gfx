@@ -1,15 +1,15 @@
 //! Command buffers.
 //!
 //! A command buffer collects a list of commands to be submitted to the device.
-//! Each command buffer has specific capabilities for graphics, compute or transfer operations,
-//! and can be either a "primary" command buffer or a "secondary" command buffer.  Operations
-//! always start from a primary command buffer, but a primary command buffer can contain calls
-//! to secondary command buffers that contain snippets of commands that do specific things, similar
-//! to function calls.
 //!
-//! All the possible commands are implemented in the `RawCommandBuffer` trait, and then the `CommandBuffer`
-//! and related types make a generic, strongly-typed wrapper around it that only expose the methods that
-//! are valid for the capabilities it provides.
+//! Each command buffer has specific capabilities for graphics, compute or transfer operations,
+//! and can be either a *primary* command buffer or a *secondary* command buffer.
+//!
+//! Operations are always initiated by a primary command buffer,
+//! but a primary command buffer can contain calls to secondary command buffers
+//! that contain snippets of commands that do specific things, similar to function calls.
+//!
+//! All the possible commands are exposed by the [`CommandBuffer`][CommandBuffer] trait.
 
 // TODO: Document pipelines and subpasses better.
 
@@ -62,9 +62,7 @@ bitflags! {
     }
 }
 
-/// An enum that indicates at runtime whether a command buffer
-/// is primary or secondary, similar to what `command::Primary`
-/// and `command::Secondary` do at compile-time.
+/// An enum that indicates whether a command buffer is primary or secondary.
 #[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Level {
@@ -219,7 +217,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<B::Buffer>;
 
-    /// Set the viewport parameters for the rasterizer.
+    /// Set the [viewport][crate::pso::Viewport] parameters for the rasterizer.
     ///
     /// Each viewport passed corresponds to the viewport with the same index,
     /// starting from an offset index `first_viewport`.
@@ -289,13 +287,16 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn set_depth_bias(&mut self, depth_bias: pso::DepthBias);
 
     /// Begins recording commands for a render pass on the given framebuffer.
-    /// `render_area` is the section of the framebuffer to render,
-    /// `clear_values` is an iterator of `ClearValueRaw`'s to use to use for
-    /// `clear_*` commands, one for each attachment of the render pass
-    /// that has a clear operation.
-    /// `first_subpass` specifies, for the first subpass, whether the
-    /// rendering commands are provided inline or whether the render
-    /// pass is composed of subpasses.
+    ///
+    /// # Arguments
+    ///
+    /// * `render_area` - section of the framebuffer to render.
+    /// * `clear_values` - iterator of [clear values][crate::command::ClearValue]
+    ///   to use to use for `clear_*` commands, one for each attachment of the render pass
+    ///   that has a clear operation.
+    /// * `first_subpass` - specifies, for the first subpass, whether the
+    ///   rendering commands are provided inline or whether the render
+    ///   pass is composed of subpasses.
     unsafe fn begin_render_pass<T>(
         &mut self,
         render_pass: &B::RenderPass,

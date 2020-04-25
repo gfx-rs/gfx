@@ -173,9 +173,9 @@ impl fmt::Display for Stage {
 pub struct EntryPoint<'a, B: Backend> {
     /// Entry point name.
     pub entry: &'a str,
-    /// Shader module reference.
+    /// Reference to the shader module containing this entry point.
     pub module: &'a B::ShaderModule,
-    /// Specialization.
+    /// Specialization constants to be used when creating the pipeline.
     pub specialization: Specialization<'a>,
 }
 

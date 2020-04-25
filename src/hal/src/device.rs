@@ -1,8 +1,8 @@
-//! Logical device
+//! Logical graphics device.
 //!
 //! # Device
 //!
-//! This module exposes the `Device` trait, which provides methods for creating
+//! This module exposes the [`Device`][Device] trait, which provides methods for creating
 //! and managing graphics resources such as buffers, images and memory.
 //!
 //! The `Adapter` and `Device` types are very similar to the Vulkan concept of
@@ -373,15 +373,14 @@ impl std::error::Error for ShaderError {
     }
 }
 
-/// # Overview
-///
-/// A `Device` is responsible for creating and managing resources for the physical device
-/// it was created from.
+/// Logical device handle, responsible for creating and managing resources
+/// for the physical device it was created from.
 ///
 /// ## Resource Construction and Handling
 ///
-/// This device structure can then be used to create and manage different resources, like buffers,
-/// shader programs and textures. See the individual methods for more information.
+/// This device structure can then be used to create and manage different resources,
+/// like [buffers][Device::create_buffer], [shader modules][Device::create_shader_module]
+/// and [images][Device::create_image]. See the individual methods for more information.
 ///
 /// ## Mutability
 ///
@@ -411,9 +410,10 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Free device memory
     unsafe fn free_memory(&self, memory: B::Memory);
 
-    /// Create a new command pool for a given queue family.
+    /// Create a new [command pool][crate::pool::CommandPool] for a given queue family.
     ///
-    /// *Note*: the family has to be associated by one as the `Gpu::queue_groups`.
+    /// *Note*: the family has to be associated with one of [the queue groups
+    /// of this device][crate::adapter::Gpu::queue_groups].
     unsafe fn create_command_pool(
         &self,
         family: QueueFamilyId,
@@ -423,11 +423,18 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Destroy a command pool.
     unsafe fn destroy_command_pool(&self, pool: B::CommandPool);
 
-    /// Create a render pass with the given attachments and subpasses.
+    /// Create a [render pass][crate::pass] with the given attachments and subpasses.
     ///
-    /// A *render pass* represents a collection of attachments, subpasses, and dependencies between
-    /// the subpasses, and describes how the attachments are used over the course of the subpasses.
     /// The use of a render pass in a command buffer is a *render pass* instance.
+    ///
+    /// # Arguments
+    ///
+    /// * `attachments` - [image attachments][crate::pass::Attachment] to be used in
+    ///   this render pass. Usually you need at least one attachment, to be used as output.
+    /// * `subpasses` - [subpasses][crate::pass::SubpassDesc] to use.
+    ///   You need to use at least one subpass.
+    /// * `dependencies` - [dependencies between subpasses][crate::pass::SubpassDependency].
+    ///   Can be empty.
     unsafe fn create_render_pass<'a, IA, IS, ID>(
         &self,
         attachments: IA,
@@ -442,7 +449,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>;
 
-    /// Destroy a `RenderPass`.
+    /// Destroys a *render pass* created by this device.
     unsafe fn destroy_render_pass(&self, rp: B::RenderPass);
 
     /// Create a new pipeline layout object.
@@ -501,13 +508,21 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn destroy_pipeline_cache(&self, cache: B::PipelineCache);
 
     /// Create a graphics pipeline.
+    ///
+    /// # Arguments
+    ///
+    /// * `desc` - the [description][crate::pso::GraphicsPipelineDesc] of
+    ///   the graphics pipeline to create.
+    /// * `cache` - the pipeline cache,
+    ///   [obtained from this device][Device::create_pipeline_cache],
+    ///   used for faster PSO creation.
     unsafe fn create_graphics_pipeline<'a>(
         &self,
         desc: &pso::GraphicsPipelineDesc<'a, B>,
         cache: Option<&B::PipelineCache>,
     ) -> Result<B::GraphicsPipeline, pso::CreationError>;
 
-    /// Create graphics pipelines.
+    /// Create multiple graphics pipelines.
     unsafe fn create_graphics_pipelines<'a, I>(
         &self,
         descs: I,
@@ -578,10 +593,12 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// which references the framebuffer, has finished execution.
     unsafe fn destroy_framebuffer(&self, buf: B::Framebuffer);
 
-    /// Create a new shader module object through the SPIR-V binary data.
+    /// Create a new shader module object from the SPIR-V binary data.
     ///
-    /// Once a shader module has been created, any entry points it contains can be used in pipeline
-    /// shader stages as described in *Compute Pipelines* and *Graphics Pipelines*.
+    /// Once a shader module has been created, any [entry points][crate::pso::EntryPoint]
+    /// it contains can be used in pipeline shader stages of
+    /// [compute pipelines][crate::pso::ComputePipelineDesc] and
+    /// [graphics pipelines][crate::pso::GraphicsPipelineDesc].
     unsafe fn create_shader_module(
         &self,
         spirv_data: &[u32],
@@ -763,27 +780,41 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     /// Unmap a memory object once host access to it is no longer needed by the application
     unsafe fn unmap_memory(&self, memory: &B::Memory);
 
-    /// Create a new semaphore object
+    /// Create a new semaphore object.
     fn create_semaphore(&self) -> Result<B::Semaphore, OutOfMemory>;
 
-    /// Destroy a semaphore object
+    /// Destroy a semaphore object.
     unsafe fn destroy_semaphore(&self, semaphore: B::Semaphore);
 
-    /// Create a new fence object
+    /// Create a new fence object.
     ///
     /// Fences are a synchronization primitive that **can** be used to insert a dependency from
-    /// a queue to the host. Fences have two states - signaled and unsignaled. A fence **can** be
-    /// signaled as part of the execution of a *queue submission* command. Fences **can** be unsignaled
-    /// on the host with *reset_fences*. Fences **can** be waited on by the host with the
-    /// *wait_for_fences* command, and the current state **can** be queried with *get_fence_status*.
+    /// a queue to the host.
+    /// Fences have two states - signaled and unsignaled.
+    ///
+    /// A fence **can** be signaled as part of the execution of a
+    /// [queue submission][crate::queue::CommandQueue::submit] command.
+    ///
+    /// Fences **can** be unsignaled on the host with
+    /// [`reset_fences`][Device::reset_fences].
+    ///
+    /// Fences **can** be waited on by the host with the
+    /// [`wait_for_fences`][Device::wait_for_fences] command.
+    ///
+    /// A fence's current state **can** be queried with
+    /// [`get_fence_status`][Device::get_fence_status].
+    ///
+    /// # Arguments
+    ///
+    /// * `signaled` - the fence will be in its signaled state.
     fn create_fence(&self, signaled: bool) -> Result<B::Fence, OutOfMemory>;
 
-    ///
+    /// Resets a given fence to its original, unsignaled state.
     unsafe fn reset_fence(&self, fence: &B::Fence) -> Result<(), OutOfMemory> {
         self.reset_fences(iter::once(fence))
     }
 
-    ///
+    /// Resets multiple fences to their original states.
     unsafe fn reset_fences<I>(&self, fences: I) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
