@@ -52,16 +52,8 @@ mod window;
 
 // CStr's cannot be constant yet, until const fn lands we need to use a lazy_static
 lazy_static! {
-    static ref LAYERS: Vec<&'static CStr> = if cfg!(all(target_os = "android", debug_assertions)) {
-        vec![
-            CStr::from_bytes_with_nul(b"VK_LAYER_LUNARG_core_validation\0").unwrap(),
-            CStr::from_bytes_with_nul(b"VK_LAYER_LUNARG_object_tracker\0").unwrap(),
-            CStr::from_bytes_with_nul(b"VK_LAYER_LUNARG_parameter_validation\0").unwrap(),
-            CStr::from_bytes_with_nul(b"VK_LAYER_GOOGLE_threading\0").unwrap(),
-            CStr::from_bytes_with_nul(b"VK_LAYER_GOOGLE_unique_objects\0").unwrap(),
-        ]
-    } else if cfg!(debug_assertions) {
-        vec![CStr::from_bytes_with_nul(b"VK_LAYER_LUNARG_standard_validation\0").unwrap()]
+    static ref LAYERS: Vec<&'static CStr> = if cfg!(debug_assertions) {
+        vec![CStr::from_bytes_with_nul(b"VK_LAYER_KHRONOS_validation\0").unwrap()]
     } else {
         vec![]
     };

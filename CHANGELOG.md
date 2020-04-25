@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-vulkan-0.5.3 (25-04-2020)
+  - switch to `VK_LAYER_KHRONOS_validation`
+
 ### backend-vulkan-0.5.2 (01-04-2020)
   - fix support for `AMD_NEGATIVE_VIEWPORT_HEIGHT`
 
