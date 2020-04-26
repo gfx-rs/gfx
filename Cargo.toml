@@ -9,6 +9,7 @@ members = [
     "src/backend/gl",
     "src/backend/metal",
     "src/backend/vulkan",
+    "src/backend/webgpu",
     "src/hal",
     "src/warden",
     "examples",
