@@ -351,11 +351,17 @@ impl hal::Instance<Backend> for Instance {
 
         let instance_extensions = entry
             .enumerate_instance_extension_properties()
-            .expect("Unable to enumerate instance extensions");
+            .map_err(|e| {
+                info!("Unable to enumerate instance extensions: {:?}", e);
+                hal::UnsupportedBackend
+            })?;
 
         let instance_layers = entry
             .enumerate_instance_layer_properties()
-            .expect("Unable to enumerate instance layers");
+            .map_err(|e| {
+                info!("Unable to enumerate instance layers: {:?}", e);
+                hal::UnsupportedBackend
+            })?;
 
         // Check our extensions against the available extensions
         let extensions = SURFACE_EXTENSIONS
@@ -369,7 +375,7 @@ impl hal::Instance<Backend> for Instance {
                     })
                     .map(|_| ext)
                     .or_else(|| {
-                        warn!("Unable to find extension: {}", ext.to_string_lossy());
+                        info!("Unable to find extension: {}", ext.to_string_lossy());
                         None
                     })
             })
