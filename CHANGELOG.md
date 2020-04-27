@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-vulkan-0.5.6 (27-04-2020)
+  - gracefully detect when the driver supports it but hardware does not
+
 ### backend-vulkan-0.5.3 (25-04-2020)
   - switch to `VK_LAYER_KHRONOS_validation`
 
