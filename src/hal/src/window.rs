@@ -1,17 +1,22 @@
-//! Windowing system interoperability
+//! Windowing system interoperability.
 //!
 //! Screen presentation (fullscreen or window) of images requires two objects:
 //!
-//! * [Surface](window::Surface) is the host abstraction of the native screen
-//! * [Swapchain](window::Swapchain) is the device abstraction for a surface, containing multiple presentable images
+//! * [Surface][Surface] is an abstraction of a native screen or window, for graphics use.
+//! * [Swapchain][Swapchain] is a chain of multiple images, which can be presented on
+//!   a surface.
 //!
 //! ## Window
 //!
-//! // DOC TODO
+//! `gfx-hal` does not provide any methods for creating a native window or screen.
+//! This is handled exeternally, either by managing your own window or by using a
+//! library such as [winit](https://github.com/rust-windowing/winit), and providing
+//! the [raw window handle](https://github.com/rust-windowing/raw-window-handle).
 //!
 //! ## Surface
 //!
-//! // DOC TODO
+//! Once you have a window handle, you need to [create a surface][crate::Instance::create_surface]
+//! compatible with the [instance][crate::Instance] of the graphics API you currently use.
 //!
 //! ## Swapchain
 //!
