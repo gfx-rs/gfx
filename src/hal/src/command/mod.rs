@@ -44,10 +44,6 @@ bitflags! {
     /// Option flags for various command buffer settings.
     #[derive(Default)]
     pub struct CommandBufferFlags: u32 {
-        // TODO: Remove once 'const fn' is stabilized: https://github.com/rust-lang/rust/issues/24111
-        /// No flags.
-        const EMPTY = 0x0;
-
         /// Says that the command buffer will be recorded, submitted only once, and then reset and re-filled
         /// for another submission.
         const ONE_TIME_SUBMIT = 0x1;
