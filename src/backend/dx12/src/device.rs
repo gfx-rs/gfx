@@ -1032,7 +1032,7 @@ impl Device {
             Width: config.extent.width,
             Height: config.extent.height,
             Format: non_srgb_format,
-            Flags: 0,
+            Flags: dxgi::DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT,
             BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
             SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
                 Count: 1,
@@ -1072,6 +1072,11 @@ impl Device {
         inner: native::WeakPtr<dxgi1_4::IDXGISwapChain3>,
         config: &w::SwapchainConfig,
     ) -> Swapchain {
+        let waitable = unsafe {
+            inner.SetMaximumFrameLatency(config.image_count);
+            inner.GetFrameLatencyWaitableObject()
+        };
+
         let rtv_desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
             Format: conv::map_format(config.format).unwrap(),
             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2D,
@@ -1096,10 +1101,10 @@ impl Device {
 
         Swapchain {
             inner,
-            next_frame: 0,
             frame_queue: VecDeque::new(),
             rtv_heap,
             resources,
+            waitable,
         }
     }
 }
