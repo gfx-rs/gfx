@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-dx12"
-version = "0.5.0"
+version = "0.5.1"
 description = "DirectX-12 API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -24,8 +24,8 @@ hal = { path = "../../hal", version = "0.5", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 bitflags = "1"
 native = { package = "d3d12", version = "0.3", features = ["libloading"] }
-log = { version = "0.4" }
-smallvec = "1.0"
+log = "0.4"
+smallvec = "1"
 spirv_cross = { version = "0.18", features = ["hlsl"] }
 winapi = { version = "0.3", features = ["basetsd","d3d12","d3d12sdklayers","d3d12shader","d3dcommon","d3dcompiler","dxgi1_2","dxgi1_3","dxgi1_4","dxgi1_6","dxgidebug","dxgiformat","dxgitype","handleapi","minwindef","synchapi","unknwnbase","winbase","windef","winerror","winnt","winuser"] }
 raw-window-handle = "0.3"

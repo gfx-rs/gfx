@@ -3285,6 +3285,7 @@ impl d::Device<B> for Device {
         const WAIT_OBJECT_LAST: u32 = winbase::WAIT_OBJECT_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         const WAIT_ABANDONED_LAST: u32 = winbase::WAIT_ABANDONED_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         match hr {
+            winbase::WAIT_FAILED => Err(d::OomOrDeviceLost::DeviceLost(d::DeviceLost)),
             winbase::WAIT_OBJECT_0 ..= WAIT_OBJECT_LAST => Ok(true),
             winbase::WAIT_ABANDONED_0 ..= WAIT_ABANDONED_LAST => Ok(true), //TODO?
             winerror::WAIT_TIMEOUT => Ok(false),
