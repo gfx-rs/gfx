@@ -1,5 +1,9 @@
 # Change Log
 
+### backend-dx12-0.5.1 (01-01-2020)
+  - fix drop of physical devices
+  - handle device lost during a fence wait
+
 ### backend-vulkan-0.5.6 (27-04-2020)
   - gracefully detect when the driver supports it but hardware does not
 
