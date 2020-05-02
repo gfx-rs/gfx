@@ -223,7 +223,7 @@ impl CommandQueue {
         gl.surfman_device
             .write()
             .make_context_current(&swapchain.context.read())
-            .unwrap();
+            .expect("TODO");
 
         // Use the framebuffer from the surfman context
         #[cfg(surfman)]
@@ -236,8 +236,11 @@ impl CommandQueue {
             .framebuffer_object;
 
         unsafe {
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.fbos[index as usize]));
-            gl.bind_framebuffer(
+            // Note that here we access the context with `gl.context` instead of accessing the gl context
+            // through the dereference of the `GlContainer` because that will make the `gl.context` current
+            // and we don't want that because we want the swapchain context to stay the current context.
+            gl.context.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.fbos[index as usize]));
+            gl.context.bind_framebuffer(
                 glow::DRAW_FRAMEBUFFER,
                 #[cfg(surfman)]
                 match fbo {
@@ -247,7 +250,7 @@ impl CommandQueue {
                 #[cfg(not(surfman))]
                 None,
             );
-            gl.blit_framebuffer(
+            gl.context.blit_framebuffer(
                 0,
                 0,
                 extent.width as _,

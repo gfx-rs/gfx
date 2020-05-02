@@ -197,14 +197,6 @@ pub struct Surface {
 }
 
 impl Surface {
-    /// Make the surface's gl context the current context
-    pub fn make_context_current(&self) {
-        self.device
-            .write()
-            .make_context_current(&self.context.read())
-            .expect("TODO");
-    }
-
     pub fn context(&self) -> Starc<RwLock<sm::Context>> {
         self.context.clone()
     }
@@ -270,7 +262,6 @@ impl window::PresentationSurface<B> for Surface {
             config.extent.height as i32,
         );
 
-        // let fbo = surface_info.framebuffer_object;
         let fbo = gl.create_framebuffer().unwrap();
         gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(fbo));
         gl.framebuffer_renderbuffer(
@@ -283,7 +274,6 @@ impl window::PresentationSurface<B> for Surface {
             context: self.context.clone(),
             extent: config.extent,
             fbos: iter::once(fbo).collect(),
-            // out_fbo: Some(surface_info.framebuffer_object),
         });
 
         Ok(())
@@ -312,7 +302,6 @@ impl window::PresentationSurface<B> for Surface {
 
 impl window::Surface<B> for Surface {
     fn supports_queue_family(&self, _: &QueueFamily) -> bool {
-        self.make_context_current();
         true
     }
 
