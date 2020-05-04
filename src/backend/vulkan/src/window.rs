@@ -392,9 +392,9 @@ impl w::Surface<Backend> for Surface {
                     u | conv::map_vk_present_mode(m)
                 }),
             composite_alpha_modes: conv::map_vk_composite_alpha(caps.supported_composite_alpha),
-            image_count: caps.min_image_count ..= max_images,
+            image_count: caps.min_image_count..=max_images,
             current_extent,
-            extents: min_extent ..= max_extent,
+            extents: min_extent..=max_extent,
             max_image_layers: caps.max_image_array_layers as _,
             usage: conv::map_vk_image_usage(caps.supported_usage_flags),
         }

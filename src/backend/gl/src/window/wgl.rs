@@ -246,9 +246,9 @@ impl window::Surface<Backend> for Surface {
         window::SurfaceCapabilities {
             present_modes: window::PresentMode::FIFO, //TODO
             composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
-            image_count: 2 ..= 2,
+            image_count: 2..=2,
             current_extent: Some(extent),
-            extents: extent ..= extent,
+            extents: extent..=extent,
             max_image_layers: 1,
             usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
         }

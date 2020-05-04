@@ -5,8 +5,17 @@ use glow::HasContext;
 use smallvec::SmallVec;
 
 use crate::{
-    command as com, device, info::LegacyFeatures, native, state, Backend, GlContext, Share, Starc,
-    Surface, Swapchain,
+    command as com,
+    device,
+    info::LegacyFeatures,
+    native,
+    state,
+    Backend,
+    GlContext,
+    Share,
+    Starc,
+    Surface,
+    Swapchain,
 };
 
 // State caching system for command queue.
@@ -316,8 +325,9 @@ impl CommandQueue {
             let viewports: SmallVec<[[f32; 4]; 16]> = (0..self.state.num_viewports)
                 .map(|_| [0.0, 0.0, 0.0, 0.0])
                 .collect();
-            let depth_ranges: SmallVec<[[f64; 2]; 16]> =
-                (0..self.state.num_viewports).map(|_| [0.0, 0.0]).collect();
+            let depth_ranges: SmallVec<[[f64; 2]; 16]> = (0..self.state.num_viewports)
+                .map(|_| [0.0, 0.0])
+                .collect();
             unsafe {
                 gl.viewport_f32_slice(0, viewports.len() as i32, &viewports);
                 gl.depth_range_f64_slice(0, depth_ranges.len() as i32, &depth_ranges);
@@ -329,8 +339,9 @@ impl CommandQueue {
             unsafe { gl.scissor(0, 0, 0, 0) };
         } else if self.state.num_scissors > 1 {
             // 16 viewports is a common limit set in drivers.
-            let scissors: SmallVec<[[i32; 4]; 16]> =
-                (0..self.state.num_scissors).map(|_| [0, 0, 0, 0]).collect();
+            let scissors: SmallVec<[[i32; 4]; 16]> = (0..self.state.num_scissors)
+                .map(|_| [0, 0, 0, 0])
+                .collect();
             unsafe { gl.scissor_slice(0, scissors.len() as i32, scissors.as_slice()) };
         }
     }
@@ -890,7 +901,7 @@ impl CommandQueue {
             },
             com::Command::BindPixelTargets(pts) => {
             let point = gl::DRAW_FRAMEBUFFER;
-            for i in 0 .. hal::MAX_COLOR_TARGETS {
+            for i in 0..hal::MAX_COLOR_TARGETS {
             let att = gl::COLOR_ATTACHMENT0 + i as gl::types::GLuint;
             if let Some(ref target) = pts.colors[i] {
             self.bind_target(point, att, target);
@@ -911,7 +922,10 @@ impl CommandQueue {
             com::Command::UnbindAttribute(slot) => unsafe {
             self.share.context.DisableVertexAttribArray(slot as gl::types::GLuint);
             },*/
-            com::Command::BindUniform { ref uniform, buffer } => {
+            com::Command::BindUniform {
+                ref uniform,
+                buffer,
+            } => {
                 let gl = &self.share.context;
 
                 unsafe {
@@ -956,15 +970,27 @@ impl CommandQueue {
                         }
                         glow::FLOAT_MAT2 => {
                             let data = Self::get::<[f32; 4]>(data_buf, buffer)[0];
-                            gl.uniform_matrix_2_f32_slice(Some((*uniform.location).clone()), false, &data);
+                            gl.uniform_matrix_2_f32_slice(
+                                Some((*uniform.location).clone()),
+                                false,
+                                &data,
+                            );
                         }
                         glow::FLOAT_MAT3 => {
                             let data = Self::get::<[f32; 9]>(data_buf, buffer)[0];
-                            gl.uniform_matrix_3_f32_slice(Some((*uniform.location).clone()), false, &data);
+                            gl.uniform_matrix_3_f32_slice(
+                                Some((*uniform.location).clone()),
+                                false,
+                                &data,
+                            );
                         }
                         glow::FLOAT_MAT4 => {
                             let data = Self::get::<[f32; 16]>(data_buf, buffer)[0];
-                            gl.uniform_matrix_4_f32_slice(Some((*uniform.location).clone()), false, &data);
+                            gl.uniform_matrix_4_f32_slice(
+                                Some((*uniform.location).clone()),
+                                false,
+                                &data,
+                            );
                         }
                         _ => panic!("Unsupported uniform datatype!"),
                     }

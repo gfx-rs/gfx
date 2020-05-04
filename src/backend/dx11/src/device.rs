@@ -919,43 +919,52 @@ impl device::Device<Backend> for Device {
                 .map_err(|err| pso::CreationError::Shader(err))
         };
 
-        let vs = build_shader(pso::Stage::Vertex, Some(&desc.shaders.vertex))?.unwrap();
-        let ps = build_shader(pso::Stage::Fragment, desc.shaders.fragment.as_ref())?;
-        let gs = build_shader(pso::Stage::Geometry, desc.shaders.geometry.as_ref())?;
-        let ds = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
-        let hs = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;
+        let (layout, vs, gs, hs, ds) = match desc.primitive_assembler {
+            pso::PrimitiveAssembler::Vertex {
+                ref buffers,
+                ref attributes,
+                ref input_assembler,
+                ref vertex,
+                ref tessellation,
+                ref geometry,
+            } => {               
+                let vs = build_shader(pso::Stage::Vertex, Some(&vertex))?.unwrap();
+                let gs = build_shader(pso::Stage::Geometry, geometry.as_ref())?;  
 
-        let layout = self.create_input_layout(
-            vs.clone(),
-            &desc.vertex_buffers,
-            &desc.attributes,
-            &desc.input_assembler,
-        )?;
-        let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
-        let blend_state = self.create_blend_state(&desc.blender)?;
-        let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);
+                let layout = self.create_input_layout(vs.clone(), buffers, attributes, input_assembler)?;
 
-        let vs = self.create_vertex_shader(vs)?;
+                let vs = self.create_vertex_shader(vs)?;
+                let gs = if let Some(blob) = gs {
+                    Some(self.create_geometry_shader(blob)?)
+                } else {
+                    None
+                };
+                let (hs, ds) = if let Some(ts) = tessellation {
+                    let hs = build_shader(pso::Stage::Hull, Some(&ts.0))?.unwrap();
+                    let ds = build_shader(pso::Stage::Domain, Some(&ts.1))?.unwrap();
+
+                    (Some(self.create_hull_shader(hs)?), Some(self.create_domain_shader(ds)?))
+                } else {
+                    (None, None)
+                };
+
+                (layout, vs, gs, hs, ds)
+            },
+            pso::PrimitiveAssembler::Mesh { .. } => {
+                return Err(pso::CreationError::UnsupportedPipeline)
+            }
+        };
+
+        let ps = build_shader(pso::Stage::Fragment, desc.fragment.as_ref())?;
         let ps = if let Some(blob) = ps {
             Some(self.create_pixel_shader(blob)?)
         } else {
             None
-        };
-        let gs = if let Some(blob) = gs {
-            Some(self.create_geometry_shader(blob)?)
-        } else {
-            None
-        };
-        let ds = if let Some(blob) = ds {
-            Some(self.create_domain_shader(blob)?)
-        } else {
-            None
-        };
-        let hs = if let Some(blob) = hs {
-            Some(self.create_hull_shader(blob)?)
-        } else {
-            None
-        };
+        };  
+
+        let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
+        let blend_state = self.create_blend_state(&desc.blender)?;
+        let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);              
 
         Ok(GraphicsPipeline {
             vs,

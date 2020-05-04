@@ -785,6 +785,7 @@ pub fn map_stage(stage: Stage) -> spirv::ExecutionModel {
         Stage::Compute => spirv::ExecutionModel::GlCompute,
         Stage::Hull => spirv::ExecutionModel::TessellationControl,
         Stage::Domain => spirv::ExecutionModel::TessellationEvaluation,
+        Stage::Task | Stage::Mesh => panic!("{:?} shader is not supported in DirectX 11", stage),
     }
 }
 

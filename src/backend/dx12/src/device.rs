@@ -328,13 +328,12 @@ impl Device {
                 )
                 .map_err(gen_unexpected_error)?;
             }
-            if !layout.elements[set as usize].mutable_bindings.contains(&binding) {
-                ast.set_decoration(
-                    storage_buffer.id,
-                    spirv::Decoration::NonWritable,
-                    0,
-                )
-                .map_err(gen_unexpected_error)?
+            if !layout.elements[set as usize]
+                .mutable_bindings
+                .contains(&binding)
+            {
+                ast.set_decoration(storage_buffer.id, spirv::Decoration::NonWritable, 0)
+                    .map_err(gen_unexpected_error)?
             }
         }
 
@@ -353,13 +352,12 @@ impl Device {
                 )
                 .map_err(gen_unexpected_error)?;
             }
-            if !layout.elements[set as usize].mutable_bindings.contains(&binding) {
-                ast.set_decoration(
-                    image.id,
-                    spirv::Decoration::NonWritable,
-                    0,
-                )
-                .map_err(gen_unexpected_error)?
+            if !layout.elements[set as usize]
+                .mutable_bindings
+                .contains(&binding)
+            {
+                ast.set_decoration(image.id, spirv::Decoration::NonWritable, 0)
+                    .map_err(gen_unexpected_error)?
             }
         }
 
@@ -1805,23 +1803,51 @@ impl d::Device<B> for Device {
                 Ok((shader, false)) => Ok(ShaderBc::Borrowed(shader)),
                 Err(err) => Err(pso::CreationError::Shader(err)),
             }
+        };        
+
+        let vertex_buffers = Vec::new();
+        let attributes = Vec::new();
+        let input_assembler = pso::InputAssemblerDesc::new(pso::Primitive::TriangleList);
+        let (vertex_buffers, attributes, input_assembler, vs, gs, hs, ds, _, _) = match desc.primitive_assembler {
+            pso::PrimitiveAssembler::Vertex {
+                ref buffers,
+                ref attributes,
+                ref input_assembler,
+                ref vertex,
+                ref tessellation,
+                ref geometry,
+            } => {
+                let (hs, ds) = if let Some(ts) = tessellation {
+                    (Some(&ts.0), Some(&ts.1))
+                } else {
+                    (None, None)
+                };
+
+                (buffers, attributes, input_assembler, Some(vertex), geometry.as_ref(), hs, ds, None, None)
+            },
+            pso::PrimitiveAssembler::Mesh { 
+                ref task,
+                ref mesh
+             } => {
+                (&vertex_buffers, &attributes, &input_assembler, None, None, None, None, task.as_ref(), Some(mesh))
+            },
         };
 
-        let vs = build_shader(pso::Stage::Vertex, Some(&desc.shaders.vertex))?;
-        let ps = build_shader(pso::Stage::Fragment, desc.shaders.fragment.as_ref())?;
-        let gs = build_shader(pso::Stage::Geometry, desc.shaders.geometry.as_ref())?;
-        let ds = build_shader(pso::Stage::Domain, desc.shaders.domain.as_ref())?;
-        let hs = build_shader(pso::Stage::Hull, desc.shaders.hull.as_ref())?;
+        let vs = build_shader(pso::Stage::Vertex, vs)?;
+        let gs = build_shader(pso::Stage::Geometry, gs)?;
+        let hs = build_shader(pso::Stage::Domain, hs)?;
+        let ds = build_shader(pso::Stage::Hull, ds)?;
+        let ps = build_shader(pso::Stage::Fragment, desc.fragment.as_ref())?;
 
         // Rebind vertex buffers, see native.rs for more details.
         let mut vertex_bindings = [None; MAX_VERTEX_BUFFERS];
         let mut vertex_strides = [0; MAX_VERTEX_BUFFERS];
 
-        for buffer in &desc.vertex_buffers {
+        for buffer in vertex_buffers {
             vertex_strides[buffer.binding as usize] = buffer.stride;
         }
         // Fill in identity mapping where we don't need to adjust anything.
-        for attrib in &desc.attributes {
+        for attrib in attributes {
             let binding = attrib.binding as usize;
             let stride = vertex_strides[attrib.binding as usize];
             if attrib.element.offset < stride {
@@ -1834,12 +1860,10 @@ impl d::Device<B> for Device {
         }
 
         // Define input element descriptions
-        let input_element_descs = desc
-            .attributes
+        let input_element_descs = attributes
             .iter()
             .filter_map(|attrib| {
-                let buffer_desc = match desc
-                    .vertex_buffers
+                let buffer_desc = match vertex_buffers
                     .iter()
                     .find(|buffer_desc| buffer_desc.binding == attrib.binding)
                 {
@@ -1972,7 +1996,7 @@ impl d::Device<B> for Device {
                 NumElements: input_element_descs.len() as u32,
             },
             IBStripCutValue: d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED, // TODO
-            PrimitiveTopologyType: conv::map_topology_type(desc.input_assembler.primitive),
+            PrimitiveTopologyType: conv::map_topology_type(input_assembler.primitive),
             NumRenderTargets: num_rtvs,
             RTVFormats: rtvs,
             DSVFormat: pass
@@ -1991,8 +2015,7 @@ impl d::Device<B> for Device {
             },
             Flags: d3d12::D3D12_PIPELINE_STATE_FLAG_NONE,
         };
-
-        let topology = conv::map_topology(&desc.input_assembler);
+        let topology = conv::map_topology(input_assembler);
 
         // Create PSO
         let mut pipeline = native::PipelineState::null();
@@ -2001,7 +2024,8 @@ impl d::Device<B> for Device {
             // Instead, we must use the newer subobject stream method.
             let (device2, hr) = self.raw.cast::<d3d12::ID3D12Device2>();
             if winerror::SUCCEEDED(hr) {
-                let mut pss_stream = GraphicsPipelineStateSubobjectStream::new(&pso_desc, true);
+                let mut pss_stream =
+                    GraphicsPipelineStateSubobjectStream::new(&pso_desc, true);
                 let pss_desc = d3d12::D3D12_PIPELINE_STATE_STREAM_DESC {
                     SizeInBytes: mem::size_of_val(&pss_stream),
                     pPipelineStateSubobjectStream: &mut pss_stream as *mut _ as _,
@@ -3300,9 +3324,8 @@ impl d::Device<B> for Device {
         const WAIT_OBJECT_LAST: u32 = winbase::WAIT_OBJECT_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         const WAIT_ABANDONED_LAST: u32 = winbase::WAIT_ABANDONED_0 + winnt::MAXIMUM_WAIT_OBJECTS;
         match hr {
-            winbase::WAIT_FAILED => Err(d::OomOrDeviceLost::DeviceLost(d::DeviceLost)),
-            winbase::WAIT_OBJECT_0 ..= WAIT_OBJECT_LAST => Ok(true),
-            winbase::WAIT_ABANDONED_0 ..= WAIT_ABANDONED_LAST => Ok(true), //TODO?
+            winbase::WAIT_OBJECT_0..=WAIT_OBJECT_LAST => Ok(true),
+            winbase::WAIT_ABANDONED_0..=WAIT_ABANDONED_LAST => Ok(true), //TODO?
             winerror::WAIT_TIMEOUT => Ok(false),
             _ => panic!("Unexpected wait status 0x{:X}", hr),
         }

@@ -84,12 +84,12 @@ impl w::Surface<Backend> for Surface {
         w::SurfaceCapabilities {
             present_modes: w::PresentMode::FIFO,                  //TODO
             composite_alpha_modes: w::CompositeAlphaMode::OPAQUE, //TODO
-            image_count: 2 ..= dxgi::DXGI_MAX_SWAP_CHAIN_BUFFERS,
+            image_count: 2..=16, // we currently use a flip effect which supports 2..=16 buffers
             current_extent,
             extents: w::Extent2D {
                 width: 16,
                 height: 16,
-            } ..= w::Extent2D {
+            }..=w::Extent2D {
                 width: 4096,
                 height: 4096,
             },

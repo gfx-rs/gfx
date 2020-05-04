@@ -26,6 +26,8 @@ pub use self::{
 pub enum CreationError {
     /// Unknown other error.
     Other,
+    /// Unsupported pipeline on hardware or implementation. Example: mesh shaders on DirectX 11.
+    UnsupportedPipeline,
     /// Invalid subpass (not part of renderpass).
     InvalidSubpass(pass::SubpassId),
     /// Shader compilation error.
@@ -45,6 +47,7 @@ impl std::fmt::Display for CreationError {
         match self {
             CreationError::OutOfMemory(err) => write!(fmt, "Failed to create pipeline: {}", err),
             CreationError::Other => write!(fmt, "Failed to create pipeline: Unsupported usage: Implementation specific error occurred"),
+            CreationError::UnsupportedPipeline => write!(fmt, "Failed to create pipeline: pipeline type is not supported"),
             CreationError::InvalidSubpass(subpass) => write!(fmt, "Failed to create pipeline: Invalid subpass: {}", subpass),
             CreationError::Shader(err) => write!(fmt, "Failed to create pipeline: {}", err),
         }
@@ -58,6 +61,7 @@ impl std::error::Error for CreationError {
             CreationError::Shader(err) => Some(err),
             CreationError::InvalidSubpass(_) => None,
             CreationError::Other => None,
+            CreationError::UnsupportedPipeline => None,
         }
     }
 }
@@ -100,6 +104,10 @@ bitflags!(
         /// Read/Write access from host.
         /// (Not a real pipeline stage)
         const HOST = 0x4000;
+        /// Task shader stage.
+        const TASK_SHADER = 0x80000;
+        /// Mesh shader stage.
+        const MESH_SHADER = 0x100000;
     }
 );
 
@@ -119,6 +127,10 @@ bitflags!(
         const FRAGMENT = 0x10;
         /// Compute shader stage.
         const COMPUTE  = 0x20;
+        /// Task shader stage.
+        const TASK     = 0x40;
+        /// Mesh shader stage.
+        const MESH     = 0x80;
         /// All graphics pipeline shader stages.
         const GRAPHICS = Self::VERTEX.bits | Self::HULL.bits |
             Self::DOMAIN.bits | Self::GEOMETRY.bits | Self::FRAGMENT.bits;
@@ -140,6 +152,8 @@ pub enum Stage {
     Geometry,
     Fragment,
     Compute,
+    Task,
+    Mesh,
 }
 
 impl From<Stage> for ShaderStageFlags {
@@ -151,6 +165,8 @@ impl From<Stage> for ShaderStageFlags {
             Stage::Geometry => ShaderStageFlags::GEOMETRY,
             Stage::Fragment => ShaderStageFlags::FRAGMENT,
             Stage::Compute => ShaderStageFlags::COMPUTE,
+            Stage::Task => ShaderStageFlags::TASK,
+            Stage::Mesh => ShaderStageFlags::MESH,
         }
     }
 }
@@ -164,6 +180,8 @@ impl fmt::Display for Stage {
             Stage::Geometry => "geometry",
             Stage::Fragment => "fragment",
             Stage::Compute => "compute",
+            Stage::Task => "task",
+            Stage::Mesh => "mesh",
         })
     }
 }

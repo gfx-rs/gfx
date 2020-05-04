@@ -31,6 +31,7 @@ use crate::{
     InstanceCount,
     VertexCount,
     VertexOffset,
+    TaskCount,
     WorkGroupCount,
 };
 
@@ -474,6 +475,32 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         buffer: &B::Buffer,
         offset: buffer::Offset,
         draw_count: DrawCount,
+        stride: u32,
+    );
+
+    /// Dispatches `task_count` of threads. Similar to compute dispatch.
+    unsafe fn draw_mesh_tasks(&mut self, task_count: TaskCount, first_task: TaskCount);
+
+    /// Indirect version of `draw_mesh_tasks`. Analogous to `draw_indirect`, but for mesh shaders.
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        buffer: &B::Buffer,
+        offset: buffer::Offset,
+        draw_count: DrawCount,
+        stride: u32,
+    );
+
+    /// Like `draw_mesh_tasks_indirect` except that the draw count is read by
+    /// the device from a buffer during execution. The command will read an
+    /// unsigned 32-bit integer from `count_buffer` located at `count_buffer_offset`
+    /// and use this as the draw count.
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        buffer: &B::Buffer,
+        offset: buffer::Offset,
+        count_buffer: &B::Buffer,
+        count_buffer_offset: buffer::Offset,
+        max_draw_count: DrawCount,
         stride: u32,
     );
 

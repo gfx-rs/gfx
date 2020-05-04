@@ -356,12 +356,10 @@ impl hal::Instance<Backend> for Instance {
                 hal::UnsupportedBackend
             })?;
 
-        let instance_layers = entry
-            .enumerate_instance_layer_properties()
-            .map_err(|e| {
-                info!("Unable to enumerate instance layers: {:?}", e);
-                hal::UnsupportedBackend
-            })?;
+        let instance_layers = entry.enumerate_instance_layer_properties().map_err(|e| {
+            info!("Unable to enumerate instance layers: {:?}", e);
+            hal::UnsupportedBackend
+        })?;
 
         // Check our extensions against the available extensions
         let extensions = SURFACE_EXTENSIONS
@@ -669,7 +667,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             return Err(DeviceCreationError::MissingFeature);
         }
 
-        let maintenance_level = if self.supports_extension(*KHR_MAINTENANCE1) { 1 } else { 0 };
+        let maintenance_level = if self.supports_extension(*KHR_MAINTENANCE1) {
+            1
+        } else {
+            0
+        };
         let enabled_features = conv::map_device_features(requested_features);
         let enabled_extensions = DEVICE_EXTENSIONS
             .iter()
@@ -681,13 +683,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     None
                 },
             )
-            .chain(
-                match maintenance_level {
-                    0 => None,
-                    1 => Some(*KHR_MAINTENANCE1),
-                    _ => unreachable!(),
-                }
-            );
+            .chain(match maintenance_level {
+                0 => None,
+                1 => Some(*KHR_MAINTENANCE1),
+                _ => unreachable!(),
+            });
 
         // Create device
         let device_raw = {
@@ -1190,6 +1190,21 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             max_uniform_buffer_range: limits.max_uniform_buffer_range as _,
             min_memory_map_alignment: limits.min_memory_map_alignment,
             standard_sample_locations: limits.standard_sample_locations == ash::vk::TRUE,
+
+            // TODO: Implement Limits for Mesh Shaders
+            max_draw_mesh_tasks_count: 0,
+            max_task_work_group_invocations: 0,
+            max_task_work_group_size: [0; 3],
+            max_task_total_memory_size: 0,
+            max_task_output_count: 0,
+            max_mesh_work_group_invocations: 0,
+            max_mesh_work_group_size: [0; 3],
+            max_mesh_total_memory_size: 0,
+            max_mesh_output_vertices: 0,
+            max_mesh_output_primitives: 0,
+            max_mesh_multiview_view_count: 0,
+            mesh_output_per_vertex_granularity: 0,
+            mesh_output_per_primitive_granularity: 0,
         }
     }
 
