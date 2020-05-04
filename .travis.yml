@@ -91,6 +91,7 @@ script:
   - export PATH=$PATH:$HOME/deps/bin
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export LIBRARY_PATH=$HOME/deps/usr/lib/x86_64-linux-gnu; fi
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export LD_LIBRARY_PATH=$LIBRARY_PATH; fi
+  - export RUST_BACKTRACE=1
   - if [[ $TARGET != "aarch64-apple-ios" ]]; then make all; else make check; fi
   - if [[ -n "$WASM" ]]; then make quad-wasm; fi
   #- if [[ $TRAVIS_OS_NAME == "linux" ]]; then make reftests-ci; fi
