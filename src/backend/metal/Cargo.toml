@@ -36,7 +36,7 @@ block = "0.1"
 cocoa = "0.20"
 core-graphics = "0.19"
 smallvec = "1"
-spirv_cross = { version = "0.18", features = ["msl"] }
+spirv_cross = { version = "0.20", features = ["msl"] }
 parking_lot = "0.10"
 storage-map = "0.2"
 lazy_static = "1"

@@ -14,7 +14,7 @@ edition = "2018"
 [dependencies]
 hal = { path = "../../hal", version = "0.5", package = "gfx-hal" }
 fxhash = "0.2.1"
-spirv_cross = { version = "0.18", optional = true }
+spirv_cross = { version = "0.20", optional = true }
 
 [lib]
 name = "gfx_auxil"
