@@ -641,5 +641,6 @@ pub fn map_stage(stage: pso::Stage) -> spirv::ExecutionModel {
         pso::Stage::Compute => spirv::ExecutionModel::GlCompute,
         pso::Stage::Hull => spirv::ExecutionModel::TessellationControl,
         pso::Stage::Domain => spirv::ExecutionModel::TessellationEvaluation,
+        pso::Stage::Task | pso::Stage::Mesh => panic!("{:?} shader is not yet implemented in SPIRV-Cross", stage),
     }
 }

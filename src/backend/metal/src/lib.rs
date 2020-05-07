@@ -994,7 +994,7 @@ impl PrivateCapabilities {
                 &[
                     MTLFeatureSet::iOS_GPUFamily4_v2,
                     MTLFeatureSet::iOS_GPUFamily5_v1,
-                ]
+                ],
             ) {
                 64 << 10
             } else if Self::supports_any(
@@ -1003,7 +1003,7 @@ impl PrivateCapabilities {
                     MTLFeatureSet::iOS_GPUFamily4_v1,
                     MTLFeatureSet::macOS_GPUFamily1_v2,
                     MTLFeatureSet::macOS_GPUFamily2_v1,
-                ]
+                ],
             ) {
                 32 << 10
             } else {

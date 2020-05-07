@@ -41,6 +41,7 @@ use hal::{
     Limits,
     VertexCount,
     VertexOffset,
+    TaskCount,
     WorkGroupCount,
 };
 
@@ -782,12 +783,12 @@ impl window::Surface<Backend> for Surface {
         window::SurfaceCapabilities {
             present_modes: window::PresentMode::FIFO, //TODO
             composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
-            image_count: 1 ..= 16,                    // TODO:
+            image_count: 1..=16,                    // TODO:
             current_extent,
             extents: window::Extent2D {
                 width: 16,
                 height: 16,
-            } ..= window::Extent2D {
+            }..=window::Extent2D {
                 width: 4096,
                 height: 4096,
             },
@@ -2224,6 +2225,32 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _offset: buffer::Offset,
         _draw_count: DrawCount,
         _stride: u32,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_mesh_tasks(&mut self, _: TaskCount, _: TaskCount) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        _: &Buffer,
+        _: buffer::Offset,
+        _: hal::DrawCount,
+        _: u32,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        _: &Buffer,
+        _: buffer::Offset,
+        _: &Buffer,
+        _: buffer::Offset,
+        _: hal::DrawCount,
+        _: u32,
     ) {
         unimplemented!()
     }

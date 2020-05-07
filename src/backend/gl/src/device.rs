@@ -758,16 +758,47 @@ impl d::Device<B> for Device {
             }
         };
 
+        let (vertex_buffers, desc_attributes, input_assembler, vs, gs, hs, ds) =
+            match desc.primitive_assembler {
+                pso::PrimitiveAssembler::Vertex {
+                    ref buffers,
+                    ref attributes,
+                    ref input_assembler,
+                    ref vertex,
+                    ref tessellation,
+                    ref geometry,
+                } => {
+                    let (hs, ds) = if let Some(ts) = tessellation {
+                        (Some(&ts.0), Some(&ts.1))
+                    } else {
+                        (None, None)
+                    };
+
+                    let mut vertex_buffers = Vec::new();
+                    for vb in buffers {
+                        while vertex_buffers.len() <= vb.binding as usize {
+                            vertex_buffers.push(None);
+                        }
+                        vertex_buffers[vb.binding as usize] = Some(*vb);
+                    }
+
+                    (vertex_buffers, attributes, input_assembler, vertex, geometry, hs, ds)
+                }
+                pso::PrimitiveAssembler::Mesh { .. } => {
+                    return Err(pso::CreationError::UnsupportedPipeline)
+                }
+            };
+
         let program = {
             let name = gl.create_program().unwrap();
 
             // Attach shaders to program
             let shaders = [
-                (pso::Stage::Vertex, Some(&desc.shaders.vertex)),
-                (pso::Stage::Hull, desc.shaders.hull.as_ref()),
-                (pso::Stage::Domain, desc.shaders.domain.as_ref()),
-                (pso::Stage::Geometry, desc.shaders.geometry.as_ref()),
-                (pso::Stage::Fragment, desc.shaders.fragment.as_ref()),
+                (pso::Stage::Vertex, Some(vs)),
+                (pso::Stage::Hull, hs),
+                (pso::Stage::Domain, ds),
+                (pso::Stage::Geometry, gs.as_ref()),
+                (pso::Stage::Fragment, desc.fragment.as_ref()),
             ];
 
             let mut name_binding_map =
@@ -846,18 +877,10 @@ impl d::Device<B> for Device {
             name
         };
 
-        let patch_size = match desc.input_assembler.primitive {
+        let patch_size = match input_assembler.primitive {
             pso::Primitive::PatchList(size) => Some(size as _),
             _ => None,
         };
-
-        let mut vertex_buffers = Vec::new();
-        for vb in &desc.vertex_buffers {
-            while vertex_buffers.len() <= vb.binding as usize {
-                vertex_buffers.push(None);
-            }
-            vertex_buffers[vb.binding as usize] = Some(*vb);
-        }
 
         let mut uniforms = Vec::new();
         {
@@ -886,12 +909,11 @@ impl d::Device<B> for Device {
 
         Ok(n::GraphicsPipeline {
             program,
-            primitive: conv::input_assember_to_gl_primitive(&desc.input_assembler),
+            primitive: conv::input_assember_to_gl_primitive(input_assembler),
             patch_size,
             blend_targets: desc.blender.targets.clone(),
             vertex_buffers,
-            attributes: desc
-                .attributes
+            attributes: desc_attributes
                 .iter()
                 .map(|&a| {
                     let fd = conv::describe_format(a.element.format).unwrap();
@@ -1860,7 +1882,6 @@ impl d::Device<B> for Device {
         config: SwapchainConfig,
         _old_swapchain: Option<Swapchain>,
     ) -> Result<(Swapchain, Vec<n::Image>), hal::window::CreationError> {
-
         let gl = &self.share.context;
 
         #[cfg(wgl)]

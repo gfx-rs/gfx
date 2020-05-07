@@ -102,70 +102,96 @@ impl GraphicsPipelineInfoBuf {
     ) {
         let mut this = Pin::get_mut(this.as_mut()); // use into_inner when it gets stable
 
-        // Vertex stage
-        // vertex shader is required
-        this.add_stage(vk::ShaderStageFlags::VERTEX, &desc.shaders.vertex);
+        match desc.primitive_assembler {
+            pso::PrimitiveAssembler::Vertex {
+                ref buffers,
+                ref attributes,
+                ref input_assembler,
+                ref vertex,
+                ref tessellation,
+                ref geometry,
+            } => {
+                // Vertex stage
+                // vertex shader is required
+                this.add_stage(vk::ShaderStageFlags::VERTEX, vertex);
+
+                // Geometry stage
+                if let Some(ref entry) = geometry {
+                    this.add_stage(vk::ShaderStageFlags::GEOMETRY, entry);
+                }
+                // Tessellation stage
+                if let Some(ts) = tessellation {
+                    this.add_stage(vk::ShaderStageFlags::TESSELLATION_CONTROL, &ts.0);
+                    this.add_stage(vk::ShaderStageFlags::TESSELLATION_EVALUATION, &ts.1);
+                }
+                this.vertex_bindings = buffers.iter().map(|vbuf| {
+                    vk::VertexInputBindingDescription {
+                        binding: vbuf.binding,
+                        stride: vbuf.stride as u32,
+                        input_rate: match vbuf.rate {
+                            VertexInputRate::Vertex => vk::VertexInputRate::VERTEX,
+                            VertexInputRate::Instance(divisor) => {
+                                debug_assert_eq!(divisor, 1, "Custom vertex rate divisors not supported in Vulkan backend without extension");
+                                vk::VertexInputRate::INSTANCE
+                            },
+                        },
+                    }
+                }).collect();
+
+                this.vertex_attributes = attributes
+                    .iter()
+                    .map(|attr| vk::VertexInputAttributeDescription {
+                        location: attr.location as u32,
+                        binding: attr.binding as u32,
+                        format: conv::map_format(attr.element.format),
+                        offset: attr.element.offset as u32,
+                    })
+                    .collect();
+
+                this.vertex_input_state = vk::PipelineVertexInputStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineVertexInputStateCreateFlags::empty(),
+                    vertex_binding_description_count: this.vertex_bindings.len() as _,
+                    p_vertex_binding_descriptions: this.vertex_bindings.as_ptr(),
+                    vertex_attribute_description_count: this.vertex_attributes.len() as _,
+                    p_vertex_attribute_descriptions: this.vertex_attributes.as_ptr(),
+                };
+
+                this.input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
+                    topology: conv::map_topology(&input_assembler),
+                    primitive_restart_enable: match input_assembler.restart_index {
+                        Some(_) => vk::TRUE,
+                        None => vk::FALSE,
+                    },
+                };
+            }
+            pso::PrimitiveAssembler::Mesh {
+                ref task,
+                ref mesh,
+            } => {
+                this.vertex_bindings = Vec::new();
+                this.vertex_attributes = Vec::new();
+                this.vertex_input_state = vk::PipelineVertexInputStateCreateInfo::default();
+                this.input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo::default();
+
+                // Task stage, optional
+                if let Some(ref entry) = task {
+                    this.add_stage(vk::ShaderStageFlags::TASK_NV, entry);
+                }
+
+                // Mesh stage
+                this.add_stage(vk::ShaderStageFlags::MESH_NV, mesh);
+            }
+        };
+
         // Pixel stage
-        if let Some(ref entry) = desc.shaders.fragment {
+        if let Some(ref entry) = desc.fragment {
             this.add_stage(vk::ShaderStageFlags::FRAGMENT, entry);
         }
-        // Geometry stage
-        if let Some(ref entry) = desc.shaders.geometry {
-            this.add_stage(vk::ShaderStageFlags::GEOMETRY, entry);
-        }
-        // Domain stage
-        if let Some(ref entry) = desc.shaders.domain {
-            this.add_stage(vk::ShaderStageFlags::TESSELLATION_EVALUATION, entry);
-        }
-        // Hull stage
-        if let Some(ref entry) = desc.shaders.hull {
-            this.add_stage(vk::ShaderStageFlags::TESSELLATION_CONTROL, entry);
-        }
-
-        this.vertex_bindings = desc.vertex_buffers.iter().map(|vbuf| {
-            vk::VertexInputBindingDescription {
-                binding: vbuf.binding,
-                stride: vbuf.stride as u32,
-                input_rate: match vbuf.rate {
-                    VertexInputRate::Vertex => vk::VertexInputRate::VERTEX,
-                    VertexInputRate::Instance(divisor) => {
-                        debug_assert_eq!(divisor, 1, "Custom vertex rate divisors not supported in Vulkan backend without extension");
-                        vk::VertexInputRate::INSTANCE
-                    },
-                },
-            }
-        }).collect();
-        this.vertex_attributes = desc
-            .attributes
-            .iter()
-            .map(|attr| vk::VertexInputAttributeDescription {
-                location: attr.location as u32,
-                binding: attr.binding as u32,
-                format: conv::map_format(attr.element.format),
-                offset: attr.element.offset as u32,
-            })
-            .collect();
-
-        this.vertex_input_state = vk::PipelineVertexInputStateCreateInfo {
-            s_type: vk::StructureType::PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::PipelineVertexInputStateCreateFlags::empty(),
-            vertex_binding_description_count: this.vertex_bindings.len() as _,
-            p_vertex_binding_descriptions: this.vertex_bindings.as_ptr(),
-            vertex_attribute_description_count: this.vertex_attributes.len() as _,
-            p_vertex_attribute_descriptions: this.vertex_attributes.as_ptr(),
-        };
-
-        this.input_assembly_state = vk::PipelineInputAssemblyStateCreateInfo {
-            s_type: vk::StructureType::PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::PipelineInputAssemblyStateCreateFlags::empty(),
-            topology: conv::map_topology(&desc.input_assembler),
-            primitive_restart_enable: match desc.input_assembler.restart_index {
-                Some(_) => vk::TRUE,
-                None => vk::FALSE,
-            },
-        };
 
         let depth_bias = match desc.rasterizer.depth_bias {
             Some(pso::State::Static(db)) => db,
@@ -204,7 +230,7 @@ impl GraphicsPipelineInfoBuf {
             } else {
                 vk::FALSE
             },
-            rasterizer_discard_enable: if desc.shaders.fragment.is_none()
+            rasterizer_discard_enable: if desc.fragment.is_none()
                 && desc.depth_stencil.depth.is_none()
                 && desc.depth_stencil.stencil.is_none()
             {
@@ -227,14 +253,20 @@ impl GraphicsPipelineInfoBuf {
         };
 
         this.tessellation_state = {
-            if let pso::Primitive::PatchList(patch_control_points) = desc.input_assembler.primitive
+            if let pso::PrimitiveAssembler::Vertex {
+                input_assembler, ..
+            } = &desc.primitive_assembler
             {
-                Some(vk::PipelineTessellationStateCreateInfo {
-                    s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
-                    p_next: ptr::null(),
-                    flags: vk::PipelineTessellationStateCreateFlags::empty(),
-                    patch_control_points: patch_control_points as _,
-                })
+                if let pso::Primitive::PatchList(patch_control_points) = input_assembler.primitive {
+                    Some(vk::PipelineTessellationStateCreateInfo {
+                        s_type: vk::StructureType::PIPELINE_TESSELLATION_STATE_CREATE_INFO,
+                        p_next: ptr::null(),
+                        flags: vk::PipelineTessellationStateCreateFlags::empty(),
+                        patch_control_points: patch_control_points as _,
+                    })
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -1468,7 +1500,10 @@ impl d::Device<B> for Device {
     ) -> Result<(), d::BindError> {
         // TODO: error handling
         // TODO: check required type
-        let result = self.shared.raw.bind_image_memory(image.raw, memory.raw, offset);
+        let result = self
+            .shared
+            .raw
+            .bind_image_memory(image.raw, memory.raw, offset);
 
         match result {
             Ok(()) => Ok(()),
@@ -2193,7 +2228,9 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_descriptor_set_layout(&self, layout: n::DescriptorSetLayout) {
-        self.shared.raw.destroy_descriptor_set_layout(layout.raw, None);
+        self.shared
+            .raw
+            .destroy_descriptor_set_layout(layout.raw, None);
     }
 
     unsafe fn destroy_fence(&self, fence: n::Fence) {

@@ -910,8 +910,21 @@ impl<B: hal::Backend> Scene<B> {
                             })
                         }
                     };
+
+                    let hs = entry(&shaders.hull);
+                    let ds = entry(&shaders.domain);
+                    let tessellation = if hs.is_some() && ds.is_some() {
+                        Some((hs.unwrap(), ds.unwrap()))
+                    } else {
+                        None
+                    };
+
                     let desc = pso::GraphicsPipelineDesc {
-                        shaders: pso::GraphicsShaderSet {
+                        rasterizer: rasterizer.clone(),
+                        primitive_assembler: pso::PrimitiveAssembler::Vertex {
+                            buffers: vertex_buffers.clone(),
+                            attributes: attributes.clone(),
+                            input_assembler: input_assembler.clone(),
                             vertex: pso::EntryPoint {
                                 entry: "main",
                                 module: reshaders
@@ -919,15 +932,10 @@ impl<B: hal::Backend> Scene<B> {
                                     .expect(&format!("Missing vertex shader: {}", shaders.vertex)),
                                 specialization: pso::Specialization::default(),
                             },
-                            hull: entry(&shaders.hull),
-                            domain: entry(&shaders.domain),
+                            tessellation,
                             geometry: entry(&shaders.geometry),
-                            fragment: entry(&shaders.fragment),
                         },
-                        rasterizer: rasterizer.clone(),
-                        vertex_buffers: vertex_buffers.clone(),
-                        attributes: attributes.clone(),
-                        input_assembler: input_assembler.clone(),
+                        fragment: entry(&shaders.fragment),
                         blender: blender.clone(),
                         depth_stencil: depth_stencil.clone(),
                         baked_states: pso::BakedStates::default(), //TODO

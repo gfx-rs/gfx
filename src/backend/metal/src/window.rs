@@ -421,17 +421,17 @@ impl w::Surface<Backend> for Surface {
             composite_alpha_modes: w::CompositeAlphaMode::OPAQUE, //TODO
             //Note: this is hardcoded in `CAMetalLayer` documentation
             image_count: if can_set_maximum_drawables_count {
-                2 ..= 3
+                2..=3
             } else {
                 // 3 is the default in `CAMetalLayer` documentation
                 // iOS 10.3 was tested to use 3 on iphone5s
-                3 ..= 3
+                3..=3
             },
             current_extent,
             extents: w::Extent2D {
                 width: 4,
                 height: 4,
-            } ..= w::Extent2D {
+            }..=w::Extent2D {
                 width: 4096,
                 height: 4096,
             },

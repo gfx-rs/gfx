@@ -1255,51 +1255,59 @@ impl<B: Backend> PipelineState<B> {
                     },
                 );
 
-                let shader_entries = pso::GraphicsShaderSet {
-                    vertex: vs_entry,
-                    hull: None,
-                    domain: None,
-                    geometry: None,
-                    fragment: Some(fs_entry),
-                };
-
                 let subpass = pass::Subpass {
                     index: 0,
                     main_pass: render_pass,
                 };
 
+                let vertex_buffers = vec![
+                    pso::VertexBufferDesc {
+                        binding: 0,
+                        stride: size_of::<Vertex>() as u32,
+                        rate: pso::VertexInputRate::Vertex,
+                    }
+                ];
+
+                let attributes = vec![
+                    pso::AttributeDesc {
+                        location: 0,
+                        binding: 0,
+                        element: pso::Element {
+                            format: f::Format::Rg32Sfloat,
+                            offset: 0,
+                        },
+                    },
+                    pso::AttributeDesc {
+                        location: 1,
+                        binding: 0,
+                        element: pso::Element {
+                            format: f::Format::Rg32Sfloat,
+                            offset: 8,
+                        },
+                    },
+                ];
+
                 let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
-                    shader_entries,
-                    pso::Primitive::TriangleList,
+                    pso::PrimitiveAssembler::Vertex {
+                        buffers: vertex_buffers,
+                        attributes,
+                        input_assembler: pso::InputAssemblerDesc {
+                            primitive: pso::Primitive::TriangleList,
+                            with_adjacency: false,
+                            restart_index: None,
+                        },
+                        vertex: vs_entry,
+                        geometry: None,
+                        tessellation: None,
+                    },
                     pso::Rasterizer::FILL,
+                    Some(fs_entry),
                     &pipeline_layout,
                     subpass,
                 );
                 pipeline_desc.blender.targets.push(pso::ColorBlendDesc {
                     mask: pso::ColorMask::ALL,
                     blend: Some(pso::BlendState::ALPHA),
-                });
-                pipeline_desc.vertex_buffers.push(pso::VertexBufferDesc {
-                    binding: 0,
-                    stride: size_of::<Vertex>() as u32,
-                    rate: pso::VertexInputRate::Vertex,
-                });
-
-                pipeline_desc.attributes.push(pso::AttributeDesc {
-                    location: 0,
-                    binding: 0,
-                    element: pso::Element {
-                        format: f::Format::Rg32Sfloat,
-                        offset: 0,
-                    },
-                });
-                pipeline_desc.attributes.push(pso::AttributeDesc {
-                    location: 1,
-                    binding: 0,
-                    element: pso::Element {
-                        format: f::Format::Rg32Sfloat,
-                        offset: 8,
-                    },
                 });
 
                 device.create_graphics_pipeline(&pipeline_desc, None)

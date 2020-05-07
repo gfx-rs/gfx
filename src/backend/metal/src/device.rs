@@ -481,7 +481,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             max_descriptor_set_storage_buffers: pc.max_buffers_per_stage as usize
                 * SHADER_STAGE_COUNT,
             max_descriptor_set_storage_buffers_dynamic: 4 * SHADER_STAGE_COUNT,
-            max_descriptor_set_sampled_images: pc.max_textures_per_stage.min(pc.max_samplers_per_stage) as usize
+            max_descriptor_set_sampled_images: pc
+                .max_textures_per_stage
+                .min(pc.max_samplers_per_stage)
+                as usize
                 * SHADER_STAGE_COUNT,
             max_descriptor_set_storage_images: pc.max_textures_per_stage as usize
                 * SHADER_STAGE_COUNT,
@@ -494,7 +497,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             max_per_stage_descriptor_samplers: pc.max_samplers_per_stage as usize,
             max_per_stage_descriptor_uniform_buffers: pc.max_buffers_per_stage as usize,
             max_per_stage_descriptor_storage_buffers: pc.max_buffers_per_stage as usize,
-            max_per_stage_descriptor_sampled_images: pc.max_textures_per_stage.min(pc.max_samplers_per_stage) as usize,
+            max_per_stage_descriptor_sampled_images: pc
+                .max_textures_per_stage
+                .min(pc.max_samplers_per_stage)
+                as usize,
             max_per_stage_descriptor_storage_images: pc.max_textures_per_stage as usize,
             max_per_stage_descriptor_input_attachments: pc.max_textures_per_stage as usize, //TODO
             max_per_stage_resources: 0x100,                                                 //TODO
@@ -1392,7 +1398,29 @@ impl hal::device::Device<Backend> for Device {
             (&main_pass.attachments, &main_pass.subpasses[index as usize])
         };
 
-        let (primitive_class, primitive_type) = match pipeline_desc.input_assembler.primitive {
+        let (desc_vertex_buffers, attributes, input_assembler, vs, gs, hs, ds) = match pipeline_desc.primitive_assembler {
+            pso::PrimitiveAssembler::Vertex {
+                ref buffers,
+                ref attributes,
+                ref input_assembler,
+                ref vertex,
+                ref tessellation,
+                ref geometry,
+            } => {
+                let (hs, ds) = if let Some(ts) = tessellation {
+                    (Some(&ts.0), Some(&ts.1))
+                } else {
+                    (None, None)
+                };    
+
+                (buffers, attributes, input_assembler, vertex, geometry, hs, ds)
+            }
+            pso::PrimitiveAssembler::Mesh { .. } => {
+                return Err(pso::CreationError::UnsupportedPipeline)
+            }
+        };
+
+        let (primitive_class, primitive_type) = match input_assembler.primitive {
             pso::Primitive::PointList => {
                 (MTLPrimitiveTopologyClass::Point, MTLPrimitiveType::Point)
             }
@@ -1419,7 +1447,7 @@ impl hal::device::Device<Backend> for Device {
 
         // Vertex shader
         let (vs_lib, vs_function, _, enable_rasterization) = self.load_shader(
-            &pipeline_desc.shaders.vertex,
+            vs,
             pipeline_layout,
             primitive_class,
             cache,
@@ -1428,7 +1456,7 @@ impl hal::device::Device<Backend> for Device {
 
         // Fragment shader
         let fs_function;
-        let fs_lib = match pipeline_desc.shaders.fragment {
+        let fs_lib = match pipeline_desc.fragment {
             Some(ref ep) => {
                 let (lib, fun, _, _) =
                     self.load_shader(ep, pipeline_layout, primitive_class, cache)?;
@@ -1447,17 +1475,17 @@ impl hal::device::Device<Backend> for Device {
         };
 
         // Other shaders
-        if pipeline_desc.shaders.hull.is_some() {
+        if hs.is_some() {
             return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(
                 pso::Stage::Hull,
             )));
         }
-        if pipeline_desc.shaders.domain.is_some() {
+        if ds.is_some() {
             return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(
                 pso::Stage::Domain,
             )));
         }
-        if pipeline_desc.shaders.geometry.is_some() {
+        if gs.is_some() {
             return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(
                 pso::Stage::Geometry,
             )));
@@ -1521,10 +1549,9 @@ impl hal::device::Device<Backend> for Device {
             location,
             binding,
             element,
-        } in &pipeline_desc.attributes
+        } in attributes
         {
-            let original = pipeline_desc
-                .vertex_buffers
+            let original = desc_vertex_buffers
                 .iter()
                 .find(|vb| vb.binding == binding)
                 .expect("no associated vertex buffer found");
@@ -2948,9 +2975,7 @@ impl hal::device::Device<Backend> for Device {
                 warn!("Timestamp queries are not really useful yet");
                 Ok(n::QueryPool::Timestamp)
             }
-            query::Type::PipelineStatistics(..) => {
-                Err(query::CreationError::Unsupported(ty))
-            }
+            query::Type::PipelineStatistics(..) => Err(query::CreationError::Unsupported(ty)),
         }
     }
 

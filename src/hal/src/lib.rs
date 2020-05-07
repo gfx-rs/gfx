@@ -90,6 +90,8 @@ pub type InstanceCount = u32;
 pub type DrawCount = u32;
 /// Number of work groups.
 pub type WorkGroupCount = [u32; 3];
+/// Number of tasks.
+pub type TaskCount = u32;
 
 bitflags! {
     //TODO: add a feature for non-normalized samplers
@@ -240,6 +242,11 @@ bitflags! {
 
         /// Make the NDC coordinate system pointing Y up, to match D3D and Metal.
         const NDC_Y_UP = 0x01 << 80;
+
+        /// Supports task shader stage.
+        const TASK_SHADER = 0x01 << 96;
+        /// Supports mesh shader stage.
+        const MESH_SHADER = 0x02 << 96;
     }
 }
 
@@ -402,6 +409,45 @@ pub struct Limits {
 
     /// The alignment of the vertex buffer stride.
     pub min_vertex_input_binding_stride_alignment: buffer::Offset,
+
+    /// The maximum number of local workgroups that can be launched by a single draw mesh tasks command
+    pub max_draw_mesh_tasks_count: u32,
+    /// The maximum total number of task shader invocations in a single local workgroup. The product of the X, Y, and
+    /// Z sizes, as specified by the LocalSize execution mode in shader modules or by the object decorated by the
+    /// WorkgroupSize decoration, must be less than or equal to this limit.
+    pub max_task_work_group_invocations: u32,
+    /// The maximum size of a local task workgroup. These three values represent the maximum local workgroup size in
+    /// the X, Y, and Z dimensions, respectively. The x, y, and z sizes, as specified by the LocalSize execution mode
+    /// or by the object decorated by the WorkgroupSize decoration in shader modules, must be less than or equal to
+    /// the corresponding limit.
+    pub max_task_work_group_size: [u32; 3],
+    /// The maximum number of bytes that the task shader can use in total for shared and output memory combined.
+    pub max_task_total_memory_size: u32,
+    /// The maximum number of output tasks a single task shader workgroup can emit.
+    pub max_task_output_count: u32,
+    /// The maximum total number of mesh shader invocations in a single local workgroup. The product of the X, Y, and
+    /// Z sizes, as specified by the LocalSize execution mode in shader modules or by the object decorated by the
+    /// WorkgroupSize decoration, must be less than or equal to this limit.
+    pub max_mesh_work_group_invocations: u32,
+    /// The maximum size of a local mesh workgroup. These three values represent the maximum local workgroup size in
+    /// the X, Y, and Z dimensions, respectively. The x, y, and z sizes, as specified by the LocalSize execution mode
+    /// or by the object decorated by the WorkgroupSize decoration in shader modules, must be less than or equal to the
+    /// corresponding limit.
+    pub max_mesh_work_group_size: [u32; 3],
+    /// The maximum number of bytes that the mesh shader can use in total for shared and output memory combined.
+    pub max_mesh_total_memory_size: u32,
+    /// The maximum number of vertices a mesh shader output can store.
+    pub max_mesh_output_vertices: u32,
+    /// The maximum number of primitives a mesh shader output can store.
+    pub max_mesh_output_primitives: u32,
+    /// The maximum number of multi-view views a mesh shader can use.
+    pub max_mesh_multiview_view_count: u32,
+    /// The granularity with which mesh vertex outputs are allocated. The value can be used to compute the memory size
+    /// used by the mesh shader, which must be less than or equal to maxMeshTotalMemorySize.
+    pub mesh_output_per_vertex_granularity: u32,
+    /// The granularity with which mesh outputs qualified as per-primitive are allocated. The value can be used to
+    /// compute the memory size used by the mesh shader, which must be less than or equal to
+    pub mesh_output_per_primitive_granularity: u32,
 }
 
 /// An enum describing the type of an index value in a slice's index buffer

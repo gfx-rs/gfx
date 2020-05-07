@@ -1484,6 +1484,31 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
+    unsafe fn draw_mesh_tasks(&mut self, _: u32, _: u32) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        _: &n::Buffer,
+        _: buffer::Offset,
+        _: hal::DrawCount,
+        _: u32,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        _: &n::Buffer,
+        _: buffer::Offset,
+        _: &n::Buffer,
+        _: buffer::Offset,
+        _: u32,
+        _: u32,
+    ) {
+        unimplemented!()
+    }
     unsafe fn set_event(&mut self, _: &(), _: pso::PipelineStage) {
         unimplemented!()
     }

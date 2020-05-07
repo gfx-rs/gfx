@@ -21,6 +21,7 @@ use hal::{
     InstanceCount,
     VertexCount,
     VertexOffset,
+    TaskCount,
     WorkGroupCount,
 };
 
@@ -219,7 +220,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             p_inheritance_info: &inheritance_info,
         };
 
-        assert_eq!(Ok(()), self.device.raw.begin_command_buffer(self.raw, &info));
+        assert_eq!(
+            Ok(()),
+            self.device.raw.begin_command_buffer(self.raw, &info)
+        );
     }
 
     unsafe fn finish(&mut self) {
@@ -233,7 +237,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             vk::CommandBufferResetFlags::empty()
         };
 
-        assert_eq!(Ok(()), self.device.raw.reset_command_buffer(self.raw, flags));
+        assert_eq!(
+            Ok(()),
+            self.device.raw.reset_command_buffer(self.raw, flags)
+        );
     }
 
     unsafe fn begin_render_pass<T>(
@@ -827,6 +834,32 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         self.device
             .raw
             .cmd_draw_indexed_indirect(self.raw, buffer.raw, offset, draw_count, stride)
+    }
+
+    unsafe fn draw_mesh_tasks(&mut self, _: TaskCount, _: TaskCount) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        _: &n::Buffer,
+        _: buffer::Offset,
+        _: hal::DrawCount,
+        _: u32,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        _: &n::Buffer,
+        _: buffer::Offset,
+        _: &n::Buffer,
+        _: buffer::Offset,
+        _: u32,
+        _: u32,
+    ) {
+        unimplemented!()
     }
 
     unsafe fn set_event(&mut self, event: &n::Event, stage_mask: pso::PipelineStage) {

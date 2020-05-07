@@ -35,6 +35,7 @@ use hal::{
     InstanceCount,
     VertexCount,
     VertexOffset,
+    TaskCount,
     WorkGroupCount,
 };
 
@@ -4426,6 +4427,32 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .issue_many(commands);
     }
 
+    unsafe fn draw_mesh_tasks(&mut self, _: TaskCount, _: TaskCount) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_mesh_tasks_indirect(
+        &mut self,
+        _: &native::Buffer,
+        _: buffer::Offset,
+        _: DrawCount,
+        _: u32,
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_mesh_tasks_indirect_count(
+        &mut self,
+        _: &native::Buffer,
+        _: buffer::Offset,
+        _: &native::Buffer,
+        _: buffer::Offset,
+        _: u32,
+        _: u32,
+    ) {
+        unimplemented!()
+    }
+
     unsafe fn set_event(&mut self, event: &native::Event, _: pso::PipelineStage) {
         self.inner
             .borrow_mut()
@@ -4652,7 +4679,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     range: start .. end,
                     value: 0,
                 };
-                self.inner.borrow_mut().sink().blit_commands(iter::once(command));
+                self.inner
+                    .borrow_mut()
+                    .sink()
+                    .blit_commands(iter::once(command));
             }
         }
     }
