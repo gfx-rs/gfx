@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx11-0.5.1, backend-dx12-0.5.3, backend-gl-0.5.1, backend-metal-0.5.2 (05-06-2020)
+  - update spirv_cross to 0.20
+
 ### backend-dx12-0.5.2 (05-04-2020)
   - fix offset calculation for root descriptors
 
