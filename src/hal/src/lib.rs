@@ -110,6 +110,8 @@ bitflags! {
         const PORTABILITY_MASK  = 0x0000_FFFF_0000_0000_0000_0000;
         /// Bit mask for extra WebGPU features.
         const WEBGPU_MASK = 0xFFFF_0000_0000_0000_0000_0000;
+        /// Bit mask for all extensions.
+        const EXTENSIONS_MASK = 0xFFFF_FFFF_0000_0000_0000_0000_0000_0000;
 
         /// Support for robust buffer access.
         /// Buffer access by SPIR-V shaders is checked against the buffer/image boundaries.

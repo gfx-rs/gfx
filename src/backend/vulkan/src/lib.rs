@@ -17,6 +17,7 @@ use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::{Entry, LoadingError};
+use ash::extensions::nv::MeshShader;
 
 use hal::{
     adapter,
@@ -88,6 +89,7 @@ lazy_static! {
         CStr::from_bytes_with_nul(b"VK_KHR_maintenance1\0").unwrap();
     static ref KHR_SAMPLER_MIRROR_MIRROR_CLAMP_TO_EDGE : &'static CStr =
         CStr::from_bytes_with_nul(b"VK_KHR_sampler_mirror_clamp_to_edge\0").unwrap();
+    static ref MESH_SHADER: &'static CStr = MeshShader::name();
 }
 
 #[cfg(not(feature = "use-rtld-next"))]
@@ -687,7 +689,14 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 0 => None,
                 1 => Some(*KHR_MAINTENANCE1),
                 _ => unreachable!(),
-            });
+            })
+            .chain(
+                if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
+                    Some(*MESH_SHADER)
+                } else {
+                    None
+                }
+            );
 
         // Create device
         let device_raw = {
@@ -695,18 +704,19 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
             let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
 
-            let info = vk::DeviceCreateInfo {
-                s_type: vk::StructureType::DEVICE_CREATE_INFO,
-                p_next: ptr::null(),
-                flags: vk::DeviceCreateFlags::empty(),
-                queue_create_info_count: family_infos.len() as u32,
-                p_queue_create_infos: family_infos.as_ptr(),
-                enabled_layer_count: 0,
-                pp_enabled_layer_names: ptr::null(),
-                enabled_extension_count: str_pointers.len() as u32,
-                pp_enabled_extension_names: str_pointers.as_ptr(),
-                p_enabled_features: &enabled_features,
-            };
+            let mut info = vk::DeviceCreateInfo::builder()
+                .queue_create_infos(&family_infos)
+                .enabled_extension_names(&str_pointers)
+                .enabled_features(&enabled_features);
+
+            let mut mesh_shader_features = vk::PhysicalDeviceMeshShaderFeaturesNV::builder()
+                .task_shader(requested_features.contains(Features::TASK_SHADER))
+                .mesh_shader(requested_features.contains(Features::MESH_SHADER))
+                .build();
+
+            if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
+                info = info.push_next(&mut mesh_shader_features);
+            }
 
             match self.instance.0.create_device(self.handle, &info, None) {
                 Ok(device) => device,
@@ -737,11 +747,18 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             )
         });
 
+        let mesh_fn = if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
+            Some(MeshShader::new(&self.instance.0, &device_raw))
+        } else {
+            None
+        };
+
         let device = Device {
             shared: Arc::new(RawDevice {
                 raw: device_raw,
                 features: requested_features,
                 instance: Arc::clone(&self.instance),
+                mesh_fn,
                 maintenance_level,
             }),
             vendor_id: self.properties.vendor_id,
@@ -1081,6 +1098,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         if features.inherited_queries != 0 {
             bits |= Features::INHERITED_QUERIES;
         }
+        if self.supports_extension(*MESH_SHADER) {
+            bits |= Features::TASK_SHADER;
+            bits |= Features::MESH_SHADER
+        }
 
         bits
     }
@@ -1192,6 +1213,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             standard_sample_locations: limits.standard_sample_locations == ash::vk::TRUE,
 
             // TODO: Implement Limits for Mesh Shaders
+            //       Depends on VkPhysicalDeviceMeshShaderPropertiesNV which depends on VkPhysicalProperties2
             max_draw_mesh_tasks_count: 0,
             max_task_work_group_invocations: 0,
             max_task_work_group_size: [0; 3],
@@ -1268,6 +1290,7 @@ pub struct RawDevice {
     raw: ash::Device,
     features: Features,
     instance: Arc<RawInstance>,
+    mesh_fn: Option<MeshShader>,
     maintenance_level: u8,
 }
 

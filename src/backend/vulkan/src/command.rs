@@ -836,30 +836,36 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .cmd_draw_indexed_indirect(self.raw, buffer.raw, offset, draw_count, stride)
     }
 
-    unsafe fn draw_mesh_tasks(&mut self, _: TaskCount, _: TaskCount) {
-        unimplemented!()
+    unsafe fn draw_mesh_tasks(&mut self, task_count: TaskCount, first_task: TaskCount) {
+        self.device.mesh_fn.as_ref()
+            .expect("Draw command not supported. You must request feature MESH_SHADER.")
+            .cmd_draw_mesh_tasks(self.raw, task_count, first_task);
     }
 
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,
-        _: &n::Buffer,
-        _: buffer::Offset,
-        _: hal::DrawCount,
-        _: u32,
+        buffer: &n::Buffer,
+        offset: buffer::Offset,
+        draw_count: hal::DrawCount,
+        stride: u32,
     ) {
-        unimplemented!()
+        self.device.mesh_fn.as_ref()
+            .expect("Draw command not supported. You must request feature MESH_SHADER.")
+            .cmd_draw_mesh_tasks_indirect(self.raw, buffer.raw, offset, draw_count, stride);
     }
 
     unsafe fn draw_mesh_tasks_indirect_count(
         &mut self,
-        _: &n::Buffer,
-        _: buffer::Offset,
-        _: &n::Buffer,
-        _: buffer::Offset,
-        _: u32,
-        _: u32,
+        buffer: &n::Buffer,
+        offset: buffer::Offset,
+        count_buffer: &n::Buffer,
+        count_buffer_offset: buffer::Offset,
+        max_draw_count: DrawCount,
+        stride: u32,
     ) {
-        unimplemented!()
+        self.device.mesh_fn.as_ref()
+            .expect("Draw command not supported. You must request feature MESH_SHADER.")
+            .cmd_draw_mesh_tasks_indirect_count(self.raw, buffer.raw, offset, count_buffer.raw, count_buffer_offset, max_draw_count, stride);
     }
 
     unsafe fn set_event(&mut self, event: &n::Event, stage_mask: pso::PipelineStage) {
