@@ -1,0 +1,51 @@
+#version 450
+
+#extension GL_NV_mesh_shader: require
+
+#define PRIMITIVES_COUNT 64
+#define VERTICES_COUNT (PRIMITIVES_COUNT * 3)
+
+layout(local_size_x = 32) in;
+layout(triangles, max_vertices = VERTICES_COUNT, max_primitives = PRIMITIVES_COUNT) out;
+
+layout (set = 0, binding = 0, std430) readonly buffer PositionsBuffer {
+	vec2 positions[];
+};
+
+out gl_MeshPerVertexNV {
+     vec4  gl_Position;
+     float gl_PointSize;
+     float gl_ClipDistance[];
+     float gl_CullDistance[];
+} gl_MeshVerticesNV[];
+
+const vec2 triangle_vertices[3] = {
+    vec2(-0.5, 0.0),
+    vec2(0.5, 0.0),
+    vec2(0.0, 1.0),
+};
+
+void main()
+{
+	const uint offset = PRIMITIVES_COUNT * gl_WorkGroupID.x;
+	for (uint i = gl_LocalInvocationID.x; i < PRIMITIVES_COUNT; i += 32)
+	{
+		const uint index = offset + i;
+		const vec2 center = positions[index];
+        
+		for(uint v = 0; v < 3; v++) {
+			gl_MeshVerticesNV[i * 3 + v].gl_Position = vec4(center + triangle_vertices[v] * (1.0 / 16.0), 0.0, 1.0);
+		}
+	}
+
+	for (uint i = gl_LocalInvocationID.x; i * 4 < VERTICES_COUNT; i += 32)
+	{
+		uint n = (i * 4);
+		n |= (i * 4 + 1) << 8;
+		n |= (i * 4 + 2) << 16;
+		n |= (i * 4 + 3) << 24;
+		writePackedPrimitiveIndices4x8NV(i * 4, n);
+	}
+
+	gl_PrimitiveCountNV = VERTICES_COUNT;
+}

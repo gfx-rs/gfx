@@ -26,6 +26,10 @@ path = "quad/main.rs"
 name = "compute"
 path = "compute/main.rs"
 
+[[bin]]
+name = "mesh-shading"
+path = "mesh-shading/main.rs"
+
 [dependencies]
 image = "0.21"
 log = "0.4"
