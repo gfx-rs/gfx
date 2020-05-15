@@ -1,5 +1,5 @@
 RUST_BACKTRACE:=1
-EXCLUDES:=
+EXCLUDES:=--exclude gfx-backend-webgpu
 FEATURES_GL:=
 FEATURES_HAL:=
 FEATURES_HAL2:=
@@ -41,7 +41,7 @@ else
 endif
 
 
-.PHONY: all check check-backends quad quad-wasm test doc reftests benches shader-binaries
+.PHONY: all check check-backends check-wasm quad quad-wasm test doc reftests benches shader-binaries
 
 all: check test
 
@@ -58,6 +58,9 @@ check: check-backends
 check-backends:
 	@echo "Note: excluding \`warden\` here, since it depends on serialization"
 	cargo check --all $(CHECK_TARGET_FLAG) $(EXCLUDES) --exclude gfx-warden
+
+check-wasm:
+	cd src/backend/webgpu && RUSTFLAGS="--cfg=web_sys_unstable_apis" cargo check --target wasm32-unknown-unknown
 
 test:
 	cargo test --all $(EXCLUDES)
