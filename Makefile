@@ -41,21 +41,23 @@ else
 endif
 
 
-.PHONY: all check quad quad-wasm test doc reftests benches shader-binaries
+.PHONY: all check check-backends quad quad-wasm test doc reftests benches shader-binaries
 
 all: check test
 
 help:
 	@echo "Supported backends: $(FEATURES_GL) $(FEATURES_HAL) $(FEATURES_HAL2)"
 
-check:
-	@echo "Note: excluding \`warden\` here, since it depends on serialization"
-	cargo check --all $(CHECK_TARGET_FLAG) $(EXCLUDES) --exclude gfx-warden
+check: check-backends
 	cd examples && cargo check $(CHECK_TARGET_FLAG) --features "$(FEATURES_GL)"
 	cd examples && cargo check $(CHECK_TARGET_FLAG) --features "$(FEATURES_HAL)"
 	cd examples && cargo check $(CHECK_TARGET_FLAG) --features "$(FEATURES_HAL2)"
 	cd src/warden && cargo check $(CHECK_TARGET_FLAG) --no-default-features
 	cd src/warden && cargo check $(CHECK_TARGET_FLAG) --features "env_logger $(FEATURES_GL) $(FEATURES_HAL) $(FEATURES_HAL2)"
+
+check-backends:
+	@echo "Note: excluding \`warden\` here, since it depends on serialization"
+	cargo check --all $(CHECK_TARGET_FLAG) $(EXCLUDES) --exclude gfx-warden
 
 test:
 	cargo test --all $(EXCLUDES)
