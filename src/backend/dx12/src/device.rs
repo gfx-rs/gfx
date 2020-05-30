@@ -120,23 +120,19 @@ pub(crate) fn compile_shader(
     entry: &str,
     code: &[u8],
 ) -> Result<native::Blob, d::ShaderError> {
-    let stage_to_str = |stage, shader_model| {
-        let stage = match stage {
-            pso::Stage::Vertex => "vs",
-            pso::Stage::Fragment => "ps",
-            pso::Stage::Compute => "cs",
-            _ => unimplemented!(),
-        };
-
-        let model = match shader_model {
-            hlsl::ShaderModel::V5_0 => "5_0",
-            hlsl::ShaderModel::V5_1 => "5_1",
-            hlsl::ShaderModel::V6_0 => "6_0",
-            _ => unimplemented!(),
-        };
-
-        format!("{}_{}\0", stage, model)
+    let stage_str = match stage {
+        pso::Stage::Vertex => "vs",
+        pso::Stage::Fragment => "ps",
+        pso::Stage::Compute => "cs",
+        _ => unimplemented!(),
     };
+    let model_str = match shader_model {
+        hlsl::ShaderModel::V5_0 => "5_0",
+        hlsl::ShaderModel::V5_1 => "5_1",
+        hlsl::ShaderModel::V6_0 => "6_0",
+        _ => unimplemented!(),
+    };
+    let full_stage = format!("{}_{}\0", stage_str, model_str);
 
     let mut shader_data = native::Blob::null();
     let mut error = native::Blob::null();
@@ -149,7 +145,7 @@ pub(crate) fn compile_shader(
             ptr::null(),
             ptr::null_mut(),
             entry.as_ptr() as *const _,
-            stage_to_str(stage, shader_model).as_ptr() as *const i8,
+            full_stage.as_ptr() as *const i8,
             1,
             0,
             shader_data.mut_void() as *mut *mut _,
