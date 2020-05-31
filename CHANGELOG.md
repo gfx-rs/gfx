@@ -1,5 +1,18 @@
 # Change Log
 
+### backend-dx12-0.5.5 (01-06-2020)
+  - implement descriptor pool destruction
+
+### backend-dx12-0.5.4 (29-05-2020)
+  - fix detection of integrated gpus
+  - fix UB in `compile_shader`
+
+### backend-dx11-0.5.1, backend-dx12-0.5.3, backend-gl-0.5.1, backend-metal-0.5.2 (05-05-2020)
+  - update spirv_cross to 0.20
+
+### backend-dx12-0.5.2 (05-04-2020)
+  - fix offset calculation for root descriptors
+
 ### backend-dx12-0.5.1 (01-01-2020)
   - fix drop of physical devices
   - handle device lost during a fence wait

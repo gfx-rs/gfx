@@ -2070,6 +2070,7 @@ impl d::Device<B> for Device {
                 baked_states,
             })
         } else {
+            error!("Failed to build shader: {:x}", hr);
             Err(pso::CreationError::Other)
         }
     }
@@ -3451,9 +3452,23 @@ impl d::Device<B> for Device {
         // Just drop
     }
 
-    unsafe fn destroy_descriptor_pool(&self, _pool: r::DescriptorPool) {
-        // Just drop
-        // Allocated descriptor sets don't need to be freed beforehand.
+    unsafe fn destroy_descriptor_pool(&self, pool: r::DescriptorPool) {
+        let view_range = pool.heap_srv_cbv_uav.range_allocator.initial_range();
+        if view_range.start < view_range.end {
+            self.heap_srv_cbv_uav
+                .lock()
+                .unwrap()
+                .range_allocator
+                .free_range(view_range.clone());
+        }
+        let sampler_range = pool.heap_sampler.range_allocator.initial_range();
+        if sampler_range.start < sampler_range.end {
+            self.heap_sampler
+                .lock()
+                .unwrap()
+                .range_allocator
+                .free_range(sampler_range.clone());
+        }
     }
 
     unsafe fn destroy_descriptor_set_layout(&self, _layout: r::DescriptorSetLayout) {
