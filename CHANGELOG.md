@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.5.5 (01-06-2020)
+  - implement descriptor pool destruction
+
 ### backend-dx12-0.5.4 (29-05-2020)
   - fix detection of integrated gpus
   - fix UB in `compile_shader`
