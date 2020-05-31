@@ -38,6 +38,10 @@ where
         }
     }
 
+    pub fn initial_range(&self) -> &Range<T> {
+        &self.initial_range
+    }
+
     pub fn allocate_range(&mut self, length: T) -> Result<Range<T>, RangeAllocationError<T>> {
         assert_ne!(length + length, length);
         let mut best_fit: Option<(usize, Range<T>)> = None;
