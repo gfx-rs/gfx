@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use glow::HasContext;
 
-use auxil::{spirv_cross_specialize_ast, FastHashMap};
+use auxil::{spirv_cross_specialize_ast, FastHashMap, ShaderStage};
 
 use hal::{
     buffer,
@@ -90,20 +90,20 @@ impl Device {
     pub fn create_shader_module_from_source(
         &self,
         shader: &str,
-        stage: pso::Stage,
+        stage: ShaderStage,
     ) -> Result<n::ShaderModule, d::ShaderError> {
         let gl = &self.share.context;
 
         let can_compute = self.share.limits.max_compute_work_group_count[0] != 0;
         let can_tessellate = self.share.limits.max_patch_size != 0;
         let target = match stage {
-            pso::Stage::Vertex => glow::VERTEX_SHADER,
-            pso::Stage::Hull if can_tessellate => glow::TESS_CONTROL_SHADER,
-            pso::Stage::Domain if can_tessellate => glow::TESS_EVALUATION_SHADER,
-            pso::Stage::Geometry => glow::GEOMETRY_SHADER,
-            pso::Stage::Fragment => glow::FRAGMENT_SHADER,
-            pso::Stage::Compute if can_compute => glow::COMPUTE_SHADER,
-            _ => return Err(d::ShaderError::UnsupportedStage(stage)),
+            ShaderStage::Vertex => glow::VERTEX_SHADER,
+            ShaderStage::Hull if can_tessellate => glow::TESS_CONTROL_SHADER,
+            ShaderStage::Domain if can_tessellate => glow::TESS_EVALUATION_SHADER,
+            ShaderStage::Geometry => glow::GEOMETRY_SHADER,
+            ShaderStage::Fragment => glow::FRAGMENT_SHADER,
+            ShaderStage::Compute if can_compute => glow::COMPUTE_SHADER,
+            _ => return Err(d::ShaderError::UnsupportedStage(stage.to_flag())),
         };
 
         let name = unsafe { gl.create_shader(target) }.unwrap();
@@ -371,7 +371,7 @@ impl Device {
     fn compile_shader(
         &self,
         point: &pso::EntryPoint<B>,
-        stage: pso::Stage,
+        stage: ShaderStage,
         desc_remap_data: &mut n::DescRemapData,
         name_binding_map: &mut FastHashMap<String, (n::BindingTypes, pso::DescriptorBinding)>,
     ) -> n::Shader {
@@ -794,11 +794,11 @@ impl d::Device<B> for Device {
 
             // Attach shaders to program
             let shaders = [
-                (pso::Stage::Vertex, Some(vs)),
-                (pso::Stage::Hull, hs),
-                (pso::Stage::Domain, ds),
-                (pso::Stage::Geometry, gs.as_ref()),
-                (pso::Stage::Fragment, desc.fragment.as_ref()),
+                (ShaderStage::Vertex, Some(vs)),
+                (ShaderStage::Hull, hs),
+                (ShaderStage::Domain, ds),
+                (ShaderStage::Geometry, gs.as_ref()),
+                (ShaderStage::Fragment, desc.fragment.as_ref()),
             ];
 
             let mut name_binding_map =
@@ -948,7 +948,7 @@ impl d::Device<B> for Device {
                 FastHashMap::<String, (n::BindingTypes, pso::DescriptorBinding)>::default();
             let shader = self.compile_shader(
                 &desc.shader,
-                pso::Stage::Compute,
+                ShaderStage::Compute,
                 &mut desc.layout.desc_remap_data.write(),
                 &mut name_binding_map,
             );

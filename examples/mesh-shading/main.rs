@@ -442,14 +442,13 @@ where
         );
         let pipeline = {
             let ms_module = {
-                let spirv = pso::read_spirv(Cursor::new(&include_bytes!("data/triangles.mesh.spv")[..]))
+                let spirv = auxil::read_spirv(Cursor::new(&include_bytes!("data/triangles.mesh.spv")[..]))
                     .unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
             let fs_module = {
-                let spirv =
-                    pso::read_spirv(Cursor::new(&include_bytes!("./data/triangles.frag.spv")[..]))
-                        .unwrap();
+                let spirv = auxil::read_spirv(Cursor::new(&include_bytes!("data/triangles.frag.spv")[..]))
+                    .unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
 

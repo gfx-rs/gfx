@@ -333,7 +333,7 @@ pub enum ShaderError {
     /// The shader has a mismatch of interface (e.g missing push constants).
     InterfaceMismatch(String),
     /// The shader stage is not supported.
-    UnsupportedStage(pso::Stage),
+    UnsupportedStage(pso::ShaderStageFlags),
     /// Out of either host or device memory.
     OutOfMemory(OutOfMemory),
 }

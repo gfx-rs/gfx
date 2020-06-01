@@ -8,6 +8,7 @@ use crate::{
     TexturePtr,
 };
 
+use auxil::ShaderStage;
 use hal;
 use metal;
 
@@ -68,28 +69,28 @@ pub enum RenderCommand<R: Resources> {
     SetRasterizerState(RasterizerState),
     SetVisibilityResult(metal::MTLVisibilityResultMode, hal::buffer::Offset),
     BindBuffer {
-        stage: hal::pso::Stage,
+        stage: ShaderStage,
         index: ResourceIndex,
         buffer: BufferPtr,
         offset: hal::buffer::Offset,
     },
     BindBuffers {
-        stage: hal::pso::Stage,
+        stage: ShaderStage,
         index: ResourceIndex,
         buffers: R::BufferArray,
     },
     BindBufferData {
-        stage: hal::pso::Stage,
+        stage: ShaderStage,
         index: ResourceIndex,
         words: R::Data,
     },
     BindTextures {
-        stage: hal::pso::Stage,
+        stage: ShaderStage,
         index: ResourceIndex,
         textures: R::TextureArray,
     },
     BindSamplers {
-        stage: hal::pso::Stage,
+        stage: ShaderStage,
         index: ResourceIndex,
         samplers: R::SamplerArray,
     },

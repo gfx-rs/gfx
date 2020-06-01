@@ -8,7 +8,7 @@ use winapi::{
 };
 use wio::com::ComPtr;
 
-use auxil::spirv_cross_specialize_ast;
+use auxil::{ShaderStage, spirv_cross_specialize_ast};
 use hal::{device, pso};
 
 use crate::{conv, Backend, PipelineLayout};
@@ -34,7 +34,7 @@ fn gen_query_error(err: SpirvErrorCode) -> device::ShaderError {
 
 pub(crate) fn compile_spirv_entrypoint(
     raw_data: &[u32],
-    stage: pso::Stage,
+    stage: ShaderStage,
     source: &pso::EntryPoint<Backend>,
     layout: &PipelineLayout,
     features: &hal::Features,
@@ -74,16 +74,16 @@ pub(crate) fn compile_spirv_entrypoint(
 }
 
 pub(crate) fn compile_hlsl_shader(
-    stage: pso::Stage,
+    stage: ShaderStage,
     shader_model: hlsl::ShaderModel,
     entry: &str,
     code: &[u8],
 ) -> Result<*mut d3dcommon::ID3DBlob, device::ShaderError> {
     let stage_str = {
         let stage = match stage {
-            pso::Stage::Vertex => "vs",
-            pso::Stage::Fragment => "ps",
-            pso::Stage::Compute => "cs",
+            ShaderStage::Vertex => "vs",
+            ShaderStage::Fragment => "ps",
+            ShaderStage::Compute => "cs",
             _ => unimplemented!(),
         };
 
@@ -147,7 +147,7 @@ fn parse_spirv(raw_data: &[u32]) -> Result<spirv::Ast<hlsl::Target>, device::Sha
 
 fn patch_spirv_resources(
     ast: &mut spirv::Ast<hlsl::Target>,
-    stage: pso::Stage,
+    stage: ShaderStage,
     layout: &PipelineLayout,
 ) -> Result<(), device::ShaderError> {
     // we remap all `layout(binding = n, set = n)` to a flat space which we get from our
@@ -251,7 +251,7 @@ fn translate_spirv(
     ast: &mut spirv::Ast<hlsl::Target>,
     shader_model: hlsl::ShaderModel,
     _layout: &PipelineLayout,
-    _stage: pso::Stage,
+    _stage: ShaderStage,
     features: &hal::Features,
 ) -> Result<String, device::ShaderError> {
     let mut compile_options = hlsl::CompilerOptions::default();

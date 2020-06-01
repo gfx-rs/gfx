@@ -1230,14 +1230,14 @@ impl<B: Backend> PipelineState<B> {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.vert").unwrap();
                 let file =
                     glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex).unwrap();
-                let spirv: Vec<u32> = pso::read_spirv(file).unwrap();
+                let spirv: Vec<u32> = auxil::read_spirv(file).unwrap();
                 device.create_shader_module(&spirv).unwrap()
             };
             let fs_module = {
                 let glsl = fs::read_to_string("colour-uniform/data/quad.frag").unwrap();
                 let file =
                     glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment).unwrap();
-                let spirv: Vec<u32> = pso::read_spirv(file).unwrap();
+                let spirv: Vec<u32> = auxil::read_spirv(file).unwrap();
                 device.create_shader_module(&spirv).unwrap()
             };
 

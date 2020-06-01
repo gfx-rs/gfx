@@ -29,6 +29,7 @@ gl = ["gfx-backend-gl"]
 
 [dependencies]
 hal = { path = "../hal", version = "0.5", package = "gfx-hal", features = ["serde"] }
+auxil = { path = "../auxil/auxil", version = "0.3", package = "gfx-auxil" }
 log = "0.4"
 ron = "0.5"
 serde = { version = "1", features = ["serde_derive"] }

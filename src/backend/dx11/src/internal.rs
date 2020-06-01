@@ -2,8 +2,8 @@ use hal::{
     command,
     image,
     pso,
-    pso::{Stage, Viewport},
 };
+use auxil::ShaderStage;
 
 use winapi::{
     shared::{
@@ -145,7 +145,7 @@ pub struct Internal {
     pub working_buffer_size: u64,
 }
 
-fn compile_blob(src: &[u8], entrypoint: &str, stage: Stage) -> ComPtr<d3dcommon::ID3DBlob> {
+fn compile_blob(src: &[u8], entrypoint: &str, stage: ShaderStage) -> ComPtr<d3dcommon::ID3DBlob> {
     unsafe {
         ComPtr::from_raw(
             shader::compile_hlsl_shader(
@@ -164,7 +164,7 @@ fn compile_vs(
     src: &[u8],
     entrypoint: &str,
 ) -> ComPtr<d3d11::ID3D11VertexShader> {
-    let bytecode = compile_blob(src, entrypoint, Stage::Vertex);
+    let bytecode = compile_blob(src, entrypoint, ShaderStage::Vertex);
     let mut shader = ptr::null_mut();
     let hr = unsafe {
         device.CreateVertexShader(
@@ -184,7 +184,7 @@ fn compile_ps(
     src: &[u8],
     entrypoint: &str,
 ) -> ComPtr<d3d11::ID3D11PixelShader> {
-    let bytecode = compile_blob(src, entrypoint, Stage::Fragment);
+    let bytecode = compile_blob(src, entrypoint, ShaderStage::Fragment);
     let mut shader = ptr::null_mut();
     let hr = unsafe {
         device.CreatePixelShader(
@@ -204,7 +204,7 @@ fn compile_cs(
     src: &[u8],
     entrypoint: &str,
 ) -> ComPtr<d3d11::ID3D11ComputeShader> {
-    let bytecode = compile_blob(src, entrypoint, Stage::Compute);
+    let bytecode = compile_blob(src, entrypoint, ShaderStage::Compute);
     let mut shader = ptr::null_mut();
     let hr = unsafe {
         device.CreateComputeShader(
@@ -1221,7 +1221,7 @@ impl Internal {
                     unsafe { context.PSSetShader(shader, ptr::null_mut(), 0) };
 
                     for clear_rect in &clear_rects {
-                        let viewport = conv::map_viewport(&Viewport {
+                        let viewport = conv::map_viewport(&pso::Viewport {
                             rect: clear_rect.rect,
                             depth: 0f32 .. 1f32,
                         });
@@ -1295,7 +1295,7 @@ impl Internal {
                     }
 
                     for clear_rect in &clear_rects {
-                        let viewport = conv::map_viewport(&Viewport {
+                        let viewport = conv::map_viewport(&pso::Viewport {
                             rect: clear_rect.rect,
                             depth: 0f32 .. 1f32,
                         });

@@ -70,7 +70,7 @@ fn main() {
 
     let glsl = fs::read_to_string("compute/shader/collatz.comp").unwrap();
     let file = glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Compute).unwrap();
-    let spirv: Vec<u32> = pso::read_spirv(file).unwrap();
+    let spirv: Vec<u32> = auxil::read_spirv(file).unwrap();
     let shader = unsafe { device.create_shader_module(&spirv) }.unwrap();
 
     let (pipeline_layout, pipeline, set_layout, mut desc_pool) = {
