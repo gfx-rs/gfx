@@ -27,7 +27,7 @@ use winapi::{
     Interface,
 };
 
-use auxil::spirv_cross_specialize_ast;
+use auxil::{ShaderStage, spirv_cross_specialize_ast};
 use hal::{
     self,
     buffer,
@@ -115,15 +115,15 @@ pub(crate) enum CommandSignature {
 
 /// Compile a single shader entry point from a HLSL text shader
 pub(crate) fn compile_shader(
-    stage: pso::Stage,
+    stage: ShaderStage,
     shader_model: hlsl::ShaderModel,
     entry: &str,
     code: &[u8],
 ) -> Result<native::Blob, d::ShaderError> {
     let stage_str = match stage {
-        pso::Stage::Vertex => "vs",
-        pso::Stage::Fragment => "ps",
-        pso::Stage::Compute => "cs",
+        ShaderStage::Vertex => "vs",
+        ShaderStage::Fragment => "ps",
+        ShaderStage::Compute => "cs",
         _ => unimplemented!(),
     };
     let model_str = match shader_model {
@@ -406,14 +406,14 @@ impl Device {
         ast: &mut spirv::Ast<hlsl::Target>,
         shader_model: hlsl::ShaderModel,
         layout: &r::PipelineLayout,
-        stage: pso::Stage,
+        stage: ShaderStage,
         features: &hal::Features,
     ) -> Result<String, d::ShaderError> {
         let mut compile_options = hlsl::CompilerOptions::default();
         compile_options.shader_model = shader_model;
         compile_options.vertex.invert_y = !features.contains(hal::Features::NDC_Y_UP);
 
-        let stage_flag = stage.into();
+        let stage_flag = stage.to_flag();
         let root_constant_layout = layout
             .constants
             .iter()
@@ -447,7 +447,7 @@ impl Device {
     // Returns compiled shader blob and bool to indicate if the shader should be
     // destroyed after pipeline creation
     fn extract_entry_point(
-        stage: pso::Stage,
+        stage: ShaderStage,
         source: &pso::EntryPoint<B>,
         layout: &r::PipelineLayout,
         features: &hal::Features,
@@ -497,7 +497,7 @@ impl Device {
     /// Create a shader module from HLSL with a single entry point
     pub fn create_shader_module_from_source(
         &self,
-        stage: pso::Stage,
+        stage: ShaderStage,
         hlsl_entry: &str,
         entry_point: &str,
         code: &[u8],
@@ -1788,7 +1788,7 @@ impl d::Device<B> for Device {
             }
         }
 
-        let build_shader = |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, B>>| {
+        let build_shader = |stage: ShaderStage, source: Option<&pso::EntryPoint<'a, B>>| {
             let source = match source {
                 Some(src) => src,
                 None => return Ok(ShaderBc::None),
@@ -1829,11 +1829,11 @@ impl d::Device<B> for Device {
             },
         };
 
-        let vs = build_shader(pso::Stage::Vertex, vs)?;
-        let gs = build_shader(pso::Stage::Geometry, gs)?;
-        let hs = build_shader(pso::Stage::Domain, hs)?;
-        let ds = build_shader(pso::Stage::Hull, ds)?;
-        let ps = build_shader(pso::Stage::Fragment, desc.fragment.as_ref())?;
+        let vs = build_shader(ShaderStage::Vertex, vs)?;
+        let gs = build_shader(ShaderStage::Geometry, gs)?;
+        let hs = build_shader(ShaderStage::Domain, hs)?;
+        let ds = build_shader(ShaderStage::Hull, ds)?;
+        let ps = build_shader(ShaderStage::Fragment, desc.fragment.as_ref())?;
 
         // Rebind vertex buffers, see native.rs for more details.
         let mut vertex_bindings = [None; MAX_VERTEX_BUFFERS];
@@ -2081,7 +2081,7 @@ impl d::Device<B> for Device {
         _cache: Option<&()>,
     ) -> Result<r::ComputePipeline, pso::CreationError> {
         let (cs, cs_destroy) = Self::extract_entry_point(
-            pso::Stage::Compute,
+            ShaderStage::Compute,
             &desc.shader,
             desc.layout,
             &self.features,

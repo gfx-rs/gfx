@@ -16,7 +16,6 @@ use hal::{
         Rasterizer,
         Rect,
         Sided,
-        Stage,
         State,
         StencilFace,
         StencilOp,
@@ -25,6 +24,7 @@ use hal::{
     },
     IndexType,
 };
+use auxil::ShaderStage;
 
 use spirv_cross::spirv;
 
@@ -765,27 +765,28 @@ pub(crate) fn map_depth_stencil_desc(
     )
 }
 
-pub fn map_execution_model(model: spirv::ExecutionModel) -> Stage {
+pub fn map_execution_model(model: spirv::ExecutionModel) -> ShaderStage {
     match model {
-        spirv::ExecutionModel::Vertex => Stage::Vertex,
-        spirv::ExecutionModel::Fragment => Stage::Fragment,
-        spirv::ExecutionModel::Geometry => Stage::Geometry,
-        spirv::ExecutionModel::GlCompute => Stage::Compute,
-        spirv::ExecutionModel::TessellationControl => Stage::Hull,
-        spirv::ExecutionModel::TessellationEvaluation => Stage::Domain,
+        spirv::ExecutionModel::Vertex => ShaderStage::Vertex,
+        spirv::ExecutionModel::Fragment => ShaderStage::Fragment,
+        spirv::ExecutionModel::Geometry => ShaderStage::Geometry,
+        spirv::ExecutionModel::GlCompute => ShaderStage::Compute,
+        spirv::ExecutionModel::TessellationControl => ShaderStage::Hull,
+        spirv::ExecutionModel::TessellationEvaluation => ShaderStage::Domain,
         spirv::ExecutionModel::Kernel => panic!("Kernel is not a valid execution model."),
     }
 }
 
-pub fn map_stage(stage: Stage) -> spirv::ExecutionModel {
+pub fn map_stage(stage: ShaderStage) -> spirv::ExecutionModel {
     match stage {
-        Stage::Vertex => spirv::ExecutionModel::Vertex,
-        Stage::Fragment => spirv::ExecutionModel::Fragment,
-        Stage::Geometry => spirv::ExecutionModel::Geometry,
-        Stage::Compute => spirv::ExecutionModel::GlCompute,
-        Stage::Hull => spirv::ExecutionModel::TessellationControl,
-        Stage::Domain => spirv::ExecutionModel::TessellationEvaluation,
-        Stage::Task | Stage::Mesh => panic!("{:?} shader is not supported in DirectX 11", stage),
+        ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
+        ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
+        ShaderStage::Geometry => spirv::ExecutionModel::Geometry,
+        ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
+        ShaderStage::Hull => spirv::ExecutionModel::TessellationControl,
+        ShaderStage::Domain => spirv::ExecutionModel::TessellationEvaluation,
+        ShaderStage::Task |
+        ShaderStage::Mesh => panic!("{:?} shader is not supported in DirectX 11", stage),
     }
 }
 

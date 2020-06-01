@@ -18,6 +18,7 @@ use hal::{
     image,
     pso,
 };
+use auxil::ShaderStage;
 
 use native::ShaderVisibility;
 
@@ -621,26 +622,27 @@ pub fn map_image_flags(usage: image::Usage, features: ImageFeature) -> D3D12_RES
     flags
 }
 
-pub fn map_execution_model(model: spirv::ExecutionModel) -> pso::Stage {
+pub fn map_execution_model(model: spirv::ExecutionModel) -> ShaderStage {
     match model {
-        spirv::ExecutionModel::Vertex => pso::Stage::Vertex,
-        spirv::ExecutionModel::Fragment => pso::Stage::Fragment,
-        spirv::ExecutionModel::Geometry => pso::Stage::Geometry,
-        spirv::ExecutionModel::GlCompute => pso::Stage::Compute,
-        spirv::ExecutionModel::TessellationControl => pso::Stage::Hull,
-        spirv::ExecutionModel::TessellationEvaluation => pso::Stage::Domain,
-        spirv::ExecutionModel::Kernel => panic!("Kernel is not a valid execution model."),
+        spirv::ExecutionModel::Vertex => ShaderStage::Vertex,
+        spirv::ExecutionModel::Fragment => ShaderStage::Fragment,
+        spirv::ExecutionModel::Geometry => ShaderStage::Geometry,
+        spirv::ExecutionModel::GlCompute => ShaderStage::Compute,
+        spirv::ExecutionModel::TessellationControl => ShaderStage::Hull,
+        spirv::ExecutionModel::TessellationEvaluation => ShaderStage::Domain,
+        spirv::ExecutionModel::Kernel => panic!("Kernel is not a valid execution model"),
     }
 }
 
-pub fn map_stage(stage: pso::Stage) -> spirv::ExecutionModel {
+pub fn map_stage(stage: ShaderStage) -> spirv::ExecutionModel {
     match stage {
-        pso::Stage::Vertex => spirv::ExecutionModel::Vertex,
-        pso::Stage::Fragment => spirv::ExecutionModel::Fragment,
-        pso::Stage::Geometry => spirv::ExecutionModel::Geometry,
-        pso::Stage::Compute => spirv::ExecutionModel::GlCompute,
-        pso::Stage::Hull => spirv::ExecutionModel::TessellationControl,
-        pso::Stage::Domain => spirv::ExecutionModel::TessellationEvaluation,
-        pso::Stage::Task | pso::Stage::Mesh => panic!("{:?} shader is not yet implemented in SPIRV-Cross", stage),
+        ShaderStage::Vertex => spirv::ExecutionModel::Vertex,
+        ShaderStage::Fragment => spirv::ExecutionModel::Fragment,
+        ShaderStage::Geometry => spirv::ExecutionModel::Geometry,
+        ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
+        ShaderStage::Hull => spirv::ExecutionModel::TessellationControl,
+        ShaderStage::Domain => spirv::ExecutionModel::TessellationEvaluation,
+        ShaderStage::Task |
+        ShaderStage::Mesh => panic!("{:?} shader is not yet implemented in SPIRV-Cross", stage),
     }
 }

@@ -40,7 +40,7 @@ use hal::{
 };
 
 use arrayvec::ArrayVec;
-use auxil::FastHashMap;
+use auxil::{FastHashMap, ShaderStage};
 use block::ConcreteBlock;
 use cocoa::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
@@ -422,7 +422,7 @@ impl State {
 
         let render_resources = iter::once(&self.resources_vs).chain(iter::once(&self.resources_ps));
         let push_constants = self.push_constants.as_slice();
-        let com_resources = [pso::Stage::Vertex, pso::Stage::Fragment]
+        let com_resources = [ShaderStage::Vertex, ShaderStage::Fragment]
             .iter()
             .zip(render_resources)
             .flat_map(move |(&stage, resources)| {
@@ -545,7 +545,7 @@ impl State {
         }
 
         Some(soft::RenderCommand::BindBuffers {
-            stage: pso::Stage::Vertex,
+            stage: ShaderStage::Vertex,
             index: start as ResourceIndex,
             buffers: (
                 &self.resources_vs.buffers[start .. end],
@@ -594,7 +594,7 @@ impl State {
     ) -> soft::RenderCommand<&soft::Ref> {
         self.resources_vs.push_constants = Some(pc);
         soft::RenderCommand::BindBufferData {
-            stage: pso::Stage::Vertex,
+            stage: ShaderStage::Vertex,
             index: pc.buffer_index,
             words: &self.push_constants[.. pc.count as usize],
         }
@@ -606,7 +606,7 @@ impl State {
     ) -> soft::RenderCommand<&soft::Ref> {
         self.resources_ps.push_constants = Some(pc);
         soft::RenderCommand::BindBufferData {
-            stage: pso::Stage::Fragment,
+            stage: ShaderStage::Fragment,
             index: pc.buffer_index,
             words: &self.push_constants[.. pc.count as usize],
         }
@@ -1600,8 +1600,8 @@ where
         } => {
             let native = Some(buffer.as_native());
             match stage {
-                pso::Stage::Vertex => encoder.set_vertex_buffer(index as _, native, offset as _),
-                pso::Stage::Fragment => {
+                ShaderStage::Vertex => encoder.set_vertex_buffer(index as _, native, offset as _),
+                ShaderStage::Fragment => {
                     encoder.set_fragment_buffer(index as _, native, offset as _)
                 }
                 _ => unreachable!(),
@@ -1621,8 +1621,8 @@ where
                 };
                 let offsets = buffers.as_slice(resources);
                 match stage {
-                    pso::Stage::Vertex => encoder.set_vertex_buffers(index as _, data, offsets),
-                    pso::Stage::Fragment => encoder.set_fragment_buffers(index as _, data, offsets),
+                    ShaderStage::Vertex => encoder.set_vertex_buffers(index as _, data, offsets),
+                    ShaderStage::Fragment => encoder.set_fragment_buffers(index as _, data, offsets),
                     _ => unreachable!(),
                 }
             }
@@ -1634,12 +1634,12 @@ where
         } => {
             let slice = words.borrow();
             match stage {
-                pso::Stage::Vertex => encoder.set_vertex_bytes(
+                ShaderStage::Vertex => encoder.set_vertex_bytes(
                     index as _,
                     (slice.len() * WORD_SIZE) as u64,
                     slice.as_ptr() as _,
                 ),
-                pso::Stage::Fragment => encoder.set_fragment_bytes(
+                ShaderStage::Fragment => encoder.set_fragment_bytes(
                     index as _,
                     (slice.len() * WORD_SIZE) as u64,
                     slice.as_ptr() as _,
@@ -1660,8 +1660,8 @@ where
                     mem::transmute(values)
                 };
                 match stage {
-                    pso::Stage::Vertex => encoder.set_vertex_textures(index as _, data),
-                    pso::Stage::Fragment => encoder.set_fragment_textures(index as _, data),
+                    ShaderStage::Vertex => encoder.set_vertex_textures(index as _, data),
+                    ShaderStage::Fragment => encoder.set_fragment_textures(index as _, data),
                     _ => unreachable!(),
                 }
             }
@@ -1679,8 +1679,8 @@ where
                     mem::transmute(values)
                 };
                 match stage {
-                    pso::Stage::Vertex => encoder.set_vertex_sampler_states(index as _, data),
-                    pso::Stage::Fragment => encoder.set_fragment_sampler_states(index as _, data),
+                    ShaderStage::Vertex => encoder.set_vertex_sampler_states(index as _, data),
+                    ShaderStage::Fragment => encoder.set_fragment_sampler_states(index as _, data),
                     _ => unreachable!(),
                 }
             }
@@ -2909,7 +2909,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     // always passing the attachment clears as `ClearColor::Sfloat` atm.
                     raw_value = com::ClearColor::from(value);
                     let com = soft::RenderCommand::BindBufferData {
-                        stage: pso::Stage::Fragment,
+                        stage: ShaderStage::Fragment,
                         index: 0,
                         words: slice::from_raw_parts(
                             raw_value.float32.as_ptr() as *const u32,
@@ -2953,7 +2953,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             let com_vertex = if vertex_is_dirty {
                 vertex_is_dirty = false;
                 Some(soft::RenderCommand::BindBufferData {
-                    stage: pso::Stage::Vertex,
+                    stage: ShaderStage::Vertex,
                     index: 0,
                     words: slice::from_raw_parts(
                         vertices.as_ptr() as *const u32,
@@ -3014,7 +3014,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.state.resources_vs.buffer_offsets.first(),
         ) {
             (Some(&Some(buffer)), Some(&offset)) => Some(soft::RenderCommand::BindBuffer {
-                stage: pso::Stage::Vertex,
+                stage: ShaderStage::Vertex,
                 index: 0,
                 buffer,
                 offset,
@@ -3026,7 +3026,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.state.resources_ps.buffer_offsets.first(),
         ) {
             (Some(&Some(buffer)), Some(&offset)) => Some(soft::RenderCommand::BindBuffer {
-                stage: pso::Stage::Fragment,
+                stage: ShaderStage::Fragment,
                 index: 0,
                 buffer,
                 offset,
@@ -3201,12 +3201,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let prelude = [
             soft::RenderCommand::BindPipeline(&**pso),
             soft::RenderCommand::BindSamplers {
-                stage: pso::Stage::Fragment,
+                stage: ShaderStage::Fragment,
                 index: 0,
                 samplers: &[Some(AsNative::from(sampler))][..],
             },
             soft::RenderCommand::BindTextures {
-                stage: pso::Stage::Fragment,
+                stage: ShaderStage::Fragment,
                 index: 0,
                 textures: &[Some(src_native)][..],
             },
@@ -3274,7 +3274,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                         height: ext.height as _,
                     }),
                     soft::RenderCommand::BindBufferData {
-                        stage: pso::Stage::Vertex,
+                        stage: ShaderStage::Vertex,
                         index: 0,
                         words: slice::from_raw_parts(
                             list.as_ptr() as *const u32,
@@ -3790,7 +3790,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             Some(AsNative::from(raw.as_ref()));
                         self.state.resources_vs.buffer_offsets[index as usize] = raw_offset;
                         pre.issue(soft::RenderCommand::BindBuffer {
-                            stage: pso::Stage::Vertex,
+                            stage: ShaderStage::Vertex,
                             index,
                             buffer: AsNative::from(raw.as_ref()),
                             offset: raw_offset,
@@ -3802,7 +3802,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             Some(AsNative::from(raw.as_ref()));
                         self.state.resources_ps.buffer_offsets[index as usize] = raw_offset;
                         pre.issue(soft::RenderCommand::BindBuffer {
-                            stage: pso::Stage::Fragment,
+                            stage: ShaderStage::Fragment,
                             index,
                             buffer: AsNative::from(raw.as_ref()),
                             offset: raw_offset,
@@ -3832,9 +3832,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         // now bind all the affected resources
         for (stage, cache, range) in
-            iter::once((pso::Stage::Vertex, &self.state.resources_vs, bind_range.vs)).chain(
+            iter::once((ShaderStage::Vertex, &self.state.resources_vs, bind_range.vs)).chain(
                 iter::once((
-                    pso::Stage::Fragment,
+                    ShaderStage::Fragment,
                     &self.state.resources_ps,
                     bind_range.ps,
                 )),

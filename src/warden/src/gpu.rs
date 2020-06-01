@@ -694,7 +694,7 @@ impl<B: hal::Backend> Scene<B> {
                         "comp" => transpile(base_file, glsl_to_spirv::ShaderType::Compute),
                         other => panic!("Unknown shader extension: {}", other),
                     };
-                    let spirv = pso::read_spirv(file).unwrap();
+                    let spirv = auxil::read_spirv(file).unwrap();
                     let module = unsafe { device.create_shader_module(&spirv) }.unwrap();
                     resources.shaders.insert(name.clone(), module);
                 }

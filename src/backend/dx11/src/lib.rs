@@ -44,7 +44,7 @@ use hal::{
     TaskCount,
     WorkGroupCount,
 };
-
+use auxil::ShaderStage;
 use range_alloc::RangeAllocator;
 
 use winapi::{
@@ -2935,11 +2935,11 @@ struct MultiStageData<T> {
 }
 
 impl<T> MultiStageData<T> {
-    fn select(self, stage: pso::Stage) -> T {
+    fn select(self, stage: ShaderStage) -> T {
         match stage {
-            pso::Stage::Vertex => self.vs,
-            pso::Stage::Fragment => self.ps,
-            pso::Stage::Compute => self.cs,
+            ShaderStage::Vertex => self.vs,
+            ShaderStage::Fragment => self.ps,
+            ShaderStage::Compute => self.cs,
             _ => panic!("Unsupported stage {:?}", stage),
         }
     }
@@ -3085,7 +3085,7 @@ struct DescriptorSetInfo {
 impl DescriptorSetInfo {
     fn find_register(
         &self,
-        stage: pso::Stage,
+        stage: ShaderStage,
         binding_index: pso::DescriptorBinding,
     ) -> (DescriptorContent, RegisterData<ResourceIndex>) {
         let mut res_offsets = self

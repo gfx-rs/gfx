@@ -1477,17 +1477,17 @@ impl hal::device::Device<Backend> for Device {
         // Other shaders
         if hs.is_some() {
             return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(
-                pso::Stage::Hull,
+                pso::ShaderStageFlags::HULL,
             )));
         }
         if ds.is_some() {
             return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(
-                pso::Stage::Domain,
+                pso::ShaderStageFlags::DOMAIN,
             )));
         }
         if gs.is_some() {
             return Err(pso::CreationError::Shader(ShaderError::UnsupportedStage(
-                pso::Stage::Geometry,
+                pso::ShaderStageFlags::GEOMETRY,
             )));
         }
 

@@ -13,6 +13,7 @@ use hal::{
     queue::QueueFamilyId,
     window,
 };
+use auxil::ShaderStage;
 
 use winapi::{
     shared::{
@@ -420,7 +421,7 @@ impl Device {
 
     // TODO: fix return type..
     fn extract_entry_point(
-        stage: pso::Stage,
+        stage: ShaderStage,
         source: &pso::EntryPoint<Backend>,
         layout: &PipelineLayout,
         features: &hal::Features,
@@ -909,7 +910,7 @@ impl device::Device<Backend> for Device {
         _cache: Option<&()>,
     ) -> Result<GraphicsPipeline, pso::CreationError> {
         let features = &self.features;
-        let build_shader = |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, Backend>>| {
+        let build_shader = |stage: ShaderStage, source: Option<&pso::EntryPoint<'a, Backend>>| {
             let source = match source {
                 Some(src) => src,
                 None => return Ok(None),
@@ -928,8 +929,8 @@ impl device::Device<Backend> for Device {
                 ref tessellation,
                 ref geometry,
             } => {               
-                let vs = build_shader(pso::Stage::Vertex, Some(&vertex))?.unwrap();
-                let gs = build_shader(pso::Stage::Geometry, geometry.as_ref())?;  
+                let vs = build_shader(ShaderStage::Vertex, Some(&vertex))?.unwrap();
+                let gs = build_shader(ShaderStage::Geometry, geometry.as_ref())?;  
 
                 let layout = self.create_input_layout(vs.clone(), buffers, attributes, input_assembler)?;
 
@@ -940,8 +941,8 @@ impl device::Device<Backend> for Device {
                     None
                 };
                 let (hs, ds) = if let Some(ts) = tessellation {
-                    let hs = build_shader(pso::Stage::Hull, Some(&ts.0))?.unwrap();
-                    let ds = build_shader(pso::Stage::Domain, Some(&ts.1))?.unwrap();
+                    let hs = build_shader(ShaderStage::Hull, Some(&ts.0))?.unwrap();
+                    let ds = build_shader(ShaderStage::Domain, Some(&ts.1))?.unwrap();
 
                     (Some(self.create_hull_shader(hs)?), Some(self.create_domain_shader(ds)?))
                 } else {
@@ -955,7 +956,7 @@ impl device::Device<Backend> for Device {
             }
         };
 
-        let ps = build_shader(pso::Stage::Fragment, desc.fragment.as_ref())?;
+        let ps = build_shader(ShaderStage::Fragment, desc.fragment.as_ref())?;
         let ps = if let Some(blob) = ps {
             Some(self.create_pixel_shader(blob)?)
         } else {
@@ -990,7 +991,7 @@ impl device::Device<Backend> for Device {
         _cache: Option<&()>,
     ) -> Result<ComputePipeline, pso::CreationError> {
         let features = &self.features;
-        let build_shader = |stage: pso::Stage, source: Option<&pso::EntryPoint<'a, Backend>>| {
+        let build_shader = |stage: ShaderStage, source: Option<&pso::EntryPoint<'a, Backend>>| {
             let source = match source {
                 Some(src) => src,
                 None => return Ok(None),
@@ -1000,7 +1001,7 @@ impl device::Device<Backend> for Device {
                 .map_err(|err| pso::CreationError::Shader(err))
         };
 
-        let cs = build_shader(pso::Stage::Compute, Some(&desc.shader))?.unwrap();
+        let cs = build_shader(ShaderStage::Compute, Some(&desc.shader))?.unwrap();
         let cs = self.create_compute_shader(cs)?;
 
         Ok(ComputePipeline { cs })
