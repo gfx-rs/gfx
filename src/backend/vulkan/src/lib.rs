@@ -899,7 +899,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let mut bits = Features::empty()
             | Features::TRIANGLE_FAN
             | Features::SEPARATE_STENCIL_REF_VALUES
-            | Features::SAMPLER_MIP_LOD_BIAS;
+            | Features::SAMPLER_MIP_LOD_BIAS
+            | Features::TEXTURE_DESCRIPTOR_ARRAY;
 
         if self.supports_extension(*AMD_NEGATIVE_VIEWPORT_HEIGHT)
             || self.supports_extension(*KHR_MAINTENANCE1)

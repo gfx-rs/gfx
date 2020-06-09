@@ -1,5 +1,8 @@
 # Change Log
 
+### hal-0.5.1 backend-dx12-0.5.6 backend-metal-0.5.3 backend-vulkan-0.5.7 (10-06-2020)
+  - add TEXTURE_DESCRIPTOR_ARRAY feature and enable on supported backends
+
 ### backend-dx12-0.5.5 (01-06-2020)
   - implement descriptor pool destruction
 
