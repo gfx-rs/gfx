@@ -1091,6 +1091,7 @@ impl hal::Instance<Backend> for Instance {
                     Features::INSTANCE_RATE |
                     Features::SAMPLER_MIP_LOD_BIAS |
                     Features::SAMPLER_ANISOTROPY |
+                    Features::TEXTURE_DESCRIPTOR_ARRAY |
                     Features::SAMPLER_MIRROR_CLAMP_EDGE |
                     Features::NDC_Y_UP,
                 hints:
