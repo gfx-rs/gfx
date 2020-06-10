@@ -442,6 +442,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 hal::Features::empty()
             }
             | hal::Features::SHADER_CLIP_DISTANCE
+            | if self.shared.private_caps.msl_version >= metal::MTLLanguageVersion::V2_0 {
+                hal::Features::TEXTURE_DESCRIPTOR_ARRAY
+            } else {
+                hal::Features::empty()
+            }
             //| hal::Features::SAMPLER_MIRROR_CLAMP_EDGE
             | hal::Features::NDC_Y_UP
     }
