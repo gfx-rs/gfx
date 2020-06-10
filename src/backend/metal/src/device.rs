@@ -446,6 +446,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 F::empty()
             }
             | F::SHADER_CLIP_DISTANCE
+            | if self.shared.private_caps.msl_version >= metal::MTLLanguageVersion::V2_0 {
+                F::TEXTURE_DESCRIPTOR_ARRAY
+            } else {
+                F::empty()
+            }
             //| F::SAMPLER_MIRROR_CLAMP_EDGE
             | F::NDC_Y_UP
     }
