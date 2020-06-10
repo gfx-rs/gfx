@@ -22,7 +22,7 @@ name = "gfx_backend_metal"
 
 [dependencies]
 auxil = { path = "../../auxil/auxil", version = "0.4", package = "gfx-auxil", features = ["spirv_cross"] }
-hal = { path = "../../hal", version = "0.5", package = "gfx-hal" }
+hal = { path = "../../hal", version = "0.5.1", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 arrayvec = "0.5"
 bitflags = "1.0"
