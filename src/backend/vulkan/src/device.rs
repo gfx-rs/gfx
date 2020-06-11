@@ -2075,7 +2075,7 @@ impl d::Device<B> for Device {
         config: SwapchainConfig,
         provided_old_swapchain: Option<w::Swapchain>,
     ) -> Result<(w::Swapchain, Vec<n::Image>), hal::window::CreationError> {
-        let functor = khr::Swapchain::new(&surface.raw.instance.0, &self.shared.raw);
+        let functor = khr::Swapchain::new(&surface.raw.instance.inner, &self.shared.raw);
 
         let old_swapchain = match provided_old_swapchain {
             Some(osc) => osc.raw,
@@ -2310,7 +2310,7 @@ impl d::Device<B> for Device {
 impl Device {
     unsafe fn set_object_name(&self, object_type: vk::ObjectType, object_handle: u64, name: &str) {
         let instance = &self.shared.instance;
-        if let Some(DebugMessenger::Utils(ref debug_utils_ext, _)) = instance.1 {
+        if let Some(DebugMessenger::Utils(ref debug_utils_ext, _)) = instance.debug_messenger {
             // Keep variables outside the if-else block to ensure they do not
             // go out of scope while we hold a pointer to them
             let mut buffer: [u8; 64] = [0u8; 64];
@@ -2334,7 +2334,6 @@ impl Device {
                     .collect::<Vec<u8>>();
                 buffer_vec.as_mut_ptr()
             };
-
             let _result = debug_utils_ext.debug_utils_set_object_name(
                 self.shared.raw.handle(),
                 &vk::DebugUtilsObjectNameInfoEXT {

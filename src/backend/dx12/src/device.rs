@@ -117,6 +117,7 @@ pub(crate) enum CommandSignature {
 pub(crate) fn compile_shader(
     stage: ShaderStage,
     shader_model: hlsl::ShaderModel,
+    features: &hal::Features,
     entry: &str,
     code: &[u8],
 ) -> Result<native::Blob, d::ShaderError> {
@@ -137,6 +138,13 @@ pub(crate) fn compile_shader(
     let mut shader_data = native::Blob::null();
     let mut error = native::Blob::null();
     let entry = ffi::CString::new(entry).unwrap();
+    let mut compile_flags = d3dcompiler::D3DCOMPILE_ENABLE_STRICTNESS;
+    if cfg!(debug_assertions) {
+        compile_flags |= d3dcompiler::D3DCOMPILE_DEBUG;
+    }
+    if features.contains(hal::Features::UNSIZED_DESCRIPTOR_ARRAY) {
+        compile_flags |= d3dcompiler::D3DCOMPILE_ENABLE_UNBOUNDED_DESCRIPTOR_TABLES;
+    }
     let hr = unsafe {
         d3dcompiler::D3DCompile(
             code.as_ptr() as *const _,
@@ -146,7 +154,7 @@ pub(crate) fn compile_shader(
             ptr::null_mut(),
             entry.as_ptr() as *const _,
             full_stage.as_ptr() as *const i8,
-            1,
+            compile_flags,
             0,
             shader_data.mut_void() as *mut *mut _,
             error.mut_void() as *mut *mut _,
@@ -485,6 +493,7 @@ impl Device {
                         let shader = compile_shader(
                             stage,
                             shader_model,
+                            features,
                             &entry_point.name,
                             shader_code.as_bytes(),
                         )?;
@@ -503,7 +512,7 @@ impl Device {
         code: &[u8],
     ) -> Result<r::ShaderModule, d::ShaderError> {
         let mut shader_map = BTreeMap::new();
-        let blob = compile_shader(stage, hlsl::ShaderModel::V5_1, hlsl_entry, code)?;
+        let blob = compile_shader(stage, hlsl::ShaderModel::V5_1, &self.features, hlsl_entry, code)?;
         shader_map.insert(entry_point.into(), blob);
         Ok(r::ShaderModule::Compiled(shader_map))
     }

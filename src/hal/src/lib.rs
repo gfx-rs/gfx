@@ -104,7 +104,7 @@ bitflags! {
     /// [`features`][adapter::PhysicalDevice::features].
     #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
     pub struct Features: u128 {
-        /// Bit mask of Vulkan Core features.
+        /// Bit mask of Vulkan Core/Extension features.
         const CORE_MASK = 0xFFFF_FFFF_FFFF_FFFF;
         /// Bit mask of Vulkan Portability features.
         const PORTABILITY_MASK  = 0x0000_FFFF_0000_0000_0000_0000;
@@ -234,6 +234,12 @@ bitflags! {
         const TEXTURE_DESCRIPTOR_ARRAY = 0x0080_0000_0000_0000;
         /// Support for
         const SAMPLER_MIRROR_CLAMP_EDGE = 0x0100_0000_0000_0000;
+        /// Allow indexing sampled texture descriptor arrays with dynamically non-uniform data
+        const SAMPLED_TEXTURE_DESCRIPTOR_INDEXING = 0x0200_0000_0000_0000;
+        /// Allow indexing storage texture descriptor arrays with dynamically non-uniform data
+        const STORAGE_TEXTURE_DESCRIPTOR_INDEXING = 0x0400_0000_0000_0000;
+        /// Allow descriptor arrays to be unsized in shaders
+        const UNSIZED_DESCRIPTOR_ARRAY = 0x0800_0000_0000_0000;
 
         /// Support triangle fan primitive topology.
         const TRIANGLE_FAN = 0x0001 << 64;
@@ -245,12 +251,12 @@ bitflags! {
         const SAMPLER_MIP_LOD_BIAS = 0x0008 << 64;
 
         /// Make the NDC coordinate system pointing Y up, to match D3D and Metal.
-        const NDC_Y_UP = 0x01 << 80;
+        const NDC_Y_UP = 0x0001 << 80;
 
         /// Supports task shader stage.
-        const TASK_SHADER = 0x01 << 96;
+        const TASK_SHADER = 0x0001 << 96;
         /// Supports mesh shader stage.
-        const MESH_SHADER = 0x02 << 96;
+        const MESH_SHADER = 0x0002 << 96;
     }
 }
 
