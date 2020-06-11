@@ -61,9 +61,10 @@ lazy_static! {
         vec![
             DebugUtils::name(),
             DebugReport::name(),
+            *KHR_GET_PHYSICAL_DEVICE_PROPERTIES2,
         ]
     } else {
-        vec![]
+        vec![*KHR_GET_PHYSICAL_DEVICE_PROPERTIES2]
     };
     static ref DEVICE_EXTENSIONS: Vec<&'static CStr> = vec![extensions::khr::Swapchain::name()];
     static ref SURFACE_EXTENSIONS: Vec<&'static CStr> = vec![
@@ -88,6 +89,10 @@ lazy_static! {
         CStr::from_bytes_with_nul(b"VK_KHR_maintenance1\0").unwrap();
     static ref KHR_SAMPLER_MIRROR_MIRROR_CLAMP_TO_EDGE : &'static CStr =
         CStr::from_bytes_with_nul(b"VK_KHR_sampler_mirror_clamp_to_edge\0").unwrap();
+    static ref KHR_GET_PHYSICAL_DEVICE_PROPERTIES2: &'static CStr =
+        CStr::from_bytes_with_nul(b"VK_KHR_get_physical_device_properties2\0").unwrap();
+    static ref EXT_DESCRIPTOR_INDEXING: &'static CStr =
+        CStr::from_bytes_with_nul(b"VK_EXT_descriptor_indexing\0").unwrap();
 }
 
 #[cfg(not(feature = "use-rtld-next"))]
@@ -109,7 +114,11 @@ lazy_static! {
         );
 }
 
-pub struct RawInstance(ash::Instance, Option<DebugMessenger>);
+pub struct RawInstance {
+    inner: ash::Instance,
+    debug_messenger: Option<DebugMessenger>,
+    get_physical_device_properties: Option<vk::KhrGetPhysicalDeviceProperties2Fn>,
+}
 
 pub enum DebugMessenger {
     Utils(DebugUtils, vk::DebugUtilsMessengerEXT),
@@ -121,7 +130,7 @@ impl Drop for RawInstance {
         unsafe {
             #[cfg(debug_assertions)]
             {
-                match self.1 {
+                match self.debug_messenger {
                     Some(DebugMessenger::Utils(ref ext, callback)) => {
                         ext.destroy_debug_utils_messenger(callback, None)
                     }
@@ -132,7 +141,7 @@ impl Drop for RawInstance {
                 }
             }
 
-            self.0.destroy_instance(None);
+            self.inner.destroy_instance(None);
         }
     }
 }
@@ -424,6 +433,15 @@ impl hal::Instance<Backend> for Instance {
             })?
         };
 
+        let get_physical_device_properties = extensions
+            .iter()
+            .find(|&&ext| ext == *KHR_GET_PHYSICAL_DEVICE_PROPERTIES2)
+            .map(|_| {
+                vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| unsafe {
+                    std::mem::transmute(entry.get_instance_proc_addr(instance.handle(), name.as_ptr()))
+                })
+            });
+
         #[cfg(debug_assertions)]
         let debug_messenger = {
             // make sure VK_EXT_debug_utils is available
@@ -463,13 +481,13 @@ impl hal::Instance<Backend> for Instance {
         let debug_messenger = None;
 
         Ok(Instance {
-            raw: Arc::new(RawInstance(instance, debug_messenger)),
+            raw: Arc::new(RawInstance{ inner: instance, debug_messenger, get_physical_device_properties }),
             extensions,
         })
     }
 
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
-        let devices = match unsafe { self.raw.0.enumerate_physical_devices() } {
+        let devices = match unsafe { self.raw.inner.enumerate_physical_devices() } {
             Ok(devices) => devices,
             Err(err) => {
                 error!("Could not enumerate physical devices! {}", err);
@@ -481,8 +499,8 @@ impl hal::Instance<Backend> for Instance {
             .into_iter()
             .map(|device| {
                 let extensions =
-                    unsafe { self.raw.0.enumerate_device_extension_properties(device) }.unwrap();
-                let properties = unsafe { self.raw.0.get_physical_device_properties(device) };
+                    unsafe { self.raw.inner.enumerate_device_extension_properties(device) }.unwrap();
+                let properties = unsafe { self.raw.inner.get_physical_device_properties(device) };
                 let info = adapter::AdapterInfo {
                     name: unsafe {
                         CStr::from_ptr(properties.device_name.as_ptr())
@@ -513,7 +531,7 @@ impl hal::Instance<Backend> for Instance {
                 };
                 let queue_families = unsafe {
                     self.raw
-                        .0
+                        .inner
                         .get_physical_device_queue_family_properties(device)
                         .into_iter()
                         .enumerate()
@@ -641,6 +659,11 @@ impl fmt::Debug for PhysicalDevice {
     }
 }
 
+pub struct DeviceCreationFeatures {
+    core: vk::PhysicalDeviceFeatures,
+    descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
+}
+
 impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
@@ -664,7 +687,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         let maintenance_level = if self.supports_extension(*KHR_MAINTENANCE1) { 1 } else { 0 };
-        let enabled_features = conv::map_device_features(requested_features);
+        let mut enabled_features = conv::map_device_features(requested_features);
         let enabled_extensions = DEVICE_EXTENSIONS
             .iter()
             .cloned()
@@ -689,20 +712,18 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
             let str_pointers = cstrings.iter().map(|s| s.as_ptr()).collect::<Vec<_>>();
 
-            let info = vk::DeviceCreateInfo {
-                s_type: vk::StructureType::DEVICE_CREATE_INFO,
-                p_next: ptr::null(),
-                flags: vk::DeviceCreateFlags::empty(),
-                queue_create_info_count: family_infos.len() as u32,
-                p_queue_create_infos: family_infos.as_ptr(),
-                enabled_layer_count: 0,
-                pp_enabled_layer_names: ptr::null(),
-                enabled_extension_count: str_pointers.len() as u32,
-                pp_enabled_extension_names: str_pointers.as_ptr(),
-                p_enabled_features: &enabled_features,
+            let info = vk::DeviceCreateInfo::builder()
+                .queue_create_infos(&family_infos)
+                .enabled_extension_names(&str_pointers)
+                .enabled_features(&enabled_features.core);
+
+            let info = if let Some(ref mut descriptor_indexing) = enabled_features.descriptor_indexing {
+                info.push_next(descriptor_indexing)
+            } else {
+                info
             };
 
-            match self.instance.0.create_device(self.handle, &info, None) {
+            match self.instance.inner.create_device(self.handle, &info, None) {
                 Ok(device) => device,
                 Err(e) => {
                     return Err(match e {
@@ -726,7 +747,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         let swapchain_fn = vk::KhrSwapchainFn::load(|name| {
             mem::transmute(
                 self.instance
-                    .0
+                    .inner
                     .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
             )
         });
@@ -767,7 +788,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
     fn format_properties(&self, format: Option<format::Format>) -> format::Properties {
         let properties = unsafe {
-            self.instance.0.get_physical_device_format_properties(
+            self.instance.inner.get_physical_device_format_properties(
                 self.handle,
                 format.map_or(vk::Format::UNDEFINED, conv::map_format),
             )
@@ -789,7 +810,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         let format_properties = unsafe {
-            self.instance.0.get_physical_device_image_format_properties(
+            self.instance.inner.get_physical_device_image_format_properties(
                 self.handle,
                 conv::map_format(format),
                 match dimensions {
@@ -827,7 +848,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     fn memory_properties(&self) -> adapter::MemoryProperties {
         let mem_properties = unsafe {
             self.instance
-                .0
+                .inner
                 .get_physical_device_memory_properties(self.handle)
         };
         let memory_heaps = mem_properties.memory_heaps
@@ -895,7 +916,25 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 || self.properties.device_id & info::intel::DEVICE_SKY_LAKE_MASK
                     == info::intel::DEVICE_SKY_LAKE_MASK);
 
-        let features = unsafe { self.instance.0.get_physical_device_features(self.handle) };
+        let mut descriptor_indexing_features = None;
+        let features = if let Some(ref get_device_properties) = self.instance.get_physical_device_properties {
+            let features = vk::PhysicalDeviceFeatures::builder().build();
+            let mut features2 = vk::PhysicalDeviceFeatures2KHR::builder().features(features).build();
+
+            // Add extension infos to the p_next chain
+            if self.supports_extension(*EXT_DESCRIPTOR_INDEXING) {
+                descriptor_indexing_features = Some(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder().build());
+
+                let mut_ref = descriptor_indexing_features.as_mut().unwrap();
+                mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
+            }
+
+            unsafe { get_device_properties.get_physical_device_features2_khr(self.handle, &mut features2 as *mut _); }
+            features2.features
+        } else {
+            unsafe { self.instance.inner.get_physical_device_features(self.handle) }
+        };
+
         let mut bits = Features::empty()
             | Features::TRIANGLE_FAN
             | Features::SEPARATE_STENCIL_REF_VALUES
@@ -909,6 +948,18 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
         if self.supports_extension(*KHR_SAMPLER_MIRROR_MIRROR_CLAMP_TO_EDGE) {
             bits |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
+        }
+        // This will only be some if the extension exists
+        if let Some(ref desc_indexing) = descriptor_indexing_features {
+            if desc_indexing.shader_sampled_image_array_non_uniform_indexing != 0 {
+                bits |= Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING;
+            }
+            if desc_indexing.shader_storage_image_array_non_uniform_indexing != 0 {
+                bits |= Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING;
+            }
+            if desc_indexing.runtime_descriptor_array != 0 {
+                bits |= Features::UNSIZED_DESCRIPTOR_ARRAY;
+            }
         }
 
         if features.robust_buffer_access != 0 {
@@ -1266,7 +1317,7 @@ impl Drop for RawDevice {
 
 impl RawDevice {
     fn debug_messenger(&self) -> Option<&DebugMessenger> {
-        self.instance.1.as_ref()
+        self.instance.debug_messenger.as_ref()
     }
 
     fn map_viewport(&self, rect: &hal::pso::Viewport) -> vk::Viewport {

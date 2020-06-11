@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-vulkan"
-version = "0.5.7"
+version = "0.5.8"
 description = "Vulkan API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -26,7 +26,7 @@ log = { version = "0.4" }
 lazy_static = "1"
 shared_library = { version = "0.1.9", optional = true }
 ash = "0.30"
-hal = { path = "../../hal", version = "0.5.1", package = "gfx-hal" }
+hal = { path = "../../hal", version = "0.5.2", package = "gfx-hal" }
 smallvec = "1.0"
 raw-window-handle = "0.3"
 
