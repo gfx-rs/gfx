@@ -2040,7 +2040,7 @@ impl d::Device<B> for Device {
         config: SwapchainConfig,
         provided_old_swapchain: Option<w::Swapchain>,
     ) -> Result<(w::Swapchain, Vec<n::Image>), hal::window::CreationError> {
-        let functor = khr::Swapchain::new(&surface.raw.instance.0, &self.shared.raw);
+        let functor = khr::Swapchain::new(&surface.raw.instance.inner, &self.shared.raw);
 
         let old_swapchain = match provided_old_swapchain {
             Some(osc) => osc.raw,
@@ -2273,7 +2273,7 @@ impl d::Device<B> for Device {
 impl Device {
     unsafe fn set_object_name(&self, object_type: vk::ObjectType, object_handle: u64, name: &str) {
         let instance = &self.shared.instance;
-        if let Some(DebugMessenger::Utils(ref debug_utils_ext, _)) = instance.1 {
+        if let Some(DebugMessenger::Utils(ref debug_utils_ext, _)) = instance.debug_messenger {
             // Append a null terminator to the string while avoiding allocating memory
             static mut NAME_BUF: [u8; 64] = [0u8; 64];
             std::ptr::copy_nonoverlapping(

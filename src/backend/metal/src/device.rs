@@ -443,7 +443,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
             | hal::Features::SHADER_CLIP_DISTANCE
             | if self.shared.private_caps.msl_version >= metal::MTLLanguageVersion::V2_0 {
-                hal::Features::TEXTURE_DESCRIPTOR_ARRAY
+                hal::Features::TEXTURE_DESCRIPTOR_ARRAY |
+                hal::Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING |
+                hal::Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING
             } else {
                 hal::Features::empty()
             }

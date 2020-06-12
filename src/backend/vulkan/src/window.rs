@@ -112,7 +112,7 @@ impl Instance {
         }
 
         let surface = {
-            let xlib_loader = khr::XlibSurface::new(entry, &self.raw.0);
+            let xlib_loader = khr::XlibSurface::new(entry, &self.raw.inner);
             let info = vk::XlibSurfaceCreateInfoKHR {
                 s_type: vk::StructureType::XLIB_SURFACE_CREATE_INFO_KHR,
                 p_next: ptr::null(),
@@ -148,7 +148,7 @@ impl Instance {
         }
 
         let surface = {
-            let xcb_loader = khr::XcbSurface::new(entry, &self.raw.0);
+            let xcb_loader = khr::XcbSurface::new(entry, &self.raw.inner);
             let info = vk::XcbSurfaceCreateInfoKHR {
                 s_type: vk::StructureType::XCB_SURFACE_CREATE_INFO_KHR,
                 p_next: ptr::null(),
@@ -179,7 +179,7 @@ impl Instance {
         }
 
         let surface = {
-            let w_loader = khr::WaylandSurface::new(entry, &self.raw.0);
+            let w_loader = khr::WaylandSurface::new(entry, &self.raw.inner);
             let info = vk::WaylandSurfaceCreateInfoKHR {
                 s_type: vk::StructureType::WAYLAND_SURFACE_CREATE_INFO_KHR,
                 p_next: ptr::null(),
@@ -201,7 +201,7 @@ impl Instance {
             .expect("Unable to load Vulkan entry points");
 
         let surface = {
-            let loader = khr::AndroidSurface::new(entry, &self.raw.0);
+            let loader = khr::AndroidSurface::new(entry, &self.raw.inner);
             let info = vk::AndroidSurfaceCreateInfoKHR {
                 s_type: vk::StructureType::ANDROID_SURFACE_CREATE_INFO_KHR,
                 p_next: ptr::null(),
@@ -233,7 +233,7 @@ impl Instance {
                 hinstance: hinstance as *mut _,
                 hwnd: hwnd as *mut _,
             };
-            let win32_loader = khr::Win32Surface::new(entry, &self.raw.0);
+            let win32_loader = khr::Win32Surface::new(entry, &self.raw.inner);
             unsafe {
                 win32_loader
                     .create_win32_surface(&info, None)
@@ -286,7 +286,7 @@ impl Instance {
         }
 
         let surface = {
-            let mac_os_loader = mvk::MacOSSurface::new(entry, &self.raw.0);
+            let mac_os_loader = mvk::MacOSSurface::new(entry, &self.raw.inner);
             let info = vk::MacOSSurfaceCreateInfoMVK {
                 s_type: vk::StructureType::MACOS_SURFACE_CREATE_INFO_M,
                 p_next: ptr::null(),
@@ -309,7 +309,7 @@ impl Instance {
             .as_ref()
             .expect("Unable to load Vulkan entry points");
 
-        let functor = khr::Surface::new(entry, &self.raw.0);
+        let functor = khr::Surface::new(entry, &self.raw.inner);
 
         let raw = Arc::new(RawSurface {
             handle: surface,
