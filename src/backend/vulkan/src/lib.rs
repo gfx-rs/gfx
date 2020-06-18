@@ -17,7 +17,7 @@ use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::{Entry, LoadingError};
-use ash::extensions::nv::MeshShader;
+use ash::extensions::{khr::Swapchain, nv::MeshShader};
 
 use hal::{
     adapter,
@@ -766,14 +766,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             }
         };
 
-        let swapchain_fn = vk::KhrSwapchainFn::load(|name| {
-            mem::transmute(
-                self.instance
-                    .inner
-                    .get_device_proc_addr(device_raw.handle(), name.as_ptr()),
-            )
-        });
-
+        let swapchain_fn = Swapchain::new(&self.instance.inner, &device_raw);
         let mesh_fn = if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
             Some(MeshShader::new(&self.instance.inner, &device_raw))
         } else {
@@ -1383,7 +1376,7 @@ pub type RawCommandQueue = Arc<vk::Queue>;
 pub struct CommandQueue {
     raw: RawCommandQueue,
     device: Arc<RawDevice>,
-    swapchain_fn: vk::KhrSwapchainFn,
+    swapchain_fn: Swapchain,
 }
 
 impl fmt::Debug for CommandQueue {
@@ -1480,18 +1473,18 @@ impl queue::CommandQueue<Backend> for CommandQueue {
             p_results: ptr::null_mut(),
         };
 
-        match self.swapchain_fn.queue_present_khr(*self.raw, &info) {
-            vk::Result::SUCCESS => Ok(None),
-            vk::Result::SUBOPTIMAL_KHR => Ok(Some(Suboptimal)),
-            vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+        match self.swapchain_fn.queue_present(*self.raw, &info) {
+            Ok(true) => Ok(None),
+            Ok(false) => Ok(Some(Suboptimal)),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
                 Err(PresentError::OutOfMemory(OutOfMemory::Host))
             }
-            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(PresentError::OutOfMemory(OutOfMemory::Device))
             }
-            vk::Result::ERROR_DEVICE_LOST => Err(PresentError::DeviceLost(DeviceLost)),
-            vk::Result::ERROR_OUT_OF_DATE_KHR => Err(PresentError::OutOfDate),
-            vk::Result::ERROR_SURFACE_LOST_KHR => Err(PresentError::SurfaceLost(SurfaceLost)),
+            Err(vk::Result::ERROR_DEVICE_LOST) => Err(PresentError::DeviceLost(DeviceLost)),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(PresentError::OutOfDate),
+            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => Err(PresentError::SurfaceLost(SurfaceLost)),
             _ => panic!("Failed to present frame"),
         }
     }
@@ -1536,19 +1529,19 @@ impl queue::CommandQueue<Backend> for CommandQueue {
 
         match self
             .swapchain_fn
-            .queue_present_khr(*self.raw, &present_info)
+            .queue_present(*self.raw, &present_info)
         {
-            vk::Result::SUCCESS => Ok(None),
-            vk::Result::SUBOPTIMAL_KHR => Ok(Some(Suboptimal)),
-            vk::Result::ERROR_OUT_OF_HOST_MEMORY => {
+            Ok(true) => Ok(None),
+            Ok(false) => Ok(Some(Suboptimal)),
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
                 Err(PresentError::OutOfMemory(OutOfMemory::Host))
             }
-            vk::Result::ERROR_OUT_OF_DEVICE_MEMORY => {
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
                 Err(PresentError::OutOfMemory(OutOfMemory::Device))
             }
-            vk::Result::ERROR_DEVICE_LOST => Err(PresentError::DeviceLost(DeviceLost)),
-            vk::Result::ERROR_OUT_OF_DATE_KHR => Err(PresentError::OutOfDate),
-            vk::Result::ERROR_SURFACE_LOST_KHR => Err(PresentError::SurfaceLost(SurfaceLost)),
+            Err(vk::Result::ERROR_DEVICE_LOST) => Err(PresentError::DeviceLost(DeviceLost)),
+            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(PresentError::OutOfDate),
+            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => Err(PresentError::SurfaceLost(SurfaceLost)),
             _ => panic!("Failed to present frame"),
         }
     }
