@@ -1,19 +1,16 @@
-#![cfg_attr(
-    not(any(
-        feature = "vulkan",
-        feature = "dx11",
-        feature = "dx12",
-        feature = "metal",
-        feature = "gl",
-        feature = "wgl"
-    )),
-    allow(dead_code, unused_extern_crates, unused_imports)
-)]
-
 #[cfg(feature = "dx11")]
 extern crate gfx_backend_dx11 as back;
 #[cfg(feature = "dx12")]
 extern crate gfx_backend_dx12 as back;
+#[cfg(not(any(
+    feature = "vulkan",
+    feature = "dx11",
+    feature = "dx12",
+    feature = "metal",
+    feature = "gl",
+    feature = "wgl",
+)))]
+extern crate gfx_backend_empty as back;
 #[cfg(any(feature = "gl", feature = "wgl"))]
 extern crate gfx_backend_gl as back;
 #[cfg(feature = "metal")]
@@ -85,18 +82,22 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
     layers: 0 .. 1,
 };
 
-#[cfg(any(
-    feature = "vulkan",
-    feature = "dx11",
-    feature = "dx12",
-    feature = "metal",
-    feature = "gl",
-    feature = "wgl"
-))]
 fn main() {
     #[cfg(target_arch = "wasm32")]
     console_log::init_with_level(log::Level::Debug).unwrap();
     env_logger::init();
+
+    #[cfg(not(any(
+        feature = "vulkan",
+        feature = "dx11",
+        feature = "dx12",
+        feature = "metal",
+        feature = "gl",
+        feature = "wgl",
+    )))]
+    eprintln!(
+        "You are running the example with the empty backend, no graphical output is to be expected"
+    );
 
     let event_loop = winit::event_loop::EventLoop::new();
 
@@ -977,16 +978,4 @@ where
         }
         println!("DROPPED!");
     }
-}
-
-#[cfg(not(any(
-    feature = "vulkan",
-    feature = "dx11",
-    feature = "dx12",
-    feature = "metal",
-    feature = "gl",
-    feature = "wgl"
-)))]
-fn main() {
-    println!("You need to enable the native API feature (vulkan/metal/dx11/dx12/gl/wgl) in order to run the example");
 }
