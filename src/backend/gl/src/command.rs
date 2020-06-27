@@ -1499,6 +1499,30 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!()
     }
 
+    unsafe fn draw_indirect_count(
+        &mut self,
+        _buffer: &n::Buffer,
+        _offset: buffer::Offset,
+        _count_buffer: &n::Buffer,
+        _count_buffer_offset: buffer::Offset,
+        _max_draw_count: u32,
+        _stride: u32
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_indexed_indirect_count(
+        &mut self,
+        _buffer: &n::Buffer,
+        _offset: buffer::Offset,
+        _count_buffer: &n::Buffer,
+        _count_buffer_offset: buffer::Offset,
+        _max_draw_count: u32,
+        _stride: u32
+    ) {
+        unimplemented!()
+    }
+
     unsafe fn draw_mesh_tasks(&mut self, _: u32, _: u32) {
         unimplemented!()
     }

@@ -879,7 +879,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: hal::VertexOffset,
         _: Range<hal::InstanceCount>,
     ) {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn draw_indirect(
@@ -889,7 +888,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: hal::DrawCount,
         _: u32,
     ) {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn draw_indexed_indirect(
@@ -899,7 +897,28 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: hal::DrawCount,
         _: u32,
     ) {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
+
+    unsafe fn draw_indirect_count(
+        &mut self,
+        _: &Buffer,
+        _: hal::buffer::Offset,
+        _: &Buffer,
+        _: hal::buffer::Offset,
+        _: u32,
+        _: u32,
+    ) {
+    }
+
+    unsafe fn draw_indexed_indirect_count(
+        &mut self,
+        _: &Buffer,
+        _: hal::buffer::Offset,
+        _: &Buffer,
+        _: hal::buffer::Offset,
+        _: u32,
+        _: u32,
+    ) {
     }
 
     unsafe fn draw_mesh_tasks(&mut self, _: u32, _: u32) {

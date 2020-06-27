@@ -427,6 +427,30 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         todo!()
     }
 
+    unsafe fn draw_indirect_count(
+        &mut self,
+        _buffer: &<Backend as hal::Backend>::Buffer,
+        _offset: buffer::Offset,
+        _count_buffer: &<Backend as hal::Backend>::Buffer,
+        _count_buffer_offset: buffer::Offset,
+        _max_draw_count: u32,
+        _stride: u32
+    ) {
+        todo!()
+    }
+
+    unsafe fn draw_indexed_indirect_count(
+        &mut self,
+        _buffer: &<Backend as hal::Backend>::Buffer,
+        _offset: buffer::Offset,
+        _count_buffer: &<Backend as hal::Backend>::Buffer,
+        _count_buffer_offset: buffer::Offset,
+        _max_draw_count: u32,
+        _stride: u32
+    ) {
+        todo!()
+    }
+
     unsafe fn draw_mesh_tasks(&mut self, _task_count: TaskCount, _first_task: TaskCount) {
         todo!()
     }
