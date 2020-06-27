@@ -2510,6 +2510,52 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         );
     }
 
+    unsafe fn draw_indirect_count(
+        &mut self,
+        buffer: &r::Buffer,
+        offset: buffer::Offset,
+        count_buffer: &r::Buffer,
+        count_buffer_offset: buffer::Offset,
+        max_draw_count: DrawCount,
+        stride: u32
+    ) {
+        assert_eq!(stride, 16);
+        let buffer = buffer.expect_bound();
+        let count_buffer = count_buffer.expect_bound();
+        self.set_graphics_bind_point();
+        self.raw.ExecuteIndirect(
+            self.shared.signatures.draw.as_mut_ptr(),
+            max_draw_count,
+            buffer.resource.as_mut_ptr(),
+            offset,
+            count_buffer.resource.as_mut_ptr(),
+            count_buffer_offset,
+        );
+    }
+
+    unsafe fn draw_indexed_indirect_count(
+        &mut self,
+        buffer: &r::Buffer,
+        offset: buffer::Offset,
+        count_buffer: &r::Buffer,
+        count_buffer_offset: buffer::Offset,
+        max_draw_count: DrawCount,
+        stride: u32
+    ) {
+        assert_eq!(stride, 20);
+        let buffer = buffer.expect_bound();
+        let count_buffer = count_buffer.expect_bound();
+        self.set_graphics_bind_point();
+        self.raw.ExecuteIndirect(
+            self.shared.signatures.draw_indexed.as_mut_ptr(),
+            max_draw_count,
+            buffer.resource.as_mut_ptr(),
+            offset,
+            count_buffer.resource.as_mut_ptr(),
+            count_buffer_offset,
+        );
+    }
+
     unsafe fn set_event(&mut self, _: &(), _: pso::PipelineStage) {
         unimplemented!()
     }
