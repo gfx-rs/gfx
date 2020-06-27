@@ -196,6 +196,8 @@ bitflags! {
         const STORAGE_TEXTURE_DESCRIPTOR_INDEXING = 0x0400_0000_0000_0000;
         /// Allow descriptor arrays to be unsized in shaders
         const UNSIZED_DESCRIPTOR_ARRAY = 0x0800_0000_0000_0000;
+        /// Enable draw_indirect_count and draw_indexed_indirect_count
+        const DRAW_INDIRECT_COUNT = 0x1000_0000_0000_0000;
 
         /// Support triangle fan primitive topology.
         const TRIANGLE_FAN = 0x0001 << 64;

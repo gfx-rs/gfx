@@ -12,6 +12,7 @@ extern crate objc;
 use ash::extensions::{
     self,
     ext::{DebugReport, DebugUtils},
+    khr::DrawIndirectCount,
 };
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
@@ -91,6 +92,8 @@ lazy_static! {
         CStr::from_bytes_with_nul(b"VK_KHR_sampler_mirror_clamp_to_edge\0").unwrap();
     static ref KHR_GET_PHYSICAL_DEVICE_PROPERTIES2: &'static CStr =
         CStr::from_bytes_with_nul(b"VK_KHR_get_physical_device_properties2\0").unwrap();
+    static ref KHR_DRAW_INDIRECT_COUNT: &'static CStr =
+        CStr::from_bytes_with_nul(b"VK_KHR_draw_indirect_count\0").unwrap();
     static ref EXT_DESCRIPTOR_INDEXING: &'static CStr =
         CStr::from_bytes_with_nul(b"VK_EXT_descriptor_indexing\0").unwrap();
 }
@@ -704,7 +707,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     1 => Some(*KHR_MAINTENANCE1),
                     _ => unreachable!(),
                 }
-            );
+            ).chain(if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
+                Some(*KHR_DRAW_INDIRECT_COUNT)
+            } else {
+                None
+            });
 
         // Create device
         let device_raw = {
@@ -752,11 +759,20 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             )
         });
 
+        let indirect_count_fn = if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
+            Some(DrawIndirectCount::new(&self.instance.inner, &device_raw))
+        } else {
+            None
+        };
+
         let device = Device {
             shared: Arc::new(RawDevice {
                 raw: device_raw,
                 features: requested_features,
                 instance: Arc::clone(&self.instance),
+                extension_fns: DeviceExtensionFunctions {
+                    draw_indirect_count: indirect_count_fn
+                },
                 maintenance_level,
             }),
             vendor_id: self.properties.vendor_id,
@@ -948,6 +964,9 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
         if self.supports_extension(*KHR_SAMPLER_MIRROR_MIRROR_CLAMP_TO_EDGE) {
             bits |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
+        }
+        if self.supports_extension(*KHR_DRAW_INDIRECT_COUNT) {
+            bits |= Features::DRAW_INDIRECT_COUNT
         }
         // This will only be some if the extension exists
         if let Some(ref desc_indexing) = descriptor_indexing_features {
@@ -1294,11 +1313,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 }
 
+struct DeviceExtensionFunctions {
+    draw_indirect_count: Option<DrawIndirectCount>,
+}
+
 #[doc(hidden)]
 pub struct RawDevice {
     raw: ash::Device,
     features: Features,
     instance: Arc<RawInstance>,
+    extension_fns: DeviceExtensionFunctions,
     maintenance_level: u8,
 }
 

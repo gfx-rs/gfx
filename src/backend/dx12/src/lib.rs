@@ -1096,7 +1096,8 @@ impl hal::Instance<Backend> for Instance {
                     Features::NDC_Y_UP |
                     Features::SAMPLED_TEXTURE_DESCRIPTOR_INDEXING |
                     Features::STORAGE_TEXTURE_DESCRIPTOR_INDEXING |
-                    Features::UNSIZED_DESCRIPTOR_ARRAY,
+                    Features::UNSIZED_DESCRIPTOR_ARRAY |
+                    Features::DRAW_INDIRECT_COUNT,
                 hints:
                     Hints::BASE_VERTEX_INSTANCE_DRAWING,
                 limits: Limits { // TODO
