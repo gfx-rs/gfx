@@ -1,4 +1,4 @@
-//! Dummy backend implementation to test the code for compile errors
+//! Mock backend implementation to test the code for compile errors
 //! outside of the graphics development environment.
 
 extern crate gfx_hal as hal;
@@ -20,6 +20,8 @@ use hal::{
 };
 use std::borrow::Borrow;
 use std::ops::Range;
+
+use log::debug;
 
 const DO_NOT_USE_MESSAGE: &str = "You need to enable a native API feature (vulkan/metal/dx11/dx12/gl/wgl) in order to use gfx-rs";
 
@@ -71,10 +73,38 @@ pub struct PhysicalDevice;
 impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     unsafe fn open(
         &self,
-        _: &[(&QueueFamily, &[queue::QueuePriority])],
-        _: hal::Features,
+        families: &[(&QueueFamily, &[queue::QueuePriority])],
+        _requested_features: hal::Features,
     ) -> Result<adapter::Gpu<Backend>, device::CreationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        // Validate the arguments
+        assert_eq!(
+            families.len(),
+            1,
+            "Empty backend doesn't have multiple queue families"
+        );
+        let (_family, priorities) = families[0];
+        assert_eq!(
+            priorities.len(),
+            1,
+            "Empty backend doesn't support multiple queues"
+        );
+        let priority = priorities[0];
+        assert!(
+            0.0 <= priority && priority <= 1.0,
+            "Queue priority is out of range"
+        );
+
+        // Create the queues
+        let queue_groups = {
+            let mut queue_group = queue::QueueGroup::new(QUEUE_FAMILY_ID);
+            queue_group.add_queue(CommandQueue);
+            vec![queue_group]
+        };
+        let gpu = adapter::Gpu {
+            device: Device,
+            queue_groups,
+        };
+        Ok(gpu)
     }
 
     fn format_properties(&self, _: Option<format::Format>) -> format::Properties {
@@ -93,7 +123,24 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn memory_properties(&self) -> adapter::MemoryProperties {
-        panic!(DO_NOT_USE_MESSAGE)
+        let memory_types = {
+            use memory::Properties;
+            let properties = Properties::DEVICE_LOCAL
+                | Properties::CPU_VISIBLE
+                | Properties::COHERENT
+                | Properties::CPU_CACHED;
+            let memory_type = adapter::MemoryType {
+                properties,
+                heap_index: 0,
+            };
+            vec![memory_type]
+        };
+        // TODO: perhaps get an estimate of free RAM to report here?
+        let memory_heaps = vec![64 * 1024];
+        adapter::MemoryProperties {
+            memory_types,
+            memory_heaps,
+        }
     }
 
     fn features(&self) -> hal::Features {
@@ -105,7 +152,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn limits(&self) -> hal::Limits {
-        panic!(DO_NOT_USE_MESSAGE)
+        hal::Limits {
+            non_coherent_atom_size: 1,
+            optimal_buffer_copy_pitch_alignment: 1,
+            ..Default::default()
+        }
     }
 }
 
@@ -124,7 +175,6 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         Iw: IntoIterator<Item = (&'a S, pso::PipelineStage)>,
         Is: IntoIterator<Item = &'a S>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
     }
 
     unsafe fn present<'a, W, Is, S, Iw>(
@@ -147,7 +197,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         _image: (),
         _wait_semaphore: Option<&()>,
     ) -> Result<Option<window::Suboptimal>, window::PresentError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(None)
     }
 
     fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
@@ -164,19 +214,17 @@ impl device::Device<Backend> for Device {
         _: queue::QueueFamilyId,
         _: pool::CommandPoolCreateFlags,
     ) -> Result<CommandPool, device::OutOfMemory> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(CommandPool)
     }
 
-    unsafe fn destroy_command_pool(&self, _: CommandPool) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_command_pool(&self, _: CommandPool) {}
 
     unsafe fn allocate_memory(
         &self,
         _: hal::MemoryTypeId,
         _: u64,
     ) -> Result<(), device::AllocationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn create_render_pass<'a, IA, IS, ID>(
@@ -193,7 +241,7 @@ impl device::Device<Backend> for Device {
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn create_pipeline_layout<IS, IR>(&self, _: IS, _: IR) -> Result<(), device::OutOfMemory>
@@ -203,7 +251,7 @@ impl device::Device<Backend> for Device {
         IR: IntoIterator,
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn create_pipeline_cache(
@@ -226,7 +274,7 @@ impl device::Device<Backend> for Device {
         _: &pso::GraphicsPipelineDesc<'a, Backend>,
         _: Option<&()>,
     ) -> Result<(), pso::CreationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn create_compute_pipeline<'a>(
@@ -255,22 +303,28 @@ impl device::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<()>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn create_shader_module(&self, _: &[u32]) -> Result<(), device::ShaderError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn create_sampler(&self, _: &image::SamplerDesc) -> Result<(), device::AllocationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
+
     unsafe fn create_buffer(&self, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn get_buffer_requirements(&self, _: &()) -> memory::Requirements {
-        panic!(DO_NOT_USE_MESSAGE)
+        memory::Requirements {
+            // TODO: actually store the buffer size and validate it
+            size: 1,
+            alignment: 1,
+            type_mask: !0,
+        }
     }
 
     unsafe fn bind_buffer_memory(
@@ -279,7 +333,7 @@ impl device::Device<Backend> for Device {
         _: u64,
         _: &mut (),
     ) -> Result<(), device::BindError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn create_buffer_view(
@@ -300,11 +354,16 @@ impl device::Device<Backend> for Device {
         _: image::Usage,
         _: image::ViewCapabilities,
     ) -> Result<(), image::CreationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn get_image_requirements(&self, _: &()) -> memory::Requirements {
-        panic!(DO_NOT_USE_MESSAGE)
+        memory::Requirements {
+            // TODO: store the image size and compute how much memory it needs
+            size: 1,
+            alignment: 1,
+            type_mask: !0,
+        }
     }
 
     unsafe fn get_image_subresource_footprint(
@@ -321,7 +380,7 @@ impl device::Device<Backend> for Device {
         _: u64,
         _: &mut (),
     ) -> Result<(), device::BindError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn create_image_view(
@@ -332,7 +391,7 @@ impl device::Device<Backend> for Device {
         _: format::Swizzle,
         _: image::SubresourceRange,
     ) -> Result<(), image::ViewCreationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn create_descriptor_pool<I>(
@@ -345,7 +404,7 @@ impl device::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorRangeDesc>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(DescriptorPool)
     }
 
     unsafe fn create_descriptor_set_layout<I, J>(
@@ -359,7 +418,7 @@ impl device::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<()>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn write_descriptor_sets<'a, I, J>(&self, _: I)
@@ -368,7 +427,6 @@ impl device::Device<Backend> for Device {
         J: IntoIterator,
         J::Item: Borrow<pso::Descriptor<'a, Backend>>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
     }
 
     unsafe fn copy_descriptor_sets<'a, I>(&self, _: I)
@@ -380,11 +438,11 @@ impl device::Device<Backend> for Device {
     }
 
     fn create_semaphore(&self) -> Result<(), device::OutOfMemory> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     fn create_fence(&self, _: bool) -> Result<(), device::OutOfMemory> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn get_fence_status(&self, _: &()) -> Result<bool, device::DeviceLost> {
@@ -427,19 +485,20 @@ impl device::Device<Backend> for Device {
     }
 
     unsafe fn map_memory(&self, _: &(), _: memory::Segment) -> Result<*mut u8, device::MapError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        // 640 KB ought to be enough
+        const MEMORY_SIZE: usize = 640 * 1024;
+        static mut MEMORY: [u8; MEMORY_SIZE] = [0u8; MEMORY_SIZE];
+        Ok(MEMORY.as_mut_ptr())
     }
 
-    unsafe fn unmap_memory(&self, _: &()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn unmap_memory(&self, _: &()) {}
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<(&'a (), memory::Segment)>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
@@ -450,62 +509,40 @@ impl device::Device<Backend> for Device {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn free_memory(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn free_memory(&self, _: ()) {}
 
-    unsafe fn destroy_shader_module(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_shader_module(&self, _: ()) {}
 
-    unsafe fn destroy_render_pass(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_render_pass(&self, _: ()) {}
 
-    unsafe fn destroy_pipeline_layout(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
-    unsafe fn destroy_graphics_pipeline(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_pipeline_layout(&self, _: ()) {}
+
+    unsafe fn destroy_graphics_pipeline(&self, _: ()) {}
+
     unsafe fn destroy_compute_pipeline(&self, _: ()) {
         panic!(DO_NOT_USE_MESSAGE)
     }
-    unsafe fn destroy_framebuffer(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_framebuffer(&self, _: ()) {}
 
-    unsafe fn destroy_buffer(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_buffer(&self, _: ()) {}
+
     unsafe fn destroy_buffer_view(&self, _: ()) {
         panic!(DO_NOT_USE_MESSAGE)
     }
-    unsafe fn destroy_image(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
-    unsafe fn destroy_image_view(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
-    unsafe fn destroy_sampler(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
 
-    unsafe fn destroy_descriptor_pool(&self, _: DescriptorPool) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_image(&self, _: ()) {}
 
-    unsafe fn destroy_descriptor_set_layout(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_image_view(&self, _: ()) {}
 
-    unsafe fn destroy_fence(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_sampler(&self, _: ()) {}
 
-    unsafe fn destroy_semaphore(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_descriptor_pool(&self, _: DescriptorPool) {}
+
+    unsafe fn destroy_descriptor_set_layout(&self, _: ()) {}
+
+    unsafe fn destroy_fence(&self, _: ()) {}
+
+    unsafe fn destroy_semaphore(&self, _: ()) {}
 
     unsafe fn destroy_event(&self, _: ()) {
         panic!(DO_NOT_USE_MESSAGE)
@@ -525,7 +562,7 @@ impl device::Device<Backend> for Device {
     }
 
     fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
     unsafe fn set_image_name(&self, _: &mut (), _: &str) {
@@ -563,29 +600,46 @@ impl device::Device<Backend> for Device {
     unsafe fn set_descriptor_set_layout_name(&self, _: &mut (), _: &str) {
         panic!(DO_NOT_USE_MESSAGE)
     }
+
+    unsafe fn reset_fence(&self, _: &()) -> Result<(), device::OutOfMemory> {
+        Ok(())
+    }
+
+    unsafe fn wait_for_fence(&self, _: &(), _: u64) -> Result<bool, device::OomOrDeviceLost> {
+        Ok(true)
+    }
 }
 
 #[derive(Debug)]
 pub struct QueueFamily;
 impl queue::QueueFamily for QueueFamily {
     fn queue_type(&self) -> queue::QueueType {
-        panic!(DO_NOT_USE_MESSAGE)
+        queue::QueueType::General
     }
     fn max_queues(&self) -> usize {
-        panic!(DO_NOT_USE_MESSAGE)
+        1
     }
     fn id(&self) -> queue::QueueFamilyId {
-        panic!(DO_NOT_USE_MESSAGE)
+        QUEUE_FAMILY_ID
     }
 }
+
+const QUEUE_FAMILY_ID: queue::QueueFamilyId = queue::QueueFamilyId(0);
 
 /// Dummy raw command pool.
 #[derive(Debug)]
 pub struct CommandPool;
 impl pool::CommandPool<Backend> for CommandPool {
-    unsafe fn reset(&mut self, _: bool) {
-        panic!(DO_NOT_USE_MESSAGE)
+    unsafe fn allocate_one(&mut self, level: command::Level) -> CommandBuffer {
+        assert_eq!(
+            level,
+            command::Level::Primary,
+            "Only primary command buffers are supported"
+        );
+        CommandBuffer
     }
+
+    unsafe fn reset(&mut self, _: bool) {}
 
     unsafe fn free<I>(&mut self, _: I)
     where
@@ -604,12 +658,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: command::CommandBufferFlags,
         _: command::CommandBufferInheritanceInfo<Backend>,
     ) {
-        panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn finish(&mut self) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn finish(&mut self) {}
 
     unsafe fn reset(&mut self, _: bool) {
         panic!(DO_NOT_USE_MESSAGE)
@@ -624,7 +675,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<memory::Barrier<'a, Backend>>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
     }
 
     unsafe fn fill_buffer(&mut self, _: &(), _: buffer::SubRange, _: u32) {
@@ -685,7 +735,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator<Item = (T, buffer::SubRange)>,
         T: Borrow<()>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
     }
 
     unsafe fn set_viewports<T>(&mut self, _: u32, _: T)
@@ -693,7 +742,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<pso::Viewport>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
     }
 
     unsafe fn set_scissors<T>(&mut self, _: u32, _: T)
@@ -701,7 +749,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<pso::Rect>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
     }
 
     unsafe fn set_stencil_reference(&mut self, _: pso::Face, _: pso::StencilValue) {
@@ -743,20 +790,15 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::ClearValue>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
     }
 
     unsafe fn next_subpass(&mut self, _: command::SubpassContents) {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn end_render_pass(&mut self) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn end_render_pass(&mut self) {}
 
-    unsafe fn bind_graphics_pipeline(&mut self, _: &()) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn bind_graphics_pipeline(&mut self, _: &()) {}
 
     unsafe fn bind_graphics_descriptor_sets<I, J>(&mut self, _: &(), _: usize, _: I, _: J)
     where
@@ -765,7 +807,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
     }
 
     unsafe fn bind_compute_pipeline(&mut self, _: &()) {
@@ -811,7 +852,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
     }
 
     unsafe fn copy_image_to_buffer<T>(&mut self, _: &(), _: image::Layout, _: &(), _: T)
@@ -822,9 +862,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         panic!(DO_NOT_USE_MESSAGE)
     }
 
-    unsafe fn draw(&mut self, _: Range<hal::VertexCount>, _: Range<hal::InstanceCount>) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn draw(&mut self, _: Range<hal::VertexCount>, _: Range<hal::InstanceCount>) {}
 
     unsafe fn draw_indexed(
         &mut self,
@@ -932,6 +970,10 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 #[derive(Debug)]
 pub struct DescriptorPool;
 impl pso::DescriptorPool<Backend> for DescriptorPool {
+    unsafe fn allocate_set(&mut self, _layout: &()) -> Result<(), pso::AllocationError> {
+        Ok(())
+    }
+
     unsafe fn free_sets<I>(&mut self, _descriptor_sets: I)
     where
         I: IntoIterator<Item = ()>,
@@ -949,15 +991,37 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
 pub struct Surface;
 impl window::Surface<Backend> for Surface {
     fn supports_queue_family(&self, _: &QueueFamily) -> bool {
-        panic!(DO_NOT_USE_MESSAGE)
+        true
     }
 
     fn capabilities(&self, _: &PhysicalDevice) -> window::SurfaceCapabilities {
-        panic!(DO_NOT_USE_MESSAGE)
+        let extents = {
+            let min_extent = window::Extent2D {
+                width: 0,
+                height: 0,
+            };
+            let max_extent = window::Extent2D {
+                width: 8192,
+                height: 4096,
+            };
+            min_extent..=max_extent
+        };
+        let usage = image::Usage::COLOR_ATTACHMENT;
+        let present_modes = window::PresentMode::all();
+        let composite_alpha_modes = window::CompositeAlphaMode::OPAQUE;
+        window::SurfaceCapabilities {
+            image_count: 1..=1,
+            current_extent: None,
+            extents,
+            max_image_layers: 1,
+            usage,
+            present_modes,
+            composite_alpha_modes,
+        }
     }
 
     fn supported_formats(&self, _: &PhysicalDevice) -> Option<Vec<format::Format>> {
-        panic!(DO_NOT_USE_MESSAGE)
+        None
     }
 }
 impl window::PresentationSurface<Backend> for Surface {
@@ -968,18 +1032,16 @@ impl window::PresentationSurface<Backend> for Surface {
         _: &Device,
         _: window::SwapchainConfig,
     ) -> Result<(), window::CreationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(())
     }
 
-    unsafe fn unconfigure_swapchain(&mut self, _: &Device) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn unconfigure_swapchain(&mut self, _: &Device) {}
 
     unsafe fn acquire_image(
         &mut self,
         _: u64,
     ) -> Result<((), Option<window::Suboptimal>), window::AcquireError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        Ok(((), None))
     }
 }
 
@@ -1001,22 +1063,39 @@ impl window::Swapchain<Backend> for Swapchain {
 pub struct Instance;
 
 impl hal::Instance<Backend> for Instance {
-    fn create(_name: &str, _version: u32) -> Result<Self, hal::UnsupportedBackend> {
+    fn create(name: &str, version: u32) -> Result<Self, hal::UnsupportedBackend> {
+        debug!(
+            "Creating empty backend instance with name '{}' and version {}",
+            name, version
+        );
         Ok(Instance)
     }
 
     fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
-        vec![]
+        // TODO: provide more mock adapters, with various qualities
+        let info = adapter::AdapterInfo {
+            name: "Mock Device".to_string(),
+            vendor: 0,
+            device: 1234,
+            device_type: adapter::DeviceType::Other,
+        };
+        let adapter = adapter::Adapter {
+            info,
+            physical_device: PhysicalDevice,
+            // TODO: multiple queue families
+            queue_families: vec![QueueFamily],
+        };
+        vec![adapter]
     }
 
     unsafe fn create_surface(
         &self,
-        _: &impl raw_window_handle::HasRawWindowHandle,
+        raw_window_handle: &impl raw_window_handle::HasRawWindowHandle,
     ) -> Result<Surface, hal::window::InitError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        // TODO: maybe check somehow that the given handle is valid?
+        let _handle = raw_window_handle.raw_window_handle();
+        Ok(Surface)
     }
 
-    unsafe fn destroy_surface(&self, _surface: Surface) {
-        panic!(DO_NOT_USE_MESSAGE)
-    }
+    unsafe fn destroy_surface(&self, _surface: Surface) {}
 }
