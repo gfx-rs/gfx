@@ -3,25 +3,17 @@
 
 extern crate gfx_hal as hal;
 
-use hal::{
-    adapter,
-    buffer,
-    command,
-    device,
-    format,
-    image,
-    memory,
-    pass,
-    pool,
-    pso,
-    query,
-    queue,
-    window,
-};
+use hal::{adapter, command, device, format, pass, pool, pso, query, queue, window};
 use std::borrow::Borrow;
 use std::ops::Range;
 
 use log::debug;
+
+mod buffer;
+mod image;
+mod memory;
+
+use crate::{buffer::Buffer, image::Image, memory::Memory};
 
 const NOT_SUPPORTED_MESSAGE: &str = "This function is not currently mocked by the empty backend";
 
@@ -40,16 +32,16 @@ impl hal::Backend for Backend {
     type CommandQueue = CommandQueue;
     type CommandBuffer = CommandBuffer;
 
-    type Memory = ();
+    type Memory = Memory;
     type CommandPool = CommandPool;
 
     type ShaderModule = ();
     type RenderPass = ();
     type Framebuffer = ();
 
-    type Buffer = ();
+    type Buffer = Buffer;
     type BufferView = ();
-    type Image = ();
+    type Image = Image;
     type ImageView = ();
     type Sampler = ();
 
@@ -115,16 +107,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         &self,
         _: format::Format,
         _dim: u8,
-        _: image::Tiling,
-        _: image::Usage,
-        _: image::ViewCapabilities,
-    ) -> Option<image::FormatProperties> {
+        _: hal::image::Tiling,
+        _: hal::image::Usage,
+        _: hal::image::ViewCapabilities,
+    ) -> Option<hal::image::FormatProperties> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     fn memory_properties(&self) -> adapter::MemoryProperties {
         let memory_types = {
-            use memory::Properties;
+            use hal::memory::Properties;
             let properties = Properties::DEVICE_LOCAL
                 | Properties::CPU_VISIBLE
                 | Properties::COHERENT
@@ -221,10 +213,10 @@ impl device::Device<Backend> for Device {
 
     unsafe fn allocate_memory(
         &self,
-        _: hal::MemoryTypeId,
-        _: u64,
-    ) -> Result<(), device::AllocationError> {
-        Ok(())
+        memory_type: hal::MemoryTypeId,
+        size: u64,
+    ) -> Result<Memory, device::AllocationError> {
+        Memory::allocate(memory_type, size)
     }
 
     unsafe fn create_render_pass<'a, IA, IS, ID>(
@@ -297,7 +289,7 @@ impl device::Device<Backend> for Device {
         &self,
         _: &(),
         _: I,
-        _: image::Extent,
+        _: hal::image::Extent,
     ) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
@@ -310,18 +302,25 @@ impl device::Device<Backend> for Device {
         Ok(())
     }
 
-    unsafe fn create_sampler(&self, _: &image::SamplerDesc) -> Result<(), device::AllocationError> {
+    unsafe fn create_sampler(
+        &self,
+        _: &hal::image::SamplerDesc,
+    ) -> Result<(), device::AllocationError> {
         Ok(())
     }
 
-    unsafe fn create_buffer(&self, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
-        Ok(())
+    unsafe fn create_buffer(
+        &self,
+        size: u64,
+        _: hal::buffer::Usage,
+    ) -> Result<Buffer, hal::buffer::CreationError> {
+        Ok(Buffer::new(size))
     }
 
-    unsafe fn get_buffer_requirements(&self, _: &()) -> memory::Requirements {
-        memory::Requirements {
-            // TODO: actually store the buffer size and validate it
-            size: 1,
+    unsafe fn get_buffer_requirements(&self, buffer: &Buffer) -> hal::memory::Requirements {
+        hal::memory::Requirements {
+            size: buffer.size,
+            // TODO: perhaps require stronger alignments?
             alignment: 1,
             type_mask: !0,
         }
@@ -329,68 +328,63 @@ impl device::Device<Backend> for Device {
 
     unsafe fn bind_buffer_memory(
         &self,
-        _: &(),
+        _memory: &Memory,
         _: u64,
-        _: &mut (),
+        _: &mut Buffer,
     ) -> Result<(), device::BindError> {
         Ok(())
     }
 
     unsafe fn create_buffer_view(
         &self,
-        _: &(),
+        _: &Buffer,
         _: Option<format::Format>,
-        _: buffer::SubRange,
-    ) -> Result<(), buffer::ViewCreationError> {
+        _: hal::buffer::SubRange,
+    ) -> Result<(), hal::buffer::ViewCreationError> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn create_image(
         &self,
-        _: image::Kind,
-        _: image::Level,
+        kind: hal::image::Kind,
+        _: hal::image::Level,
         _: format::Format,
-        _: image::Tiling,
-        _: image::Usage,
-        _: image::ViewCapabilities,
-    ) -> Result<(), image::CreationError> {
-        Ok(())
+        _: hal::image::Tiling,
+        _: hal::image::Usage,
+        _: hal::image::ViewCapabilities,
+    ) -> Result<Image, hal::image::CreationError> {
+        Ok(Image::new(kind))
     }
 
-    unsafe fn get_image_requirements(&self, _: &()) -> memory::Requirements {
-        memory::Requirements {
-            // TODO: store the image size and compute how much memory it needs
-            size: 1,
-            alignment: 1,
-            type_mask: !0,
-        }
+    unsafe fn get_image_requirements(&self, image: &Image) -> hal::memory::Requirements {
+        image.get_requirements()
     }
 
     unsafe fn get_image_subresource_footprint(
         &self,
-        _: &(),
-        _: image::Subresource,
-    ) -> image::SubresourceFootprint {
+        _: &Image,
+        _: hal::image::Subresource,
+    ) -> hal::image::SubresourceFootprint {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn bind_image_memory(
         &self,
-        _: &(),
+        _memory: &Memory,
         _: u64,
-        _: &mut (),
+        _: &mut Image,
     ) -> Result<(), device::BindError> {
         Ok(())
     }
 
     unsafe fn create_image_view(
         &self,
-        _: &(),
-        _: image::ViewKind,
+        _: &Image,
+        _: hal::image::ViewKind,
         _: format::Format,
         _: format::Swizzle,
-        _: image::SubresourceRange,
-    ) -> Result<(), image::ViewCreationError> {
+        _: hal::image::SubresourceRange,
+    ) -> Result<(), hal::image::ViewCreationError> {
         Ok(())
     }
 
@@ -478,25 +472,26 @@ impl device::Device<Backend> for Device {
         _: &(),
         _: Range<query::Id>,
         _: &mut [u8],
-        _: buffer::Offset,
+        _: hal::buffer::Offset,
         _: query::ResultFlags,
     ) -> Result<bool, device::OomOrDeviceLost> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn map_memory(&self, _: &(), _: memory::Segment) -> Result<*mut u8, device::MapError> {
-        // 640 KB ought to be enough
-        const MEMORY_SIZE: usize = 640 * 1024;
-        static mut MEMORY: [u8; MEMORY_SIZE] = [0u8; MEMORY_SIZE];
-        Ok(MEMORY.as_mut_ptr())
+    unsafe fn map_memory(
+        &self,
+        memory: &Memory,
+        segment: hal::memory::Segment,
+    ) -> Result<*mut u8, device::MapError> {
+        memory.map(segment)
     }
 
-    unsafe fn unmap_memory(&self, _: &()) {}
+    unsafe fn unmap_memory(&self, _memory: &Memory) {}
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a (), memory::Segment)>,
+        I::Item: Borrow<(&'a Memory, hal::memory::Segment)>,
     {
         Ok(())
     }
@@ -504,12 +499,14 @@ impl device::Device<Backend> for Device {
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a (), memory::Segment)>,
+        I::Item: Borrow<(&'a Memory, hal::memory::Segment)>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn free_memory(&self, _: ()) {}
+    unsafe fn free_memory(&self, _memory: Memory) {
+        // Let memory drop
+    }
 
     unsafe fn destroy_shader_module(&self, _: ()) {}
 
@@ -524,13 +521,13 @@ impl device::Device<Backend> for Device {
     }
     unsafe fn destroy_framebuffer(&self, _: ()) {}
 
-    unsafe fn destroy_buffer(&self, _: ()) {}
+    unsafe fn destroy_buffer(&self, _: Buffer) {}
 
     unsafe fn destroy_buffer_view(&self, _: ()) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn destroy_image(&self, _: ()) {}
+    unsafe fn destroy_image(&self, _: Image) {}
 
     unsafe fn destroy_image_view(&self, _: ()) {}
 
@@ -553,7 +550,7 @@ impl device::Device<Backend> for Device {
         _: &mut Surface,
         _: window::SwapchainConfig,
         _: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<()>), hal::window::CreationError> {
+    ) -> Result<(Swapchain, Vec<Image>), hal::window::CreationError> {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
@@ -565,11 +562,11 @@ impl device::Device<Backend> for Device {
         Ok(())
     }
 
-    unsafe fn set_image_name(&self, _: &mut (), _: &str) {
+    unsafe fn set_image_name(&self, _: &mut Image, _: &str) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn set_buffer_name(&self, _: &mut (), _: &str) {
+    unsafe fn set_buffer_name(&self, _: &mut Buffer, _: &str) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
@@ -669,26 +666,31 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn pipeline_barrier<'a, T>(
         &mut self,
         _: Range<pso::PipelineStage>,
-        _: memory::Dependencies,
+        _: hal::memory::Dependencies,
         _: T,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T::Item: Borrow<hal::memory::Barrier<'a, Backend>>,
     {
     }
 
-    unsafe fn fill_buffer(&mut self, _: &(), _: buffer::SubRange, _: u32) {
+    unsafe fn fill_buffer(&mut self, _: &Buffer, _: hal::buffer::SubRange, _: u32) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn update_buffer(&mut self, _: &(), _: buffer::Offset, _: &[u8]) {
+    unsafe fn update_buffer(&mut self, _: &Buffer, _: hal::buffer::Offset, _: &[u8]) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn clear_image<T>(&mut self, _: &(), _: image::Layout, _: command::ClearValue, _: T)
-    where
+    unsafe fn clear_image<T>(
+        &mut self,
+        _: &Image,
+        _: hal::image::Layout,
+        _: command::ClearValue,
+        _: T,
+    ) where
         T: IntoIterator,
-        T::Item: Borrow<image::SubresourceRange>,
+        T::Item: Borrow<hal::image::SubresourceRange>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
@@ -703,8 +705,14 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn resolve_image<T>(&mut self, _: &(), _: image::Layout, _: &(), _: image::Layout, _: T)
-    where
+    unsafe fn resolve_image<T>(
+        &mut self,
+        _: &Image,
+        _: hal::image::Layout,
+        _: &Image,
+        _: hal::image::Layout,
+        _: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<command::ImageResolve>,
     {
@@ -713,11 +721,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn blit_image<T>(
         &mut self,
-        _: &(),
-        _: image::Layout,
-        _: &(),
-        _: image::Layout,
-        _: image::Filter,
+        _: &Image,
+        _: hal::image::Layout,
+        _: &Image,
+        _: hal::image::Layout,
+        _: hal::image::Filter,
         _: T,
     ) where
         T: IntoIterator,
@@ -726,14 +734,14 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn bind_index_buffer(&mut self, _: buffer::IndexBufferView<Backend>) {
+    unsafe fn bind_index_buffer(&mut self, _: hal::buffer::IndexBufferView<Backend>) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, _: u32, _: I)
     where
-        I: IntoIterator<Item = (T, buffer::SubRange)>,
-        T: Borrow<()>,
+        I: IntoIterator<Item = (T, hal::buffer::SubRange)>,
+        T: Borrow<Buffer>,
     {
     }
 
@@ -827,11 +835,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn dispatch_indirect(&mut self, _: &(), _: buffer::Offset) {
+    unsafe fn dispatch_indirect(&mut self, _: &Buffer, _: hal::buffer::Offset) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn copy_buffer<T>(&mut self, _: &(), _: &(), _: T)
+    unsafe fn copy_buffer<T>(&mut self, _: &Buffer, _: &Buffer, _: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
@@ -839,22 +847,28 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn copy_image<T>(&mut self, _: &(), _: image::Layout, _: &(), _: image::Layout, _: T)
-    where
+    unsafe fn copy_image<T>(
+        &mut self,
+        _: &Image,
+        _: hal::image::Layout,
+        _: &Image,
+        _: hal::image::Layout,
+        _: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<command::ImageCopy>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn copy_buffer_to_image<T>(&mut self, _: &(), _: &(), _: image::Layout, _: T)
+    unsafe fn copy_buffer_to_image<T>(&mut self, _: &Buffer, _: &Image, _: hal::image::Layout, _: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
     }
 
-    unsafe fn copy_image_to_buffer<T>(&mut self, _: &(), _: image::Layout, _: &(), _: T)
+    unsafe fn copy_image_to_buffer<T>(&mut self, _: &Image, _: hal::image::Layout, _: &Buffer, _: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
@@ -873,14 +887,20 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn draw_indirect(&mut self, _: &(), _: buffer::Offset, _: hal::DrawCount, _: u32) {
+    unsafe fn draw_indirect(
+        &mut self,
+        _: &Buffer,
+        _: hal::buffer::Offset,
+        _: hal::DrawCount,
+        _: u32,
+    ) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn draw_indexed_indirect(
         &mut self,
-        _: &(),
-        _: buffer::Offset,
+        _: &Buffer,
+        _: hal::buffer::Offset,
         _: hal::DrawCount,
         _: u32,
     ) {
@@ -900,7 +920,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator,
         I::Item: Borrow<()>,
         J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J::Item: Borrow<hal::memory::Barrier<'a, Backend>>,
     {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
@@ -921,9 +941,9 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         &mut self,
         _: &(),
         _: Range<query::Id>,
-        _: &(),
-        _: buffer::Offset,
-        _: buffer::Offset,
+        _: &Buffer,
+        _: hal::buffer::Offset,
+        _: hal::buffer::Offset,
         _: query::ResultFlags,
     ) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
@@ -1006,7 +1026,7 @@ impl window::Surface<Backend> for Surface {
             };
             min_extent..=max_extent
         };
-        let usage = image::Usage::COLOR_ATTACHMENT;
+        let usage = hal::image::Usage::COLOR_ATTACHMENT;
         let present_modes = window::PresentMode::all();
         let composite_alpha_modes = window::CompositeAlphaMode::OPAQUE;
         window::SurfaceCapabilities {
