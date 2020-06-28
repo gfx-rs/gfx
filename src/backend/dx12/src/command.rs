@@ -2477,7 +2477,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         draw_count: DrawCount,
         stride: u32,
     ) {
-        assert_eq!(stride, 16);
+        if stride != 0 {
+            assert_eq!(stride, 16);
+        }
         let buffer = buffer.expect_bound();
         self.set_graphics_bind_point();
         self.raw.ExecuteIndirect(
@@ -2497,7 +2499,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         draw_count: DrawCount,
         stride: u32,
     ) {
-        assert_eq!(stride, 20);
+        if stride != 0 {
+            assert_eq!(stride, 20);
+        }
         let buffer = buffer.expect_bound();
         self.set_graphics_bind_point();
         self.raw.ExecuteIndirect(
@@ -2519,7 +2523,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         max_draw_count: DrawCount,
         stride: u32
     ) {
-        assert_eq!(stride, 16);
+        if stride != 0 {
+            assert_eq!(stride, 16);
+        }
         let buffer = buffer.expect_bound();
         let count_buffer = count_buffer.expect_bound();
         self.set_graphics_bind_point();
@@ -2542,7 +2548,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         max_draw_count: DrawCount,
         stride: u32
     ) {
-        assert_eq!(stride, 20);
+        if stride != 0 {
+            assert_eq!(stride, 20);
+        }
         let buffer = buffer.expect_bound();
         let count_buffer = count_buffer.expect_bound();
         self.set_graphics_bind_point();
