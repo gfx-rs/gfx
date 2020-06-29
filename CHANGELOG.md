@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx11-0.5.2 (29-07-2020)
+  - update libloading to 0.6
+
 ### backend-vulkan-0.5.11 (22-07-2020)
   - switch from `core-graphics` to `core-graphics-types`.
 
