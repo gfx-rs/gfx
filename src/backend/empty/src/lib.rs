@@ -3,27 +3,19 @@
 
 extern crate gfx_hal as hal;
 
-use hal::{
-    adapter,
-    buffer,
-    command,
-    device,
-    format,
-    image,
-    memory,
-    pass,
-    pool,
-    pso,
-    query,
-    queue,
-    window,
-};
+use hal::{adapter, command, device, format, pass, pool, pso, query, queue, window};
 use std::borrow::Borrow;
 use std::ops::Range;
 
 use log::debug;
 
-const DO_NOT_USE_MESSAGE: &str = "You need to enable a native API feature (vulkan/metal/dx11/dx12/gl/wgl) in order to use gfx-rs";
+mod buffer;
+mod image;
+mod memory;
+
+use crate::{buffer::Buffer, image::Image, memory::Memory};
+
+const NOT_SUPPORTED_MESSAGE: &str = "This function is not currently mocked by the empty backend";
 
 /// Dummy backend.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -40,16 +32,16 @@ impl hal::Backend for Backend {
     type CommandQueue = CommandQueue;
     type CommandBuffer = CommandBuffer;
 
-    type Memory = ();
+    type Memory = Memory;
     type CommandPool = CommandPool;
 
     type ShaderModule = ();
     type RenderPass = ();
     type Framebuffer = ();
 
-    type Buffer = ();
+    type Buffer = Buffer;
     type BufferView = ();
-    type Image = ();
+    type Image = Image;
     type ImageView = ();
     type Sampler = ();
 
@@ -108,23 +100,23 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn format_properties(&self, _: Option<format::Format>) -> format::Properties {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     fn image_format_properties(
         &self,
         _: format::Format,
         _dim: u8,
-        _: image::Tiling,
-        _: image::Usage,
-        _: image::ViewCapabilities,
-    ) -> Option<image::FormatProperties> {
-        panic!(DO_NOT_USE_MESSAGE)
+        _: hal::image::Tiling,
+        _: hal::image::Usage,
+        _: hal::image::ViewCapabilities,
+    ) -> Option<hal::image::FormatProperties> {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     fn memory_properties(&self) -> adapter::MemoryProperties {
         let memory_types = {
-            use memory::Properties;
+            use hal::memory::Properties;
             let properties = Properties::DEVICE_LOCAL
                 | Properties::CPU_VISIBLE
                 | Properties::COHERENT
@@ -144,11 +136,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn features(&self) -> hal::Features {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     fn hints(&self) -> hal::Hints {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     fn limits(&self) -> hal::Limits {
@@ -188,7 +180,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         S: 'a + Borrow<()>,
         Iw: IntoIterator<Item = &'a S>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn present_surface(
@@ -201,7 +193,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     }
 
     fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 }
 
@@ -221,10 +213,10 @@ impl device::Device<Backend> for Device {
 
     unsafe fn allocate_memory(
         &self,
-        _: hal::MemoryTypeId,
-        _: u64,
-    ) -> Result<(), device::AllocationError> {
-        Ok(())
+        memory_type: hal::MemoryTypeId,
+        size: u64,
+    ) -> Result<Memory, device::AllocationError> {
+        Memory::allocate(memory_type, size)
     }
 
     unsafe fn create_render_pass<'a, IA, IS, ID>(
@@ -258,15 +250,15 @@ impl device::Device<Backend> for Device {
         &self,
         _data: Option<&[u8]>,
     ) -> Result<(), device::OutOfMemory> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn get_pipeline_cache_data(&self, _cache: &()) -> Result<Vec<u8>, device::OutOfMemory> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn destroy_pipeline_cache(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn create_graphics_pipeline<'a>(
@@ -282,7 +274,7 @@ impl device::Device<Backend> for Device {
         _: &pso::ComputePipelineDesc<'a, Backend>,
         _: Option<&()>,
     ) -> Result<(), pso::CreationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn merge_pipeline_caches<I>(&self, _: &(), _: I) -> Result<(), device::OutOfMemory>
@@ -290,14 +282,14 @@ impl device::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<()>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn create_framebuffer<I>(
         &self,
         _: &(),
         _: I,
-        _: image::Extent,
+        _: hal::image::Extent,
     ) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
@@ -310,18 +302,25 @@ impl device::Device<Backend> for Device {
         Ok(())
     }
 
-    unsafe fn create_sampler(&self, _: &image::SamplerDesc) -> Result<(), device::AllocationError> {
+    unsafe fn create_sampler(
+        &self,
+        _: &hal::image::SamplerDesc,
+    ) -> Result<(), device::AllocationError> {
         Ok(())
     }
 
-    unsafe fn create_buffer(&self, _: u64, _: buffer::Usage) -> Result<(), buffer::CreationError> {
-        Ok(())
+    unsafe fn create_buffer(
+        &self,
+        size: u64,
+        _: hal::buffer::Usage,
+    ) -> Result<Buffer, hal::buffer::CreationError> {
+        Ok(Buffer::new(size))
     }
 
-    unsafe fn get_buffer_requirements(&self, _: &()) -> memory::Requirements {
-        memory::Requirements {
-            // TODO: actually store the buffer size and validate it
-            size: 1,
+    unsafe fn get_buffer_requirements(&self, buffer: &Buffer) -> hal::memory::Requirements {
+        hal::memory::Requirements {
+            size: buffer.size,
+            // TODO: perhaps require stronger alignments?
             alignment: 1,
             type_mask: !0,
         }
@@ -329,68 +328,63 @@ impl device::Device<Backend> for Device {
 
     unsafe fn bind_buffer_memory(
         &self,
-        _: &(),
+        _memory: &Memory,
         _: u64,
-        _: &mut (),
+        _: &mut Buffer,
     ) -> Result<(), device::BindError> {
         Ok(())
     }
 
     unsafe fn create_buffer_view(
         &self,
-        _: &(),
+        _: &Buffer,
         _: Option<format::Format>,
-        _: buffer::SubRange,
-    ) -> Result<(), buffer::ViewCreationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        _: hal::buffer::SubRange,
+    ) -> Result<(), hal::buffer::ViewCreationError> {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn create_image(
         &self,
-        _: image::Kind,
-        _: image::Level,
+        kind: hal::image::Kind,
+        _: hal::image::Level,
         _: format::Format,
-        _: image::Tiling,
-        _: image::Usage,
-        _: image::ViewCapabilities,
-    ) -> Result<(), image::CreationError> {
-        Ok(())
+        _: hal::image::Tiling,
+        _: hal::image::Usage,
+        _: hal::image::ViewCapabilities,
+    ) -> Result<Image, hal::image::CreationError> {
+        Ok(Image::new(kind))
     }
 
-    unsafe fn get_image_requirements(&self, _: &()) -> memory::Requirements {
-        memory::Requirements {
-            // TODO: store the image size and compute how much memory it needs
-            size: 1,
-            alignment: 1,
-            type_mask: !0,
-        }
+    unsafe fn get_image_requirements(&self, image: &Image) -> hal::memory::Requirements {
+        image.get_requirements()
     }
 
     unsafe fn get_image_subresource_footprint(
         &self,
-        _: &(),
-        _: image::Subresource,
-    ) -> image::SubresourceFootprint {
-        panic!(DO_NOT_USE_MESSAGE)
+        _: &Image,
+        _: hal::image::Subresource,
+    ) -> hal::image::SubresourceFootprint {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn bind_image_memory(
         &self,
-        _: &(),
+        _memory: &Memory,
         _: u64,
-        _: &mut (),
+        _: &mut Image,
     ) -> Result<(), device::BindError> {
         Ok(())
     }
 
     unsafe fn create_image_view(
         &self,
-        _: &(),
-        _: image::ViewKind,
+        _: &Image,
+        _: hal::image::ViewKind,
         _: format::Format,
         _: format::Swizzle,
-        _: image::SubresourceRange,
-    ) -> Result<(), image::ViewCreationError> {
+        _: hal::image::SubresourceRange,
+    ) -> Result<(), hal::image::ViewCreationError> {
         Ok(())
     }
 
@@ -434,7 +428,7 @@ impl device::Device<Backend> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, Backend>>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     fn create_semaphore(&self) -> Result<(), device::OutOfMemory> {
@@ -446,31 +440,31 @@ impl device::Device<Backend> for Device {
     }
 
     unsafe fn get_fence_status(&self, _: &()) -> Result<bool, device::DeviceLost> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     fn create_event(&self) -> Result<(), device::OutOfMemory> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn get_event_status(&self, _: &()) -> Result<bool, device::OomOrDeviceLost> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_event(&self, _: &()) -> Result<(), device::OutOfMemory> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn reset_event(&self, _: &()) -> Result<(), device::OutOfMemory> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn create_query_pool(&self, _: query::Type, _: u32) -> Result<(), query::CreationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn destroy_query_pool(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn get_query_pool_results(
@@ -478,25 +472,26 @@ impl device::Device<Backend> for Device {
         _: &(),
         _: Range<query::Id>,
         _: &mut [u8],
-        _: buffer::Offset,
+        _: hal::buffer::Offset,
         _: query::ResultFlags,
     ) -> Result<bool, device::OomOrDeviceLost> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn map_memory(&self, _: &(), _: memory::Segment) -> Result<*mut u8, device::MapError> {
-        // 640 KB ought to be enough
-        const MEMORY_SIZE: usize = 640 * 1024;
-        static mut MEMORY: [u8; MEMORY_SIZE] = [0u8; MEMORY_SIZE];
-        Ok(MEMORY.as_mut_ptr())
+    unsafe fn map_memory(
+        &self,
+        memory: &Memory,
+        segment: hal::memory::Segment,
+    ) -> Result<*mut u8, device::MapError> {
+        memory.map(segment)
     }
 
-    unsafe fn unmap_memory(&self, _: &()) {}
+    unsafe fn unmap_memory(&self, _memory: &Memory) {}
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a (), memory::Segment)>,
+        I::Item: Borrow<(&'a Memory, hal::memory::Segment)>,
     {
         Ok(())
     }
@@ -504,12 +499,14 @@ impl device::Device<Backend> for Device {
     unsafe fn invalidate_mapped_memory_ranges<'a, I>(&self, _: I) -> Result<(), device::OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<(&'a (), memory::Segment)>,
+        I::Item: Borrow<(&'a Memory, hal::memory::Segment)>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn free_memory(&self, _: ()) {}
+    unsafe fn free_memory(&self, _memory: Memory) {
+        // Let memory drop
+    }
 
     unsafe fn destroy_shader_module(&self, _: ()) {}
 
@@ -520,17 +517,17 @@ impl device::Device<Backend> for Device {
     unsafe fn destroy_graphics_pipeline(&self, _: ()) {}
 
     unsafe fn destroy_compute_pipeline(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
     unsafe fn destroy_framebuffer(&self, _: ()) {}
 
-    unsafe fn destroy_buffer(&self, _: ()) {}
+    unsafe fn destroy_buffer(&self, _: Buffer) {}
 
     unsafe fn destroy_buffer_view(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn destroy_image(&self, _: ()) {}
+    unsafe fn destroy_image(&self, _: Image) {}
 
     unsafe fn destroy_image_view(&self, _: ()) {}
 
@@ -545,7 +542,7 @@ impl device::Device<Backend> for Device {
     unsafe fn destroy_semaphore(&self, _: ()) {}
 
     unsafe fn destroy_event(&self, _: ()) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn create_swapchain(
@@ -553,52 +550,52 @@ impl device::Device<Backend> for Device {
         _: &mut Surface,
         _: window::SwapchainConfig,
         _: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<()>), hal::window::CreationError> {
-        panic!(DO_NOT_USE_MESSAGE)
+    ) -> Result<(Swapchain, Vec<Image>), hal::window::CreationError> {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn destroy_swapchain(&self, _: Swapchain) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     fn wait_idle(&self) -> Result<(), device::OutOfMemory> {
         Ok(())
     }
 
-    unsafe fn set_image_name(&self, _: &mut (), _: &str) {
-        panic!(DO_NOT_USE_MESSAGE)
+    unsafe fn set_image_name(&self, _: &mut Image, _: &str) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn set_buffer_name(&self, _: &mut (), _: &str) {
-        panic!(DO_NOT_USE_MESSAGE)
+    unsafe fn set_buffer_name(&self, _: &mut Buffer, _: &str) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_command_buffer_name(&self, _: &mut CommandBuffer, _: &str) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_semaphore_name(&self, _: &mut (), _: &str) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_fence_name(&self, _: &mut (), _: &str) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_framebuffer_name(&self, _: &mut (), _: &str) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_render_pass_name(&self, _: &mut (), _: &str) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_descriptor_set_name(&self, _: &mut (), _: &str) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_descriptor_set_layout_name(&self, _: &mut (), _: &str) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn reset_fence(&self, _: &()) -> Result<(), device::OutOfMemory> {
@@ -645,7 +642,7 @@ impl pool::CommandPool<Backend> for CommandPool {
     where
         I: IntoIterator<Item = CommandBuffer>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 }
 
@@ -663,34 +660,39 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn finish(&mut self) {}
 
     unsafe fn reset(&mut self, _: bool) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn pipeline_barrier<'a, T>(
         &mut self,
         _: Range<pso::PipelineStage>,
-        _: memory::Dependencies,
+        _: hal::memory::Dependencies,
         _: T,
     ) where
         T: IntoIterator,
-        T::Item: Borrow<memory::Barrier<'a, Backend>>,
+        T::Item: Borrow<hal::memory::Barrier<'a, Backend>>,
     {
     }
 
-    unsafe fn fill_buffer(&mut self, _: &(), _: buffer::SubRange, _: u32) {
-        panic!(DO_NOT_USE_MESSAGE)
+    unsafe fn fill_buffer(&mut self, _: &Buffer, _: hal::buffer::SubRange, _: u32) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn update_buffer(&mut self, _: &(), _: buffer::Offset, _: &[u8]) {
-        panic!(DO_NOT_USE_MESSAGE)
+    unsafe fn update_buffer(&mut self, _: &Buffer, _: hal::buffer::Offset, _: &[u8]) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn clear_image<T>(&mut self, _: &(), _: image::Layout, _: command::ClearValue, _: T)
-    where
+    unsafe fn clear_image<T>(
+        &mut self,
+        _: &Image,
+        _: hal::image::Layout,
+        _: command::ClearValue,
+        _: T,
+    ) where
         T: IntoIterator,
-        T::Item: Borrow<image::SubresourceRange>,
+        T::Item: Borrow<hal::image::SubresourceRange>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn clear_attachments<T, U>(&mut self, _: T, _: U)
@@ -700,40 +702,46 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         U: IntoIterator,
         U::Item: Borrow<pso::ClearRect>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn resolve_image<T>(&mut self, _: &(), _: image::Layout, _: &(), _: image::Layout, _: T)
-    where
+    unsafe fn resolve_image<T>(
+        &mut self,
+        _: &Image,
+        _: hal::image::Layout,
+        _: &Image,
+        _: hal::image::Layout,
+        _: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<command::ImageResolve>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn blit_image<T>(
         &mut self,
-        _: &(),
-        _: image::Layout,
-        _: &(),
-        _: image::Layout,
-        _: image::Filter,
+        _: &Image,
+        _: hal::image::Layout,
+        _: &Image,
+        _: hal::image::Layout,
+        _: hal::image::Filter,
         _: T,
     ) where
         T: IntoIterator,
         T::Item: Borrow<command::ImageBlit>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn bind_index_buffer(&mut self, _: buffer::IndexBufferView<Backend>) {
-        panic!(DO_NOT_USE_MESSAGE)
+    unsafe fn bind_index_buffer(&mut self, _: hal::buffer::IndexBufferView<Backend>) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn bind_vertex_buffers<I, T>(&mut self, _: u32, _: I)
     where
-        I: IntoIterator<Item = (T, buffer::SubRange)>,
-        T: Borrow<()>,
+        I: IntoIterator<Item = (T, hal::buffer::SubRange)>,
+        T: Borrow<Buffer>,
     {
     }
 
@@ -752,31 +760,31 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn set_stencil_reference(&mut self, _: pso::Face, _: pso::StencilValue) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_stencil_read_mask(&mut self, _: pso::Face, _: pso::StencilValue) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_stencil_write_mask(&mut self, _: pso::Face, _: pso::StencilValue) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_blend_constants(&mut self, _: pso::ColorValue) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_depth_bounds(&mut self, _: Range<f32>) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_line_width(&mut self, _: f32) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_depth_bias(&mut self, _: pso::DepthBias) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn begin_render_pass<T>(
@@ -793,7 +801,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn next_subpass(&mut self, _: command::SubpassContents) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn end_render_pass(&mut self) {}
@@ -810,7 +818,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn bind_compute_pipeline(&mut self, _: &()) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn bind_compute_descriptor_sets<I, J>(&mut self, _: &(), _: usize, _: I, _: J)
@@ -820,46 +828,52 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn dispatch(&mut self, _: hal::WorkGroupCount) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn dispatch_indirect(&mut self, _: &(), _: buffer::Offset) {
-        panic!(DO_NOT_USE_MESSAGE)
+    unsafe fn dispatch_indirect(&mut self, _: &Buffer, _: hal::buffer::Offset) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn copy_buffer<T>(&mut self, _: &(), _: &(), _: T)
+    unsafe fn copy_buffer<T>(&mut self, _: &Buffer, _: &Buffer, _: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn copy_image<T>(&mut self, _: &(), _: image::Layout, _: &(), _: image::Layout, _: T)
-    where
+    unsafe fn copy_image<T>(
+        &mut self,
+        _: &Image,
+        _: hal::image::Layout,
+        _: &Image,
+        _: hal::image::Layout,
+        _: T,
+    ) where
         T: IntoIterator,
         T::Item: Borrow<command::ImageCopy>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn copy_buffer_to_image<T>(&mut self, _: &(), _: &(), _: image::Layout, _: T)
+    unsafe fn copy_buffer_to_image<T>(&mut self, _: &Buffer, _: &Image, _: hal::image::Layout, _: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
     }
 
-    unsafe fn copy_image_to_buffer<T>(&mut self, _: &(), _: image::Layout, _: &(), _: T)
+    unsafe fn copy_image_to_buffer<T>(&mut self, _: &Image, _: hal::image::Layout, _: &Buffer, _: T)
     where
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn draw(&mut self, _: Range<hal::VertexCount>, _: Range<hal::InstanceCount>) {}
@@ -870,55 +884,61 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: hal::VertexOffset,
         _: Range<hal::InstanceCount>,
     ) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn draw_indirect(&mut self, _: &(), _: buffer::Offset, _: hal::DrawCount, _: u32) {
-        panic!(DO_NOT_USE_MESSAGE)
+    unsafe fn draw_indirect(
+        &mut self,
+        _: &Buffer,
+        _: hal::buffer::Offset,
+        _: hal::DrawCount,
+        _: u32,
+    ) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn draw_indexed_indirect(
         &mut self,
-        _: &(),
-        _: buffer::Offset,
+        _: &Buffer,
+        _: hal::buffer::Offset,
         _: hal::DrawCount,
         _: u32,
     ) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn draw_mesh_tasks(&mut self, _: u32, _: u32) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn draw_mesh_tasks_indirect(
         &mut self,
-        _: &(),
-        _: buffer::Offset,
+        _: &Buffer,
+        _: hal::buffer::Offset,
         _: hal::DrawCount,
         _: u32,
     ) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn draw_mesh_tasks_indirect_count(
         &mut self,
-        _: &(),
-        _: buffer::Offset,
-        _: &(),
-        _: buffer::Offset,
+        _: &Buffer,
+        _: hal::buffer::Offset,
+        _: &Buffer,
+        _: hal::buffer::Offset,
         _: u32,
         _: u32,
     ) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn set_event(&mut self, _: &(), _: pso::PipelineStage) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn reset_event(&mut self, _: &(), _: pso::PipelineStage) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn wait_events<'a, I, J>(&mut self, _: I, _: Range<pso::PipelineStage>, _: J)
@@ -926,37 +946,37 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator,
         I::Item: Borrow<()>,
         J: IntoIterator,
-        J::Item: Borrow<memory::Barrier<'a, Backend>>,
+        J::Item: Borrow<hal::memory::Barrier<'a, Backend>>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn begin_query(&mut self, _: query::Query<Backend>, _: query::ControlFlags) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn end_query(&mut self, _: query::Query<Backend>) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn reset_query_pool(&mut self, _: &(), _: Range<query::Id>) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn copy_query_pool_results(
         &mut self,
         _: &(),
         _: Range<query::Id>,
-        _: &(),
-        _: buffer::Offset,
-        _: buffer::Offset,
+        _: &Buffer,
+        _: hal::buffer::Offset,
+        _: hal::buffer::Offset,
         _: query::ResultFlags,
     ) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn write_timestamp(&mut self, _: pso::PipelineStage, _: query::Query<Backend>) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn push_graphics_constants(
@@ -966,11 +986,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _: u32,
         _: &[u32],
     ) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn push_compute_constants(&mut self, _: &(), _: u32, _: &[u32]) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn execute_commands<'a, T, I>(&mut self, _: I)
@@ -978,17 +998,17 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: 'a + Borrow<CommandBuffer>,
         I: IntoIterator<Item = &'a T>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn insert_debug_marker(&mut self, _: &str, _: u32) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
     unsafe fn begin_debug_marker(&mut self, _: &str, _: u32) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
     unsafe fn end_debug_marker(&mut self) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 }
 
@@ -1004,11 +1024,11 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
     where
         I: IntoIterator<Item = ()>,
     {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
     unsafe fn reset(&mut self) {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 }
 
@@ -1032,7 +1052,7 @@ impl window::Surface<Backend> for Surface {
             };
             min_extent..=max_extent
         };
-        let usage = image::Usage::COLOR_ATTACHMENT;
+        let usage = hal::image::Usage::COLOR_ATTACHMENT;
         let present_modes = window::PresentMode::all();
         let composite_alpha_modes = window::CompositeAlphaMode::OPAQUE;
         window::SurfaceCapabilities {
@@ -1081,7 +1101,7 @@ impl window::Swapchain<Backend> for Swapchain {
         _: Option<&()>,
         _: Option<&()>,
     ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
-        panic!(DO_NOT_USE_MESSAGE)
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 }
 
