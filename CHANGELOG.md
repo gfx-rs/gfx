@@ -1,5 +1,9 @@
 # Change Log
 
+### backend-empty-0.5.1 (30-06-2020)
+  - start turning the empty backend into a mock instead of always panicking
+  - mock memory creation and buffer and image creation functions
+
 ### hal-0.5.3 backend-dx12-0.5.8 backend-vulkan-0.5.9 (27-06-2020)
   - add `DRAW_INDIRECT_COUNT` feature and enable on supported backends
 
