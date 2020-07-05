@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-empty-0.5.2 (06-07-2020)
+  - mock descriptor set creation functions
+
 ### backend-empty-0.5.1 (30-06-2020)
   - start turning the empty backend into a mock instead of always panicking
   - mock memory creation and buffer and image creation functions
