@@ -10,10 +10,16 @@ use std::ops::Range;
 use log::debug;
 
 mod buffer;
+mod descriptor;
 mod image;
 mod memory;
 
-use crate::{buffer::Buffer, image::Image, memory::Memory};
+use crate::{
+    buffer::Buffer,
+    descriptor::{DescriptorPool, DescriptorSet, DescriptorSetLayout},
+    image::Image,
+    memory::Memory,
+};
 
 const NOT_SUPPORTED_MESSAGE: &str = "This function is not currently mocked by the empty backend";
 
@@ -49,9 +55,9 @@ impl hal::Backend for Backend {
     type GraphicsPipeline = ();
     type PipelineCache = ();
     type PipelineLayout = ();
-    type DescriptorSetLayout = ();
+    type DescriptorSetLayout = DescriptorSetLayout;
     type DescriptorPool = DescriptorPool;
-    type DescriptorSet = ();
+    type DescriptorSet = DescriptorSet;
 
     type Fence = ();
     type Semaphore = ();
@@ -239,7 +245,7 @@ impl device::Device<Backend> for Device {
     unsafe fn create_pipeline_layout<IS, IR>(&self, _: IS, _: IR) -> Result<(), device::OutOfMemory>
     where
         IS: IntoIterator,
-        IS::Item: Borrow<()>,
+        IS::Item: Borrow<DescriptorSetLayout>,
         IR: IntoIterator,
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
     {
@@ -403,16 +409,19 @@ impl device::Device<Backend> for Device {
 
     unsafe fn create_descriptor_set_layout<I, J>(
         &self,
-        _: I,
-        _: J,
-    ) -> Result<(), device::OutOfMemory>
+        _bindings: I,
+        _samplers: J,
+    ) -> Result<DescriptorSetLayout, device::OutOfMemory>
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
         J: IntoIterator,
         J::Item: Borrow<()>,
     {
-        Ok(())
+        let layout = DescriptorSetLayout {
+            name: String::new(),
+        };
+        Ok(layout)
     }
 
     unsafe fn write_descriptor_sets<'a, I, J>(&self, _: I)
@@ -535,7 +544,7 @@ impl device::Device<Backend> for Device {
 
     unsafe fn destroy_descriptor_pool(&self, _: DescriptorPool) {}
 
-    unsafe fn destroy_descriptor_set_layout(&self, _: ()) {}
+    unsafe fn destroy_descriptor_set_layout(&self, _: DescriptorSetLayout) {}
 
     unsafe fn destroy_fence(&self, _: ()) {}
 
@@ -590,12 +599,12 @@ impl device::Device<Backend> for Device {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
-    unsafe fn set_descriptor_set_name(&self, _: &mut (), _: &str) {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    unsafe fn set_descriptor_set_name(&self, set: &mut DescriptorSet, name: &str) {
+        set.name = name.to_string();
     }
 
-    unsafe fn set_descriptor_set_layout_name(&self, _: &mut (), _: &str) {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    unsafe fn set_descriptor_set_layout_name(&self, layout: &mut DescriptorSetLayout, name: &str) {
+        layout.name = name.to_string();
     }
 
     unsafe fn reset_fence(&self, _: &()) -> Result<(), device::OutOfMemory> {
@@ -811,10 +820,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn bind_graphics_descriptor_sets<I, J>(&mut self, _: &(), _: usize, _: I, _: J)
     where
         I: IntoIterator,
-        I::Item: Borrow<()>,
+        I::Item: Borrow<DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
+        // Do nothing
     }
 
     unsafe fn bind_compute_pipeline(&mut self, _: &()) {
@@ -824,11 +834,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     unsafe fn bind_compute_descriptor_sets<I, J>(&mut self, _: &(), _: usize, _: I, _: J)
     where
         I: IntoIterator,
-        I::Item: Borrow<()>,
+        I::Item: Borrow<DescriptorSet>,
         J: IntoIterator,
         J::Item: Borrow<command::DescriptorSetOffset>,
     {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+        // Do nothing
     }
 
     unsafe fn dispatch(&mut self, _: hal::WorkGroupCount) {
@@ -982,26 +992,6 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
     unsafe fn end_debug_marker(&mut self) {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
-    }
-}
-
-// Dummy descriptor pool.
-#[derive(Debug)]
-pub struct DescriptorPool;
-impl pso::DescriptorPool<Backend> for DescriptorPool {
-    unsafe fn allocate_set(&mut self, _layout: &()) -> Result<(), pso::AllocationError> {
-        Ok(())
-    }
-
-    unsafe fn free_sets<I>(&mut self, _descriptor_sets: I)
-    where
-        I: IntoIterator<Item = ()>,
-    {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
-    }
-
-    unsafe fn reset(&mut self) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 }

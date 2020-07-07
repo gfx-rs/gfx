@@ -1,7 +1,7 @@
 #[derive(Debug)]
 pub struct Buffer {
     /// Size of this buffer
-    pub size: u64,
+    pub(crate) size: u64,
 }
 
 impl Buffer {
