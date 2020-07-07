@@ -56,10 +56,10 @@ before_install:
   # We want to find out about nightly bugs, so they're done in master, but we don't block on them.
   - if [[ $TRAVIS_RUST_VERSION == "nightly" && $TRAVIS_BRANCH == "staging" ]]; then exit; fi
   - rustup self update
-  - rustup target add $TARGET; true
+  - if [[ $TARGET != "" ]]; then rustup target add $TARGET; fi
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export CXX=g++-5; fi
   - if [[ $TRAVIS_OS_NAME == "osx" ]]; then brew update; fi
-  - if [[ $TRAVIS_OS_NAME == "windows" ]]; then choco install make mingw && rustup component remove rust-mingw && for i in crt2.o dllcrt2.o libmingwex.a libmsvcrt.a; do cp -f "/C/ProgramData/Chocolatey/lib/mingw/tools/install/mingw64/x86_64-w64-mingw32/lib/$i" "`rustc --print sysroot`/lib/rustlib/x86_64-pc-windows-gnu/lib"; done; fi
+  - if [[ $TRAVIS_OS_NAME == "windows" ]]; then choco install make; fi
   - if [[ -n "$WASM" ]]; then rustup target add wasm32-unknown-unknown --toolchain nightly && cargo install -f wasm-bindgen-cli; fi
 
 addons:
