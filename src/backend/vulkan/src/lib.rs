@@ -528,6 +528,12 @@ impl hal::Instance<Backend> for Instance {
                     handle: device,
                     extensions,
                     properties,
+                    known_memory_flags:
+                        vk::MemoryPropertyFlags::DEVICE_LOCAL |
+                        vk::MemoryPropertyFlags::HOST_VISIBLE |
+                        vk::MemoryPropertyFlags::HOST_COHERENT |
+                        vk::MemoryPropertyFlags::HOST_CACHED |
+                        vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
                 };
                 let queue_families = unsafe {
                     self.raw
@@ -649,6 +655,7 @@ pub struct PhysicalDevice {
     handle: vk::PhysicalDevice,
     extensions: Vec<vk::ExtensionProperties>,
     properties: vk::PhysicalDeviceProperties,
+    known_memory_flags: vk::MemoryPropertyFlags,
 }
 
 impl PhysicalDevice {
@@ -722,6 +729,23 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 }
             );
 
+        let valid_ash_memory_types = {
+            let mem_properties = self.instance
+                .inner
+                .get_physical_device_memory_properties(self.handle);
+            mem_properties
+                .memory_types[.. mem_properties.memory_type_count as usize]
+                .iter()
+                .enumerate()
+                .fold(0, |u, (i, mem)| {
+                    if self.known_memory_flags.contains(mem.property_flags) {
+                        u | (1 << i)
+                    } else {
+                        u
+                    }
+                })
+        };
+
         // Create device
         let device_raw = {
             let cstrings = enabled_extensions.map(CString::from).collect::<Vec<_>>();
@@ -782,6 +806,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 maintenance_level,
             }),
             vendor_id: self.properties.vendor_id,
+            valid_ash_memory_types,
         };
 
         let device_arc = Arc::clone(&device.shared);
@@ -878,48 +903,39 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .iter()
             .map(|mem| mem.size)
             .collect();
-        let memory_types = mem_properties.memory_types
-            [.. mem_properties.memory_type_count as usize]
+        let memory_types = mem_properties
+            .memory_types[.. mem_properties.memory_type_count as usize]
             .iter()
-            .map(|mem| {
+            .filter_map(|mem| { 
                 use crate::memory::Properties;
-                let mut type_flags = Properties::empty();
+                let mut properties = Properties::empty();
 
-                if mem
-                    .property_flags
-                    .intersects(vk::MemoryPropertyFlags::DEVICE_LOCAL)
-                {
-                    type_flags |= Properties::DEVICE_LOCAL;
+                if mem.property_flags.contains(vk::MemoryPropertyFlags::DEVICE_LOCAL) {
+                    properties |= Properties::DEVICE_LOCAL;
                 }
-                if mem
-                    .property_flags
-                    .intersects(vk::MemoryPropertyFlags::HOST_VISIBLE)
-                {
-                    type_flags |= Properties::CPU_VISIBLE;
+                if mem.property_flags.contains(vk::MemoryPropertyFlags::HOST_VISIBLE) {
+                    properties |= Properties::CPU_VISIBLE;
                 }
-                if mem
-                    .property_flags
-                    .intersects(vk::MemoryPropertyFlags::HOST_COHERENT)
-                {
-                    type_flags |= Properties::COHERENT;
+                if mem.property_flags.contains(vk::MemoryPropertyFlags::HOST_COHERENT) {
+                    properties |= Properties::COHERENT;
                 }
-                if mem
-                    .property_flags
-                    .intersects(vk::MemoryPropertyFlags::HOST_CACHED)
-                {
-                    type_flags |= Properties::CPU_CACHED;
+                if mem.property_flags.contains(vk::MemoryPropertyFlags::HOST_CACHED) {
+                    properties |= Properties::CPU_CACHED;
                 }
-                if mem
-                    .property_flags
-                    .intersects(vk::MemoryPropertyFlags::LAZILY_ALLOCATED)
-                {
-                    type_flags |= Properties::LAZILY_ALLOCATED;
+                if mem.property_flags.contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED) {
+                    properties |= Properties::LAZILY_ALLOCATED;
                 }
 
-                adapter::MemoryType {
-                    properties: type_flags,
-                    heap_index: mem.heap_index as usize,
+                if self.known_memory_flags.contains(mem.property_flags) {
+                    Some(adapter::MemoryType {
+                        properties,
+                        heap_index: mem.heap_index as usize,
+                    })
+                } else {
+                    warn!("Skipping memory type with unknown flags {:?}", mem.property_flags);
+                    None
                 }
+                
             })
             .collect();
 
@@ -1560,6 +1576,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
 pub struct Device {
     shared: Arc<RawDevice>,
     vendor_id: u32,
+    valid_ash_memory_types: u32,
 }
 
 #[derive(Copy, Clone, Debug, Eq, Hash, PartialEq)]

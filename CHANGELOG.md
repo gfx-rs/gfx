@@ -1,5 +1,24 @@
 # Change Log
 
+### backend-vulkan-0.5.10 (10-07-2020)
+  - skip unknown memory types
+
+### backend-empty-0.5.2 (06-07-2020)
+  - mock descriptor set creation functions
+
+### backend-empty-0.5.1 (30-06-2020)
+  - start turning the empty backend into a mock instead of always panicking
+  - mock memory creation and buffer and image creation functions
+
+### hal-0.5.3 backend-dx12-0.5.8 backend-vulkan-0.5.9 (27-06-2020)
+  - add `DRAW_INDIRECT_COUNT` feature and enable on supported backends
+
+### hal-0.5.2 backend-dx12-0.5.7 backend-metal-0.5.4 backend-vulkan-0.5.8 (12-06-2020)
+  - add descriptor indexing features and enable on supported backends
+
+### hal-0.5.1 backend-dx12-0.5.6 backend-metal-0.5.3 backend-vulkan-0.5.7 (10-06-2020)
+  - add `TEXTURE_DESCRIPTOR_ARRAY` feature and enable on supported backends
+
 ### backend-dx12-0.5.5 (01-06-2020)
   - implement descriptor pool destruction
 

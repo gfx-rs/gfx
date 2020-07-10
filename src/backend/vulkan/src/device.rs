@@ -499,7 +499,7 @@ impl d::Device<B> for Device {
             s_type: vk::StructureType::MEMORY_ALLOCATE_INFO,
             p_next: ptr::null(),
             allocation_size: size,
-            memory_type_index: mem_type.0 as _,
+            memory_type_index: self.get_ash_memory_type_index(mem_type),
         };
 
         let result = self.shared.raw.allocate_memory(&info, None);
@@ -1365,7 +1365,7 @@ impl d::Device<B> for Device {
         Requirements {
             size: req.size,
             alignment: req.alignment,
-            type_mask: req.memory_type_bits as _,
+            type_mask: self.filter_memory_requirements(req.memory_type_bits),
         }
     }
 
@@ -1472,7 +1472,7 @@ impl d::Device<B> for Device {
         Requirements {
             size: req.size,
             alignment: req.alignment,
-            type_mask: req.memory_type_bits as _,
+            type_mask: self.filter_memory_requirements(req.memory_type_bits),
         }
     }
 
@@ -2308,6 +2308,35 @@ impl d::Device<B> for Device {
 }
 
 impl Device {
+    /// We only work with a subset of Ash-exposed memory types that we know.
+    /// This function filters an ash mask into our mask.
+    fn filter_memory_requirements(&self, ash_mask: u32) -> u64 {
+        let mut hal_index = 0;
+        let mut mask = 0;
+        for ash_index in 0..32 {
+            if self.valid_ash_memory_types & (1 << ash_index) != 0 {
+                if ash_mask & (1 << ash_index) != 0 {
+                    mask |= 1 << hal_index;
+                }
+                hal_index += 1;
+            }
+        }
+        mask
+    }
+
+    fn get_ash_memory_type_index(&self, hal_type: MemoryTypeId) -> u32 {
+        let mut hal_count = hal_type.0;
+        for ash_index in 0..32 {
+            if self.valid_ash_memory_types & (1 << ash_index) != 0 {
+                if hal_count == 0 {
+                    return ash_index;
+                }
+                hal_count -= 1;
+            }
+        }
+        panic!("Unable to get Ash memory type for {:?}", hal_type);
+    }
+
     unsafe fn set_object_name(&self, object_type: vk::ObjectType, object_handle: u64, name: &str) {
         let instance = &self.shared.instance;
         if let Some(DebugMessenger::Utils(ref debug_utils_ext, _)) = instance.debug_messenger {
