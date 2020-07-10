@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-vulkan-0.5.10 (10-07-2020)
+  - skip unknown memory types
+
 ### backend-empty-0.5.2 (06-07-2020)
   - mock descriptor set creation functions
 
