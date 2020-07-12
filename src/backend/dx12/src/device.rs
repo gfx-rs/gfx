@@ -1808,7 +1808,7 @@ impl d::Device<B> for Device {
                 Ok((shader, false)) => Ok(ShaderBc::Borrowed(shader)),
                 Err(err) => Err(pso::CreationError::Shader(err)),
             }
-        };        
+        };
 
         let vertex_buffers = Vec::new();
         let attributes = Vec::new();
@@ -1830,7 +1830,7 @@ impl d::Device<B> for Device {
 
                 (buffers, attributes, input_assembler, Some(vertex), geometry.as_ref(), hs, ds, None, None)
             },
-            pso::PrimitiveAssembler::Mesh { 
+            pso::PrimitiveAssembler::Mesh {
                 ref task,
                 ref mesh
              } => {
@@ -3612,6 +3612,30 @@ impl d::Device<B> for Device {
     unsafe fn set_descriptor_set_layout_name(
         &self,
         _descriptor_set_layout: &mut r::DescriptorSetLayout,
+        _name: &str,
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_pipeline_layout_name(
+        &self,
+        _pipeline_layout: &mut r::PipelineLayout,
+        _name: &str,
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_compute_pipeline_name(
+        &self,
+        _compute_pipeline: &mut r::ComputePipeline,
+        _name: &str,
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_graphics_pipeline_name(
+        &self,
+        _graphics_pipeline: &mut r::GraphicsPipeline,
         _name: &str,
     ) {
         // TODO

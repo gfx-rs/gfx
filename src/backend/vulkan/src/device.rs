@@ -2305,6 +2305,38 @@ impl d::Device<B> for Device {
             name,
         )
     }
+
+    unsafe fn set_pipeline_layout_name(
+        &self,
+        pipeline_layout: &mut n::PipelineLayout,
+        name: &str,
+    ) {
+        self.set_object_name(
+            vk::ObjectType::PIPELINE_LAYOUT,
+            pipeline_layout.raw.as_raw(),
+            name,
+        )
+    }
+
+    unsafe fn set_compute_pipeline_name(
+        &self,
+        compute_pipeline: &mut n::ComputePipeline,
+        name: &str,
+    ) {
+        self.set_object_name(
+            vk::ObjectType::PIPELINE,
+            compute_pipeline.0.as_raw(),
+            name,
+        )
+    }
+
+    unsafe fn set_graphics_pipeline_name(&self, graphics_pipeline: &mut n::GraphicsPipeline, name: &str) {
+        self.set_object_name(
+            vk::ObjectType::PIPELINE,
+            graphics_pipeline.0.as_raw(),
+            name,
+        )
+    }
 }
 
 impl Device {

@@ -607,6 +607,18 @@ impl device::Device<Backend> for Device {
         layout.name = name.to_string();
     }
 
+    unsafe fn set_pipeline_layout_name(&self, _pipeline_layout: &mut (), _name: &str) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
+
+    unsafe fn set_compute_pipeline_name(&self, _compute_pipeline: &mut (), _name: &str) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
+
+    unsafe fn set_graphics_pipeline_name(&self, _graphics_pipeline: &mut (), _name: &str) {
+        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
+    }
+
     unsafe fn reset_fence(&self, _: &()) -> Result<(), device::OutOfMemory> {
         Ok(())
     }

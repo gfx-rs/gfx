@@ -1007,4 +1007,25 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         descriptor_set_layout: &mut B::DescriptorSetLayout,
         name: &str,
     );
+    /// Associate a name with a pipeline layout, for easier debugging in external tools or with
+    /// validation layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_pipeline_layout_name(
+        &self,
+        pipeline_layout: &mut B::PipelineLayout,
+        name: &str,
+    );
+    /// Associate a name with a compute pipeline, for easier debugging in external tools or with
+    /// validation layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_compute_pipeline_name(
+        &self,
+        compute_pipeline: &mut B::ComputePipeline,
+        name: &str,
+    );
+    /// Associate a name with a graphics pipeline, for easier debugging in external tools or with
+    /// validation layers that can print a friendly name when referring to objects in error messages
+    unsafe fn set_graphics_pipeline_name(
+        &self,
+        graphics_pipeline: &mut B::GraphicsPipeline,
+        name: &str,
+    );
 }

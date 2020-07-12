@@ -1418,7 +1418,7 @@ impl hal::device::Device<Backend> for Device {
                     (Some(&ts.0), Some(&ts.1))
                 } else {
                     (None, None)
-                };    
+                };
 
                 (buffers, attributes, input_assembler, vertex, geometry, hs, ds)
             }
@@ -3154,6 +3154,30 @@ impl hal::device::Device<Backend> for Device {
     unsafe fn set_descriptor_set_layout_name(
         &self,
         _descriptor_set_layout: &mut n::DescriptorSetLayout,
+        _name: &str,
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_pipeline_layout_name(
+        &self,
+        _pipeline_layout: &mut n::PipelineLayout,
+        _name: &str,
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_compute_pipeline_name(
+        &self,
+        _compute_pipeline: &mut n::ComputePipeline,
+        _name: &str,
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_graphics_pipeline_name(
+        &self,
+        _graphics_pipeline: &mut n::GraphicsPipeline,
         _name: &str,
     ) {
         // TODO
