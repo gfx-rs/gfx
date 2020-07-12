@@ -928,9 +928,9 @@ impl device::Device<Backend> for Device {
                 ref vertex,
                 ref tessellation,
                 ref geometry,
-            } => {               
+            } => {
                 let vs = build_shader(ShaderStage::Vertex, Some(&vertex))?.unwrap();
-                let gs = build_shader(ShaderStage::Geometry, geometry.as_ref())?;  
+                let gs = build_shader(ShaderStage::Geometry, geometry.as_ref())?;
 
                 let layout = self.create_input_layout(vs.clone(), buffers, attributes, input_assembler)?;
 
@@ -961,11 +961,11 @@ impl device::Device<Backend> for Device {
             Some(self.create_pixel_shader(blob)?)
         } else {
             None
-        };  
+        };
 
         let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
         let blend_state = self.create_blend_state(&desc.blender)?;
-        let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);              
+        let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);
 
         Ok(GraphicsPipeline {
             vs,
@@ -2366,6 +2366,30 @@ impl device::Device<Backend> for Device {
     unsafe fn set_descriptor_set_layout_name(
         &self,
         _descriptor_set_layout: &mut DescriptorSetLayout,
+        _name: &str,
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_pipeline_layout_name(
+        &self,
+        _pipeline_layout: &mut PipelineLayout,
+        _name: &str,
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_compute_pipeline_name(
+        &self,
+        _compute_pipeline: &mut ComputePipeline,
+        _name: &str,
+    ) {
+        // TODO
+    }
+
+    unsafe fn set_graphics_pipeline_name(
+        &self,
+        _graphics_pipeline: &mut GraphicsPipeline,
         _name: &str,
     ) {
         // TODO
