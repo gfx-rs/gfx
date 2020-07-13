@@ -99,7 +99,7 @@ pub struct Requirements {
     /// Memory alignment.
     pub alignment: u64,
     /// Supported memory types.
-    pub type_mask: u64,
+    pub type_mask: u32,
 }
 
 /// A linear segment within a memory block.

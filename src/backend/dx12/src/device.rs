@@ -67,13 +67,13 @@ use native::{PipelineStateSubobject, Subobject};
 // Register space used for root constants.
 const ROOT_CONSTANT_SPACE: u32 = 0;
 
-const MEM_TYPE_MASK: u64 = 0x7;
-const MEM_TYPE_SHIFT: u64 = 3;
+const MEM_TYPE_MASK: u32 = 0x7;
+const MEM_TYPE_SHIFT: u32 = 3;
 
-const MEM_TYPE_UNIVERSAL_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::Universal as u64;
-const MEM_TYPE_BUFFER_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::BufferOnly as u64;
-const MEM_TYPE_IMAGE_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::ImageOnly as u64;
-const MEM_TYPE_TARGET_SHIFT: u64 = MEM_TYPE_SHIFT * MemoryGroup::TargetOnly as u64;
+const MEM_TYPE_UNIVERSAL_SHIFT: u32 = MEM_TYPE_SHIFT * MemoryGroup::Universal as u32;
+const MEM_TYPE_BUFFER_SHIFT: u32 = MEM_TYPE_SHIFT * MemoryGroup::BufferOnly as u32;
+const MEM_TYPE_IMAGE_SHIFT: u32 = MEM_TYPE_SHIFT * MemoryGroup::ImageOnly as u32;
+const MEM_TYPE_TARGET_SHIFT: u32 = MEM_TYPE_SHIFT * MemoryGroup::TargetOnly as u32;
 
 pub const IDENTITY_MAPPING: UINT = 0x1688; // D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
 
@@ -1808,7 +1808,7 @@ impl d::Device<B> for Device {
                 Ok((shader, false)) => Ok(ShaderBc::Borrowed(shader)),
                 Err(err) => Err(pso::CreationError::Shader(err)),
             }
-        };        
+        };
 
         let vertex_buffers = Vec::new();
         let attributes = Vec::new();
@@ -1830,7 +1830,7 @@ impl d::Device<B> for Device {
 
                 (buffers, attributes, input_assembler, Some(vertex), geometry.as_ref(), hs, ds, None, None)
             },
-            pso::PrimitiveAssembler::Mesh { 
+            pso::PrimitiveAssembler::Mesh {
                 ref task,
                 ref mesh
              } => {

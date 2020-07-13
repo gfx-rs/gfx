@@ -76,7 +76,7 @@ use crate::{
 };
 
 //TODO: expose coherent type 0x2 when it's properly supported
-const BUFFER_TYPE_MASK: u64 = 0x1 | 0x4;
+const BUFFER_TYPE_MASK: u32 = 0x1 | 0x4;
 
 struct InputLayout {
     raw: ComPtr<d3d11::ID3D11InputLayout>,
@@ -928,9 +928,9 @@ impl device::Device<Backend> for Device {
                 ref vertex,
                 ref tessellation,
                 ref geometry,
-            } => {               
+            } => {
                 let vs = build_shader(ShaderStage::Vertex, Some(&vertex))?.unwrap();
-                let gs = build_shader(ShaderStage::Geometry, geometry.as_ref())?;  
+                let gs = build_shader(ShaderStage::Geometry, geometry.as_ref())?;
 
                 let layout = self.create_input_layout(vs.clone(), buffers, attributes, input_assembler)?;
 
@@ -961,11 +961,11 @@ impl device::Device<Backend> for Device {
             Some(self.create_pixel_shader(blob)?)
         } else {
             None
-        };  
+        };
 
         let rasterizer_state = self.create_rasterizer_state(&desc.rasterizer)?;
         let blend_state = self.create_blend_state(&desc.blender)?;
-        let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);              
+        let depth_stencil_state = Some(self.create_depth_stencil_state(&desc.depth_stencil)?);
 
         Ok(GraphicsPipeline {
             vs,
