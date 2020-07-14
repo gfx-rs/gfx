@@ -1289,8 +1289,8 @@ impl<B: Backend> PipelineState<B> {
 
                 let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
                     pso::PrimitiveAssembler::Vertex {
-                        buffers: vertex_buffers,
-                        attributes,
+                        buffers: &vertex_buffers,
+                        attributes: &attributes,
                         input_assembler: pso::InputAssemblerDesc {
                             primitive: pso::Primitive::TriangleList,
                             with_adjacency: false,

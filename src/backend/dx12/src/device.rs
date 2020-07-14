@@ -1810,13 +1810,13 @@ impl d::Device<B> for Device {
             }
         };
 
-        let vertex_buffers = Vec::new();
-        let attributes = Vec::new();
+        let vertex_buffers: Vec<pso::VertexBufferDesc> = Vec::new();
+        let attributes: Vec<pso::AttributeDesc> = Vec::new();
         let input_assembler = pso::InputAssemblerDesc::new(pso::Primitive::TriangleList);
         let (vertex_buffers, attributes, input_assembler, vs, gs, hs, ds, _, _) = match desc.primitive_assembler {
             pso::PrimitiveAssembler::Vertex {
-                ref buffers,
-                ref attributes,
+                buffers,
+                attributes,
                 ref input_assembler,
                 ref vertex,
                 ref tessellation,
@@ -1834,7 +1834,7 @@ impl d::Device<B> for Device {
                 ref task,
                 ref mesh
              } => {
-                (&vertex_buffers, &attributes, &input_assembler, None, None, None, None, task.as_ref(), Some(mesh))
+                (&vertex_buffers[..], &attributes[..], &input_assembler, None, None, None, None, task.as_ref(), Some(mesh))
             },
         };
 

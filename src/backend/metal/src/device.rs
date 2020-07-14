@@ -1407,8 +1407,8 @@ impl hal::device::Device<Backend> for Device {
 
         let (desc_vertex_buffers, attributes, input_assembler, vs, gs, hs, ds) = match pipeline_desc.primitive_assembler {
             pso::PrimitiveAssembler::Vertex {
-                ref buffers,
-                ref attributes,
+                buffers,
+                attributes,
                 ref input_assembler,
                 ref vertex,
                 ref tessellation,
