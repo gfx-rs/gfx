@@ -199,7 +199,7 @@ impl Drop for Device {
 
 bitflags! {
     /// Memory type bits.
-    struct MemoryTypes: u64 {
+    struct MemoryTypes: u32 {
         const PRIVATE = 1<<0;
         const SHARED = 1<<1;
         const MANAGED_UPLOAD = 1<<2;

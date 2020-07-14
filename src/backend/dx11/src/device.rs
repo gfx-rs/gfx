@@ -76,7 +76,7 @@ use crate::{
 };
 
 //TODO: expose coherent type 0x2 when it's properly supported
-const BUFFER_TYPE_MASK: u64 = 0x1 | 0x4;
+const BUFFER_TYPE_MASK: u32 = 0x1 | 0x4;
 
 struct InputLayout {
     raw: ComPtr<d3d11::ID3D11InputLayout>,

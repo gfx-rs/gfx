@@ -326,7 +326,7 @@ impl Share {
         Ok(())
     }
 
-    fn buffer_memory_type_mask(&self, usage: buffer::Usage) -> u64 {
+    fn buffer_memory_type_mask(&self, usage: buffer::Usage) -> u32 {
         let mut type_mask = 0;
         for (type_index, &(_, kind)) in self.memory_types.iter().enumerate() {
             match kind {
@@ -347,7 +347,7 @@ impl Share {
         type_mask
     }
 
-    fn image_memory_type_mask(&self) -> u64 {
+    fn image_memory_type_mask(&self) -> u32 {
         let mut type_mask = 0;
         for (type_index, &(_, kind)) in self.memory_types.iter().enumerate() {
             match kind {

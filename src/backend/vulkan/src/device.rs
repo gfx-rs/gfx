@@ -2342,7 +2342,7 @@ impl d::Device<B> for Device {
 impl Device {
     /// We only work with a subset of Ash-exposed memory types that we know.
     /// This function filters an ash mask into our mask.
-    fn filter_memory_requirements(&self, ash_mask: u32) -> u64 {
+    fn filter_memory_requirements(&self, ash_mask: u32) -> u32 {
         let mut hal_index = 0;
         let mut mask = 0;
         for ash_index in 0..32 {
