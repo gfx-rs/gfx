@@ -922,8 +922,8 @@ impl device::Device<Backend> for Device {
 
         let (layout, vs, gs, hs, ds) = match desc.primitive_assembler {
             pso::PrimitiveAssembler::Vertex {
-                ref buffers,
-                ref attributes,
+                buffers,
+                attributes,
                 ref input_assembler,
                 ref vertex,
                 ref tessellation,

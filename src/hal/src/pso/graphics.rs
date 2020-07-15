@@ -75,9 +75,9 @@ pub enum PrimitiveAssembler<'a, B: Backend> {
     /// Vertex based pipeline
     Vertex {
         /// Vertex buffers (IA)
-        buffers: Vec<VertexBufferDesc>,
+        buffers: &'a [VertexBufferDesc],
         /// Vertex attributes (IA)
-        attributes: Vec<AttributeDesc>,
+        attributes: &'a [AttributeDesc],
         /// Input assembler attributes, describes how
         /// vertices are assembled into primitives (such as triangles).
         input_assembler: InputAssemblerDesc,
@@ -156,7 +156,7 @@ impl<'a, B: Backend> GraphicsPipelineDesc<'a, B> {
     ) -> Self {
         GraphicsPipelineDesc {
             primitive_assembler,
-            rasterizer,            
+            rasterizer,
             fragment,
             blender: BlendDesc::default(),
             depth_stencil: DepthStencilDesc::default(),
