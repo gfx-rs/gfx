@@ -930,6 +930,7 @@ impl d::Device<B> for Device {
             uniforms,
             rasterizer: desc.rasterizer,
             depth: desc.depth_stencil.depth,
+            baked_states: desc.baked_states.clone(),
         })
     }
 

@@ -158,6 +158,7 @@ pub struct GraphicsPipeline {
     pub(crate) uniforms: Vec<UniformDesc>,
     pub(crate) rasterizer: pso::Rasterizer,
     pub(crate) depth: Option<pso::DepthTest>,
+    pub(crate) baked_states: pso::BakedStates,
 }
 
 #[derive(Clone, Debug)]
