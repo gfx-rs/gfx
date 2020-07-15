@@ -11,6 +11,7 @@ use crate::{native as n, Backend, ColorSlot};
 
 use parking_lot::Mutex;
 use std::borrow::Borrow;
+use std::iter;
 use std::ops::Range;
 use std::sync::Arc;
 use std::{mem, slice};
@@ -1062,6 +1063,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             ref uniforms,
             rasterizer,
             depth,
+            ref baked_states,
         } = *pipeline;
 
         if self.cache.primitive != Some(primitive) {
@@ -1094,6 +1096,19 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             depth.map(|d| d.write).unwrap_or(true),
         ));
         self.cache.depth_mask = depth.map(|d| d.write);
+
+        if let Some(ref vp) = baked_states.viewport {
+            self.set_viewports(0, iter::once(vp));
+        }
+        if let Some(ref rect) = baked_states.scissor {
+            self.set_scissors(0, iter::once(rect));
+        }
+        if let Some(color) = baked_states.blend_color {
+            self.set_blend_constants(color);
+        }
+        if let Some(ref bounds) = baked_states.depth_bounds {
+            self.set_depth_bounds(bounds.clone());
+        }
     }
 
     unsafe fn bind_graphics_descriptor_sets<I, J>(
