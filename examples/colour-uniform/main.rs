@@ -1219,6 +1219,7 @@ impl<B: Backend> PipelineState<B> {
     where
         IS: IntoIterator,
         IS::Item: std::borrow::Borrow<B::DescriptorSetLayout>,
+        IS::IntoIter: ExactSizeIterator,
     {
         let device = &device_ptr.borrow().device;
         let pipeline_layout = device
