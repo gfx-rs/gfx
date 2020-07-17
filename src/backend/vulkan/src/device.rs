@@ -559,10 +559,13 @@ impl d::Device<B> for Device {
     where
         IA: IntoIterator,
         IA::Item: Borrow<pass::Attachment>,
+        IA::IntoIter: ExactSizeIterator,
         IS: IntoIterator,
         IS::Item: Borrow<pass::SubpassDesc<'a>>,
+        IS::IntoIter: ExactSizeIterator,
         ID: IntoIterator,
         ID::Item: Borrow<pass::SubpassDependency>,
+        ID::IntoIter: ExactSizeIterator,
     {
         let attachments = attachments
             .into_iter()
@@ -583,71 +586,7 @@ impl d::Device<B> for Device {
                     initial_layout: conv::map_image_layout(attachment.layouts.start),
                     final_layout: conv::map_image_layout(attachment.layouts.end),
                 }
-            })
-            .collect::<Vec<_>>();
-
-        let clear_attachments_mask = attachments
-            .iter()
-            .enumerate()
-            .filter_map(|(i, at)| {
-                if at.load_op == vk::AttachmentLoadOp::CLEAR
-                    || at.stencil_load_op == vk::AttachmentLoadOp::CLEAR
-                {
-                    Some(1 << i as u64)
-                } else {
-                    None
-                }
-            })
-            .sum();
-
-        let attachment_refs = subpasses
-            .into_iter()
-            .map(|subpass| {
-                let subpass = subpass.borrow();
-                fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
-                    vk::AttachmentReference {
-                        attachment: id as _,
-                        layout: conv::map_image_layout(layout),
-                    }
-                }
-                let colors = subpass.colors.iter().map(make_ref).collect::<Box<[_]>>();
-                let depth_stencil = subpass.depth_stencil.map(make_ref);
-                let inputs = subpass.inputs.iter().map(make_ref).collect::<Box<[_]>>();
-                let preserves = subpass
-                    .preserves
-                    .iter()
-                    .map(|&id| id as u32)
-                    .collect::<Box<[_]>>();
-                let resolves = subpass.resolves.iter().map(make_ref).collect::<Box<[_]>>();
-
-                (colors, depth_stencil, inputs, preserves, resolves)
-            })
-            .collect::<Box<[_]>>();
-
-        let subpasses = attachment_refs
-            .iter()
-            .map(
-                |(colors, depth_stencil, inputs, preserves, resolves)| vk::SubpassDescription {
-                    flags: vk::SubpassDescriptionFlags::empty(),
-                    pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
-                    input_attachment_count: inputs.len() as u32,
-                    p_input_attachments: inputs.as_ptr(),
-                    color_attachment_count: colors.len() as u32,
-                    p_color_attachments: colors.as_ptr(),
-                    p_resolve_attachments: if resolves.is_empty() {
-                        ptr::null()
-                    } else {
-                        resolves.as_ptr()
-                    },
-                    p_depth_stencil_attachment: match depth_stencil {
-                        Some(ref aref) => aref as *const _,
-                        None => ptr::null(),
-                    },
-                    preserve_attachment_count: preserves.len() as u32,
-                    p_preserve_attachments: preserves.as_ptr(),
-                },
-            )
-            .collect::<Box<[_]>>();
+            });
 
         let dependencies = dependencies
             .into_iter()
@@ -666,22 +605,95 @@ impl d::Device<B> for Device {
                     dst_access_mask: conv::map_image_access(sdep.accesses.end),
                     dependency_flags: mem::transmute(sdep.flags),
                 }
-            })
-            .collect::<Vec<_>>();
+            });
 
-        let info = vk::RenderPassCreateInfo {
-            s_type: vk::StructureType::RENDER_PASS_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::RenderPassCreateFlags::empty(),
-            attachment_count: attachments.len() as u32,
-            p_attachments: attachments.as_ptr(),
-            subpass_count: subpasses.len() as u32,
-            p_subpasses: subpasses.as_ptr(),
-            dependency_count: dependencies.len() as u32,
-            p_dependencies: dependencies.as_ptr(),
-        };
+        let (clear_attachments_mask, result) = inplace_it::inplace_or_alloc_array(attachments.len(), |uninit_guard| {
+            let attachments = uninit_guard.init_with_iter(attachments);
 
-        let result = self.shared.raw.create_render_pass(&info, None);
+            let clear_attachments_mask = attachments
+                .iter()
+                .enumerate()
+                .filter_map(|(i, at)| {
+                    if at.load_op == vk::AttachmentLoadOp::CLEAR
+                        || at.stencil_load_op == vk::AttachmentLoadOp::CLEAR
+                    {
+                        Some(1 << i as u64)
+                    } else {
+                        None
+                    }
+                })
+                .sum();
+
+            let attachment_refs = subpasses
+                .into_iter()
+                .map(|subpass| {
+                    let subpass = subpass.borrow();
+                    fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
+                        vk::AttachmentReference {
+                            attachment: id as _,
+                            layout: conv::map_image_layout(layout),
+                        }
+                    }
+                    let colors = subpass.colors.iter().map(make_ref).collect::<Box<[_]>>();
+                    let depth_stencil = subpass.depth_stencil.map(make_ref);
+                    let inputs = subpass.inputs.iter().map(make_ref).collect::<Box<[_]>>();
+                    let preserves = subpass
+                        .preserves
+                        .iter()
+                        .map(|&id| id as u32)
+                        .collect::<Box<[_]>>();
+                    let resolves = subpass.resolves.iter().map(make_ref).collect::<Box<[_]>>();
+
+                    (colors, depth_stencil, inputs, preserves, resolves)
+                })
+                .collect::<Box<[_]>>();
+
+            let subpasses = attachment_refs
+                .iter()
+                .map(|(colors, depth_stencil, inputs, preserves, resolves)| {
+                    vk::SubpassDescription {
+                        flags: vk::SubpassDescriptionFlags::empty(),
+                        pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
+                        input_attachment_count: inputs.len() as u32,
+                        p_input_attachments: inputs.as_ptr(),
+                        color_attachment_count: colors.len() as u32,
+                        p_color_attachments: colors.as_ptr(),
+                        p_resolve_attachments: if resolves.is_empty() {
+                            ptr::null()
+                        } else {
+                            resolves.as_ptr()
+                        },
+                        p_depth_stencil_attachment: match depth_stencil {
+                            Some(ref aref) => aref as *const _,
+                            None => ptr::null(),
+                        },
+                        preserve_attachment_count: preserves.len() as u32,
+                        p_preserve_attachments: preserves.as_ptr(),
+                    }
+                })
+                .collect::<Box<[_]>>();
+
+            let result = inplace_it::inplace_or_alloc_array(dependencies.len(), |uninit_guard| {
+                let dependencies =
+                    uninit_guard.init_with_iter(dependencies);
+
+                let info = vk::RenderPassCreateInfo {
+                    s_type: vk::StructureType::RENDER_PASS_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::RenderPassCreateFlags::empty(),
+                    attachment_count: attachments.len() as u32,
+                    p_attachments: attachments.as_ptr(),
+                    subpass_count: subpasses.len() as u32,
+                    p_subpasses: subpasses.as_ptr(),
+                    dependency_count: dependencies.len() as u32,
+                    p_dependencies: dependencies.as_ptr(),
+                };
+
+                self.shared.raw.create_render_pass(&info, None)
+            });
+
+            (clear_attachments_mask, result)
+        });
 
         match result {
             Ok(renderpass) => Ok(n::RenderPass {
@@ -702,15 +714,14 @@ impl d::Device<B> for Device {
     where
         IS: IntoIterator,
         IS::Item: Borrow<n::DescriptorSetLayout>,
+        IS::IntoIter: ExactSizeIterator,
         IR: IntoIterator,
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+        IR::IntoIter: ExactSizeIterator,
     {
         let set_layouts = sets
             .into_iter()
-            .map(|set| set.borrow().raw)
-            .collect::<Vec<_>>();
-
-        debug!("create_pipeline_layout {:?}", set_layouts);
+            .map(|set| set.borrow().raw);
 
         let push_constant_ranges = push_constant_ranges
             .into_iter()
@@ -721,20 +732,31 @@ impl d::Device<B> for Device {
                     offset: r.start,
                     size: r.end - r.start,
                 }
+            });
+
+        let result = inplace_it::inplace_or_alloc_array(set_layouts.len(), |uninit_guard| {
+            let set_layouts =
+                uninit_guard.init_with_iter(set_layouts);
+
+            // TODO: set_layouts doesnt implement fmt::Debug, submit PR?
+            // debug!("create_pipeline_layout {:?}", set_layouts);
+
+            inplace_it::inplace_or_alloc_array(push_constant_ranges.len(), |uninit_guard| {
+                let push_constant_ranges = uninit_guard.init_with_iter(push_constant_ranges);
+
+                let info = vk::PipelineLayoutCreateInfo {
+                    s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::PipelineLayoutCreateFlags::empty(),
+                    set_layout_count: set_layouts.len() as u32,
+                    p_set_layouts: set_layouts.as_ptr(),
+                    push_constant_range_count: push_constant_ranges.len() as u32,
+                    p_push_constant_ranges: push_constant_ranges.as_ptr(),
+                };
+
+                self.shared.raw.create_pipeline_layout(&info, None)
             })
-            .collect::<Vec<_>>();
-
-        let info = vk::PipelineLayoutCreateInfo {
-            s_type: vk::StructureType::PIPELINE_LAYOUT_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::PipelineLayoutCreateFlags::empty(),
-            set_layout_count: set_layouts.len() as u32,
-            p_set_layouts: set_layouts.as_ptr(),
-            push_constant_range_count: push_constant_ranges.len() as u32,
-            p_push_constant_ranges: push_constant_ranges.as_ptr(),
-        };
-
-        let result = self.shared.raw.create_pipeline_layout(&info, None);
+        });
 
         match result {
             Ok(raw) => Ok(n::PipelineLayout { raw }),
@@ -798,17 +820,22 @@ impl d::Device<B> for Device {
     where
         I: IntoIterator,
         I::Item: Borrow<n::PipelineCache>,
+        I::IntoIter: ExactSizeIterator,
     {
         let caches = sources
             .into_iter()
-            .map(|s| s.borrow().raw)
-            .collect::<Vec<_>>();
-        let result = self.shared.raw.fp_v1_0().merge_pipeline_caches(
-            self.shared.raw.handle(),
-            target.raw,
-            caches.len() as u32,
-            caches.as_ptr(),
-        );
+            .map(|s| s.borrow().raw);
+
+        let result = inplace_it::inplace_or_alloc_array(caches.len(), |uninit_guard| {
+            let caches = uninit_guard.init_with_iter(caches);
+
+            self.shared.raw.fp_v1_0().merge_pipeline_caches(
+                self.shared.raw.handle(),
+                target.raw,
+                caches.len() as u32,
+                caches.as_ptr(),
+            )
+        });
 
         match result {
             vk::Result::SUCCESS => Ok(()),
@@ -1562,6 +1589,7 @@ impl d::Device<B> for Device {
     where
         T: IntoIterator,
         T::Item: Borrow<pso::DescriptorRangeDesc>,
+        T::IntoIter: ExactSizeIterator,
     {
         let pools = descriptor_pools
             .into_iter()
@@ -1571,19 +1599,22 @@ impl d::Device<B> for Device {
                     ty: conv::map_descriptor_type(pool.ty),
                     descriptor_count: pool.count as u32,
                 }
-            })
-            .collect::<Vec<_>>();
+            });
 
-        let info = vk::DescriptorPoolCreateInfo {
-            s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: conv::map_descriptor_pool_create_flags(flags),
-            max_sets: max_sets as u32,
-            pool_size_count: pools.len() as u32,
-            p_pool_sizes: pools.as_ptr(),
-        };
+        let result = inplace_it::inplace_or_alloc_array(pools.len(), |uninit_guard| {
+            let pools = uninit_guard.init_with_iter(pools);
 
-        let result = self.shared.raw.create_descriptor_pool(&info, None);
+            let info = vk::DescriptorPoolCreateInfo {
+                s_type: vk::StructureType::DESCRIPTOR_POOL_CREATE_INFO,
+                p_next: ptr::null(),
+                flags: conv::map_descriptor_pool_create_flags(flags),
+                max_sets: max_sets as u32,
+                pool_size_count: pools.len() as u32,
+                p_pool_sizes: pools.as_ptr(),
+            };
+
+            self.shared.raw.create_descriptor_pool(&info, None)
+        });
 
         match result {
             Ok(pool) => Ok(n::DescriptorPool {
@@ -1607,11 +1638,11 @@ impl d::Device<B> for Device {
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
         J: IntoIterator,
         J::Item: Borrow<n::Sampler>,
+        J::IntoIter: ExactSizeIterator,
     {
         let immutable_samplers = immutable_sampler_iter
             .into_iter()
-            .map(|is| is.borrow().0)
-            .collect::<Vec<_>>();
+            .map(|is| is.borrow().0);
         let mut sampler_offset = 0;
 
         let bindings = Arc::new(
@@ -1621,34 +1652,42 @@ impl d::Device<B> for Device {
                 .collect::<Vec<_>>(),
         );
 
-        let raw_bindings = bindings
-            .iter()
-            .map(|b| vk::DescriptorSetLayoutBinding {
-                binding: b.binding,
-                descriptor_type: conv::map_descriptor_type(b.ty),
-                descriptor_count: b.count as _,
-                stage_flags: conv::map_stage_flags(b.stage_flags),
-                p_immutable_samplers: if b.immutable_samplers {
-                    let slice = &immutable_samplers[sampler_offset ..];
-                    sampler_offset += b.count;
-                    slice.as_ptr()
-                } else {
-                    ptr::null()
-                },
+        let result = inplace_it::inplace_or_alloc_array(immutable_samplers.len(), |uninit_guard| {
+            let immutable_samplers = uninit_guard.init_with_iter(immutable_samplers);
+
+            let raw_bindings = bindings
+                .iter()
+                .map(|b| vk::DescriptorSetLayoutBinding {
+                    binding: b.binding,
+                    descriptor_type: conv::map_descriptor_type(b.ty),
+                    descriptor_count: b.count as _,
+                    stage_flags: conv::map_stage_flags(b.stage_flags),
+                    p_immutable_samplers: if b.immutable_samplers {
+                        let slice = &immutable_samplers[sampler_offset ..];
+                        sampler_offset += b.count;
+                        slice.as_ptr()
+                    } else {
+                        ptr::null()
+                    },
+                });
+
+            inplace_it::inplace_or_alloc_array(raw_bindings.len(), |uninit_guard| {
+                let raw_bindings = uninit_guard.init_with_iter(raw_bindings);
+
+                // TODO raw_bindings doesnt implement fmt::Debug
+                // debug!("create_descriptor_set_layout {:?}", raw_bindings);
+
+                let info = vk::DescriptorSetLayoutCreateInfo {
+                    s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                    p_next: ptr::null(),
+                    flags: vk::DescriptorSetLayoutCreateFlags::empty(),
+                    binding_count: raw_bindings.len() as _,
+                    p_bindings: raw_bindings.as_ptr(),
+                };
+
+                self.shared.raw.create_descriptor_set_layout(&info, None)
             })
-            .collect::<Vec<_>>();
-
-        debug!("create_descriptor_set_layout {:?}", raw_bindings);
-
-        let info = vk::DescriptorSetLayoutCreateInfo {
-            s_type: vk::StructureType::DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-            p_next: ptr::null(),
-            flags: vk::DescriptorSetLayoutCreateFlags::empty(),
-            binding_count: raw_bindings.len() as _,
-            p_bindings: raw_bindings.as_ptr(),
-        };
-
-        let result = self.shared.raw.create_descriptor_set_layout(&info, None);
+        });
 
         match result {
             Ok(layout) => Ok(n::DescriptorSetLayout {
@@ -1775,6 +1814,7 @@ impl d::Device<B> for Device {
     where
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
+        I::IntoIter: ExactSizeIterator,
     {
         let copies = copies
             .into_iter()
@@ -1791,10 +1831,13 @@ impl d::Device<B> for Device {
                     dst_array_element: c.dst_array_offset as u32,
                     descriptor_count: c.count as u32,
                 }
-            })
-            .collect::<Vec<_>>();
+            });
 
-        self.shared.raw.update_descriptor_sets(&[], &copies);
+        inplace_it::inplace_or_alloc_array(copies.len(), |uninit_guard| {
+            let copies = uninit_guard.init_with_iter(copies);
+
+            self.shared.raw.update_descriptor_sets(&[], &copies);
+        });
     }
 
     unsafe fn map_memory(
@@ -1896,12 +1939,16 @@ impl d::Device<B> for Device {
     where
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
+        I::IntoIter: ExactSizeIterator,
     {
         let fences = fences
             .into_iter()
-            .map(|fence| fence.borrow().0)
-            .collect::<Vec<_>>();
-        let result = self.shared.raw.reset_fences(&fences);
+            .map(|fence| fence.borrow().0);
+
+        let result = inplace_it::inplace_or_alloc_array(fences.len(), |uninit_guard| {
+            let fences = uninit_guard.init_with_iter(fences);
+            self.shared.raw.reset_fences(&fences)
+        });
 
         match result {
             Ok(()) => Ok(()),
@@ -1920,16 +1967,22 @@ impl d::Device<B> for Device {
     where
         I: IntoIterator,
         I::Item: Borrow<n::Fence>,
+        I::IntoIter: ExactSizeIterator,
     {
         let fences = fences
             .into_iter()
-            .map(|fence| fence.borrow().0)
-            .collect::<Vec<_>>();
+            .map(|fence| fence.borrow().0);
+
         let all = match wait {
             d::WaitFor::Any => false,
             d::WaitFor::All => true,
         };
-        let result = self.shared.raw.wait_for_fences(&fences, all, timeout_ns);
+
+        let result = inplace_it::inplace_or_alloc_array(fences.len(), |uninit_guard| {
+            let fences = uninit_guard.init_with_iter(fences);
+            self.shared.raw.wait_for_fences(&fences, all, timeout_ns)
+        });
+
         match result {
             Ok(()) => Ok(true),
             Err(vk::Result::TIMEOUT) => Ok(false),

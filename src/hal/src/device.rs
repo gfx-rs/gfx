@@ -444,10 +444,13 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     where
         IA: IntoIterator,
         IA::Item: Borrow<pass::Attachment>,
+        IA::IntoIter: ExactSizeIterator,
         IS: IntoIterator,
         IS::Item: Borrow<pass::SubpassDesc<'a>>,
+        IS::IntoIter: ExactSizeIterator,
         ID: IntoIterator,
-        ID::Item: Borrow<pass::SubpassDependency>;
+        ID::Item: Borrow<pass::SubpassDependency>,
+        ID::IntoIter: ExactSizeIterator;
 
     /// Destroys a *render pass* created by this device.
     unsafe fn destroy_render_pass(&self, rp: B::RenderPass);
@@ -476,8 +479,10 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     where
         IS: IntoIterator,
         IS::Item: Borrow<B::DescriptorSetLayout>,
+        IS::IntoIter: ExactSizeIterator,
         IR: IntoIterator,
-        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>;
+        IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
+        IR::IntoIter: ExactSizeIterator;
 
     /// Destroy a pipeline layout object
     unsafe fn destroy_pipeline_layout(&self, layout: B::PipelineLayout);
@@ -502,7 +507,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<(), OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<B::PipelineCache>;
+        I::Item: Borrow<B::PipelineCache>,
+        I::IntoIter: ExactSizeIterator;
 
     /// Destroy a pipeline cache object.
     unsafe fn destroy_pipeline_cache(&self, cache: B::PipelineCache);
@@ -718,7 +724,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     ) -> Result<B::DescriptorPool, OutOfMemory>
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorRangeDesc>;
+        I::Item: Borrow<pso::DescriptorRangeDesc>,
+        I::IntoIter: ExactSizeIterator;
 
     /// Destroy a descriptor pool object
     ///
@@ -742,7 +749,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetLayoutBinding>,
         J: IntoIterator,
-        J::Item: Borrow<B::Sampler>;
+        J::Item: Borrow<B::Sampler>,
+        J::IntoIter: ExactSizeIterator;
 
     /// Destroy a descriptor set layout object
     unsafe fn destroy_descriptor_set_layout(&self, layout: B::DescriptorSetLayout);
@@ -758,7 +766,8 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     unsafe fn copy_descriptor_sets<'a, I>(&self, copy_iter: I)
     where
         I: IntoIterator,
-        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>;
+        I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
+        I::IntoIter: ExactSizeIterator;
 
     /// Map a memory object into application address space
     ///
@@ -819,6 +828,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     where
         I: IntoIterator,
         I::Item: Borrow<B::Fence>,
+        I::IntoIter: ExactSizeIterator,
     {
         for fence in fences {
             self.reset_fence(fence.borrow())?;
@@ -847,6 +857,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     where
         I: IntoIterator,
         I::Item: Borrow<B::Fence>,
+        I::IntoIter: ExactSizeIterator,
     {
         use std::{thread, time};
         fn to_ns(duration: time::Duration) -> u64 {
