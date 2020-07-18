@@ -33,8 +33,8 @@ metal = { version = "0.18", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
-cocoa = "0.20"
-core-graphics = "0.19"
+cocoa = "0.22"
+core-graphics = "0.21"
 smallvec = "1"
 spirv_cross = { version = "0.20", features = ["msl"] }
 parking_lot = "0.10"
