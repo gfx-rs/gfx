@@ -29,7 +29,7 @@ bitflags = "1.0"
 copyless = "0.1.4"
 log = { version = "0.4" }
 dispatch = { version = "0.2", optional = true }
-metal = { version = "0.18", features = ["private"] }
+metal = { version = "0.19", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
