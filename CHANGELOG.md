@@ -1,8 +1,7 @@
 # Change Log
 
 ### backend-metal-0.5.5 (19-07-2020)
-  - update cocoa to 0.22, core-graphics to 0.21
-  - added the patch version number to the metal dependency (v0.18.1).
+  - update cocoa to 0.22, core-graphics to 0.21 and metal to 0.19.
 
 ### backend-vulkan-0.5.10 (10-07-2020)
   - skip unknown memory types
