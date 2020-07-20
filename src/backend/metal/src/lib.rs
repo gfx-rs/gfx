@@ -65,14 +65,13 @@ use hal::{
 use range_alloc::RangeAllocator;
 
 use cocoa::foundation::NSInteger;
-use core_graphics::base::CGFloat;
-use core_graphics::geometry::CGRect;
 #[cfg(feature = "dispatch")]
 use dispatch;
 use foreign_types::ForeignTypeRef;
 use lazy_static::lazy_static;
 use metal::MTLFeatureSet;
 use metal::MTLLanguageVersion;
+use metal::{CGFloat, CGSize};
 use objc::{
     declare::ClassDecl,
     runtime::{Class, Object, Sel, BOOL, YES},
@@ -101,6 +100,40 @@ pub type GraphicsCommandPool = CommandPool;
 //TODO: investigate why exactly using `u8` here is slower (~5% total).
 /// A type representing Metal binding's resource index.
 type ResourceIndex = u32;
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CGPoint {
+    pub x: CGFloat,
+    pub y: CGFloat,
+}
+
+impl CGPoint {
+    #[inline]
+    pub fn new(x: CGFloat, y: CGFloat) -> CGPoint {
+        CGPoint {
+            x,
+            y,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CGRect {
+    pub origin: CGPoint,
+    pub size: CGSize
+}
+
+impl CGRect {
+    #[inline]
+    pub fn new(origin: CGPoint, size: CGSize) -> CGRect {
+        CGRect {
+            origin,
+            size,
+        }
+    }
+}
 
 /// Method of recording one-time-submit command buffers.
 #[derive(Clone, Debug, Hash, PartialEq)]
