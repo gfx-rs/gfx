@@ -29,12 +29,11 @@ bitflags = "1.0"
 copyless = "0.1.4"
 log = { version = "0.4" }
 dispatch = { version = "0.2", optional = true }
-metal = { version = "0.18", features = ["private"] }
+metal = { version = "0.19", features = ["private"] }
 foreign-types = "0.3"
 objc = "0.2.5"
 block = "0.1"
-cocoa = "0.20"
-core-graphics = "0.19"
+cocoa = "0.22"
 smallvec = "1"
 spirv_cross = { version = "0.20", features = ["msl"] }
 parking_lot = "0.10"
