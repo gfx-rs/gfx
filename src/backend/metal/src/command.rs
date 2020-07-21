@@ -42,7 +42,7 @@ use hal::{
 use arrayvec::ArrayVec;
 use auxil::{FastHashMap, ShaderStage};
 use block::ConcreteBlock;
-use cocoa::foundation::{NSRange, NSUInteger};
+use cocoa_foundation::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
 #[cfg(feature = "dispatch")]
 use dispatch;
