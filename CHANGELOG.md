@@ -1,8 +1,12 @@
 # Change Log
 
+### backend-metal-0.5.6 (21-07-2020)
+  - update metal to 0.20
+  - switch from `cocoa` to `cocoa-foundation`.
+  - remove core-graphics dependency
+
 ### backend-metal-0.5.5 (20-07-2020)
   - update cocoa to 0.22 and metal to 0.19.
-  - remove core-graphics dependency
 
 ### backend-vulkan-0.5.10 (10-07-2020)
   - skip unknown memory types
