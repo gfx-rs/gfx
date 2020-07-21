@@ -18,7 +18,7 @@ use crate::{
 
 use arrayvec::ArrayVec;
 use auxil::{spirv_cross_specialize_ast, FastHashMap};
-use cocoa::foundation::{NSRange, NSUInteger};
+use cocoa_foundation::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use hal::{
