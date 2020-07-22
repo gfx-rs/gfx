@@ -4140,6 +4140,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::ImageCopy>,
+        T::IntoIter: ExactSizeIterator,
     {
         match (&src.like, &dst.like) {
             (&native::ImageLike::Unbound { .. }, _) | (_, &native::ImageLike::Unbound { .. }) => {
@@ -4244,6 +4245,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::BufferImageCopy>,
+        T::IntoIter: ExactSizeIterator,
     {
         match dst.like {
             native::ImageLike::Unbound { .. } => {
@@ -4293,6 +4295,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     ) where
         T: IntoIterator,
         T::Item: Borrow<com::BufferImageCopy>,
+        T::IntoIter: ExactSizeIterator,
     {
         match src.like {
             native::ImageLike::Unbound { .. } => {
