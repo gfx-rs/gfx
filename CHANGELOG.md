@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-vulkan-0.5.11 (22-07-2020)
+  - switch from `core-graphics` to `core-graphics-types`.
+
 ### backend-metal-0.5.6 (21-07-2020)
   - update metal to 0.20
   - switch from `cocoa` to `cocoa-foundation`.
