@@ -247,7 +247,7 @@ impl Instance {
     #[cfg(target_os = "macos")]
     pub fn create_surface_from_ns_view(&self, view: *mut c_void) -> Surface {
         use ash::extensions::mvk;
-        use core_graphics::{base::CGFloat, geometry::CGRect};
+        use core_graphics_types::{base::CGFloat, geometry::CGRect};
         use objc::runtime::{Object, BOOL, YES};
 
         // TODO: this logic is duplicated from gfx-backend-metal, refactor?
