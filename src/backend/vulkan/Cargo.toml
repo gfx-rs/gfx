@@ -35,7 +35,7 @@ inplace_it = "0.3.1"
 winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc = "0.2.5"
-core-graphics = "0.19"
+core-graphics-types = "0.1"
 
 [target.'cfg(all(unix, not(target_os = "macos"), not(target_os = "ios"), not(target_os = "android")))'.dependencies]
 x11 = { version = "2.15", features = ["xlib"], optional = true }
