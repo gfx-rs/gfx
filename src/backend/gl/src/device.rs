@@ -1627,8 +1627,32 @@ impl d::Device<B> for Device {
         I: IntoIterator,
         I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
     {
-        for _copy in copies {
-            unimplemented!()
+        for copy in copies {
+            let copy = copy.borrow();
+
+            let src_set = &copy.src_set;
+            let dst_set = &copy.dst_set;
+            if std::ptr::eq(src_set, dst_set) {
+                panic!("copying within same descriptor set is not currently supported");
+            }
+
+            let src_bindings = src_set.bindings.lock();
+            let mut dst_bindings = dst_set.bindings.lock();
+
+            let count = copy.count;
+
+            // TODO: add support for array bindings when the OpenGL backend gets them
+            let src_start = copy.src_binding as usize;
+            let src_end = src_start + count;
+            assert!(src_end <= src_bindings.len());
+
+            let src_slice = &src_bindings[src_start..src_end];
+
+            let dst_start = copy.dst_binding as usize;
+            let dst_end = dst_start + count;
+            assert!(dst_end <= dst_bindings.len());
+
+            dst_bindings[dst_start..dst_end].clone_from_slice(src_slice);
         }
     }
 
