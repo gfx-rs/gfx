@@ -686,12 +686,13 @@ impl<B: Backend> RenderPassState<B> {
                 inputs: &[],
                 resolves: &[],
                 preserves: &[],
+                view_mask: 0,
             };
 
             device
                 .borrow()
                 .device
-                .create_render_pass(&[attachment], &[subpass], &[])
+                .create_render_pass(&[attachment], &[subpass], &[], None)
                 .ok()
         };
 

@@ -555,6 +555,7 @@ impl d::Device<B> for Device {
         attachments: IA,
         subpasses: IS,
         dependencies: ID,
+        correlation_masks: Option<&[u32]>,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
         IA: IntoIterator,
@@ -590,6 +591,10 @@ impl d::Device<B> for Device {
 
         let dependencies = dependencies
             .into_iter()
+            .collect::<Vec<ID::Item>>();
+
+        let vk_dependencies = dependencies
+            .iter()
             .map(|subpass_dep| {
                 let sdep = subpass_dep.borrow();
                 // TODO: checks
@@ -644,13 +649,13 @@ impl d::Device<B> for Device {
                         .collect::<Box<[_]>>();
                     let resolves = subpass.resolves.iter().map(make_ref).collect::<Box<[_]>>();
 
-                    (colors, depth_stencil, inputs, preserves, resolves)
+                    (colors, depth_stencil, inputs, preserves, resolves, subpass.view_mask)
                 })
                 .collect::<Box<[_]>>();
 
             let subpasses = attachment_refs
                 .iter()
-                .map(|(colors, depth_stencil, inputs, preserves, resolves)| {
+                .map(|(colors, depth_stencil, inputs, preserves, resolves, _view_mask)| {
                     vk::SubpassDescription {
                         flags: vk::SubpassDescriptionFlags::empty(),
                         pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
@@ -673,23 +678,56 @@ impl d::Device<B> for Device {
                 })
                 .collect::<Box<[_]>>();
 
-            let result = inplace_it::inplace_or_alloc_array(dependencies.len(), |uninit_guard| {
-                let dependencies =
-                    uninit_guard.init_with_iter(dependencies);
+            let multiview_enabled = self.shared.features.contains(Features::MULTIVIEW);
 
-                let info = vk::RenderPassCreateInfo {
-                    s_type: vk::StructureType::RENDER_PASS_CREATE_INFO,
-                    p_next: ptr::null(),
-                    flags: vk::RenderPassCreateFlags::empty(),
-                    attachment_count: attachments.len() as u32,
-                    p_attachments: attachments.as_ptr(),
-                    subpass_count: subpasses.len() as u32,
-                    p_subpasses: subpasses.as_ptr(),
-                    dependency_count: dependencies.len() as u32,
-                    p_dependencies: dependencies.as_ptr(),
-                };
+            let view_masks = if multiview_enabled {
+                Some(
+                    attachment_refs
+                        .iter()
+                        .map(|(_colors, _depth_stencil, _inputs, _preserves, _resolves, view_mask)| {
+                            *view_mask
+                        })
+                        .collect::<Vec<u32>>()
+                )
+            } else {
+                None
+            };
 
-                self.shared.raw.create_render_pass(&info, None)
+            let view_offsets = if multiview_enabled {
+                Some(
+                    dependencies
+                        .iter()
+                        .map(|dependency| {
+                            dependency.borrow().view_offset
+                        })
+                        .collect::<Vec<i32>>()
+                )
+            } else {
+                None
+            };
+
+            let result = inplace_it::inplace_or_alloc_array(vk_dependencies.len(), |uninit_guard| {
+                let vk_dependencies =
+                    uninit_guard.init_with_iter(vk_dependencies);
+
+                let mut info_builder = vk::RenderPassCreateInfo::builder()
+                    .flags(vk::RenderPassCreateFlags::empty())
+                    .attachments(&attachments)
+                    .subpasses(&subpasses)
+                    .dependencies(&vk_dependencies);
+                let mut multiview;
+
+                if multiview_enabled {
+                    multiview = vk::RenderPassMultiviewCreateInfo::builder()
+                        .view_masks(&view_masks.unwrap())
+                        .view_offsets(&view_offsets.unwrap())
+                        .correlation_masks(correlation_masks.unwrap())
+                        .build();
+
+                    info_builder = info_builder.push_next(&mut multiview);
+                }
+
+                self.shared.raw.create_render_pass(&info_builder.build(), None)
             });
 
             (clear_attachments_mask, result)

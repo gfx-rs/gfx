@@ -584,10 +584,11 @@ where
                 inputs: &[],
                 resolves: &[],
                 preserves: &[],
+                view_mask: 0,
             };
 
             ManuallyDrop::new(
-                unsafe { device.create_render_pass(&[attachment], &[subpass], &[]) }
+                unsafe { device.create_render_pass(&[attachment], &[subpass], &[], None) }
                     .expect("Can't create render pass"),
             )
         };
