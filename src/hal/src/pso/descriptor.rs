@@ -242,22 +242,27 @@ pub trait DescriptorPool<B: Backend>: Send + Sync + fmt::Debug {
     unsafe fn reset(&mut self);
 }
 
-/// Writes the actual descriptors to be bound into a descriptor set. Should be provided
-/// to the `write_descriptor_sets` method of a `Device`.
-#[allow(missing_docs)]
+/// Writes the actual descriptors to be bound into a descriptor set.
+///
+/// Should be provided to the `write_descriptor_sets` method of a `Device`.
 #[derive(Debug)]
 pub struct DescriptorSetWrite<'a, B: Backend, WI>
 where
     WI: IntoIterator,
     WI::Item: Borrow<Descriptor<'a, B>>,
 {
+    /// The descriptor set to modify.
     pub set: &'a B::DescriptorSet,
-    /// *Note*: when there is more descriptors provided than
+    /// Binding index to start writing at.
+    ///
+    /// *Note*: when there are more descriptors provided than
     /// array elements left in the specified binding starting
-    /// at specified, offset, the updates are spilled onto
+    /// at the specified offset, the updates are spilled onto
     /// the next binding (starting with offset 0), and so on.
     pub binding: DescriptorBinding,
+    /// Offset into the array to copy to.
     pub array_offset: DescriptorArrayIndex,
+    /// Descriptors to write to the set.
     pub descriptors: WI,
 }
 
@@ -275,17 +280,34 @@ pub enum Descriptor<'a, B: Backend> {
     TexelBuffer(&'a B::BufferView),
 }
 
-/// Copies a range of descriptors to be bound from one descriptor set to another Should be
-/// provided to the `copy_descriptor_sets` method of a `Device`.
-#[allow(missing_docs)]
+/// Copies a range of descriptors to be bound from one descriptor set to another.
+///
+/// Should be provided to the `copy_descriptor_sets` method of a `Device`.
 #[derive(Clone, Copy, Debug)]
 pub struct DescriptorSetCopy<'a, B: Backend> {
+    /// Descriptor set to copy from.
     pub src_set: &'a B::DescriptorSet,
+    /// Binding to copy from.
+    ///
+    /// *Note*: when there are more descriptors required than
+    /// array elements left in the specified binding starting
+    /// at the specified offset, the updates are taken from
+    /// the next binding (starting with offset 0), and so on.
     pub src_binding: DescriptorBinding,
+    /// Offset into the descriptor array to start copying from.
     pub src_array_offset: DescriptorArrayIndex,
+    /// Descriptor set to copy to.
     pub dst_set: &'a B::DescriptorSet,
+    /// Binding to copy to.
+    ///
+    /// *Note*: when there are more descriptors provided than
+    /// array elements left in the specified binding starting
+    /// at the specified offset, the updates are spilled onto
+    /// the next binding (starting with offset 0), and so on.
     pub dst_binding: DescriptorBinding,
+    /// Offset into the descriptor array to copy to.
     pub dst_array_offset: DescriptorArrayIndex,
+    /// How many descriptors to copy.
     pub count: usize,
 }
 
