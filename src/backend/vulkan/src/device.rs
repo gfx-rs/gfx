@@ -693,39 +693,37 @@ impl d::Device<B> for Device {
                 None
             };
 
-            let view_offsets = if multiview_enabled {
-                Some(
-                    dependencies
-                        .iter()
-                        .map(|dependency| {
-                            dependency.borrow().view_offset
-                        })
-                        .collect::<Vec<i32>>()
-                )
-            } else {
-                None
-            };
+                let view_offsets = if multiview_enabled {
+                    Some(
+                        dependencies
+                            .iter()
+                            .map(|dependency| dependency.borrow().view_offset)
+                            .collect::<Vec<i32>>(),
+                    )
+                } else {
+                    None
+                };
 
-            let result = inplace_it::inplace_or_alloc_array(vk_dependencies.len(), |uninit_guard| {
-                let vk_dependencies =
-                    uninit_guard.init_with_iter(vk_dependencies);
+                let result =
+                    inplace_it::inplace_or_alloc_array(vk_dependencies.len(), |uninit_guard| {
+                        let vk_dependencies = uninit_guard.init_with_iter(vk_dependencies);
 
-                let mut info_builder = vk::RenderPassCreateInfo::builder()
-                    .flags(vk::RenderPassCreateFlags::empty())
-                    .attachments(&attachments)
-                    .subpasses(&subpasses)
-                    .dependencies(&vk_dependencies);
-                let mut multiview;
+                        let mut info_builder = vk::RenderPassCreateInfo::builder()
+                            .flags(vk::RenderPassCreateFlags::empty())
+                            .attachments(&attachments)
+                            .subpasses(&subpasses)
+                            .dependencies(&vk_dependencies);
+                        let mut multiview;
 
-                if multiview_enabled {
-                    multiview = vk::RenderPassMultiviewCreateInfo::builder()
-                        .view_masks(&view_masks.unwrap())
-                        .view_offsets(&view_offsets.unwrap())
-                        .correlation_masks(correlation_masks.unwrap())
-                        .build();
+                        if multiview_enabled {
+                            multiview = vk::RenderPassMultiviewCreateInfo::builder()
+                                .view_masks(&view_masks.unwrap())
+                                .view_offsets(&view_offsets.unwrap())
+                                .correlation_masks(correlation_masks.unwrap())
+                                .build();
 
-                    info_builder = info_builder.push_next(&mut multiview);
-                }
+                            info_builder = info_builder.push_next(&mut multiview);
+                        }
 
                 self.shared.raw.create_render_pass(&info_builder.build(), None)
             });
