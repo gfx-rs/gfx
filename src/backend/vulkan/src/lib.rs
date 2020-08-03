@@ -505,14 +505,14 @@ impl hal::Instance<Backend> for Instance {
                 let properties = PhysicalDeviceProperties::load(&self, &device, &extensions);
                 let info = adapter::AdapterInfo {
                     name: unsafe {
-                        CStr::from_ptr(properties.properties.device_name.as_ptr())
+                        CStr::from_ptr(properties.inner.device_name.as_ptr())
                             .to_str()
                             .unwrap_or("Unknown")
                             .to_owned()
                     },
-                    vendor: properties.properties.vendor_id as usize,
-                    device: properties.properties.device_id as usize,
-                    device_type: match properties.properties.device_type {
+                    vendor: properties.inner.vendor_id as usize,
+                    device: properties.inner.device_id as usize,
+                    device_type: match properties.inner.device_type {
                         ash::vk::PhysicalDeviceType::OTHER => adapter::DeviceType::Other,
                         ash::vk::PhysicalDeviceType::INTEGRATED_GPU => {
                             adapter::DeviceType::IntegratedGpu
@@ -667,7 +667,7 @@ impl From<vk::PhysicalDeviceMultiviewProperties> for PhysicalDeviceMultiviewProp
 }
 
 pub struct PhysicalDeviceProperties {
-    properties: vk::PhysicalDeviceProperties,
+    inner: vk::PhysicalDeviceProperties,
     multiview: Option<PhysicalDeviceMultiviewProperties>,
 }
 
@@ -694,12 +694,12 @@ impl PhysicalDeviceProperties {
             unsafe { get_device_properties.get_physical_device_properties2_khr(*device, &mut properties2 as *mut _); }
 
             Self {
-                properties: properties2.properties,
-                multiview: multiview.map(|multiview| multiview.into()),
+                inner: properties2.properties,
+                multiview: multiview.map(PhysicalDeviceMultiviewProperties::from),
             }
         } else {
             Self {
-                properties: unsafe { instance.raw.inner.get_physical_device_properties(*device) },
+                inner: unsafe { instance.raw.inner.get_physical_device_properties(*device) },
                 multiview: None,
             }
         }
@@ -861,7 +861,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 mesh_fn,
                 maintenance_level,
             }),
-            vendor_id: self.properties.properties.vendor_id,
+            vendor_id: self.properties.inner.vendor_id,
             valid_ash_memory_types,
         };
 
@@ -1004,10 +1004,10 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     fn features(&self) -> Features {
         // see https://github.com/gfx-rs/gfx/issues/1930
         let is_windows_intel_dual_src_bug = cfg!(windows)
-            && self.properties.properties.vendor_id == info::intel::VENDOR
-            && (self.properties.properties.device_id & info::intel::DEVICE_KABY_LAKE_MASK
+            && self.properties.inner.vendor_id == info::intel::VENDOR
+            && (self.properties.inner.device_id & info::intel::DEVICE_KABY_LAKE_MASK
                 == info::intel::DEVICE_KABY_LAKE_MASK
-                || self.properties.properties.device_id & info::intel::DEVICE_SKY_LAKE_MASK
+                || self.properties.inner.device_id & info::intel::DEVICE_SKY_LAKE_MASK
                     == info::intel::DEVICE_SKY_LAKE_MASK);
 
         let mut descriptor_indexing_features = None;
@@ -1025,7 +1025,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
 
-            if self.supports_extension(*KHR_MULTIVIEW) {
+            if self.properties.multiview.is_some() {
                 multiview = Some(vk::PhysicalDeviceMultiviewFeatures::builder().build());
 
                 let mut_ref = multiview.as_mut().unwrap();
@@ -1255,7 +1255,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     }
 
     fn limits(&self) -> Limits {
-        let limits = &self.properties.properties.limits;
+        let limits = &self.properties.inner.limits;
         let max_group_count = limits.max_compute_work_group_count;
         let max_group_size = limits.max_compute_work_group_size;
 
@@ -1402,27 +1402,27 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         }
 
         // vendor id
-        if vendor_id != self.properties.properties.vendor_id {
+        if vendor_id != self.properties.inner.vendor_id {
             warn!(
                 "Vendor ID mismatch. Device: {:?}, cache: {:?}.",
-                self.properties.properties.vendor_id, vendor_id,
+                self.properties.inner.vendor_id, vendor_id,
             );
             return false;
         }
 
         // device id
-        if device_id != self.properties.properties.device_id {
+        if device_id != self.properties.inner.device_id {
             warn!(
                 "Device ID mismatch. Device: {:?}, cache: {:?}.",
-                self.properties.properties.device_id, device_id,
+                self.properties.inner.device_id, device_id,
             );
             return false;
         }
 
-        if self.properties.properties.pipeline_cache_uuid != cache[16 .. 16 + vk::UUID_SIZE] {
+        if self.properties.inner.pipeline_cache_uuid != cache[16 .. 16 + vk::UUID_SIZE] {
             warn!(
                 "Pipeline cache UUID mismatch. Device: {:?}, cache: {:?}.",
-                self.properties.properties.pipeline_cache_uuid,
+                self.properties.inner.pipeline_cache_uuid,
                 &cache[16 .. 16 + vk::UUID_SIZE],
             );
             return false;

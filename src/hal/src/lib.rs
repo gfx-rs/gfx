@@ -259,11 +259,11 @@ bitflags! {
         const MESH_SHADER = 0x0000_0002_0000_0000 << 64;
 
         /// Supports multiview
-        const MULTIVIEW = 0x0001_0000_0000_0000 << 64;
+        const MULTIVIEW = 0x0000_0004_0000_0000 << 64;
         /// Supports multiview geometry shader
-        const MULTIVIEW_GEOMETRY_SHADER = 0x0002_0000_0000_0000 << 64;
+        const MULTIVIEW_GEOMETRY_SHADER = 0x0000_0008_0000_0000 << 64;
         /// Supports multiview tessellation shader
-        const MULTIVIEW_TESSELLATION_SHADER = 0x0004_0000_0000_0000 << 64;
+        const MULTIVIEW_TESSELLATION_SHADER = 0x0000_0010_0000_0000 << 64;
     }
 }
 
