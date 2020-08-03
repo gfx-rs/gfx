@@ -29,7 +29,7 @@ ash = "0.30"
 hal = { path = "../../hal", version = "0.5", package = "gfx-hal" }
 smallvec = "1.0"
 raw-window-handle = "0.3"
-inplace_it = "0.3.1"
+inplace_it = "0.3.2"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["libloaderapi", "windef", "winuser"] }
