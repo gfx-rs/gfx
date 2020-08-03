@@ -678,7 +678,7 @@ impl d::Device<B> for Device {
                     })
                     .collect::<Box<[_]>>();
 
-                let multiview_enabled = self.shared.features.contains(Features::MULTIVIEW);
+                let multiview_enabled = correlation_masks.is_some() && self.shared.features.contains(Features::MULTIVIEW);
 
                 let view_masks = if multiview_enabled {
                     Some(

@@ -23,6 +23,10 @@ name = "quad"
 path = "quad/main.rs"
 
 [[bin]]
+name = "quad-multiview"
+path = "quad-multiview/main.rs"
+
+[[bin]]
 name = "compute"
 path = "compute/main.rs"
 
