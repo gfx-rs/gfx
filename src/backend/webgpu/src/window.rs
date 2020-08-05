@@ -50,16 +50,3 @@ impl hal::window::PresentationSurface<Backend> for Surface {
         todo!()
     }
 }
-
-#[derive(Debug)]
-pub struct Swapchain;
-impl hal::window::Swapchain<Backend> for Swapchain {
-    unsafe fn acquire_image(
-        &mut self,
-        _timeout_ns: u64,
-        _semaphore: Option<&<Backend as hal::Backend>::Semaphore>,
-        _fence: Option<&<Backend as hal::Backend>::Fence>,
-    ) -> Result<(SwapImageIndex, Option<Suboptimal>), AcquireError> {
-        todo!()
-    }
-}

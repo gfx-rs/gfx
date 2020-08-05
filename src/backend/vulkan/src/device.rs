@@ -2122,103 +2122,6 @@ impl d::Device<B> for Device {
         }
     }
 
-    unsafe fn create_swapchain(
-        &self,
-        surface: &mut w::Surface,
-        config: SwapchainConfig,
-        provided_old_swapchain: Option<w::Swapchain>,
-    ) -> Result<(w::Swapchain, Vec<n::Image>), hal::window::CreationError> {
-        let functor = khr::Swapchain::new(&surface.raw.instance.inner, &self.shared.raw);
-
-        let old_swapchain = match provided_old_swapchain {
-            Some(osc) => osc.raw,
-            None => vk::SwapchainKHR::null(),
-        };
-
-        let info = vk::SwapchainCreateInfoKHR {
-            s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
-            p_next: ptr::null(),
-            flags: vk::SwapchainCreateFlagsKHR::empty(),
-            surface: surface.raw.handle,
-            min_image_count: config.image_count,
-            image_format: conv::map_format(config.format),
-            image_color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
-            image_extent: vk::Extent2D {
-                width: config.extent.width,
-                height: config.extent.height,
-            },
-            image_array_layers: 1,
-            image_usage: conv::map_image_usage(config.image_usage),
-            image_sharing_mode: vk::SharingMode::EXCLUSIVE,
-            queue_family_index_count: 0,
-            p_queue_family_indices: ptr::null(),
-            pre_transform: vk::SurfaceTransformFlagsKHR::IDENTITY,
-            composite_alpha: conv::map_composite_alpha_mode(config.composite_alpha_mode),
-            present_mode: conv::map_present_mode(config.present_mode),
-            clipped: 1,
-            old_swapchain,
-        };
-
-        let result = functor.create_swapchain(&info, None);
-
-        if old_swapchain != vk::SwapchainKHR::null() {
-            functor.destroy_swapchain(old_swapchain, None)
-        }
-
-        let swapchain_raw = match result {
-            Ok(swapchain_raw) => swapchain_raw,
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                return Err(d::OutOfMemory::Host.into());
-            }
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                return Err(d::OutOfMemory::Device.into());
-            }
-            Err(vk::Result::ERROR_DEVICE_LOST) => return Err(d::DeviceLost.into()),
-            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => return Err(d::SurfaceLost.into()),
-            Err(vk::Result::ERROR_NATIVE_WINDOW_IN_USE_KHR) => return Err(d::WindowInUse.into()),
-            _ => unreachable!("Unexpected result - driver bug? {:?}", result),
-        };
-
-        let result = functor.get_swapchain_images(swapchain_raw);
-
-        let backbuffer_images = match result {
-            Ok(backbuffer_images) => backbuffer_images,
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                return Err(d::OutOfMemory::Host.into());
-            }
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                return Err(d::OutOfMemory::Device.into());
-            }
-            _ => unreachable!(),
-        };
-
-        let swapchain = w::Swapchain {
-            raw: swapchain_raw,
-            functor,
-            vendor_id: self.vendor_id,
-        };
-
-        let images = backbuffer_images
-            .into_iter()
-            .map(|image| n::Image {
-                raw: image,
-                ty: vk::ImageType::TYPE_2D,
-                flags: vk::ImageCreateFlags::empty(),
-                extent: vk::Extent3D {
-                    width: config.extent.width,
-                    height: config.extent.height,
-                    depth: 1,
-                },
-            })
-            .collect();
-
-        Ok((swapchain, images))
-    }
-
-    unsafe fn destroy_swapchain(&self, swapchain: w::Swapchain) {
-        swapchain.functor.destroy_swapchain(swapchain.raw, None);
-    }
-
     unsafe fn destroy_query_pool(&self, pool: n::QueryPool) {
         self.shared.raw.destroy_query_pool(pool.0, None);
     }
@@ -2459,6 +2362,99 @@ impl Device {
                 },
             );
         }
+    }
+
+    pub(crate) unsafe fn create_swapchain(
+        &self,
+        surface: &mut w::Surface,
+        config: SwapchainConfig,
+        provided_old_swapchain: Option<w::Swapchain>,
+    ) -> Result<(w::Swapchain, Vec<n::Image>), hal::window::CreationError> {
+        let functor = khr::Swapchain::new(&surface.raw.instance.inner, &self.shared.raw);
+
+        let old_swapchain = match provided_old_swapchain {
+            Some(osc) => osc.raw,
+            None => vk::SwapchainKHR::null(),
+        };
+
+        let info = vk::SwapchainCreateInfoKHR {
+            s_type: vk::StructureType::SWAPCHAIN_CREATE_INFO_KHR,
+            p_next: ptr::null(),
+            flags: vk::SwapchainCreateFlagsKHR::empty(),
+            surface: surface.raw.handle,
+            min_image_count: config.image_count,
+            image_format: conv::map_format(config.format),
+            image_color_space: vk::ColorSpaceKHR::SRGB_NONLINEAR,
+            image_extent: vk::Extent2D {
+                width: config.extent.width,
+                height: config.extent.height,
+            },
+            image_array_layers: 1,
+            image_usage: conv::map_image_usage(config.image_usage),
+            image_sharing_mode: vk::SharingMode::EXCLUSIVE,
+            queue_family_index_count: 0,
+            p_queue_family_indices: ptr::null(),
+            pre_transform: vk::SurfaceTransformFlagsKHR::IDENTITY,
+            composite_alpha: conv::map_composite_alpha_mode(config.composite_alpha_mode),
+            present_mode: conv::map_present_mode(config.present_mode),
+            clipped: 1,
+            old_swapchain,
+        };
+
+        let result = functor.create_swapchain(&info, None);
+
+        if old_swapchain != vk::SwapchainKHR::null() {
+            functor.destroy_swapchain(old_swapchain, None)
+        }
+
+        let swapchain_raw = match result {
+            Ok(swapchain_raw) => swapchain_raw,
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                return Err(d::OutOfMemory::Host.into());
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                return Err(d::OutOfMemory::Device.into());
+            }
+            Err(vk::Result::ERROR_DEVICE_LOST) => return Err(d::DeviceLost.into()),
+            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => return Err(d::SurfaceLost.into()),
+            Err(vk::Result::ERROR_NATIVE_WINDOW_IN_USE_KHR) => return Err(d::WindowInUse.into()),
+            _ => unreachable!("Unexpected result - driver bug? {:?}", result),
+        };
+
+        let result = functor.get_swapchain_images(swapchain_raw);
+
+        let backbuffer_images = match result {
+            Ok(backbuffer_images) => backbuffer_images,
+            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
+                return Err(d::OutOfMemory::Host.into());
+            }
+            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
+                return Err(d::OutOfMemory::Device.into());
+            }
+            _ => unreachable!(),
+        };
+
+        let swapchain = w::Swapchain {
+            raw: swapchain_raw,
+            functor,
+            vendor_id: self.vendor_id,
+        };
+
+        let images = backbuffer_images
+            .into_iter()
+            .map(|image| n::Image {
+                raw: image,
+                ty: vk::ImageType::TYPE_2D,
+                flags: vk::ImageCreateFlags::empty(),
+                extent: vk::Extent3D {
+                    width: config.extent.width,
+                    height: config.extent.height,
+                    depth: 1,
+                },
+            })
+            .collect();
+
+        Ok((swapchain, images))
     }
 }
 

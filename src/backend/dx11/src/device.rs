@@ -25,7 +25,6 @@ use winapi::{
         winerror,
     },
     um::{d3d11, d3d11sdklayers, d3dcommon},
-    Interface as _,
 };
 
 use wio::com::ComPtr;
@@ -70,8 +69,6 @@ use crate::{
     Semaphore,
     ShaderModule,
     SubpassDesc,
-    Surface,
-    Swapchain,
     ViewInfo,
 };
 
@@ -2238,92 +2235,6 @@ impl device::Device<Backend> for Device {
 
     unsafe fn destroy_event(&self, _event: ()) {
         //unimplemented!()
-    }
-
-    unsafe fn create_swapchain(
-        &self,
-        surface: &mut Surface,
-        config: window::SwapchainConfig,
-        _old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<Image>), window::CreationError> {
-        let (dxgi_swapchain, non_srgb_format) =
-            self.create_swapchain_impl(&config, surface.wnd_handle, surface.factory.clone())?;
-
-        let resource = {
-            let mut resource: *mut d3d11::ID3D11Resource = ptr::null_mut();
-            assert_eq!(
-                winerror::S_OK,
-                dxgi_swapchain.GetBuffer(
-                    0 as _,
-                    &d3d11::ID3D11Resource::uuidof(),
-                    &mut resource as *mut *mut _ as *mut *mut _,
-                )
-            );
-            resource
-        };
-
-        let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
-        let decomposed =
-            conv::DecomposedDxgiFormat::from_dxgi_format(conv::map_format(config.format).unwrap());
-
-        let mut view_info = ViewInfo {
-            resource,
-            kind,
-            caps: image::ViewCapabilities::empty(),
-            view_kind: image::ViewKind::D2,
-            format: decomposed.rtv.unwrap(),
-            // TODO: can these ever differ for backbuffer?
-            range: image::SubresourceRange {
-                aspects: format::Aspects::COLOR,
-                levels: 0 .. 1,
-                layers: 0 .. 1,
-            },
-        };
-        let rtv = self.view_image_as_render_target(&view_info).unwrap();
-
-        view_info.format = non_srgb_format;
-        view_info.view_kind = image::ViewKind::D2Array;
-        let copy_srv = self.view_image_as_shader_resource(&view_info).unwrap();
-
-        let images = (0 .. config.image_count)
-            .map(|_i| {
-                // returning the 0th buffer for all images seems like the right thing to do. we can
-                // only get write access to the first buffer in the case of `_SEQUENTIAL` flip model,
-                // and read access to the rest
-                let internal = InternalImage {
-                    raw: resource,
-                    copy_srv: Some(copy_srv.clone()),
-                    srv: None,
-                    unordered_access_views: Vec::new(),
-                    depth_stencil_views: Vec::new(),
-                    render_target_views: vec![rtv.clone()],
-                };
-
-                Image {
-                    kind,
-                    usage: config.image_usage,
-                    format: config.format,
-                    view_caps: image::ViewCapabilities::empty(),
-                    // NOTE: not the actual format of the backbuffer(s)
-                    decomposed_format: decomposed.clone(),
-                    mip_levels: 1,
-                    internal,
-                    bind: 0, // TODO: ?
-                    requirements: memory::Requirements {
-                        // values don't really matter
-                        size: 0,
-                        alignment: 0,
-                        type_mask: 0,
-                    },
-                }
-            })
-            .collect();
-
-        Ok((Swapchain { dxgi_swapchain }, images))
-    }
-
-    unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {
-        // automatic
     }
 
     fn wait_idle(&self) -> Result<(), device::OutOfMemory> {

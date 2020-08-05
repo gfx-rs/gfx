@@ -347,17 +347,6 @@ impl Swapchain {
     }
 }
 
-impl window::Swapchain<Backend> for Swapchain {
-    unsafe fn acquire_image(
-        &mut self,
-        _timeout_ns: u64,
-        _semaphore: Option<&native::Semaphore>,
-        _fence: Option<&native::Fence>,
-    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
-        Ok((0, None)) // TODO
-    }
-}
-
 /// Basic abstraction for wgl context handles.
 #[derive(Debug, Copy, Clone)]
 struct Context {

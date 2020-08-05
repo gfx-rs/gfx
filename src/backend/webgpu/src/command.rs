@@ -63,34 +63,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         todo!()
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(
-        &mut self,
-        _swapchains: Is,
-        _wait_semaphores: Iw,
-    ) -> Result<Option<Suboptimal>, PresentError>
-    where
-        Self: Sized,
-        W: 'a + Borrow<<Backend as hal::Backend>::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
-        S: 'a + Borrow<<Backend as hal::Backend>::Semaphore>,
-        Iw: IntoIterator<Item = &'a S>,
-    {
-        todo!()
-    }
-
-    unsafe fn present_without_semaphores<'a, W, Is>(
-        &mut self,
-        _swapchains: Is,
-    ) -> Result<Option<Suboptimal>, PresentError>
-    where
-        Self: Sized,
-        W: 'a + Borrow<<Backend as hal::Backend>::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
-    {
-        todo!()
-    }
-
-    unsafe fn present_surface(
+    unsafe fn present(
         &mut self,
         _surface: &mut <Backend as hal::Backend>::Surface,
         _image: <<Backend as hal::Backend>::Surface as PresentationSurface<Backend>>::SwapchainImage,

@@ -2224,19 +2224,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 Format: dst.descriptor.Format,
                 ..src.descriptor.clone()
             };
-            let (heap_ptr, offset) = match src.place {
-                r::Place::SwapChain => {
-                    error!("Unable to copy from a swapchain image with format conversion: {:?} -> {:?}",
-                        src.descriptor.Format, dst.descriptor.Format);
-                    return;
-                }
-                r::Place::Heap { ref raw, offset } => (raw.as_mut_ptr(), offset),
-            };
             assert_eq!(
                 winerror::S_OK,
                 device.CreatePlacedResource(
-                    heap_ptr,
-                    offset,
+                    src.place.heap.as_mut_ptr(),
+                    src.place.offset,
                     &desc,
                     d3d12::D3D12_RESOURCE_STATE_COMMON,
                     ptr::null(),

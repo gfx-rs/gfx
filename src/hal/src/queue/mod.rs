@@ -11,7 +11,7 @@ pub mod family;
 use crate::{
     device::OutOfMemory,
     pso,
-    window::{PresentError, PresentationSurface, Suboptimal, SwapImageIndex},
+    window::{PresentError, PresentationSurface, Suboptimal},
     Backend,
 };
 use std::{any::Any, borrow::Borrow, fmt, iter};
@@ -121,41 +121,13 @@ pub trait CommandQueue<B: Backend>: fmt::Debug + Any + Send + Sync {
         self.submit::<_, _, B::Semaphore, _, _>(submission, fence)
     }
 
-    /// Presents the result of the queue to the given swapchains, after waiting on all the
-    /// semaphores given in `wait_semaphores`. A given swapchain must not appear in this
-    /// list more than once.
+    /// Present a swapchain image directly to a surface, after waiting on `wait_semaphore`.
     ///
     /// # Safety
     ///
     /// Unsafe for the same reasons as [`submit`][CommandQueue::submit].
     /// No checks are performed to verify that this queue supports present operations.
-    unsafe fn present<'a, W, Is, S, Iw>(
-        &mut self,
-        swapchains: Is,
-        wait_semaphores: Iw,
-    ) -> Result<Option<Suboptimal>, PresentError>
-    where
-        Self: Sized,
-        W: 'a + Borrow<B::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
-        S: 'a + Borrow<B::Semaphore>,
-        Iw: IntoIterator<Item = &'a S>;
-
-    /// Simplified version of `present` that doesn't expect any semaphores.
-    unsafe fn present_without_semaphores<'a, W, Is>(
-        &mut self,
-        swapchains: Is,
-    ) -> Result<Option<Suboptimal>, PresentError>
-    where
-        Self: Sized,
-        W: 'a + Borrow<B::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
-    {
-        self.present::<_, _, B::Semaphore, _>(swapchains, iter::empty())
-    }
-
-    /// Present a swapchain image directly to a surface.
-    unsafe fn present_surface(
+    unsafe fn present(
         &mut self,
         surface: &mut B::Surface,
         image: <B::Surface as PresentationSurface<B>>::SwapchainImage,

@@ -35,7 +35,7 @@ mod window;
 
 // Web implementation
 #[cfg(wasm)]
-pub use window::web::{Surface, Swapchain};
+pub use window::web::Surface;
 
 // Glutin implementation
 #[cfg(glutin)]
@@ -54,7 +54,7 @@ surfman::declare_surfman!();
 #[cfg(wgl)]
 use window::wgl::DeviceContext;
 #[cfg(wgl)]
-pub use window::wgl::{Instance, Surface, Swapchain};
+pub use crate::window::wgl::{Instance, Surface, Swapchain};
 
 // Catch-all dummy implementation
 #[cfg(dummy)]
@@ -177,9 +177,7 @@ impl hal::Backend for Backend {
 
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
-
     type Surface = Surface;
-    type Swapchain = Swapchain;
 
     type QueueFamily = QueueFamily;
     type CommandQueue = queue::CommandQueue;

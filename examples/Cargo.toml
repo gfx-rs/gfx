@@ -37,7 +37,7 @@ hal = { path = "../src/hal", version = "0.5", package = "gfx-hal" }
 auxil = { path = "../src/auxil/auxil", version = "0.3", package = "gfx-auxil" }
 gfx-backend-gl = { path = "../src/backend/gl", version = "0.5", optional = true }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.5" }
-winit = { version = "0.21.0", features = ["web-sys"] }
+winit = { version = "0.22", features = ["web-sys"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 env_logger = "0.6"

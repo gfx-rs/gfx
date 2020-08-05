@@ -492,7 +492,7 @@ impl ServicePipes {
             buffers.object_at(2).unwrap().set_mutability(metal::MTLMutability::Immutable);
         }*/
 
-        unsafe { device.new_compute_pipeline_state(&pipeline) }.unwrap()
+        device.new_compute_pipeline_state(&pipeline).unwrap()
     }
 
     fn create_fill_buffer(
@@ -511,62 +511,6 @@ impl ServicePipes {
             buffers.object_at(1).unwrap().set_mutability(metal::MTLMutability::Immutable);
         }*/
 
-        unsafe { device.new_compute_pipeline_state(&pipeline) }.unwrap()
-    }
-
-    pub(crate) fn simple_blit(
-        &self,
-        device: &Mutex<metal::Device>,
-        cmd_buffer: &metal::CommandBufferRef,
-        src: &metal::TextureRef,
-        dst: &metal::TextureRef,
-        private_caps: &PrivateCapabilities,
-    ) {
-        let key = (
-            metal::MTLTextureType::D2,
-            dst.pixel_format(),
-            Aspects::COLOR,
-            Channel::Float,
-        );
-        let pso = self.blits.get(key, &self.library, device, private_caps);
-        let vertices = [
-            BlitVertex {
-                uv: [0.0, 1.0, 0.0, 0.0],
-                pos: [0.0, 0.0, 0.0, 0.0],
-            },
-            BlitVertex {
-                uv: [0.0, 0.0, 0.0, 0.0],
-                pos: [0.0, 1.0, 0.0, 0.0],
-            },
-            BlitVertex {
-                uv: [1.0, 1.0, 0.0, 0.0],
-                pos: [1.0, 0.0, 0.0, 0.0],
-            },
-            BlitVertex {
-                uv: [1.0, 0.0, 0.0, 0.0],
-                pos: [1.0, 1.0, 0.0, 0.0],
-            },
-        ];
-
-        let descriptor = metal::RenderPassDescriptor::new();
-        if private_caps.layered_rendering {
-            descriptor.set_render_target_array_length(1);
-        }
-        let attachment = descriptor.color_attachments().object_at(0).unwrap();
-        attachment.set_texture(Some(dst));
-        attachment.set_load_action(metal::MTLLoadAction::DontCare);
-        attachment.set_store_action(metal::MTLStoreAction::Store);
-
-        let encoder = cmd_buffer.new_render_command_encoder(descriptor);
-        encoder.set_render_pipeline_state(pso.as_ref());
-        encoder.set_fragment_sampler_state(0, Some(&self.sampler_states.linear));
-        encoder.set_fragment_texture(0, Some(src));
-        encoder.set_vertex_bytes(
-            0,
-            (vertices.len() * mem::size_of::<BlitVertex>()) as u64,
-            vertices.as_ptr() as *const _,
-        );
-        encoder.draw_primitives(metal::MTLPrimitiveType::TriangleStrip, 0, 4);
-        encoder.end_encoding();
+        device.new_compute_pipeline_state(&pipeline).unwrap()
     }
 }

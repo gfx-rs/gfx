@@ -498,8 +498,6 @@ impl w::PresentationSurface<Backend> for Surface {
         &mut self,
         mut timeout_ns: u64,
     ) -> Result<(Self::SwapchainImage, Option<w::Suboptimal>), w::AcquireError> {
-        use hal::window::Swapchain as _;
-
         let ssc = self.swapchain.as_mut().unwrap();
         let moment = Instant::now();
         let (index, suboptimal) =
@@ -566,7 +564,7 @@ impl fmt::Debug for Swapchain {
     }
 }
 
-impl w::Swapchain<Backend> for Swapchain {
+impl Swapchain {
     unsafe fn acquire_image(
         &mut self,
         timeout_ns: u64,

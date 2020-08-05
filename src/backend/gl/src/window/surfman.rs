@@ -22,18 +22,6 @@ pub struct Swapchain {
     pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 3]>,
 }
 
-impl window::Swapchain<B> for Swapchain {
-    unsafe fn acquire_image(
-        &mut self,
-        _timeout_ns: u64,
-        _semaphore: Option<&native::Semaphore>,
-        _fence: Option<&native::Fence>,
-    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
-        // TODO: sync
-        Ok((0, None))
-    }
-}
-
 thread_local! {
     /// The thread-local surfman connection
     static SM_CONN: RefCell<sm::Connection> =

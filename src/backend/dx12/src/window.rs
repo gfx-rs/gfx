@@ -16,7 +16,7 @@ use winapi::{
 };
 
 use crate::{conv, resource as r, Backend, Device, Instance, PhysicalDevice, QueueFamily};
-use hal::{self, device::{Device as _}, format as f, image as i, window as w};
+use hal::{device::{Device as _}, format as f, image as i, window as w};
 
 impl Instance {
     pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
@@ -158,9 +158,10 @@ impl w::PresentationSurface<Backend> for Surface {
         Ok(())
     }
 
-    unsafe fn unconfigure_swapchain(&mut self, device: &Device) {
+    unsafe fn unconfigure_swapchain(&mut self, _device: &Device) {
         if let Some(present) = self.presentation.take() {
-            device.destroy_swapchain(present.swapchain);
+            let inner = present.swapchain.release_resources();
+            inner.destroy();
         }
     }
 
@@ -219,27 +220,6 @@ impl Swapchain {
         }
         self.rtv_heap.destroy();
         self.inner
-    }
-}
-
-impl w::Swapchain<Backend> for Swapchain {
-    unsafe fn acquire_image(
-        &mut self,
-        _timout_ns: u64,
-        _semaphore: Option<&r::Semaphore>,
-        _fence: Option<&r::Fence>,
-    ) -> Result<(w::SwapImageIndex, Option<w::Suboptimal>), w::AcquireError> {
-        // TODO: sync
-
-        let index = self.inner.GetCurrentBackBufferIndex();
-        if false {
-            // TODO: we need to block this at some point? (running out of backbuffers)
-            //let num_images = self.images.len();
-            self.frame_queue.push_back(index as usize);
-        }
-
-        // TODO:
-        Ok((index, None))
     }
 }
 

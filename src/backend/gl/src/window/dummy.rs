@@ -49,14 +49,3 @@ pub struct Swapchain {
     pub(crate) extent: window::Extent2D,
     pub(crate) fbos: ArrayVec<[native::RawFrameBuffer; 0]>,
 }
-
-impl window::Swapchain<Backend> for Swapchain {
-    unsafe fn acquire_image(
-        &mut self,
-        _: u64,
-        _: Option<&native::Semaphore>,
-        _: Option<&native::Fence>,
-    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
-        unimplemented!()
-    }
-}
