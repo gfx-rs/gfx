@@ -27,7 +27,7 @@ use hal::{
     memory,
     pso::{PatchSize, PipelineStage},
     queue,
-    window::{PresentError, Suboptimal, SwapImageIndex},
+    window::{PresentError, Suboptimal},
     Features,
     Hints,
     Limits,
@@ -1455,57 +1455,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         assert_eq!(Ok(()), result);
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(
-        &mut self,
-        swapchains: Is,
-        wait_semaphores: Iw,
-    ) -> Result<Option<Suboptimal>, PresentError>
-    where
-        W: 'a + Borrow<window::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
-        S: 'a + Borrow<native::Semaphore>,
-        Iw: IntoIterator<Item = &'a S>,
-    {
-        let semaphores = wait_semaphores
-            .into_iter()
-            .map(|sem| sem.borrow().0)
-            .collect::<Vec<_>>();
-
-        let mut frames = Vec::new();
-        let mut vk_swapchains = Vec::new();
-        for (swapchain, index) in swapchains {
-            vk_swapchains.push(swapchain.borrow().raw);
-            frames.push(index);
-        }
-
-        let info = vk::PresentInfoKHR {
-            s_type: vk::StructureType::PRESENT_INFO_KHR,
-            p_next: ptr::null(),
-            wait_semaphore_count: semaphores.len() as _,
-            p_wait_semaphores: semaphores.as_ptr(),
-            swapchain_count: vk_swapchains.len() as _,
-            p_swapchains: vk_swapchains.as_ptr(),
-            p_image_indices: frames.as_ptr(),
-            p_results: ptr::null_mut(),
-        };
-
-        match self.swapchain_fn.queue_present(*self.raw, &info) {
-            Ok(true) => Ok(None),
-            Ok(false) => Ok(Some(Suboptimal)),
-            Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {
-                Err(PresentError::OutOfMemory(OutOfMemory::Host))
-            }
-            Err(vk::Result::ERROR_OUT_OF_DEVICE_MEMORY) => {
-                Err(PresentError::OutOfMemory(OutOfMemory::Device))
-            }
-            Err(vk::Result::ERROR_DEVICE_LOST) => Err(PresentError::DeviceLost(DeviceLost)),
-            Err(vk::Result::ERROR_OUT_OF_DATE_KHR) => Err(PresentError::OutOfDate),
-            Err(vk::Result::ERROR_SURFACE_LOST_KHR) => Err(PresentError::SurfaceLost(SurfaceLost)),
-            _ => panic!("Failed to present frame"),
-        }
-    }
-
-    unsafe fn present_surface(
+    unsafe fn present(
         &mut self,
         surface: &mut window::Surface,
         image: window::SurfaceImage,
@@ -1585,9 +1535,7 @@ impl hal::Backend for Backend {
     type Instance = Instance;
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
-
     type Surface = window::Surface;
-    type Swapchain = window::Swapchain;
 
     type QueueFamily = QueueFamily;
     type CommandQueue = CommandQueue;

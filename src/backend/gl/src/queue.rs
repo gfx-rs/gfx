@@ -1222,28 +1222,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         }
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(
-        &mut self,
-        swapchains: Is,
-        _wait_semaphores: Iw,
-    ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError>
-    where
-        W: 'a + Borrow<crate::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, hal::window::SwapImageIndex)>,
-        S: 'a + Borrow<native::Semaphore>,
-        Iw: IntoIterator<Item = &'a S>,
-    {
-        for (swapchain, index) in swapchains {
-            self.present_by_copy(swapchain.borrow(), index);
-        }
-
-        #[cfg(wgl)]
-        self.share.instance_context.make_current();
-
-        Ok(None)
-    }
-
-    unsafe fn present_surface(
+    unsafe fn present(
         &mut self,
         surface: &mut Surface,
         _image: native::ImageView,

@@ -31,16 +31,13 @@ extern crate gfx_backend_vulkan as back;
 #[macro_use]
 extern crate log;
 
-struct Dimensions<T> {
-    width: T,
-    height: T,
-}
-
-use std::cell::RefCell;
-use std::io::Cursor;
-use std::mem::{size_of, ManuallyDrop};
-use std::rc::Rc;
-use std::{fs, iter, ptr};
+use std::{
+    cell::RefCell,
+    io::Cursor,
+    mem::{size_of, ManuallyDrop},
+    rc::Rc,
+    fs, iter, ptr,
+};
 
 use hal::{
     adapter::{Adapter, MemoryType},
@@ -59,6 +56,11 @@ use hal::{
 };
 
 pub type ColorFormat = f::Rgba8Srgb;
+
+struct Dimensions<T> {
+    width: T,
+    height: T,
+}
 
 const ENTRY_NAME: &str = "main";
 const DIMS: w::Extent2D = w::Extent2D {
@@ -108,7 +110,7 @@ const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
 struct RendererState<B: Backend> {
     uniform_desc_pool: Option<B::DescriptorPool>,
     img_desc_pool: Option<B::DescriptorPool>,
-    swapchain: Option<SwapchainState<B>>,
+    swapchain: SwapchainState,
     device: Rc<RefCell<DeviceState<B>>>,
     backend: BackendState<B>,
     vertex_buffer: BufferState<B>,
@@ -268,14 +270,11 @@ impl<B: Backend> RendererState<B> {
 
         device.borrow().device.destroy_command_pool(staging_pool);
 
-        let mut swapchain = Some(SwapchainState::new(&mut backend, Rc::clone(&device)));
-
-        let render_pass = RenderPassState::new(swapchain.as_ref().unwrap(), Rc::clone(&device));
-
+        let swapchain = SwapchainState::new(&mut *backend.surface, &*device.borrow());
+        let render_pass = RenderPassState::new(&swapchain, Rc::clone(&device));
         let framebuffer = FramebufferState::new(
             Rc::clone(&device),
-            &render_pass,
-            swapchain.as_mut().unwrap(),
+            swapchain.frame_queue_size,
         );
 
         let pipeline = PipelineState::new(
@@ -284,7 +283,7 @@ impl<B: Backend> RendererState<B> {
             Rc::clone(&device),
         );
 
-        let viewport = RendererState::create_viewport(swapchain.as_ref().unwrap());
+        let viewport = swapchain.make_viewport();
 
         RendererState {
             backend,
@@ -310,20 +309,18 @@ impl<B: Backend> RendererState<B> {
     fn recreate_swapchain(&mut self) {
         self.device.borrow().device.wait_idle().unwrap();
 
-        self.swapchain.take().unwrap();
-
-        self.swapchain =
-            Some(unsafe { SwapchainState::new(&mut self.backend, Rc::clone(&self.device)) });
+        self.swapchain = unsafe {
+            SwapchainState::new(&mut *self.backend.surface, &*self.device.borrow())
+        };
 
         self.render_pass = unsafe {
-            RenderPassState::new(self.swapchain.as_ref().unwrap(), Rc::clone(&self.device))
+            RenderPassState::new(&self.swapchain, Rc::clone(&self.device))
         };
 
         self.framebuffer = unsafe {
             FramebufferState::new(
                 Rc::clone(&self.device),
-                &self.render_pass,
-                self.swapchain.as_mut().unwrap(),
+                self.swapchain.frame_queue_size,
             )
         };
 
@@ -335,19 +332,7 @@ impl<B: Backend> RendererState<B> {
             )
         };
 
-        self.viewport = RendererState::create_viewport(self.swapchain.as_ref().unwrap());
-    }
-
-    fn create_viewport(swapchain: &SwapchainState<B>) -> pso::Viewport {
-        pso::Viewport {
-            rect: pso::Rect {
-                x: 0,
-                y: 0,
-                w: swapchain.extent.width as i16,
-                h: swapchain.extent.height as i16,
-            },
-            depth: 0.0 .. 1.0,
-        }
+        self.viewport = self.swapchain.make_viewport();
     }
 
     fn draw(&mut self) {
@@ -356,24 +341,9 @@ impl<B: Backend> RendererState<B> {
             self.recreate_swapchain = false;
         }
 
-        let sem_index = self.framebuffer.next_acq_pre_pair_index();
-
-        let frame: w::SwapImageIndex = unsafe {
-            let (acquire_semaphore, _) = self
-                .framebuffer
-                .get_frame_data(None, Some(sem_index))
-                .1
-                .unwrap();
-            match self
-                .swapchain
-                .as_mut()
-                .unwrap()
-                .swapchain
-                .as_mut()
-                .unwrap()
-                .acquire_image(!0, Some(acquire_semaphore), None)
-            {
-                Ok((i, _)) => i,
+        let surface_image = unsafe {
+            match self.backend.surface.acquire_image(!0) {
+                Ok((image, _)) => image,
                 Err(_) => {
                     self.recreate_swapchain = true;
                     return;
@@ -381,24 +351,24 @@ impl<B: Backend> RendererState<B> {
             }
         };
 
-        let (fid, sid) = self
-            .framebuffer
-            .get_frame_data(Some(frame as usize), Some(sem_index));
+        let framebuffer = unsafe {
+            self.device.borrow().device
+                .create_framebuffer(
+                    self.render_pass.render_pass.as_ref().unwrap(),
+                    iter::once(std::borrow::Borrow::borrow(&surface_image)),
+                    self.swapchain.extent,
+                )
+                .unwrap()
+        };
 
-        let (framebuffer_fence, framebuffer, command_pool, command_buffers) = fid.unwrap();
-        let (image_acquired, image_present) = sid.unwrap();
+        let frame_idx = (self.swapchain.frame_index % self.swapchain.frame_queue_size) as usize;
+        self.swapchain.frame_index += 1;
+
+        let (command_pool, command_buffers, sem_image_present) = self
+            .framebuffer
+            .get_frame_data(frame_idx);
 
         unsafe {
-            self.device
-                .borrow()
-                .device
-                .wait_for_fence(framebuffer_fence, !0)
-                .unwrap();
-            self.device
-                .borrow()
-                .device
-                .reset_fence(framebuffer_fence)
-                .unwrap();
             command_pool.reset(false);
 
             // Rendering
@@ -427,7 +397,7 @@ impl<B: Backend> RendererState<B> {
 
             cmd_buffer.begin_render_pass(
                 self.render_pass.render_pass.as_ref().unwrap(),
-                framebuffer,
+                &framebuffer,
                 self.viewport.rect,
                 &[command::ClearValue {
                     color: command::ClearColor {
@@ -442,30 +412,21 @@ impl<B: Backend> RendererState<B> {
 
             let submission = Submission {
                 command_buffers: iter::once(&cmd_buffer),
-                wait_semaphores: iter::once((&*image_acquired, pso::PipelineStage::BOTTOM_OF_PIPE)),
-                signal_semaphores: iter::once(&*image_present),
+                wait_semaphores: None,
+                signal_semaphores: iter::once(&*sem_image_present),
             };
 
-            self.device.borrow_mut().queues.queues[0].submit(submission, Some(framebuffer_fence));
+            self.device.borrow_mut().queues.queues[0].submit(submission, None);
             command_buffers.push(cmd_buffer);
 
             // present frame
-            if let Err(_) = self
-                .swapchain
-                .as_ref()
-                .unwrap()
-                .swapchain
-                .as_ref()
-                .unwrap()
-                .present(
-                    &mut self.device.borrow_mut().queues.queues[0],
-                    frame,
-                    Some(&*image_present),
-                )
+            if let Err(_) = self.device.borrow_mut().queues.queues[0]
+                .present(&mut *self.backend.surface, surface_image, Some(sem_image_present))
             {
                 self.recreate_swapchain = true;
-                return;
             }
+
+            self.device.borrow().device.destroy_framebuffer(framebuffer);
         }
     }
 
@@ -548,7 +509,6 @@ impl<B: Backend> Drop for RendererState<B> {
                 .borrow()
                 .device
                 .destroy_descriptor_pool(self.uniform_desc_pool.take().unwrap());
-            self.swapchain.take();
         }
     }
 }
@@ -667,7 +627,7 @@ struct RenderPassState<B: Backend> {
 }
 
 impl<B: Backend> RenderPassState<B> {
-    unsafe fn new(swapchain: &SwapchainState<B>, device: Rc<RefCell<DeviceState<B>>>) -> Self {
+    unsafe fn new(swapchain: &SwapchainState, device: Rc<RefCell<DeviceState<B>>>) -> Self {
         let render_pass = {
             let attachment = pass::Attachment {
                 format: Some(swapchain.format.clone()),
@@ -1338,22 +1298,19 @@ impl<B: Backend> Drop for PipelineState<B> {
     }
 }
 
-struct SwapchainState<B: Backend> {
-    swapchain: Option<B::Swapchain>,
-    backbuffer: Option<Vec<B::Image>>,
-    device: Rc<RefCell<DeviceState<B>>>,
+struct SwapchainState {
     extent: i::Extent,
     format: f::Format,
+    frame_index: u32,
+    frame_queue_size: u32,
 }
 
-impl<B: Backend> SwapchainState<B> {
-    unsafe fn new(backend: &mut BackendState<B>, device: Rc<RefCell<DeviceState<B>>>) -> Self {
-        let caps = backend
-            .surface
-            .capabilities(&device.borrow().physical_device);
-        let formats = backend
-            .surface
-            .supported_formats(&device.borrow().physical_device);
+impl SwapchainState {
+    unsafe fn new<B: Backend>(surface: &mut B::Surface, device_state: &DeviceState<B>) -> Self {
+        let caps = surface
+            .capabilities(&device_state.physical_device);
+        let formats = surface
+            .supported_formats(&device_state.physical_device);
         println!("formats: {:?}", formats);
         let format = formats.map_or(f::Format::Rgba8Srgb, |formats| {
             formats
@@ -1366,109 +1323,49 @@ impl<B: Backend> SwapchainState<B> {
         println!("Surface format: {:?}", format);
         let swap_config = w::SwapchainConfig::from_caps(&caps, format, DIMS);
         let extent = swap_config.extent.to_extent();
-        let (swapchain, backbuffer) = device
-            .borrow()
-            .device
-            .create_swapchain(&mut backend.surface, swap_config, None)
+        let frame_queue_size = swap_config.image_count;
+        surface
+            .configure_swapchain(&device_state.device, swap_config)
             .expect("Can't create swapchain");
 
-        let swapchain = SwapchainState {
-            swapchain: Some(swapchain),
-            backbuffer: Some(backbuffer),
-            device,
+        SwapchainState {
             extent,
             format,
-        };
-        swapchain
+            frame_index: 0,
+            frame_queue_size,
+        }
     }
-}
 
-impl<B: Backend> Drop for SwapchainState<B> {
-    fn drop(&mut self) {
-        unsafe {
-            self.device
-                .borrow()
-                .device
-                .destroy_swapchain(self.swapchain.take().unwrap());
+    fn make_viewport(&self) -> pso::Viewport {
+        pso::Viewport {
+            rect: pso::Rect {
+                x: 0,
+                y: 0,
+                w: self.extent.width as i16,
+                h: self.extent.height as i16,
+            },
+            depth: 0.0 .. 1.0,
         }
     }
 }
 
 struct FramebufferState<B: Backend> {
-    framebuffers: Option<Vec<B::Framebuffer>>,
-    framebuffer_fences: Option<Vec<B::Fence>>,
     command_pools: Option<Vec<B::CommandPool>>,
     command_buffer_lists: Vec<Vec<B::CommandBuffer>>,
-    frame_images: Option<Vec<(B::Image, B::ImageView)>>,
-    acquire_semaphores: Option<Vec<B::Semaphore>>,
     present_semaphores: Option<Vec<B::Semaphore>>,
-    last_ref: usize,
     device: Rc<RefCell<DeviceState<B>>>,
 }
 
 impl<B: Backend> FramebufferState<B> {
     unsafe fn new(
         device: Rc<RefCell<DeviceState<B>>>,
-        render_pass: &RenderPassState<B>,
-        swapchain: &mut SwapchainState<B>,
+        num_frames: u32,
     ) -> Self {
-        let (frame_images, framebuffers) = {
-            let extent = i::Extent {
-                width: swapchain.extent.width as _,
-                height: swapchain.extent.height as _,
-                depth: 1,
-            };
-            let pairs = swapchain
-                .backbuffer
-                .take()
-                .unwrap()
-                .into_iter()
-                .map(|image| {
-                    let rtv = device
-                        .borrow()
-                        .device
-                        .create_image_view(
-                            &image,
-                            i::ViewKind::D2,
-                            swapchain.format,
-                            f::Swizzle::NO,
-                            COLOR_RANGE.clone(),
-                        )
-                        .unwrap();
-                    (image, rtv)
-                })
-                .collect::<Vec<_>>();
-            let fbos = pairs
-                .iter()
-                .map(|&(_, ref rtv)| {
-                    device
-                        .borrow()
-                        .device
-                        .create_framebuffer(
-                            render_pass.render_pass.as_ref().unwrap(),
-                            Some(rtv),
-                            extent,
-                        )
-                        .unwrap()
-                })
-                .collect();
-            (pairs, fbos)
-        };
-
-        let iter_count = if frame_images.len() != 0 {
-            frame_images.len()
-        } else {
-            1 // GL can have zero
-        };
-
-        let mut fences: Vec<B::Fence> = vec![];
         let mut command_pools: Vec<_> = vec![];
         let mut command_buffer_lists = Vec::new();
-        let mut acquire_semaphores: Vec<B::Semaphore> = vec![];
         let mut present_semaphores: Vec<B::Semaphore> = vec![];
 
-        for _ in 0 .. iter_count {
-            fences.push(device.borrow().device.create_fence(true).unwrap());
+        for _ in 0 .. num_frames {
             command_pools.push(
                 device
                     .borrow()
@@ -1481,65 +1378,26 @@ impl<B: Backend> FramebufferState<B> {
             );
             command_buffer_lists.push(Vec::new());
 
-            acquire_semaphores.push(device.borrow().device.create_semaphore().unwrap());
             present_semaphores.push(device.borrow().device.create_semaphore().unwrap());
         }
 
         FramebufferState {
-            frame_images: Some(frame_images),
-            framebuffers: Some(framebuffers),
-            framebuffer_fences: Some(fences),
             command_pools: Some(command_pools),
             command_buffer_lists,
             present_semaphores: Some(present_semaphores),
-            acquire_semaphores: Some(acquire_semaphores),
             device,
-            last_ref: 0,
         }
     }
 
-    fn next_acq_pre_pair_index(&mut self) -> usize {
-        if self.last_ref >= self.acquire_semaphores.as_ref().unwrap().len() {
-            self.last_ref = 0
-        }
-
-        let ret = self.last_ref;
-        self.last_ref += 1;
-        ret
-    }
-
-    fn get_frame_data(
-        &mut self,
-        frame_id: Option<usize>,
-        sem_index: Option<usize>,
-    ) -> (
-        Option<(
-            &mut B::Fence,
-            &mut B::Framebuffer,
-            &mut B::CommandPool,
-            &mut Vec<B::CommandBuffer>,
-        )>,
-        Option<(&mut B::Semaphore, &mut B::Semaphore)>,
+    fn get_frame_data(&mut self, index: usize) -> (
+        &mut B::CommandPool,
+        &mut Vec<B::CommandBuffer>,
+        &mut B::Semaphore,
     ) {
         (
-            if let Some(fid) = frame_id {
-                Some((
-                    &mut self.framebuffer_fences.as_mut().unwrap()[fid],
-                    &mut self.framebuffers.as_mut().unwrap()[fid],
-                    &mut self.command_pools.as_mut().unwrap()[fid],
-                    &mut self.command_buffer_lists[fid],
-                ))
-            } else {
-                None
-            },
-            if let Some(sid) = sem_index {
-                Some((
-                    &mut self.acquire_semaphores.as_mut().unwrap()[sid],
-                    &mut self.present_semaphores.as_mut().unwrap()[sid],
-                ))
-            } else {
-                None
-            },
+            &mut self.command_pools.as_mut().unwrap()[index],
+            &mut self.command_buffer_lists[index],
+            &mut self.present_semaphores.as_mut().unwrap()[index],
         )
     }
 }
@@ -1549,11 +1407,6 @@ impl<B: Backend> Drop for FramebufferState<B> {
         let device = &self.device.borrow().device;
 
         unsafe {
-            for fence in self.framebuffer_fences.take().unwrap() {
-                device.wait_for_fence(&fence, !0).unwrap();
-                device.destroy_fence(fence);
-            }
-
             for (mut command_pool, comamnd_buffer_list) in self
                 .command_pools
                 .take()
@@ -1565,20 +1418,8 @@ impl<B: Backend> Drop for FramebufferState<B> {
                 device.destroy_command_pool(command_pool);
             }
 
-            for acquire_semaphore in self.acquire_semaphores.take().unwrap() {
-                device.destroy_semaphore(acquire_semaphore);
-            }
-
             for present_semaphore in self.present_semaphores.take().unwrap() {
                 device.destroy_semaphore(present_semaphore);
-            }
-
-            for framebuffer in self.framebuffers.take().unwrap() {
-                device.destroy_framebuffer(framebuffer);
-            }
-
-            for (_, rtv) in self.frame_images.take().unwrap() {
-                device.destroy_image_view(rtv);
             }
         }
     }
@@ -1639,7 +1480,6 @@ fn main() {
                         *control_flow = winit::event_loop::ControlFlow::Exit
                     }
                     winit::event::WindowEvent::Resized(dims) => {
-                        println!("RESIZE EVENT");
                         renderer_state.recreate_swapchain = true;
                     }
                     winit::event::WindowEvent::KeyboardInput {
@@ -1651,7 +1491,6 @@ fn main() {
                             },
                         ..
                     } => {
-                        println!("Keyboard input");
                         if let Some(virtual_keycode) = virtual_keycode {
                             renderer_state.input(virtual_keycode);
                         }
@@ -1660,12 +1499,10 @@ fn main() {
                 }
             }
             winit::event::Event::RedrawRequested(_) => {
-                println!("RedrawRequested");
                 renderer_state.draw();
             }
             winit::event::Event::RedrawEventsCleared => {
                 renderer_state.backend.window.request_redraw();
-                println!("RedrawEventsCleared");
             }
             _ => (),
         }

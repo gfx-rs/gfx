@@ -3,23 +3,25 @@
 
 extern crate gfx_hal as hal;
 
-use hal::{adapter, command, device, format, pass, pool, pso, query, queue, window};
-use std::borrow::Borrow;
-use std::ops::Range;
-
-use log::debug;
-
-mod buffer;
-mod descriptor;
-mod image;
-mod memory;
-
 use crate::{
     buffer::Buffer,
     descriptor::{DescriptorPool, DescriptorSet, DescriptorSetLayout},
     image::Image,
     memory::Memory,
 };
+
+use hal::{adapter, command, device, format, pass, pool, pso, query, queue, window};
+use log::debug;
+
+use std::{
+    borrow::Borrow,
+    ops::Range,
+};
+
+mod buffer;
+mod descriptor;
+mod image;
+mod memory;
 
 const NOT_SUPPORTED_MESSAGE: &str = "This function is not currently mocked by the empty backend";
 
@@ -30,9 +32,7 @@ impl hal::Backend for Backend {
     type Instance = Instance;
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
-
     type Surface = Surface;
-    type Swapchain = Swapchain;
 
     type QueueFamily = QueueFamily;
     type CommandQueue = CommandQueue;
@@ -175,21 +175,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
     {
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(
-        &mut self,
-        _: Is,
-        _: Iw,
-    ) -> Result<Option<window::Suboptimal>, window::PresentError>
-    where
-        W: 'a + Borrow<Swapchain>,
-        Is: IntoIterator<Item = (&'a W, window::SwapImageIndex)>,
-        S: 'a + Borrow<()>,
-        Iw: IntoIterator<Item = &'a S>,
-    {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
-    }
-
-    unsafe fn present_surface(
+    unsafe fn present(
         &mut self,
         _surface: &mut Surface,
         _image: (),
@@ -551,19 +537,6 @@ impl device::Device<Backend> for Device {
     unsafe fn destroy_semaphore(&self, _: ()) {}
 
     unsafe fn destroy_event(&self, _: ()) {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
-    }
-
-    unsafe fn create_swapchain(
-        &self,
-        _: &mut Surface,
-        _: window::SwapchainConfig,
-        _: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<Image>), hal::window::CreationError> {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
-    }
-
-    unsafe fn destroy_swapchain(&self, _: Swapchain) {
         unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 
@@ -1090,20 +1063,6 @@ impl window::PresentationSurface<Backend> for Surface {
         _: u64,
     ) -> Result<((), Option<window::Suboptimal>), window::AcquireError> {
         Ok(((), None))
-    }
-}
-
-/// Dummy swapchain.
-#[derive(Debug)]
-pub struct Swapchain;
-impl window::Swapchain<Backend> for Swapchain {
-    unsafe fn acquire_image(
-        &mut self,
-        _: u64,
-        _: Option<&()>,
-        _: Option<&()>,
-    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
-        unimplemented!("{}", NOT_SUPPORTED_MESSAGE)
     }
 }
 

@@ -73,7 +73,7 @@ pub mod prelude {
         pool::CommandPool,
         pso::DescriptorPool,
         queue::{CommandQueue, QueueFamily},
-        window::{PresentationSurface, Surface, Swapchain},
+        window::{PresentationSurface, Surface},
         Instance,
     };
 }
@@ -535,8 +535,6 @@ pub trait Instance<B: Backend>: Any + Send + Sync + Sized {
     ///
     /// # Safety
     ///
-    /// The surface shouldn't be destroyed before the attached swapchain
-    /// is destroyed, otherwise crashes or undefined behavior could occur.
     unsafe fn destroy_surface(&self, surface: B::Surface);
 }
 
@@ -572,11 +570,8 @@ pub trait Backend: 'static + Sized + Eq + Clone + Hash + fmt::Debug + Any + Send
     type PhysicalDevice: adapter::PhysicalDevice<Self>;
     /// The corresponding [logical device][device::Device] type for this backend.
     type Device: device::Device<Self>;
-
     /// The corresponding [surface][window::PresentationSurface] type for this backend.
     type Surface: window::PresentationSurface<Self>;
-    /// The corresponding [swapchain][window::Swapchain] type for this backend.
-    type Swapchain: window::Swapchain<Self>;
 
     /// The corresponding [queue family][queue::QueueFamily] type for this backend.
     type QueueFamily: queue::QueueFamily;

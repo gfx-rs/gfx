@@ -33,7 +33,7 @@ parking_lot = "0.10"
 spirv_cross = { version = "0.20", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
-glutin = { version = "0.23.0", optional = true }
+glutin = { version = "0.24", optional = true }
 
 [target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
 # TODO: Update to released version when it comes out

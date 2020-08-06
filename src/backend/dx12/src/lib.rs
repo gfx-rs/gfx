@@ -481,26 +481,7 @@ impl q::CommandQueue<Backend> for CommandQueue {
         }
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(
-        &mut self,
-        swapchains: Is,
-        _wait_semaphores: Iw,
-    ) -> Result<Option<hal::window::Suboptimal>, hal::window::PresentError>
-    where
-        W: 'a + Borrow<window::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, hal::window::SwapImageIndex)>,
-        S: 'a + Borrow<resource::Semaphore>,
-        Iw: IntoIterator<Item = &'a S>,
-    {
-        // TODO: semaphores
-        for (swapchain, _) in swapchains {
-            swapchain.borrow().inner.Present(1, 0);
-        }
-
-        Ok(None)
-    }
-
-    unsafe fn present_surface(
+    unsafe fn present(
         &mut self,
         surface: &mut window::Surface,
         _image: resource::ImageView,
@@ -1191,9 +1172,7 @@ impl hal::Backend for Backend {
     type Instance = Instance;
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
-
     type Surface = window::Surface;
-    type Swapchain = window::Swapchain;
 
     type QueueFamily = QueueFamily;
     type CommandQueue = CommandQueue;

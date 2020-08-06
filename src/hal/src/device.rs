@@ -27,7 +27,6 @@ use crate::{
     pso::DescriptorPoolCreateFlags,
     query,
     queue::QueueFamilyId,
-    window::{self, SwapchainConfig},
     Backend,
     MemoryTypeId,
 };
@@ -943,43 +942,6 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         stride: buffer::Offset,
         flags: query::ResultFlags,
     ) -> Result<bool, OomOrDeviceLost>;
-
-    /// Create a new swapchain from a surface and a queue family, optionally providing the old
-    /// swapchain to aid in resource reuse and rendering continuity.
-    ///
-    /// *Note*: The number of exposed images in the back buffer might differ
-    /// from number of internally used buffers.
-    ///
-    /// # Safety
-    ///
-    /// The queue family _must_ support surface presentation.
-    /// This can be checked by calling [`supports_queue_family`](trait.Surface.html#tymethod.supports_queue_family)
-    /// on this surface.
-    ///
-    /// # Examples
-    ///
-    /// ```no_run
-    /// # extern crate gfx_backend_empty as empty;
-    /// # extern crate gfx_hal;
-    /// # fn main() {
-    /// use gfx_hal::{prelude::*, format::Format, window::SwapchainConfig};
-    ///
-    /// # let mut surface: empty::Surface = return;
-    /// # let device: empty::Device = return;
-    /// # unsafe {
-    /// let swapchain_config = SwapchainConfig::new(100, 100, Format::Rgba8Srgb, 2);
-    /// device.create_swapchain(&mut surface, swapchain_config, None);
-    /// # }}
-    /// ```
-    unsafe fn create_swapchain(
-        &self,
-        surface: &mut B::Surface,
-        config: SwapchainConfig,
-        old_swapchain: Option<B::Swapchain>,
-    ) -> Result<(B::Swapchain, Vec<B::Image>), window::CreationError>;
-
-    ///
-    unsafe fn destroy_swapchain(&self, swapchain: B::Swapchain);
 
     /// Wait for all queues associated with this device to idle.
     ///

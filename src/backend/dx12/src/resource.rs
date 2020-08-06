@@ -236,9 +236,9 @@ unsafe impl Send for BufferView {}
 unsafe impl Sync for BufferView {}
 
 #[derive(Clone)]
-pub enum Place {
-    SwapChain,
-    Heap { raw: native::Heap, offset: u64 },
+pub struct Place {
+    pub(crate) heap: native::Heap,
+    pub(crate) offset: u64,
 }
 
 #[derive(Clone)]

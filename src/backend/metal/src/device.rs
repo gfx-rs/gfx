@@ -9,8 +9,6 @@ use crate::{
     QueueFamily,
     ResourceIndex,
     Shared,
-    Surface,
-    Swapchain,
     VisibilityShared,
     MAX_BOUND_DESCRIPTOR_SETS,
     MAX_COLOR_ATTACHMENTS,
@@ -44,10 +42,8 @@ use hal::{
     pso::VertexInputRate,
     query,
     queue::{QueueFamilyId, QueueGroup, QueuePriority},
-    window,
 };
 use metal::{
-    self,
     CaptureManager,
     MTLCPUCacheMode,
     MTLLanguageVersion,
@@ -60,22 +56,26 @@ use metal::{
     MTLTextureType,
     MTLVertexStepFunction,
 };
-use objc::rc::autoreleasepool;
-use objc::runtime::{Object, BOOL, NO};
+use objc::{
+    rc::autoreleasepool,
+    runtime::{Object, BOOL, NO},
+};
 use parking_lot::Mutex;
 use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 
-use std::borrow::Borrow;
-use std::cell::RefCell;
-use std::collections::hash_map::Entry;
-use std::collections::BTreeMap;
-use std::ops::Range;
-use std::path::Path;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc,
+use std::{
+    borrow::Borrow,
+    cell::RefCell,
+    collections::hash_map::Entry,
+    collections::BTreeMap,
+    ops::Range,
+    path::Path,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    cmp, iter, mem, ptr, thread, time,
 };
-use std::{cmp, iter, mem, ptr, thread, time};
 
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
 const PUSH_CONSTANTS_DESC_BINDING: u32 = 0;
@@ -1906,7 +1906,6 @@ impl hal::device::Device<Backend> for Device {
             } else {
                 None
             },
-            image_ready: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -2903,19 +2902,6 @@ impl hal::device::Device<Backend> for Device {
                     self.shared.queue_blocker.lock().triage();
                 }
             }
-            n::FenceInner::AcquireFrame {
-                ref swapchain_image,
-                iteration,
-            } => {
-                if swapchain_image.iteration() > iteration {
-                    Ok(true)
-                } else if timeout_ns == 0 {
-                    Ok(false)
-                } else {
-                    swapchain_image.wait_until_ready();
-                    Ok(true)
-                }
-            }
         }
     }
 
@@ -2926,10 +2912,6 @@ impl hal::device::Device<Backend> for Device {
                 metal::MTLCommandBufferStatus::Completed => true,
                 _ => false,
             },
-            n::FenceInner::AcquireFrame {
-                ref swapchain_image,
-                iteration,
-            } => swapchain_image.iteration() > iteration,
         })
     }
 
@@ -3065,17 +3047,6 @@ impl hal::device::Device<Backend> for Device {
 
         Ok(is_ready)
     }
-
-    unsafe fn create_swapchain(
-        &self,
-        surface: &mut Surface,
-        config: window::SwapchainConfig,
-        old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<n::Image>), window::CreationError> {
-        Ok(self.build_swapchain(surface, config, old_swapchain))
-    }
-
-    unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {}
 
     fn wait_idle(&self) -> Result<(), OutOfMemory> {
         command::QueueInner::wait_idle(&self.shared.queue);

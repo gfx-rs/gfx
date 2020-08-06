@@ -906,33 +906,6 @@ impl window::PresentationSurface<Backend> for Surface {
     }
 }
 
-pub struct Swapchain {
-    dxgi_swapchain: ComPtr<IDXGISwapChain>,
-}
-
-impl fmt::Debug for Swapchain {
-    fn fmt(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
-        fmt.write_str("Swapchain")
-    }
-}
-
-unsafe impl Send for Swapchain {}
-unsafe impl Sync for Swapchain {}
-
-impl window::Swapchain<Backend> for Swapchain {
-    unsafe fn acquire_image(
-        &mut self,
-        _timeout_ns: u64,
-        _semaphore: Option<&Semaphore>,
-        _fence: Option<&Fence>,
-    ) -> Result<(window::SwapImageIndex, Option<window::Suboptimal>), window::AcquireError> {
-        // TODO: non-`_DISCARD` swap effects have more than one buffer, `FLIP`
-        //       effects are dxgi 1.3 (w10+?) in which case there is
-        //       `GetCurrentBackBufferIndex()` on the swapchain
-        Ok((0, None))
-    }
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct QueueFamily;
 
@@ -1007,25 +980,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         }
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(
-        &mut self,
-        swapchains: Is,
-        _wait_semaphores: Iw,
-    ) -> Result<Option<window::Suboptimal>, window::PresentError>
-    where
-        W: 'a + Borrow<Swapchain>,
-        Is: IntoIterator<Item = (&'a W, window::SwapImageIndex)>,
-        S: 'a + Borrow<Semaphore>,
-        Iw: IntoIterator<Item = &'a S>,
-    {
-        for (swapchain, _idx) in swapchains {
-            swapchain.borrow().dxgi_swapchain.Present(1, 0);
-        }
-
-        Ok(None)
-    }
-
-    unsafe fn present_surface(
+    unsafe fn present(
         &mut self,
         surface: &mut Surface,
         _image: ImageView,
@@ -3429,9 +3384,7 @@ impl hal::Backend for Backend {
     type Instance = Instance;
     type PhysicalDevice = PhysicalDevice;
     type Device = device::Device;
-
     type Surface = Surface;
-    type Swapchain = Swapchain;
 
     type QueueFamily = QueueFamily;
     type CommandQueue = CommandQueue;

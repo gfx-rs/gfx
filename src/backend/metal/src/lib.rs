@@ -71,7 +71,7 @@ use foreign_types::ForeignTypeRef;
 use lazy_static::lazy_static;
 use metal::MTLFeatureSet;
 use metal::MTLLanguageVersion;
-use metal::{CGFloat, CGSize};
+use metal::{CoreAnimationLayer, CoreAnimationLayerRef, CGFloat, CGSize};
 use objc::{
     declare::ClassDecl,
     runtime::{Class, Object, Sel, BOOL, YES},
@@ -93,7 +93,7 @@ mod window;
 
 pub use crate::command::CommandPool;
 pub use crate::device::{Device, LanguageVersion, PhysicalDevice};
-pub use crate::window::{AcquireMode, CAMetalLayer, Surface, Swapchain};
+pub use crate::window::{AcquireMode, Surface};
 
 pub type GraphicsCommandPool = CommandPool;
 
@@ -292,11 +292,11 @@ impl hal::Instance<Backend> for Instance {
         match has_handle.raw_window_handle() {
             #[cfg(target_os = "ios")]
             raw_window_handle::RawWindowHandle::IOS(handle) => {
-                Ok(self.create_surface_from_uiview(handle.ui_view, false))
+                Ok(self.create_surface_from_uiview(handle.ui_view))
             }
             #[cfg(target_os = "macos")]
             raw_window_handle::RawWindowHandle::MacOS(handle) => {
-                Ok(self.create_surface_from_nsview(handle.ns_view, false))
+                Ok(self.create_surface_from_nsview(handle.ns_view))
             }
             _ => Err(hal::window::InitError::UnsupportedWindowHandle),
         }
@@ -362,20 +362,18 @@ impl Instance {
             panic!("window does not have a valid contentView");
         }
 
-        let main_layer: CAMetalLayer = msg_send![view, layer];
+        let main_layer: *mut Object = msg_send![view, layer];
         let class = class!(CAMetalLayer);
         let is_valid_layer: BOOL = msg_send![main_layer, isKindOfClass: class];
         let render_layer = if is_valid_layer == YES {
-            main_layer
+            mem::transmute::<_, &CoreAnimationLayerRef>(main_layer).to_owned()
         } else {
             // If the main layer is not a CAMetalLayer, we create a CAMetalLayer sublayer and use it instead.
             // Unlike on macOS, we cannot replace the main view as UIView does not allow it (when NSView does).
-            let new_layer: CAMetalLayer = msg_send![class, new];
-
+            let new_layer: CoreAnimationLayer = msg_send![class, new];
             let bounds: CGRect = msg_send![main_layer, bounds];
-            let () = msg_send![new_layer, setFrame: bounds];
-
-            let () = msg_send![main_layer, addSublayer: new_layer];
+            let () = msg_send![new_layer.as_ref(), setFrame: bounds];
+            let () = msg_send![main_layer, addSublayer: new_layer.as_ref()];
             new_layer
         };
 
@@ -403,10 +401,10 @@ impl Instance {
         // Deprecated! Clients should use `create_surface_from_layer` instead.
         let is_actually_layer: BOOL = msg_send![view, isKindOfClass: class];
         if is_actually_layer == YES {
-            return self.create_from_layer(view);
+            return self.create_from_layer(mem::transmute(view));
         }
 
-        let existing: CAMetalLayer = msg_send![view, layer];
+        let existing: *mut Object = msg_send![view, layer];
         let use_current = if existing.is_null() {
             false
         } else {
@@ -414,14 +412,14 @@ impl Instance {
             result == YES
         };
 
-        let render_layer: CAMetalLayer = if use_current {
-            existing
+        let render_layer: CoreAnimationLayer = if use_current {
+            mem::transmute::<_, &CoreAnimationLayerRef>(existing).to_owned()
         } else {
-            let layer: CAMetalLayer = msg_send![class, new];
-            let () = msg_send![view, setLayer: layer];
+            let layer: CoreAnimationLayer = msg_send![class, new];
+            let () = msg_send![view, setLayer: layer.as_ref()];
             let () = msg_send![view, setWantsLayer: YES];
             let bounds: CGRect = msg_send![view, bounds];
-            let () = msg_send![layer, setBounds: bounds];
+            let () = msg_send![layer.as_ref(), setBounds: bounds];
 
             let window: cocoa_foundation::base::id = msg_send![view, window];
             if !window.is_null() {
@@ -436,38 +434,34 @@ impl Instance {
         window::SurfaceInner::new(NonNull::new(view), render_layer)
     }
 
-    unsafe fn create_from_layer(&self, layer: CAMetalLayer) -> window::SurfaceInner {
+    unsafe fn create_from_layer(&self, layer: &CoreAnimationLayerRef) -> window::SurfaceInner {
         let class = class!(CAMetalLayer);
         let proper_kind: BOOL = msg_send![layer, isKindOfClass: class];
         assert_eq!(proper_kind, YES);
-        let _: *mut c_void = msg_send![layer, retain];
-        window::SurfaceInner::new(None, layer)
+        window::SurfaceInner::new(None, layer.to_owned())
     }
 
     pub fn create_surface_from_layer(
         &self,
-        layer: CAMetalLayer,
-        enable_signposts: bool,
+        layer: &CoreAnimationLayerRef,
     ) -> Surface {
-        unsafe { self.create_from_layer(layer) }.into_surface(enable_signposts)
+        unsafe { self.create_from_layer(layer) }.into_surface()
     }
 
     #[cfg(target_os = "macos")]
     pub fn create_surface_from_nsview(
         &self,
         nsview: *mut c_void,
-        enable_signposts: bool,
     ) -> Surface {
-        unsafe { self.create_from_nsview(nsview) }.into_surface(enable_signposts)
+        unsafe { self.create_from_nsview(nsview) }.into_surface()
     }
 
     #[cfg(target_os = "ios")]
     pub fn create_surface_from_uiview(
         &self,
         uiview: *mut c_void,
-        enable_signposts: bool,
     ) -> Surface {
-        unsafe { self.create_from_uiview(uiview) }.into_surface(enable_signposts)
+        unsafe { self.create_from_uiview(uiview) }.into_surface()
     }
 }
 
@@ -477,9 +471,7 @@ impl hal::Backend for Backend {
     type Instance = Instance;
     type PhysicalDevice = device::PhysicalDevice;
     type Device = device::Device;
-
     type Surface = window::Surface;
-    type Swapchain = window::Swapchain;
 
     type QueueFamily = QueueFamily;
     type CommandQueue = command::CommandQueue;

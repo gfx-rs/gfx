@@ -506,25 +506,6 @@ impl hal::device::Device<Backend> for Device {
         todo!()
     }
 
-    unsafe fn create_swapchain(
-        &self,
-        _surface: &mut <Backend as hal::Backend>::Surface,
-        _config: hal::window::SwapchainConfig,
-        _old_swapchain: Option<<Backend as hal::Backend>::Swapchain>,
-    ) -> Result<
-        (
-            <Backend as hal::Backend>::Swapchain,
-            Vec<<Backend as hal::Backend>::Image>,
-        ),
-        hal::window::CreationError,
-    > {
-        todo!()
-    }
-
-    unsafe fn destroy_swapchain(&self, _swapchain: <Backend as hal::Backend>::Swapchain) {
-        todo!()
-    }
-
     fn wait_idle(&self) -> Result<(), OutOfMemory> {
         todo!()
     }

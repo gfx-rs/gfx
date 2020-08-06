@@ -1,6 +1,5 @@
 use crate::{
     internal::{Channel, FastStorageMap},
-    window::SwapchainImage,
     Backend,
     BufferPtr,
     ResourceIndex,
@@ -24,7 +23,7 @@ use range_alloc::RangeAllocator;
 use arrayvec::ArrayVec;
 use cocoa_foundation::foundation::NSRange;
 use metal;
-use parking_lot::{Mutex, RwLock};
+use parking_lot::RwLock;
 use spirv_cross::{msl, spirv};
 
 use std::{
@@ -405,7 +404,6 @@ unsafe impl Sync for Sampler {}
 #[derive(Clone, Debug)]
 pub struct Semaphore {
     pub(crate) system: Option<SystemSemaphore>,
-    pub(crate) image_ready: Arc<Mutex<Option<SwapchainImage>>>,
 }
 
 #[derive(Debug)]
@@ -994,10 +992,6 @@ pub enum FenceInner {
         signaled: bool,
     },
     PendingSubmission(metal::CommandBuffer),
-    AcquireFrame {
-        swapchain_image: SwapchainImage,
-        iteration: usize,
-    },
 }
 
 #[derive(Debug)]
@@ -1071,6 +1065,7 @@ impl Drop for Signpost {
     }
 }
 
+#[allow(dead_code)]
 impl Signpost {
     pub(crate) fn new(code: u32, args: [usize; 4]) -> Self {
         #[cfg(feature = "signpost")]

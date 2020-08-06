@@ -28,7 +28,7 @@ use hal::{
     pass::AttachmentLoadOp,
     pso,
     query,
-    window::{PresentError, Suboptimal, SwapImageIndex},
+    window::{PresentError, Suboptimal},
     DrawCount,
     IndexCount,
     IndexType,
@@ -2062,14 +2062,6 @@ impl CommandQueue {
             if let Some(ref system) = sem.system {
                 system.wait(!0);
             }
-            if let Some(swap_image) = sem.image_ready.lock().take() {
-                let start = time::Instant::now();
-                let count = swap_image.wait_until_ready();
-                if let Some(ref mut counters) = self.perf_counters {
-                    counters.frame_wait_count += count;
-                    counters.frame_wait_duration += start.elapsed();
-                }
-            }
         }
     }
 }
@@ -2288,70 +2280,7 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         }
     }
 
-    unsafe fn present<'a, W, Is, S, Iw>(
-        &mut self,
-        swapchains: Is,
-        wait_semaphores: Iw,
-    ) -> Result<Option<Suboptimal>, PresentError>
-    where
-        W: 'a + Borrow<window::Swapchain>,
-        Is: IntoIterator<Item = (&'a W, SwapImageIndex)>,
-        S: 'a + Borrow<native::Semaphore>,
-        Iw: IntoIterator<Item = &'a S>,
-    {
-        self.wait(wait_semaphores);
-
-        let queue = self.shared.queue.lock();
-        autoreleasepool(|| {
-            let command_buffer = queue.raw.new_command_buffer();
-            command_buffer.set_label("present");
-            self.record_empty(command_buffer);
-
-            for (swapchain, index) in swapchains {
-                debug!("presenting frame {}", index);
-                let drawable = swapchain
-                    .borrow()
-                    .take_drawable(index)
-                    .map_err(|()| PresentError::OutOfDate)?; // What `Err(())` represents?
-                command_buffer.present_drawable(&drawable);
-            }
-            command_buffer.commit();
-            Ok(())
-        })?;
-
-        if let Some(ref mut counters) = self.perf_counters {
-            counters.frame += 1;
-            if counters.frame >= COUNTERS_REPORT_WINDOW {
-                let time = counters.frame_wait_duration / counters.frame as u32;
-                let total_submitted = counters.immediate_command_buffers
-                    + counters.deferred_command_buffers
-                    + counters.remote_command_buffers
-                    + counters.signal_command_buffers;
-                println!("Performance counters:");
-                println!(
-                    "\tCommand buffers: {} immediate, {} deferred, {} remote, {} signals",
-                    counters.immediate_command_buffers / counters.frame,
-                    counters.deferred_command_buffers / counters.frame,
-                    counters.remote_command_buffers / counters.frame,
-                    counters.signal_command_buffers / counters.frame,
-                );
-                println!("\tEstimated pipeline length is {} frames, given the total active {} command buffers",
-                    counters.frame * queue.reserve.start / total_submitted.max(1),
-                    queue.reserve.start,
-                );
-                println!(
-                    "\tFrame wait time is {}ms over {} requests",
-                    time.as_secs() as u32 * 1000 + time.subsec_millis(),
-                    counters.frame_wait_count as f32 / counters.frame as f32,
-                );
-                *counters = PerformanceCounters::default();
-            }
-        }
-
-        Ok(None)
-    }
-
-    unsafe fn present_surface(
+    unsafe fn present(
         &mut self,
         _surface: &mut window::Surface,
         image: window::SurfaceImage,

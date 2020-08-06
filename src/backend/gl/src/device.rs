@@ -1,4 +1,3 @@
-use arrayvec::ArrayVec;
 use parking_lot::{Mutex, RwLock};
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 use std::borrow::Borrow;
@@ -22,7 +21,6 @@ use hal::{
     pso,
     query,
     queue,
-    window::{Extent2D, SwapchainConfig},
 };
 
 use crate::{
@@ -38,8 +36,6 @@ use crate::{
     MemoryUsage,
     Share,
     Starc,
-    Surface,
-    Swapchain,
 };
 
 /// Emit error during shader module creation. Used if we don't expect an error
@@ -1899,138 +1895,6 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_event(&self, _event: ()) {
         unimplemented!()
-    }
-
-    unsafe fn create_swapchain(
-        &self,
-        surface: &mut Surface,
-        config: SwapchainConfig,
-        _old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<n::Image>), hal::window::CreationError> {
-        let gl = &self.share.context;
-
-        #[cfg(wgl)]
-        let context = {
-            use crate::window::wgl::PresentContext;
-
-            let context = PresentContext::new(surface, &self.share.instance_context);
-            context.make_current();
-            context
-        };
-
-        let mut fbos = ArrayVec::new();
-        let mut images = Vec::new();
-
-        for _ in 0 .. config.image_count {
-            let fbo = gl.create_framebuffer().unwrap();
-            gl.bind_framebuffer(glow::FRAMEBUFFER, Some(fbo));
-            fbos.push(fbo);
-
-            let Extent2D { width, height } = config.extent;
-            let image = self
-                .create_image(
-                    i::Kind::D2(width, height, config.image_layers, 1),
-                    1,
-                    config.format,
-                    i::Tiling::Optimal,
-                    config.image_usage,
-                    i::ViewCapabilities::empty(),
-                )
-                .unwrap();
-
-            match image.kind {
-                n::ImageKind::Renderbuffer { renderbuffer, .. } => {
-                    gl.framebuffer_renderbuffer(
-                        glow::FRAMEBUFFER,
-                        glow::COLOR_ATTACHMENT0,
-                        glow::RENDERBUFFER,
-                        Some(renderbuffer),
-                    );
-                }
-                n::ImageKind::Texture {
-                    texture, target, ..
-                } => {
-                    if self.share.private_caps.framebuffer_texture {
-                        gl.framebuffer_texture(
-                            glow::FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            Some(texture),
-                            0,
-                        );
-                    } else {
-                        gl.bind_texture(target, Some(texture));
-                        gl.framebuffer_texture_2d(
-                            glow::FRAMEBUFFER,
-                            glow::COLOR_ATTACHMENT0,
-                            target,
-                            Some(texture),
-                            0,
-                        );
-                    }
-                }
-            }
-
-            images.push(image);
-        }
-
-        // Web
-        #[cfg(wasm)]
-        let _ = surface;
-        #[cfg(wasm)]
-        let swapchain = Swapchain {
-            fbos,
-            extent: config.extent,
-        };
-
-        // Glutin
-        #[cfg(glutin)]
-        let swapchain = Swapchain {
-            fbos,
-            extent: config.extent,
-            context: {
-                surface.context().resize(glutin::dpi::PhysicalSize::new(
-                    config.extent.width,
-                    config.extent.height,
-                ));
-                surface.context.clone()
-            },
-        };
-
-        // Surfman
-        #[cfg(surfman)]
-        let swapchain = Swapchain {
-            fbos,
-            extent: config.extent,
-            // TODO: Resize the context to the extent
-            context: surface.context.clone(),
-        };
-
-        // WGL
-        #[cfg(wgl)]
-        let swapchain = {
-            self.share.instance_context.make_current();
-            Swapchain {
-                fbos,
-                context,
-                extent: config.extent,
-            }
-        };
-
-        // Dummy
-        #[cfg(dummy)]
-        let swapchain = Swapchain {
-            extent: {
-                let _ = surface;
-                config.extent
-            },
-            fbos,
-        };
-
-        Ok((swapchain, images))
-    }
-
-    unsafe fn destroy_swapchain(&self, _swapchain: Swapchain) {
-        // Nothing to do
     }
 
     fn wait_idle(&self) -> Result<(), d::OutOfMemory> {

@@ -26,9 +26,7 @@ impl hal::Backend for Backend {
     type Instance = Instance;
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
-
     type Surface = Surface;
-    type Swapchain = Swapchain;
 
     type QueueFamily = QueueFamily;
     type CommandQueue = command::CommandQueue;

@@ -54,7 +54,7 @@ use crate::{
     resource as r,
     root_constants,
     root_constants::RootConstant,
-    window::{Surface, Swapchain},
+    window::Swapchain,
     Backend as B,
     Device,
     MemoryGroup,
@@ -2566,8 +2566,8 @@ impl d::Device<B> for Device {
 
         *image = r::Image::Bound(r::ImageBound {
             resource: resource,
-            place: r::Place::Heap {
-                raw: memory.heap.clone(),
+            place: r::Place {
+                heap: memory.heap.clone(),
                 offset,
             },
             surface_type: image_unbound.format.base_format().0,
@@ -3494,76 +3494,6 @@ impl d::Device<B> for Device {
 
     unsafe fn destroy_event(&self, _event: ()) {
         unimplemented!()
-    }
-
-    unsafe fn create_swapchain(
-        &self,
-        surface: &mut Surface,
-        config: w::SwapchainConfig,
-        old_swapchain: Option<Swapchain>,
-    ) -> Result<(Swapchain, Vec<r::Image>), w::CreationError> {
-        if let Some(old_swapchain) = old_swapchain {
-            self.destroy_swapchain(old_swapchain);
-        }
-
-        let (swap_chain3, non_srgb_format) =
-            self.create_swapchain_impl(&config, surface.wnd_handle, surface.factory)?;
-
-        let swapchain = self.wrap_swapchain(swap_chain3, &config);
-
-        let mut images = Vec::with_capacity(config.image_count as usize);
-        for (i, &resource) in swapchain.resources.iter().enumerate() {
-            let rtv_handle = swapchain.rtv_heap.at(i as _, 0).cpu;
-            let surface_type = config.format.base_format().0;
-            let format_desc = surface_type.desc();
-
-            let bytes_per_block = (format_desc.bits / 8) as _;
-            let block_dim = format_desc.dim;
-            let kind = image::Kind::D2(config.extent.width, config.extent.height, 1, 1);
-
-            images.push(r::Image::Bound(r::ImageBound {
-                resource,
-                place: r::Place::SwapChain,
-                surface_type,
-                kind,
-                usage: config.image_usage,
-                default_view_format: Some(non_srgb_format),
-                view_caps: image::ViewCapabilities::empty(),
-                descriptor: d3d12::D3D12_RESOURCE_DESC {
-                    Dimension: d3d12::D3D12_RESOURCE_DIMENSION_TEXTURE2D,
-                    Alignment: 0,
-                    Width: config.extent.width as _,
-                    Height: config.extent.height as _,
-                    DepthOrArraySize: 1,
-                    MipLevels: 1,
-                    Format: non_srgb_format,
-                    SampleDesc: dxgitype::DXGI_SAMPLE_DESC {
-                        Count: 1,
-                        Quality: 0,
-                    },
-                    Layout: d3d12::D3D12_TEXTURE_LAYOUT_UNKNOWN,
-                    Flags: 0,
-                },
-                bytes_per_block,
-                block_dim,
-                clear_cv: vec![rtv_handle],
-                clear_dv: Vec::new(),
-                clear_sv: Vec::new(),
-                // Dummy values, image is already bound
-                requirements: memory::Requirements {
-                    alignment: 1,
-                    size: 1,
-                    type_mask: MEM_TYPE_MASK,
-                },
-            }));
-        }
-
-        Ok((swapchain, images))
-    }
-
-    unsafe fn destroy_swapchain(&self, swapchain: Swapchain) {
-        let inner = swapchain.release_resources();
-        inner.destroy();
     }
 
     fn wait_idle(&self) -> Result<(), d::OutOfMemory> {
