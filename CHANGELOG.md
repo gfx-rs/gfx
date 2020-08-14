@@ -1,5 +1,10 @@
 # Change Log
 
+### backend-dx12-0.5.9 (14-08-2020)
+  - fix creation of depth-stencil views
+  - fix command allocator reset validation errors
+  - fix the crash on `unconfigure_swapchain`
+
 ### backend-dx11-0.5.2 (29-07-2020)
   - update libloading to 0.6
 
