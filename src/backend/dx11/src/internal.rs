@@ -606,7 +606,7 @@ impl Internal {
                         image_offset: [
                             info.image_offset.x as _,
                             info.image_offset.y as _,
-                            (info.image_offset.z + info.image_layers.layers.start as i32) as _,
+                            (info.image_offset.z + info.image_layers.layer_start as i32) as _,
                             0,
                         ],
                         image_extent: [
@@ -1000,7 +1000,7 @@ impl Internal {
                         dst.internal.raw,
                         dst.calc_subresource(
                             info.image_layers.level as _,
-                            info.image_layers.layers.start as _,
+                            info.image_layers.layer_start as _,
                         ),
                         &d3d11::D3D11_BOX {
                             left: info.image_offset.x as _,
@@ -1044,7 +1044,7 @@ impl Internal {
                     let uav = dst
                         .get_uav(
                             info.image_layers.level,
-                            0, /*info.image_layers.layers.start*/
+                            0, /*info.image_layers.layer_start*/
                         )
                         .unwrap()
                         .as_raw();
@@ -1136,7 +1136,7 @@ impl Internal {
                 let rtv = dst
                     .get_rtv(
                         region.dst_subresource.level,
-                        region.dst_subresource.layers.start,
+                        region.dst_subresource.layer_start,
                     )
                     .unwrap()
                     .as_raw();

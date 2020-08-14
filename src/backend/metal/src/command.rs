@@ -1831,24 +1831,20 @@ where
             src,
             dst,
             ref region,
+            num_layers,
         } => {
             let size = conv::map_extent(region.extent);
             let src_offset = conv::map_offset(region.src_offset);
             let dst_offset = conv::map_offset(region.dst_offset);
-            let layers = region
-                .src_subresource
-                .layers
-                .clone()
-                .zip(region.dst_subresource.layers.clone());
-            for (src_layer, dst_layer) in layers {
+            for layer in 0 .. num_layers {
                 encoder.copy_from_texture(
                     src.as_native(),
-                    src_layer as _,
+                    (region.src_subresource.layer_start + layer) as _,
                     region.src_subresource.level as _,
                     src_offset,
                     size,
                     dst.as_native(),
-                    dst_layer as _,
+                    (region.dst_subresource.layer_start + layer) as _,
                     region.dst_subresource.level as _,
                     dst_offset,
                 );
@@ -1859,15 +1855,15 @@ where
             dst,
             dst_desc,
             ref region,
+            num_layers,
         } => {
             let extent = conv::map_extent(region.image_extent);
             let origin = conv::map_offset(region.image_offset);
             let (row_pitch, slice_pitch) = compute_pitches(&region, dst_desc, &extent);
-            let r = &region.image_layers;
 
-            for layer in r.layers.clone() {
+            for layer in 0 .. num_layers {
                 let offset = region.buffer_offset
-                    + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
+                    + slice_pitch as NSUInteger * layer as NSUInteger;
                 encoder.copy_from_buffer_to_texture(
                     src.as_native(),
                     offset as NSUInteger,
@@ -1875,8 +1871,8 @@ where
                     slice_pitch as NSUInteger,
                     extent,
                     dst.as_native(),
-                    layer as NSUInteger,
-                    r.level as NSUInteger,
+                    (region.image_layers.layer_start + layer) as NSUInteger,
+                    region.image_layers.level as NSUInteger,
                     origin,
                     metal::MTLBlitOption::empty(),
                 );
@@ -1887,19 +1883,19 @@ where
             src_desc,
             dst,
             ref region,
+            num_layers,
         } => {
             let extent = conv::map_extent(region.image_extent);
             let origin = conv::map_offset(region.image_offset);
             let (row_pitch, slice_pitch) = compute_pitches(&region, src_desc, &extent);
-            let r = &region.image_layers;
 
-            for layer in r.layers.clone() {
+            for layer in 0 .. num_layers {
                 let offset = region.buffer_offset
-                    + slice_pitch as NSUInteger * (layer - r.layers.start) as NSUInteger;
+                    + slice_pitch as NSUInteger * layer as NSUInteger;
                 encoder.copy_from_texture_to_buffer(
                     src.as_native(),
-                    layer as NSUInteger,
-                    r.level as NSUInteger,
+                    (region.image_layers.layer_start + layer) as NSUInteger,
+                    region.image_layers.level as NSUInteger,
                     origin,
                     extent,
                     dst.as_native(),
@@ -2652,19 +2648,22 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         let clear_color = image.shader_channel.interpret(value.color);
         let base_extent = image.kind.extent();
+        let total_layers = image.kind.num_layers();
+        let total_levels = image.kind.num_levels();
         let is_layered = !self.shared.disabilities.broken_layered_clear_image;
 
         autoreleasepool(|| {
             let raw = image.like.as_texture();
             for subresource_range in subresource_ranges {
                 let sub = subresource_range.borrow();
-                let num_layers = (sub.layers.end - sub.layers.start) as u64;
+                let num_layers = sub.resolve_layer_count(total_layers);
+                let num_levels = sub.resolve_level_count(total_levels);
                 let layers = if is_layered {
                     0 .. 1
                 } else {
-                    sub.layers.clone()
+                    sub.layer_start .. sub.layer_start + num_layers
                 };
-                let texture = if is_layered && sub.layers.start > 0 {
+                let texture = if is_layered && sub.layer_start > 0 {
                     // aliasing is necessary for bulk-clearing all layers starting with 0
                     let tex = raw.new_texture_view_from_slice(
                         image.mtl_format,
@@ -2674,8 +2673,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             length: raw.mipmap_level_count(),
                         },
                         NSRange {
-                            location: sub.layers.start as _,
-                            length: num_layers,
+                            location: sub.layer_start as _,
+                            length: num_layers as _,
                         },
                     );
                     retained_textures.push(tex);
@@ -2685,14 +2684,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 };
 
                 for layer in layers {
-                    for level in sub.levels.clone() {
+                    for level in sub.level_start .. sub.level_start + num_levels {
                         let descriptor = metal::RenderPassDescriptor::new().to_owned();
                         if base_extent.depth > 1 {
-                            assert_eq!(sub.layers.end, 1);
                             let depth = base_extent.at_level(level).depth as u64;
                             descriptor.set_render_target_array_length(depth);
                         } else if is_layered {
-                            descriptor.set_render_target_array_length(num_layers);
+                            descriptor.set_render_target_array_length(num_layers as _);
                         };
 
                         if image.format_desc.aspects.contains(Aspects::COLOR) {
@@ -3034,15 +3032,16 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             &self.shared.device,
             &self.shared.private_caps,
         );
+        let total_src_layers = src.kind.num_layers();
+        let total_dst_layers = dst.kind.num_layers();
 
         for region in regions {
             let r = region.borrow();
 
             // layer count must be equal in both subresources
-            debug_assert_eq!(
-                r.src_subresource.layers.len(),
-                r.dst_subresource.layers.len()
-            );
+            let num_src_layers = r.src_subresource.resolve_layer_count(total_src_layers);
+            let num_dst_layers = r.dst_subresource.resolve_layer_count(total_dst_layers);
+            debug_assert_eq!(num_src_layers, num_dst_layers);
             debug_assert_eq!(r.src_subresource.aspects, r.dst_subresource.aspects);
             debug_assert!(src.format_desc.aspects.contains(r.src_subresource.aspects));
             debug_assert!(dst.format_desc.aspects.contains(r.dst_subresource.aspects));
@@ -3057,16 +3056,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 );
             }
 
-            let layers = r
-                .src_subresource
-                .layers
-                .clone()
-                .zip(r.dst_subresource.layers.clone());
             let list = vertices
                 .entry((r.dst_subresource.aspects, r.dst_subresource.level))
                 .or_insert_with(Vec::new);
 
-            for (src_layer, dst_layer) in layers {
+            for layer in 0 .. num_src_layers.min(num_dst_layers) {
                 // this helper array defines unique data for quad vertices
                 let data = [
                     [
@@ -3105,14 +3099,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                         uv: [
                             d[0] as f32 / se.width as f32,
                             d[1] as f32 / se.height as f32,
-                            src_layer as f32,
+                            (r.src_subresource.layer_start + layer) as f32,
                             r.src_subresource.level as f32,
                         ],
                         pos: [
                             d[2] as f32 / de.width as f32,
                             d[3] as f32 / de.height as f32,
                             0.0,
-                            dst_layer as f32,
+                            (r.dst_subresource.layer_start + layer) as f32,
                         ],
                     });
                 }
@@ -4085,6 +4079,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     ..
                 } = *self.inner.borrow_mut();
 
+                let total_src_layers = src.kind.num_layers();
+                let total_dst_layers = dst.kind.num_layers();
                 let new_src = if src.mtl_format == dst.mtl_format {
                     src_raw
                 } else {
@@ -4103,6 +4099,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             src: AsNative::from(new_src.as_ref()),
                             dst: AsNative::from(dst_raw.as_ref()),
                             region: r.clone(),
+                            num_layers: r.src_subresource
+                                .resolve_layer_count(total_src_layers)
+                                .min(r.dst_subresource.resolve_layer_count(total_dst_layers)),
                         })
                     }
                 });
@@ -4181,6 +4180,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 panic!("Unexpected Image::Unbound");
             }
             native::ImageLike::Texture(ref dst_raw) => {
+                let total_layers = dst.kind.num_layers();
                 let (src_raw, src_range) = src.as_bound();
                 let commands = regions.into_iter().filter_map(|region| {
                     let r = region.borrow();
@@ -4195,6 +4195,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                                 buffer_offset: r.buffer_offset + src_range.start,
                                 ..r.clone()
                             },
+                            num_layers: r.image_layers.resolve_layer_count(total_layers),
                         })
                     }
                 });
@@ -4231,6 +4232,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 panic!("Unexpected Image::Unbound");
             }
             native::ImageLike::Texture(ref src_raw) => {
+                let total_layers = src.kind.num_layers();
                 let (dst_raw, dst_range) = dst.as_bound();
                 let commands = regions.into_iter().filter_map(|region| {
                     let r = region.borrow();
@@ -4245,6 +4247,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                                 buffer_offset: r.buffer_offset + dst_range.start,
                                 ..r.clone()
                             },
+                            num_layers: r.image_layers.resolve_layer_count(total_layers),
                         })
                     }
                 });

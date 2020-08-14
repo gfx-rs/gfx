@@ -75,12 +75,6 @@ const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
 
-const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: f::Aspects::COLOR,
-    levels: 0 .. 1,
-    layers: 0 .. 1,
-};
-
 fn main() {
     #[cfg(target_arch = "wasm32")]
     console_log::init_with_level(log::Level::Debug).unwrap();
@@ -436,6 +430,11 @@ where
             unsafe { device.allocate_memory(device_type, image_req.size) }.unwrap(),
         );
 
+        let color_range = i::SubresourceRange {
+            aspects: f::Aspects::COLOR,
+            .. Default::default()
+        };
+
         unsafe { device.bind_image_memory(&image_memory, 0, &mut image_logo) }.unwrap();
         let image_srv = ManuallyDrop::new(
             unsafe {
@@ -444,7 +443,7 @@ where
                     i::ViewKind::D2,
                     ColorFormat::SELF,
                     Swizzle::NO,
-                    COLOR_RANGE.clone(),
+                    color_range,
                 )
             }
             .unwrap(),
@@ -488,7 +487,7 @@ where
                     .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                 target: &*image_logo,
                 families: None,
-                range: COLOR_RANGE.clone(),
+                range: color_range,
             };
 
             cmd_buffer.pipeline_barrier(
@@ -507,8 +506,7 @@ where
                     buffer_height: height as u32,
                     image_layers: i::SubresourceLayers {
                         aspects: f::Aspects::COLOR,
-                        level: 0,
-                        layers: 0 .. 1,
+                        .. Default::default()
                     },
                     image_offset: i::Offset { x: 0, y: 0, z: 0 },
                     image_extent: i::Extent {
@@ -524,7 +522,7 @@ where
                     .. (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
                 target: &*image_logo,
                 families: None,
-                range: COLOR_RANGE.clone(),
+                range: color_range,
             };
             cmd_buffer.pipeline_barrier(
                 PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER,

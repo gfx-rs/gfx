@@ -140,18 +140,21 @@ pub enum BlitCommand {
         src: TexturePtr,
         dst: TexturePtr,
         region: hal::command::ImageCopy,
+        num_layers: hal::image::Layer,
     },
     CopyBufferToImage {
         src: BufferPtr,
         dst: TexturePtr,
         dst_desc: hal::format::FormatDesc,
         region: hal::command::BufferImageCopy,
+        num_layers: hal::image::Layer,
     },
     CopyImageToBuffer {
         src: TexturePtr,
         src_desc: hal::format::FormatDesc,
         dst: BufferPtr,
         region: hal::command::BufferImageCopy,
+        num_layers: hal::image::Layer,
     },
 }
 

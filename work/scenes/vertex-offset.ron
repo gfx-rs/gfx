@@ -34,8 +34,10 @@
             format: Rgba32Uint,
             range: (
                 aspects: (bits: 1),
-                levels: (start: 0, end: 1),
-                layers: (start: 0, end: 1),
+                level_start: 0,
+                level_count: None,
+                layer_start: 0,
+                layer_count: None,
             ),
         ),
         "fbo": Framebuffer(

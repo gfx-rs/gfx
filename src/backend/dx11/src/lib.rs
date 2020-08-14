@@ -115,13 +115,14 @@ type CreateFun = unsafe extern "system" fn(
 ) -> winerror::HRESULT;
 
 #[derive(Clone)]
-pub(crate) struct ViewInfo {
+struct ViewInfo {
     resource: *mut d3d11::ID3D11Resource,
     kind: image::Kind,
     caps: image::ViewCapabilities,
     view_kind: image::ViewKind,
     format: dxgiformat::DXGI_FORMAT,
-    range: image::SubresourceRange,
+    levels: Range<image::Level>,
+    layers: Range<image::Layer>,
 }
 
 impl fmt::Debug for ViewInfo {
@@ -867,11 +868,8 @@ impl window::PresentationSurface<Backend> for Surface {
             caps: image::ViewCapabilities::empty(),
             view_kind: image::ViewKind::D2,
             format: decomposed.rtv.unwrap(),
-            range: image::SubresourceRange {
-                aspects: format::Aspects::COLOR,
-                levels: 0 .. 1,
-                layers: 0 .. 1,
-            },
+            levels: 0 .. 1,
+            layers: 0 .. 1,
         };
         let view = device.view_image_as_render_target(&view_info).unwrap();
 
@@ -1630,13 +1628,18 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     {
         for range in subresource_ranges {
             let range = range.borrow();
+            let layer_count = range.resolve_layer_count(image.kind.num_layers());
+            let level_count = range.resolve_level_count(image.kind.num_levels());
 
             // TODO: clear Int/Uint depending on format
             if range.aspects.contains(format::Aspects::COLOR) {
-                for layer in range.layers.clone() {
-                    for level in range.levels.clone() {
+                for rel_layer in 0 .. layer_count {
+                    for rel_level in 0 .. level_count {
                         self.context.ClearRenderTargetView(
-                            image.get_rtv(level, layer).unwrap().as_raw(),
+                            image.get_rtv(
+                                range.level_start + rel_level,
+                                range.layer_start + rel_layer,
+                            ).unwrap().as_raw(),
                             &value.color.float32,
                         );
                     }
@@ -1653,10 +1656,13 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             }
 
             if depth_stencil_flags != 0 {
-                for layer in range.layers.clone() {
-                    for level in range.levels.clone() {
+                for rel_layer in 0 .. layer_count {
+                    for rel_level in 0 .. level_count {
                         self.context.ClearDepthStencilView(
-                            image.get_dsv(level, layer).unwrap().as_raw(),
+                            image.get_dsv(
+                                range.level_start + rel_level,
+                                range.layer_start + rel_layer,
+                            ).unwrap().as_raw(),
                             depth_stencil_flags,
                             value.depth_stencil.depth,
                             value.depth_stencil.stencil as _,

@@ -24,12 +24,6 @@ use hal::{
 
 use crate::raw;
 
-const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: f::Aspects::COLOR,
-    levels: 0 .. 1,
-    layers: 0 .. 1,
-};
-
 pub struct FetchGuard<'a, B: hal::Backend> {
     device: &'a mut B::Device,
     buffer: Option<B::Buffer>,
@@ -456,6 +450,11 @@ impl<B: hal::Backend> Scene<B> {
                         unsafe { device.allocate_memory(memory_type, requirements.size) }.unwrap();
                     unsafe { device.bind_image_memory(&gpu_memory, 0, &mut image) }.unwrap();
 
+                    let color_range = i::SubresourceRange {
+                        aspects: f::Aspects::COLOR,
+                        .. Default::default()
+                    };
+
                     // process initial data for the image
                     let stable_state = if data.is_empty() {
                         let (aspects, access, layout) = if format.is_color() {
@@ -477,7 +476,7 @@ impl<B: hal::Backend> Scene<B> {
                             families: None,
                             range: i::SubresourceRange {
                                 aspects,
-                                ..COLOR_RANGE.clone()
+                                ..color_range
                             },
                         };
                         unsafe {
@@ -545,7 +544,7 @@ impl<B: hal::Backend> Scene<B> {
                                 .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                             families: None,
                             target: &image,
-                            range: COLOR_RANGE.clone(), //TODO
+                            range: color_range, //TODO
                         };
                         unsafe {
                             init_cmd.pipeline_barrier(
@@ -562,8 +561,7 @@ impl<B: hal::Backend> Scene<B> {
                             buffer_height: h as u32,
                             image_layers: i::SubresourceLayers {
                                 aspects: f::Aspects::COLOR,
-                                level: 0,
-                                layers: 0 .. 1,
+                                .. Default::default()
                             },
                             image_offset: i::Offset::ZERO,
                             image_extent: extent,
@@ -581,7 +579,7 @@ impl<B: hal::Backend> Scene<B> {
                                 .. final_state,
                             families: None,
                             target: &image,
-                            range: COLOR_RANGE.clone(), //TODO
+                            range: color_range, //TODO
                         };
                         unsafe {
                             init_cmd.pipeline_barrier(
@@ -602,7 +600,7 @@ impl<B: hal::Backend> Scene<B> {
                             _memory: gpu_memory,
                             kind,
                             format,
-                            range: COLOR_RANGE.clone(),
+                            range: color_range,
                             stable_state,
                         },
                     );
@@ -1640,6 +1638,11 @@ impl<B: hal::Backend> Scene<B> {
         }
         .unwrap();
 
+        let color_range = i::SubresourceRange {
+            aspects: f::Aspects::COLOR,
+            .. Default::default()
+        };
+
         let mut command_pool = unsafe {
             self.device.create_command_pool(
                 self.queue_group.family,
@@ -1657,7 +1660,7 @@ impl<B: hal::Backend> Scene<B> {
                     .. (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
                 target: &image.handle,
                 families: None,
-                range: COLOR_RANGE.clone(), //TODO
+                range: color_range, //TODO
             };
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
@@ -1671,8 +1674,7 @@ impl<B: hal::Backend> Scene<B> {
                 buffer_height: height as u32,
                 image_layers: i::SubresourceLayers {
                     aspects: f::Aspects::COLOR,
-                    level: 0,
-                    layers: 0 .. 1,
+                    .. Default::default()
                 },
                 image_offset: i::Offset { x: 0, y: 0, z: 0 },
                 image_extent: i::Extent {
@@ -1693,7 +1695,7 @@ impl<B: hal::Backend> Scene<B> {
                     .. image.stable_state,
                 target: &image.handle,
                 families: None,
-                range: COLOR_RANGE.clone(), //TODO
+                range: color_range, //TODO
             };
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,

@@ -185,6 +185,8 @@ pub enum ImageKind {
         target: TextureTarget,
         format: TextureFormat,
         pixel_type: DataType,
+        level_count: i::Level,
+        layer_count: i::Layer,
     },
 }
 

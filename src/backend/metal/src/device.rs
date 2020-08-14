@@ -2806,8 +2806,7 @@ impl hal::device::Device<Backend> for Device {
         let raw = image.like.as_texture();
         let full_range = image::SubresourceRange {
             aspects: image.format_desc.aspects,
-            levels: 0 .. raw.mipmap_level_count() as image::Level,
-            layers: 0 .. image.kind.num_layers(),
+            .. Default::default()
         };
         let mtl_type = if image.mtl_type == MTLTextureType::D2Multisample {
             if kind != image::ViewKind::D2 {
@@ -2831,12 +2830,12 @@ impl hal::device::Device<Backend> for Device {
                 mtl_format,
                 mtl_type,
                 NSRange {
-                    location: range.levels.start as _,
-                    length: (range.levels.end - range.levels.start) as _,
+                    location: range.level_start as _,
+                    length: range.resolve_level_count(image.kind.num_levels()) as _,
                 },
                 NSRange {
-                    location: range.layers.start as _,
-                    length: (range.layers.end - range.layers.start) as _,
+                    location: range.layer_start as _,
+                    length: range.resolve_layer_count(image.kind.num_layers()) as _,
                 },
             )
         };

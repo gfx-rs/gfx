@@ -915,11 +915,12 @@ impl CommandBuffer {
         let slice_pitch = div(buffer_height, image.block_dim.1 as _) * row_pitch;
         let is_pitch_aligned = row_pitch % d3d12::D3D12_TEXTURE_DATA_PITCH_ALIGNMENT == 0;
 
-        for layer in r.image_layers.layers.clone() {
-            let img_subresource = image.calc_subresource(r.image_layers.level as _, layer as _, 0);
-            let layer_relative = (layer - r.image_layers.layers.start) as u32;
+        for layer_relative in 0 .. r.image_layers.resolve_layer_count(image.kind.num_layers()) {
+            let img_subresource = image.calc_subresource(
+                r.image_layers.level as _,
+                (r.image_layers.layer_start + layer_relative) as _, 0);
             let layer_offset = r.buffer_offset as u64
-                + (layer_relative * slice_pitch * r.image_extent.depth) as u64;
+                + (layer_relative as u32 * slice_pitch * r.image_extent.depth) as u64;
             let aligned_offset =
                 layer_offset & !(d3d12::D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT as u64 - 1);
             if layer_offset == aligned_offset && is_pitch_aligned {
@@ -1153,17 +1154,20 @@ impl CommandBuffer {
             StateAfter: states.end,
         });
 
-        if *range == target.to_subresource_range(range.aspects) {
+        if *range == (image::SubresourceRange { aspects: range.aspects, .. Default::default() }) {
             // Only one barrier if it affects the whole image.
             list.extend(iter::once(bar));
         } else {
             // Generate barrier for each layer/level combination.
-            for level in range.levels.clone() {
-                for layer in range.layers.clone() {
+            for level in 0 .. range.resolve_level_count(target.kind.num_levels()) {
+                for layer in 0 .. range.resolve_layer_count(target.kind.num_layers()) {
                     unsafe {
                         let transition_barrier = &mut *bar.u.Transition_mut();
-                        transition_barrier.Subresource =
-                            target.calc_subresource(level as _, layer as _, 0);
+                        transition_barrier.Subresource = target.calc_subresource(
+                            (range.level_start + level) as _,
+                            (range.layer_start + layer) as _,
+                            0,
+                        );
                     }
                     list.extend(iter::once(bar));
                 }
@@ -1416,7 +1420,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
-            if sub.levels.end != 1 {
+            if sub.resolve_level_count(image.kind.num_levels()) != 1 {
                 warn!("Clearing non-zero mipmap levels is not supported yet");
             }
             let target_state = if sub.aspects.contains(Aspects::COLOR) {
@@ -1432,17 +1436,18 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.raw
                 .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
 
-            for layer in sub.layers.clone() {
+            for rel_layer in 0 .. sub.resolve_layer_count(image.kind.num_layers()) {
+                let layer = (sub.layer_start + rel_layer) as usize;
                 if sub.aspects.contains(Aspects::COLOR) {
-                    let rtv = image.clear_cv[layer as usize];
+                    let rtv = image.clear_cv[layer];
                     self.clear_render_target_view(rtv, value.color, &[]);
                 }
                 if sub.aspects.contains(Aspects::DEPTH) {
-                    let dsv = image.clear_dv[layer as usize];
+                    let dsv = image.clear_dv[layer];
                     self.clear_depth_stencil_view(dsv, Some(value.depth_stencil.depth), None, &[]);
                 }
                 if sub.aspects.contains(Aspects::STENCIL) {
-                    let dsv = image.clear_sv[layer as usize];
+                    let dsv = image.clear_sv[layer];
                     self.clear_depth_stencil_view(
                         dsv,
                         None,
@@ -1505,12 +1510,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
                             component_mapping: device::IDENTITY_MAPPING,
-                            range: image::SubresourceRange {
-                                aspects: Aspects::COLOR,
-                                levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
-                                layers: attachment.layers.0 + clear_rect.layers.start
-                                    .. attachment.layers.0 + clear_rect.layers.end,
-                            },
+                            levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
+                            layers: attachment.layers.0 + clear_rect.layers.start
+                                .. attachment.layers.0 + clear_rect.layers.end,
                         };
                         let rtv = rtv_pool.alloc_handle();
                         Device::view_image_as_render_target_impl(device, rtv, &view_info).unwrap();
@@ -1542,20 +1544,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
                             component_mapping: device::IDENTITY_MAPPING,
-                            range: image::SubresourceRange {
-                                aspects: if depth.is_some() {
-                                    Aspects::DEPTH
-                                } else {
-                                    Aspects::empty()
-                                } | if stencil.is_some() {
-                                    Aspects::STENCIL
-                                } else {
-                                    Aspects::empty()
-                                },
-                                levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
-                                layers: attachment.layers.0 + clear_rect.layers.start
-                                    .. attachment.layers.0 + clear_rect.layers.end,
-                            },
+                            levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
+                            layers: attachment.layers.0 + clear_rect.layers.start
+                                .. attachment.layers.0 + clear_rect.layers.end,
                         };
                         let dsv = dsv_pool.alloc_handle();
                         Device::view_image_as_depth_stencil_impl(device, dsv, &view_info).unwrap();
@@ -1603,13 +1594,13 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     src.resource.as_mut_ptr(),
                     src.calc_subresource(
                         r.src_subresource.level as UINT,
-                        r.src_subresource.layers.start as UINT + layer,
+                        r.src_subresource.layer_start as UINT + layer,
                         0,
                     ),
                     dst.resource.as_mut_ptr(),
                     dst.calc_subresource(
                         r.dst_subresource.level as UINT,
-                        r.dst_subresource.layers.start as UINT + layer,
+                        r.dst_subresource.layer_start as UINT + layer,
                         0,
                     ),
                     src.descriptor.Format,
@@ -1669,11 +1660,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             view_kind: image::ViewKind::D2Array, // TODO
             format: src.default_view_format.unwrap(),
             component_mapping: device::IDENTITY_MAPPING,
-            range: image::SubresourceRange {
-                aspects: format::Aspects::COLOR, // TODO
-                levels: 0 .. src.descriptor.MipLevels as _,
-                layers: 0 .. src.kind.num_layers(),
-            },
+            levels: 0 .. src.descriptor.MipLevels as _,
+            layers: 0 .. src.kind.num_layers(),
         })
         .unwrap();
         device.CreateShaderResourceView(
@@ -1700,8 +1688,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         for region in regions {
             let r = region.borrow();
 
-            let first_layer = r.dst_subresource.layers.start;
-            let num_layers = r.dst_subresource.layers.end - first_layer;
+            let first_layer = r.dst_subresource.layer_start;
+            let num_layers = r.dst_subresource.resolve_layer_count(dst.kind.num_layers());
 
             // WORKAROUND: renderdoc crashes if we destroy the pool too early
             let rtv_pool = Device::create_descriptor_heap_impl(
@@ -1752,7 +1740,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             let list = instances.entry(key).or_insert(Vec::new());
 
             for i in 0 .. num_layers {
-                let src_layer = r.src_subresource.layers.start + i;
+                let src_layer = r.src_subresource.layer_start + i;
                 // Screen space triangle blitting
                 let data = {
                     // Image extents, layers are treated as depth
@@ -2257,10 +2245,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let r = region.borrow();
-            debug_assert_eq!(
-                r.src_subresource.layers.len(),
-                r.dst_subresource.layers.len()
-            );
+            let src_layer_count = r.src_subresource.resolve_layer_count(src.kind.num_layers());
+            let dst_layer_count = r.src_subresource.resolve_layer_count(dst.kind.num_layers());
+            debug_assert_eq!(src_layer_count, dst_layer_count);
             let src_box = d3d12::D3D12_BOX {
                 left: r.src_offset.x as _,
                 top: r.src_offset.y as _,
@@ -2270,16 +2257,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 back: (r.src_offset.z + r.extent.depth as i32) as _,
             };
 
-            for (src_layer, dst_layer) in r
-                .src_subresource
-                .layers
-                .clone()
-                .zip(r.dst_subresource.layers.clone())
-            {
+            for layer in 0 .. src_layer_count.min(dst_layer_count) {
                 *src_image.u.SubresourceIndex_mut() =
-                    src.calc_subresource(r.src_subresource.level as _, src_layer as _, 0);
+                    src.calc_subresource(r.src_subresource.level as _, (r.src_subresource.layer_start + layer) as _, 0);
                 *dst_image.u.SubresourceIndex_mut() =
-                    dst.calc_subresource(r.dst_subresource.level as _, dst_layer as _, 0);
+                    dst.calc_subresource(r.dst_subresource.level as _, (r.dst_subresource.layer_start + layer) as _, 0);
                 self.raw.CopyTextureRegion(
                     &dst_image,
                     r.dst_offset.x as _,

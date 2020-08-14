@@ -270,15 +270,6 @@ unsafe impl Send for ImageBound {}
 unsafe impl Sync for ImageBound {}
 
 impl ImageBound {
-    /// Get `SubresourceRange` of the whole image.
-    pub fn to_subresource_range(&self, aspects: format::Aspects) -> image::SubresourceRange {
-        image::SubresourceRange {
-            aspects,
-            levels: 0 .. self.descriptor.MipLevels as _,
-            layers: 0 .. self.kind.num_layers(),
-        }
-    }
-
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT, plane: UINT) -> UINT {
         mip_level
             + (layer * self.descriptor.MipLevels as UINT)

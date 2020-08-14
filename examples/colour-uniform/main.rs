@@ -101,12 +101,6 @@ const QUAD: [Vertex; 6] = [
     },
 ];
 
-const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: f::Aspects::COLOR,
-    levels: 0 .. 1,
-    layers: 0 .. 1,
-};
-
 struct RendererState<B: Backend> {
     uniform_desc_pool: Option<B::DescriptorPool>,
     img_desc_pool: Option<B::DescriptorPool>,
@@ -1022,6 +1016,11 @@ impl<B: Backend> ImageState<B> {
 
         let memory = device.allocate_memory(device_type, req.size).unwrap();
 
+        let color_range = i::SubresourceRange {
+            aspects: f::Aspects::COLOR,
+            .. Default::default()
+        };
+
         device.bind_image_memory(&memory, 0, &mut image).unwrap();
         let image_view = device
             .create_image_view(
@@ -1029,7 +1028,7 @@ impl<B: Backend> ImageState<B> {
                 i::ViewKind::D2,
                 ColorFormat::SELF,
                 f::Swizzle::NO,
-                COLOR_RANGE.clone(),
+                color_range,
             )
             .unwrap();
 
@@ -1068,7 +1067,7 @@ impl<B: Backend> ImageState<B> {
                     .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                 target: &image,
                 families: None,
-                range: COLOR_RANGE.clone(),
+                range: color_range,
             };
 
             cmd_buffer.pipeline_barrier(
@@ -1087,8 +1086,7 @@ impl<B: Backend> ImageState<B> {
                     buffer_height: dims.height as u32,
                     image_layers: i::SubresourceLayers {
                         aspects: f::Aspects::COLOR,
-                        level: 0,
-                        layers: 0 .. 1,
+                        .. Default::default()
                     },
                     image_offset: i::Offset { x: 0, y: 0, z: 0 },
                     image_extent: i::Extent {
@@ -1104,7 +1102,7 @@ impl<B: Backend> ImageState<B> {
                     .. (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
                 target: &image,
                 families: None,
-                range: COLOR_RANGE.clone(),
+                range: color_range,
             };
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER .. pso::PipelineStage::FRAGMENT_SHADER,

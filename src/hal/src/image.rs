@@ -8,7 +8,12 @@ use crate::{
     format,
     pso::{Comparison, Rect},
 };
-use std::{f32, hash, ops::Range};
+use std::{
+    f32,
+    hash,
+    num::{NonZeroU16, NonZeroU8},
+    ops::Range,
+};
 
 /// Dimension size.
 pub type Size = u32;
@@ -175,6 +180,11 @@ impl From<device::OutOfMemory> for ViewCreationError {
         ViewCreationError::OutOfMemory(error)
     }
 }
+impl From<LayerError> for ViewCreationError {
+    fn from(error: LayerError) -> Self {
+        ViewCreationError::Layer(error)
+    }
+}
 
 impl std::fmt::Display for ViewCreationError {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -205,7 +215,12 @@ pub enum LayerError {
     /// The source image kind doesn't support array slices.
     NotExpected(Kind),
     /// Selected layers are outside of the provided range.
-    OutOfBounds(Range<Layer>),
+    OutOfBounds {
+        /// Starting index of the range.
+        start: Layer,
+        /// Number of layers in the range.
+        count: Option<NonZeroU16>,
+    }
 }
 
 impl std::fmt::Display for LayerError {
@@ -214,11 +229,13 @@ impl std::fmt::Display for LayerError {
             LayerError::NotExpected(kind) => {
                 write!(fmt, "Kind {{{:?}}} does not support arrays", kind)
             }
-            LayerError::OutOfBounds(layers) => write!(
-                fmt,
-                "Out of bounds layers {} .. {}",
-                layers.start, layers.end
-            ),
+            LayerError::OutOfBounds { start, count } => {
+                write!(fmt, "Out of bounds layers ")?;
+                match count {
+                    Some(count) => write!(fmt, "{}..{}", start, start + count.get()),
+                    None => write!(fmt, "{}..", start),
+                }
+            }
         }
     }
 }
@@ -642,27 +659,61 @@ pub struct Subresource {
 }
 
 /// A subset of resource layers contained within an image's level.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubresourceLayers {
     /// Included aspects: color/depth/stencil
     pub aspects: format::Aspects,
     /// Selected mipmap level
     pub level: Level,
-    /// Included array levels
-    pub layers: Range<Layer>,
+    /// First layer in this subresource
+    pub layer_start: Layer,
+    /// Number of sequential layers in this subresource.
+    ///
+    /// A value of `None` indicates the subresource contains
+    /// all of the remaining layers.
+    pub layer_count: Option<NonZeroU16>,
+}
+
+impl SubresourceLayers {
+    /// Resolve the concrete layer count based on the total number of layer in an image.
+    pub fn resolve_layer_count(&self, total: Layer) -> Layer {
+        self.layer_count.map_or(total - self.layer_start, |c| c.get())
+    }
 }
 
 /// A subset of resources contained within an image.
-#[derive(Clone, Debug, Hash, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, Hash, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct SubresourceRange {
     /// Included aspects: color/depth/stencil
     pub aspects: format::Aspects,
-    /// Included mipmap levels
-    pub levels: Range<Level>,
-    /// Included array levels
-    pub layers: Range<Layer>,
+    /// First mipmap level in this subresource
+    pub level_start: Level,
+    /// Number of sequential levels in this subresource.
+    ///
+    /// A value of `None` indicates the subresource contains
+    /// all of the remaining levels.
+    pub level_count: Option<NonZeroU8>,
+    /// First layer in this subresource
+    pub layer_start: Layer,
+    /// Number of sequential layers in this subresource.
+    ///
+    /// A value of `None` indicates the subresource contains
+    /// all of the remaining layers.
+    pub layer_count: Option<NonZeroU16>,
+}
+
+impl SubresourceRange {
+    /// Resolve the concrete level count based on the total number of layers in an image.
+    pub fn resolve_level_count(&self, total: Level) -> Level {
+        self.level_count.map_or(total - self.level_start, |c| c.get())
+    }
+
+    /// Resolve the concrete layer count based on the total number of layer in an image.
+    pub fn resolve_layer_count(&self, total: Layer) -> Layer {
+        self.layer_count.map_or(total - self.layer_start, |c| c.get())
+    }
 }
 
 /// Image format properties.

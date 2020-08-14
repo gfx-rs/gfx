@@ -2,6 +2,7 @@ use parking_lot::{Mutex, RwLock};
 use spirv_cross::{glsl, spirv, ErrorCode as SpirvErrorCode};
 use std::borrow::Borrow;
 use std::cell::Cell;
+use std::num::NonZeroU16;
 use std::ops::Range;
 use std::slice;
 use std::sync::Arc;
@@ -1404,6 +1405,8 @@ impl d::Device<B> for Device {
                 target,
                 format: desc.tex_external,
                 pixel_type: desc.data_type,
+                level_count: num_levels,
+                layer_count: kind.num_layers(),
             }
         } else {
             let name = gl.create_renderbuffer().unwrap();
@@ -1473,41 +1476,41 @@ impl d::Device<B> for Device {
         swizzle: Swizzle,
         range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewCreationError> {
-        //TODO: check if `layers.end` covers all the layers
-        let level = range.levels.start;
-        assert_eq!(level + 1, range.levels.end);
+        let level = range.level_start;
         //assert_eq!(format, image.format);
         assert_eq!(swizzle, Swizzle::NO);
         //TODO: check format
         match image.kind {
             n::ImageKind::Renderbuffer { renderbuffer, .. } => {
-                if range.levels.start == 0 && range.layers.start == 0 {
+                if level == 0 && range.layer_start == 0 {
                     Ok(n::ImageView::Renderbuffer(renderbuffer))
                 } else if level != 0 {
                     Err(i::ViewCreationError::Level(level)) //TODO
                 } else {
-                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds(
-                        range.layers,
-                    )))
+                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds {
+                        start: range.layer_start,
+                        count: range.layer_count
+                    }))
                 }
             }
             n::ImageKind::Texture {
                 texture, target, ..
             } => {
                 //TODO: check that `level` exists
-                if range.layers.start == 0 {
+                if range.layer_start == 0 {
                     Ok(n::ImageView::Texture(texture, target, level))
-                } else if range.layers.start + 1 == range.layers.end {
+                } else if range.layer_count == NonZeroU16::new(1) {
                     Ok(n::ImageView::TextureLayer(
                         texture,
                         target,
                         level,
-                        range.layers.start,
+                        range.layer_start
                     ))
                 } else {
-                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds(
-                        range.layers,
-                    )))
+                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds {
+                        start: range.layer_start,
+                        count: range.layer_count,
+                    }))
                 }
             }
         }
