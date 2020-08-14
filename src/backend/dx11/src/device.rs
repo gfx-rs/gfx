@@ -809,6 +809,7 @@ impl device::Device<Backend> for Device {
         attachments: IA,
         subpasses: IS,
         _dependencies: ID,
+        _correlation_masks: Option<&[u32]>,
     ) -> Result<RenderPass, device::OutOfMemory>
     where
         IA: IntoIterator,

@@ -113,18 +113,26 @@ fn main() {
 
     // instantiate backend
     #[cfg(not(target_arch = "wasm32"))]
-    let (_window, instance, mut adapters, surface) = {
-        let window = wb.build(&event_loop).unwrap();
+    let (windows, instance, mut adapters, surfaces) = {
+        let windows = [
+            wb.clone().with_title("quad view 1".to_string()).build(&event_loop).unwrap(),
+            wb.clone().with_title("quad view 2".to_string()).build(&event_loop).unwrap(),
+        ];
         let instance =
             back::Instance::create("gfx-rs quad", 1).expect("Failed to create an instance!");
         let adapters = instance.enumerate_adapters();
-        let surface = unsafe {
-            instance
-                .create_surface(&window)
-                .expect("Failed to create a surface!")
+        let surfaces = unsafe {
+            [
+                instance
+                    .create_surface(&windows[0])
+                    .expect("Failed to create a surface!"),
+                instance
+                    .create_surface(&windows[1])
+                    .expect("Failed to create a surface!"),
+            ]
         };
         // Return `window` so it is not dropped: dropping it invalidates `surface`.
-        (window, Some(instance), adapters, surface)
+        (windows, Some(instance), adapters, surfaces)
     };
 
     #[cfg(target_arch = "wasm32")]
@@ -153,7 +161,7 @@ fn main() {
 
     let adapter = adapters.remove(0);
 
-    let mut renderer = Renderer::new(instance, surface, adapter);
+    let mut renderer = Renderer::new(instance, windows, surfaces, adapter);
 
     renderer.render();
 
@@ -163,7 +171,7 @@ fn main() {
         *control_flow = winit::event_loop::ControlFlow::Wait;
 
         match event {
-            winit::event::Event::WindowEvent { event, .. } => match event {
+            winit::event::Event::WindowEvent { event, window_id, .. } => match event {
                 winit::event::WindowEvent::CloseRequested => {
                     *control_flow = winit::event_loop::ControlFlow::Exit
                 }
@@ -176,12 +184,12 @@ fn main() {
                     ..
                 } => *control_flow = winit::event_loop::ControlFlow::Exit,
                 winit::event::WindowEvent::Resized(dims) => {
-                    println!("resized to {:?}", dims);
-                    renderer.dimensions = window::Extent2D {
+                    let window_index = renderer.get_window_index(window_id);
+                    renderer.dimensions[window_index] = window::Extent2D {
                         width: dims.width,
                         height: dims.height,
                     };
-                    renderer.recreate_swapchain();
+                    renderer.recreate_swapchains();
                 }
                 _ => {}
             },
@@ -198,11 +206,12 @@ struct Renderer<B: hal::Backend> {
     device: B::Device,
     queue_group: QueueGroup<B>,
     desc_pool: ManuallyDrop<B::DescriptorPool>,
-    surface: ManuallyDrop<B::Surface>,
+    surfaces: ManuallyDrop<[B::Surface; 2]>,
     adapter: hal::adapter::Adapter<B>,
-    format: hal::format::Format,
-    dimensions: window::Extent2D,
-    viewport: pso::Viewport,
+    windows: [winit::window::Window; 2],
+    format: [hal::format::Format; 2],
+    dimensions: [window::Extent2D; 2],
+    viewports: [pso::Viewport; 2],
     render_pass: ManuallyDrop<B::RenderPass>,
     pipeline: ManuallyDrop<B::GraphicsPipeline>,
     pipeline_layout: ManuallyDrop<B::PipelineLayout>,
@@ -230,7 +239,8 @@ where
 {
     fn new(
         instance: Option<B::Instance>,
-        mut surface: B::Surface,
+        windows: [winit::window::Window; 2],
+        mut surfaces: [B::Surface; 2],
         adapter: hal::adapter::Adapter<B>,
     ) -> Renderer<B> {
         let memory_types = adapter.physical_device.memory_properties().memory_types;
@@ -241,15 +251,19 @@ where
             .queue_families
             .iter()
             .find(|family| {
-                surface.supports_queue_family(family) && family.queue_type().supports_graphics()
+                surfaces[0].supports_queue_family(family)
+                    && surfaces[1].supports_queue_family(family)
+                    && family.queue_type().supports_graphics()
             })
             .unwrap();
+        dbg!(adapter.physical_device.features());
         let mut gpu = unsafe {
             adapter
                 .physical_device
-                .open(&[(family, &[1.0])], hal::Features::empty())
+                .open(&[(family, &[1.0])], hal::Features::empty() | hal::Features::MULTIVIEW)
                 .unwrap()
         };
+    
         let mut queue_group = gpu.queue_groups.pop().unwrap();
         let device = gpu.device;
 
@@ -546,37 +560,66 @@ where
             device.destroy_fence(copy_fence);
         }
 
-        let caps = surface.capabilities(&adapter.physical_device);
-        let formats = surface.supported_formats(&adapter.physical_device);
+        let caps = [
+            surfaces[0].capabilities(&adapter.physical_device),
+            surfaces[1].capabilities(&adapter.physical_device),
+        ];
+        let formats = [
+            surfaces[0].supported_formats(&adapter.physical_device),
+            surfaces[1].supported_formats(&adapter.physical_device),
+        ];
         println!("formats: {:?}", formats);
-        let format = formats.map_or(f::Format::Rgba8Srgb, |formats| {
-            formats
-                .iter()
-                .find(|format| format.base_format().1 == ChannelType::Srgb)
-                .map(|format| *format)
-                .unwrap_or(formats[0])
-        });
+        let mut format = (0..2).map(|i| {
+            Some(formats[i].clone().map_or(f::Format::Rgba8Srgb, |formats| {
+                formats
+                    .iter()
+                    .find(|format| format.base_format().1 == ChannelType::Srgb)
+                    .map(|format| *format)
+                    .unwrap_or(formats[0])
+            }))
+        }).collect::<Vec<_>>();
+        let format = [format[0].take().unwrap(), format[1].take().unwrap()];
 
-        let swap_config = window::SwapchainConfig::from_caps(&caps, format, DIMS);
-        println!("{:?}", swap_config);
-        let extent = swap_config.extent;
-        unsafe {
-            surface
-                .configure_swapchain(&device, swap_config)
-                .expect("Can't configure swapchain");
-        };
+        let swap_configs = [
+            window::SwapchainConfig::from_caps(&caps[0], format[0], DIMS),
+            window::SwapchainConfig::from_caps(&caps[1], format[1], DIMS),
+        ];
+        println!("{:?}", swap_configs);
+        let extents = [
+            swap_configs[0].extent,
+            swap_configs[1].extent,
+        ];
+        for i in 0..2 {
+            unsafe {
+                surfaces[i]
+                    .configure_swapchain(&device, swap_configs[i].clone())
+                    .expect("Can't configure swapchain");
+            }
+        }
 
         let render_pass = {
-            let attachment = pass::Attachment {
-                format: Some(format),
-                samples: 1,
-                ops: pass::AttachmentOps::new(
-                    pass::AttachmentLoadOp::Clear,
-                    pass::AttachmentStoreOp::Store,
-                ),
-                stencil_ops: pass::AttachmentOps::DONT_CARE,
-                layouts: i::Layout::Undefined .. i::Layout::Present,
-            };
+            let attachments = [
+                pass::Attachment {
+                    format: Some(format[0]),
+                    samples: 1,
+                    ops: pass::AttachmentOps::new(
+                        pass::AttachmentLoadOp::Clear,
+                        pass::AttachmentStoreOp::Store,
+                    ),
+                    stencil_ops: pass::AttachmentOps::DONT_CARE,
+                    layouts: i::Layout::Undefined .. i::Layout::Present,
+                },
+                pass::Attachment {
+                    format: Some(format[1]),
+                    samples: 1,
+                    ops: pass::AttachmentOps::new(
+                        pass::AttachmentLoadOp::Clear,
+                        pass::AttachmentStoreOp::Store,
+                    ),
+                    stencil_ops: pass::AttachmentOps::DONT_CARE,
+                    layouts: i::Layout::Undefined .. i::Layout::Present,
+                },
+            ];
 
             let subpass = pass::SubpassDesc {
                 colors: &[(0, i::Layout::ColorAttachmentOptimal)],
@@ -584,11 +627,11 @@ where
                 inputs: &[],
                 resolves: &[],
                 preserves: &[],
-                view_mask: 0,
+                view_mask: 0b11,
             };
 
             ManuallyDrop::new(
-                unsafe { device.create_render_pass(&[attachment], &[subpass], &[], None) }
+                unsafe { device.create_render_pass(&attachments, &[subpass], &[], Some(&[0b11])) }
                     .expect("Can't create render pass"),
             )
         };
@@ -598,8 +641,8 @@ where
         let frames_in_flight = 3;
 
         // The number of the rest of the resources is based on the frames in flight.
-        let mut submission_complete_semaphores = Vec::with_capacity(frames_in_flight);
-        let mut submission_complete_fences = Vec::with_capacity(frames_in_flight);
+        let mut submission_complete_semaphores = Vec::with_capacity(frames_in_flight * 2);
+        let mut submission_complete_fences = Vec::with_capacity(frames_in_flight * 2);
         // Note: We don't really need a different command pool per frame in such a simple demo like this,
         // but in a more 'real' application, it's generally seen as optimal to have one command pool per
         // thread per frame. There is a flag that lets a command pool reset individual command buffers
@@ -609,11 +652,11 @@ where
         // usually best to just make a command pool for each set of buffers which need to be reset at the
         // same time (each frame). In our case, each pool will only have one command buffer created from it,
         // though.
-        let mut cmd_pools = Vec::with_capacity(frames_in_flight);
-        let mut cmd_buffers = Vec::with_capacity(frames_in_flight);
+        let mut cmd_pools = Vec::with_capacity(frames_in_flight * 2);
+        let mut cmd_buffers = Vec::with_capacity(frames_in_flight * 2);
 
         cmd_pools.push(command_pool);
-        for _ in 1 .. frames_in_flight {
+        for _ in 1 .. frames_in_flight * 2 {
             unsafe {
                 cmd_pools.push(
                     device
@@ -626,7 +669,7 @@ where
             }
         }
 
-        for i in 0 .. frames_in_flight {
+        for i in 0 .. frames_in_flight * 2 {
             submission_complete_semaphores.push(
                 device
                     .create_semaphore()
@@ -648,14 +691,17 @@ where
         );
         let pipeline = {
             let vs_module = {
-                let spirv = auxil::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..]))
-                    .unwrap();
+                let glsl = std::fs::read_to_string("quad-multiview/data/quad.vert").unwrap();
+                let file =
+                    glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Vertex).unwrap();
+                let spirv = auxil::read_spirv(file).unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
             let fs_module = {
-                let spirv =
-                    auxil::read_spirv(Cursor::new(&include_bytes!("./data/quad.frag.spv")[..]))
-                        .unwrap();
+                let glsl = std::fs::read_to_string("quad-multiview/data/quad.frag").unwrap();
+                let file =
+                    glsl_to_spirv::compile(&glsl, glsl_to_spirv::ShaderType::Fragment).unwrap();
+                let spirv = auxil::read_spirv(file).unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
 
@@ -743,26 +789,38 @@ where
         };
 
         // Rendering setup
-        let viewport = pso::Viewport {
-            rect: pso::Rect {
-                x: 0,
-                y: 0,
-                w: extent.width as _,
-                h: extent.height as _,
+        let viewports = [
+            pso::Viewport {
+                rect: pso::Rect {
+                    x: 0,
+                    y: 0,
+                    w: extents[0].width as _,
+                    h: extents[0].height as _,
+                },
+                depth: 0.0 .. 1.0,
             },
-            depth: 0.0 .. 1.0,
-        };
+            pso::Viewport {
+                rect: pso::Rect {
+                    x: 0,
+                    y: 0,
+                    w: extents[1].width as _,
+                    h: extents[1].height as _,
+                },
+                depth: 0.0 .. 1.0,
+            },
+        ];
 
         Renderer {
             instance,
             device,
             queue_group,
             desc_pool,
-            surface: ManuallyDrop::new(surface),
+            windows,
+            surfaces: ManuallyDrop::new(surfaces),
             adapter,
             format,
-            dimensions: DIMS,
-            viewport,
+            dimensions: [DIMS, DIMS],
+            viewports,
             render_pass,
             pipeline,
             pipeline_layout,
@@ -785,41 +843,58 @@ where
         }
     }
 
-    fn recreate_swapchain(&mut self) {
-        let caps = self.surface.capabilities(&self.adapter.physical_device);
-        let swap_config = window::SwapchainConfig::from_caps(&caps, self.format, self.dimensions);
-        println!("{:?}", swap_config);
-        let extent = swap_config.extent.to_extent();
+    fn get_window_index(&self, window_id: winit::window::WindowId) -> usize {
+        if window_id == self.windows[0].id() { 0 } else { 1 }
+    }
 
-        unsafe {
-            self.surface
-                .configure_swapchain(&self.device, swap_config)
-                .expect("Can't create swapchain");
+    fn recreate_swapchains(&mut self) {
+        for i in 0..2 {
+            let caps = self.surfaces[i].capabilities(&self.adapter.physical_device);
+            let swap_config = window::SwapchainConfig::from_caps(&caps, self.format[i], self.dimensions[i]);
+            println!("{:?}", swap_config);
+            let extent = swap_config.extent.to_extent();
+
+            unsafe {
+                self.surfaces[i]
+                    .configure_swapchain(&self.device, swap_config)
+                    .expect("Can't create swapchain");
+            }
+
+            self.viewports[i].rect.w = extent.width as _;
+            self.viewports[i].rect.h = extent.height as _;
         }
-
-        self.viewport.rect.w = extent.width as _;
-        self.viewport.rect.h = extent.height as _;
     }
 
     fn render(&mut self) {
-        let surface_image = unsafe {
-            match self.surface.acquire_image(!0) {
-                Ok((image, _)) => image,
-                Err(_) => {
-                    self.recreate_swapchain();
-                    return;
+        let surface_images = [
+            unsafe {
+                match self.surfaces[0].acquire_image(!0) {
+                    Ok((image, _)) => image,
+                    Err(_) => {
+                        self.recreate_swapchains();
+                        return;
+                    }
                 }
-            }
-        };
+            },
+            unsafe {
+                match self.surfaces[1].acquire_image(!0) {
+                    Ok((image, _)) => image,
+                    Err(_) => {
+                        self.recreate_swapchains();
+                        return;
+                    }
+                }
+            },
+        ];
 
         let framebuffer = unsafe {
             self.device
                 .create_framebuffer(
                     &self.render_pass,
-                    iter::once(surface_image.borrow()),
+                    vec![surface_images[0].borrow(), surface_images[1].borrow()],
                     i::Extent {
-                        width: self.dimensions.width,
-                        height: self.dimensions.height,
+                        width: self.dimensions[0].width,
+                        height: self.dimensions[0].height,
                         depth: 1,
                     },
                 )
@@ -837,14 +912,16 @@ where
         // updated with a CPU->GPU data copy are not in use by the GPU, so we can perform those updates.
         // In this case there are none to be done, however.
         unsafe {
-            let fence = &self.submission_complete_fences[frame_idx];
-            self.device
-                .wait_for_fence(fence, !0)
-                .expect("Failed to wait for fence");
-            self.device
-                .reset_fence(fence)
-                .expect("Failed to reset fence");
-            self.cmd_pools[frame_idx].reset(false);
+            for i in 0..2 {
+                let fence = &self.submission_complete_fences[frame_idx * 2 + i];
+                self.device
+                    .wait_for_fence(fence, !0)
+                    .expect("Failed to wait for fence");
+                self.device
+                    .reset_fence(fence)
+                    .expect("Failed to reset fence");
+                self.cmd_pools[frame_idx].reset(false);
+            }
         }
 
         // Rendering
@@ -852,8 +929,8 @@ where
         unsafe {
             cmd_buffer.begin_primary(command::CommandBufferFlags::ONE_TIME_SUBMIT);
 
-            cmd_buffer.set_viewports(0, &[self.viewport.clone()]);
-            cmd_buffer.set_scissors(0, &[self.viewport.rect]);
+            cmd_buffer.set_viewports(0, &[self.viewports[0].clone()]);
+            cmd_buffer.set_scissors(0, &[self.viewports[0].rect]);
             cmd_buffer.bind_graphics_pipeline(&self.pipeline);
             cmd_buffer.bind_vertex_buffers(
                 0,
@@ -869,12 +946,19 @@ where
             cmd_buffer.begin_render_pass(
                 &self.render_pass,
                 &framebuffer,
-                self.viewport.rect,
-                &[command::ClearValue {
-                    color: command::ClearColor {
-                        float32: [0.8, 0.8, 0.8, 1.0],
+                self.viewports[0].rect,
+                &[
+                    command::ClearValue {
+                        color: command::ClearColor {
+                            float32: [0.8, 0.8, 0.8, 1.0],
+                        },
                     },
-                }],
+                    command::ClearValue {
+                        color: command::ClearColor {
+                            float32: [0.8, 0.8, 0.8, 1.0],
+                        },
+                    },
+                ],
                 command::SubpassContents::Inline,
             );
             cmd_buffer.draw(0 .. 6, 0 .. 1);
@@ -884,24 +968,43 @@ where
             let submission = Submission {
                 command_buffers: iter::once(&*cmd_buffer),
                 wait_semaphores: None,
-                signal_semaphores: iter::once(&self.submission_complete_semaphores[frame_idx]),
+                signal_semaphores: vec![
+                    &self.submission_complete_semaphores[frame_idx * 2 + 0],
+                ],
             };
             self.queue_group.queues[0].submit(
                 submission,
-                Some(&self.submission_complete_fences[frame_idx]),
+                Some(&self.submission_complete_fences[frame_idx * 2 + 0]),
+            );
+            let submission = Submission {
+                command_buffers: iter::once(&*cmd_buffer),
+                wait_semaphores: None,
+                signal_semaphores: vec![
+                    &self.submission_complete_semaphores[frame_idx * 2 + 1],
+                ],
+            };
+            self.queue_group.queues[0].submit(
+                submission,
+                Some(&self.submission_complete_fences[frame_idx * 2 + 1]),
             );
 
-            // present frame
-            let result = self.queue_group.queues[0].present(
-                &mut self.surface,
-                surface_image,
-                Some(&self.submission_complete_semaphores[frame_idx]),
-            );
+            // present frames
+            let [surface_image_0, surface_image_1] = surface_images;
+            let mut result = self.queue_group.queues[0].present_surface(
+                &mut self.surfaces[0],
+                surface_image_0,
+                Some(&self.submission_complete_semaphores[frame_idx * 2 + 0]),
+            ).is_ok();
+            result &= self.queue_group.queues[0].present_surface(
+                &mut self.surfaces[1],
+                surface_image_1,
+                Some(&self.submission_complete_semaphores[frame_idx * 2 + 1]),
+            ).is_ok();
 
             self.device.destroy_framebuffer(framebuffer);
 
-            if result.is_err() {
-                self.recreate_swapchain();
+            if !result {
+                self.recreate_swapchains();
             }
         }
 
@@ -948,7 +1051,9 @@ where
             }
             self.device
                 .destroy_render_pass(ManuallyDrop::into_inner(ptr::read(&self.render_pass)));
-            self.surface.unconfigure_swapchain(&self.device);
+            for i in 0..2 {
+                self.surfaces[i].unconfigure_swapchain(&self.device);
+            }
             self.device
                 .free_memory(ManuallyDrop::into_inner(ptr::read(&self.buffer_memory)));
             self.device
@@ -963,8 +1068,9 @@ where
                     &self.pipeline_layout,
                 )));
             if let Some(instance) = &self.instance {
-                let surface = ManuallyDrop::into_inner(ptr::read(&self.surface));
-                instance.destroy_surface(surface);
+                let [surface_0, surface_1] = ManuallyDrop::into_inner(ptr::read(&self.surfaces));
+                instance.destroy_surface(surface_0);
+                instance.destroy_surface(surface_1);
             }
         }
         println!("DROPPED!");

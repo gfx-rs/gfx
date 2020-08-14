@@ -216,6 +216,7 @@ impl device::Device<Backend> for Device {
         _: IA,
         _: IS,
         _: ID,
+        _: Option<&[u32]>,
     ) -> Result<(), device::OutOfMemory>
     where
         IA: IntoIterator,

@@ -971,6 +971,7 @@ impl hal::device::Device<Backend> for Device {
         attachments: IA,
         subpasses: IS,
         _dependencies: ID,
+        _correlation_masks: Option<&[u32]>,
     ) -> Result<n::RenderPass, OutOfMemory>
     where
         IA: IntoIterator,

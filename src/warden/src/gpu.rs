@@ -655,6 +655,7 @@ impl<B: hal::Backend> Scene<B> {
                             inputs: &t.2,
                             preserves: &t.3,
                             resolves: &t.4,
+                            view_mask: 0,
                         })
                         .collect::<Vec<_>>();
                     let raw_deps = dependencies.iter().map(|dep| hal::pass::SubpassDependency {
@@ -662,10 +663,11 @@ impl<B: hal::Backend> Scene<B> {
                         stages: dep.stages.clone(),
                         accesses: dep.accesses.clone(),
                         flags: memory::Dependencies::empty(),
+                        view_offset: 0,
                     });
 
                     let rp = RenderPass {
-                        handle: unsafe { device.create_render_pass(raw_atts, raw_subs, raw_deps) }
+                        handle: unsafe { device.create_render_pass(raw_atts, raw_subs, raw_deps, None) }
                             .expect("Render pass creation failure"),
                         attachments: attachments
                             .iter()

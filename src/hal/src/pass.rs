@@ -144,6 +144,8 @@ pub struct SubpassDependency {
     pub accesses: Range<image::Access>,
     /// Dependency flags.
     pub flags: Dependencies,
+    /// Controls which views in the source subpass the views in the destination subpass depend on.
+    pub view_offset: i32,
 }
 
 /// Description of a subpass for render pass creation.
@@ -167,6 +169,8 @@ pub struct SubpassDesc<'a> {
     /// Attachments that are not used by the subpass but must be preserved to be
     /// passed on to subsequent passes.
     pub preserves: &'a [AttachmentId],
+    /// A bitfield of view indices describing which views rendering is broadcast to in each subpass, when multiview is enabled. If subpassCount is zero, each view mask is treated as zero.
+    pub view_mask: u32,
 }
 
 /// A sub-pass borrow of a pass.

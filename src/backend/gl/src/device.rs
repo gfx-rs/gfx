@@ -601,6 +601,7 @@ impl d::Device<B> for Device {
         attachments: IA,
         subpasses: IS,
         _dependencies: ID,
+        correlation_masks: Option<&[u32]>,
     ) -> Result<n::RenderPass, d::OutOfMemory>
     where
         IA: IntoIterator,

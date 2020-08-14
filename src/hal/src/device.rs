@@ -439,6 +439,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
         attachments: IA,
         subpasses: IS,
         dependencies: ID,
+        correlation_masks: Option<&[u32]>,
     ) -> Result<B::RenderPass, OutOfMemory>
     where
         IA: IntoIterator,

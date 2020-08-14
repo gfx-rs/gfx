@@ -56,6 +56,7 @@ impl hal::device::Device<Backend> for Device {
         _attachments: IA,
         _subpasses: IS,
         _dependencies: ID,
+        _correlation_masks: Option<&[u32]>,
     ) -> Result<<Backend as hal::Backend>::RenderPass, OutOfMemory>
     where
         IA: IntoIterator,
