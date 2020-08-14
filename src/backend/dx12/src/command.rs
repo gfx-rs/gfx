@@ -1510,7 +1510,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             },
                         };
                         let rtv = rtv_pool.alloc_handle();
-                        Device::view_image_as_render_target_impl(device, rtv, view_info).unwrap();
+                        Device::view_image_as_render_target_impl(device, rtv, &view_info).unwrap();
                         self.clear_render_target_view(rtv, value.into(), &rect);
                     }
 
@@ -1555,7 +1555,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             },
                         };
                         let dsv = dsv_pool.alloc_handle();
-                        Device::view_image_as_depth_stencil_impl(device, dsv, view_info).unwrap();
+                        Device::view_image_as_depth_stencil_impl(device, dsv, &view_info).unwrap();
                         self.clear_depth_stencil_view(dsv, depth, stencil, &rect);
                     }
 
