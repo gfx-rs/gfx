@@ -343,6 +343,7 @@ pub struct CommandBuffer {
     raw: native::GraphicsCommandList,
     allocator: native::CommandAllocator,
     shared: Arc<Shared>,
+    is_active: bool,
 
     // Cache renderpasses for graphics operations
     pass_cache: Option<RenderPassCache>,
@@ -432,6 +433,7 @@ impl CommandBuffer {
             raw,
             allocator,
             shared,
+            is_active: false,
             pass_cache: None,
             cur_subpass: !0,
             gr_pipeline: PipelineCache::new(),
@@ -471,8 +473,22 @@ impl CommandBuffer {
     }
 
     fn reset(&mut self) {
+        if self
+            .pool_create_flags
+            .contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL)
+        {
+            // Command buffer has reset semantics now and doesn't require to be in `Initial` state.
+            if self.is_active {
+                self.raw.close();
+            }
+            unsafe {
+                self.allocator.Reset()
+            };
+        }
         self.raw
             .reset(self.allocator, native::PipelineState::null());
+        self.is_active = true;
+
         self.pass_cache = None;
         self.cur_subpass = !0;
         self.gr_pipeline = PipelineCache::new();
@@ -1163,29 +1179,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _info: com::CommandBufferInheritanceInfo<Backend>,
     ) {
         // TODO: Implement flags and secondary command buffers (bundles).
-        if self
-            .pool_create_flags
-            .contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL)
-        {
-            // Command buffer has reset semantics now and doesn't require to be in `Initial` state.
-            self.allocator.Reset();
-        }
         self.reset();
     }
 
     unsafe fn finish(&mut self) {
-        self.raw.Close();
+        self.raw.close();
+        self.is_active = false;
     }
 
     unsafe fn reset(&mut self, _release_resources: bool) {
-        // Ensure that we have a bijective relation between list and allocator.
-        // This allows to modify the allocator here. Using `reset` requires this by specification.
-        assert!(self
-            .pool_create_flags
-            .contains(pool::CommandPoolCreateFlags::RESET_INDIVIDUAL));
-
-        // TODO: `release_resources` should recreate the allocator to give back all memory.
-        self.allocator.Reset();
         self.reset();
     }
 
