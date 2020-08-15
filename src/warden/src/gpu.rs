@@ -24,12 +24,6 @@ use hal::{
 
 use crate::raw;
 
-const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: f::Aspects::COLOR,
-    levels: 0 .. 1,
-    layers: 0 .. 1,
-};
-
 pub struct FetchGuard<'a, B: hal::Backend> {
     device: &'a mut B::Device,
     buffer: Option<B::Buffer>,
@@ -477,7 +471,7 @@ impl<B: hal::Backend> Scene<B> {
                             families: None,
                             range: i::SubresourceRange {
                                 aspects,
-                                ..COLOR_RANGE.clone()
+                                .. Default::default()
                             },
                         };
                         unsafe {
@@ -545,7 +539,10 @@ impl<B: hal::Backend> Scene<B> {
                                 .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                             families: None,
                             target: &image,
-                            range: COLOR_RANGE.clone(), //TODO
+                            range: i::SubresourceRange {
+                                aspects: f::Aspects::COLOR,
+                                .. Default::default()
+                            }, //TODO
                         };
                         unsafe {
                             init_cmd.pipeline_barrier(
@@ -581,7 +578,10 @@ impl<B: hal::Backend> Scene<B> {
                                 .. final_state,
                             families: None,
                             target: &image,
-                            range: COLOR_RANGE.clone(), //TODO
+                            range: i::SubresourceRange {
+                                aspects: f::Aspects::COLOR,
+                                .. Default::default()
+                            }, //TODO
                         };
                         unsafe {
                             init_cmd.pipeline_barrier(
@@ -602,7 +602,10 @@ impl<B: hal::Backend> Scene<B> {
                             _memory: gpu_memory,
                             kind,
                             format,
-                            range: COLOR_RANGE.clone(),
+                            range: i::SubresourceRange {
+                                aspects: f::Aspects::COLOR,
+                                .. Default::default()
+                            },
                             stable_state,
                         },
                     );
@@ -1657,7 +1660,10 @@ impl<B: hal::Backend> Scene<B> {
                     .. (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
                 target: &image.handle,
                 families: None,
-                range: COLOR_RANGE.clone(), //TODO
+                range: i::SubresourceRange {
+                    aspects: f::Aspects::COLOR,
+                    .. Default::default()
+                }, //TODO
             };
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
@@ -1693,7 +1699,10 @@ impl<B: hal::Backend> Scene<B> {
                     .. image.stable_state,
                 target: &image.handle,
                 families: None,
-                range: COLOR_RANGE.clone(), //TODO
+                range: i::SubresourceRange {
+                    aspects: f::Aspects::COLOR,
+                    .. Default::default()
+                }, //TODO
             };
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,

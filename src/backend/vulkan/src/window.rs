@@ -470,8 +470,7 @@ impl w::PresentationSurface<Backend> for Surface {
                             hal::format::Swizzle::NO,
                             hal::image::SubresourceRange {
                                 aspects: hal::format::Aspects::COLOR,
-                                layers: 0 .. 1,
-                                levels: 0 .. 1,
+                                .. Default::default()
                             },
                         )
                         .unwrap();
@@ -522,8 +521,7 @@ impl w::PresentationSurface<Backend> for Surface {
                         view: frame.view,
                         range: hal::image::SubresourceRange {
                             aspects: hal::format::Aspects::COLOR,
-                            layers: 0 .. 1,
-                            levels: 0 .. 1,
+                            .. Default::default()
                         },
                         owner: native::ImageViewOwner::Surface(FramebufferCachePtr(Arc::clone(
                             &frame.framebuffers.0,

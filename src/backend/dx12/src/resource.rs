@@ -247,6 +247,7 @@ pub struct ImageBound {
     pub(crate) place: Place,
     pub(crate) surface_type: format::SurfaceType,
     pub(crate) kind: image::Kind,
+    pub(crate) mip_levels: image::Level,
     pub(crate) usage: image::Usage,
     pub(crate) default_view_format: Option<DXGI_FORMAT>,
     pub(crate) view_caps: image::ViewCapabilities,
@@ -270,15 +271,6 @@ unsafe impl Send for ImageBound {}
 unsafe impl Sync for ImageBound {}
 
 impl ImageBound {
-    /// Get `SubresourceRange` of the whole image.
-    pub fn to_subresource_range(&self, aspects: format::Aspects) -> image::SubresourceRange {
-        image::SubresourceRange {
-            aspects,
-            levels: 0 .. self.descriptor.MipLevels as _,
-            layers: 0 .. self.kind.num_layers(),
-        }
-    }
-
     pub fn calc_subresource(&self, mip_level: UINT, layer: UINT, plane: UINT) -> UINT {
         mip_level
             + (layer * self.descriptor.MipLevels as UINT)
@@ -294,6 +286,7 @@ pub struct ImageUnbound {
     pub(crate) requirements: memory::Requirements,
     pub(crate) format: format::Format,
     pub(crate) kind: image::Kind,
+    pub(crate) mip_levels: image::Level,
     pub(crate) usage: image::Usage,
     pub(crate) tiling: image::Tiling,
     pub(crate) view_caps: image::ViewCapabilities,

@@ -104,7 +104,8 @@ pub(crate) struct ViewInfo {
     pub(crate) view_kind: image::ViewKind,
     pub(crate) format: dxgiformat::DXGI_FORMAT,
     pub(crate) component_mapping: UINT,
-    pub(crate) range: image::SubresourceRange,
+    pub(crate) levels: Range<image::Level>,
+    pub(crate) layers: Range<image::Layer>,
 }
 
 pub(crate) enum CommandSignature {
@@ -587,22 +588,22 @@ impl Device {
             u: unsafe { mem::zeroed() },
         };
 
-        let MipSlice = info.range.levels.start as _;
-        let FirstArraySlice = info.range.layers.start as _;
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let MipSlice = info.levels.start as _;
+        let FirstArraySlice = info.layers.start as _;
+        let ArraySize = (info.layers.end - info.layers.start) as _;
         let is_msaa = info.kind.num_samples() > 1;
-        if info.range.levels.start + 1 != info.range.levels.end {
-            return Err(image::ViewCreationError::Level(info.range.levels.start));
+        if info.levels.start + 1 != info.levels.end {
+            return Err(image::ViewCreationError::Level(info.levels.start));
         }
-        if info.range.layers.end > info.kind.num_layers() {
+        if info.layers.end > info.kind.num_layers() {
             return Err(image::ViewCreationError::Layer(
-                image::LayerError::OutOfBounds(info.range.layers.clone()),
+                image::LayerError::OutOfBounds,
             ));
         }
 
         match info.view_kind {
             image::ViewKind::D1 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_RTV { MipSlice }
             }
@@ -615,14 +616,14 @@ impl Device {
                 }
             }
             image::ViewKind::D2 if is_msaa => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2DMS;
                 *unsafe { desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_RTV {
                     UnusedField_NothingToDefine: 0,
                 }
             }
             image::ViewKind::D2 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_RTV {
                     MipSlice,
@@ -646,7 +647,7 @@ impl Device {
                 }
             }
             image::ViewKind::D3 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_RTV_DIMENSION_TEXTURE3D;
                 *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_RTV {
                     MipSlice,
@@ -695,22 +696,22 @@ impl Device {
             u: unsafe { mem::zeroed() },
         };
 
-        let MipSlice = info.range.levels.start as _;
-        let FirstArraySlice = info.range.layers.start as _;
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let MipSlice = info.levels.start as _;
+        let FirstArraySlice = info.layers.start as _;
+        let ArraySize = (info.layers.end - info.layers.start) as _;
         let is_msaa = info.kind.num_samples() > 1;
-        if info.range.levels.start + 1 != info.range.levels.end {
-            return Err(image::ViewCreationError::Level(info.range.levels.start));
+        if info.levels.start + 1 != info.levels.end {
+            return Err(image::ViewCreationError::Level(info.levels.start));
         }
-        if info.range.layers.end > info.kind.num_layers() {
+        if info.layers.end > info.kind.num_layers() {
             return Err(image::ViewCreationError::Layer(
-                image::LayerError::OutOfBounds(info.range.layers.clone()),
+                image::LayerError::OutOfBounds,
             ));
         }
 
         match info.view_kind {
             image::ViewKind::D1 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_DSV { MipSlice }
             }
@@ -723,14 +724,14 @@ impl Device {
                 }
             }
             image::ViewKind::D2 if is_msaa => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2DMS;
                 *unsafe { desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_DSV {
                     UnusedField_NothingToDefine: 0,
                 }
             }
             image::ViewKind::D2 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_DSV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_DSV { MipSlice }
             }
@@ -781,14 +782,14 @@ impl Device {
             u: unsafe { mem::zeroed() },
         };
 
-        let MostDetailedMip = info.range.levels.start as _;
-        let MipLevels = (info.range.levels.end - info.range.levels.start) as _;
-        let FirstArraySlice = info.range.layers.start as _;
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let MostDetailedMip = info.levels.start as _;
+        let MipLevels = (info.levels.end - info.levels.start) as _;
+        let FirstArraySlice = info.layers.start as _;
+        let ArraySize = (info.layers.end - info.layers.start) as _;
 
-        if info.range.layers.end > info.kind.num_layers() {
+        if info.layers.end > info.kind.num_layers() {
             return Err(image::ViewCreationError::Layer(
-                image::LayerError::OutOfBounds(info.range.layers.clone()),
+                image::LayerError::OutOfBounds,
             ));
         }
         let is_msaa = info.kind.num_samples() > 1;
@@ -796,7 +797,7 @@ impl Device {
 
         match info.view_kind {
             image::ViewKind::D1 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_SRV {
                     MostDetailedMip,
@@ -815,14 +816,14 @@ impl Device {
                 }
             }
             image::ViewKind::D2 if is_msaa => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2DMS;
                 *unsafe { desc.u.Texture2DMS_mut() } = d3d12::D3D12_TEX2DMS_SRV {
                     UnusedField_NothingToDefine: 0,
                 }
             }
             image::ViewKind::D2 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_SRV {
                     MostDetailedMip,
@@ -850,7 +851,7 @@ impl Device {
                 }
             }
             image::ViewKind::D3 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_SRV_DIMENSION_TEXTURE3D;
                 *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_SRV {
                     MostDetailedMip,
@@ -893,6 +894,7 @@ impl Device {
         &self,
         info: &ViewInfo,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
+        println!("SRV {:?}", info);
         let desc = Self::build_image_as_shader_resource_desc(&info)?;
         let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
         unsafe {
@@ -908,7 +910,7 @@ impl Device {
         info: &ViewInfo,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
         #![allow(non_snake_case)]
-        assert_eq!(info.range.levels.start + 1, info.range.levels.end);
+        assert_eq!(info.levels.start + 1, info.levels.end);
 
         let mut desc = d3d12::D3D12_UNORDERED_ACCESS_VIEW_DESC {
             Format: info.format,
@@ -916,13 +918,13 @@ impl Device {
             u: unsafe { mem::zeroed() },
         };
 
-        let MipSlice = info.range.levels.start as _;
-        let FirstArraySlice = info.range.layers.start as _;
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let MipSlice = info.levels.start as _;
+        let FirstArraySlice = info.layers.start as _;
+        let ArraySize = (info.layers.end - info.layers.start) as _;
 
-        if info.range.layers.end > info.kind.num_layers() {
+        if info.layers.end > info.kind.num_layers() {
             return Err(image::ViewCreationError::Layer(
-                image::LayerError::OutOfBounds(info.range.layers.clone()),
+                image::LayerError::OutOfBounds,
             ));
         }
         if info.kind.num_samples() > 1 {
@@ -932,7 +934,7 @@ impl Device {
 
         match info.view_kind {
             image::ViewKind::D1 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d12::D3D12_TEX1D_UAV { MipSlice }
             }
@@ -945,7 +947,7 @@ impl Device {
                 }
             }
             image::ViewKind::D2 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d12::D3D12_TEX2D_UAV {
                     MipSlice,
@@ -962,7 +964,7 @@ impl Device {
                 }
             }
             image::ViewKind::D3 => {
-                assert_eq!(info.range.layers, 0 .. 1);
+                assert_eq!(info.layers, 0 .. 1);
                 desc.ViewDimension = d3d12::D3D12_UAV_DIMENSION_TEXTURE3D;
                 *unsafe { desc.u.Texture3D_mut() } = d3d12::D3D12_TEX3D_UAV {
                     MipSlice,
@@ -2353,7 +2355,7 @@ impl d::Device<B> for Device {
         usage: image::Usage,
         view_caps: image::ViewCapabilities,
     ) -> Result<r::Image, image::CreationError> {
-        assert!(mip_levels <= kind.num_levels());
+        assert!(mip_levels <= kind.compute_num_levels());
 
         let base_format = format.base_format();
         let format_desc = base_format.0.desc();
@@ -2429,6 +2431,7 @@ impl d::Device<B> for Device {
             },
             format,
             kind,
+            mip_levels,
             usage,
             tiling,
             view_caps,
@@ -2527,11 +2530,8 @@ impl d::Device<B> for Device {
             },
             format: image_unbound.desc.Format,
             component_mapping: IDENTITY_MAPPING,
-            range: image::SubresourceRange {
-                aspects: Aspects::empty(),
-                levels: 0 .. 0,
-                layers: 0 .. 0,
-            },
+            levels: 0 .. 1,
+            layers: 0 .. 0,
         };
 
         //TODO: the clear_Xv is incomplete. We should support clearing images created without XXX_ATTACHMENT usage.
@@ -2563,6 +2563,7 @@ impl d::Device<B> for Device {
             },
             surface_type: image_unbound.format.base_format().0,
             kind: image_unbound.kind,
+            mip_levels: image_unbound.mip_levels,
             usage: image_unbound.usage,
             default_view_format: image_unbound.view_format,
             view_caps: image_unbound.view_caps,
@@ -2575,11 +2576,7 @@ impl d::Device<B> for Device {
                     .map(|layer| {
                         self.view_image_as_render_target(&ViewInfo {
                             format,
-                            range: image::SubresourceRange {
-                                aspects: Aspects::COLOR,
-                                levels: 0 .. 1, //TODO?
-                                layers: layer .. layer + 1,
-                            },
+                            layers: layer .. layer + 1,
                             ..info.clone()
                         })
                         .unwrap()
@@ -2594,11 +2591,7 @@ impl d::Device<B> for Device {
                     .map(|layer| {
                         self.view_image_as_depth_stencil(&ViewInfo {
                             format,
-                            range: image::SubresourceRange {
-                                aspects: Aspects::DEPTH,
-                                levels: 0 .. 1, //TODO?
-                                layers: layer .. layer + 1,
-                            },
+                            layers: layer .. layer + 1,
                             ..info.clone()
                         })
                         .unwrap()
@@ -2613,11 +2606,7 @@ impl d::Device<B> for Device {
                     .map(|layer| {
                         self.view_image_as_depth_stencil(&ViewInfo {
                             format,
-                            range: image::SubresourceRange {
-                                aspects: Aspects::STENCIL,
-                                levels: 0 .. 1, //TODO?
-                                layers: layer .. layer + 1,
-                            },
+                            layers: layer .. layer + 1,
                             ..info.clone()
                         })
                         .unwrap()
@@ -2642,8 +2631,14 @@ impl d::Device<B> for Device {
     ) -> Result<r::ImageView, image::ViewCreationError> {
         let image = image.expect_bound();
         let is_array = image.kind.num_layers() > 1;
-        let mip_levels = (range.levels.start, range.levels.end);
-        let layers = (range.layers.start, range.layers.end);
+        let mip_levels = (
+            range.level_start,
+            range.level_start + range.resolve_level_count(image.mip_levels),
+        );
+        let layers = (
+            range.layer_start,
+            range.layer_start + range.resolve_layer_count(image.kind.num_layers()),
+        );
         let surface_format = format.base_format().0;
 
         let info = ViewInfo {
@@ -2660,7 +2655,8 @@ impl d::Device<B> for Device {
             },
             format: conv::map_format(format).ok_or(image::ViewCreationError::BadFormat(format))?,
             component_mapping: conv::map_swizzle(swizzle),
-            range,
+            levels: mip_levels.0 .. mip_levels.1,
+            layers: layers.0 .. layers.1,
         };
 
         //Note: we allow RTV/DSV/SRV/UAV views to fail to be created here,
@@ -2672,13 +2668,13 @@ impl d::Device<B> for Device {
                 .usage
                 .intersects(image::Usage::SAMPLED | image::Usage::INPUT_ATTACHMENT)
             {
-                let info = if info.range.aspects.contains(format::Aspects::DEPTH) {
+                let info = if range.aspects.contains(format::Aspects::DEPTH) {
                     conv::map_format_shader_depth(surface_format)
                         .map(|format| ViewInfo {
                             format,
                             .. info.clone()
                         })
-                } else if info.range.aspects.contains(format::Aspects::STENCIL) {
+                } else if range.aspects.contains(format::Aspects::STENCIL) {
                     // Vulkan/gfx expects stencil to be read from the R channel,
                     // while DX12 exposes it in "G" always.
                     let new_swizzle = conv::swizzle_rg(swizzle);

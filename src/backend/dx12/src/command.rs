@@ -1152,18 +1152,27 @@ impl CommandBuffer {
             StateBefore: states.start,
             StateAfter: states.end,
         });
+        let full_range = image::SubresourceRange {
+            aspects: range.aspects,
+            .. Default::default()
+        };
+        let num_levels = range.resolve_level_count(target.mip_levels);
+        let num_layers = range.resolve_layer_count(target.kind.num_layers());
 
-        if *range == target.to_subresource_range(range.aspects) {
+        if *range == full_range {
             // Only one barrier if it affects the whole image.
             list.extend(iter::once(bar));
         } else {
             // Generate barrier for each layer/level combination.
-            for level in range.levels.clone() {
-                for layer in range.layers.clone() {
+            for rel_level in 0 .. num_levels {
+                for rel_layer in 0 .. num_layers {
                     unsafe {
                         let transition_barrier = &mut *bar.u.Transition_mut();
-                        transition_barrier.Subresource =
-                            target.calc_subresource(level as _, layer as _, 0);
+                        transition_barrier.Subresource = target.calc_subresource(
+                            (range.level_start + rel_level) as _,
+                            (range.layer_start + rel_layer) as _,
+                            0,
+                        );
                     }
                     list.extend(iter::once(bar));
                 }
@@ -1416,7 +1425,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         for subresource_range in subresource_ranges {
             let sub = subresource_range.borrow();
-            if sub.levels.end != 1 {
+            if sub.level_start != 0 || image.mip_levels != 1 {
                 warn!("Clearing non-zero mipmap levels is not supported yet");
             }
             let target_state = if sub.aspects.contains(Aspects::COLOR) {
@@ -1432,17 +1441,18 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             self.raw
                 .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
 
-            for layer in sub.layers.clone() {
+            for rel_layer in 0 .. sub.resolve_layer_count(image.kind.num_layers()) {
+                let layer = (sub.layer_start + rel_layer) as usize;
                 if sub.aspects.contains(Aspects::COLOR) {
-                    let rtv = image.clear_cv[layer as usize];
+                    let rtv = image.clear_cv[layer];
                     self.clear_render_target_view(rtv, value.color, &[]);
                 }
                 if sub.aspects.contains(Aspects::DEPTH) {
-                    let dsv = image.clear_dv[layer as usize];
+                    let dsv = image.clear_dv[layer];
                     self.clear_depth_stencil_view(dsv, Some(value.depth_stencil.depth), None, &[]);
                 }
                 if sub.aspects.contains(Aspects::STENCIL) {
-                    let dsv = image.clear_sv[layer as usize];
+                    let dsv = image.clear_sv[layer];
                     self.clear_depth_stencil_view(
                         dsv,
                         None,
@@ -1505,12 +1515,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
                             component_mapping: device::IDENTITY_MAPPING,
-                            range: image::SubresourceRange {
-                                aspects: Aspects::COLOR,
-                                levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
-                                layers: attachment.layers.0 + clear_rect.layers.start
-                                    .. attachment.layers.0 + clear_rect.layers.end,
-                            },
+                            levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
+                            layers: attachment.layers.0 + clear_rect.layers.start
+                                .. attachment.layers.0 + clear_rect.layers.end,
                         };
                         let rtv = rtv_pool.alloc_handle();
                         Device::view_image_as_render_target_impl(device, rtv, &view_info).unwrap();
@@ -1542,20 +1549,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
                             component_mapping: device::IDENTITY_MAPPING,
-                            range: image::SubresourceRange {
-                                aspects: if depth.is_some() {
-                                    Aspects::DEPTH
-                                } else {
-                                    Aspects::empty()
-                                } | if stencil.is_some() {
-                                    Aspects::STENCIL
-                                } else {
-                                    Aspects::empty()
-                                },
-                                levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
-                                layers: attachment.layers.0 + clear_rect.layers.start
-                                    .. attachment.layers.0 + clear_rect.layers.end,
-                            },
+                            levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
+                            layers: attachment.layers.0 + clear_rect.layers.start
+                                .. attachment.layers.0 + clear_rect.layers.end,
                         };
                         let dsv = dsv_pool.alloc_handle();
                         Device::view_image_as_depth_stencil_impl(device, dsv, &view_info).unwrap();
@@ -1669,11 +1665,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             view_kind: image::ViewKind::D2Array, // TODO
             format: src.default_view_format.unwrap(),
             component_mapping: device::IDENTITY_MAPPING,
-            range: image::SubresourceRange {
-                aspects: format::Aspects::COLOR, // TODO
-                levels: 0 .. src.descriptor.MipLevels as _,
-                layers: 0 .. src.kind.num_layers(),
-            },
+            levels: 0 .. src.descriptor.MipLevels as _,
+            layers: 0 .. src.kind.num_layers(),
         })
         .unwrap();
         device.CreateShaderResourceView(

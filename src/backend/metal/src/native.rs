@@ -313,6 +313,7 @@ impl ImageLike {
 pub struct Image {
     pub(crate) like: ImageLike,
     pub(crate) kind: image::Kind,
+    pub(crate) mip_levels: image::Level,
     pub(crate) format_desc: FormatDesc,
     pub(crate) shader_channel: Channel,
     pub(crate) mtl_format: metal::MTLPixelFormat,
