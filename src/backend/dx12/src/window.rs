@@ -2,21 +2,15 @@ use std::{collections::VecDeque, fmt, mem, os::raw::c_void};
 
 use winapi::{
     shared::{
-        dxgi,
-        dxgi1_4,
+        dxgi, dxgi1_4,
         windef::{HWND, RECT},
         winerror,
     },
-    um::{
-        synchapi,
-        winbase,
-        winnt::HANDLE,
-        winuser::GetClientRect,
-    },
+    um::{synchapi, winbase, winnt::HANDLE, winuser::GetClientRect},
 };
 
 use crate::{conv, resource as r, Backend, Device, Instance, PhysicalDevice, QueueFamily};
-use hal::{device::{Device as _}, format as f, image as i, window as w};
+use hal::{device::Device as _, format as f, image as i, window as w};
 
 impl Instance {
     pub fn create_surface_from_hwnd(&self, hwnd: *mut c_void) -> Surface {
@@ -162,7 +156,7 @@ impl w::PresentationSurface<Backend> for Surface {
         if let Some(mut present) = self.presentation.take() {
             let _ = present.swapchain.wait(winbase::INFINITE);
             let _ = device.wait_idle(); //TODO: this shouldn't be needed,
-            // but it complains that the queue is still used otherwise
+                                        // but it complains that the queue is still used otherwise
             let inner = present.swapchain.release_resources();
             inner.destroy();
         }
@@ -174,7 +168,7 @@ impl w::PresentationSurface<Backend> for Surface {
     ) -> Result<(r::ImageView, Option<w::Suboptimal>), w::AcquireError> {
         let present = self.presentation.as_mut().unwrap();
         let sc = &mut present.swapchain;
- 
+
         sc.wait((timeout_ns / 1_000_000) as u32)?;
 
         let index = sc.inner.GetCurrentBackBufferIndex();
@@ -217,11 +211,10 @@ impl Swapchain {
     }
 
     pub(crate) fn wait(&mut self, timeout_ms: u32) -> Result<(), w::AcquireError> {
-        match unsafe {
-            synchapi::WaitForSingleObject(self.waitable, timeout_ms)
-        } {
-            winbase::WAIT_ABANDONED |
-            winbase::WAIT_FAILED => Err(w::AcquireError::DeviceLost(hal::device::DeviceLost)),
+        match unsafe { synchapi::WaitForSingleObject(self.waitable, timeout_ms) } {
+            winbase::WAIT_ABANDONED | winbase::WAIT_FAILED => {
+                Err(w::AcquireError::DeviceLost(hal::device::DeviceLost))
+            }
             winbase::WAIT_OBJECT_0 => Ok(()),
             winerror::WAIT_TIMEOUT => Err(w::AcquireError::Timeout),
             hr => panic!("Unexpected wait status 0x{:X}", hr),

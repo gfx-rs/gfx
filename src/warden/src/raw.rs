@@ -203,7 +203,7 @@ pub enum DescriptorRange {
 }
 
 fn default_instance_range() -> Range<hal::InstanceCount> {
-    0 .. 1
+    0..1
 }
 
 #[derive(Debug, Deserialize)]

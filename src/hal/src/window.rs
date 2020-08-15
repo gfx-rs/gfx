@@ -55,12 +55,7 @@
 //!
 //! DOC TODO
 
-use crate::{
-    device,
-    format::Format,
-    image,
-    Backend,
-};
+use crate::{device, format::Format, image, Backend};
 
 use std::{
     any::Any,
@@ -69,7 +64,6 @@ use std::{
     fmt,
     ops::RangeInclusive,
 };
-
 
 /// Default image usage for the swapchain.
 pub const DEFAULT_USAGE: image::Usage = image::Usage::COLOR_ATTACHMENT;

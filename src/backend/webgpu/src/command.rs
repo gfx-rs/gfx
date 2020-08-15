@@ -3,33 +3,17 @@ use std::{borrow::Borrow, ops::Range};
 use hal::{
     buffer,
     command::{
-        AttachmentClear,
-        BufferCopy,
-        BufferImageCopy,
-        ClearValue,
-        CommandBufferFlags,
-        CommandBufferInheritanceInfo,
-        DescriptorSetOffset,
-        ImageBlit,
-        ImageCopy,
-        ImageResolve,
-        Level,
-        SubpassContents,
+        AttachmentClear, BufferCopy, BufferImageCopy, ClearValue, CommandBufferFlags,
+        CommandBufferInheritanceInfo, DescriptorSetOffset, ImageBlit, ImageCopy, ImageResolve,
+        Level, SubpassContents,
     },
     device::OutOfMemory,
     image::{Filter, Layout, SubresourceRange},
     memory::{Barrier, Dependencies},
-    pso,
-    query,
+    pso, query,
     queue::Submission,
     window::{PresentError, PresentationSurface, Suboptimal, SwapImageIndex},
-    DrawCount,
-    IndexCount,
-    InstanceCount,
-    TaskCount,
-    VertexCount,
-    VertexOffset,
-    WorkGroupCount,
+    DrawCount, IndexCount, InstanceCount, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
 };
 
 use crate::Backend;
@@ -434,7 +418,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &<Backend as hal::Backend>::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32
+        _stride: u32,
     ) {
         todo!()
     }
@@ -446,7 +430,7 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &<Backend as hal::Backend>::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32
+        _stride: u32,
     ) {
         todo!()
     }
@@ -569,7 +553,6 @@ impl hal::command::CommandBuffer<Backend> for CommandBuffer {
     {
         todo!()
     }
-
 
     unsafe fn insert_debug_marker(&mut self, _name: &str, _color: u32) {
         todo!()

@@ -13,10 +13,7 @@ use crate::{
 use hal::{adapter, command, device, format, pass, pool, pso, query, queue, window};
 use log::debug;
 
-use std::{
-    borrow::Borrow,
-    ops::Range,
-};
+use std::{borrow::Borrow, ops::Range};
 
 mod buffer;
 mod descriptor;

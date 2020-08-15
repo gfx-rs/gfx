@@ -52,9 +52,9 @@ surfman::declare_surfman!();
 
 // WGL implementation
 #[cfg(wgl)]
-use window::wgl::DeviceContext;
-#[cfg(wgl)]
 pub use crate::window::wgl::{Instance, Surface, Swapchain};
+#[cfg(wgl)]
+use window::wgl::DeviceContext;
 
 // Catch-all dummy implementation
 #[cfg(dummy)]
@@ -769,5 +769,5 @@ fn resolve_sub_range(
     whole: Range<buffer::Offset>,
 ) -> Range<buffer::Offset> {
     let end = sub.size.map_or(whole.end, |s| whole.start + sub.offset + s);
-    whole.start + sub.offset .. end
+    whole.start + sub.offset..end
 }

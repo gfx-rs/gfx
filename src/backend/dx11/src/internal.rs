@@ -1,9 +1,5 @@
-use hal::{
-    command,
-    image,
-    pso,
-};
 use auxil::ShaderStage;
+use hal::{command, image, pso};
 
 use winapi::{
     shared::{
@@ -1223,7 +1219,7 @@ impl Internal {
                     for clear_rect in &clear_rects {
                         let viewport = conv::map_viewport(&pso::Viewport {
                             rect: clear_rect.rect,
-                            depth: 0f32 .. 1f32,
+                            depth: 0f32..1f32,
                         });
 
                         debug_marker!(context, "{:?}", clear_rect.rect);
@@ -1297,7 +1293,7 @@ impl Internal {
                     for clear_rect in &clear_rects {
                         let viewport = conv::map_viewport(&pso::Viewport {
                             rect: clear_rect.rect,
-                            depth: 0f32 .. 1f32,
+                            depth: 0f32..1f32,
                         });
 
                         unsafe {

@@ -1,22 +1,7 @@
 use auxil::FastHashMap;
 use hal::{
-    buffer,
-    command as com,
-    format,
-    format::Aspects,
-    image,
-    memory,
-    pass,
-    pool,
-    pso,
-    query,
-    DrawCount,
-    IndexCount,
-    IndexType,
-    InstanceCount,
-    VertexCount,
-    VertexOffset,
-    TaskCount,
+    buffer, command as com, format, format::Aspects, image, memory, pass, pool, pso, query,
+    DrawCount, IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset,
     WorkGroupCount,
 };
 
@@ -35,17 +20,8 @@ use winapi::{
 use smallvec::SmallVec;
 
 use crate::{
-    conv,
-    descriptors_cpu,
-    device,
-    internal,
-    resource as r,
-    root_constants::RootConstant,
-    validate_line_width,
-    Backend,
-    Device,
-    Shared,
-    MAX_VERTEX_BUFFERS,
+    conv, descriptors_cpu, device, internal, resource as r, root_constants::RootConstant,
+    validate_line_width, Backend, Device, Shared, MAX_VERTEX_BUFFERS,
 };
 
 // Fixed size of the root signature.
@@ -265,7 +241,7 @@ impl PipelineCache {
         self.srv_cbv_uav_start = srv_cbv_uav_start;
         self.sampler_start = sampler_start;
 
-        for (set, element) in sets.zip(layout.elements[first_set ..].iter()) {
+        for (set, element) in sets.zip(layout.elements[first_set..].iter()) {
             let set = set.borrow();
 
             let mut num_tables = 0;
@@ -481,9 +457,7 @@ impl CommandBuffer {
             if self.is_active {
                 self.raw.close();
             }
-            unsafe {
-                self.allocator.Reset()
-            };
+            unsafe { self.allocator.Reset() };
         }
         self.raw
             .reset(self.allocator, native::PipelineState::null());
@@ -642,7 +616,7 @@ impl CommandBuffer {
             let resolve_dst = state.framebuffer.attachments[dst_attachment];
 
             // The number of layers of the render area are given on framebuffer creation.
-            for l in 0 .. framebuffer.layers {
+            for l in 0..framebuffer.layers {
                 // Attachtments only have a single mip level by specification.
                 let subresource_src = resolve_src.calc_subresource(
                     resolve_src.mip_levels.0 as _,
@@ -816,7 +790,7 @@ impl CommandBuffer {
         for (i, root_constant) in pipeline.root_constants.iter().enumerate() {
             let num_constants = (root_constant.range.end - root_constant.range.start) as usize;
             let mut data = Vec::new();
-            for c in cur_index .. cur_index + num_constants {
+            for c in cur_index..cur_index + num_constants {
                 data.push(match user_data.data[c] {
                     RootElement::Constant(v) => v,
                     _ => {
@@ -840,7 +814,7 @@ impl CommandBuffer {
             .iter()
             .fold(0, |sum, c| sum + c.range.end - c.range.start) as usize;
 
-        for i in num_root_constant .. pipeline.num_parameter_slots {
+        for i in num_root_constant..pipeline.num_parameter_slots {
             let table_index = i - num_root_constant + table_start;
             if user_data.is_index_dirty(table_index) {
                 match user_data.data[table_index] {
@@ -1007,8 +981,8 @@ impl CommandBuffer {
                 }
             } else {
                 // worst case: row by row copy
-                for z in 0 .. r.image_extent.depth {
-                    for y in 0 .. image_extent_aligned.height / image.block_dim.1 as u32 {
+                for z in 0..r.image_extent.depth {
+                    for y in 0..image_extent_aligned.height / image.block_dim.1 as u32 {
                         // an image row starts non-aligned
                         let row_offset = layer_offset
                             + z as u64 * slice_pitch as u64
@@ -1097,7 +1071,7 @@ impl CommandBuffer {
         let vbs = &self.vertex_buffer_views;
         let mut last_end_slot = 0;
         loop {
-            let start_offset = match vbs_remap[last_end_slot ..]
+            let start_offset = match vbs_remap[last_end_slot..]
                 .iter()
                 .position(|remap| remap.is_some())
             {
@@ -1106,7 +1080,7 @@ impl CommandBuffer {
             };
 
             let start_slot = last_end_slot + start_offset;
-            let buffers = vbs_remap[start_slot ..]
+            let buffers = vbs_remap[start_slot..]
                 .iter()
                 .take_while(|x| x.is_some())
                 .filter_map(|mapping| {
@@ -1154,7 +1128,7 @@ impl CommandBuffer {
         });
         let full_range = image::SubresourceRange {
             aspects: range.aspects,
-            .. Default::default()
+            ..Default::default()
         };
         let num_levels = range.resolve_level_count(target.mip_levels);
         let num_layers = range.resolve_layer_count(target.kind.num_layers());
@@ -1164,8 +1138,8 @@ impl CommandBuffer {
             list.extend(iter::once(bar));
         } else {
             // Generate barrier for each layer/level combination.
-            for rel_level in 0 .. num_levels {
-                for rel_layer in 0 .. num_layers {
+            for rel_level in 0..num_levels {
+                for rel_layer in 0..num_layers {
                     unsafe {
                         let transition_barrier = &mut *bar.u.Transition_mut();
                         transition_barrier.Subresource = target.calc_subresource(
@@ -1364,7 +1338,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     let target = target.expect_bound();
                     Self::fill_texture_barries(
                         target,
-                        state_src .. state_dst,
+                        state_src..state_dst,
                         range,
                         &mut raw_barriers,
                     );
@@ -1437,11 +1411,11 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             // Transition into a renderable state. We don't expect `*AttachmentOptimal`
             // here since this would be invalid.
             raw_barriers.clear();
-            Self::fill_texture_barries(image, base_state .. target_state, sub, &mut raw_barriers);
+            Self::fill_texture_barries(image, base_state..target_state, sub, &mut raw_barriers);
             self.raw
                 .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
 
-            for rel_layer in 0 .. sub.resolve_layer_count(image.kind.num_layers()) {
+            for rel_layer in 0..sub.resolve_layer_count(image.kind.num_layers()) {
                 let layer = (sub.layer_start + rel_layer) as usize;
                 if sub.aspects.contains(Aspects::COLOR) {
                     let rtv = image.clear_cv[layer];
@@ -1464,7 +1438,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
             // Transition back into the old state.
             raw_barriers.clear();
-            Self::fill_texture_barries(image, target_state .. base_state, sub, &mut raw_barriers);
+            Self::fill_texture_barries(image, target_state..base_state, sub, &mut raw_barriers);
             self.raw
                 .ResourceBarrier(raw_barriers.len() as _, raw_barriers.as_ptr());
         }
@@ -1515,9 +1489,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
                             component_mapping: device::IDENTITY_MAPPING,
-                            levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
+                            levels: attachment.mip_levels.0..attachment.mip_levels.1,
                             layers: attachment.layers.0 + clear_rect.layers.start
-                                .. attachment.layers.0 + clear_rect.layers.end,
+                                ..attachment.layers.0 + clear_rect.layers.end,
                         };
                         let rtv = rtv_pool.alloc_handle();
                         Device::view_image_as_render_target_impl(device, rtv, &view_info).unwrap();
@@ -1549,9 +1523,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             view_kind: image::ViewKind::D2Array,
                             format: attachment.dxgi_format,
                             component_mapping: device::IDENTITY_MAPPING,
-                            levels: attachment.mip_levels.0 .. attachment.mip_levels.1,
+                            levels: attachment.mip_levels.0..attachment.mip_levels.1,
                             layers: attachment.layers.0 + clear_rect.layers.start
-                                .. attachment.layers.0 + clear_rect.layers.end,
+                                ..attachment.layers.0 + clear_rect.layers.end,
                         };
                         let dsv = dsv_pool.alloc_handle();
                         Device::view_image_as_depth_stencil_impl(device, dsv, &view_info).unwrap();
@@ -1594,7 +1568,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
         for region in regions {
             let r = region.borrow();
-            for layer in 0 .. r.extent.depth as UINT {
+            for layer in 0..r.extent.depth as UINT {
                 self.raw.ResolveSubresource(
                     src.resource.as_mut_ptr(),
                     src.calc_subresource(
@@ -1665,8 +1639,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             view_kind: image::ViewKind::D2Array, // TODO
             format: src.default_view_format.unwrap(),
             component_mapping: device::IDENTITY_MAPPING,
-            levels: 0 .. src.descriptor.MipLevels as _,
-            layers: 0 .. src.kind.num_layers(),
+            levels: 0..src.descriptor.MipLevels as _,
+            layers: 0..src.kind.num_layers(),
         })
         .unwrap();
         device.CreateShaderResourceView(
@@ -1709,7 +1683,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 format::Aspects::COLOR => {
                     let format = dst.default_view_format.unwrap();
                     // Create RTVs of the dst image for the miplevel of the current region
-                    for i in 0 .. num_layers {
+                    for i in 0..num_layers {
                         let mut desc = d3d12::D3D12_RENDER_TARGET_VIEW_DESC {
                             Format: format,
                             ViewDimension: d3d12::D3D12_RTV_DIMENSION_TEXTURE2DARRAY,
@@ -1744,7 +1718,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
             let list = instances.entry(key).or_insert(Vec::new());
 
-            for i in 0 .. num_layers {
+            for i in 0..num_layers {
                 let src_layer = r.src_subresource.layers.start + i;
                 // Screen space triangle blitting
                 let data = {
@@ -1874,7 +1848,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     {
         assert!(first_binding as usize <= MAX_VERTEX_BUFFERS);
 
-        for (view, (buffer, sub)) in self.vertex_buffer_views[first_binding as _ ..]
+        for (view, (buffer, sub)) in self.vertex_buffer_views[first_binding as _..]
             .iter_mut()
             .zip(buffers)
         {
@@ -2531,7 +2505,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         count_buffer: &r::Buffer,
         count_buffer_offset: buffer::Offset,
         max_draw_count: DrawCount,
-        stride: u32
+        stride: u32,
     ) {
         assert_eq!(stride, 16);
         let buffer = buffer.expect_bound();
@@ -2554,7 +2528,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         count_buffer: &r::Buffer,
         count_buffer_offset: buffer::Offset,
         max_draw_count: DrawCount,
-        stride: u32
+        stride: u32,
     ) {
         assert_eq!(stride, 20);
         let buffer = buffer.expect_bound();

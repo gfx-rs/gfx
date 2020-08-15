@@ -422,7 +422,7 @@ impl CommandBuffer {
             self.cache.blend_targets.resize(max_blend_slots, None);
         }
 
-        let all_targets_same = blend_targets[1 ..]
+        let all_targets_same = blend_targets[1..]
             .iter()
             .all(|target| target == &blend_targets[0]);
 
@@ -1506,7 +1506,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &n::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32
+        _stride: u32,
     ) {
         unimplemented!()
     }
@@ -1518,7 +1518,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &n::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32
+        _stride: u32,
     ) {
         unimplemented!()
     }

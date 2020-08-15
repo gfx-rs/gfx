@@ -2,8 +2,7 @@ use crate::{conv, device::Device, native, Backend, GlContainer, PhysicalDevice, 
 
 use std::{
     ffi::{CString, OsStr},
-    iter,
-    mem,
+    iter, mem,
     os::{raw::c_void, windows::ffi::OsStrExt},
     ptr,
 };

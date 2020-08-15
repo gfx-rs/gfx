@@ -17,9 +17,7 @@ use std::ops::Range;
 use std::{fmt, iter};
 
 use crate::{
-    buffer,
-    format,
-    image,
+    buffer, format, image,
     memory::{Requirements, Segment},
     pass,
     pool::CommandPoolCreateFlags,
@@ -27,8 +25,7 @@ use crate::{
     pso::DescriptorPoolCreateFlags,
     query,
     queue::QueueFamilyId,
-    Backend,
-    MemoryTypeId,
+    Backend, MemoryTypeId,
 };
 
 /// Error occurred caused device to be lost.
@@ -982,11 +979,7 @@ pub trait Device<B: Backend>: fmt::Debug + Any + Send + Sync {
     );
     /// Associate a name with a pipeline layout, for easier debugging in external tools or with
     /// validation layers that can print a friendly name when referring to objects in error messages
-    unsafe fn set_pipeline_layout_name(
-        &self,
-        pipeline_layout: &mut B::PipelineLayout,
-        name: &str,
-    );
+    unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut B::PipelineLayout, name: &str);
     /// Associate a name with a compute pipeline, for easier debugging in external tools or with
     /// validation layers that can print a friendly name when referring to objects in error messages
     unsafe fn set_compute_pipeline_name(

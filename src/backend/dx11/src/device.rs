@@ -1,25 +1,13 @@
-use hal::{
-    adapter::MemoryProperties,
-    buffer,
-    device,
-    format,
-    image,
-    memory,
-    pass,
-    pool,
-    pso,
-    pso::VertexInputRate,
-    query,
-    queue::QueueFamilyId,
-    window,
-};
 use auxil::ShaderStage;
+use hal::{
+    adapter::MemoryProperties, buffer, device, format, image, memory, pass, pool, pso,
+    pso::VertexInputRate, query, queue::QueueFamilyId, window,
+};
 
 use winapi::{
     shared::{
         dxgi::{IDXGIFactory, IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD},
-        dxgiformat,
-        dxgitype,
+        dxgiformat, dxgitype,
         minwindef::TRUE,
         windef::HWND,
         winerror,
@@ -34,42 +22,12 @@ use std::{borrow::Borrow, cell::RefCell, fmt, mem, ops::Range, ptr, sync::Arc};
 use parking_lot::{Condvar, Mutex};
 
 use crate::{
-    conv,
-    internal,
-    shader,
-    Backend,
-    Buffer,
-    BufferView,
-    CommandBuffer,
-    CommandPool,
-    ComputePipeline,
-    DescriptorContent,
-    DescriptorIndex,
-    DescriptorPool,
-    DescriptorSet,
-    DescriptorSetInfo,
-    DescriptorSetLayout,
-    Fence,
-    Framebuffer,
-    GraphicsPipeline,
-    Image,
-    ImageView,
-    InternalBuffer,
-    InternalImage,
-    Memory,
-    MultiStageData,
-    PipelineLayout,
-    QueryPool,
-    RawFence,
-    RegisterAccumulator,
-    RegisterData,
-    RenderPass,
-    ResourceIndex,
-    Sampler,
-    Semaphore,
-    ShaderModule,
-    SubpassDesc,
-    ViewInfo,
+    conv, internal, shader, Backend, Buffer, BufferView, CommandBuffer, CommandPool,
+    ComputePipeline, DescriptorContent, DescriptorIndex, DescriptorPool, DescriptorSet,
+    DescriptorSetInfo, DescriptorSetLayout, Fence, Framebuffer, GraphicsPipeline, Image, ImageView,
+    InternalBuffer, InternalImage, Memory, MultiStageData, PipelineLayout, QueryPool, RawFence,
+    RegisterAccumulator, RegisterData, RenderPass, ResourceIndex, Sampler, Semaphore, ShaderModule,
+    SubpassDesc, ViewInfo,
 };
 
 //TODO: expose coherent type 0x2 when it's properly supported
@@ -929,7 +887,8 @@ impl device::Device<Backend> for Device {
                 let vs = build_shader(ShaderStage::Vertex, Some(&vertex))?.unwrap();
                 let gs = build_shader(ShaderStage::Geometry, geometry.as_ref())?;
 
-                let layout = self.create_input_layout(vs.clone(), buffers, attributes, input_assembler)?;
+                let layout =
+                    self.create_input_layout(vs.clone(), buffers, attributes, input_assembler)?;
 
                 let vs = self.create_vertex_shader(vs)?;
                 let gs = if let Some(blob) = gs {
@@ -941,13 +900,16 @@ impl device::Device<Backend> for Device {
                     let hs = build_shader(ShaderStage::Hull, Some(&ts.0))?.unwrap();
                     let ds = build_shader(ShaderStage::Domain, Some(&ts.1))?.unwrap();
 
-                    (Some(self.create_hull_shader(hs)?), Some(self.create_domain_shader(ds)?))
+                    (
+                        Some(self.create_hull_shader(hs)?),
+                        Some(self.create_domain_shader(ds)?),
+                    )
                 } else {
                     (None, None)
                 };
 
                 (layout, vs, gs, hs, ds)
-            },
+            }
             pso::PrimitiveAssembler::Mesh { .. } => {
                 return Err(pso::CreationError::UnsupportedPipeline)
             }
@@ -1091,7 +1053,7 @@ impl device::Device<Backend> for Device {
                 usage,
             },
             properties: memory::Properties::empty(),
-            bound_range: 0 .. 0,
+            bound_range: 0..0,
             host_ptr: ptr::null_mut(),
             bind,
             requirements: memory::Requirements {
@@ -1296,7 +1258,7 @@ impl device::Device<Backend> for Device {
             uav,
             usage: buffer.internal.usage,
         };
-        let range = offset .. offset + buffer.requirements.size;
+        let range = offset..offset + buffer.requirements.size;
 
         memory.bind_buffer(range.clone(), internal.clone());
 
@@ -1487,8 +1449,8 @@ impl device::Device<Backend> for Device {
             image::Kind::D2(width, height, layers, _) => {
                 let mut initial_datas = Vec::new();
 
-                for _layer in 0 .. layers {
-                    for level in 0 .. image.mip_levels {
+                for _layer in 0..layers {
+                    for level in 0..image.mip_levels {
                         let width = image.kind.extent().at_level(level).width;
 
                         // TODO: layer offset?
@@ -1586,7 +1548,7 @@ impl device::Device<Backend> for Device {
         let mut unordered_access_views = Vec::new();
 
         if image.usage.contains(Usage::TRANSFER_DST) && !compressed && !depth {
-            for mip in 0 .. image.mip_levels {
+            for mip in 0..image.mip_levels {
                 let view = ViewInfo {
                     resource: resource,
                     kind: image.kind,
@@ -1595,8 +1557,8 @@ impl device::Device<Backend> for Device {
                     // TODO: we should be using `uav_format` rather than `copy_uav_format`, and share
                     //       the UAVs when the formats are identical
                     format: decomposed.copy_uav.unwrap(),
-                    levels: mip .. (mip + 1),
-                    layers: 0 .. image.kind.num_layers(),
+                    levels: mip..(mip + 1),
+                    layers: 0..image.kind.num_layers(),
                 };
 
                 unordered_access_views.push(
@@ -1613,8 +1575,8 @@ impl device::Device<Backend> for Device {
                 caps: image::ViewCapabilities::empty(),
                 view_kind,
                 format: decomposed.copy_srv.unwrap(),
-                levels: 0 .. image.mip_levels,
-                layers: 0 .. image.kind.num_layers(),
+                levels: 0..image.mip_levels,
+                layers: 0..image.kind.num_layers(),
             };
 
             let copy_srv = if !compressed {
@@ -1649,16 +1611,16 @@ impl device::Device<Backend> for Device {
             && !compressed
             && !depth
         {
-            for layer in 0 .. image.kind.num_layers() {
-                for mip in 0 .. image.mip_levels {
+            for layer in 0..image.kind.num_layers() {
+                for mip in 0..image.mip_levels {
                     let view = ViewInfo {
                         resource: resource,
                         kind: image.kind,
                         caps: image::ViewCapabilities::empty(),
                         view_kind,
                         format: decomposed.rtv.unwrap(),
-                        levels: mip .. (mip + 1),
-                        layers: layer .. (layer + 1),
+                        levels: mip..(mip + 1),
+                        layers: layer..(layer + 1),
                     };
 
                     render_target_views.push(
@@ -1672,16 +1634,16 @@ impl device::Device<Backend> for Device {
         let mut depth_stencil_views = Vec::new();
 
         if depth {
-            for layer in 0 .. image.kind.num_layers() {
-                for mip in 0 .. image.mip_levels {
+            for layer in 0..image.kind.num_layers() {
+                for mip in 0..image.mip_levels {
                     let view = ViewInfo {
                         resource: resource,
                         kind: image.kind,
                         caps: image::ViewCapabilities::empty(),
                         view_kind,
                         format: decomposed.dsv.unwrap(),
-                        levels: mip .. (mip + 1),
-                        layers: layer .. (layer + 1),
+                        levels: mip..(mip + 1),
+                        layers: layer..(layer + 1),
                     };
 
                     depth_stencil_views.push(
@@ -1732,8 +1694,8 @@ impl device::Device<Backend> for Device {
                 view_kind
             },
             format: conv::map_format(format).ok_or(image::ViewCreationError::BadFormat(format))?,
-            levels: range.level_start .. range.level_start + num_levels,
-            layers: range.layer_start .. range.layer_start + num_layers,
+            levels: range.level_start..range.level_start + num_levels,
+            layers: range.layer_start..range.layer_start + num_layers,
         };
 
         let srv_info = ViewInfo {
@@ -1883,12 +1845,12 @@ impl device::Device<Backend> for Device {
                 .iter()
                 .position(|binding| binding.binding == write.binding)
                 .unwrap();
-            for binding in &write.set.layout.bindings[.. binding_start] {
+            for binding in &write.set.layout.bindings[..binding_start] {
                 let content = DescriptorContent::from(binding.ty);
                 mapping.add_content(content, binding.stage_flags);
             }
 
-            for (binding, descriptor) in write.set.layout.bindings[binding_start ..]
+            for (binding, descriptor) in write.set.layout.bindings[binding_start..]
                 .iter()
                 .zip(write.descriptors)
             {
@@ -2273,11 +2235,7 @@ impl device::Device<Backend> for Device {
         // TODO
     }
 
-    unsafe fn set_pipeline_layout_name(
-        &self,
-        _pipeline_layout: &mut PipelineLayout,
-        _name: &str,
-    ) {
+    unsafe fn set_pipeline_layout_name(&self, _pipeline_layout: &mut PipelineLayout, _name: &str) {
         // TODO
     }
 

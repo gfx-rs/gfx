@@ -28,13 +28,9 @@ pub fn wasm_main() {
 }
 
 use hal::{
-    buffer,
-    command,
-    format as f,
+    buffer, command, format as f,
     format::{AsFormat, ChannelType, Rgba8Srgb as ColorFormat, Swizzle},
-    image as i,
-    memory as m,
-    pass,
+    image as i, memory as m, pass,
     pass::Subpass,
     pool,
     prelude::*,
@@ -74,7 +70,6 @@ const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [  0.5,-0.33 ], a_Uv: [1.0, 0.0] },
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
-
 
 fn main() {
     #[cfg(target_arch = "wasm32")]
@@ -387,9 +382,9 @@ where
                 .bind_buffer_memory(&memory, 0, &mut image_upload_buffer)
                 .unwrap();
             let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
-            for y in 0 .. height as usize {
+            for y in 0..height as usize {
                 let row = &(*img)[y * (width as usize) * image_stride
-                    .. (y + 1) * (width as usize) * image_stride];
+                    ..(y + 1) * (width as usize) * image_stride];
                 ptr::copy_nonoverlapping(
                     row.as_ptr(),
                     mapping.offset(y as isize * row_pitch as isize),
@@ -441,7 +436,7 @@ where
                     Swizzle::NO,
                     i::SubresourceRange {
                         aspects: f::Aspects::COLOR,
-                        .. Default::default()
+                        ..Default::default()
                     },
                 )
             }
@@ -483,17 +478,17 @@ where
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::empty(), i::Layout::Undefined)
-                    .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                    ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                 target: &*image_logo,
                 families: None,
                 range: i::SubresourceRange {
                     aspects: f::Aspects::COLOR,
-                    .. Default::default()
+                    ..Default::default()
                 },
             };
 
             cmd_buffer.pipeline_barrier(
-                PipelineStage::TOP_OF_PIPE .. PipelineStage::TRANSFER,
+                PipelineStage::TOP_OF_PIPE..PipelineStage::TRANSFER,
                 m::Dependencies::empty(),
                 &[image_barrier],
             );
@@ -509,7 +504,7 @@ where
                     image_layers: i::SubresourceLayers {
                         aspects: f::Aspects::COLOR,
                         level: 0,
-                        layers: 0 .. 1,
+                        layers: 0..1,
                     },
                     image_offset: i::Offset { x: 0, y: 0, z: 0 },
                     image_extent: i::Extent {
@@ -522,16 +517,16 @@ where
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
-                    .. (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
+                    ..(i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
                 target: &*image_logo,
                 families: None,
                 range: i::SubresourceRange {
                     aspects: f::Aspects::COLOR,
-                    .. Default::default()
+                    ..Default::default()
                 },
             };
             cmd_buffer.pipeline_barrier(
-                PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER,
+                PipelineStage::TRANSFER..PipelineStage::FRAGMENT_SHADER,
                 m::Dependencies::empty(),
                 &[image_barrier],
             );
@@ -579,7 +574,7 @@ where
                     pass::AttachmentStoreOp::Store,
                 ),
                 stencil_ops: pass::AttachmentOps::DONT_CARE,
-                layouts: i::Layout::Undefined .. i::Layout::Present,
+                layouts: i::Layout::Undefined..i::Layout::Present,
             };
 
             let subpass = pass::SubpassDesc {
@@ -616,7 +611,7 @@ where
         let mut cmd_buffers = Vec::with_capacity(frames_in_flight);
 
         cmd_pools.push(command_pool);
-        for _ in 1 .. frames_in_flight {
+        for _ in 1..frames_in_flight {
             unsafe {
                 cmd_pools.push(
                     device
@@ -629,7 +624,7 @@ where
             }
         }
 
-        for i in 0 .. frames_in_flight {
+        for i in 0..frames_in_flight {
             submission_complete_semaphores.push(
                 device
                     .create_semaphore()
@@ -644,15 +639,16 @@ where
             unsafe {
                 device.create_pipeline_layout(
                     iter::once(&*set_layout),
-                    &[(pso::ShaderStageFlags::VERTEX, 0 .. 8)],
+                    &[(pso::ShaderStageFlags::VERTEX, 0..8)],
                 )
             }
             .expect("Can't create pipeline layout"),
         );
         let pipeline = {
             let vs_module = {
-                let spirv = auxil::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..]))
-                    .unwrap();
+                let spirv =
+                    auxil::read_spirv(Cursor::new(&include_bytes!("data/quad.vert.spv")[..]))
+                        .unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
             let fs_module = {
@@ -681,13 +677,11 @@ where
                     main_pass: &*render_pass,
                 };
 
-                let vertex_buffers = vec![
-                    pso::VertexBufferDesc {
-                        binding: 0,
-                        stride: mem::size_of::<Vertex>() as u32,
-                        rate: VertexInputRate::Vertex,
-                    },
-                ];
+                let vertex_buffers = vec![pso::VertexBufferDesc {
+                    binding: 0,
+                    stride: mem::size_of::<Vertex>() as u32,
+                    rate: VertexInputRate::Vertex,
+                }];
 
                 let attributes = vec![
                     pso::AttributeDesc {
@@ -753,7 +747,7 @@ where
                 w: extent.width as _,
                 h: extent.height as _,
             },
-            depth: 0.0 .. 1.0,
+            depth: 0.0..1.0,
         };
 
         Renderer {
@@ -880,7 +874,7 @@ where
                 }],
                 command::SubpassContents::Inline,
             );
-            cmd_buffer.draw(0 .. 6, 0 .. 1);
+            cmd_buffer.draw(0..6, 0..1);
             cmd_buffer.end_render_pass();
             cmd_buffer.finish();
 

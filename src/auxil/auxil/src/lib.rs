@@ -1,9 +1,9 @@
+use std::{io, slice};
 #[cfg(feature = "spirv_cross")]
 use {
     hal::{device::ShaderError, pso},
     spirv_cross::spirv,
 };
-use std::{io, slice};
 
 /// Fast hash map used internally.
 pub type FastHashMap<K, V> =
@@ -122,7 +122,7 @@ where
         {
             // Override specialization constant values
             let value = specialization.data
-                [constant.range.start as usize .. constant.range.end as usize]
+                [constant.range.start as usize..constant.range.end as usize]
                 .iter()
                 .rev()
                 .fold(0u64, |u, &b| (u << 8) + b as u64);

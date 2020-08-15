@@ -55,7 +55,7 @@ pub trait CommandPool<B: Backend>: fmt::Debug + Any + Send + Sync {
     where
         E: Extend<B::CommandBuffer>,
     {
-        list.extend((0 .. num).map(|_| self.allocate_one(level)));
+        list.extend((0..num).map(|_| self.allocate_one(level)));
     }
 
     /// Free [command buffers][crate::command::CommandBuffer] allocated from this pool.

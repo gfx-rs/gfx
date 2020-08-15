@@ -1,17 +1,8 @@
 use crate::{
-    command,
-    conversions as conv,
+    command, conversions as conv,
     internal::{Channel, FastStorageMap},
-    native as n,
-    AsNative,
-    Backend,
-    OnlineRecording,
-    QueueFamily,
-    ResourceIndex,
-    Shared,
-    VisibilityShared,
-    MAX_BOUND_DESCRIPTOR_SETS,
-    MAX_COLOR_ATTACHMENTS,
+    native as n, AsNative, Backend, OnlineRecording, QueueFamily, ResourceIndex, Shared,
+    VisibilityShared, MAX_BOUND_DESCRIPTOR_SETS, MAX_COLOR_ATTACHMENTS,
 };
 
 use arrayvec::ArrayVec;
@@ -20,21 +11,12 @@ use cocoa_foundation::foundation::{NSRange, NSUInteger};
 use copyless::VecHelper;
 use foreign_types::{ForeignType, ForeignTypeRef};
 use hal::{
-    adapter,
-    buffer,
+    adapter, buffer,
     device::{
-        AllocationError,
-        BindError,
-        CreationError as DeviceCreationError,
-        DeviceLost,
-        MapError,
-        OomOrDeviceLost,
-        OutOfMemory,
-        ShaderError,
+        AllocationError, BindError, CreationError as DeviceCreationError, DeviceLost, MapError,
+        OomOrDeviceLost, OutOfMemory, ShaderError,
     },
-    format,
-    image,
-    memory,
+    format, image, memory,
     memory::Properties,
     pass,
     pool::CommandPoolCreateFlags,
@@ -44,17 +26,9 @@ use hal::{
     queue::{QueueFamilyId, QueueGroup, QueuePriority},
 };
 use metal::{
-    CaptureManager,
-    MTLCPUCacheMode,
-    MTLLanguageVersion,
-    MTLPrimitiveTopologyClass,
-    MTLPrimitiveType,
-    MTLResourceOptions,
-    MTLSamplerBorderColor,
-    MTLSamplerMipFilter,
-    MTLStorageMode,
-    MTLTextureType,
-    MTLVertexStepFunction,
+    CaptureManager, MTLCPUCacheMode, MTLLanguageVersion, MTLPrimitiveTopologyClass,
+    MTLPrimitiveType, MTLResourceOptions, MTLSamplerBorderColor, MTLSamplerMipFilter,
+    MTLStorageMode, MTLTextureType, MTLVertexStepFunction,
 };
 use objc::{
     rc::autoreleasepool,
@@ -66,15 +40,18 @@ use spirv_cross::{msl, spirv, ErrorCode as SpirvErrorCode};
 use std::{
     borrow::Borrow,
     cell::RefCell,
+    cmp,
     collections::hash_map::Entry,
     collections::BTreeMap,
+    iter, mem,
     ops::Range,
     path::Path,
+    ptr,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    cmp, iter, mem, ptr, thread, time,
+    thread, time,
 };
 
 const PUSH_CONSTANTS_DESC_SET: u32 = !0;
@@ -128,7 +105,7 @@ fn get_final_function(
     let all_values: *mut Object = unsafe { msg_send![dictionary, allValues] };
 
     let constants = metal::FunctionConstantValues::new();
-    for i in 0 .. count {
+    for i in 0..count {
         let object: *mut MTLFunctionConstant = unsafe { msg_send![all_values, objectAtIndex: i] };
         let index: NSUInteger = unsafe { msg_send![object, index] };
         let required: BOOL = unsafe { msg_send![object, required] };
@@ -316,7 +293,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         assert_eq!(families.len(), 1);
         assert_eq!(families[0].1.len(), 1);
         let mut queue_group = QueueGroup::new(families[0].0.id());
-        for _ in 0 .. self.shared.private_caps.exposed_queues {
+        for _ in 0..self.shared.private_caps.exposed_queues {
             queue_group.add_queue(command::CommandQueue::new(self.shared.clone()));
         }
 
@@ -896,7 +873,7 @@ impl Device {
             }
         }
 
-        let lods = info.lod_range.start.0 .. info.lod_range.end.0;
+        let lods = info.lod_range.start.0..info.lod_range.end.0;
         msl::SamplerData {
             coord: if info.normalized {
                 msl::SamplerCoord::Normalized
@@ -1410,27 +1387,36 @@ impl hal::device::Device<Backend> for Device {
             (&main_pass.attachments, &main_pass.subpasses[index as usize])
         };
 
-        let (desc_vertex_buffers, attributes, input_assembler, vs, gs, hs, ds) = match pipeline_desc.primitive_assembler {
-            pso::PrimitiveAssembler::Vertex {
-                buffers,
-                attributes,
-                ref input_assembler,
-                ref vertex,
-                ref tessellation,
-                ref geometry,
-            } => {
-                let (hs, ds) = if let Some(ts) = tessellation {
-                    (Some(&ts.0), Some(&ts.1))
-                } else {
-                    (None, None)
-                };
+        let (desc_vertex_buffers, attributes, input_assembler, vs, gs, hs, ds) =
+            match pipeline_desc.primitive_assembler {
+                pso::PrimitiveAssembler::Vertex {
+                    buffers,
+                    attributes,
+                    ref input_assembler,
+                    ref vertex,
+                    ref tessellation,
+                    ref geometry,
+                } => {
+                    let (hs, ds) = if let Some(ts) = tessellation {
+                        (Some(&ts.0), Some(&ts.1))
+                    } else {
+                        (None, None)
+                    };
 
-                (buffers, attributes, input_assembler, vertex, geometry, hs, ds)
-            }
-            pso::PrimitiveAssembler::Mesh { .. } => {
-                return Err(pso::CreationError::UnsupportedPipeline)
-            }
-        };
+                    (
+                        buffers,
+                        attributes,
+                        input_assembler,
+                        vertex,
+                        geometry,
+                        hs,
+                        ds,
+                    )
+                }
+                pso::PrimitiveAssembler::Mesh { .. } => {
+                    return Err(pso::CreationError::UnsupportedPipeline)
+                }
+            };
 
         let (primitive_class, primitive_type) = match input_assembler.primitive {
             pso::Primitive::PointList => {
@@ -1458,12 +1444,8 @@ impl hal::device::Device<Backend> for Device {
         }
 
         // Vertex shader
-        let (vs_lib, vs_function, _, enable_rasterization) = self.load_shader(
-            vs,
-            pipeline_layout,
-            primitive_class,
-            cache,
-        )?;
+        let (vs_lib, vs_function, _, enable_rasterization) =
+            self.load_shader(vs, pipeline_layout, primitive_class, cache)?;
         pipeline.set_vertex_function(Some(&vs_function));
 
         // Fragment shader
@@ -2082,7 +2064,7 @@ impl hal::device::Device<Backend> for Device {
                     content |= n::DescriptorContent::IMMUTABLE_SAMPLER;
                 }
 
-                desc_layouts.extend((0 .. slb.count).map(|array_index| n::DescriptorLayout {
+                desc_layouts.extend((0..slb.count).map(|array_index| n::DescriptorLayout {
                     content,
                     stages: slb.stage_flags,
                     binding: slb.binding,
@@ -2143,7 +2125,7 @@ impl hal::device::Device<Backend> for Device {
                     let mut data = pool.write();
 
                     for (layout, descriptor) in
-                        layouts[start.unwrap() ..].iter().zip(write.descriptors)
+                        layouts[start.unwrap()..].iter().zip(write.descriptors)
                     {
                         trace!("\t{:?}", layout);
                         match *descriptor.borrow() {
@@ -2206,7 +2188,7 @@ impl hal::device::Device<Backend> for Device {
                     };
 
                     for (data, descriptor) in pool.write().resources
-                        [range.start as usize + arg_index as usize .. range.end as usize]
+                        [range.start as usize + arg_index as usize..range.end as usize]
                         .iter_mut()
                         .zip(write.descriptors)
                     {
@@ -2416,7 +2398,7 @@ impl hal::device::Device<Backend> for Device {
                 n::Buffer::Bound {
                     raw,
                     options,
-                    range: 0 .. size, //TODO?
+                    range: 0..size, //TODO?
                 }
             }
             n::MemoryHeap::Public(mt, ref cpu_buffer) => {
@@ -2440,7 +2422,7 @@ impl hal::device::Device<Backend> for Device {
                 n::Buffer::Bound {
                     raw: cpu_buffer.clone(),
                     options,
-                    range: offset .. offset + size,
+                    range: offset..offset + size,
                 }
             }
             n::MemoryHeap::Private => {
@@ -2452,7 +2434,7 @@ impl hal::device::Device<Backend> for Device {
                 n::Buffer::Bound {
                     raw,
                     options,
-                    range: 0 .. size,
+                    range: 0..size,
                 }
             }
         };
@@ -2610,7 +2592,7 @@ impl hal::device::Device<Backend> for Device {
 
         let base = format.base_format();
         let format_desc = base.0.desc();
-        let mip_sizes = (0 .. mip_levels)
+        let mip_sizes = (0..mip_levels)
             .map(|level| {
                 let pitches = n::Image::pitches_impl(extent.at_level(level), format_desc);
                 num_layers.unwrap_or(1) as buffer::Offset * pitches[3]
@@ -2708,14 +2690,14 @@ impl hal::device::Device<Backend> for Device {
         sub: image::Subresource,
     ) -> image::SubresourceFootprint {
         let num_layers = image.kind.num_layers() as buffer::Offset;
-        let level_offset = (0 .. sub.level).fold(0, |offset, level| {
+        let level_offset = (0..sub.level).fold(0, |offset, level| {
             let pitches = image.pitches(level);
             offset + num_layers * pitches[3]
         });
         let pitches = image.pitches(sub.level);
         let layer_offset = level_offset + sub.layer as buffer::Offset * pitches[3];
         image::SubresourceFootprint {
-            slice: layer_offset .. layer_offset + pitches[3],
+            slice: layer_offset..layer_offset + pitches[3],
             row_pitch: pitches[1] as _,
             depth_pitch: pitches[2] as _,
             array_pitch: pitches[3] as _,
@@ -2770,7 +2752,7 @@ impl hal::device::Device<Backend> for Device {
                     }
                     n::ImageLike::Buffer(n::Buffer::Bound {
                         raw: cpu_buffer.clone(),
-                        range: offset .. offset + mip_sizes[0] as u64,
+                        range: offset..offset + mip_sizes[0] as u64,
                         options: MTLResourceOptions::StorageModeShared,
                     })
                 }
@@ -2812,7 +2794,7 @@ impl hal::device::Device<Backend> for Device {
         let raw = image.like.as_texture();
         let full_range = image::SubresourceRange {
             aspects: image.format_desc.aspects,
-            .. Default::default()
+            ..Default::default()
         };
         let mtl_type = if image.mtl_type == MTLTextureType::D2Multisample {
             if kind != image::ViewKind::D2 {
@@ -3018,14 +3000,14 @@ impl hal::device::Device<Backend> for Device {
                     );
                 } else {
                     // copy parts of individual entries
-                    for i in 0 .. queries.end - queries.start {
+                    for i in 0..queries.end - queries.start {
                         let absolute_index = (pool_range.start + queries.start + i) as isize;
                         let value =
                             *(visibility.buffer.contents() as *const u64).offset(absolute_index);
                         let base = (visibility.buffer.contents() as *const u8)
                             .offset(visibility.availability_offset as isize);
                         let availability = *(base as *const u32).offset(absolute_index);
-                        let data_ptr = data[i as usize * stride as usize ..].as_mut_ptr();
+                        let data_ptr = data[i as usize * stride as usize..].as_mut_ptr();
                         if flags.contains(query::ResultFlags::BITS_64) {
                             *(data_ptr as *mut u64) = value;
                             if flags.contains(query::ResultFlags::WITH_AVAILABILITY) {
