@@ -102,7 +102,7 @@ impl GraphicsPipelineInfoBuf {
         let mut this = Pin::get_mut(this.as_mut()); // use into_inner when it gets stable
 
         match desc.primitive_assembler {
-            pso::PrimitiveAssembler::Vertex {
+            pso::PrimitiveAssemblerDesc::Vertex {
                 ref buffers,
                 ref attributes,
                 ref input_assembler,
@@ -168,7 +168,7 @@ impl GraphicsPipelineInfoBuf {
                     },
                 };
             }
-            pso::PrimitiveAssembler::Mesh { ref task, ref mesh } => {
+            pso::PrimitiveAssemblerDesc::Mesh { ref task, ref mesh } => {
                 this.vertex_bindings = Vec::new();
                 this.vertex_attributes = Vec::new();
                 this.vertex_input_state = vk::PipelineVertexInputStateCreateInfo::default();
@@ -249,7 +249,7 @@ impl GraphicsPipelineInfoBuf {
         };
 
         this.tessellation_state = {
-            if let pso::PrimitiveAssembler::Vertex {
+            if let pso::PrimitiveAssemblerDesc::Vertex {
                 input_assembler, ..
             } = &desc.primitive_assembler
             {

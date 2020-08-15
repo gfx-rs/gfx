@@ -466,7 +466,7 @@ where
                 };
 
                 let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
-                    pso::PrimitiveAssembler::Mesh {
+                    pso::PrimitiveAssemblerDesc::Mesh {
                         task: None,
                         mesh: ms_entry,
                     },

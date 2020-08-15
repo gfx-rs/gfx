@@ -876,7 +876,7 @@ impl device::Device<Backend> for Device {
         };
 
         let (layout, vs, gs, hs, ds) = match desc.primitive_assembler {
-            pso::PrimitiveAssembler::Vertex {
+            pso::PrimitiveAssemblerDesc::Vertex {
                 buffers,
                 attributes,
                 ref input_assembler,
@@ -910,7 +910,7 @@ impl device::Device<Backend> for Device {
 
                 (layout, vs, gs, hs, ds)
             }
-            pso::PrimitiveAssembler::Mesh { .. } => {
+            pso::PrimitiveAssemblerDesc::Mesh { .. } => {
                 return Err(pso::CreationError::UnsupportedPipeline)
             }
         };

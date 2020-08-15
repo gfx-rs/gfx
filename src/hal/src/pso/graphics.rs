@@ -67,7 +67,7 @@ pub struct BakedStates {
 }
 #[derive(Debug)]
 /// Primitive Assembler describes how input data are fetched in the pipeline and formed into primitives before being sent into the fragment shader.
-pub enum PrimitiveAssembler<'a, B: Backend> {
+pub enum PrimitiveAssemblerDesc<'a, B: Backend> {
     /// Vertex based pipeline
     Vertex {
         /// Vertex buffers (IA)
@@ -109,7 +109,7 @@ pub enum PrimitiveAssembler<'a, B: Backend> {
 #[derive(Debug)]
 pub struct GraphicsPipelineDesc<'a, B: Backend> {
     /// Primitive assembler
-    pub primitive_assembler: PrimitiveAssembler<'a, B>,
+    pub primitive_assembler: PrimitiveAssemblerDesc<'a, B>,
     /// Rasterizer setup
     pub rasterizer: Rasterizer,
     /// A shader that outputs a value for a fragment.
@@ -144,7 +144,7 @@ pub struct GraphicsPipelineDesc<'a, B: Backend> {
 impl<'a, B: Backend> GraphicsPipelineDesc<'a, B> {
     /// Create a new empty PSO descriptor.
     pub fn new(
-        primitive_assembler: PrimitiveAssembler<'a, B>,
+        primitive_assembler: PrimitiveAssemblerDesc<'a, B>,
         rasterizer: Rasterizer,
         fragment: Option<EntryPoint<'a, B>>,
         layout: &'a B::PipelineLayout,

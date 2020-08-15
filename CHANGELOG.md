@@ -5,7 +5,7 @@
     - the old Vulkan-ish swapchain model is completely removed
     - `pso::Stage` enum is removed from the API into `gfx-auxil::ShaderStage`
     - `SubresourceRange` allows unbound array layers and mipmap levels
-    - new `PrimitiveAssembler` enum
+    - new `PrimitiveAssemblerDesc` enum
     - `DescriptorPool::free_sets` is renamed to just `free`
   - Features:
     - object labels for pipelines and their layouts
