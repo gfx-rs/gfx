@@ -29,7 +29,7 @@ gfx-hal = { path = "../../hal", version = "0.5" }
 auxil = { path = "../../auxil/auxil", version = "0.3", package = "gfx-auxil", features = ["spirv_cross"] }
 smallvec = "1.0"
 glow = "0.4"
-parking_lot = "0.10"
+parking_lot = "0.11"
 spirv_cross = { version = "0.20", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
