@@ -1389,7 +1389,7 @@ impl hal::device::Device<Backend> for Device {
 
         let (desc_vertex_buffers, attributes, input_assembler, vs, gs, hs, ds) =
             match pipeline_desc.primitive_assembler {
-                pso::PrimitiveAssembler::Vertex {
+                pso::PrimitiveAssemblerDesc::Vertex {
                     buffers,
                     attributes,
                     ref input_assembler,
@@ -1413,7 +1413,7 @@ impl hal::device::Device<Backend> for Device {
                         ds,
                     )
                 }
-                pso::PrimitiveAssembler::Mesh { .. } => {
+                pso::PrimitiveAssemblerDesc::Mesh { .. } => {
                     return Err(pso::CreationError::UnsupportedPipeline)
                 }
             };

@@ -1795,7 +1795,7 @@ impl d::Device<B> for Device {
         let input_assembler = pso::InputAssemblerDesc::new(pso::Primitive::TriangleList);
         let (vertex_buffers, attributes, input_assembler, vs, gs, hs, ds, _, _) =
             match desc.primitive_assembler {
-                pso::PrimitiveAssembler::Vertex {
+                pso::PrimitiveAssemblerDesc::Vertex {
                     buffers,
                     attributes,
                     ref input_assembler,
@@ -1821,7 +1821,7 @@ impl d::Device<B> for Device {
                         None,
                     )
                 }
-                pso::PrimitiveAssembler::Mesh { ref task, ref mesh } => (
+                pso::PrimitiveAssemblerDesc::Mesh { ref task, ref mesh } => (
                     &vertex_buffers[..],
                     &attributes[..],
                     &input_assembler,

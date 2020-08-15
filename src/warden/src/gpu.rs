@@ -913,7 +913,7 @@ impl<B: hal::Backend> Scene<B> {
 
                     let desc = pso::GraphicsPipelineDesc {
                         rasterizer: rasterizer.clone(),
-                        primitive_assembler: pso::PrimitiveAssembler::Vertex {
+                        primitive_assembler: pso::PrimitiveAssemblerDesc::Vertex {
                             buffers: &vertex_buffers,
                             attributes: &attributes,
                             input_assembler: input_assembler.clone(),

@@ -703,7 +703,7 @@ where
                 ];
 
                 let mut pipeline_desc = pso::GraphicsPipelineDesc::new(
-                    pso::PrimitiveAssembler::Vertex {
+                    pso::PrimitiveAssemblerDesc::Vertex {
                         buffers: &vertex_buffers,
                         attributes: &attributes,
                         input_assembler: pso::InputAssemblerDesc {
