@@ -196,7 +196,7 @@ impl PrivateCapabilities {
                 buffer_features,
                 ..Properties::default()
             },
-            Some(R8Unorm_sRGB) if self.format_r8unorm_srgb_all => Properties {
+            Some(R8Unorm_sRGB) if self.format_any8_unorm_srgb_all => Properties {
                 optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
@@ -205,7 +205,7 @@ impl PrivateCapabilities {
                 buffer_features,
                 ..Properties::default()
             },
-            Some(R8Unorm_sRGB) if self.format_r8unorm_srgb_no_write => Properties {
+            Some(R8Unorm_sRGB) if self.format_any8_unorm_srgb_no_write => Properties {
                 optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
@@ -213,7 +213,7 @@ impl PrivateCapabilities {
                 buffer_features,
                 ..Properties::default()
             },
-            Some(R8Snorm) if self.format_r8snorm_all => Properties {
+            Some(R8Snorm) if self.format_any8_snorm_all => Properties {
                 optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
@@ -278,7 +278,7 @@ impl PrivateCapabilities {
                 buffer_features,
                 ..Properties::default()
             },
-            Some(RG8Unorm_sRGB) if self.format_rg8unorm_srgb_all => Properties {
+            Some(RG8Unorm_sRGB) if self.format_any8_unorm_srgb_all => Properties {
                 optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE
@@ -287,7 +287,7 @@ impl PrivateCapabilities {
                 buffer_features,
                 ..Properties::default()
             },
-            Some(RG8Unorm_sRGB) if self.format_rg8unorm_srgb_no_write => Properties {
+            Some(RG8Unorm_sRGB) if self.format_any8_unorm_srgb_no_write => Properties {
                 optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::COLOR_ATTACHMENT
@@ -295,7 +295,7 @@ impl PrivateCapabilities {
                 buffer_features,
                 ..Properties::default()
             },
-            Some(RG8Snorm) if self.format_rg8snorm_all => Properties {
+            Some(RG8Snorm) if self.format_any8_snorm_all => Properties {
                 optimal_tiling: color_if
                     | If::SAMPLED_LINEAR
                     | If::STORAGE

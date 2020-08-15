@@ -508,121 +508,102 @@ const RESOURCE_HEAP_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v3,
     MTLFeatureSet::iOS_GPUFamily2_v3,
     MTLFeatureSet::iOS_GPUFamily3_v2,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v3,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const ARGUMENT_BUFFER_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v4,
+    MTLFeatureSet::iOS_GPUFamily2_v4,
+    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v3,
     MTLFeatureSet::macOS_GPUFamily1_v3,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const MUTABLE_COMPARISON_SAMPLER_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::macOS_GPUFamily1_v1,
     MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const ASTC_PIXEL_FORMAT_FEATURES: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily2_v1,
-    MTLFeatureSet::iOS_GPUFamily2_v2,
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily2_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
     MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v1,
-    MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
 ];
 
-const R8UNORM_SRGB_ALL: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily3_v1,
+const ANY8_UNORM_SRGB_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily2_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily3_v1,
     MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
 ];
 
-const R8SNORM_NO_RESOLVE: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v1,
-    MTLFeatureSet::iOS_GPUFamily1_v2,
-    MTLFeatureSet::iOS_GPUFamily1_v3,
-    MTLFeatureSet::iOS_GPUFamily1_v4,
-];
-
-const RG8UNORM_SRGB_NO_WRITE: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v1,
+const ANY8_SNORM_RESOLVE: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily2_v1,
-    MTLFeatureSet::iOS_GPUFamily1_v2,
-    MTLFeatureSet::iOS_GPUFamily2_v2,
-    MTLFeatureSet::iOS_GPUFamily1_v3,
-    MTLFeatureSet::iOS_GPUFamily1_v4,
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v1,
-];
-
-const RG8SNORM_NO_RESOLVE: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v1,
-    MTLFeatureSet::iOS_GPUFamily1_v2,
-    MTLFeatureSet::iOS_GPUFamily1_v3,
-    MTLFeatureSet::iOS_GPUFamily1_v4,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const RGBA8_SRGB: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily3_v1,
     MTLFeatureSet::iOS_GPUFamily2_v3,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily2_v4,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily3_v1,
     MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
-    MTLFeatureSet::tvOS_GPUFamily1_v3,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
 ];
 
 const RGB10A2UNORM_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
     MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily1_v3,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const RGB10A2UINT_COLOR_WRITE: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
     MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily1_v3,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const RG11B10FLOAT_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
     MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
-    MTLFeatureSet::macOS_GPUFamily1_v2,
-    MTLFeatureSet::macOS_GPUFamily1_v3,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const RGB9E5FLOAT_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily3_v1,
-    MTLFeatureSet::iOS_GPUFamily3_v2,
-    MTLFeatureSet::iOS_GPUFamily3_v3,
     MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
 ];
 
@@ -631,36 +612,75 @@ const BGR10A2_ALL: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily2_v4,
     MTLFeatureSet::iOS_GPUFamily3_v3,
     MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v3,
     MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v3,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const BASE_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
-    MTLFeatureSet::iOS_GPUFamily1_v4,
     MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
+];
+
+const BASE_VERTEX_INSTANCE_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily3_v1,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
+];
+
+const TEXTURE_CUBE_ARRAY_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
+    MTLFeatureSet::tvOS_GPUFamily1_v2,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
+    MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const DUAL_SOURCE_BLEND_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v4,
+    MTLFeatureSet::iOS_GPUFamily2_v4,
+    MTLFeatureSet::iOS_GPUFamily3_v3,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v3,
+    MTLFeatureSet::tvOS_GPUFamily2_v1,
     MTLFeatureSet::macOS_GPUFamily1_v2,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const LAYERED_RENDERING_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const FUNCTION_SPECIALIZATION_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily1_v3,
+    MTLFeatureSet::iOS_GPUFamily2_v3,
+    MTLFeatureSet::iOS_GPUFamily3_v2,
+    MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v2,
     MTLFeatureSet::macOS_GPUFamily1_v2,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 const DEPTH_CLIP_MODE: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily4_v1,
+    MTLFeatureSet::iOS_GPUFamily5_v1,
     MTLFeatureSet::tvOS_GPUFamily1_v3,
     MTLFeatureSet::macOS_GPUFamily1_v1,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
 #[derive(Clone, Debug)]
@@ -683,6 +703,7 @@ struct PrivateCapabilities {
     layered_rendering: bool,
     function_specialization: bool,
     depth_clip_mode: bool,
+    texture_cube_array: bool,
     format_depth24_stencil8: bool,
     format_depth32_stencil8_filter: bool,
     format_depth32_stencil8_none: bool,
@@ -691,13 +712,10 @@ struct PrivateCapabilities {
     format_bc: bool,
     format_eac_etc: bool,
     format_astc: bool,
-    format_r8unorm_srgb_all: bool,
-    format_r8unorm_srgb_no_write: bool,
-    format_r8snorm_all: bool,
+    format_any8_unorm_srgb_all: bool,
+    format_any8_unorm_srgb_no_write: bool,
+    format_any8_snorm_all: bool,
     format_r16_norm_all: bool,
-    format_rg8unorm_srgb_all: bool,
-    format_rg8unorm_srgb_no_write: bool,
-    format_rg8snorm_all: bool,
     format_r32_all: bool,
     format_r32_no_write: bool,
     format_r32float_no_write_no_filter: bool,
@@ -823,23 +841,14 @@ impl PrivateCapabilities {
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
             base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
-            base_vertex_instance_drawing: Self::supports_any(
-                &device,
-                &[
-                    MTLFeatureSet::iOS_GPUFamily3_v1,
-                    MTLFeatureSet::iOS_GPUFamily4_v1,
-                    MTLFeatureSet::iOS_GPUFamily5_v1,
-                    MTLFeatureSet::tvOS_GPUFamily2_v1,
-                    MTLFeatureSet::macOS_GPUFamily1_v1,
-                    MTLFeatureSet::macOS_GPUFamily2_v1,
-                ],
-            ),
+            base_vertex_instance_drawing: Self::supports_any(&device, BASE_VERTEX_INSTANCE_SUPPORT),
             dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),
             low_power: !os_is_mac || device.is_low_power(),
             headless: os_is_mac && device.is_headless(),
             layered_rendering: Self::supports_any(&device, LAYERED_RENDERING_SUPPORT),
             function_specialization: Self::supports_any(&device, FUNCTION_SPECIALIZATION_SUPPORT),
             depth_clip_mode: Self::supports_any(&device, DEPTH_CLIP_MODE),
+            texture_cube_array: Self::supports_any(&device, TEXTURE_CUBE_ARRAY_SUPPORT),
             format_depth24_stencil8: os_is_mac && device.d24_s8_supported(),
             format_depth32_stencil8_filter: os_is_mac,
             format_depth32_stencil8_none: !os_is_mac,
@@ -848,15 +857,11 @@ impl PrivateCapabilities {
             format_bc: os_is_mac,
             format_eac_etc: !os_is_mac,
             format_astc: Self::supports_any(&device, ASTC_PIXEL_FORMAT_FEATURES),
-            format_r8unorm_srgb_all: Self::supports_any(&device, R8UNORM_SRGB_ALL),
-            format_r8unorm_srgb_no_write: !Self::supports_any(&device, R8UNORM_SRGB_ALL)
+            format_any8_unorm_srgb_all: Self::supports_any(&device, ANY8_UNORM_SRGB_ALL),
+            format_any8_unorm_srgb_no_write: !Self::supports_any(&device, ANY8_UNORM_SRGB_ALL)
                 && !os_is_mac,
-            format_r8snorm_all: !Self::supports_any(&device, R8SNORM_NO_RESOLVE),
+            format_any8_snorm_all: Self::supports_any(&device, ANY8_SNORM_RESOLVE),
             format_r16_norm_all: os_is_mac,
-            format_rg8unorm_srgb_all: Self::supports_any(&device, RG8UNORM_SRGB_NO_WRITE),
-            format_rg8unorm_srgb_no_write: !Self::supports_any(&device, RG8UNORM_SRGB_NO_WRITE)
-                && !os_is_mac,
-            format_rg8snorm_all: !Self::supports_any(&device, RG8SNORM_NO_RESOLVE),
             format_r32_all: !Self::supports_any(
                 &device,
                 &[
