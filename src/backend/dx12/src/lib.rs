@@ -1082,6 +1082,17 @@ impl hal::Instance<Backend> for Instance {
                 hints:
                     Hints::BASE_VERTEX_INSTANCE_DRAWING,
                 limits: Limits { // TODO
+                    max_bound_descriptor_sets: 8, //TODO: verify all of these not linked to constants
+                    max_descriptor_set_uniform_buffers_dynamic: 8,
+                    max_descriptor_set_storage_buffers_dynamic: 4,
+                    max_per_stage_descriptor_sampled_images: d3d12::D3D12_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
+                    max_per_stage_descriptor_samplers: d3d12::D3D12_COMMONSHADER_SAMPLER_REGISTER_COUNT as _,
+                    max_per_stage_descriptor_storage_buffers: 4,
+                    max_per_stage_descriptor_storage_images: 4,
+                    max_per_stage_descriptor_uniform_buffers: d3d12::D3D12_COMMONSHADER_CONSTANT_BUFFER_API_SLOT_COUNT as _,
+                    max_uniform_buffer_range: (d3d12::D3D12_REQ_CONSTANT_BUFFER_ELEMENT_COUNT * 16) as _,
+                    max_storage_buffer_range: !0,
+                    max_push_constants_size: 128,
                     max_image_1d_size: d3d12::D3D12_REQ_TEXTURE1D_U_DIMENSION as _,
                     max_image_2d_size: d3d12::D3D12_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
                     max_image_3d_size: d3d12::D3D12_REQ_TEXTURE3D_U_V_OR_W_DIMENSION as _,
