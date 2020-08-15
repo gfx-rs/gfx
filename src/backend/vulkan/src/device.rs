@@ -10,8 +10,7 @@ use hal::{
     pool::CommandPoolCreateFlags,
     pso::VertexInputRate,
     window::SwapchainConfig,
-    {buffer, device as d, format, image, pass, pso, query, queue},
-    {Features, MemoryTypeId},
+    {buffer, device as d, format, image, pass, pso, query, queue}, {Features, MemoryTypeId},
 };
 
 use std::borrow::Borrow;
@@ -169,10 +168,7 @@ impl GraphicsPipelineInfoBuf {
                     },
                 };
             }
-            pso::PrimitiveAssembler::Mesh {
-                ref task,
-                ref mesh,
-            } => {
+            pso::PrimitiveAssembler::Mesh { ref task, ref mesh } => {
                 this.vertex_bindings = Vec::new();
                 this.vertex_attributes = Vec::new();
                 this.vertex_input_state = vk::PipelineVertexInputStateCreateInfo::default();
@@ -567,133 +563,132 @@ impl d::Device<B> for Device {
         ID::Item: Borrow<pass::SubpassDependency>,
         ID::IntoIter: ExactSizeIterator,
     {
-        let attachments = attachments
-            .into_iter()
-            .map(|attachment| {
-                let attachment = attachment.borrow();
-                vk::AttachmentDescription {
-                    flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
-                    format: attachment
-                        .format
-                        .map_or(vk::Format::UNDEFINED, conv::map_format),
-                    samples: vk::SampleCountFlags::from_raw(
-                        (attachment.samples as u32) & vk::SampleCountFlags::all().as_raw(),
-                    ),
-                    load_op: conv::map_attachment_load_op(attachment.ops.load),
-                    store_op: conv::map_attachment_store_op(attachment.ops.store),
-                    stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
-                    stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
-                    initial_layout: conv::map_image_layout(attachment.layouts.start),
-                    final_layout: conv::map_image_layout(attachment.layouts.end),
-                }
-            });
-
-        let dependencies = dependencies
-            .into_iter()
-            .map(|subpass_dep| {
-                let sdep = subpass_dep.borrow();
-                // TODO: checks
-                vk::SubpassDependency {
-                    src_subpass: sdep
-                        .passes
-                        .start
-                        .map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
-                    dst_subpass: sdep.passes.end.map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
-                    src_stage_mask: conv::map_pipeline_stage(sdep.stages.start),
-                    dst_stage_mask: conv::map_pipeline_stage(sdep.stages.end),
-                    src_access_mask: conv::map_image_access(sdep.accesses.start),
-                    dst_access_mask: conv::map_image_access(sdep.accesses.end),
-                    dependency_flags: mem::transmute(sdep.flags),
-                }
-            });
-
-        let (clear_attachments_mask, result) = inplace_it::inplace_or_alloc_array(attachments.len(), |uninit_guard| {
-            let attachments = uninit_guard.init_with_iter(attachments);
-
-            let clear_attachments_mask = attachments
-                .iter()
-                .enumerate()
-                .filter_map(|(i, at)| {
-                    if at.load_op == vk::AttachmentLoadOp::CLEAR
-                        || at.stencil_load_op == vk::AttachmentLoadOp::CLEAR
-                    {
-                        Some(1 << i as u64)
-                    } else {
-                        None
-                    }
-                })
-                .sum();
-
-            let attachment_refs = subpasses
-                .into_iter()
-                .map(|subpass| {
-                    let subpass = subpass.borrow();
-                    fn make_ref(&(id, layout): &pass::AttachmentRef) -> vk::AttachmentReference {
-                        vk::AttachmentReference {
-                            attachment: id as _,
-                            layout: conv::map_image_layout(layout),
-                        }
-                    }
-                    let colors = subpass.colors.iter().map(make_ref).collect::<Box<[_]>>();
-                    let depth_stencil = subpass.depth_stencil.map(make_ref);
-                    let inputs = subpass.inputs.iter().map(make_ref).collect::<Box<[_]>>();
-                    let preserves = subpass
-                        .preserves
-                        .iter()
-                        .map(|&id| id as u32)
-                        .collect::<Box<[_]>>();
-                    let resolves = subpass.resolves.iter().map(make_ref).collect::<Box<[_]>>();
-
-                    (colors, depth_stencil, inputs, preserves, resolves)
-                })
-                .collect::<Box<[_]>>();
-
-            let subpasses = attachment_refs
-                .iter()
-                .map(|(colors, depth_stencil, inputs, preserves, resolves)| {
-                    vk::SubpassDescription {
-                        flags: vk::SubpassDescriptionFlags::empty(),
-                        pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
-                        input_attachment_count: inputs.len() as u32,
-                        p_input_attachments: inputs.as_ptr(),
-                        color_attachment_count: colors.len() as u32,
-                        p_color_attachments: colors.as_ptr(),
-                        p_resolve_attachments: if resolves.is_empty() {
-                            ptr::null()
-                        } else {
-                            resolves.as_ptr()
-                        },
-                        p_depth_stencil_attachment: match depth_stencil {
-                            Some(ref aref) => aref as *const _,
-                            None => ptr::null(),
-                        },
-                        preserve_attachment_count: preserves.len() as u32,
-                        p_preserve_attachments: preserves.as_ptr(),
-                    }
-                })
-                .collect::<Box<[_]>>();
-
-            let result = inplace_it::inplace_or_alloc_array(dependencies.len(), |uninit_guard| {
-                let dependencies =
-                    uninit_guard.init_with_iter(dependencies);
-
-                let info = vk::RenderPassCreateInfo {
-                    s_type: vk::StructureType::RENDER_PASS_CREATE_INFO,
-                    p_next: ptr::null(),
-                    flags: vk::RenderPassCreateFlags::empty(),
-                    attachment_count: attachments.len() as u32,
-                    p_attachments: attachments.as_ptr(),
-                    subpass_count: subpasses.len() as u32,
-                    p_subpasses: subpasses.as_ptr(),
-                    dependency_count: dependencies.len() as u32,
-                    p_dependencies: dependencies.as_ptr(),
-                };
-
-                self.shared.raw.create_render_pass(&info, None)
-            });
-
-            (clear_attachments_mask, result)
+        let attachments = attachments.into_iter().map(|attachment| {
+            let attachment = attachment.borrow();
+            vk::AttachmentDescription {
+                flags: vk::AttachmentDescriptionFlags::empty(), // TODO: may even alias!
+                format: attachment
+                    .format
+                    .map_or(vk::Format::UNDEFINED, conv::map_format),
+                samples: vk::SampleCountFlags::from_raw(
+                    (attachment.samples as u32) & vk::SampleCountFlags::all().as_raw(),
+                ),
+                load_op: conv::map_attachment_load_op(attachment.ops.load),
+                store_op: conv::map_attachment_store_op(attachment.ops.store),
+                stencil_load_op: conv::map_attachment_load_op(attachment.stencil_ops.load),
+                stencil_store_op: conv::map_attachment_store_op(attachment.stencil_ops.store),
+                initial_layout: conv::map_image_layout(attachment.layouts.start),
+                final_layout: conv::map_image_layout(attachment.layouts.end),
+            }
         });
+
+        let dependencies = dependencies.into_iter().map(|subpass_dep| {
+            let sdep = subpass_dep.borrow();
+            // TODO: checks
+            vk::SubpassDependency {
+                src_subpass: sdep
+                    .passes
+                    .start
+                    .map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
+                dst_subpass: sdep.passes.end.map_or(vk::SUBPASS_EXTERNAL, |id| id as u32),
+                src_stage_mask: conv::map_pipeline_stage(sdep.stages.start),
+                dst_stage_mask: conv::map_pipeline_stage(sdep.stages.end),
+                src_access_mask: conv::map_image_access(sdep.accesses.start),
+                dst_access_mask: conv::map_image_access(sdep.accesses.end),
+                dependency_flags: mem::transmute(sdep.flags),
+            }
+        });
+
+        let (clear_attachments_mask, result) =
+            inplace_it::inplace_or_alloc_array(attachments.len(), |uninit_guard| {
+                let attachments = uninit_guard.init_with_iter(attachments);
+
+                let clear_attachments_mask = attachments
+                    .iter()
+                    .enumerate()
+                    .filter_map(|(i, at)| {
+                        if at.load_op == vk::AttachmentLoadOp::CLEAR
+                            || at.stencil_load_op == vk::AttachmentLoadOp::CLEAR
+                        {
+                            Some(1 << i as u64)
+                        } else {
+                            None
+                        }
+                    })
+                    .sum();
+
+                let attachment_refs = subpasses
+                    .into_iter()
+                    .map(|subpass| {
+                        let subpass = subpass.borrow();
+                        fn make_ref(
+                            &(id, layout): &pass::AttachmentRef,
+                        ) -> vk::AttachmentReference {
+                            vk::AttachmentReference {
+                                attachment: id as _,
+                                layout: conv::map_image_layout(layout),
+                            }
+                        }
+                        let colors = subpass.colors.iter().map(make_ref).collect::<Box<[_]>>();
+                        let depth_stencil = subpass.depth_stencil.map(make_ref);
+                        let inputs = subpass.inputs.iter().map(make_ref).collect::<Box<[_]>>();
+                        let preserves = subpass
+                            .preserves
+                            .iter()
+                            .map(|&id| id as u32)
+                            .collect::<Box<[_]>>();
+                        let resolves = subpass.resolves.iter().map(make_ref).collect::<Box<[_]>>();
+
+                        (colors, depth_stencil, inputs, preserves, resolves)
+                    })
+                    .collect::<Box<[_]>>();
+
+                let subpasses = attachment_refs
+                    .iter()
+                    .map(|(colors, depth_stencil, inputs, preserves, resolves)| {
+                        vk::SubpassDescription {
+                            flags: vk::SubpassDescriptionFlags::empty(),
+                            pipeline_bind_point: vk::PipelineBindPoint::GRAPHICS,
+                            input_attachment_count: inputs.len() as u32,
+                            p_input_attachments: inputs.as_ptr(),
+                            color_attachment_count: colors.len() as u32,
+                            p_color_attachments: colors.as_ptr(),
+                            p_resolve_attachments: if resolves.is_empty() {
+                                ptr::null()
+                            } else {
+                                resolves.as_ptr()
+                            },
+                            p_depth_stencil_attachment: match depth_stencil {
+                                Some(ref aref) => aref as *const _,
+                                None => ptr::null(),
+                            },
+                            preserve_attachment_count: preserves.len() as u32,
+                            p_preserve_attachments: preserves.as_ptr(),
+                        }
+                    })
+                    .collect::<Box<[_]>>();
+
+                let result =
+                    inplace_it::inplace_or_alloc_array(dependencies.len(), |uninit_guard| {
+                        let dependencies = uninit_guard.init_with_iter(dependencies);
+
+                        let info = vk::RenderPassCreateInfo {
+                            s_type: vk::StructureType::RENDER_PASS_CREATE_INFO,
+                            p_next: ptr::null(),
+                            flags: vk::RenderPassCreateFlags::empty(),
+                            attachment_count: attachments.len() as u32,
+                            p_attachments: attachments.as_ptr(),
+                            subpass_count: subpasses.len() as u32,
+                            p_subpasses: subpasses.as_ptr(),
+                            dependency_count: dependencies.len() as u32,
+                            p_dependencies: dependencies.as_ptr(),
+                        };
+
+                        self.shared.raw.create_render_pass(&info, None)
+                    });
+
+                (clear_attachments_mask, result)
+            });
 
         match result {
             Ok(renderpass) => Ok(n::RenderPass {
@@ -719,24 +714,19 @@ impl d::Device<B> for Device {
         IR::Item: Borrow<(pso::ShaderStageFlags, Range<u32>)>,
         IR::IntoIter: ExactSizeIterator,
     {
-        let set_layouts = sets
-            .into_iter()
-            .map(|set| set.borrow().raw);
+        let set_layouts = sets.into_iter().map(|set| set.borrow().raw);
 
-        let push_constant_ranges = push_constant_ranges
-            .into_iter()
-            .map(|range| {
-                let &(s, ref r) = range.borrow();
-                vk::PushConstantRange {
-                    stage_flags: conv::map_stage_flags(s),
-                    offset: r.start,
-                    size: r.end - r.start,
-                }
-            });
+        let push_constant_ranges = push_constant_ranges.into_iter().map(|range| {
+            let &(s, ref r) = range.borrow();
+            vk::PushConstantRange {
+                stage_flags: conv::map_stage_flags(s),
+                offset: r.start,
+                size: r.end - r.start,
+            }
+        });
 
         let result = inplace_it::inplace_or_alloc_array(set_layouts.len(), |uninit_guard| {
-            let set_layouts =
-                uninit_guard.init_with_iter(set_layouts);
+            let set_layouts = uninit_guard.init_with_iter(set_layouts);
 
             // TODO: set_layouts doesnt implement fmt::Debug, submit PR?
             // debug!("create_pipeline_layout {:?}", set_layouts);
@@ -822,9 +812,7 @@ impl d::Device<B> for Device {
         I::Item: Borrow<n::PipelineCache>,
         I::IntoIter: ExactSizeIterator,
     {
-        let caches = sources
-            .into_iter()
-            .map(|s| s.borrow().raw);
+        let caches = sources.into_iter().map(|s| s.borrow().raw);
 
         let result = inplace_it::inplace_or_alloc_array(caches.len(), |uninit_guard| {
             let caches = uninit_guard.init_with_iter(caches);
@@ -1512,7 +1500,7 @@ impl d::Device<B> for Device {
         let layout = self.shared.raw.get_image_subresource_layout(image.raw, sub);
 
         image::SubresourceFootprint {
-            slice: layout.offset .. layout.offset + layout.size,
+            slice: layout.offset..layout.offset + layout.size,
             row_pitch: layout.row_pitch,
             array_pitch: layout.array_pitch,
             depth_pitch: layout.depth_pitch,
@@ -1591,15 +1579,13 @@ impl d::Device<B> for Device {
         T::Item: Borrow<pso::DescriptorRangeDesc>,
         T::IntoIter: ExactSizeIterator,
     {
-        let pools = descriptor_pools
-            .into_iter()
-            .map(|pool| {
-                let pool = pool.borrow();
-                vk::DescriptorPoolSize {
-                    ty: conv::map_descriptor_type(pool.ty),
-                    descriptor_count: pool.count as u32,
-                }
-            });
+        let pools = descriptor_pools.into_iter().map(|pool| {
+            let pool = pool.borrow();
+            vk::DescriptorPoolSize {
+                ty: conv::map_descriptor_type(pool.ty),
+                descriptor_count: pool.count as u32,
+            }
+        });
 
         let result = inplace_it::inplace_or_alloc_array(pools.len(), |uninit_guard| {
             let pools = uninit_guard.init_with_iter(pools);
@@ -1640,9 +1626,7 @@ impl d::Device<B> for Device {
         J::Item: Borrow<n::Sampler>,
         J::IntoIter: ExactSizeIterator,
     {
-        let immutable_samplers = immutable_sampler_iter
-            .into_iter()
-            .map(|is| is.borrow().0);
+        let immutable_samplers = immutable_sampler_iter.into_iter().map(|is| is.borrow().0);
         let mut sampler_offset = 0;
 
         let bindings = Arc::new(
@@ -1655,21 +1639,19 @@ impl d::Device<B> for Device {
         let result = inplace_it::inplace_or_alloc_array(immutable_samplers.len(), |uninit_guard| {
             let immutable_samplers = uninit_guard.init_with_iter(immutable_samplers);
 
-            let raw_bindings = bindings
-                .iter()
-                .map(|b| vk::DescriptorSetLayoutBinding {
-                    binding: b.binding,
-                    descriptor_type: conv::map_descriptor_type(b.ty),
-                    descriptor_count: b.count as _,
-                    stage_flags: conv::map_stage_flags(b.stage_flags),
-                    p_immutable_samplers: if b.immutable_samplers {
-                        let slice = &immutable_samplers[sampler_offset ..];
-                        sampler_offset += b.count;
-                        slice.as_ptr()
-                    } else {
-                        ptr::null()
-                    },
-                });
+            let raw_bindings = bindings.iter().map(|b| vk::DescriptorSetLayoutBinding {
+                binding: b.binding,
+                descriptor_type: conv::map_descriptor_type(b.ty),
+                descriptor_count: b.count as _,
+                stage_flags: conv::map_stage_flags(b.stage_flags),
+                p_immutable_samplers: if b.immutable_samplers {
+                    let slice = &immutable_samplers[sampler_offset..];
+                    sampler_offset += b.count;
+                    slice.as_ptr()
+                } else {
+                    ptr::null()
+                },
+            });
 
             inplace_it::inplace_or_alloc_array(raw_bindings.len(), |uninit_guard| {
                 let raw_bindings = uninit_guard.init_with_iter(raw_bindings);
@@ -1786,13 +1768,13 @@ impl d::Device<B> for Device {
                     raw.p_buffer_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
                     let base = raw.p_image_info as usize - raw.descriptor_count as usize;
-                    raw.p_image_info = image_infos[base ..].as_ptr();
+                    raw.p_image_info = image_infos[base..].as_ptr();
                 }
                 Dt::UNIFORM_TEXEL_BUFFER | Dt::STORAGE_TEXEL_BUFFER => {
                     raw.p_buffer_info = ptr::null();
                     raw.p_image_info = ptr::null();
                     let base = raw.p_texel_buffer_view as usize - raw.descriptor_count as usize;
-                    raw.p_texel_buffer_view = texel_buffer_views[base ..].as_ptr();
+                    raw.p_texel_buffer_view = texel_buffer_views[base..].as_ptr();
                 }
                 Dt::UNIFORM_BUFFER
                 | Dt::STORAGE_BUFFER
@@ -1801,7 +1783,7 @@ impl d::Device<B> for Device {
                     raw.p_image_info = ptr::null();
                     raw.p_texel_buffer_view = ptr::null();
                     let base = raw.p_buffer_info as usize - raw.descriptor_count as usize;
-                    raw.p_buffer_info = buffer_infos[base ..].as_ptr();
+                    raw.p_buffer_info = buffer_infos[base..].as_ptr();
                 }
                 _ => panic!("unknown descriptor type"),
             }
@@ -1816,22 +1798,20 @@ impl d::Device<B> for Device {
         I::Item: Borrow<pso::DescriptorSetCopy<'a, B>>,
         I::IntoIter: ExactSizeIterator,
     {
-        let copies = copies
-            .into_iter()
-            .map(|copy| {
-                let c = copy.borrow();
-                vk::CopyDescriptorSet {
-                    s_type: vk::StructureType::COPY_DESCRIPTOR_SET,
-                    p_next: ptr::null(),
-                    src_set: c.src_set.raw,
-                    src_binding: c.src_binding as u32,
-                    src_array_element: c.src_array_offset as u32,
-                    dst_set: c.dst_set.raw,
-                    dst_binding: c.dst_binding as u32,
-                    dst_array_element: c.dst_array_offset as u32,
-                    descriptor_count: c.count as u32,
-                }
-            });
+        let copies = copies.into_iter().map(|copy| {
+            let c = copy.borrow();
+            vk::CopyDescriptorSet {
+                s_type: vk::StructureType::COPY_DESCRIPTOR_SET,
+                p_next: ptr::null(),
+                src_set: c.src_set.raw,
+                src_binding: c.src_binding as u32,
+                src_array_element: c.src_array_offset as u32,
+                dst_set: c.dst_set.raw,
+                dst_binding: c.dst_binding as u32,
+                dst_array_element: c.dst_array_offset as u32,
+                descriptor_count: c.count as u32,
+            }
+        });
 
         inplace_it::inplace_or_alloc_array(copies.len(), |uninit_guard| {
             let copies = uninit_guard.init_with_iter(copies);
@@ -1941,9 +1921,7 @@ impl d::Device<B> for Device {
         I::Item: Borrow<n::Fence>,
         I::IntoIter: ExactSizeIterator,
     {
-        let fences = fences
-            .into_iter()
-            .map(|fence| fence.borrow().0);
+        let fences = fences.into_iter().map(|fence| fence.borrow().0);
 
         let result = inplace_it::inplace_or_alloc_array(fences.len(), |uninit_guard| {
             let fences = uninit_guard.init_with_iter(fences);
@@ -1969,9 +1947,7 @@ impl d::Device<B> for Device {
         I::Item: Borrow<n::Fence>,
         I::IntoIter: ExactSizeIterator,
     {
-        let fences = fences
-            .into_iter()
-            .map(|fence| fence.borrow().0);
+        let fences = fences.into_iter().map(|fence| fence.borrow().0);
 
         let all = match wait {
             d::WaitFor::Any => false,
@@ -2262,11 +2238,7 @@ impl d::Device<B> for Device {
         )
     }
 
-    unsafe fn set_pipeline_layout_name(
-        &self,
-        pipeline_layout: &mut n::PipelineLayout,
-        name: &str,
-    ) {
+    unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut n::PipelineLayout, name: &str) {
         self.set_object_name(
             vk::ObjectType::PIPELINE_LAYOUT,
             pipeline_layout.raw.as_raw(),
@@ -2279,19 +2251,15 @@ impl d::Device<B> for Device {
         compute_pipeline: &mut n::ComputePipeline,
         name: &str,
     ) {
-        self.set_object_name(
-            vk::ObjectType::PIPELINE,
-            compute_pipeline.0.as_raw(),
-            name,
-        )
+        self.set_object_name(vk::ObjectType::PIPELINE, compute_pipeline.0.as_raw(), name)
     }
 
-    unsafe fn set_graphics_pipeline_name(&self, graphics_pipeline: &mut n::GraphicsPipeline, name: &str) {
-        self.set_object_name(
-            vk::ObjectType::PIPELINE,
-            graphics_pipeline.0.as_raw(),
-            name,
-        )
+    unsafe fn set_graphics_pipeline_name(
+        &self,
+        graphics_pipeline: &mut n::GraphicsPipeline,
+        name: &str,
+    ) {
+        self.set_object_name(vk::ObjectType::PIPELINE, graphics_pipeline.0.as_raw(), name)
     }
 }
 

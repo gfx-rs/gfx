@@ -23,28 +23,11 @@ extern crate log;
 #[macro_use]
 extern crate winapi;
 
-use hal::{
-    adapter,
-    buffer,
-    command,
-    format,
-    image,
-    memory,
-    pass,
-    pso,
-    query,
-    queue,
-    window,
-    DrawCount,
-    IndexCount,
-    InstanceCount,
-    Limits,
-    VertexCount,
-    VertexOffset,
-    TaskCount,
-    WorkGroupCount,
-};
 use auxil::ShaderStage;
+use hal::{
+    adapter, buffer, command, format, image, memory, pass, pso, query, queue, window, DrawCount,
+    IndexCount, InstanceCount, Limits, TaskCount, VertexCount, VertexOffset, WorkGroupCount,
+};
 use range_alloc::RangeAllocator;
 
 use winapi::{
@@ -518,7 +501,7 @@ fn get_feature_level(func: &CreateFun, adapter: *mut IDXGIAdapter) -> d3dcommon:
                     d3dcommon::D3D_DRIVER_TYPE_UNKNOWN,
                     ptr::null_mut(),
                     0,
-                    requested_feature_levels[1 ..].as_ptr(),
+                    requested_feature_levels[1..].as_ptr(),
                     (requested_feature_levels.len() - 1) as _,
                     d3d11::D3D11_SDK_VERSION,
                     ptr::null_mut(),
@@ -784,7 +767,7 @@ impl window::Surface<Backend> for Surface {
         window::SurfaceCapabilities {
             present_modes: window::PresentMode::FIFO, //TODO
             composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
-            image_count: 1..=16,                    // TODO:
+            image_count: 1..=16,                      // TODO:
             current_extent,
             extents: window::Extent2D {
                 width: 16,
@@ -868,8 +851,8 @@ impl window::PresentationSurface<Backend> for Surface {
             caps: image::ViewCapabilities::empty(),
             view_kind: image::ViewKind::D2,
             format: decomposed.rtv.unwrap(),
-            levels: 0 .. 1,
-            layers: 0 .. 1,
+            levels: 0..1,
+            layers: 0..1,
         };
         let view = device.view_image_as_render_target(&view_info).unwrap();
 
@@ -1036,7 +1019,7 @@ impl RenderPassCache {
             attachments,
             &[pso::ClearRect {
                 rect: self.target_rect,
-                layers: 0 .. 1,
+                layers: 0..1,
             }],
             &self,
         );
@@ -1640,8 +1623,8 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             }
 
             // TODO: clear Int/Uint depending on format
-            for rel_layer in 0 .. num_layers {
-                for rel_level in 0 .. num_levels {
+            for rel_layer in 0..num_layers {
+                for rel_level in 0..num_levels {
                     let level = range.level_start + rel_level;
                     let layer = range.layer_start + rel_layer;
                     if range.aspects.contains(format::Aspects::COLOR) {
@@ -1842,7 +1825,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
 
         //let offsets: Vec<command::DescriptorSetOffset> = offsets.into_iter().map(|o| *o.borrow()).collect();
 
-        for (set, info) in sets.into_iter().zip(&layout.sets[first_set ..]) {
+        for (set, info) in sets.into_iter().zip(&layout.sets[first_set..]) {
             let set = set.borrow();
 
             {
@@ -1952,7 +1935,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             [ptr::null_mut(); 16].as_ptr(),
             ptr::null_mut(),
         );
-        for (set, info) in sets.into_iter().zip(&layout.sets[first_set ..]) {
+        for (set, info) in sets.into_iter().zip(&layout.sets[first_set..]) {
             let set = set.borrow();
 
             {
@@ -2186,7 +2169,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32
+        _stride: u32,
     ) {
         unimplemented!()
     }
@@ -2198,7 +2181,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32
+        _stride: u32,
     ) {
         unimplemented!()
     }
@@ -2348,7 +2331,7 @@ fn intersection(a: &Range<u64>, b: &Range<u64>) -> Option<Range<u64>> {
         None
     } else {
         let end = if min.end < max.end { min.end } else { max.end };
-        Some(max.start .. end)
+        Some(max.start..end)
     }
 }
 
@@ -2428,15 +2411,15 @@ impl MemoryInvalidate {
         let remainder = len % stride;
 
         // we split up the copies into chunks the size of our working buffer
-        for i in 0 .. chunks {
+        for i in 0..chunks {
             let offset = range.start + i * stride;
-            let range = offset .. (offset + stride);
+            let range = offset..(offset + stride);
 
             self.download(context, self.buffer, range);
         }
 
         if remainder != 0 {
-            self.download(context, self.buffer, (chunks * stride) .. range.end);
+            self.download(context, self.buffer, (chunks * stride)..range.end);
         }
     }
 
@@ -2500,7 +2483,7 @@ unsafe impl Sync for Memory {}
 
 impl Memory {
     pub fn resolve(&self, segment: &memory::Segment) -> Range<u64> {
-        segment.offset .. segment.size.map_or(self.size, |s| segment.offset + s)
+        segment.offset..segment.size.map_or(self.size, |s| segment.offset + s)
     }
 
     pub fn bind_buffer(&self, range: Range<u64>, buffer: InternalBuffer) {
@@ -2556,7 +2539,7 @@ impl Memory {
 
                     MemoryFlush {
                         host_memory: unsafe { ptr.offset(range.start as _) },
-                        sync_range: SyncRange::Partial(local_start .. (local_start + local_len)),
+                        sync_range: SyncRange::Partial(local_start..(local_start + local_len)),
                         buffer: buffer.raw,
                     }
                     .do_flush(&context);
@@ -3202,9 +3185,7 @@ bitflags! {
 impl From<pso::DescriptorType> for DescriptorContent {
     fn from(ty: pso::DescriptorType) -> Self {
         use hal::pso::{
-            BufferDescriptorFormat as Bdf,
-            BufferDescriptorType as Bdt,
-            DescriptorType as Dt,
+            BufferDescriptorFormat as Bdf, BufferDescriptorType as Bdt, DescriptorType as Dt,
             ImageDescriptorType as Idt,
         };
         match ty {
@@ -3329,7 +3310,7 @@ impl DescriptorPool {
     fn with_capacity(size: DescriptorIndex) -> Self {
         DescriptorPool {
             handles: vec![Descriptor(ptr::null_mut()); size as usize],
-            allocator: RangeAllocator::new(0 .. size),
+            allocator: RangeAllocator::new(0..size),
         }
     }
 }
@@ -3348,7 +3329,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
         self.allocator
             .allocate_range(len)
             .map(|range| {
-                for handle in &mut self.handles[range.start as usize .. range.end as usize] {
+                for handle in &mut self.handles[range.start as usize..range.end as usize] {
                     *handle = Descriptor(ptr::null_mut());
                 }
 
@@ -3375,7 +3356,7 @@ impl pso::DescriptorPool<Backend> for DescriptorPool {
     {
         for set in descriptor_sets {
             self.allocator
-                .free_range(set.offset .. (set.offset + set.len))
+                .free_range(set.offset..(set.offset + set.len))
         }
     }
 

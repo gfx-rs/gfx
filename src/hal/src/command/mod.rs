@@ -25,13 +25,7 @@ use crate::image::{Filter, Layout, SubresourceRange};
 use crate::memory::{Barrier, Dependencies};
 use crate::{buffer, pass, pso, query};
 use crate::{
-    Backend,
-    DrawCount,
-    IndexCount,
-    InstanceCount,
-    VertexCount,
-    VertexOffset,
-    TaskCount,
+    Backend, DrawCount, IndexCount, InstanceCount, TaskCount, VertexCount, VertexOffset,
     WorkGroupCount,
 };
 
@@ -509,7 +503,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         _count_buffer: &B::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32
+        _stride: u32,
     );
 
     /// Functions identically to `draw_indexed_indirect()`, except the amount of draw
@@ -527,7 +521,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         _count_buffer: &B::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32
+        _stride: u32,
     );
 
     /// Dispatches `task_count` of threads. Similar to compute dispatch.
@@ -579,7 +573,7 @@ pub trait CommandBuffer<B: Backend>: fmt::Debug + Any + Send + Sync {
         I::IntoIter: ExactSizeIterator,
         J: IntoIterator,
         J::Item: Borrow<Barrier<'a, B>>,
-        J::IntoIter: ExactSizeIterator,;
+        J::IntoIter: ExactSizeIterator;
 
     /// Begins a query operation.  Queries count operations or record timestamps
     /// resulting from commands that occur between the beginning and end of the query,

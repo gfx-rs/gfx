@@ -31,13 +31,9 @@ pub fn wasm_main() {
 }
 
 use hal::{
-    buffer,
-    command,
-    format as f,
+    buffer, command, format as f,
     format::ChannelType,
-    image as i,
-    memory as m,
-    pass,
+    image as i, memory as m, pass,
     pass::Subpass,
     pool,
     prelude::*,
@@ -90,8 +86,8 @@ fn main() {
     #[cfg(not(target_arch = "wasm32"))]
     let (_window, instance, mut adapters, surface) = {
         let window = wb.build(&event_loop).unwrap();
-        let instance =
-            back::Instance::create("gfx-rs mesh shading", 1).expect("Failed to create an instance!");
+        let instance = back::Instance::create("gfx-rs mesh shading", 1)
+            .expect("Failed to create an instance!");
         let adapters = instance.enumerate_adapters();
         let surface = unsafe {
             instance
@@ -234,20 +230,18 @@ where
         let set_layout = ManuallyDrop::new(
             unsafe {
                 device.create_descriptor_set_layout(
-                    &[
-                        pso::DescriptorSetLayoutBinding {
-                            binding: 0,
-                            ty: pso::DescriptorType::Buffer {
-                                ty: pso::BufferDescriptorType::Storage { read_only: true },
-                                format: pso::BufferDescriptorFormat::Structured {
-                                    dynamic_offset: false,
-                                },
+                    &[pso::DescriptorSetLayoutBinding {
+                        binding: 0,
+                        ty: pso::DescriptorType::Buffer {
+                            ty: pso::BufferDescriptorType::Storage { read_only: true },
+                            format: pso::BufferDescriptorFormat::Structured {
+                                dynamic_offset: false,
                             },
-                            count: 1,
-                            stage_flags: ShaderStageFlags::MESH,
-                            immutable_samplers: false,
                         },
-                    ],
+                        count: 1,
+                        stage_flags: ShaderStageFlags::MESH,
+                        immutable_samplers: false,
+                    }],
                     &[],
                 )
             }
@@ -259,17 +253,15 @@ where
             unsafe {
                 device.create_descriptor_pool(
                     1, // sets
-                    &[
-                        pso::DescriptorRangeDesc {
-                            ty: pso::DescriptorType::Buffer {
-                                ty: pso::BufferDescriptorType::Storage { read_only: true },
-                                format: pso::BufferDescriptorFormat::Structured {
-                                    dynamic_offset: false,
-                                },
+                    &[pso::DescriptorRangeDesc {
+                        ty: pso::DescriptorType::Buffer {
+                            ty: pso::BufferDescriptorType::Storage { read_only: true },
+                            format: pso::BufferDescriptorFormat::Structured {
+                                dynamic_offset: false,
                             },
-                            count: 1,
                         },
-                    ],
+                        count: 1,
+                    }],
                     pso::DescriptorPoolCreateFlags::empty(),
                 )
             }
@@ -322,7 +314,11 @@ where
                 .bind_buffer_memory(&memory, 0, &mut positions_buffer)
                 .unwrap();
             let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
-            ptr::copy_nonoverlapping(positions.as_ptr() as *const u8, mapping, buffer_len as usize);
+            ptr::copy_nonoverlapping(
+                positions.as_ptr() as *const u8,
+                mapping,
+                buffer_len as usize,
+            );
             device
                 .flush_mapped_memory_ranges(iter::once((&memory, m::Segment::ALL)))
                 .unwrap();
@@ -331,14 +327,15 @@ where
         };
 
         unsafe {
-            device.write_descriptor_sets(vec![
-                pso::DescriptorSetWrite {
-                    set: &desc_set,
-                    binding: 0,
-                    array_offset: 0,
-                    descriptors: Some(pso::Descriptor::Buffer(&*positions_buffer, buffer::SubRange::WHOLE)),
-                },
-            ]);
+            device.write_descriptor_sets(vec![pso::DescriptorSetWrite {
+                set: &desc_set,
+                binding: 0,
+                array_offset: 0,
+                descriptors: Some(pso::Descriptor::Buffer(
+                    &*positions_buffer,
+                    buffer::SubRange::WHOLE,
+                )),
+            }]);
         }
 
         let caps = surface.capabilities(&adapter.physical_device);
@@ -370,7 +367,7 @@ where
                     pass::AttachmentStoreOp::Store,
                 ),
                 stencil_ops: pass::AttachmentOps::DONT_CARE,
-                layouts: i::Layout::Undefined .. i::Layout::Present,
+                layouts: i::Layout::Undefined..i::Layout::Present,
             };
 
             let subpass = pass::SubpassDesc {
@@ -407,7 +404,7 @@ where
         let mut cmd_buffers = Vec::with_capacity(frames_in_flight);
 
         cmd_pools.push(command_pool);
-        for _ in 1 .. frames_in_flight {
+        for _ in 1..frames_in_flight {
             unsafe {
                 cmd_pools.push(
                     device
@@ -420,7 +417,7 @@ where
             }
         }
 
-        for i in 0 .. frames_in_flight {
+        for i in 0..frames_in_flight {
             submission_complete_semaphores.push(
                 device
                     .create_semaphore()
@@ -432,23 +429,20 @@ where
         }
 
         let pipeline_layout = ManuallyDrop::new(
-            unsafe {
-                device.create_pipeline_layout(
-                    iter::once(&*set_layout),
-                    &[],
-                )
-            }
-            .expect("Can't create pipeline layout"),
+            unsafe { device.create_pipeline_layout(iter::once(&*set_layout), &[]) }
+                .expect("Can't create pipeline layout"),
         );
         let pipeline = {
             let ms_module = {
-                let spirv = auxil::read_spirv(Cursor::new(&include_bytes!("data/triangles.mesh.spv")[..]))
-                    .unwrap();
+                let spirv =
+                    auxil::read_spirv(Cursor::new(&include_bytes!("data/triangles.mesh.spv")[..]))
+                        .unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
             let fs_module = {
-                let spirv = auxil::read_spirv(Cursor::new(&include_bytes!("data/triangles.frag.spv")[..]))
-                    .unwrap();
+                let spirv =
+                    auxil::read_spirv(Cursor::new(&include_bytes!("data/triangles.frag.spv")[..]))
+                        .unwrap();
                 unsafe { device.create_shader_module(&spirv) }.unwrap()
             };
 
@@ -508,7 +502,7 @@ where
                 w: extent.width as _,
                 h: extent.height as _,
             },
-            depth: 0.0 .. 1.0,
+            depth: 0.0..1.0,
         };
 
         Renderer {

@@ -1,16 +1,13 @@
 use crate::{
     device::{Device, PhysicalDevice},
-    native,
-    Backend,
-    QueueFamily,
-    Shared,
+    native, Backend, QueueFamily, Shared,
 };
 
 use hal::{format, image, window as w};
 
 use crate::CGRect;
 use foreign_types::ForeignType;
-use metal::{CoreAnimationDrawable, CGFloat, CGSize};
+use metal::{CGFloat, CGSize, CoreAnimationDrawable};
 use objc::rc::autoreleasepool;
 use objc::runtime::Object;
 use parking_lot::Mutex;
@@ -39,9 +36,7 @@ unsafe impl Sync for SurfaceInner {}
 impl Drop for SurfaceInner {
     fn drop(&mut self) {
         if let Some(view) = self.view {
-            let () = unsafe {
-                msg_send![view.as_ptr(), release]
-            };
+            let () = unsafe { msg_send![view.as_ptr(), release] };
         }
     }
 }

@@ -14,15 +14,7 @@ mod root_constants;
 mod window;
 
 use hal::{
-    adapter,
-    format as f,
-    image,
-    memory,
-    pso::PipelineStage,
-    queue as q,
-    Features,
-    Hints,
-    Limits,
+    adapter, format as f, image, memory, pso::PipelineStage, queue as q, Features, Hints, Limits,
 };
 
 use winapi::{
@@ -271,7 +263,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     }
                     QueueFamily::Normal(_) => {
                         let list_type = family.native_type();
-                        for _ in 0 .. priorities.len() {
+                        for _ in 0..priorities.len() {
                             let (queue, hr_queue) = device_raw.create_command_queue(
                                 list_type,
                                 native::Priority::Normal,
@@ -847,7 +839,7 @@ impl hal::Instance<Backend> for Instance {
 
             let device_name = {
                 let len = desc.Description.iter().take_while(|&&c| c != 0).count();
-                let name = <OsString as OsStringExt>::from_wide(&desc.Description[.. len]);
+                let name = <OsString as OsStringExt>::from_wide(&desc.Description[..len]);
                 name.to_string_lossy().into_owned()
             };
 
@@ -997,7 +989,7 @@ impl hal::Instance<Backend> for Instance {
                 // `device::MEM_TYPE_IMAGE_SHIFT`, `device::MEM_TYPE_TARGET_SHIFT`)
                 // denote the usage group.
                 let mut types = Vec::new();
-                for i in 0 .. MemoryGroup::NumGroups as _ {
+                for i in 0..MemoryGroup::NumGroups as _ {
                     types.extend(base_memory_types.iter().map(|mem_type| {
                         let mut ty = mem_type.clone();
 
@@ -1248,7 +1240,7 @@ impl FormatProperties {
     fn new(device: native::Device) -> Self {
         let mut buf = Vec::with_capacity(f::NUM_FORMATS);
         buf.push(Mutex::new(Some(FormatInfo::default())));
-        for _ in 1 .. f::NUM_FORMATS {
+        for _ in 1..f::NUM_FORMATS {
             buf.push(Mutex::new(None))
         }
         FormatProperties {
@@ -1348,7 +1340,7 @@ impl FormatProperties {
         };
 
         let mut sample_count_mask = 0;
-        for i in 0 .. 6 {
+        for i in 0..6 {
             let mut data = d3d12::D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS {
                 Format: dxgi_format,
                 SampleCount: 1 << i,

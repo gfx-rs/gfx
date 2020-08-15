@@ -9,17 +9,8 @@ use std::path::PathBuf;
 use std::{iter, mem, slice};
 
 use hal::{
-    self,
-    adapter,
-    buffer as b,
-    command as c,
-    format as f,
-    image as i,
-    memory,
-    prelude::*,
-    pso,
-    query,
-    queue,
+    self, adapter, buffer as b, command as c, format as f, image as i, memory, prelude::*, pso,
+    query, queue,
 };
 
 use crate::raw;
@@ -61,10 +52,10 @@ pub struct Buffer<B: hal::Backend> {
 
 impl<B: hal::Backend> Buffer<B> {
     fn _barrier_to(&self, access: b::Access) -> memory::Barrier<B> {
-        memory::Barrier::whole_buffer(&self.handle, self.stable_state .. access)
+        memory::Barrier::whole_buffer(&self.handle, self.stable_state..access)
     }
     fn barrier_from(&self, access: b::Access) -> memory::Barrier<B> {
-        memory::Barrier::whole_buffer(&self.handle, access .. self.stable_state)
+        memory::Barrier::whole_buffer(&self.handle, access..self.stable_state)
     }
     fn barrier<T>(
         &self,
@@ -73,7 +64,7 @@ impl<B: hal::Backend> Buffer<B> {
     ) -> Option<memory::Barrier<B>> {
         let from = mem::replace(entry.or_insert(self.stable_state), access);
         if from != access {
-            Some(memory::Barrier::whole_buffer(&self.handle, from .. access))
+            Some(memory::Barrier::whole_buffer(&self.handle, from..access))
         } else {
             None
         }
@@ -92,7 +83,7 @@ pub struct Image<B: hal::Backend> {
 impl<B: hal::Backend> Image<B> {
     fn barrier_to(&self, access: i::Access, layout: i::Layout) -> memory::Barrier<B> {
         memory::Barrier::Image {
-            states: self.stable_state .. (access, layout),
+            states: self.stable_state..(access, layout),
             target: &self.handle,
             families: None,
             range: self.range.clone(),
@@ -100,7 +91,7 @@ impl<B: hal::Backend> Image<B> {
     }
     fn barrier_from(&self, access: i::Access, layout: i::Layout) -> memory::Barrier<B> {
         memory::Barrier::Image {
-            states: (access, layout) .. self.stable_state,
+            states: (access, layout)..self.stable_state,
             target: &self.handle,
             families: None,
             range: self.range.clone(),
@@ -115,7 +106,7 @@ impl<B: hal::Backend> Image<B> {
         let from = mem::replace(entry.or_insert(self.stable_state), (access, layout));
         if from != (access, layout) {
             Some(memory::Barrier::Image {
-                states: from .. (access, layout),
+                states: from..(access, layout),
                 target: &self.handle,
                 families: None,
                 range: self.range.clone(),
@@ -285,7 +276,7 @@ impl<B: hal::Backend> Scene<B> {
             init_cmd.begin_primary(c::CommandBufferFlags::empty());
             init_cmd.begin_debug_marker("_init", 0x0000FF00);
             if let Ok(ref pool) = query_pool {
-                init_cmd.reset_query_pool(pool, 0 .. 2);
+                init_cmd.reset_query_pool(pool, 0..2);
                 init_cmd.write_timestamp(
                     pso::PipelineStage::TOP_OF_PIPE,
                     query::Query { pool, id: 0 },
@@ -326,14 +317,12 @@ impl<B: hal::Backend> Scene<B> {
                         let access = b::Access::SHADER_READ; //TODO
                         if false {
                             //TODO
-                            let buffer_barrier = memory::Barrier::whole_buffer(
-                                &buffer,
-                                b::Access::empty() .. access,
-                            );
+                            let buffer_barrier =
+                                memory::Barrier::whole_buffer(&buffer, b::Access::empty()..access);
                             unsafe {
                                 init_cmd.pipeline_barrier(
                                     pso::PipelineStage::TOP_OF_PIPE
-                                        .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                                        ..pso::PipelineStage::BOTTOM_OF_PIPE,
                                     memory::Dependencies::empty(),
                                     &[buffer_barrier],
                                 );
@@ -374,11 +363,11 @@ impl<B: hal::Backend> Scene<B> {
                         let final_state = b::Access::SHADER_READ;
                         let pre_barrier = memory::Barrier::whole_buffer(
                             &buffer,
-                            b::Access::empty() .. b::Access::TRANSFER_WRITE,
+                            b::Access::empty()..b::Access::TRANSFER_WRITE,
                         );
                         unsafe {
                             init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                                pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                                 memory::Dependencies::empty(),
                                 &[pre_barrier],
                             );
@@ -393,11 +382,11 @@ impl<B: hal::Backend> Scene<B> {
                         }
                         let post_barrier = memory::Barrier::whole_buffer(
                             &buffer,
-                            b::Access::TRANSFER_WRITE .. final_state,
+                            b::Access::TRANSFER_WRITE..final_state,
                         );
                         unsafe {
                             init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                                pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                                 memory::Dependencies::empty(),
                                 &[post_barrier],
                             );
@@ -466,18 +455,18 @@ impl<B: hal::Backend> Scene<B> {
                             )
                         };
                         let image_barrier = memory::Barrier::Image {
-                            states: (i::Access::empty(), i::Layout::Undefined) .. (access, layout),
+                            states: (i::Access::empty(), i::Layout::Undefined)..(access, layout),
                             target: &image,
                             families: None,
                             range: i::SubresourceRange {
                                 aspects,
-                                .. Default::default()
+                                ..Default::default()
                             },
                         };
                         unsafe {
                             init_cmd.pipeline_barrier(
                                 pso::PipelineStage::BOTTOM_OF_PIPE
-                                    .. pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                                    ..pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                                 memory::Dependencies::empty(),
                                 &[image_barrier],
                             );
@@ -522,7 +511,7 @@ impl<B: hal::Backend> Scene<B> {
                             let mapping = device
                                 .map_memory(&upload_memory, memory::Segment::ALL)
                                 .unwrap();
-                            for y in 0 .. (h as usize * d as usize) {
+                            for y in 0..(h as usize * d as usize) {
                                 let slice = slice::from_raw_parts_mut(
                                     mapping.offset(y as isize * row_pitch as isize),
                                     width_bytes as usize,
@@ -536,17 +525,17 @@ impl<B: hal::Backend> Scene<B> {
                             (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal);
                         let pre_barrier = memory::Barrier::Image {
                             states: (i::Access::empty(), i::Layout::Undefined)
-                                .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                                ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                             families: None,
                             target: &image,
                             range: i::SubresourceRange {
                                 aspects: f::Aspects::COLOR,
-                                .. Default::default()
+                                ..Default::default()
                             }, //TODO
                         };
                         unsafe {
                             init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                                pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                                 memory::Dependencies::empty(),
                                 &[pre_barrier],
                             );
@@ -560,7 +549,7 @@ impl<B: hal::Backend> Scene<B> {
                             image_layers: i::SubresourceLayers {
                                 aspects: f::Aspects::COLOR,
                                 level: 0,
-                                layers: 0 .. 1,
+                                layers: 0..1,
                             },
                             image_offset: i::Offset::ZERO,
                             image_extent: extent,
@@ -575,17 +564,17 @@ impl<B: hal::Backend> Scene<B> {
                         }
                         let post_barrier = memory::Barrier::Image {
                             states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
-                                .. final_state,
+                                ..final_state,
                             families: None,
                             target: &image,
                             range: i::SubresourceRange {
                                 aspects: f::Aspects::COLOR,
-                                .. Default::default()
+                                ..Default::default()
                             }, //TODO
                         };
                         unsafe {
                             init_cmd.pipeline_barrier(
-                                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                                pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                                 memory::Dependencies::empty(),
                                 &[post_barrier],
                             );
@@ -604,7 +593,7 @@ impl<B: hal::Backend> Scene<B> {
                             format,
                             range: i::SubresourceRange {
                                 aspects: f::Aspects::COLOR,
-                                .. Default::default()
+                                ..Default::default()
                             },
                             stable_state,
                         },
@@ -661,7 +650,7 @@ impl<B: hal::Backend> Scene<B> {
                         })
                         .collect::<Vec<_>>();
                     let raw_deps = dependencies.iter().map(|dep| hal::pass::SubpassDependency {
-                        passes: subpass_ref(&dep.passes.start) .. subpass_ref(&dep.passes.end),
+                        passes: subpass_ref(&dep.passes.start)..subpass_ref(&dep.passes.end),
                         stages: dep.stages.clone(),
                         accesses: dep.accesses.clone(),
                         flags: memory::Dependencies::empty(),
@@ -1024,7 +1013,7 @@ impl<B: hal::Backend> Scene<B> {
                                     .get(dst)
                                     .expect(&format!("Missing destination buffer: {}", dst));
                                 command_buf.pipeline_barrier(
-                                    src_stage .. pso::PipelineStage::TRANSFER,
+                                    src_stage..pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
                                     sb.barrier(buffers.entry(src), b::State::TRANSFER_READ)
                                         .into_iter()
@@ -1051,7 +1040,7 @@ impl<B: hal::Backend> Scene<B> {
                                     .get(dst)
                                     .expect(&format!("Missing destination image: {}", dst));
                                 command_buf.pipeline_barrier(
-                                    src_stage .. pso::PipelineStage::TRANSFER,
+                                    src_stage..pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
                                     st.barrier(
                                         images.entry(src),
@@ -1087,7 +1076,7 @@ impl<B: hal::Backend> Scene<B> {
                                     .get(dst)
                                     .expect(&format!("Missing destination image: {}", dst));
                                 command_buf.pipeline_barrier(
-                                    src_stage .. pso::PipelineStage::TRANSFER,
+                                    src_stage..pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
                                     sb.barrier(buffers.entry(src), b::State::TRANSFER_READ)
                                         .into_iter()
@@ -1118,7 +1107,7 @@ impl<B: hal::Backend> Scene<B> {
                                     .get(dst)
                                     .expect(&format!("Missing destination buffer: {}", dst));
                                 command_buf.pipeline_barrier(
-                                    src_stage .. pso::PipelineStage::TRANSFER,
+                                    src_stage..pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
                                     st.barrier(
                                         images.entry(src),
@@ -1147,7 +1136,7 @@ impl<B: hal::Backend> Scene<B> {
                                     .get(image)
                                     .expect(&format!("Missing clear image: {}", image));
                                 command_buf.pipeline_barrier(
-                                    src_stage .. pso::PipelineStage::TRANSFER,
+                                    src_stage..pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
                                     img.barrier(
                                         images.entry(image),
@@ -1177,7 +1166,7 @@ impl<B: hal::Backend> Scene<B> {
                                     .get(dst)
                                     .expect(&format!("Missing destination image: {}", dst));
                                 command_buf.pipeline_barrier(
-                                    src_stage .. pso::PipelineStage::TRANSFER,
+                                    src_stage..pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
                                     st.barrier(
                                         images.entry(src),
@@ -1211,7 +1200,7 @@ impl<B: hal::Backend> Scene<B> {
                                     .get(buffer)
                                     .expect(&format!("Missing buffer: {}", buffer));
                                 command_buf.pipeline_barrier(
-                                    src_stage .. pso::PipelineStage::TRANSFER,
+                                    src_stage..pso::PipelineStage::TRANSFER,
                                     memory::Dependencies::empty(),
                                     buf.barrier(buffers.entry(buffer), b::State::TRANSFER_WRITE),
                                 );
@@ -1238,7 +1227,7 @@ impl<B: hal::Backend> Scene<B> {
                         | pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT;
                     unsafe {
                         command_buf.pipeline_barrier(
-                            pso::PipelineStage::TRANSFER .. dst_stages,
+                            pso::PipelineStage::TRANSFER..dst_stages,
                             memory::Dependencies::empty(),
                             buffer_cleanup.chain(image_cleanup),
                         );
@@ -1280,7 +1269,7 @@ impl<B: hal::Backend> Scene<B> {
                     };
                     command_buf.pipeline_barrier(
                         pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT
-                            .. pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                            ..pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                         memory::Dependencies::empty(),
                         fb.views.iter().map(|v| {
                             let view = &resources.image_views[&v.0];
@@ -1290,7 +1279,7 @@ impl<B: hal::Backend> Scene<B> {
                     );
                     command_buf.pipeline_barrier(
                         pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT
-                            .. pso::PipelineStage::VERTEX_SHADER
+                            ..pso::PipelineStage::VERTEX_SHADER
                                 | pso::PipelineStage::FRAGMENT_SHADER,
                         memory::Dependencies::empty(),
                         all_images.iter().map(|&(ref name, layout)| {
@@ -1309,7 +1298,7 @@ impl<B: hal::Backend> Scene<B> {
                         0,
                         Some(pso::Viewport {
                             rect,
-                            depth: 0.0 .. 1.0,
+                            depth: 0.0..1.0,
                         }),
                     );
 
@@ -1408,7 +1397,7 @@ impl<B: hal::Backend> Scene<B> {
                     command_buf.end_render_pass();
                     command_buf.pipeline_barrier(
                         pso::PipelineStage::VERTEX_SHADER | pso::PipelineStage::FRAGMENT_SHADER
-                            .. pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                            ..pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                         memory::Dependencies::empty(),
                         all_images.iter().map(|&(ref name, layout)| {
                             resources.images[name].barrier_from(i::Access::SHADER_READ, layout)
@@ -1416,7 +1405,7 @@ impl<B: hal::Backend> Scene<B> {
                     );
                     command_buf.pipeline_barrier(
                         pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT
-                            .. pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
+                            ..pso::PipelineStage::COLOR_ATTACHMENT_OUTPUT,
                         memory::Dependencies::empty(),
                         fb.views.iter().map(|v| {
                             let view = &resources.image_views[&v.0];
@@ -1546,10 +1535,10 @@ impl<B: hal::Backend> Scene<B> {
             cmd_buffer.begin_debug_marker("_fetch_buffer", 0x0000FF00);
             let pre_barrier = memory::Barrier::whole_buffer(
                 &buffer.handle,
-                buffer.stable_state .. b::Access::TRANSFER_READ,
+                buffer.stable_state..b::Access::TRANSFER_READ,
             );
             cmd_buffer.pipeline_barrier(
-                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                 memory::Dependencies::empty(),
                 &[pre_barrier],
             );
@@ -1563,10 +1552,10 @@ impl<B: hal::Backend> Scene<B> {
 
             let post_barrier = memory::Barrier::whole_buffer(
                 &buffer.handle,
-                b::Access::TRANSFER_READ .. buffer.stable_state,
+                b::Access::TRANSFER_READ..buffer.stable_state,
             );
             cmd_buffer.pipeline_barrier(
-                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                 memory::Dependencies::empty(),
                 &[post_barrier],
             );
@@ -1657,16 +1646,16 @@ impl<B: hal::Backend> Scene<B> {
             cmd_buffer.begin_debug_marker("_fetch_image", 0x0000FF00);
             let pre_barrier = memory::Barrier::Image {
                 states: image.stable_state
-                    .. (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
+                    ..(i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal),
                 target: &image.handle,
                 families: None,
                 range: i::SubresourceRange {
                     aspects: f::Aspects::COLOR,
-                    .. Default::default()
+                    ..Default::default()
                 }, //TODO
             };
             cmd_buffer.pipeline_barrier(
-                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                 memory::Dependencies::empty(),
                 &[pre_barrier],
             );
@@ -1678,7 +1667,7 @@ impl<B: hal::Backend> Scene<B> {
                 image_layers: i::SubresourceLayers {
                     aspects: f::Aspects::COLOR,
                     level: 0,
-                    layers: 0 .. 1,
+                    layers: 0..1,
                 },
                 image_offset: i::Offset { x: 0, y: 0, z: 0 },
                 image_extent: i::Extent {
@@ -1696,16 +1685,16 @@ impl<B: hal::Backend> Scene<B> {
 
             let post_barrier = memory::Barrier::Image {
                 states: (i::Access::TRANSFER_READ, i::Layout::TransferSrcOptimal)
-                    .. image.stable_state,
+                    ..image.stable_state,
                 target: &image.handle,
                 families: None,
                 range: i::SubresourceRange {
                     aspects: f::Aspects::COLOR,
-                    .. Default::default()
+                    ..Default::default()
                 }, //TODO
             };
             cmd_buffer.pipeline_barrier(
-                pso::PipelineStage::TRANSFER .. pso::PipelineStage::BOTTOM_OF_PIPE,
+                pso::PipelineStage::TRANSFER..pso::PipelineStage::BOTTOM_OF_PIPE,
                 memory::Dependencies::empty(),
                 &[post_barrier],
             );
@@ -1745,7 +1734,7 @@ impl<B: hal::Backend> Scene<B> {
                 self.device.wait_idle().unwrap();
                 let raw_data = slice::from_raw_parts_mut(results.as_mut_ptr() as *mut u8, 4 * 2);
                 self.device
-                    .get_query_pool_results(pool, 0 .. 2, raw_data, 4, query::ResultFlags::empty())
+                    .get_query_pool_results(pool, 0..2, raw_data, 4, query::ResultFlags::empty())
                     .unwrap();
             }
         }

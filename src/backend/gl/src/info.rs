@@ -74,13 +74,13 @@ impl Version {
         let es_sig = " ES ";
         let is_es = match src.rfind(es_sig) {
             Some(pos) => {
-                src = src[pos + es_sig.len() ..].to_string();
+                src = src[pos + es_sig.len()..].to_string();
                 true
             }
             None => false,
         };
         let (version, vendor_info) = match src.find(' ') {
-            Some(i) => (src[.. i].to_string(), src[i + 1 ..].to_string()),
+            Some(i) => (src[..i].to_string(), src[i + 1..].to_string()),
             None => (src.to_string(), String::from("")),
         };
 
@@ -275,7 +275,7 @@ impl Info {
         #[cfg(not(wasm))]
         let extensions = if version >= Version::new(3, 0, None, String::from("")) {
             let num_exts = get_usize(gl, glow::NUM_EXTENSIONS).unwrap();
-            (0 .. num_exts)
+            (0..num_exts)
                 .map(|i| unsafe { gl.get_parameter_indexed_string(glow::EXTENSIONS, i as u32) })
                 .collect()
         } else {

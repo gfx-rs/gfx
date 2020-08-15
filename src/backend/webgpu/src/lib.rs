@@ -3,8 +3,7 @@ use std::borrow::Borrow;
 use hal::{
     adapter::{Adapter, AdapterInfo, DeviceType, Gpu, MemoryProperties},
     device::CreationError,
-    format,
-    image,
+    format, image,
     queue::{QueueFamilyId, QueuePriority, QueueType},
     Features,
 };
@@ -154,7 +153,6 @@ fn map_wgpu_adapter_to_hal_adapter(adapter: web_sys::GpuAdapter) -> Adapter<Back
 // WASM doesn't have threads yet
 unsafe impl std::marker::Send for Instance {}
 unsafe impl std::marker::Sync for Instance {}
-
 
 #[derive(Debug)]
 pub struct PhysicalDevice(web_sys::GpuAdapter);

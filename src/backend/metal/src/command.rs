@@ -1,41 +1,21 @@
 use crate::{
     conversions as conv,
     internal::{BlitVertex, ClearKey, ClearVertex},
-    native,
-    soft,
-    window,
-    AsNative,
-    Backend,
-    BufferPtr,
-    OnlineRecording,
-    PrivateDisabilities,
-    ResourceIndex,
-    ResourcePtr,
-    SamplerPtr,
-    Shared,
-    TexturePtr,
-    MAX_BOUND_DESCRIPTOR_SETS,
+    native, soft, window, AsNative, Backend, BufferPtr, OnlineRecording, PrivateDisabilities,
+    ResourceIndex, ResourcePtr, SamplerPtr, Shared, TexturePtr, MAX_BOUND_DESCRIPTOR_SETS,
     MAX_COLOR_ATTACHMENTS,
 };
 
 use hal::{
-    buffer,
-    command as com,
+    buffer, command as com,
     device::OutOfMemory,
     format::{Aspects, FormatDesc},
     image::{Extent, Filter, Layout, Level, SubresourceRange},
     memory,
     pass::AttachmentLoadOp,
-    pso,
-    query,
+    pso, query,
     window::{PresentError, Suboptimal},
-    DrawCount,
-    IndexCount,
-    IndexType,
-    InstanceCount,
-    VertexCount,
-    VertexOffset,
-    TaskCount,
+    DrawCount, IndexCount, IndexType, InstanceCount, TaskCount, VertexCount, VertexOffset,
     WorkGroupCount,
 };
 
@@ -56,17 +36,14 @@ use std::fmt;
 use std::{
     borrow::Borrow,
     cell::RefCell,
-    iter,
-    mem,
+    iter, mem,
     ops::{Deref, Range},
-    ptr,
-    slice,
+    ptr, slice,
     sync::{
         atomic::{AtomicBool, Ordering},
         Arc,
     },
-    thread,
-    time,
+    thread, time,
 };
 
 const WORD_SIZE: usize = 4;
@@ -110,12 +87,12 @@ impl QueueInner {
         match pool_size {
             Some(count) => QueueInner {
                 raw: device.new_command_queue_with_max_command_buffer_count(count as u64),
-                reserve: 0 .. count,
+                reserve: 0..count,
                 debug_retain_references: false,
             },
             None => QueueInner {
                 raw: device.new_command_queue(),
-                reserve: 0 .. 64,
+                reserve: 0..64,
                 debug_retain_references: true,
             },
         }
@@ -447,7 +424,7 @@ impl State {
                         .map(|pc| soft::RenderCommand::BindBufferData {
                             stage,
                             index: pc.buffer_index as _,
-                            words: &push_constants[.. pc.count as usize],
+                            words: &push_constants[..pc.count as usize],
                         });
                 iter::once(com_buffers)
                     .chain(iter::once(com_textures))
@@ -496,7 +473,7 @@ impl State {
                 .push_constants
                 .map(|pc| soft::ComputeCommand::BindBufferData {
                     index: pc.buffer_index as _,
-                    words: &self.push_constants[.. pc.count as usize],
+                    words: &self.push_constants[..pc.count as usize],
                 });
         let com_used_resources = self.descriptor_sets.iter().flat_map(|ds| {
             ds.compute_resources
@@ -518,10 +495,10 @@ impl State {
         let start = end - rps.vertex_buffers.len();
         self.resources_vs.pre_allocate_buffers(end);
 
-        for ((out_buffer, out_offset), vb_maybe) in self.resources_vs.buffers[.. end]
+        for ((out_buffer, out_offset), vb_maybe) in self.resources_vs.buffers[..end]
             .iter_mut()
             .rev()
-            .zip(self.resources_vs.buffer_offsets[.. end].iter_mut().rev())
+            .zip(self.resources_vs.buffer_offsets[..end].iter_mut().rev())
             .zip(&rps.vertex_buffers)
         {
             match vb_maybe {
@@ -548,8 +525,8 @@ impl State {
             stage: ShaderStage::Vertex,
             index: start as ResourceIndex,
             buffers: (
-                &self.resources_vs.buffers[start .. end],
-                &self.resources_vs.buffer_offsets[start .. end],
+                &self.resources_vs.buffers[start..end],
+                &self.resources_vs.buffer_offsets[start..end],
             ),
         })
     }
@@ -596,7 +573,7 @@ impl State {
         soft::RenderCommand::BindBufferData {
             stage: ShaderStage::Vertex,
             index: pc.buffer_index,
-            words: &self.push_constants[.. pc.count as usize],
+            words: &self.push_constants[..pc.count as usize],
         }
     }
 
@@ -608,7 +585,7 @@ impl State {
         soft::RenderCommand::BindBufferData {
             stage: ShaderStage::Fragment,
             index: pc.buffer_index,
-            words: &self.push_constants[.. pc.count as usize],
+            words: &self.push_constants[..pc.count as usize],
         }
     }
 
@@ -619,7 +596,7 @@ impl State {
         self.resources_cs.push_constants = Some(pc);
         soft::ComputeCommand::BindBufferData {
             index: pc.buffer_index,
-            words: &self.push_constants[.. pc.count as usize],
+            words: &self.push_constants[..pc.count as usize],
         }
     }
 
@@ -628,7 +605,7 @@ impl State {
         vp: &'a pso::Viewport,
         disabilities: PrivateDisabilities,
     ) -> soft::RenderCommand<&'a soft::Ref> {
-        let depth = vp.depth.start .. if disabilities.broken_viewport_near_depth {
+        let depth = vp.depth.start..if disabilities.broken_viewport_near_depth {
             vp.depth.end - vp.depth.start
         } else {
             vp.depth.end
@@ -664,7 +641,7 @@ impl State {
         if data.len() < total as usize {
             data.resize(total as usize, 0);
         }
-        data[offset .. offset + constants.len()].copy_from_slice(constants);
+        data[offset..offset + constants.len()].copy_from_slice(constants);
     }
 
     fn set_visibility_query(
@@ -925,7 +902,7 @@ impl Journal {
                 };
                 self.passes.alloc().init((
                     pass.clone(),
-                    range.start + offset .. range.end + offset,
+                    range.start + offset..range.end + offset,
                     label.clone(),
                 ));
             }
@@ -1165,7 +1142,7 @@ impl CommandSink {
                 *is_encoding = true;
                 journal.passes.alloc().init((
                     soft::Pass::Render(descriptor),
-                    journal.render_commands.len() .. 0,
+                    journal.render_commands.len()..0,
                     label.clone(),
                 ));
                 PreRender::Deferred(&mut journal.resources, &mut journal.render_commands)
@@ -1254,7 +1231,7 @@ impl CommandSink {
                     journal.stop();
                     journal.passes.alloc().init((
                         soft::Pass::Blit,
-                        journal.blit_commands.len() .. 0,
+                        journal.blit_commands.len()..0,
                         label.clone(),
                     ));
                 }
@@ -1362,7 +1339,7 @@ impl CommandSink {
                     journal.stop();
                     journal.passes.alloc().init((
                         soft::Pass::Compute,
-                        journal.compute_commands.len() .. 0,
+                        journal.compute_commands.len()..0,
                         label.clone(),
                     ));
                     true
@@ -1622,7 +1599,9 @@ where
                 let offsets = buffers.as_slice(resources);
                 match stage {
                     ShaderStage::Vertex => encoder.set_vertex_buffers(index as _, data, offsets),
-                    ShaderStage::Fragment => encoder.set_fragment_buffers(index as _, data, offsets),
+                    ShaderStage::Fragment => {
+                        encoder.set_fragment_buffers(index as _, data, offsets)
+                    }
                     _ => unreachable!(),
                 }
             }
@@ -2381,7 +2360,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
                 target_formats: native::SubpassFormats::default(),
                 visibility_query: (metal::MTLVisibilityResultMode::Disabled, 0),
                 pending_subpasses: Vec::new(),
-                descriptor_sets: (0 .. MAX_BOUND_DESCRIPTOR_SETS)
+                descriptor_sets: (0..MAX_BOUND_DESCRIPTOR_SETS)
                     .map(|_| DescriptorSetInfo::default())
                     .collect(),
             },
@@ -2513,7 +2492,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     let pass_desc = metal::RenderPassDescriptor::new().to_owned();
                     journal.passes.alloc().init((
                         soft::Pass::Render(pass_desc),
-                        0 .. 0,
+                        0..0,
                         label.clone(),
                     ));
                 }
@@ -2561,7 +2540,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         if (data & 0xFF) * 0x0101_0101 == data {
             let command = soft::BlitCommand::FillBuffer {
                 dst: AsNative::from(raw),
-                range: start .. end,
+                range: start..end,
                 value: data as u8,
             };
             inner.sink().blit_commands(iter::once(command));
@@ -2661,9 +2640,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 let num_layers = sub.resolve_layer_count(image.kind.num_layers());
                 let num_levels = sub.resolve_level_count(image.mip_levels);
                 let layers = if is_layered {
-                    0 .. 1
+                    0..1
                 } else {
-                    sub.layer_start .. sub.layer_start + num_layers
+                    sub.layer_start..sub.layer_start + num_layers
                 };
                 let texture = if is_layered && sub.layer_start > 0 {
                     // aliasing is necessary for bulk-clearing all layers starting with 0
@@ -2686,7 +2665,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 };
 
                 for layer in layers {
-                    for level in sub.level_start .. sub.level_start + num_levels {
+                    for level in sub.level_start..sub.level_start + num_levels {
                         let descriptor = metal::RenderPassDescriptor::new().to_owned();
                         if base_extent.depth > 1 {
                             assert_eq!((sub.layer_start, num_layers), (1, 1));
@@ -2901,7 +2880,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 w: ext.width as _,
                 h: -(ext.height as i16),
             };
-            let com_viewport = iter::once(soft::RenderCommand::SetViewport(rect, 0.0 .. 1.0));
+            let com_viewport = iter::once(soft::RenderCommand::SetViewport(rect, 0.0..1.0));
             let com_scissor = iter::once(soft::RenderCommand::SetScissor(MTLScissorRect {
                 x: 0,
                 y: 0,
@@ -2911,8 +2890,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
             let com_draw = iter::once(soft::RenderCommand::Draw {
                 primitive_type: MTLPrimitiveType::Triangle,
-                vertices: 0 .. vertices.len() as _,
-                instances: 0 .. 1,
+                vertices: 0..vertices.len() as _,
+                instances: 0..1,
             });
 
             let commands = iter::once(com_clear)
@@ -3196,7 +3175,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 };
 
                 let extra = [
-                    soft::RenderCommand::SetViewport(rect, 0.0 .. 1.0),
+                    soft::RenderCommand::SetViewport(rect, 0.0..1.0),
                     soft::RenderCommand::SetScissor(MTLScissorRect {
                         x: 0,
                         y: 0,
@@ -3213,8 +3192,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     },
                     soft::RenderCommand::Draw {
                         primitive_type: MTLPrimitiveType::Triangle,
-                        vertices: 0 .. list.len() as _,
-                        instances: 0 .. 1,
+                        vertices: 0..list.len() as _,
+                        instances: 0..1,
                     },
                 ];
 
@@ -3655,15 +3634,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let mut bind_range = {
             let first = &pipe_layout.infos[first_set].offsets;
             native::MultiStageData {
-                vs: first.vs.map(|&i| i .. i),
-                ps: first.ps.map(|&i| i .. i),
-                cs: first.cs.map(|&i| i .. i),
+                vs: first.vs.map(|&i| i..i),
+                ps: first.ps.map(|&i| i..i),
+                cs: first.cs.map(|&i| i..i),
             }
         };
-        for ((info, desc_set), cached_ds) in pipe_layout.infos[first_set ..]
+        for ((info, desc_set), cached_ds) in pipe_layout.infos[first_set..]
             .iter()
             .zip(sets)
-            .zip(self.state.descriptor_sets[first_set ..].iter_mut())
+            .zip(self.state.descriptor_sets[first_set..].iter_mut())
         {
             match *desc_set.borrow() {
                 native::DescriptorSet::Emulated {
@@ -3743,7 +3722,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     {
                         cached_ds.graphics_resources.clear();
                         cached_ds.graphics_resources.extend(
-                            pool.read().resources[range.start as usize .. range.end as usize]
+                            pool.read().resources[range.start as usize..range.end as usize]
                                 .iter()
                                 .filter_map(|ur| {
                                     ptr::NonNull::new(ur.ptr).map(|res| (res, ur.usage))
@@ -3775,7 +3754,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     stage,
                     index: range.textures.start,
                     textures: &cache.textures
-                        [range.textures.start as usize .. range.textures.end as usize],
+                        [range.textures.start as usize..range.textures.end as usize],
                 });
             }
             if range.samplers.start != range.samplers.end {
@@ -3783,7 +3762,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     stage,
                     index: range.samplers.start,
                     samplers: &cache.samplers
-                        [range.samplers.start as usize .. range.samplers.end as usize],
+                        [range.samplers.start as usize..range.samplers.end as usize],
                 });
             }
             if range.buffers.start != range.buffers.end {
@@ -3791,7 +3770,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     stage,
                     index: range.buffers.start,
                     buffers: {
-                        let range = range.buffers.start as usize .. range.buffers.end as usize;
+                        let range = range.buffers.start as usize..range.buffers.end as usize;
                         (&cache.buffers[range.clone()], &cache.buffer_offsets[range])
                     },
                 });
@@ -3835,12 +3814,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let mut inner = self.inner.borrow_mut();
         let mut pre = inner.sink().pre_compute();
         let cache = &mut self.state.resources_cs;
-        let mut bind_range = pipe_layout.infos[first_set].offsets.cs.map(|&i| i .. i);
+        let mut bind_range = pipe_layout.infos[first_set].offsets.cs.map(|&i| i..i);
 
-        for ((info, desc_set), cached_ds) in pipe_layout.infos[first_set ..]
+        for ((info, desc_set), cached_ds) in pipe_layout.infos[first_set..]
             .iter()
             .zip(sets)
-            .zip(self.state.descriptor_sets[first_set ..].iter_mut())
+            .zip(self.state.descriptor_sets[first_set..].iter_mut())
         {
             let res_offset = &info.offsets.cs;
             match *desc_set.borrow() {
@@ -3891,7 +3870,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
                         cached_ds.compute_resources.clear();
                         cached_ds.compute_resources.extend(
-                            pool.read().resources[range.start as usize .. range.end as usize]
+                            pool.read().resources[range.start as usize..range.end as usize]
                                 .iter()
                                 .filter_map(|ur| {
                                     ptr::NonNull::new(ur.ptr).map(|res| (res, ur.usage))
@@ -3913,22 +3892,21 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             pre.issue(soft::ComputeCommand::BindTextures {
                 index: bind_range.textures.start,
                 textures: &cache.textures
-                    [bind_range.textures.start as usize .. bind_range.textures.end as usize],
+                    [bind_range.textures.start as usize..bind_range.textures.end as usize],
             });
         }
         if bind_range.samplers.start != bind_range.samplers.end {
             pre.issue(soft::ComputeCommand::BindSamplers {
                 index: bind_range.samplers.start,
                 samplers: &cache.samplers
-                    [bind_range.samplers.start as usize .. bind_range.samplers.end as usize],
+                    [bind_range.samplers.start as usize..bind_range.samplers.end as usize],
             });
         }
         if bind_range.buffers.start != bind_range.buffers.end {
             pre.issue(soft::ComputeCommand::BindBuffers {
                 index: bind_range.buffers.start,
                 buffers: {
-                    let range =
-                        bind_range.buffers.start as usize .. bind_range.buffers.end as usize;
+                    let range = bind_range.buffers.start as usize..bind_range.buffers.end as usize;
                     (&cache.buffers[range.clone()], &cache.buffer_offsets[range])
                 },
             });
@@ -4317,7 +4295,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         debug_assert!(self.state.render_pso_is_compatible);
         let (raw, range) = buffer.as_bound();
 
-        let commands = (0 .. count).map(|i| soft::RenderCommand::DrawIndirect {
+        let commands = (0..count).map(|i| soft::RenderCommand::DrawIndirect {
             primitive_type: self.state.primitive_type,
             buffer: AsNative::from(raw),
             offset: range.start + offset + (i * stride) as buffer::Offset,
@@ -4342,7 +4320,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         debug_assert!(self.state.render_pso_is_compatible);
         let (raw, range) = buffer.as_bound();
 
-        let commands = (0 .. count).map(|i| soft::RenderCommand::DrawIndexedIndirect {
+        let commands = (0..count).map(|i| soft::RenderCommand::DrawIndexedIndirect {
             primitive_type: self.state.primitive_type,
             index: self
                 .state
@@ -4367,7 +4345,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &native::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32
+        _stride: u32,
     ) {
         unimplemented!()
     }
@@ -4379,7 +4357,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         _count_buffer: &native::Buffer,
         _count_buffer_offset: buffer::Offset,
         _max_draw_count: u32,
-        _stride: u32
+        _stride: u32,
     ) {
         unimplemented!()
     }
@@ -4509,7 +4487,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 let command_data = soft::BlitCommand::FillBuffer {
                     dst: AsNative::from(visibility.buffer.as_ref()),
                     range: offset_data + queries.start as buffer::Offset * size_data
-                        .. offset_data + queries.end as buffer::Offset * size_data,
+                        ..offset_data + queries.end as buffer::Offset * size_data,
                     value: 0,
                 };
 
@@ -4519,7 +4497,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 let command_meta = soft::BlitCommand::FillBuffer {
                     dst: AsNative::from(visibility.buffer.as_ref()),
                     range: offset_meta + queries.start as buffer::Offset * size_meta
-                        .. offset_meta + queries.end as buffer::Offset * size_meta,
+                        ..offset_meta + queries.end as buffer::Offset * size_meta,
                     value: 0,
                 };
 
@@ -4571,7 +4549,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     } else {
                         mem::size_of::<u32>() as buffer::Offset
                     };
-                    let commands = (0 .. queries.end - queries.start).flat_map(|i| {
+                    let commands = (0..queries.end - queries.start).flat_map(|i| {
                         let absolute_index =
                             (pool_range.start + queries.start + i) as buffer::Offset;
                         let dst_offset = range.start + offset + i as buffer::Offset * stride;
@@ -4592,7 +4570,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             // the client expects the availability to be set regardless.
                             let com = soft::BlitCommand::FillBuffer {
                                 dst: AsNative::from(raw),
-                                range: dst_offset + size_payload .. dst_offset + 2 * size_payload,
+                                range: dst_offset + size_payload..dst_offset + 2 * size_payload,
                                 value: !0,
                             };
                             (Some(com), None)
@@ -4612,7 +4590,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                                 Some(soft::BlitCommand::FillBuffer {
                                     dst: AsNative::from(raw),
                                     range: dst_offset + size_payload + size_meta
-                                        .. dst_offset + 2 * size_payload,
+                                        ..dst_offset + 2 * size_payload,
                                     value: 0,
                                 })
                             } else {
@@ -4633,7 +4611,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 let end = range.start + offset + (queries.end - 1) as buffer::Offset * stride + 4;
                 let command = soft::BlitCommand::FillBuffer {
                     dst: AsNative::from(raw),
-                    range: start .. end,
+                    range: start..end,
                     value: 0,
                 };
                 self.inner

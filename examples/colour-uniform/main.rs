@@ -33,26 +33,23 @@ extern crate log;
 
 use std::{
     cell::RefCell,
+    fs,
     io::Cursor,
+    iter,
     mem::{size_of, ManuallyDrop},
+    ptr,
     rc::Rc,
-    fs, iter, ptr,
 };
 
 use hal::{
     adapter::{Adapter, MemoryType},
-    buffer,
-    command,
+    buffer, command,
     format::{self as f, AsFormat},
-    image as i,
-    memory as m,
-    pass,
-    pool,
+    image as i, memory as m, pass, pool,
     prelude::*,
     pso,
     queue::{QueueGroup, Submission},
-    window as w,
-    Backend,
+    window as w, Backend,
 };
 
 pub type ColorFormat = f::Rgba8Srgb;
@@ -266,10 +263,7 @@ impl<B: Backend> RendererState<B> {
 
         let swapchain = SwapchainState::new(&mut *backend.surface, &*device.borrow());
         let render_pass = RenderPassState::new(&swapchain, Rc::clone(&device));
-        let framebuffer = FramebufferState::new(
-            Rc::clone(&device),
-            swapchain.frame_queue_size,
-        );
+        let framebuffer = FramebufferState::new(Rc::clone(&device), swapchain.frame_queue_size);
 
         let pipeline = PipelineState::new(
             vec![image.get_layout(), uniform.get_layout()],
@@ -303,19 +297,14 @@ impl<B: Backend> RendererState<B> {
     fn recreate_swapchain(&mut self) {
         self.device.borrow().device.wait_idle().unwrap();
 
-        self.swapchain = unsafe {
-            SwapchainState::new(&mut *self.backend.surface, &*self.device.borrow())
-        };
+        self.swapchain =
+            unsafe { SwapchainState::new(&mut *self.backend.surface, &*self.device.borrow()) };
 
-        self.render_pass = unsafe {
-            RenderPassState::new(&self.swapchain, Rc::clone(&self.device))
-        };
+        self.render_pass =
+            unsafe { RenderPassState::new(&self.swapchain, Rc::clone(&self.device)) };
 
         self.framebuffer = unsafe {
-            FramebufferState::new(
-                Rc::clone(&self.device),
-                self.swapchain.frame_queue_size,
-            )
+            FramebufferState::new(Rc::clone(&self.device), self.swapchain.frame_queue_size)
         };
 
         self.pipeline = unsafe {
@@ -346,7 +335,9 @@ impl<B: Backend> RendererState<B> {
         };
 
         let framebuffer = unsafe {
-            self.device.borrow().device
+            self.device
+                .borrow()
+                .device
                 .create_framebuffer(
                     self.render_pass.render_pass.as_ref().unwrap(),
                     iter::once(std::borrow::Borrow::borrow(&surface_image)),
@@ -358,9 +349,8 @@ impl<B: Backend> RendererState<B> {
         let frame_idx = (self.swapchain.frame_index % self.swapchain.frame_queue_size) as usize;
         self.swapchain.frame_index += 1;
 
-        let (command_pool, command_buffers, sem_image_present) = self
-            .framebuffer
-            .get_frame_data(frame_idx);
+        let (command_pool, command_buffers, sem_image_present) =
+            self.framebuffer.get_frame_data(frame_idx);
 
         unsafe {
             command_pool.reset(false);
@@ -400,7 +390,7 @@ impl<B: Backend> RendererState<B> {
                 }],
                 command::SubpassContents::Inline,
             );
-            cmd_buffer.draw(0 .. 6, 0 .. 1);
+            cmd_buffer.draw(0..6, 0..1);
             cmd_buffer.end_render_pass();
             cmd_buffer.finish();
 
@@ -414,9 +404,11 @@ impl<B: Backend> RendererState<B> {
             command_buffers.push(cmd_buffer);
 
             // present frame
-            if let Err(_) = self.device.borrow_mut().queues.queues[0]
-                .present(&mut *self.backend.surface, surface_image, Some(sem_image_present))
-            {
+            if let Err(_) = self.device.borrow_mut().queues.queues[0].present(
+                &mut *self.backend.surface,
+                surface_image,
+                Some(sem_image_present),
+            ) {
                 self.recreate_swapchain = true;
             }
 
@@ -631,7 +623,7 @@ impl<B: Backend> RenderPassState<B> {
                     pass::AttachmentStoreOp::Store,
                 ),
                 stencil_ops: pass::AttachmentOps::DONT_CARE,
-                layouts: i::Layout::Undefined .. i::Layout::Present,
+                layouts: i::Layout::Undefined..i::Layout::Present,
             };
 
             let subpass = pass::SubpassDesc {
@@ -797,9 +789,9 @@ impl<B: Backend> BufferState<B> {
 
             // copy image data into staging buffer
             let mapping = device.map_memory(&memory, m::Segment::ALL).unwrap();
-            for y in 0 .. height as usize {
+            for y in 0..height as usize {
                 let data_source_slice =
-                    &(**img)[y * (width as usize) * stride .. (y + 1) * (width as usize) * stride];
+                    &(**img)[y * (width as usize) * stride..(y + 1) * (width as usize) * stride];
                 ptr::copy_nonoverlapping(
                     data_source_slice.as_ptr(),
                     mapping.offset(y as isize * row_pitch as isize),
@@ -1025,7 +1017,7 @@ impl<B: Backend> ImageState<B> {
                 f::Swizzle::NO,
                 i::SubresourceRange {
                     aspects: f::Aspects::COLOR,
-                    .. Default::default()
+                    ..Default::default()
                 },
             )
             .unwrap();
@@ -1062,17 +1054,17 @@ impl<B: Backend> ImageState<B> {
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::empty(), i::Layout::Undefined)
-                    .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
+                    ..(i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                 target: &image,
                 families: None,
                 range: i::SubresourceRange {
                     aspects: f::Aspects::COLOR,
-                    .. Default::default()
+                    ..Default::default()
                 },
             };
 
             cmd_buffer.pipeline_barrier(
-                pso::PipelineStage::TOP_OF_PIPE .. pso::PipelineStage::TRANSFER,
+                pso::PipelineStage::TOP_OF_PIPE..pso::PipelineStage::TRANSFER,
                 m::Dependencies::empty(),
                 &[image_barrier],
             );
@@ -1088,7 +1080,7 @@ impl<B: Backend> ImageState<B> {
                     image_layers: i::SubresourceLayers {
                         aspects: f::Aspects::COLOR,
                         level: 0,
-                        layers: 0 .. 1,
+                        layers: 0..1,
                     },
                     image_offset: i::Offset { x: 0, y: 0, z: 0 },
                     image_extent: i::Extent {
@@ -1101,16 +1093,16 @@ impl<B: Backend> ImageState<B> {
 
             let image_barrier = m::Barrier::Image {
                 states: (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal)
-                    .. (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
+                    ..(i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
                 target: &image,
                 families: None,
                 range: i::SubresourceRange {
                     aspects: f::Aspects::COLOR,
-                    .. Default::default()
+                    ..Default::default()
                 },
             };
             cmd_buffer.pipeline_barrier(
-                pso::PipelineStage::TRANSFER .. pso::PipelineStage::FRAGMENT_SHADER,
+                pso::PipelineStage::TRANSFER..pso::PipelineStage::FRAGMENT_SHADER,
                 m::Dependencies::empty(),
                 &[image_barrier],
             );
@@ -1186,7 +1178,7 @@ impl<B: Backend> PipelineState<B> {
     {
         let device = &device_ptr.borrow().device;
         let pipeline_layout = device
-            .create_pipeline_layout(desc_layouts, &[(pso::ShaderStageFlags::VERTEX, 0 .. 8)])
+            .create_pipeline_layout(desc_layouts, &[(pso::ShaderStageFlags::VERTEX, 0..8)])
             .expect("Can't create pipeline layout");
 
         let pipeline = {
@@ -1224,13 +1216,11 @@ impl<B: Backend> PipelineState<B> {
                     main_pass: render_pass,
                 };
 
-                let vertex_buffers = vec![
-                    pso::VertexBufferDesc {
-                        binding: 0,
-                        stride: size_of::<Vertex>() as u32,
-                        rate: pso::VertexInputRate::Vertex,
-                    }
-                ];
+                let vertex_buffers = vec![pso::VertexBufferDesc {
+                    binding: 0,
+                    stride: size_of::<Vertex>() as u32,
+                    rate: pso::VertexInputRate::Vertex,
+                }];
 
                 let attributes = vec![
                     pso::AttributeDesc {
@@ -1310,10 +1300,8 @@ struct SwapchainState {
 
 impl SwapchainState {
     unsafe fn new<B: Backend>(surface: &mut B::Surface, device_state: &DeviceState<B>) -> Self {
-        let caps = surface
-            .capabilities(&device_state.physical_device);
-        let formats = surface
-            .supported_formats(&device_state.physical_device);
+        let caps = surface.capabilities(&device_state.physical_device);
+        let formats = surface.supported_formats(&device_state.physical_device);
         println!("formats: {:?}", formats);
         let format = formats.map_or(f::Format::Rgba8Srgb, |formats| {
             formats
@@ -1347,7 +1335,7 @@ impl SwapchainState {
                 w: self.extent.width as i16,
                 h: self.extent.height as i16,
             },
-            depth: 0.0 .. 1.0,
+            depth: 0.0..1.0,
         }
     }
 }
@@ -1360,15 +1348,12 @@ struct FramebufferState<B: Backend> {
 }
 
 impl<B: Backend> FramebufferState<B> {
-    unsafe fn new(
-        device: Rc<RefCell<DeviceState<B>>>,
-        num_frames: u32,
-    ) -> Self {
+    unsafe fn new(device: Rc<RefCell<DeviceState<B>>>, num_frames: u32) -> Self {
         let mut command_pools: Vec<_> = vec![];
         let mut command_buffer_lists = Vec::new();
         let mut present_semaphores: Vec<B::Semaphore> = vec![];
 
-        for _ in 0 .. num_frames {
+        for _ in 0..num_frames {
             command_pools.push(
                 device
                     .borrow()
@@ -1392,7 +1377,10 @@ impl<B: Backend> FramebufferState<B> {
         }
     }
 
-    fn get_frame_data(&mut self, index: usize) -> (
+    fn get_frame_data(
+        &mut self,
+        index: usize,
+    ) -> (
         &mut B::CommandPool,
         &mut Vec<B::CommandBuffer>,
         &mut B::Semaphore,

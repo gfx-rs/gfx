@@ -11,15 +11,9 @@
 use std::{any::Any, fmt};
 
 use crate::{
-    device,
-    format,
-    image,
-    memory,
+    device, format, image, memory,
     queue::{QueueGroup, QueuePriority},
-    Backend,
-    Features,
-    Hints,
-    Limits,
+    Backend, Features, Hints, Limits,
 };
 
 /// A description for a single chunk of memory in a heap.

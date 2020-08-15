@@ -71,7 +71,7 @@ use foreign_types::ForeignTypeRef;
 use lazy_static::lazy_static;
 use metal::MTLFeatureSet;
 use metal::MTLLanguageVersion;
-use metal::{CoreAnimationLayer, CoreAnimationLayerRef, CGFloat, CGSize};
+use metal::{CGFloat, CGSize, CoreAnimationLayer, CoreAnimationLayerRef};
 use objc::{
     declare::ClassDecl,
     runtime::{Class, Object, Sel, BOOL, YES},
@@ -111,10 +111,7 @@ pub struct CGPoint {
 impl CGPoint {
     #[inline]
     pub fn new(x: CGFloat, y: CGFloat) -> CGPoint {
-        CGPoint {
-            x,
-            y,
-        }
+        CGPoint { x, y }
     }
 }
 
@@ -122,16 +119,13 @@ impl CGPoint {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct CGRect {
     pub origin: CGPoint,
-    pub size: CGSize
+    pub size: CGSize,
 }
 
 impl CGRect {
     #[inline]
     pub fn new(origin: CGPoint, size: CGSize) -> CGRect {
-        CGRect {
-            origin,
-            size,
-        }
+        CGRect { origin, size }
     }
 }
 
@@ -208,7 +202,7 @@ impl Shared {
                 metal::MTLResourceOptions::StorageModeShared,
             ),
             allocator: Mutex::new(RangeAllocator::new(
-                0 .. MAX_VISIBILITY_QUERIES as hal::query::Id,
+                0..MAX_VISIBILITY_QUERIES as hal::query::Id,
             )),
             availability_offset: (MAX_VISIBILITY_QUERIES * mem::size_of::<u64>())
                 as hal::buffer::Offset,
@@ -441,26 +435,17 @@ impl Instance {
         window::SurfaceInner::new(None, layer.to_owned())
     }
 
-    pub fn create_surface_from_layer(
-        &self,
-        layer: &CoreAnimationLayerRef,
-    ) -> Surface {
+    pub fn create_surface_from_layer(&self, layer: &CoreAnimationLayerRef) -> Surface {
         unsafe { self.create_from_layer(layer) }.into_surface()
     }
 
     #[cfg(target_os = "macos")]
-    pub fn create_surface_from_nsview(
-        &self,
-        nsview: *mut c_void,
-    ) -> Surface {
+    pub fn create_surface_from_nsview(&self, nsview: *mut c_void) -> Surface {
         unsafe { self.create_from_nsview(nsview) }.into_surface()
     }
 
     #[cfg(target_os = "ios")]
-    pub fn create_surface_from_uiview(
-        &self,
-        uiview: *mut c_void,
-    ) -> Surface {
+    pub fn create_surface_from_uiview(&self, uiview: *mut c_void) -> Surface {
         unsafe { self.create_from_uiview(uiview) }.into_surface()
     }
 }

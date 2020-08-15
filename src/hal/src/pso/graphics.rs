@@ -1,15 +1,11 @@
 //! Graphics pipeline descriptor.
 
 use crate::{
-    image,
-    pass,
+    image, pass,
     pso::{
         input_assembler::{AttributeDesc, InputAssemblerDesc, VertexBufferDesc},
         output_merger::{ColorBlendDesc, DepthStencilDesc, Face},
-        BasePipeline,
-        EntryPoint,
-        PipelineCreationFlags,
-        State,
+        BasePipeline, EntryPoint, PipelineCreationFlags, State,
     },
     Backend,
 };

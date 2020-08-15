@@ -11,31 +11,19 @@ use glow::HasContext;
 use auxil::{spirv_cross_specialize_ast, FastHashMap, ShaderStage};
 
 use hal::{
-    buffer,
-    device as d,
+    buffer, device as d,
     format::{Format, Swizzle},
-    image as i,
-    memory,
-    pass,
+    image as i, memory, pass,
     pool::CommandPoolCreateFlags,
-    pso,
-    query,
-    queue,
+    pso, query, queue,
 };
 
 use crate::{
-    command as cmd,
-    conv,
+    command as cmd, conv,
     info::LegacyFeatures,
     native as n,
     pool::{BufferMemory, CommandPool, OwnedBuffer},
-    state,
-    Backend as B,
-    GlContainer,
-    GlContext,
-    MemoryUsage,
-    Share,
-    Starc,
+    state, Backend as B, GlContainer, GlContext, MemoryUsage, Share, Starc,
 };
 
 /// Emit error during shader module creation. Used if we don't expect an error
@@ -778,7 +766,15 @@ impl d::Device<B> for Device {
                         vertex_buffers[vb.binding as usize] = Some(*vb);
                     }
 
-                    (vertex_buffers, attributes, input_assembler, vertex, geometry, hs, ds)
+                    (
+                        vertex_buffers,
+                        attributes,
+                        input_assembler,
+                        vertex,
+                        geometry,
+                        hs,
+                        ds,
+                    )
                 }
                 pso::PrimitiveAssembler::Mesh { .. } => {
                     return Err(pso::CreationError::UnsupportedPipeline)
@@ -816,7 +812,7 @@ impl d::Device<B> for Device {
                 .collect::<Vec<_>>();
 
             if !share.private_caps.program_interface && share.private_caps.frag_data_location {
-                for i in 0 .. subpass.color_attachments.len() {
+                for i in 0..subpass.color_attachments.len() {
                     let color_name = format!("Target{}\0", i);
                     gl.bind_frag_data_location(name, i as u32, color_name.as_str());
                 }
@@ -885,7 +881,7 @@ impl d::Device<B> for Device {
 
             let mut offset = 0;
 
-            for uniform in 0 .. count {
+            for uniform in 0..count {
                 let glow::ActiveUniform { size, utype, name } =
                     gl.get_active_uniform(program, uniform).unwrap();
 
@@ -1162,7 +1158,7 @@ impl d::Device<B> for Device {
                 .buffer
                 .expect("Improper memory type used for buffer memory")
                 .0,
-            range: offset .. offset + size,
+            range: offset..offset + size,
         };
 
         Ok(())
@@ -1341,7 +1337,7 @@ impl d::Device<B> for Device {
                         );
                         let mut w = w;
                         let mut h = h;
-                        for i in 0 .. num_levels {
+                        for i in 0..num_levels {
                             gl.tex_image_2d(
                                 glow::TEXTURE_2D,
                                 i as _,
@@ -1378,7 +1374,7 @@ impl d::Device<B> for Device {
                         );
                         let mut w = w;
                         let mut h = h;
-                        for i in 0 .. num_levels {
+                        for i in 0..num_levels {
                             gl.tex_image_3d(
                                 glow::TEXTURE_2D_ARRAY,
                                 i as _,

@@ -1,11 +1,7 @@
 use hal::{
     format::Format,
     window::{
-        AcquireError,
-        CreationError,
-        Suboptimal,
-        SurfaceCapabilities,
-        SwapImageIndex,
+        AcquireError, CreationError, Suboptimal, SurfaceCapabilities, SwapImageIndex,
         SwapchainConfig,
     },
 };

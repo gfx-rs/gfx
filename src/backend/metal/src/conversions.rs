@@ -4,9 +4,7 @@ use crate::PrivateCapabilities;
 
 use hal::{
     format::{Format, Properties, Swizzle},
-    image,
-    pass,
-    pso,
+    image, pass, pso,
     pso::{Comparison, StencilOp},
     IndexType,
 };

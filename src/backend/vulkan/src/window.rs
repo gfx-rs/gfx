@@ -1,7 +1,6 @@
 use std::{
     borrow::Borrow,
-    fmt,
-    hash,
+    fmt, hash,
     os::raw::c_void,
     ptr,
     sync::{Arc, Mutex},
@@ -14,14 +13,7 @@ use smallvec::SmallVec;
 
 use crate::{conv, info, native};
 use crate::{
-    Backend,
-    Device,
-    Instance,
-    PhysicalDevice,
-    QueueFamily,
-    RawDevice,
-    RawInstance,
-    VK_ENTRY,
+    Backend, Device, Instance, PhysicalDevice, QueueFamily, RawDevice, RawInstance, VK_ENTRY,
 };
 
 #[derive(Debug, Default)]
@@ -470,7 +462,7 @@ impl w::PresentationSurface<Backend> for Surface {
                             hal::format::Swizzle::NO,
                             hal::image::SubresourceRange {
                                 aspects: hal::format::Aspects::COLOR,
-                                .. Default::default()
+                                ..Default::default()
                             },
                         )
                         .unwrap();
@@ -521,7 +513,7 @@ impl w::PresentationSurface<Backend> for Surface {
                         view: frame.view,
                         range: hal::image::SubresourceRange {
                             aspects: hal::format::Aspects::COLOR,
-                            .. Default::default()
+                            ..Default::default()
                         },
                         owner: native::ImageViewOwner::Surface(FramebufferCachePtr(Arc::clone(
                             &frame.framebuffers.0,

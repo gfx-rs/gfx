@@ -12,13 +12,12 @@ use winapi::{
     um::{d3d12::*, d3dcommon::*},
 };
 
+use auxil::ShaderStage;
 use hal::{
     buffer,
     format::{Format, ImageFeature, SurfaceType, Swizzle},
-    image,
-    pso,
+    image, pso,
 };
-use auxil::ShaderStage;
 
 use native::ShaderVisibility;
 
@@ -182,7 +181,7 @@ pub fn swizzle_rg(swizzle: Swizzle) -> Swizzle {
             C::G => C::R,
             x => x,
         }
-    } 
+    }
     Swizzle(
         map_component(swizzle.0),
         map_component(swizzle.1),
@@ -681,7 +680,8 @@ pub fn map_stage(stage: ShaderStage) -> spirv::ExecutionModel {
         ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
         ShaderStage::Hull => spirv::ExecutionModel::TessellationControl,
         ShaderStage::Domain => spirv::ExecutionModel::TessellationEvaluation,
-        ShaderStage::Task |
-        ShaderStage::Mesh => panic!("{:?} shader is not yet implemented in SPIRV-Cross", stage),
+        ShaderStage::Task | ShaderStage::Mesh => {
+            panic!("{:?} shader is not yet implemented in SPIRV-Cross", stage)
+        }
     }
 }

@@ -4,8 +4,7 @@
 
 use crate::{
     buffer::Offset as RawOffset,
-    device,
-    format,
+    device, format,
     pso::{Comparison, Rect},
 };
 use std::{f32, hash, ops::Range};
@@ -87,7 +86,7 @@ impl Offset {
             y: self.y + extent.height as i32,
             z: self.z + extent.depth as i32,
         };
-        self .. end
+        self..end
     }
 }
 
@@ -214,10 +213,7 @@ impl std::fmt::Display for LayerError {
             LayerError::NotExpected(kind) => {
                 write!(fmt, "Kind {{{:?}}} does not support arrays", kind)
             }
-            LayerError::OutOfBounds => write!(
-                fmt,
-                "Out of bounds layers"
-            ),
+            LayerError::OutOfBounds => write!(fmt, "Out of bounds layers"),
         }
     }
 }
@@ -334,7 +330,7 @@ impl Kind {
             _ => {
                 let extent = self.extent();
                 let dominant = max(max(extent.width, extent.height), extent.depth);
-                (1 ..).find(|level| dominant >> level == 0).unwrap()
+                (1..).find(|level| dominant >> level == 0).unwrap()
             }
         }
     }
@@ -461,7 +457,7 @@ pub struct Lod(pub f32);
 
 impl Lod {
     /// Possible LOD range.
-    pub const RANGE: Range<Self> = Lod(f32::MIN) .. Lod(f32::MAX);
+    pub const RANGE: Range<Self> = Lod(f32::MIN)..Lod(f32::MAX);
 }
 
 impl Eq for Lod {}

@@ -1,11 +1,6 @@
 use crate::{
-    command::IndexBuffer,
-    native::RasterizerState,
-    BufferPtr,
-    ResourceIndex,
-    ResourcePtr,
-    SamplerPtr,
-    TexturePtr,
+    command::IndexBuffer, native::RasterizerState, BufferPtr, ResourceIndex, ResourcePtr,
+    SamplerPtr, TexturePtr,
 };
 
 use auxil::ShaderStage;
@@ -242,7 +237,7 @@ impl Own {
                     let start = self.buffers.len() as CacheResourceIndex;
                     self.buffers.extend_from_slice(buffers);
                     self.buffer_offsets.extend_from_slice(offsets);
-                    start .. self.buffers.len() as CacheResourceIndex
+                    start..self.buffers.len() as CacheResourceIndex
                 },
             },
             BindBufferData {
@@ -264,7 +259,7 @@ impl Own {
                 textures: {
                     let start = self.textures.len() as CacheResourceIndex;
                     self.textures.extend_from_slice(textures);
-                    start .. self.textures.len() as CacheResourceIndex
+                    start..self.textures.len() as CacheResourceIndex
                 },
             },
             BindSamplers {
@@ -277,7 +272,7 @@ impl Own {
                 samplers: {
                     let start = self.samplers.len() as CacheResourceIndex;
                     self.samplers.extend_from_slice(samplers);
-                    start .. self.samplers.len() as CacheResourceIndex
+                    start..self.samplers.len() as CacheResourceIndex
                 },
             },
             BindPipeline(pso) => BindPipeline(pso.to_owned()),
@@ -348,7 +343,7 @@ impl Own {
                     let start = self.buffers.len() as CacheResourceIndex;
                     self.buffers.extend_from_slice(buffers);
                     self.buffer_offsets.extend_from_slice(offsets);
-                    start .. self.buffers.len() as CacheResourceIndex
+                    start..self.buffers.len() as CacheResourceIndex
                 },
             },
             BindBufferData { index, words } => BindBufferData {
@@ -360,7 +355,7 @@ impl Own {
                 textures: {
                     let start = self.textures.len() as CacheResourceIndex;
                     self.textures.extend_from_slice(textures);
-                    start .. self.textures.len() as CacheResourceIndex
+                    start..self.textures.len() as CacheResourceIndex
                 },
             },
             BindSamplers { index, samplers } => BindSamplers {
@@ -368,7 +363,7 @@ impl Own {
                 samplers: {
                     let start = self.samplers.len() as CacheResourceIndex;
                     self.samplers.extend_from_slice(samplers);
-                    start .. self.samplers.len() as CacheResourceIndex
+                    start..self.samplers.len() as CacheResourceIndex
                 },
             },
             BindPipeline(pso) => BindPipeline(pso.to_owned()),
@@ -491,25 +486,25 @@ impl<'b> AsSlice<hal::buffer::Offset, &'b Ref>
 impl AsSlice<Option<BufferPtr>, Own> for Range<CacheResourceIndex> {
     #[inline(always)]
     fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [Option<BufferPtr>] {
-        &resources.buffers[self.start as usize .. self.end as usize]
+        &resources.buffers[self.start as usize..self.end as usize]
     }
 }
 impl AsSlice<hal::buffer::Offset, Own> for Range<CacheResourceIndex> {
     #[inline(always)]
     fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [hal::buffer::Offset] {
-        &resources.buffer_offsets[self.start as usize .. self.end as usize]
+        &resources.buffer_offsets[self.start as usize..self.end as usize]
     }
 }
 impl AsSlice<Option<TexturePtr>, Own> for Range<CacheResourceIndex> {
     #[inline(always)]
     fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [Option<TexturePtr>] {
-        &resources.textures[self.start as usize .. self.end as usize]
+        &resources.textures[self.start as usize..self.end as usize]
     }
 }
 impl AsSlice<Option<SamplerPtr>, Own> for Range<CacheResourceIndex> {
     #[inline(always)]
     fn as_slice<'a>(&'a self, resources: &'a Own) -> &'a [Option<SamplerPtr>] {
-        &resources.samplers[self.start as usize .. self.end as usize]
+        &resources.samplers[self.start as usize..self.end as usize]
     }
 }
 

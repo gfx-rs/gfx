@@ -20,7 +20,6 @@ use std::path::PathBuf;
 
 use ron::de;
 
-
 #[derive(Debug, Deserialize)]
 enum Expectation {
     Buffer(String, Vec<u8>),

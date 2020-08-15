@@ -14,24 +14,20 @@ use ash::extensions::{
     ext::{DebugReport, DebugUtils},
     khr::DrawIndirectCount,
 };
+use ash::extensions::{khr::Swapchain, nv::MeshShader};
 use ash::version::{DeviceV1_0, EntryV1_0, InstanceV1_0};
 use ash::vk;
 #[cfg(not(feature = "use-rtld-next"))]
 use ash::{Entry, LoadingError};
-use ash::extensions::{khr::Swapchain, nv::MeshShader};
 
 use hal::{
     adapter,
     device::{CreationError as DeviceCreationError, DeviceLost, OutOfMemory, SurfaceLost},
-    format,
-    image,
-    memory,
+    format, image, memory,
     pso::{PatchSize, PipelineStage},
     queue,
     window::{PresentError, Suboptimal},
-    Features,
-    Hints,
-    Limits,
+    Features, Hints, Limits,
 };
 
 use std::borrow::{Borrow, Cow};
@@ -427,7 +423,7 @@ impl hal::Instance<Backend> for Instance {
                 enabled_layer_count: layers.len() as _,
                 pp_enabled_layer_names: str_pointers.as_ptr(),
                 enabled_extension_count: extensions.len() as _,
-                pp_enabled_extension_names: str_pointers[layers.len() ..].as_ptr(),
+                pp_enabled_extension_names: str_pointers[layers.len()..].as_ptr(),
             };
 
             unsafe { entry.create_instance(&create_info, None) }.map_err(|e| {
@@ -441,7 +437,9 @@ impl hal::Instance<Backend> for Instance {
             .find(|&&ext| ext == *KHR_GET_PHYSICAL_DEVICE_PROPERTIES2)
             .map(|_| {
                 vk::KhrGetPhysicalDeviceProperties2Fn::load(|name| unsafe {
-                    std::mem::transmute(entry.get_instance_proc_addr(instance.handle(), name.as_ptr()))
+                    std::mem::transmute(
+                        entry.get_instance_proc_addr(instance.handle(), name.as_ptr()),
+                    )
                 })
             });
 
@@ -484,7 +482,11 @@ impl hal::Instance<Backend> for Instance {
         let debug_messenger = None;
 
         Ok(Instance {
-            raw: Arc::new(RawInstance{ inner: instance, debug_messenger, get_physical_device_properties }),
+            raw: Arc::new(RawInstance {
+                inner: instance,
+                debug_messenger,
+                get_physical_device_properties,
+            }),
             extensions,
         })
     }
@@ -502,7 +504,8 @@ impl hal::Instance<Backend> for Instance {
             .into_iter()
             .map(|device| {
                 let extensions =
-                    unsafe { self.raw.inner.enumerate_device_extension_properties(device) }.unwrap();
+                    unsafe { self.raw.inner.enumerate_device_extension_properties(device) }
+                        .unwrap();
                 let properties = unsafe { self.raw.inner.get_physical_device_properties(device) };
                 let info = adapter::AdapterInfo {
                     name: unsafe {
@@ -531,12 +534,11 @@ impl hal::Instance<Backend> for Instance {
                     handle: device,
                     extensions,
                     properties,
-                    known_memory_flags:
-                        vk::MemoryPropertyFlags::DEVICE_LOCAL |
-                        vk::MemoryPropertyFlags::HOST_VISIBLE |
-                        vk::MemoryPropertyFlags::HOST_COHERENT |
-                        vk::MemoryPropertyFlags::HOST_CACHED |
-                        vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
+                    known_memory_flags: vk::MemoryPropertyFlags::DEVICE_LOCAL
+                        | vk::MemoryPropertyFlags::HOST_VISIBLE
+                        | vk::MemoryPropertyFlags::HOST_COHERENT
+                        | vk::MemoryPropertyFlags::HOST_CACHED
+                        | vk::MemoryPropertyFlags::LAZILY_ALLOCATED,
                 };
                 let queue_families = unsafe {
                     self.raw
@@ -678,7 +680,7 @@ impl fmt::Debug for PhysicalDevice {
 pub struct DeviceCreationFeatures {
     core: vk::PhysicalDeviceFeatures,
     descriptor_indexing: Option<vk::PhysicalDeviceDescriptorIndexingFeaturesEXT>,
-    mesh_shaders: Option<vk::PhysicalDeviceMeshShaderFeaturesNV>
+    mesh_shaders: Option<vk::PhysicalDeviceMeshShaderFeaturesNV>,
 }
 
 impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
@@ -729,19 +731,22 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     Some(*MESH_SHADER)
                 } else {
                     None
-                }
-            ).chain(if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
-                Some(*KHR_DRAW_INDIRECT_COUNT)
-            } else {
-                None
-            });
+                },
+            )
+            .chain(
+                if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
+                    Some(*KHR_DRAW_INDIRECT_COUNT)
+                } else {
+                    None
+                },
+            );
 
         let valid_ash_memory_types = {
-            let mem_properties = self.instance
+            let mem_properties = self
+                .instance
                 .inner
                 .get_physical_device_memory_properties(self.handle);
-            mem_properties
-                .memory_types[.. mem_properties.memory_type_count as usize]
+            mem_properties.memory_types[..mem_properties.memory_type_count as usize]
                 .iter()
                 .enumerate()
                 .fold(0, |u, (i, mem)| {
@@ -764,11 +769,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .enabled_extension_names(&str_pointers)
                 .enabled_features(&enabled_features.core);
 
-            let info = if let Some(ref mut descriptor_indexing) = enabled_features.descriptor_indexing {
-                info.push_next(descriptor_indexing)
-            } else {
-                info
-            };
+            let info =
+                if let Some(ref mut descriptor_indexing) = enabled_features.descriptor_indexing {
+                    info.push_next(descriptor_indexing)
+                } else {
+                    info
+                };
 
             let info = if let Some(ref mut mesh_shaders) = enabled_features.mesh_shaders {
                 info.push_next(mesh_shaders)
@@ -799,11 +805,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
 
         let swapchain_fn = Swapchain::new(&self.instance.inner, &device_raw);
 
-        let mesh_fn = if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
-            Some(MeshShader::new(&self.instance.inner, &device_raw))
-        } else {
-            None
-        };
+        let mesh_fn =
+            if requested_features.intersects(Features::TASK_SHADER | Features::MESH_SHADER) {
+                Some(MeshShader::new(&self.instance.inner, &device_raw))
+            } else {
+                None
+            };
 
         let indirect_count_fn = if requested_features.contains(Features::DRAW_INDIRECT_COUNT) {
             Some(DrawIndirectCount::new(&self.instance.inner, &device_raw))
@@ -832,7 +839,7 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             .map(|&(family, ref priorities)| {
                 let mut family_raw =
                     queue::QueueGroup::new(queue::QueueFamilyId(family.index as usize));
-                for id in 0 .. priorities.len() {
+                for id in 0..priorities.len() {
                     let queue_raw = device_arc.raw.get_device_queue(family.index, id as _);
                     family_raw.add_queue(CommandQueue {
                         raw: Arc::new(queue_raw),
@@ -874,19 +881,21 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         view_caps: image::ViewCapabilities,
     ) -> Option<image::FormatProperties> {
         let format_properties = unsafe {
-            self.instance.inner.get_physical_device_image_format_properties(
-                self.handle,
-                conv::map_format(format),
-                match dimensions {
-                    1 => vk::ImageType::TYPE_1D,
-                    2 => vk::ImageType::TYPE_2D,
-                    3 => vk::ImageType::TYPE_3D,
-                    _ => panic!("Unexpected image dimensionality: {}", dimensions),
-                },
-                conv::map_tiling(tiling),
-                conv::map_image_usage(usage),
-                conv::map_view_capabilities(view_caps),
-            )
+            self.instance
+                .inner
+                .get_physical_device_image_format_properties(
+                    self.handle,
+                    conv::map_format(format),
+                    match dimensions {
+                        1 => vk::ImageType::TYPE_1D,
+                        2 => vk::ImageType::TYPE_2D,
+                        3 => vk::ImageType::TYPE_3D,
+                        _ => panic!("Unexpected image dimensionality: {}", dimensions),
+                    },
+                    conv::map_tiling(tiling),
+                    conv::map_image_usage(usage),
+                    conv::map_view_capabilities(view_caps),
+                )
         };
 
         match format_properties {
@@ -915,31 +924,44 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 .inner
                 .get_physical_device_memory_properties(self.handle)
         };
-        let memory_heaps = mem_properties.memory_heaps
-            [.. mem_properties.memory_heap_count as usize]
+        let memory_heaps = mem_properties.memory_heaps[..mem_properties.memory_heap_count as usize]
             .iter()
             .map(|mem| mem.size)
             .collect();
-        let memory_types = mem_properties
-            .memory_types[.. mem_properties.memory_type_count as usize]
+        let memory_types = mem_properties.memory_types[..mem_properties.memory_type_count as usize]
             .iter()
-            .filter_map(|mem| { 
+            .filter_map(|mem| {
                 use crate::memory::Properties;
                 let mut properties = Properties::empty();
 
-                if mem.property_flags.contains(vk::MemoryPropertyFlags::DEVICE_LOCAL) {
+                if mem
+                    .property_flags
+                    .contains(vk::MemoryPropertyFlags::DEVICE_LOCAL)
+                {
                     properties |= Properties::DEVICE_LOCAL;
                 }
-                if mem.property_flags.contains(vk::MemoryPropertyFlags::HOST_VISIBLE) {
+                if mem
+                    .property_flags
+                    .contains(vk::MemoryPropertyFlags::HOST_VISIBLE)
+                {
                     properties |= Properties::CPU_VISIBLE;
                 }
-                if mem.property_flags.contains(vk::MemoryPropertyFlags::HOST_COHERENT) {
+                if mem
+                    .property_flags
+                    .contains(vk::MemoryPropertyFlags::HOST_COHERENT)
+                {
                     properties |= Properties::COHERENT;
                 }
-                if mem.property_flags.contains(vk::MemoryPropertyFlags::HOST_CACHED) {
+                if mem
+                    .property_flags
+                    .contains(vk::MemoryPropertyFlags::HOST_CACHED)
+                {
                     properties |= Properties::CPU_CACHED;
                 }
-                if mem.property_flags.contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED) {
+                if mem
+                    .property_flags
+                    .contains(vk::MemoryPropertyFlags::LAZILY_ALLOCATED)
+                {
                     properties |= Properties::LAZILY_ALLOCATED;
                 }
 
@@ -949,10 +971,12 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                         heap_index: mem.heap_index as usize,
                     })
                 } else {
-                    warn!("Skipping memory type with unknown flags {:?}", mem.property_flags);
+                    warn!(
+                        "Skipping memory type with unknown flags {:?}",
+                        mem.property_flags
+                    );
                     None
                 }
-                
             })
             .collect();
 
@@ -972,22 +996,34 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                     == info::intel::DEVICE_SKY_LAKE_MASK);
 
         let mut descriptor_indexing_features = None;
-        let features = if let Some(ref get_device_properties) = self.instance.get_physical_device_properties {
+        let features = if let Some(ref get_device_properties) =
+            self.instance.get_physical_device_properties
+        {
             let features = vk::PhysicalDeviceFeatures::builder().build();
-            let mut features2 = vk::PhysicalDeviceFeatures2KHR::builder().features(features).build();
+            let mut features2 = vk::PhysicalDeviceFeatures2KHR::builder()
+                .features(features)
+                .build();
 
             // Add extension infos to the p_next chain
             if self.supports_extension(*EXT_DESCRIPTOR_INDEXING) {
-                descriptor_indexing_features = Some(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder().build());
+                descriptor_indexing_features =
+                    Some(vk::PhysicalDeviceDescriptorIndexingFeaturesEXT::builder().build());
 
                 let mut_ref = descriptor_indexing_features.as_mut().unwrap();
                 mut_ref.p_next = mem::replace(&mut features2.p_next, mut_ref as *mut _ as *mut _);
             }
 
-            unsafe { get_device_properties.get_physical_device_features2_khr(self.handle, &mut features2 as *mut _); }
+            unsafe {
+                get_device_properties
+                    .get_physical_device_features2_khr(self.handle, &mut features2 as *mut _);
+            }
             features2.features
         } else {
-            unsafe { self.instance.inner.get_physical_device_features(self.handle) }
+            unsafe {
+                self.instance
+                    .inner
+                    .get_physical_device_features(self.handle)
+            }
         };
 
         let mut bits = Features::empty()
@@ -1360,11 +1396,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             return false;
         }
 
-        if self.properties.pipeline_cache_uuid != cache[16 .. 16 + vk::UUID_SIZE] {
+        if self.properties.pipeline_cache_uuid != cache[16..16 + vk::UUID_SIZE] {
             warn!(
                 "Pipeline cache UUID mismatch. Device: {:?}, cache: {:?}.",
                 self.properties.pipeline_cache_uuid,
-                &cache[16 .. 16 + vk::UUID_SIZE],
+                &cache[16..16 + vk::UUID_SIZE],
             );
             return false;
         }
@@ -1518,10 +1554,7 @@ impl queue::CommandQueue<Backend> for CommandQueue {
             p_results: ptr::null_mut(),
         };
 
-        match self
-            .swapchain_fn
-            .queue_present(*self.raw, &present_info)
-        {
+        match self.swapchain_fn.queue_present(*self.raw, &present_info) {
             Ok(true) => Ok(None),
             Ok(false) => Ok(Some(Suboptimal)),
             Err(vk::Result::ERROR_OUT_OF_HOST_MEMORY) => {

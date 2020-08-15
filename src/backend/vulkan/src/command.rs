@@ -11,19 +11,10 @@ use inplace_it::inplace_or_alloc_array;
 
 use crate::{conv, native as n, Backend, DebugMessenger, RawDevice};
 use hal::{
-    buffer,
-    command as com,
+    buffer, command as com,
     format::Aspects,
     image::{Filter, Layout, SubresourceRange},
-    memory,
-    pso,
-    query,
-    DrawCount,
-    IndexCount,
-    InstanceCount,
-    VertexCount,
-    VertexOffset,
-    TaskCount,
+    memory, pso, query, DrawCount, IndexCount, InstanceCount, TaskCount, VertexCount, VertexOffset,
     WorkGroupCount,
 };
 
@@ -48,26 +39,27 @@ fn map_subpass_contents(contents: com::SubpassContents) -> vk::SubpassContents {
     }
 }
 
-fn map_buffer_image_regions<T>(_image: &n::Image, regions: T) -> impl ExactSizeIterator<Item = vk::BufferImageCopy>
+fn map_buffer_image_regions<T>(
+    _image: &n::Image,
+    regions: T,
+) -> impl ExactSizeIterator<Item = vk::BufferImageCopy>
 where
     T: IntoIterator,
     T::Item: Borrow<com::BufferImageCopy>,
     T::IntoIter: ExactSizeIterator,
 {
-    regions
-        .into_iter()
-        .map(|region| {
-            let r = region.borrow();
-            let image_subresource = conv::map_subresource_layers(&r.image_layers);
-            vk::BufferImageCopy {
-                buffer_offset: r.buffer_offset,
-                buffer_row_length: r.buffer_width,
-                buffer_image_height: r.buffer_height,
-                image_subresource,
-                image_offset: conv::map_offset(r.image_offset),
-                image_extent: conv::map_extent(r.image_extent),
-            }
-        })
+    regions.into_iter().map(|region| {
+        let r = region.borrow();
+        let image_subresource = conv::map_subresource_layers(&r.image_layers);
+        vk::BufferImageCopy {
+            buffer_offset: r.buffer_offset,
+            buffer_row_length: r.buffer_width,
+            buffer_image_height: r.buffer_height,
+            image_subresource,
+            image_offset: conv::map_offset(r.image_offset),
+            image_extent: conv::map_extent(r.image_extent),
+        }
+    })
 }
 
 struct BarrierSet {
@@ -110,8 +102,8 @@ where
                 ref families,
             } => {
                 let families = match families {
-                    Some(f) => f.start.0 as u32 .. f.end.0 as u32,
-                    None => vk::QUEUE_FAMILY_IGNORED .. vk::QUEUE_FAMILY_IGNORED,
+                    Some(f) => f.start.0 as u32..f.end.0 as u32,
+                    None => vk::QUEUE_FAMILY_IGNORED..vk::QUEUE_FAMILY_IGNORED,
                 };
                 buffer.push(vk::BufferMemoryBarrier {
                     s_type: vk::StructureType::BUFFER_MEMORY_BARRIER,
@@ -133,8 +125,8 @@ where
             } => {
                 let subresource_range = conv::map_subresource_range(range);
                 let families = match families {
-                    Some(f) => f.start.0 as u32 .. f.end.0 as u32,
-                    None => vk::QUEUE_FAMILY_IGNORED .. vk::QUEUE_FAMILY_IGNORED,
+                    Some(f) => f.start.0 as u32..f.end.0 as u32,
+                    None => vk::QUEUE_FAMILY_IGNORED..vk::QUEUE_FAMILY_IGNORED,
                 };
                 image.push(vk::ImageMemoryBarrier {
                     s_type: vk::StructureType::IMAGE_MEMORY_BARRIER,
@@ -271,16 +263,15 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         // but can receive less clear values than total attachments.
         let clear_value_count = 64 - render_pass.clear_attachments_mask.leading_zeros() as u32;
         let mut clear_value_iter = clear_values.into_iter();
-        let raw_clear_values = (0 .. clear_value_count)
-            .map(|i| {
-                if render_pass.clear_attachments_mask & (1 << i) != 0 {
-                    // Vulkan and HAL share same memory layout
-                    let next = clear_value_iter.next().unwrap();
-                    mem::transmute(*next.borrow())
-                } else {
-                    mem::zeroed()
-                }
-            });
+        let raw_clear_values = (0..clear_value_count).map(|i| {
+            if render_pass.clear_attachments_mask & (1 << i) != 0 {
+                // Vulkan and HAL share same memory layout
+                let next = clear_value_iter.next().unwrap();
+                mem::transmute(*next.borrow())
+            } else {
+                mem::zeroed()
+            }
+        });
 
         inplace_or_alloc_array(raw_clear_values.len(), |uninit_guard| {
             let raw_clear_values = uninit_guard.init_with_iter(raw_clear_values);
@@ -420,35 +411,33 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         U::Item: Borrow<pso::ClearRect>,
         U::IntoIter: ExactSizeIterator,
     {
-        let clears = clears
-            .into_iter()
-            .map(|clear| match *clear.borrow() {
-                com::AttachmentClear::Color { index, value } => vk::ClearAttachment {
-                    aspect_mask: vk::ImageAspectFlags::COLOR,
-                    color_attachment: index as _,
-                    clear_value: vk::ClearValue {
-                        color: mem::transmute(value),
+        let clears = clears.into_iter().map(|clear| match *clear.borrow() {
+            com::AttachmentClear::Color { index, value } => vk::ClearAttachment {
+                aspect_mask: vk::ImageAspectFlags::COLOR,
+                color_attachment: index as _,
+                clear_value: vk::ClearValue {
+                    color: mem::transmute(value),
+                },
+            },
+            com::AttachmentClear::DepthStencil { depth, stencil } => vk::ClearAttachment {
+                aspect_mask: if depth.is_some() {
+                    vk::ImageAspectFlags::DEPTH
+                } else {
+                    vk::ImageAspectFlags::empty()
+                } | if stencil.is_some() {
+                    vk::ImageAspectFlags::STENCIL
+                } else {
+                    vk::ImageAspectFlags::empty()
+                },
+                color_attachment: 0,
+                clear_value: vk::ClearValue {
+                    depth_stencil: vk::ClearDepthStencilValue {
+                        depth: depth.unwrap_or_default(),
+                        stencil: stencil.unwrap_or_default(),
                     },
                 },
-                com::AttachmentClear::DepthStencil { depth, stencil } => vk::ClearAttachment {
-                    aspect_mask: if depth.is_some() {
-                        vk::ImageAspectFlags::DEPTH
-                    } else {
-                        vk::ImageAspectFlags::empty()
-                    } | if stencil.is_some() {
-                        vk::ImageAspectFlags::STENCIL
-                    } else {
-                        vk::ImageAspectFlags::empty()
-                    },
-                    color_attachment: 0,
-                    clear_value: vk::ClearValue {
-                        depth_stencil: vk::ClearDepthStencilValue {
-                            depth: depth.unwrap_or_default(),
-                            stencil: stencil.unwrap_or_default(),
-                        },
-                    },
-                },
-            });
+            },
+        });
 
         let rects = rects
             .into_iter()
@@ -479,19 +468,16 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::ImageResolve>,
         T::IntoIter: ExactSizeIterator,
     {
-        let regions = regions
-            .into_iter()
-            .map(|region| {
-                let r = region.borrow();
-                vk::ImageResolve {
-                    src_subresource: conv::map_subresource_layers(&r.src_subresource),
-                    src_offset: conv::map_offset(r.src_offset),
-                    dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
-                    dst_offset: conv::map_offset(r.dst_offset),
-                    extent: conv::map_extent(r.extent),
-                }
-            });
-
+        let regions = regions.into_iter().map(|region| {
+            let r = region.borrow();
+            vk::ImageResolve {
+                src_subresource: conv::map_subresource_layers(&r.src_subresource),
+                src_offset: conv::map_offset(r.src_offset),
+                dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
+                dst_offset: conv::map_offset(r.dst_offset),
+                extent: conv::map_extent(r.extent),
+            }
+        });
 
         inplace_or_alloc_array(regions.len(), |uninit_guard| {
             let regions = uninit_guard.init_with_iter(regions);
@@ -520,23 +506,21 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::ImageBlit>,
         T::IntoIter: ExactSizeIterator,
     {
-        let regions = regions
-            .into_iter()
-            .map(|region| {
-                let r = region.borrow();
-                vk::ImageBlit {
-                    src_subresource: conv::map_subresource_layers(&r.src_subresource),
-                    src_offsets: [
-                        conv::map_offset(r.src_bounds.start),
-                        conv::map_offset(r.src_bounds.end),
-                    ],
-                    dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
-                    dst_offsets: [
-                        conv::map_offset(r.dst_bounds.start),
-                        conv::map_offset(r.dst_bounds.end),
-                    ],
-                }
-            });
+        let regions = regions.into_iter().map(|region| {
+            let r = region.borrow();
+            vk::ImageBlit {
+                src_subresource: conv::map_subresource_layers(&r.src_subresource),
+                src_offsets: [
+                    conv::map_offset(r.src_bounds.start),
+                    conv::map_offset(r.src_bounds.end),
+                ],
+                dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
+                dst_offsets: [
+                    conv::map_offset(r.dst_bounds.start),
+                    conv::map_offset(r.dst_bounds.end),
+                ],
+            }
+        });
 
         inplace_or_alloc_array(regions.len(), |uninit_guard| {
             let regions = uninit_guard.init_with_iter(regions);
@@ -613,7 +597,6 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 .raw
                 .cmd_set_scissor(self.raw, first_scissor, &scissors);
         });
-
     }
 
     unsafe fn set_stencil_reference(&mut self, faces: pso::Face, value: pso::StencilValue) {
@@ -736,16 +719,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::BufferCopy>,
         T::IntoIter: ExactSizeIterator,
     {
-        let regions = regions
-            .into_iter()
-            .map(|region| {
-                let region = region.borrow();
-                vk::BufferCopy {
-                    src_offset: region.src,
-                    dst_offset: region.dst,
-                    size: region.size,
-                }
-            });
+        let regions = regions.into_iter().map(|region| {
+            let region = region.borrow();
+            vk::BufferCopy {
+                src_offset: region.src,
+                dst_offset: region.dst,
+                size: region.size,
+            }
+        });
 
         inplace_or_alloc_array(regions.len(), |uninit_guard| {
             let regions = uninit_guard.init_with_iter(regions);
@@ -767,18 +748,16 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         T::Item: Borrow<com::ImageCopy>,
         T::IntoIter: ExactSizeIterator,
     {
-        let regions = regions
-            .into_iter()
-            .map(|region| {
-                let r = region.borrow();
-                vk::ImageCopy {
-                    src_subresource: conv::map_subresource_layers(&r.src_subresource),
-                    src_offset: conv::map_offset(r.src_offset),
-                    dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
-                    dst_offset: conv::map_offset(r.dst_offset),
-                    extent: conv::map_extent(r.extent),
-                }
-            });
+        let regions = regions.into_iter().map(|region| {
+            let r = region.borrow();
+            vk::ImageCopy {
+                src_subresource: conv::map_subresource_layers(&r.src_subresource),
+                src_offset: conv::map_offset(r.src_offset),
+                dst_subresource: conv::map_subresource_layers(&r.dst_subresource),
+                dst_offset: conv::map_offset(r.dst_offset),
+                extent: conv::map_extent(r.extent),
+            }
+        });
 
         inplace_or_alloc_array(regions.len(), |uninit_guard| {
             let regions = uninit_guard.init_with_iter(regions);
@@ -896,7 +875,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
     }
 
     unsafe fn draw_mesh_tasks(&mut self, task_count: TaskCount, first_task: TaskCount) {
-        self.device.extension_fns.mesh_shaders.as_ref()
+        self.device
+            .extension_fns
+            .mesh_shaders
+            .as_ref()
             .expect("Draw command not supported. You must request feature MESH_SHADER.")
             .cmd_draw_mesh_tasks(self.raw, task_count, first_task);
     }
@@ -908,7 +890,10 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         draw_count: hal::DrawCount,
         stride: u32,
     ) {
-        self.device.extension_fns.mesh_shaders.as_ref()
+        self.device
+            .extension_fns
+            .mesh_shaders
+            .as_ref()
             .expect("Draw command not supported. You must request feature MESH_SHADER.")
             .cmd_draw_mesh_tasks_indirect(self.raw, buffer.raw, offset, draw_count, stride);
     }
@@ -922,9 +907,20 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         max_draw_count: DrawCount,
         stride: u32,
     ) {
-        self.device.extension_fns.mesh_shaders.as_ref()
+        self.device
+            .extension_fns
+            .mesh_shaders
+            .as_ref()
             .expect("Draw command not supported. You must request feature MESH_SHADER.")
-            .cmd_draw_mesh_tasks_indirect_count(self.raw, buffer.raw, offset, count_buffer.raw, count_buffer_offset, max_draw_count, stride);
+            .cmd_draw_mesh_tasks_indirect_count(
+                self.raw,
+                buffer.raw,
+                offset,
+                count_buffer.raw,
+                count_buffer_offset,
+                max_draw_count,
+                stride,
+            );
     }
 
     unsafe fn draw_indirect_count(
@@ -934,14 +930,22 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         count_buffer: &n::Buffer,
         count_buffer_offset: buffer::Offset,
         max_draw_count: DrawCount,
-        stride: u32
+        stride: u32,
     ) {
         self.device
             .extension_fns
             .draw_indirect_count
             .as_ref()
             .expect("Feature DRAW_INDIRECT_COUNT must be enabled to call draw_indirect_count")
-            .cmd_draw_indirect_count(self.raw, buffer.raw, offset, count_buffer.raw, count_buffer_offset, max_draw_count, stride);
+            .cmd_draw_indirect_count(
+                self.raw,
+                buffer.raw,
+                offset,
+                count_buffer.raw,
+                count_buffer_offset,
+                max_draw_count,
+                stride,
+            );
     }
 
     unsafe fn draw_indexed_indirect_count(
@@ -951,14 +955,24 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         count_buffer: &n::Buffer,
         count_buffer_offset: buffer::Offset,
         max_draw_count: DrawCount,
-        stride: u32
+        stride: u32,
     ) {
         self.device
             .extension_fns
             .draw_indirect_count
             .as_ref()
-            .expect("Feature DRAW_INDIRECT_COUNT must be enabled to call draw_indexed_indirect_count")
-            .cmd_draw_indexed_indirect_count(self.raw, buffer.raw, offset, count_buffer.raw, count_buffer_offset, max_draw_count, stride);
+            .expect(
+                "Feature DRAW_INDIRECT_COUNT must be enabled to call draw_indexed_indirect_count",
+            )
+            .cmd_draw_indexed_indirect_count(
+                self.raw,
+                buffer.raw,
+                offset,
+                count_buffer.raw,
+                count_buffer_offset,
+                max_draw_count,
+                stride,
+            );
     }
 
     unsafe fn set_event(&mut self, event: &n::Event, stage_mask: pso::PipelineStage) {
@@ -1105,9 +1119,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         I: IntoIterator<Item = &'a T>,
         I::IntoIter: ExactSizeIterator,
     {
-        let command_buffers = buffers
-            .into_iter()
-            .map(|b| b.borrow().raw);
+        let command_buffers = buffers.into_iter().map(|b| b.borrow().raw);
 
         inplace_or_alloc_array(command_buffers.len(), |uninit_guard| {
             let command_buffers = uninit_guard.init_with_iter(command_buffers);

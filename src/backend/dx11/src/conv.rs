@@ -1,30 +1,14 @@
+use auxil::ShaderStage;
 use hal::{
     format::Format,
     image::{Filter, WrapMode},
     pso::{
-        BlendDesc,
-        BlendOp,
-        ColorBlendDesc,
-        Comparison,
-        DepthBias,
-        DepthStencilDesc,
-        Face,
-        Factor,
-        FrontFace,
-        InputAssemblerDesc,
-        PolygonMode,
-        Rasterizer,
-        Rect,
-        Sided,
-        State,
-        StencilFace,
-        StencilOp,
-        StencilValue,
-        Viewport,
+        BlendDesc, BlendOp, ColorBlendDesc, Comparison, DepthBias, DepthStencilDesc, Face, Factor,
+        FrontFace, InputAssemblerDesc, PolygonMode, Rasterizer, Rect, Sided, State, StencilFace,
+        StencilOp, StencilValue, Viewport,
     },
     IndexType,
 };
-use auxil::ShaderStage;
 
 use spirv_cross::spirv;
 
@@ -785,8 +769,9 @@ pub fn map_stage(stage: ShaderStage) -> spirv::ExecutionModel {
         ShaderStage::Compute => spirv::ExecutionModel::GlCompute,
         ShaderStage::Hull => spirv::ExecutionModel::TessellationControl,
         ShaderStage::Domain => spirv::ExecutionModel::TessellationEvaluation,
-        ShaderStage::Task |
-        ShaderStage::Mesh => panic!("{:?} shader is not supported in DirectX 11", stage),
+        ShaderStage::Task | ShaderStage::Mesh => {
+            panic!("{:?} shader is not supported in DirectX 11", stage)
+        }
     }
 }
 

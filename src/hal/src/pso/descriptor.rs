@@ -19,12 +19,7 @@
 use std::{borrow::Borrow, fmt, iter};
 
 use crate::{
-    buffer::SubRange,
-    device::OutOfMemory,
-    image::Layout,
-    pso::ShaderStageFlags,
-    Backend,
-    PseudoVec,
+    buffer::SubRange, device::OutOfMemory, image::Layout, pso::ShaderStageFlags, Backend, PseudoVec,
 };
 
 ///

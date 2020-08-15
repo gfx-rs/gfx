@@ -8,7 +8,7 @@ use winapi::{
 };
 use wio::com::ComPtr;
 
-use auxil::{ShaderStage, spirv_cross_specialize_ast};
+use auxil::{spirv_cross_specialize_ast, ShaderStage};
 use hal::{device, pso};
 
 use crate::{conv, Backend, PipelineLayout};

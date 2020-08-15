@@ -1,12 +1,5 @@
 use crate::{
-    conv,
-    device::Device,
-    native,
-    Backend as B,
-    GlContainer,
-    PhysicalDevice,
-    QueueFamily,
-    Starc,
+    conv, device::Device, native, Backend as B, GlContainer, PhysicalDevice, QueueFamily, Starc,
 };
 use arrayvec::ArrayVec;
 use glow::HasContext;
