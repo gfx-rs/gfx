@@ -1,5 +1,36 @@
 # Change Log
 
+## hal-0.6.0 (15-08-2020)
+  - API changes:
+    - the old Vulkan-ish swapchain model is completely removed
+    - `pso::Stage` enum is removed from the API into `gfx-auxil::ShaderStage`
+    - `SubresourceRange` allows unbound array layers and mipmap levels
+    - new `PrimitiveAssembler` enum
+    - `DescriptorPool::free_sets` is renamed to just `free`
+  - Features:
+    - object labels for pipelines and their layouts
+    - draw with indirect counts
+    - mesh shaders (Vulkan with NV extension only, for now)
+
+### backend-dx12-0.5.9 (14-08-2020)
+  - fix creation of depth-stencil views
+  - fix command allocator reset validation errors
+  - fix the crash on `unconfigure_swapchain`
+
+### backend-dx11-0.5.2 (29-07-2020)
+  - update libloading to 0.6
+
+### backend-vulkan-0.5.11 (22-07-2020)
+  - switch from `core-graphics` to `core-graphics-types`.
+
+### backend-metal-0.5.6 (21-07-2020)
+  - update metal to 0.20
+  - switch from `cocoa` to `cocoa-foundation`.
+  - remove core-graphics dependency
+
+### backend-metal-0.5.5 (20-07-2020)
+  - update cocoa to 0.22 and metal to 0.19.
+
 ### backend-vulkan-0.5.10 (10-07-2020)
   - skip unknown memory types
 
