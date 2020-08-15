@@ -423,6 +423,11 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
         F::empty()
             | F::ROBUST_BUFFER_ACCESS
             | F::FULL_DRAW_INDEX_U32
+            | if self.shared.private_caps.texture_cube_array {
+                F::IMAGE_CUBE_ARRAY
+            } else {
+                F::empty()
+            }
             | F::INDEPENDENT_BLENDING
             | if self.shared.private_caps.dual_source_blending {
                 F::DUAL_SRC_BLENDING
