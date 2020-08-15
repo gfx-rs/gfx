@@ -3,6 +3,28 @@ use arrayvec::ArrayVec;
 use hal::window;
 
 #[derive(Debug)]
+pub struct Instance {}
+
+#[cfg(dummy)]
+impl hal::Instance<Backend> for Instance {
+    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
+        Ok(Instance {})
+    }
+    fn enumerate_adapters(&self) -> Vec<hal::adapter::Adapter<Backend>> {
+        Vec::new()
+    }
+    unsafe fn create_surface(
+        &self,
+        _: &impl raw_window_handle::HasRawWindowHandle,
+    ) -> Result<Surface, hal::window::InitError> {
+        unimplemented!()
+    }
+    unsafe fn destroy_surface(&self, _surface: Surface) {
+        unimplemented!()
+    }
+}
+
+#[derive(Debug)]
 pub struct Surface {
     pub(crate) swapchain: Option<Swapchain>,
 }

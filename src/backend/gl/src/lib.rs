@@ -58,7 +58,7 @@ pub use crate::window::wgl::{Instance, Surface, Swapchain};
 
 // Catch-all dummy implementation
 #[cfg(dummy)]
-pub use window::dummy::{Surface, Swapchain};
+pub use window::dummy::{Instance, Surface, Swapchain};
 
 pub use glow::Context as GlContext;
 use glow::HasContext;
@@ -166,14 +166,11 @@ impl Drop for GlContainer {
 pub enum Backend {}
 
 impl hal::Backend for Backend {
-    #[cfg(not(any(wasm, dummy)))]
+    #[cfg(not(wasm))]
     type Instance = Instance;
 
     #[cfg(wasm)]
     type Instance = Surface;
-
-    #[cfg(dummy)]
-    type Instance = DummyInstance;
 
     type PhysicalDevice = PhysicalDevice;
     type Device = Device;
@@ -764,28 +761,6 @@ impl q::QueueFamily for QueueFamily {
     }
     fn id(&self) -> q::QueueFamilyId {
         q::QueueFamilyId(0)
-    }
-}
-
-#[cfg(dummy)]
-pub struct DummyInstance;
-
-#[cfg(dummy)]
-impl hal::Instance<Backend> for DummyInstance {
-    fn create(_: &str, _: u32) -> Result<Self, hal::UnsupportedBackend> {
-        unimplemented!()
-    }
-    fn enumerate_adapters(&self) -> Vec<adapter::Adapter<Backend>> {
-        unimplemented!()
-    }
-    unsafe fn create_surface(
-        &self,
-        _: &impl raw_window_handle::HasRawWindowHandle,
-    ) -> Result<Surface, hal::window::InitError> {
-        unimplemented!()
-    }
-    unsafe fn destroy_surface(&self, _surface: Surface) {
-        unimplemented!()
     }
 }
 
