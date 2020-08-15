@@ -2658,13 +2658,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             let raw = image.like.as_texture();
             for subresource_range in subresource_ranges {
                 let sub = subresource_range.borrow();
-                let num_layers = (sub.layers.end - sub.layers.start) as u64;
+                let num_layers = sub.resolve_layer_count(image.kind.num_layers());
+                let num_levels = sub.resolve_level_count(image.mip_levels);
                 let layers = if is_layered {
                     0 .. 1
                 } else {
-                    sub.layers.clone()
+                    sub.layer_start .. sub.layer_start + num_layers
                 };
-                let texture = if is_layered && sub.layers.start > 0 {
+                let texture = if is_layered && sub.layer_start > 0 {
                     // aliasing is necessary for bulk-clearing all layers starting with 0
                     let tex = raw.new_texture_view_from_slice(
                         image.mtl_format,
@@ -2674,8 +2675,8 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                             length: raw.mipmap_level_count(),
                         },
                         NSRange {
-                            location: sub.layers.start as _,
-                            length: num_layers,
+                            location: sub.layer_start as _,
+                            length: num_layers as _,
                         },
                     );
                     retained_textures.push(tex);
@@ -2685,14 +2686,14 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 };
 
                 for layer in layers {
-                    for level in sub.levels.clone() {
+                    for level in sub.level_start .. sub.level_start + num_levels {
                         let descriptor = metal::RenderPassDescriptor::new().to_owned();
                         if base_extent.depth > 1 {
-                            assert_eq!(sub.layers.end, 1);
+                            assert_eq!((sub.layer_start, num_layers), (1, 1));
                             let depth = base_extent.at_level(level).depth as u64;
                             descriptor.set_render_target_array_length(depth);
                         } else if is_layered {
-                            descriptor.set_render_target_array_length(num_layers);
+                            descriptor.set_render_target_array_length(num_layers as u64);
                         };
 
                         if image.format_desc.aspects.contains(Aspects::COLOR) {

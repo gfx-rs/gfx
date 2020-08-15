@@ -172,6 +172,8 @@ pub struct Image {
     // Required for clearing operations
     pub(crate) channel: format::ChannelType,
     pub(crate) requirements: Requirements,
+    pub(crate) num_levels: i::Level,
+    pub(crate) num_layers: i::Layer,
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Hash, Debug)]

@@ -75,11 +75,6 @@ const QUAD: [Vertex; 6] = [
     Vertex { a_Pos: [ -0.5,-0.33 ], a_Uv: [0.0, 0.0] },
 ];
 
-const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: f::Aspects::COLOR,
-    levels: 0 .. 1,
-    layers: 0 .. 1,
-};
 
 fn main() {
     #[cfg(target_arch = "wasm32")]
@@ -444,7 +439,10 @@ where
                     i::ViewKind::D2,
                     ColorFormat::SELF,
                     Swizzle::NO,
-                    COLOR_RANGE.clone(),
+                    i::SubresourceRange {
+                        aspects: f::Aspects::COLOR,
+                        .. Default::default()
+                    },
                 )
             }
             .unwrap(),
@@ -488,7 +486,10 @@ where
                     .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                 target: &*image_logo,
                 families: None,
-                range: COLOR_RANGE.clone(),
+                range: i::SubresourceRange {
+                    aspects: f::Aspects::COLOR,
+                    .. Default::default()
+                },
             };
 
             cmd_buffer.pipeline_barrier(
@@ -524,7 +525,10 @@ where
                     .. (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
                 target: &*image_logo,
                 families: None,
-                range: COLOR_RANGE.clone(),
+                range: i::SubresourceRange {
+                    aspects: f::Aspects::COLOR,
+                    .. Default::default()
+                },
             };
             cmd_buffer.pipeline_barrier(
                 PipelineStage::TRANSFER .. PipelineStage::FRAGMENT_SHADER,

@@ -447,13 +447,13 @@ impl Device {
         }
 
         #[allow(non_snake_case)]
-        let MostDetailedMip = info.range.levels.start as _;
+        let MostDetailedMip = info.levels.start as _;
         #[allow(non_snake_case)]
-        let MipLevels = (info.range.levels.end - info.range.levels.start) as _;
+        let MipLevels = (info.levels.end - info.levels.start) as _;
         #[allow(non_snake_case)]
-        let FirstArraySlice = info.range.layers.start as _;
+        let FirstArraySlice = info.layers.start as _;
         #[allow(non_snake_case)]
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let ArraySize = (info.layers.end - info.layers.start) as _;
 
         match info.view_kind {
             image::ViewKind::D1 => {
@@ -537,17 +537,17 @@ impl Device {
         desc.Format = info.format;
 
         #[allow(non_snake_case)]
-        let MipSlice = info.range.levels.start as _;
+        let MipSlice = info.levels.start as _;
         #[allow(non_snake_case)]
-        let FirstArraySlice = info.range.layers.start as _;
+        let FirstArraySlice = info.layers.start as _;
         #[allow(non_snake_case)]
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let ArraySize = (info.layers.end - info.layers.start) as _;
 
         match info.view_kind {
             image::ViewKind::D1 => {
                 desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_TEXTURE1D;
                 *unsafe { desc.u.Texture1D_mut() } = d3d11::D3D11_TEX1D_UAV {
-                    MipSlice: info.range.levels.start as _,
+                    MipSlice: info.levels.start as _,
                 }
             }
             image::ViewKind::D1Array => {
@@ -561,7 +561,7 @@ impl Device {
             image::ViewKind::D2 => {
                 desc.ViewDimension = d3d11::D3D11_UAV_DIMENSION_TEXTURE2D;
                 *unsafe { desc.u.Texture2D_mut() } = d3d11::D3D11_TEX2D_UAV {
-                    MipSlice: info.range.levels.start as _,
+                    MipSlice: info.levels.start as _,
                 }
             }
             image::ViewKind::D2Array => {
@@ -607,11 +607,11 @@ impl Device {
         desc.Format = info.format;
 
         #[allow(non_snake_case)]
-        let MipSlice = info.range.levels.start as _;
+        let MipSlice = info.levels.start as _;
         #[allow(non_snake_case)]
-        let FirstArraySlice = info.range.layers.start as _;
+        let FirstArraySlice = info.layers.start as _;
         #[allow(non_snake_case)]
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
+        let ArraySize = (info.layers.end - info.layers.start) as _;
 
         match info.view_kind {
             image::ViewKind::D1 => {
@@ -671,11 +671,11 @@ impl Device {
     ) -> Result<ComPtr<d3d11::ID3D11DepthStencilView>, image::ViewCreationError> {
         #![allow(non_snake_case)]
 
-        let MipSlice = info.range.levels.start as _;
-        let FirstArraySlice = info.range.layers.start as _;
-        let ArraySize = (info.range.layers.end - info.range.layers.start) as _;
-        assert_eq!(info.range.levels.start + 1, info.range.levels.end);
-        assert!(info.range.layers.end <= info.kind.num_layers());
+        let MipSlice = info.levels.start as _;
+        let FirstArraySlice = info.layers.start as _;
+        let ArraySize = (info.layers.end - info.layers.start) as _;
+        assert_eq!(info.levels.start + 1, info.levels.end);
+        assert!(info.layers.end <= info.kind.num_layers());
 
         let mut desc: d3d11::D3D11_DEPTH_STENCIL_VIEW_DESC = unsafe { mem::zeroed() };
         desc.Format = info.format;
@@ -1595,11 +1595,8 @@ impl device::Device<Backend> for Device {
                     // TODO: we should be using `uav_format` rather than `copy_uav_format`, and share
                     //       the UAVs when the formats are identical
                     format: decomposed.copy_uav.unwrap(),
-                    range: image::SubresourceRange {
-                        aspects: format::Aspects::COLOR,
-                        levels: mip .. (mip + 1),
-                        layers: 0 .. image.kind.num_layers(),
-                    },
+                    levels: mip .. (mip + 1),
+                    layers: 0 .. image.kind.num_layers(),
                 };
 
                 unordered_access_views.push(
@@ -1616,11 +1613,8 @@ impl device::Device<Backend> for Device {
                 caps: image::ViewCapabilities::empty(),
                 view_kind,
                 format: decomposed.copy_srv.unwrap(),
-                range: image::SubresourceRange {
-                    aspects: format::Aspects::COLOR,
-                    levels: 0 .. image.mip_levels,
-                    layers: 0 .. image.kind.num_layers(),
-                },
+                levels: 0 .. image.mip_levels,
+                layers: 0 .. image.kind.num_layers(),
             };
 
             let copy_srv = if !compressed {
@@ -1663,11 +1657,8 @@ impl device::Device<Backend> for Device {
                         caps: image::ViewCapabilities::empty(),
                         view_kind,
                         format: decomposed.rtv.unwrap(),
-                        range: image::SubresourceRange {
-                            aspects: format::Aspects::COLOR,
-                            levels: mip .. (mip + 1),
-                            layers: layer .. (layer + 1),
-                        },
+                        levels: mip .. (mip + 1),
+                        layers: layer .. (layer + 1),
                     };
 
                     render_target_views.push(
@@ -1689,11 +1680,8 @@ impl device::Device<Backend> for Device {
                         caps: image::ViewCapabilities::empty(),
                         view_kind,
                         format: decomposed.dsv.unwrap(),
-                        range: image::SubresourceRange {
-                            aspects: format::Aspects::COLOR,
-                            levels: mip .. (mip + 1),
-                            layers: layer .. (layer + 1),
-                        },
+                        levels: mip .. (mip + 1),
+                        layers: layer .. (layer + 1),
                     };
 
                     depth_stencil_views.push(
@@ -1728,6 +1716,8 @@ impl device::Device<Backend> for Device {
         range: image::SubresourceRange,
     ) -> Result<ImageView, image::ViewCreationError> {
         let is_array = image.kind.num_layers() > 1;
+        let num_levels = range.resolve_level_count(image.mip_levels);
+        let num_layers = range.resolve_layer_count(image.kind.num_layers());
 
         let info = ViewInfo {
             resource: image.internal.raw,
@@ -1742,7 +1732,8 @@ impl device::Device<Backend> for Device {
                 view_kind
             },
             format: conv::map_format(format).ok_or(image::ViewCreationError::BadFormat(format))?,
-            range,
+            levels: range.level_start .. range.level_start + num_levels,
+            layers: range.layer_start .. range.layer_start + num_layers,
         };
 
         let srv_info = ViewInfo {

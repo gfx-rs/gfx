@@ -101,12 +101,6 @@ const QUAD: [Vertex; 6] = [
     },
 ];
 
-const COLOR_RANGE: i::SubresourceRange = i::SubresourceRange {
-    aspects: f::Aspects::COLOR,
-    levels: 0 .. 1,
-    layers: 0 .. 1,
-};
-
 struct RendererState<B: Backend> {
     uniform_desc_pool: Option<B::DescriptorPool>,
     img_desc_pool: Option<B::DescriptorPool>,
@@ -1029,7 +1023,10 @@ impl<B: Backend> ImageState<B> {
                 i::ViewKind::D2,
                 ColorFormat::SELF,
                 f::Swizzle::NO,
-                COLOR_RANGE.clone(),
+                i::SubresourceRange {
+                    aspects: f::Aspects::COLOR,
+                    .. Default::default()
+                },
             )
             .unwrap();
 
@@ -1068,7 +1065,10 @@ impl<B: Backend> ImageState<B> {
                     .. (i::Access::TRANSFER_WRITE, i::Layout::TransferDstOptimal),
                 target: &image,
                 families: None,
-                range: COLOR_RANGE.clone(),
+                range: i::SubresourceRange {
+                    aspects: f::Aspects::COLOR,
+                    .. Default::default()
+                },
             };
 
             cmd_buffer.pipeline_barrier(
@@ -1104,7 +1104,10 @@ impl<B: Backend> ImageState<B> {
                     .. (i::Access::SHADER_READ, i::Layout::ShaderReadOnlyOptimal),
                 target: &image,
                 families: None,
-                range: COLOR_RANGE.clone(),
+                range: i::SubresourceRange {
+                    aspects: f::Aspects::COLOR,
+                    .. Default::default()
+                },
             };
             cmd_buffer.pipeline_barrier(
                 pso::PipelineStage::TRANSFER .. pso::PipelineStage::FRAGMENT_SHADER,

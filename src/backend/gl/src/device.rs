@@ -1441,6 +1441,8 @@ impl d::Device<B> for Device {
                 alignment: 1,
                 type_mask,
             },
+            num_levels,
+            num_layers: kind.num_layers(),
         })
     }
 
@@ -1474,40 +1476,37 @@ impl d::Device<B> for Device {
         range: i::SubresourceRange,
     ) -> Result<n::ImageView, i::ViewCreationError> {
         //TODO: check if `layers.end` covers all the layers
-        let level = range.levels.start;
-        assert_eq!(level + 1, range.levels.end);
+        let level = range.level_start;
+        let num_layers = range.resolve_layer_count(image.num_layers);
+        assert_eq!(range.resolve_level_count(image.num_levels), 1);
         //assert_eq!(format, image.format);
         assert_eq!(swizzle, Swizzle::NO);
         //TODO: check format
         match image.kind {
             n::ImageKind::Renderbuffer { renderbuffer, .. } => {
-                if range.levels.start == 0 && range.layers.start == 0 {
+                if range.level_start == 0 && range.layer_start == 0 {
                     Ok(n::ImageView::Renderbuffer(renderbuffer))
                 } else if level != 0 {
                     Err(i::ViewCreationError::Level(level)) //TODO
                 } else {
-                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds(
-                        range.layers,
-                    )))
+                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds))
                 }
             }
             n::ImageKind::Texture {
                 texture, target, ..
             } => {
                 //TODO: check that `level` exists
-                if range.layers.start == 0 {
+                if range.layer_start == 0 {
                     Ok(n::ImageView::Texture(texture, target, level))
-                } else if range.layers.start + 1 == range.layers.end {
+                } else if num_layers == 1 {
                     Ok(n::ImageView::TextureLayer(
                         texture,
                         target,
                         level,
-                        range.layers.start,
+                        range.layer_start,
                     ))
                 } else {
-                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds(
-                        range.layers,
-                    )))
+                    Err(i::ViewCreationError::Layer(i::LayerError::OutOfBounds))
                 }
             }
         }

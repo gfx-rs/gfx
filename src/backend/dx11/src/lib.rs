@@ -121,7 +121,8 @@ pub(crate) struct ViewInfo {
     caps: image::ViewCapabilities,
     view_kind: image::ViewKind,
     format: dxgiformat::DXGI_FORMAT,
-    range: image::SubresourceRange,
+    levels: Range<image::Level>,
+    layers: Range<image::Layer>,
 }
 
 impl fmt::Debug for ViewInfo {
@@ -867,11 +868,8 @@ impl window::PresentationSurface<Backend> for Surface {
             caps: image::ViewCapabilities::empty(),
             view_kind: image::ViewKind::D2,
             format: decomposed.rtv.unwrap(),
-            range: image::SubresourceRange {
-                aspects: format::Aspects::COLOR,
-                levels: 0 .. 1,
-                layers: 0 .. 1,
-            },
+            levels: 0 .. 1,
+            layers: 0 .. 1,
         };
         let view = device.view_image_as_render_target(&view_info).unwrap();
 
@@ -1630,31 +1628,28 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     {
         for range in subresource_ranges {
             let range = range.borrow();
-
-            // TODO: clear Int/Uint depending on format
-            if range.aspects.contains(format::Aspects::COLOR) {
-                for layer in range.layers.clone() {
-                    for level in range.levels.clone() {
-                        self.context.ClearRenderTargetView(
-                            image.get_rtv(level, layer).unwrap().as_raw(),
-                            &value.color.float32,
-                        );
-                    }
-                }
-            }
+            let num_levels = range.resolve_level_count(image.mip_levels);
+            let num_layers = range.resolve_layer_count(image.kind.num_layers());
 
             let mut depth_stencil_flags = 0;
             if range.aspects.contains(format::Aspects::DEPTH) {
                 depth_stencil_flags |= d3d11::D3D11_CLEAR_DEPTH;
             }
-
             if range.aspects.contains(format::Aspects::STENCIL) {
                 depth_stencil_flags |= d3d11::D3D11_CLEAR_STENCIL;
             }
 
-            if depth_stencil_flags != 0 {
-                for layer in range.layers.clone() {
-                    for level in range.levels.clone() {
+            // TODO: clear Int/Uint depending on format
+            for rel_layer in 0 .. num_layers {
+                for rel_level in 0 .. num_levels {
+                    let level = range.level_start + rel_level;
+                    let layer = range.layer_start + rel_layer;
+                    if range.aspects.contains(format::Aspects::COLOR) {
+                        self.context.ClearRenderTargetView(
+                            image.get_rtv(level, layer).unwrap().as_raw(),
+                            &value.color.float32,
+                        );
+                    } else {
                         self.context.ClearDepthStencilView(
                             image.get_dsv(level, layer).unwrap().as_raw(),
                             depth_stencil_flags,

@@ -121,10 +121,14 @@ pub fn map_subresource_layers(sub: &image::SubresourceLayers) -> vk::ImageSubres
 pub fn map_subresource_range(range: &image::SubresourceRange) -> vk::ImageSubresourceRange {
     vk::ImageSubresourceRange {
         aspect_mask: map_image_aspects(range.aspects),
-        base_mip_level: range.levels.start as _,
-        level_count: (range.levels.end - range.levels.start) as _,
-        base_array_layer: range.layers.start as _,
-        layer_count: (range.layers.end - range.layers.start) as _,
+        base_mip_level: range.level_start as _,
+        level_count: range
+            .level_count
+            .map_or(vk::REMAINING_MIP_LEVELS, |c| c as _),
+        base_array_layer: range.layer_start as _,
+        layer_count: range
+            .layer_count
+            .map_or(vk::REMAINING_ARRAY_LAYERS, |c| c as _),
     }
 }
 
