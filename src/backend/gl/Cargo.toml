@@ -17,9 +17,10 @@ build = "build.rs"
 name = "gfx_backend_gl"
 
 [features]
-default = ["wgl", "surfman", "surfman-x11"]
+#default = ["wgl", "surfman", "surfman-x11"]
+default = []
 wgl = ["winapi"]
-surfman-x11 = ["surfman/sm-x11"]
+#surfman-x11 = ["surfman/sm-x11"]
 
 [dependencies]
 arrayvec = "0.5"
@@ -33,11 +34,12 @@ parking_lot = "0.11"
 spirv_cross = { version = "0.20", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
-glutin = { version = "0.24", optional = true }
+# disable this for now, the versions of glutin are jumping too fast
+#glutin = { version = "0.24", optional = true }
 
-[target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
+#[target.'cfg(all(unix, not(target_os = "ios")))'.dependencies]
 # TODO: Update to released version when it comes out
-surfman = { git = "https://github.com/servo/surfman.git", rev = "41ac1ee", features = ["sm-raw-window-handle"], optional = true }
+#surfman = { git = "https://github.com/servo/surfman.git", rev = "41ac1ee", features = ["sm-raw-window-handle"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 js-sys = "0.3.6"
