@@ -4359,6 +4359,30 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             .issue_many(commands);
     }
 
+    unsafe fn draw_indirect_count(
+        &mut self,
+        _buffer: &native::Buffer,
+        _offset: buffer::Offset,
+        _count_buffer: &native::Buffer,
+        _count_buffer_offset: buffer::Offset,
+        _max_draw_count: u32,
+        _stride: u32
+    ) {
+        unimplemented!()
+    }
+
+    unsafe fn draw_indexed_indirect_count(
+        &mut self,
+        _buffer: &native::Buffer,
+        _offset: buffer::Offset,
+        _count_buffer: &native::Buffer,
+        _count_buffer_offset: buffer::Offset,
+        _max_draw_count: u32,
+        _stride: u32
+    ) {
+        unimplemented!()
+    }
+
     unsafe fn draw_mesh_tasks(&mut self, _: TaskCount, _: TaskCount) {
         unimplemented!()
     }
