@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.5.10 (16-08-2020)
+  - fix binding of dynamic uniform buffers
+
 ### backend-dx12-0.5.9 (14-08-2020)
   - fix creation of depth-stencil views
   - fix command allocator reset validation errors
