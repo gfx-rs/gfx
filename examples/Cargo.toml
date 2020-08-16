@@ -31,16 +31,16 @@ name = "mesh-shading"
 path = "mesh-shading/main.rs"
 
 [dependencies]
-image = "0.21"
+image = "0.23"
 log = "0.4"
 hal = { path = "../src/hal", version = "0.6", package = "gfx-hal" }
-auxil = { path = "../src/auxil/auxil", version = "0.4", package = "gfx-auxil" }
+auxil = { path = "../src/auxil/auxil", version = "0.5", package = "gfx-auxil" }
 gfx-backend-gl = { path = "../src/backend/gl", version = "0.6", optional = true }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.6" }
 winit = { version = "0.22", features = ["web-sys"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-env_logger = "0.6"
+env_logger = "0.7"
 glsl-to-spirv = "0.1.4"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

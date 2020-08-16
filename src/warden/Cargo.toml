@@ -28,12 +28,12 @@ gl = ["gfx-backend-gl"]
 #TODO: keep Warden backend-agnostic?
 
 [dependencies]
-auxil = { path = "../auxil/auxil", version = "0.4", package = "gfx-auxil" }
+auxil = { path = "../auxil/auxil", version = "0.5", package = "gfx-auxil" }
 hal = { path = "../hal", version = "0.6", package = "gfx-hal", features = ["serde"] }
 log = "0.4"
-ron = "0.5"
+ron = "0.6"
 serde = { version = "1", features = ["serde_derive"] }
-env_logger = { version = "0.6", optional = true }
+env_logger = { version = "0.7", optional = true }
 glsl-to-spirv = { version = "0.1", optional = true }
 
 [dependencies.gfx-backend-vulkan]

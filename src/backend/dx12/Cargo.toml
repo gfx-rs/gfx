@@ -19,7 +19,7 @@ default = []
 name = "gfx_backend_dx12"
 
 [dependencies]
-auxil = { path = "../../auxil/auxil", version = "0.4", package = "gfx-auxil", features = ["spirv_cross"] }
+auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
 hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1.1" }
 bitflags = "1"

@@ -354,7 +354,7 @@ where
         // Image
         let img_data = include_bytes!("data/logo.png");
 
-        let img = image::load(Cursor::new(&img_data[..]), image::PNG)
+        let img = image::load(Cursor::new(&img_data[..]), image::ImageFormat::Png)
             .unwrap()
             .to_rgba();
         let (width, height) = img.dimensions();

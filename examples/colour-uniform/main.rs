@@ -220,7 +220,7 @@ impl<B: Backend> RendererState<B> {
         println!("Memory types: {:?}", backend.adapter.memory_types);
 
         const IMAGE_LOGO: &'static [u8] = include_bytes!("data/logo.png");
-        let img = image::load(Cursor::new(&IMAGE_LOGO[..]), image::PNG)
+        let img = image::load(Cursor::new(&IMAGE_LOGO[..]), image::ImageFormat::Png)
             .unwrap()
             .to_rgba();
 
