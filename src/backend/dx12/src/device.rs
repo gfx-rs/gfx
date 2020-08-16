@@ -881,7 +881,6 @@ impl Device {
         &self,
         info: &ViewInfo,
     ) -> Result<d3d12::D3D12_CPU_DESCRIPTOR_HANDLE, image::ViewCreationError> {
-        println!("SRV {:?}", info);
         let desc = Self::build_image_as_shader_resource_desc(&info)?;
         let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
         unsafe {

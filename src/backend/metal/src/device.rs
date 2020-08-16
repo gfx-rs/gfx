@@ -398,7 +398,6 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
     fn features(&self) -> hal::Features {
         use hal::Features as F;
         F::empty()
-            | F::ROBUST_BUFFER_ACCESS
             | F::FULL_DRAW_INDEX_U32
             | if self.shared.private_caps.texture_cube_array {
                 F::IMAGE_CUBE_ARRAY
