@@ -21,10 +21,10 @@ gfx-rs is a low-level, cross-platform graphics and compute abstraction library i
 
 * `gfx-hal` which is gfx's hardware abstraction layer: a Vulkan-ic mostly unsafe API which translates to native graphics backends.
 * `gfx-backend-*` which contains graphics backends for various platforms:
-  * [Vulkan](src/backend/vulkan) (confirmed to run on Linux and Windows)
+  * [Vulkan](src/backend/vulkan) (runs on Linux, Windows, and Android)
   * [DirectX 12](src/backend/dx12) and [DirectX 11](src/backend/dx11)
-  * [Metal](src/backend/metal) (confirmed to run on macOS and iOS)
-  * [OpenGL 2.1+/ES2+](src/backend/gl)
+  * [Metal](src/backend/metal) (runs on macOS and iOS)
+  * [OpenGL 2.1+/ES2+](src/backend/gl) (temporarily disabled)
 * `gfx-warden` which is a data-driven reference test framework, used to verify consistency across all graphics backends.
 
 gfx-rs is hard to use, it's recommended for performance-sensitive libraries and engines. If that's not your domain, take a look at [wgpu-rs](https://github.com/gfx-rs/wgpu-rs) for a safe and simple alternative.

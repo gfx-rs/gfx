@@ -16,6 +16,11 @@ matrix:
       rust: nightly
       compiler: gcc
 
+    # Android
+    - env: TARGET=aarch64-linux-android
+      os: linux
+      rust: stable
+
     # macOS 64bit
     - env: MACOSX_DEPLOYMENT_TARGET=10.9
       os: osx
@@ -60,7 +65,20 @@ before_install:
   - if [[ $TRAVIS_OS_NAME == "linux" ]]; then export CXX=g++-5; fi
   - if [[ $TRAVIS_OS_NAME == "osx" ]]; then brew update; fi
   - if [[ $TRAVIS_OS_NAME == "windows" ]]; then choco install make; fi
-  - if [[ -n "$WASM" ]]; then rustup target add wasm32-unknown-unknown --toolchain nightly && cargo install -f wasm-bindgen-cli; fi
+  - | # install NDK
+    if [ $TARGET == "aarch64-linux-android" ]; then
+      wget https://dl.google.com/android/repository/android-ndk-r21b-linux-x86_64.zip
+      unzip -qq android-ndk-r21b-linux-x86_64.zip
+      export ANDROID_NDK_HOME=`pwd`/android-ndk-r21b
+      export LOCAL_ANDROID_NDK_HOME="$ANDROID_NDK_HOME"
+      export LOCAL_ANDROID_NDK_HOST_PLATFORM="linux-x86_64"
+      export PATH=$PATH:${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin
+    fi
+  - | # install wasm-bindgen
+    if [[ -n "$WASM" ]]; then
+      rustup target add wasm32-unknown-unknown --toolchain nightly;
+      cargo install -f wasm-bindgen-cli;
+    fi
 
 addons:
   apt:

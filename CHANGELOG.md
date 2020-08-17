@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-vulkan-0.6.1 (17-08-2020)
+  - fix Android build
+
 ## hal-0.6.0 (15-08-2020)
   - API changes:
     - the old Vulkan-ish swapchain model is completely removed
