@@ -2326,7 +2326,7 @@ impl Device {
                     p_next: std::ptr::null_mut(),
                     object_type,
                     object_handle,
-                    p_object_name: name_ptr as *const i8,
+                    p_object_name: name_ptr as *const _,
                 },
             );
         }
