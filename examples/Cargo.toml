@@ -35,7 +35,6 @@ image = "0.23"
 log = "0.4"
 hal = { path = "../src/hal", version = "0.6", package = "gfx-hal" }
 auxil = { path = "../src/auxil/auxil", version = "0.5", package = "gfx-auxil" }
-gfx-backend-gl = { path = "../src/backend/gl", version = "0.6", optional = true }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.6" }
 winit = { version = "0.22", features = ["web-sys"] }
 
@@ -54,6 +53,12 @@ features = [ "console", "Document", "Element", "HtmlElement", "Node", "Window" ]
 
 [dependencies.gfx-backend-vulkan]
 path = "../src/backend/vulkan"
+version = "0.6"
+features = ["x11"]
+optional = true
+
+[target.'cfg(unix)'.dependencies.gfx-backend-gl]
+path = "../src/backend/gl"
 version = "0.6"
 features = ["x11"]
 optional = true

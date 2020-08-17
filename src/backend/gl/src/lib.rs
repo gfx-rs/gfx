@@ -78,9 +78,11 @@ pub(crate) struct GlContainer {
 impl GlContainer {
     #[cfg(not(wasm))]
     fn make_current(&self) {
-        // TODO:
-        // NOTE: Beware, calling this on dereference breaks the surfman backend
-        // I'm not sure if there would be similar concequences with other backends.
+        #[cfg(surfman)]
+        self.surfman_device
+            .write()
+            .make_context_current(&self.surfman_context.read())
+            .expect("TODO");
     }
 
     #[cfg(any(glutin, wgl))]
