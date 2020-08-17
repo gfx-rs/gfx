@@ -34,8 +34,7 @@ path = "mesh-shading/main.rs"
 image = "0.23"
 log = "0.4"
 hal = { path = "../src/hal", version = "0.6", package = "gfx-hal" }
-auxil = { path = "../src/auxil/auxil", version = "0.7", package = "gfx-auxil" }
-gfx-backend-gl = { path = "../src/backend/gl", version = "0.6", optional = true }
+auxil = { path = "../src/auxil/auxil", version = "0.5", package = "gfx-auxil" }
 gfx-backend-empty = { path = "../src/backend/empty", version = "0.6" }
 winit = { version = "0.22", features = ["web-sys"] }
 
@@ -58,7 +57,13 @@ version = "0.6"
 features = ["x11"]
 optional = true
 
-[target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies.gfx-backend-metal]
+[target.'cfg(unix)'.dependencies.gfx-backend-gl]
+path = "../src/backend/gl"
+version = "0.6"
+features = ["x11"]
+optional = true
+
+[target.'cfg(any(target_os = "macos", all(target_os = "ios", target_arch = "aarch64")))'.dependencies.gfx-backend-metal]
 path = "../src/backend/metal"
 version = "0.6"
 optional = true

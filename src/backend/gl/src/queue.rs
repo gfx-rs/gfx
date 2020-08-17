@@ -231,7 +231,7 @@ impl CommandQueue {
                 #[cfg(not(surfman))]
                 None,
             );
-            gl.blit_framebuffer(
+            gl.context.blit_framebuffer(
                 0,
                 0,
                 extent.width as _,
