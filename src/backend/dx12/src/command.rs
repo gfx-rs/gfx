@@ -20,8 +20,8 @@ use winapi::{
 use smallvec::SmallVec;
 
 use crate::{
-    conv, descriptors_cpu, device, internal, resource as r, root_constants::RootConstant,
-    validate_line_width, Backend, Device, Shared, MAX_VERTEX_BUFFERS,
+    conv, descriptors_cpu, device, internal, resource as r, validate_line_width, Backend, Device,
+    Shared, MAX_VERTEX_BUFFERS,
 };
 
 // Fixed size of the root signature.
@@ -103,6 +103,15 @@ struct UserData {
     dirty_mask: u64,
 }
 
+impl Default for UserData {
+    fn default() -> Self {
+        UserData {
+            data: [RootElement::Undefined; ROOT_SIGNATURE_SIZE],
+            dirty_mask: 0,
+        }
+    }
+}
+
 impl fmt::Debug for UserData {
     fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt.debug_struct("UserData")
@@ -113,13 +122,6 @@ impl fmt::Debug for UserData {
 }
 
 impl UserData {
-    fn new() -> Self {
-        UserData {
-            data: [RootElement::Undefined; ROOT_SIGNATURE_SIZE],
-            dirty_mask: 0,
-        }
-    }
-
     /// Write root constant values into the user data, overwriting virtual memory
     /// range [offset..offset + data.len()]. Changes are marked as dirty.
     fn set_constants(&mut self, offset: usize, data: &[u32]) {
@@ -164,32 +166,31 @@ impl UserData {
         self.dirty_mask != 0
     }
 
-    fn is_index_dirty(&self, i: usize) -> bool {
+    fn is_index_dirty(&self, i: u32) -> bool {
         ((self.dirty_mask >> i) & 1) == 1
-    }
-
-    /// Clear dirty flag.
-    fn clear_dirty(&mut self, i: usize) {
-        self.dirty_mask &= !(1 << i);
     }
 
     /// Mark all entries as dirty.
     fn dirty_all(&mut self) {
         self.dirty_mask = !0;
     }
+
+    /// Mark all entries as clear up to the given i.
+    fn clear_up_to(&mut self, i: u32) {
+        self.dirty_mask &= !((1 << i) - 1);
+    }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 struct PipelineCache {
-    // Bound pipeline and root signature.
+    // Bound pipeline and layout info.
     // Changed on bind pipeline calls.
-    pipeline: Option<(native::PipelineState, native::RootSignature)>,
-    // Parameter slots of the current root signature.
-    num_parameter_slots: usize,
-    //
-    root_constants: Vec<RootConstant>,
+    pipeline: Option<(native::PipelineState, Arc<r::PipelineShared>)>,
+
     // Virtualized root signature user data of the shaders
     user_data: UserData,
+
+    temp_constants: Vec<u32>,
 
     // Descriptor heap gpu handle offsets
     srv_cbv_uav_start: u64,
@@ -197,17 +198,6 @@ struct PipelineCache {
 }
 
 impl PipelineCache {
-    fn new() -> Self {
-        PipelineCache {
-            pipeline: None,
-            num_parameter_slots: 0,
-            root_constants: Vec::new(),
-            user_data: UserData::new(),
-            srv_cbv_uav_start: 0,
-            sampler_start: 0,
-        }
-    }
-
     fn bind_descriptor_sets<'a, I, J>(
         &mut self,
         layout: &r::PipelineLayout,
@@ -243,34 +233,30 @@ impl PipelineCache {
 
         for (set, element) in sets.zip(layout.elements[first_set..].iter()) {
             let set = set.borrow();
-
-            let mut num_words = 0;
-            let table = &element.table;
+            let mut root_offset = element.table.offset;
 
             // Bind CBV/SRC/UAV descriptor tables
-            set.first_gpu_view.map(|gpu| {
-                assert!(table.ty.contains(r::SRV_CBV_UAV));
-
+            if let Some(gpu) = set.first_gpu_view {
+                assert!(element.table.ty.contains(r::SRV_CBV_UAV));
                 // Cast is safe as offset **must** be in u32 range. Unable to
                 // create heaps with more descriptors.
                 let table_gpu_offset = (gpu.ptr - srv_cbv_uav_start) as u32;
-                let table_offset = table.offset + num_words;
                 self.user_data
-                    .set_srv_cbv_uav_table(table_offset, table_gpu_offset);
-                num_words += 1;
-            });
+                    .set_srv_cbv_uav_table(root_offset, table_gpu_offset);
+                root_offset += 1;
+            }
 
             // Bind Sampler descriptor tables.
-            set.first_gpu_sampler.map(|gpu| {
-                assert!(table.ty.contains(r::SAMPLERS));
+            if let Some(gpu) = set.first_gpu_sampler {
+                assert!(element.table.ty.contains(r::SAMPLERS));
+
                 // Cast is safe as offset **must** be in u32 range. Unable to
                 // create heaps with more descriptors.
                 let table_gpu_offset = (gpu.ptr - sampler_start) as u32;
-                let table_offset = table.offset + num_words;
                 self.user_data
-                    .set_sampler_table(table_offset, table_gpu_offset);
-                num_words += 1;
-            });
+                    .set_sampler_table(root_offset, table_gpu_offset);
+                root_offset += 1;
+            }
 
             // Bind root descriptors
             // TODO: slow, can we move the dynamic descriptors into toplevel somehow during initialization?
@@ -279,17 +265,92 @@ impl PipelineCache {
                 // It's not valid to modify the descriptor sets during recording -> access if safe.
                 let dynamic_descriptors = unsafe { &*binding.dynamic_descriptors.get() };
                 for descriptor in dynamic_descriptors {
-                    let root_offset = table.offset + num_words;
-                    self.user_data.set_descriptor_cbv(
-                        root_offset,
-                        descriptor.gpu_buffer_location + offsets.next().unwrap(),
-                    );
-                    num_words += 2;
+                    let gpu_offset = descriptor.gpu_buffer_location + offsets.next().unwrap();
+                    self.user_data.set_descriptor_cbv(root_offset, gpu_offset);
+                    root_offset += 2;
                 }
             }
         }
 
         [heap_srv_cbv_uav, heap_sampler]
+    }
+
+    fn flush_user_data<F, G, H>(
+        &mut self,
+        mut constants_update: F,
+        mut table_update: G,
+        mut descriptor_cbv_update: H,
+    ) where
+        F: FnMut(u32, &[u32]),
+        G: FnMut(u32, d3d12::D3D12_GPU_DESCRIPTOR_HANDLE),
+        H: FnMut(u32, d3d12::D3D12_GPU_VIRTUAL_ADDRESS),
+    {
+        let user_data = &mut self.user_data;
+        if !user_data.is_dirty() {
+            return;
+        }
+
+        let shared = match self.pipeline {
+            Some((_, ref shared)) => shared,
+            None => return,
+        };
+
+        for (i, &root_offset) in shared.parameter_offsets.iter().enumerate() {
+            if !user_data.is_index_dirty(root_offset) {
+                continue;
+            }
+            match user_data.data[root_offset as usize] {
+                RootElement::Constant(_) => {
+                    let c = &shared.constants[i];
+                    debug_assert_eq!(root_offset, c.range.start);
+                    self.temp_constants.clear();
+                    self.temp_constants.extend(
+                        user_data.data[c.range.start as usize..c.range.end as usize]
+                            .iter()
+                            .map(|ud| match *ud {
+                                RootElement::Constant(v) => v,
+                                _ => {
+                                    warn!(
+                                        "Unset or mismatching root constant at index {:?} ({:?})",
+                                        c, ud
+                                    );
+                                    0
+                                }
+                            }),
+                    );
+                    constants_update(root_offset, &self.temp_constants);
+                }
+                RootElement::TableSrvCbvUav(offset) => {
+                    let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
+                        ptr: self.srv_cbv_uav_start + offset as u64,
+                    };
+                    table_update(root_offset, gpu);
+                }
+                RootElement::TableSampler(offset) => {
+                    let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
+                        ptr: self.sampler_start + offset as u64,
+                    };
+                    table_update(root_offset, gpu);
+                }
+                RootElement::DescriptorCbv { buffer } => {
+                    debug_assert!(user_data.is_index_dirty(root_offset + 1));
+                    debug_assert_eq!(
+                        user_data.data[root_offset as usize + 1],
+                        RootElement::DescriptorPlaceholder
+                    );
+
+                    descriptor_cbv_update(root_offset, buffer);
+                }
+                RootElement::DescriptorPlaceholder | RootElement::Undefined => {
+                    error!(
+                        "Undefined user data element in the root signature at {}",
+                        root_offset
+                    );
+                }
+            }
+        }
+
+        user_data.clear_up_to(shared.total_slots);
     }
 }
 
@@ -410,9 +471,9 @@ impl CommandBuffer {
             is_active: false,
             pass_cache: None,
             cur_subpass: !0,
-            gr_pipeline: PipelineCache::new(),
+            gr_pipeline: PipelineCache::default(),
             primitive_topology: d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED,
-            comp_pipeline: PipelineCache::new(),
+            comp_pipeline: PipelineCache::default(),
             active_bindpoint: BindPoint::Graphics { internal: false },
             active_descriptor_heaps: [native::DescriptorHeap::null(); 2],
             occlusion_query: None,
@@ -463,9 +524,9 @@ impl CommandBuffer {
 
         self.pass_cache = None;
         self.cur_subpass = !0;
-        self.gr_pipeline = PipelineCache::new();
+        self.gr_pipeline = PipelineCache::default();
         self.primitive_topology = d3dcommon::D3D_PRIMITIVE_TOPOLOGY_UNDEFINED;
-        self.comp_pipeline = PipelineCache::new();
+        self.comp_pipeline = PipelineCache::default();
         self.active_bindpoint = BindPoint::Graphics { internal: false };
         self.active_descriptor_heaps = [native::DescriptorHeap::null(); 2];
         self.occlusion_query = None;
@@ -687,20 +748,22 @@ impl CommandBuffer {
         match self.active_bindpoint {
             BindPoint::Compute => {
                 // Switch to graphics bind point
-                let (pipeline, _) = self
+                let &(pipeline, _) = self
                     .gr_pipeline
                     .pipeline
+                    .as_ref()
                     .expect("No graphics pipeline bound");
                 self.raw.set_pipeline_state(pipeline);
             }
             BindPoint::Graphics { internal: true } => {
                 // Switch to graphics bind point
-                let (pipeline, signature) = self
+                let &(pipeline, ref shared) = self
                     .gr_pipeline
                     .pipeline
+                    .as_ref()
                     .expect("No graphics pipeline bound");
                 self.raw.set_pipeline_state(pipeline);
-                self.raw.set_graphics_root_signature(signature);
+                self.raw.set_graphics_root_signature(shared.signature);
                 self.bind_descriptor_heaps();
             }
             BindPoint::Graphics { internal: false } => {}
@@ -710,8 +773,7 @@ impl CommandBuffer {
         let cmd_buffer = &mut self.raw;
 
         // Flush root signature data
-        Self::flush_user_data(
-            &mut self.gr_pipeline,
+        self.gr_pipeline.flush_user_data(
             |slot, data| unsafe {
                 cmd_buffer.clone().SetGraphicsRoot32BitConstants(
                     slot,
@@ -729,9 +791,10 @@ impl CommandBuffer {
         match self.active_bindpoint {
             BindPoint::Graphics { internal } => {
                 // Switch to compute bind point
-                let (pipeline, _) = self
+                let &(pipeline, _) = self
                     .comp_pipeline
                     .pipeline
+                    .as_ref()
                     .expect("No compute pipeline bound");
 
                 self.raw.set_pipeline_state(pipeline);
@@ -743,8 +806,8 @@ impl CommandBuffer {
                     // Rebind the graphics root signature as we come from an internal graphics.
                     // Issuing a draw call afterwards would hide the information that we internally
                     // changed the graphics root signature.
-                    if let Some((_, signature)) = self.gr_pipeline.pipeline {
-                        self.raw.set_graphics_root_signature(signature);
+                    if let Some((_, ref shared)) = self.gr_pipeline.pipeline {
+                        self.raw.set_graphics_root_signature(shared.signature);
                     }
                 }
             }
@@ -752,8 +815,7 @@ impl CommandBuffer {
         }
 
         let cmd_buffer = &mut self.raw;
-        Self::flush_user_data(
-            &mut self.comp_pipeline,
+        self.comp_pipeline.flush_user_data(
             |slot, data| unsafe {
                 cmd_buffer.clone().SetComputeRoot32BitConstants(
                     slot,
@@ -765,96 +827,6 @@ impl CommandBuffer {
             |slot, gpu| cmd_buffer.set_compute_root_descriptor_table(slot, gpu),
             |slot, buffer| cmd_buffer.set_compute_root_constant_buffer_view(slot, buffer),
         );
-    }
-
-    fn flush_user_data<F, G, H>(
-        pipeline: &mut PipelineCache,
-        mut constants_update: F,
-        mut table_update: G,
-        mut descriptor_cbv_update: H,
-    ) where
-        F: FnMut(u32, &[u32]),
-        G: FnMut(u32, d3d12::D3D12_GPU_DESCRIPTOR_HANDLE),
-        H: FnMut(u32, d3d12::D3D12_GPU_VIRTUAL_ADDRESS),
-    {
-        let user_data = &mut pipeline.user_data;
-        if !user_data.is_dirty() {
-            return;
-        }
-
-        let num_root_constant = pipeline.root_constants.len();
-        let mut cur_index = 0;
-        // TODO: opt: Only set dirty root constants?
-        for (i, root_constant) in pipeline.root_constants.iter().enumerate() {
-            let num_constants = (root_constant.range.end - root_constant.range.start) as usize;
-            let mut data = Vec::new();
-            for c in cur_index..cur_index + num_constants {
-                data.push(match user_data.data[c] {
-                    RootElement::Constant(v) => v,
-                    _ => {
-                        warn!(
-                            "Unset or mismatching root constant at index {:?} ({:?})",
-                            c, user_data.data[c]
-                        );
-                        0
-                    }
-                });
-                user_data.clear_dirty(c);
-            }
-            constants_update(i as _, &data);
-            cur_index += num_constants;
-        }
-
-        // Flush descriptor tables & root descriptors
-        // Index in the user data array where tables are starting
-        let mut root_index = pipeline
-            .root_constants
-            .iter()
-            .fold(0, |sum, c| sum + c.range.end - c.range.start)
-            as usize;
-
-        for i in num_root_constant..pipeline.num_parameter_slots {
-            if user_data.is_index_dirty(root_index) {
-                match user_data.data[root_index] {
-                    RootElement::TableSrvCbvUav(offset) => {
-                        let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
-                            ptr: pipeline.srv_cbv_uav_start + offset as u64,
-                        };
-                        table_update(i as _, gpu);
-                        user_data.clear_dirty(root_index);
-                        root_index += 1;
-                    }
-                    RootElement::TableSampler(offset) => {
-                        let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
-                            ptr: pipeline.sampler_start + offset as u64,
-                        };
-                        table_update(i as _, gpu);
-                        user_data.clear_dirty(root_index);
-                        root_index += 1;
-                    }
-                    RootElement::DescriptorCbv { buffer } => {
-                        debug_assert!(user_data.is_index_dirty(root_index + 1));
-                        debug_assert_eq!(
-                            user_data.data[root_index + 1],
-                            RootElement::DescriptorPlaceholder
-                        );
-
-                        descriptor_cbv_update(i as _, buffer);
-
-                        user_data.clear_dirty(root_index);
-                        user_data.clear_dirty(root_index + 1); // skip placeholder
-                        root_index += 2;
-                    }
-                    other => {
-                        error!(
-                            "Unexpected user data element in the root signature ({:?})",
-                            (root_index, other)
-                        );
-                        continue;
-                    }
-                };
-            }
-        }
     }
 
     fn transition_barrier(
@@ -1960,13 +1932,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_graphics_pipeline(&mut self, pipeline: &r::GraphicsPipeline) {
         match self.gr_pipeline.pipeline {
-            Some((_, signature)) if signature == pipeline.signature => {
+            Some((_, ref shared)) if Arc::ptr_eq(shared, &pipeline.shared) => {
                 // Same root signature, nothing to do
             }
             _ => {
-                self.raw.set_graphics_root_signature(pipeline.signature);
-                self.gr_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
-                self.gr_pipeline.root_constants = pipeline.constants.clone();
+                self.raw
+                    .set_graphics_root_signature(pipeline.shared.signature);
                 // All slots need to be rebound internally on signature change.
                 self.gr_pipeline.user_data.dirty_all();
             }
@@ -1976,7 +1947,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         self.primitive_topology = pipeline.topology;
 
         self.active_bindpoint = BindPoint::Graphics { internal: false };
-        self.gr_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
+        self.gr_pipeline.pipeline = Some((pipeline.raw, Arc::clone(&pipeline.shared)));
         self.vertex_bindings_remap = pipeline.vertex_bindings;
 
         self.set_vertex_buffers();
@@ -2015,13 +1986,12 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
 
     unsafe fn bind_compute_pipeline(&mut self, pipeline: &r::ComputePipeline) {
         match self.comp_pipeline.pipeline {
-            Some((_, signature)) if signature == pipeline.signature => {
+            Some((_, ref shared)) if Arc::ptr_eq(shared, &pipeline.shared) => {
                 // Same root signature, nothing to do
             }
             _ => {
-                self.raw.set_compute_root_signature(pipeline.signature);
-                self.comp_pipeline.num_parameter_slots = pipeline.num_parameter_slots;
-                self.comp_pipeline.root_constants = pipeline.constants.clone();
+                self.raw
+                    .set_compute_root_signature(pipeline.shared.signature);
                 // All slots need to be rebound internally on signature change.
                 self.comp_pipeline.user_data.dirty_all();
             }
@@ -2029,7 +1999,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         self.raw.set_pipeline_state(pipeline.raw);
 
         self.active_bindpoint = BindPoint::Compute;
-        self.comp_pipeline.pipeline = Some((pipeline.raw, pipeline.signature));
+        self.comp_pipeline.pipeline = Some((pipeline.raw, Arc::clone(&pipeline.shared)));
     }
 
     unsafe fn bind_compute_descriptor_sets<I, J>(
