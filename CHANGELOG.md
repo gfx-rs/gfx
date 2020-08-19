@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.6.1 (18-08-2020)
+  - fix descriptor binding
+
 ### backend-vulkan-0.6.1 (17-08-2020)
   - fix Android build
 

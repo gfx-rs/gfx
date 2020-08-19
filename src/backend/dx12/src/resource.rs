@@ -8,7 +8,7 @@ use range_alloc::RangeAllocator;
 
 use crate::{root_constants::RootConstant, Backend, MAX_VERTEX_BUFFERS};
 
-use std::{cell::UnsafeCell, collections::BTreeMap, fmt, ops::Range};
+use std::{cell::UnsafeCell, collections::BTreeMap, fmt, ops::Range, sync::Arc};
 
 // ShaderModule is either a precompiled if the source comes from HLSL or
 // the SPIR-V module doesn't contain specialization constants or push constants
@@ -97,10 +97,8 @@ pub struct VertexBinding {
 #[derive(Debug)]
 pub struct GraphicsPipeline {
     pub(crate) raw: native::PipelineState,
-    pub(crate) signature: native::RootSignature, // weak-ptr, owned by `PipelineLayout`
-    pub(crate) num_parameter_slots: usize,       // signature parameter slots, see `PipelineLayout`
+    pub(crate) shared: Arc<PipelineShared>,
     pub(crate) topology: d3d12::D3D12_PRIMITIVE_TOPOLOGY,
-    pub(crate) constants: Vec<RootConstant>,
     pub(crate) vertex_bindings: [Option<VertexBinding>; MAX_VERTEX_BUFFERS],
     pub(crate) baked_states: pso::BakedStates,
 }
@@ -110,9 +108,7 @@ unsafe impl Sync for GraphicsPipeline {}
 #[derive(Debug)]
 pub struct ComputePipeline {
     pub(crate) raw: native::PipelineState,
-    pub(crate) signature: native::RootSignature, // weak-ptr, owned by `PipelineLayout`
-    pub(crate) num_parameter_slots: usize,       // signature parameter slots, see `PipelineLayout`
-    pub(crate) constants: Vec<RootConstant>,
+    pub(crate) shared: Arc<PipelineShared>,
 }
 
 unsafe impl Send for ComputePipeline {}
@@ -150,19 +146,26 @@ pub struct RootElement {
 }
 
 #[derive(Debug)]
-pub struct PipelineLayout {
-    pub(crate) raw: native::RootSignature,
-    // Disjunct, sorted vector of root constant ranges.
+pub struct PipelineShared {
+    pub(crate) signature: native::RootSignature,
+    /// Disjunct, sorted vector of root constant ranges.
     pub(crate) constants: Vec<RootConstant>,
+    /// A root offset per parameter.
+    pub(crate) parameter_offsets: Vec<u32>,
+    /// Total number of root slots occupied by the pipeline.
+    pub(crate) total_slots: u32,
+}
+
+unsafe impl Send for PipelineShared {}
+unsafe impl Sync for PipelineShared {}
+
+#[derive(Debug)]
+pub struct PipelineLayout {
+    pub(crate) shared: Arc<PipelineShared>,
     // Storing for each associated descriptor set layout, which tables we created
     // in the root signature. This is required for binding descriptor sets.
     pub(crate) elements: Vec<RootElement>,
-    // Number of parameter slots in this layout, can be larger than number of tables.
-    // Required for updating the root signature when flushing user data.
-    pub(crate) num_parameter_slots: usize,
 }
-unsafe impl Send for PipelineLayout {}
-unsafe impl Sync for PipelineLayout {}
 
 #[derive(Debug, Clone)]
 pub struct Framebuffer {

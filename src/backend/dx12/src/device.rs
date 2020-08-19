@@ -4,6 +4,7 @@ use std::{
     ffi, mem,
     ops::Range,
     ptr, slice,
+    sync::Arc,
 };
 
 use range_alloc::RangeAllocator;
@@ -268,7 +269,11 @@ impl Device {
         layout: &r::PipelineLayout,
     ) -> Result<(), d::ShaderError> {
         // Move the descriptor sets away to yield for the root constants at "space0".
-        let space_offset = if layout.constants.is_empty() { 0 } else { 1 };
+        let space_offset = if layout.shared.constants.is_empty() {
+            0
+        } else {
+            1
+        };
         let shader_resources = ast.get_shader_resources().map_err(gen_query_error)?;
 
         if space_offset != 0 {
@@ -405,6 +410,7 @@ impl Device {
 
         let stage_flag = stage.to_flag();
         let root_constant_layout = layout
+            .shared
             .constants
             .iter()
             .filter_map(|constant| {
@@ -1519,12 +1525,12 @@ impl d::Device<B> for Device {
 
         let sets = sets.into_iter().collect::<Vec<_>>();
 
-        let mut root_offset = 0;
+        let mut root_offset = 0u32;
         let root_constants = root_constants::split(push_constant_ranges)
             .iter()
             .map(|constant| {
                 assert!(constant.range.start <= constant.range.end);
-                root_offset += (constant.range.end - constant.range.start) as usize;
+                root_offset += constant.range.end - constant.range.start;
 
                 RootConstant {
                     stages: constant.stages,
@@ -1542,6 +1548,7 @@ impl d::Device<B> for Device {
         // Number of elements in the root signature.
         // Guarantees that no re-allocation is done, and our pointers are valid
         let mut parameters = Vec::with_capacity(root_constants.len() + sets.len() * 2);
+        let mut parameter_offsets = Vec::with_capacity(parameters.capacity());
 
         // Convert root signature descriptions into root signature parameters.
         for root_constant in root_constants.iter() {
@@ -1549,6 +1556,7 @@ impl d::Device<B> for Device {
                 "\tRoot constant set={} range {:?}",
                 ROOT_CONSTANT_SPACE, root_constant.range
             );
+            parameter_offsets.push(root_constant.range.start);
             parameters.push(native::RootParameter::constants(
                 conv::map_shader_visibility(root_constant.stages),
                 native::Binding {
@@ -1638,6 +1646,7 @@ impl d::Device<B> for Device {
                     }
                 }
                 if ranges.len() > range_base {
+                    parameter_offsets.push(root_offset);
                     parameters.push(native::RootParameter::descriptor_table(
                         visibility,
                         &ranges[range_base..],
@@ -1655,6 +1664,7 @@ impl d::Device<B> for Device {
                     }
                 }
                 if ranges.len() > range_base {
+                    parameter_offsets.push(root_offset);
                     parameters.push(native::RootParameter::descriptor_table(
                         visibility,
                         &ranges[range_base..],
@@ -1674,8 +1684,9 @@ impl d::Device<B> for Device {
 
                         if content.contains(r::DescriptorContent::CBV) {
                             descriptors.push(r::RootDescriptor {
-                                offset: root_offset,
+                                offset: root_offset as usize,
                             });
+                            parameter_offsets.push(root_offset);
                             parameters
                                 .push(native::RootParameter::cbv_descriptor(visibility, binding));
                             root_offset += 2; // root CBV costs 2 words
@@ -1699,6 +1710,7 @@ impl d::Device<B> for Device {
 
         // Ensure that we didn't reallocate!
         debug_assert_eq!(ranges.len(), total);
+        assert_eq!(parameters.len(), parameter_offsets.len());
 
         // TODO: error handling
         let (signature_raw, error) = match self.library.serialize_root_signature(
@@ -1725,10 +1737,13 @@ impl d::Device<B> for Device {
         signature_raw.destroy();
 
         Ok(r::PipelineLayout {
-            raw: signature,
-            constants: root_constants,
+            shared: Arc::new(r::PipelineShared {
+                signature,
+                constants: root_constants,
+                parameter_offsets,
+                total_slots: root_offset,
+            }),
             elements,
-            num_parameter_slots: parameters.len(),
         })
     }
 
@@ -1960,7 +1975,7 @@ impl d::Device<B> for Device {
 
         // Setup pipeline description
         let pso_desc = d3d12::D3D12_GRAPHICS_PIPELINE_STATE_DESC {
-            pRootSignature: desc.layout.raw.as_mut_ptr(),
+            pRootSignature: desc.layout.shared.signature.as_mut_ptr(),
             VS: *vs.shader(),
             PS: *ps.shader(),
             GS: *gs.shader(),
@@ -2065,10 +2080,8 @@ impl d::Device<B> for Device {
 
             Ok(r::GraphicsPipeline {
                 raw: pipeline,
-                signature: desc.layout.raw,
-                num_parameter_slots: desc.layout.num_parameter_slots,
+                shared: Arc::clone(&desc.layout.shared),
                 topology,
-                constants: desc.layout.constants.clone(),
                 vertex_bindings,
                 baked_states,
             })
@@ -2092,7 +2105,7 @@ impl d::Device<B> for Device {
         .map_err(|err| pso::CreationError::Shader(err))?;
 
         let (pipeline, hr) = self.raw.create_compute_pipeline_state(
-            desc.layout.raw,
+            desc.layout.shared.signature,
             native::Shader::from_blob(cs),
             0,
             native::CachedPSO::null(),
@@ -2106,11 +2119,10 @@ impl d::Device<B> for Device {
         if winerror::SUCCEEDED(hr) {
             Ok(r::ComputePipeline {
                 raw: pipeline,
-                signature: desc.layout.raw,
-                num_parameter_slots: desc.layout.num_parameter_slots,
-                constants: desc.layout.constants.clone(),
+                shared: Arc::clone(&desc.layout.shared),
             })
         } else {
+            error!("Failed to build shader: {:x}", hr);
             Err(pso::CreationError::Other)
         }
     }
@@ -3426,7 +3438,7 @@ impl d::Device<B> for Device {
     }
 
     unsafe fn destroy_pipeline_layout(&self, layout: r::PipelineLayout) {
-        layout.raw.destroy();
+        layout.shared.signature.destroy();
     }
 
     unsafe fn destroy_graphics_pipeline(&self, pipeline: r::GraphicsPipeline) {
