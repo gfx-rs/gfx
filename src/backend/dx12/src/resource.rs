@@ -174,10 +174,11 @@ pub struct Framebuffer {
     pub(crate) layers: image::Layer,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Clone, Debug)]
 pub struct BufferUnbound {
     pub(crate) requirements: memory::Requirements,
     pub(crate) usage: buffer::Usage,
+    pub(crate) name: Option<Vec<u16>>,
 }
 
 pub struct BufferBound {
@@ -282,7 +283,7 @@ impl ImageBound {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Clone)]
 pub struct ImageUnbound {
     pub(crate) desc: d3d12::D3D12_RESOURCE_DESC,
     pub(crate) view_format: Option<DXGI_FORMAT>,
@@ -298,6 +299,7 @@ pub struct ImageUnbound {
     pub(crate) bytes_per_block: u8,
     // Dimension of a texel block (compressed formats).
     pub(crate) block_dim: (u8, u8),
+    pub(crate) name: Option<Vec<u16>>,
 }
 
 impl fmt::Debug for ImageUnbound {
