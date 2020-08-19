@@ -56,7 +56,6 @@ check: check-backends
 	cd src/warden && cargo check $(CHECK_TARGET_FLAG) --features "env_logger $(FEATURES_GL) $(FEATURES_HAL) $(FEATURES_HAL2)"
 
 check-backends:
-	@echo "Note: excluding \`warden\` here, since it depends on serialization"
 	cargo check --all $(CHECK_TARGET_FLAG) $(EXCLUDES) --exclude gfx-warden
 
 check-wasm:
