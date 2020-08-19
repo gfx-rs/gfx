@@ -8,8 +8,8 @@
   <a href="https://crates.io/crates/gfx-hal">
       <img src="http://img.shields.io/crates/v/gfx-hal.svg?label=gfx-hal" alt = "gfx-hal on crates.io">
   </a>
-  <a href="https://travis-ci.org/gfx-rs/gfx">
-      <img src="https://img.shields.io/travis/gfx-rs/gfx/master.svg?branch=master" alt="Travis Build Status">
+  <a href="https://github.com/gfx-rs/gfx/actions">
+      <img src="https://github.com/gfx-rs/gfx/workflows/CI/badge.svg" alt="Build Status">
   </a>
   <br>
   <strong><a href="info/getting_started.md">Getting Started</a> | <a href="http://docs.rs/gfx-hal">Documentation</a> | <a href="http://gfx-rs.github.io/">Blog</a> </strong>
