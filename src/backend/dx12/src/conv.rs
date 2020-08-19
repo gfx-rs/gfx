@@ -252,7 +252,7 @@ pub fn map_topology(ia: &pso::InputAssemblerDesc) -> D3D12_PRIMITIVE_TOPOLOGY {
     }
 }
 
-pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
+pub fn map_rasterizer(rasterizer: &pso::Rasterizer, multisample: bool) -> D3D12_RASTERIZER_DESC {
     use hal::pso::FrontFace::*;
     use hal::pso::PolygonMode::*;
 
@@ -289,7 +289,7 @@ pub fn map_rasterizer(rasterizer: &pso::Rasterizer) -> D3D12_RASTERIZER_DESC {
         DepthBiasClamp: bias.clamp,
         SlopeScaledDepthBias: bias.slope_factor,
         DepthClipEnable: !rasterizer.depth_clamping as _,
-        MultisampleEnable: FALSE,     // TODO: currently not supported
+        MultisampleEnable: if multisample { TRUE } else { FALSE },
         ForcedSampleCount: 0,         // TODO: currently not supported
         AntialiasedLineEnable: FALSE, // TODO: currently not supported
         ConservativeRaster: if rasterizer.conservative {

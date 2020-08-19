@@ -375,7 +375,7 @@ struct Copy {
 }
 
 pub struct CommandBuffer {
-    raw: native::GraphicsCommandList,
+    pub(crate) raw: native::GraphicsCommandList,
     allocator: native::CommandAllocator,
     shared: Arc<Shared>,
     is_active: bool,

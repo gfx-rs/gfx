@@ -1,7 +1,7 @@
 use std::{
     borrow::Borrow,
     collections::{BTreeMap, VecDeque},
-    ffi, mem,
+    ffi, iter, mem,
     ops::Range,
     ptr, slice,
     sync::Arc,
@@ -23,7 +23,7 @@ use winapi::{
 
 use auxil::{spirv_cross_specialize_ast, ShaderStage};
 use hal::{
-    self, buffer, device as d, format,
+    buffer, device as d, format,
     format::Aspects,
     image, memory,
     memory::Requirements,
@@ -58,6 +58,10 @@ const MEM_TYPE_IMAGE_SHIFT: u32 = MEM_TYPE_SHIFT * MemoryGroup::ImageOnly as u32
 const MEM_TYPE_TARGET_SHIFT: u32 = MEM_TYPE_SHIFT * MemoryGroup::TargetOnly as u32;
 
 pub const IDENTITY_MAPPING: UINT = 0x1688; // D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING
+
+fn wide_cstr(name: &str) -> Vec<u16> {
+    name.encode_utf16().chain(iter::once(0)).collect()
+}
 
 /// Emit error during shader module creation. Used if we don't expect an error
 /// but might panic due to an exception in SPIRV-Cross.
@@ -1806,7 +1810,7 @@ impl d::Device<B> for Device {
 
         let vertex_buffers: Vec<pso::VertexBufferDesc> = Vec::new();
         let attributes: Vec<pso::AttributeDesc> = Vec::new();
-        let input_assembler = pso::InputAssemblerDesc::new(pso::Primitive::TriangleList);
+        let mesh_input_assembler = pso::InputAssemblerDesc::new(pso::Primitive::TriangleList);
         let (vertex_buffers, attributes, input_assembler, vs, gs, hs, ds, _, _) =
             match desc.primitive_assembler {
                 pso::PrimitiveAssemblerDesc::Vertex {
@@ -1838,7 +1842,7 @@ impl d::Device<B> for Device {
                 pso::PrimitiveAssemblerDesc::Mesh { ref task, ref mesh } => (
                     &vertex_buffers[..],
                     &attributes[..],
-                    &input_assembler,
+                    &mesh_input_assembler,
                     None,
                     None,
                     None,
@@ -1953,7 +1957,8 @@ impl d::Device<B> for Device {
 
         // Get color attachment formats from subpass
         let (rtvs, num_rtvs) = {
-            let mut rtvs = [dxgiformat::DXGI_FORMAT_UNKNOWN; 8];
+            let mut rtvs = [dxgiformat::DXGI_FORMAT_UNKNOWN;
+                d3d12::D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT as usize];
             let mut num_rtvs = 0;
             for (rtv, target) in rtvs.iter_mut().zip(pass.color_attachments.iter()) {
                 let format = desc.subpass.main_pass.attachments[target.0].format;
@@ -1999,8 +2004,11 @@ impl d::Device<B> for Device {
                 IndependentBlendEnable: TRUE,
                 RenderTarget: conv::map_render_targets(&desc.blender.targets),
             },
-            SampleMask: UINT::max_value(),
-            RasterizerState: conv::map_rasterizer(&desc.rasterizer),
+            SampleMask: match desc.multisampling {
+                Some(ref ms) => ms.sample_mask as u32,
+                None => UINT::max_value(),
+            },
+            RasterizerState: conv::map_rasterizer(&desc.rasterizer, desc.multisampling.is_some()),
             DepthStencilState: conv::map_depth_stencil(&desc.depth_stencil),
             InputLayout: d3d12::D3D12_INPUT_LAYOUT_DESC {
                 pInputElementDescs: if input_element_descs.is_empty() {
@@ -2010,7 +2018,11 @@ impl d::Device<B> for Device {
                 },
                 NumElements: input_element_descs.len() as u32,
             },
-            IBStripCutValue: d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED, // TODO
+            IBStripCutValue: match input_assembler.restart_index {
+                Some(hal::IndexType::U16) => d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFF,
+                Some(hal::IndexType::U32) => d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_0xFFFFFFFF,
+                None => d3d12::D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED,
+            },
             PrimitiveTopologyType: conv::map_topology_type(input_assembler.primitive),
             NumRenderTargets: num_rtvs,
             RTVFormats: rtvs,
@@ -2181,6 +2193,7 @@ impl d::Device<B> for Device {
         Ok(r::Buffer::Unbound(r::BufferUnbound {
             requirements,
             usage,
+            name: None,
         }))
     }
 
@@ -2197,7 +2210,7 @@ impl d::Device<B> for Device {
         offset: u64,
         buffer: &mut r::Buffer,
     ) -> Result<(), d::BindError> {
-        let buffer_unbound = *buffer.expect_unbound();
+        let buffer_unbound = buffer.expect_unbound();
         if buffer_unbound.requirements.type_mask & (1 << memory.type_id) == 0 {
             error!(
                 "Bind memory failure: supported mask 0x{:x}, given id {}",
@@ -2238,6 +2251,10 @@ impl d::Device<B> for Device {
                 resource.mut_void(),
             )
         );
+
+        if let Some(ref name) = buffer_unbound.name {
+            resource.SetName(name.as_ptr());
+        }
 
         let clear_uav = if buffer_unbound.usage.contains(buffer::Usage::TRANSFER_DST) {
             let handle = self.srv_uav_pool.lock().unwrap().alloc_handle();
@@ -2450,6 +2467,7 @@ impl d::Device<B> for Device {
             view_caps,
             bytes_per_block,
             block_dim,
+            name: None,
         }))
     }
 
@@ -2504,7 +2522,7 @@ impl d::Device<B> for Device {
     ) -> Result<(), d::BindError> {
         use self::image::Usage;
 
-        let image_unbound = *image.expect_unbound();
+        let image_unbound = image.expect_unbound();
         if image_unbound.requirements.type_mask & (1 << memory.type_id) == 0 {
             error!(
                 "Bind memory failure: supported mask 0x{:x}, given id {}",
@@ -2531,6 +2549,10 @@ impl d::Device<B> for Device {
                 resource.mut_void(),
             )
         );
+
+        if let Some(ref name) = image_unbound.name {
+            resource.SetName(name.as_ptr());
+        }
 
         let info = ViewInfo {
             resource,
@@ -3525,40 +3547,51 @@ impl d::Device<B> for Device {
         Ok(())
     }
 
-    unsafe fn set_image_name(&self, _image: &mut r::Image, _name: &str) {
-        // TODO
+    unsafe fn set_image_name(&self, image: &mut r::Image, name: &str) {
+        let cwstr = wide_cstr(name);
+        match *image {
+            r::Image::Unbound(ref mut image) => image.name = Some(cwstr),
+            r::Image::Bound(ref image) => {
+                image.resource.SetName(cwstr.as_ptr());
+            }
+        }
     }
 
-    unsafe fn set_buffer_name(&self, _buffer: &mut r::Buffer, _name: &str) {
-        // TODO
+    unsafe fn set_buffer_name(&self, buffer: &mut r::Buffer, name: &str) {
+        let cwstr = wide_cstr(name);
+        match *buffer {
+            r::Buffer::Unbound(ref mut buffer) => buffer.name = Some(cwstr),
+            r::Buffer::Bound(ref buffer) => {
+                buffer.resource.SetName(cwstr.as_ptr());
+            }
+        }
     }
 
-    unsafe fn set_command_buffer_name(
-        &self,
-        _command_buffer: &mut cmd::CommandBuffer,
-        _name: &str,
-    ) {
-        // TODO
+    unsafe fn set_command_buffer_name(&self, command_buffer: &mut cmd::CommandBuffer, name: &str) {
+        let cwstr = wide_cstr(name);
+        command_buffer.raw.SetName(cwstr.as_ptr());
     }
 
-    unsafe fn set_semaphore_name(&self, _semaphore: &mut r::Semaphore, _name: &str) {
-        // TODO
+    unsafe fn set_semaphore_name(&self, semaphore: &mut r::Semaphore, name: &str) {
+        let cwstr = wide_cstr(name);
+        semaphore.raw.SetName(cwstr.as_ptr());
     }
 
-    unsafe fn set_fence_name(&self, _fence: &mut r::Fence, _name: &str) {
-        // TODO
+    unsafe fn set_fence_name(&self, fence: &mut r::Fence, name: &str) {
+        let cwstr = wide_cstr(name);
+        fence.raw.SetName(cwstr.as_ptr());
     }
 
     unsafe fn set_framebuffer_name(&self, _framebuffer: &mut r::Framebuffer, _name: &str) {
-        // TODO
+        // ignored
     }
 
     unsafe fn set_render_pass_name(&self, _render_pass: &mut r::RenderPass, _name: &str) {
-        // TODO
+        // ignored
     }
 
     unsafe fn set_descriptor_set_name(&self, _descriptor_set: &mut r::DescriptorSet, _name: &str) {
-        // TODO
+        // ignored
     }
 
     unsafe fn set_descriptor_set_layout_name(
@@ -3566,31 +3599,22 @@ impl d::Device<B> for Device {
         _descriptor_set_layout: &mut r::DescriptorSetLayout,
         _name: &str,
     ) {
-        // TODO
+        // ignored
     }
 
-    unsafe fn set_pipeline_layout_name(
-        &self,
-        _pipeline_layout: &mut r::PipelineLayout,
-        _name: &str,
-    ) {
-        // TODO
+    unsafe fn set_pipeline_layout_name(&self, pipeline_layout: &mut r::PipelineLayout, name: &str) {
+        let cwstr = wide_cstr(name);
+        pipeline_layout.shared.signature.SetName(cwstr.as_ptr());
     }
 
-    unsafe fn set_compute_pipeline_name(
-        &self,
-        _compute_pipeline: &mut r::ComputePipeline,
-        _name: &str,
-    ) {
-        // TODO
+    unsafe fn set_compute_pipeline_name(&self, pipeline: &mut r::ComputePipeline, name: &str) {
+        let cwstr = wide_cstr(name);
+        pipeline.raw.SetName(cwstr.as_ptr());
     }
 
-    unsafe fn set_graphics_pipeline_name(
-        &self,
-        _graphics_pipeline: &mut r::GraphicsPipeline,
-        _name: &str,
-    ) {
-        // TODO
+    unsafe fn set_graphics_pipeline_name(&self, pipeline: &mut r::GraphicsPipeline, name: &str) {
+        let cwstr = wide_cstr(name);
+        pipeline.raw.SetName(cwstr.as_ptr());
     }
 }
 

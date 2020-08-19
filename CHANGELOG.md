@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.6.2 (19-08-2020)
+  - enable multisampling and object labels
+
 ### backend-dx12-0.6.1 (18-08-2020)
   - fix descriptor binding
 
