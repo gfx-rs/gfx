@@ -34,7 +34,9 @@ jobs:
           echo "::add-path::$NDK_HOME_BIN"
       - run: rustup target add ${{ env.TARGET }}
       - name: Check
-        run: cargo check --manifest-path src/backend/vulkan/Cargo.toml --target ${{ env.TARGET }}
+        run: |
+          cargo check --manifest-path src/backend/vulkan/Cargo.toml --target ${{ env.TARGET }}
+          cargo check --manifest-path src/backend/gl/Cargo.toml --target ${{ env.TARGET }}
 
   build:
     name: ${{ matrix.name }}
