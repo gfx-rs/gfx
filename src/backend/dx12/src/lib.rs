@@ -1063,6 +1063,8 @@ impl hal::Instance<Backend> for Instance {
                     Features::FORMAT_BC |
                     Features::INSTANCE_RATE |
                     Features::SAMPLER_MIP_LOD_BIAS |
+                    Features::SAMPLER_BORDER_COLOR |
+                    Features::MUTABLE_COMPARISON_SAMPLER |
                     Features::SAMPLER_ANISOTROPY |
                     Features::TEXTURE_DESCRIPTOR_ARRAY |
                     Features::SAMPLER_MIRROR_CLAMP_EDGE |

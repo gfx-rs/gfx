@@ -1326,13 +1326,7 @@ impl d::Device<B> for Device {
             compare_op: conv::map_comparison(desc.comparison.unwrap_or(Comparison::Never)),
             min_lod: desc.lod_range.start.0,
             max_lod: desc.lod_range.end.0,
-            border_color: match conv::map_border_color(desc.border) {
-                Some(bc) => bc,
-                None => {
-                    error!("Unsupported border color {:x}", desc.border.0);
-                    vk::BorderColor::FLOAT_TRANSPARENT_BLACK
-                }
-            },
+            border_color: conv::map_border_color(desc.border),
             unnormalized_coordinates: if desc.normalized { vk::FALSE } else { vk::TRUE },
         };
 

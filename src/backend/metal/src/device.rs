@@ -27,8 +27,8 @@ use hal::{
 };
 use metal::{
     CaptureManager, MTLCPUCacheMode, MTLLanguageVersion, MTLPrimitiveTopologyClass,
-    MTLPrimitiveType, MTLResourceOptions, MTLSamplerBorderColor, MTLSamplerMipFilter,
-    MTLStorageMode, MTLTextureType, MTLVertexStepFunction,
+    MTLPrimitiveType, MTLResourceOptions, MTLSamplerMipFilter, MTLStorageMode, MTLTextureType,
+    MTLVertexStepFunction,
 };
 use objc::{
     rc::autoreleasepool,
@@ -435,6 +435,16 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
                 F::empty()
             }
             //| F::SAMPLER_MIRROR_CLAMP_EDGE
+            | if self.shared.private_caps.sampler_clamp_to_border {
+                F::SAMPLER_BORDER_COLOR
+            } else {
+                F::empty()
+            }
+            | if self.shared.private_caps.mutable_comparison_samplers {
+                F::MUTABLE_COMPARISON_SAMPLER
+            } else {
+                F::empty()
+            }
             | F::NDC_Y_UP
     }
 
@@ -841,15 +851,7 @@ impl Device {
             descriptor.set_compare_function(conv::map_compare_function(fun));
         }
         if [r, s, t].iter().any(|&am| am == image::WrapMode::Border) {
-            descriptor.set_border_color(match info.border.0 {
-                0x0000_0000 => MTLSamplerBorderColor::TransparentBlack,
-                0x0000_00FF => MTLSamplerBorderColor::OpaqueBlack,
-                0xFFFF_FFFF => MTLSamplerBorderColor::OpaqueWhite,
-                other => {
-                    error!("Border color 0x{:X} is not supported", other);
-                    MTLSamplerBorderColor::TransparentBlack
-                }
-            });
+            descriptor.set_border_color(conv::map_border_color(info.border));
         }
 
         if caps.argument_buffers {
@@ -899,14 +901,10 @@ impl Device {
                 Some(func) => unsafe { mem::transmute(conv::map_compare_function(func) as u32) },
                 None => msl::SamplerCompareFunc::Always,
             },
-            border_color: match info.border.0 {
-                0x0000_0000 => msl::SamplerBorderColor::TransparentBlack,
-                0x0000_00FF => msl::SamplerBorderColor::OpaqueBlack,
-                0xFFFF_FFFF => msl::SamplerBorderColor::OpaqueWhite,
-                other => {
-                    error!("Border color 0x{:X} is not supported", other);
-                    msl::SamplerBorderColor::TransparentBlack
-                }
+            border_color: match info.border {
+                image::BorderColor::TransparentBlack => msl::SamplerBorderColor::TransparentBlack,
+                image::BorderColor::OpaqueBlack => msl::SamplerBorderColor::OpaqueBlack,
+                image::BorderColor::OpaqueWhite => msl::SamplerBorderColor::OpaqueWhite,
             },
             lod_clamp_min: lods.start.into(),
             lod_clamp_max: lods.end.into(),

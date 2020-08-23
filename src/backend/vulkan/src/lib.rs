@@ -1030,6 +1030,8 @@ impl adapter::PhysicalDevice<Backend> for PhysicalDevice {
             | Features::TRIANGLE_FAN
             | Features::SEPARATE_STENCIL_REF_VALUES
             | Features::SAMPLER_MIP_LOD_BIAS
+            | Features::SAMPLER_BORDER_COLOR
+            | Features::MUTABLE_COMPARISON_SAMPLER
             | Features::TEXTURE_DESCRIPTOR_ARRAY;
 
         if self.supports_extension(*AMD_NEGATIVE_VIEWPORT_HEIGHT)

@@ -1165,6 +1165,14 @@ pub fn map_wrap_mode(wrap: image::WrapMode) -> MTLSamplerAddressMode {
     }
 }
 
+pub fn map_border_color(border_color: image::BorderColor) -> MTLSamplerBorderColor {
+    match border_color {
+        image::BorderColor::TransparentBlack => MTLSamplerBorderColor::TransparentBlack,
+        image::BorderColor::OpaqueBlack => MTLSamplerBorderColor::OpaqueBlack,
+        image::BorderColor::OpaqueWhite => MTLSamplerBorderColor::OpaqueWhite,
+    }
+}
+
 pub fn map_extent(extent: image::Extent) -> MTLSize {
     MTLSize {
         width: extent.width as _,

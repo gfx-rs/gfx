@@ -242,12 +242,10 @@ bitflags! {
         const COPY_BUFFER = 0x00000800;
         /// Support separation of textures and samplers.
         const SAMPLER_OBJECTS = 0x00001000;
-        /// Support setting border texel colors.
-        const SAMPLER_BORDER_COLOR = 0x00002000;
         /// Support explicit layouts in shader.
-        const EXPLICIT_LAYOUTS_IN_SHADER = 0x00004000;
+        const EXPLICIT_LAYOUTS_IN_SHADER = 0x00002000;
         /// Support instanced input rate on attribute binding.
-        const INSTANCED_ATTRIBUTE_BINDING = 0x00008000;
+        const INSTANCED_ATTRIBUTE_BINDING = 0x00004000;
     }
 }
 
@@ -398,7 +396,7 @@ pub(crate) fn query_all(
         }
     }
 
-    let mut features = Features::NDC_Y_UP;
+    let mut features = Features::NDC_Y_UP | Features::MUTABLE_COMPARISON_SAMPLER;
     let mut legacy = LegacyFeatures::empty();
 
     if info.is_supported(&[
@@ -417,6 +415,9 @@ pub(crate) fn query_all(
     if info.is_supported(&[Core(3, 3)]) {
         // TODO: extension
         features |= Features::SAMPLER_MIP_LOD_BIAS;
+    }
+    if info.is_supported(&[Core(2, 1)]) {
+        features |= Features::SAMPLER_BORDER_COLOR;
     }
     if info.is_supported(&[Core(4, 4), Ext("ARB_texture_mirror_clamp_to_edge")]) {
         features |= Features::SAMPLER_MIRROR_CLAMP_EDGE;
@@ -475,10 +476,6 @@ pub(crate) fn query_all(
     }
     if info.is_supported(&[Core(3, 3), Es(3, 0), Ext("GL_ARB_sampler_objects")]) {
         legacy |= LegacyFeatures::SAMPLER_OBJECTS;
-    }
-    if info.is_supported(&[Core(3, 3)]) {
-        // TODO: extension
-        legacy |= LegacyFeatures::SAMPLER_BORDER_COLOR;
     }
     if info.is_supported(&[Core(3, 3), Es(3, 0)]) {
         legacy |= LegacyFeatures::INSTANCED_ATTRIBUTE_BINDING;
