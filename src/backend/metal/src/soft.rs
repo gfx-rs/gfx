@@ -508,7 +508,17 @@ impl AsSlice<Option<SamplerPtr>, Own> for Range<CacheResourceIndex> {
     }
 }
 
-fn _test_render_command_size(com: RenderCommand<Own>) -> [usize; 6] {
-    use std::mem;
-    unsafe { mem::transmute(com) }
+fn _test_command_sizes(
+    render: RenderCommand<&Ref>,
+    blit: BlitCommand,
+    compute: ComputeCommand<&Ref>,
+) {
+    use std::mem::transmute;
+    let _ = unsafe {
+        (
+            transmute::<_, [usize; 6]>(render),
+            transmute::<_, [usize; 9]>(blit),
+            transmute::<_, [usize; 7]>(compute),
+        )
+    };
 }
