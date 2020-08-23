@@ -393,7 +393,6 @@ impl Device {
 pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamInt>(
     info: &i::SamplerDesc,
     features: &hal::Features,
-    legacy_features: &LegacyFeatures,
     mut set_param_float: SetParamFloat,
     mut set_param_float_vec: SetParamFloatVec,
     mut set_param_int: SetParamInt,
@@ -421,7 +420,7 @@ pub(crate) unsafe fn set_sampler_info<SetParamFloat, SetParamFloatVec, SetParamI
     if features.contains(hal::Features::SAMPLER_MIP_LOD_BIAS) {
         set_param_float(glow::TEXTURE_LOD_BIAS, info.lod_bias.0);
     }
-    if legacy_features.contains(LegacyFeatures::SAMPLER_BORDER_COLOR) {
+    if features.contains(hal::Features::SAMPLER_BORDER_COLOR) {
         let mut border: [f32; 4] = info.border.into();
         set_param_float_vec(glow::TEXTURE_BORDER_COLOR, &mut border);
     }
@@ -1097,7 +1096,6 @@ impl d::Device<B> for Device {
         set_sampler_info(
             &info,
             &self.features,
-            &self.share.legacy_features,
             |a, b| gl.sampler_parameter_f32(name, a, b),
             |a, b| gl.sampler_parameter_f32_slice(name, a, b),
             |a, b| gl.sampler_parameter_i32(name, a, b),

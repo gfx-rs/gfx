@@ -860,7 +860,6 @@ impl CommandQueue {
                 device::set_sampler_info(
                     &sinfo,
                     &self.features,
-                    &self.share.legacy_features,
                     |a, b| gl.tex_parameter_f32(textype, a, b),
                     |a, b| gl.tex_parameter_f32_slice(textype, a, &b),
                     |a, b| gl.tex_parameter_i32(textype, a, b),

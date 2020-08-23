@@ -520,6 +520,11 @@ const MUTABLE_COMPARISON_SAMPLER_SUPPORT: &[MTLFeatureSet] = &[
     MTLFeatureSet::macOS_GPUFamily2_v1,
 ];
 
+const SAMPLER_CLAMP_TO_BORDER_SUPPORT: &[MTLFeatureSet] = &[
+    MTLFeatureSet::macOS_GPUFamily1_v2,
+    MTLFeatureSet::macOS_GPUFamily2_v1,
+];
+
 const ASTC_PIXEL_FORMAT_FEATURES: &[MTLFeatureSet] = &[
     MTLFeatureSet::iOS_GPUFamily2_v1,
     MTLFeatureSet::iOS_GPUFamily3_v1,
@@ -680,6 +685,7 @@ struct PrivateCapabilities {
     argument_buffers: bool,
     shared_textures: bool,
     mutable_comparison_samplers: bool,
+    sampler_clamp_to_border: bool,
     base_instance: bool,
     base_vertex_instance_drawing: bool,
     dual_source_blending: bool,
@@ -825,6 +831,7 @@ impl PrivateCapabilities {
                 &device,
                 MUTABLE_COMPARISON_SAMPLER_SUPPORT,
             ),
+            sampler_clamp_to_border: Self::supports_any(&device, SAMPLER_CLAMP_TO_BORDER_SUPPORT),
             base_instance: Self::supports_any(&device, BASE_INSTANCE_SUPPORT),
             base_vertex_instance_drawing: Self::supports_any(&device, BASE_VERTEX_INSTANCE_SUPPORT),
             dual_source_blending: Self::supports_any(&device, DUAL_SOURCE_BLEND_SUPPORT),

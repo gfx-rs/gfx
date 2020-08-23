@@ -223,12 +223,11 @@ pub fn map_wrap(wrap: image::WrapMode) -> vk::SamplerAddressMode {
     }
 }
 
-pub fn map_border_color(col: image::PackedColor) -> Option<vk::BorderColor> {
-    match col.0 {
-        0x00000000 => Some(vk::BorderColor::FLOAT_TRANSPARENT_BLACK),
-        0xFF000000 => Some(vk::BorderColor::FLOAT_OPAQUE_BLACK),
-        0xFFFFFFFF => Some(vk::BorderColor::FLOAT_OPAQUE_WHITE),
-        _ => None,
+pub fn map_border_color(border_color: image::BorderColor) -> vk::BorderColor {
+    match border_color {
+        image::BorderColor::TransparentBlack => vk::BorderColor::FLOAT_TRANSPARENT_BLACK,
+        image::BorderColor::OpaqueBlack => vk::BorderColor::FLOAT_OPAQUE_BLACK,
+        image::BorderColor::OpaqueWhite => vk::BorderColor::FLOAT_OPAQUE_WHITE,
     }
 }
 

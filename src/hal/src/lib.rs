@@ -251,6 +251,10 @@ bitflags! {
         const INSTANCE_RATE = 0x0004 << 64;
         /// Support non-zero mipmap bias on samplers.
         const SAMPLER_MIP_LOD_BIAS = 0x0008 << 64;
+        /// Support sampler wrap mode that clamps to border.
+        const SAMPLER_BORDER_COLOR = 0x0010 << 64;
+        /// Can create comparison samplers in regular descriptor sets.
+        const MUTABLE_COMPARISON_SAMPLER = 0x0020 << 64;
 
         /// Make the NDC coordinate system pointing Y up, to match D3D and Metal.
         const NDC_Y_UP = 0x0001 << 80;
