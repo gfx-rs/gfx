@@ -2668,7 +2668,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     for level in sub.level_start..sub.level_start + num_levels {
                         let descriptor = metal::RenderPassDescriptor::new().to_owned();
                         if base_extent.depth > 1 {
-                            assert_eq!((sub.layer_start, num_layers), (1, 1));
+                            assert_eq!((sub.layer_start, num_layers), (0, 1));
                             let depth = base_extent.at_level(level).depth as u64;
                             descriptor.set_render_target_array_length(depth);
                         } else if is_layered {

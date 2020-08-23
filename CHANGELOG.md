@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-metal-0.6.1 (23-08-2020)
+  - fix layer checks in `clear_image`
+
 ### backend-dx12-0.6.2 (19-08-2020)
   - enable multisampling and object labels
 
