@@ -10,7 +10,7 @@ use hal::{
     buffer, command as com,
     device::OutOfMemory,
     format::{Aspects, FormatDesc},
-    image::{Extent, Filter, Layout, Level, SubresourceRange},
+    image::{Extent, Filter, Layout, Level, NumSamples, SubresourceRange},
     memory,
     pass::AttachmentLoadOp,
     pso, query,
@@ -250,6 +250,7 @@ struct SubpassInfo {
     descriptor: metal::RenderPassDescriptor,
     combined_aspects: Aspects,
     formats: native::SubpassFormats,
+    sample_count: NumSamples,
 }
 
 #[derive(Debug, Default)]
@@ -300,6 +301,7 @@ struct State {
     target_aspects: Aspects,
     target_extent: Extent,
     target_formats: native::SubpassFormats,
+    target_samples: NumSamples,
     visibility_query: (metal::MTLVisibilityResultMode, buffer::Offset),
     pending_subpasses: Vec<SubpassInfo>,
     descriptor_sets: ArrayVec<[DescriptorSetInfo; MAX_BOUND_DESCRIPTOR_SETS]>,
@@ -2358,6 +2360,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
                 target_aspects: Aspects::empty(),
                 target_extent: Extent::default(),
                 target_formats: native::SubpassFormats::default(),
+                target_samples: 0,
                 visibility_query: (metal::MTLVisibilityResultMode::Disabled, 0),
                 pending_subpasses: Vec::new(),
                 descriptor_sets: (0..MAX_BOUND_DESCRIPTOR_SETS)
@@ -2795,6 +2798,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 .target_formats
                 .depth_stencil
                 .unwrap_or(metal::MTLPixelFormat::Invalid),
+            sample_count: self.state.target_samples,
             target_index: None,
         };
         for (out, &(mtl_format, _)) in key
@@ -3367,6 +3371,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         // we stack the subpasses in the opposite order
         for subpass in render_pass.subpasses.iter().rev() {
             let mut combined_aspects = Aspects::empty();
+            let mut sample_count = 0;
             let descriptor = autoreleasepool(|| {
                 let descriptor = metal::RenderPassDescriptor::new().to_owned();
                 descriptor.set_visibility_result_buffer(Some(&self.shared.visibility.buffer));
@@ -3380,6 +3385,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     let desc = descriptor.color_attachments().object_at(i as _).unwrap();
 
                     combined_aspects |= Aspects::COLOR;
+                    sample_count = sample_count.max(rat.samples);
                     desc.set_texture(Some(texture));
 
                     if op_flags.contains(native::SubpassOps::LOAD) {
@@ -3404,6 +3410,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                     let rat = &render_pass.attachments[at_id];
                     let texture = framebuffer.attachments[at_id].as_ref();
                     let aspects = rat.format.unwrap().surface_desc().aspects;
+                    sample_count = sample_count.max(rat.samples);
                     combined_aspects |= aspects;
 
                     if aspects.contains(Aspects::DEPTH) {
@@ -3445,6 +3452,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
                 descriptor,
                 combined_aspects,
                 formats: subpass.target_formats.clone(),
+                sample_count,
             });
         }
 
@@ -3461,6 +3469,7 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         };
         self.state.target_aspects = sin.combined_aspects;
         self.state.target_formats.copy_from(&sin.formats);
+        self.state.target_samples = sin.sample_count;
 
         let ds_store = &self.shared.service_pipes.depth_stencil_states;
         let ds_state;
