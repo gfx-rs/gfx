@@ -10,7 +10,7 @@ extern crate gfx_backend_dx12 as back;
     feature = "gl",
 )))]
 extern crate gfx_backend_empty as back;
-#[cfg(any(feature = "gl"))]
+#[cfg(all(unix, feature = "gl"))]
 extern crate gfx_backend_gl as back;
 #[cfg(feature = "metal")]
 extern crate gfx_backend_metal as back;

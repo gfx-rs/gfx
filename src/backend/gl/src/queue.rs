@@ -227,8 +227,8 @@ impl CommandQueue {
             .framebuffer_object;
 
         unsafe {
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.fbos[index as usize]));
-            gl.bind_framebuffer(
+            gl.context.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.fbos[index as usize]));
+            gl.context.bind_framebuffer(
                 glow::DRAW_FRAMEBUFFER,
                 #[cfg(surfman)]
                 match fbo {
@@ -238,7 +238,7 @@ impl CommandQueue {
                 #[cfg(not(surfman))]
                 None,
             );
-            gl.blit_framebuffer(
+            gl.context.blit_framebuffer(
                 0,
                 0,
                 extent.width as _,
