@@ -456,8 +456,10 @@ impl ServicePipes {
     pub fn new(device: &metal::DeviceRef) -> Self {
         let data = if cfg!(target_os = "macos") {
             &include_bytes!("./../shaders/gfx-shaders-macos.metallib")[..]
-        } else {
+        } else if cfg!(target_arch = "aarch64") {
             &include_bytes!("./../shaders/gfx-shaders-ios.metallib")[..]
+        } else {
+            &include_bytes!("./../shaders/gfx-shaders-ios-simulator.metallib")[..]
         };
         let library = device.new_library_with_data(data).unwrap();
 
