@@ -136,8 +136,8 @@ ByteAddressBuffer   BufferCopySrc : register(t0);
 RWByteAddressBuffer BufferCopyDst : register(u0);
 
 RWTexture1DArray<uint>  Image1CopyDstR    : register(u0);
-RWTexture1DArray<uint>  Image1CopyDstRg   : register(u0);
-RWTexture1DArray<uint>  Image1CopyDstRgba : register(u0);
+RWTexture1DArray<uint2>  Image1CopyDstRg   : register(u0);
+RWTexture1DArray<uint4>  Image1CopyDstRgba : register(u0);
 
 Texture2DArray<uint4>   Image2CopySrc     : register(t0);
 RWTexture2DArray<uint>  Image2CopyDstR    : register(u0);
