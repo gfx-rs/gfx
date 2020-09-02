@@ -295,13 +295,13 @@ impl PipelineCache {
             None => return,
         };
 
-        for (i, &root_offset) in shared.parameter_offsets.iter().enumerate() {
+        for (root_index, &root_offset) in shared.parameter_offsets.iter().enumerate() {
             if !user_data.is_index_dirty(root_offset) {
                 continue;
             }
             match user_data.data[root_offset as usize] {
                 RootElement::Constant(_) => {
-                    let c = &shared.constants[i];
+                    let c = &shared.constants[root_index];
                     debug_assert_eq!(root_offset, c.range.start);
                     self.temp_constants.clear();
                     self.temp_constants.extend(
@@ -318,19 +318,19 @@ impl PipelineCache {
                                 }
                             }),
                     );
-                    constants_update(root_offset, &self.temp_constants);
+                    constants_update(root_index as u32, &self.temp_constants);
                 }
                 RootElement::TableSrvCbvUav(offset) => {
                     let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
                         ptr: self.srv_cbv_uav_start + offset as u64,
                     };
-                    table_update(root_offset, gpu);
+                    table_update(root_index as u32, gpu);
                 }
                 RootElement::TableSampler(offset) => {
                     let gpu = d3d12::D3D12_GPU_DESCRIPTOR_HANDLE {
                         ptr: self.sampler_start + offset as u64,
                     };
-                    table_update(root_offset, gpu);
+                    table_update(root_index as u32, gpu);
                 }
                 RootElement::DescriptorCbv { buffer } => {
                     debug_assert!(user_data.is_index_dirty(root_offset + 1));
@@ -339,7 +339,7 @@ impl PipelineCache {
                         RootElement::DescriptorPlaceholder
                     );
 
-                    descriptor_cbv_update(root_offset, buffer);
+                    descriptor_cbv_update(root_index as u32, buffer);
                 }
                 RootElement::DescriptorPlaceholder | RootElement::Undefined => {
                     error!(
