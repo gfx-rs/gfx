@@ -209,6 +209,7 @@ impl Device {
             }
         };
         compile_options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);
+        compile_options.force_zero_initialized_variables = true;
         debug!("SPIR-V options {:?}", compile_options);
 
         ast.set_compiler_options(&compile_options)

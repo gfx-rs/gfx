@@ -1,6 +1,6 @@
 [package]
 name = "gfx-backend-metal"
-version = "0.6.1"
+version = "0.6.2"
 description = "Metal API backend for gfx-rs"
 homepage = "https://github.com/gfx-rs/gfx"
 repository = "https://github.com/gfx-rs/gfx"
@@ -21,7 +21,7 @@ signpost = []
 name = "gfx_backend_metal"
 
 [dependencies]
-auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
+auxil = { path = "../../auxil/auxil", version = "0.6", package = "gfx-auxil", features = ["spirv_cross"] }
 hal = { path = "../../hal", version = "0.6", package = "gfx-hal" }
 range-alloc = { path = "../../auxil/range-alloc", version = "0.1" }
 arrayvec = "0.5"
@@ -35,7 +35,7 @@ objc = "0.2.5"
 block = "0.1"
 cocoa-foundation = "0.1"
 smallvec = "1"
-spirv_cross = { version = "0.20", features = ["msl"] }
+spirv_cross = { version = "0.21", features = ["msl"] }
 parking_lot = "0.11"
 storage-map = "0.3"
 lazy_static = "1"

@@ -411,6 +411,7 @@ impl Device {
         let mut compile_options = hlsl::CompilerOptions::default();
         compile_options.shader_model = shader_model;
         compile_options.vertex.invert_y = !features.contains(hal::Features::NDC_Y_UP);
+        compile_options.force_zero_initialized_variables = true;
 
         let stage_flag = stage.to_flag();
         let root_constant_layout = layout
