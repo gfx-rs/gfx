@@ -32,6 +32,8 @@ else
 	endif
 	ifeq ($(TARGET),aarch64-apple-ios)
 		EXCLUDES+= --exclude gfx-backend-vulkan --exclude gfx-backend-gl
+	else ifeq ($(TARGET),x86_64-apple-ios)
+		EXCLUDES+= --exclude gfx-backend-vulkan --exclude gfx-backend-gl
 	else
 		FEATURES_GL=gl
 	endif
@@ -94,5 +96,10 @@ ifeq ($(UNAME_S),Darwin)
 	cd ./src/backend/metal/shaders && \
 	xcrun -sdk iphoneos metal -c *.metal -mios-version-min=11.4 && \
 	xcrun -sdk iphoneos metallib *.air -o gfx-shaders-ios.metallib && \
+	rm *.air
+	# iOS Simulator
+	cd ./src/backend/metal/shaders && \
+	xcrun -sdk iphonesimulator metal -c *.metal -mios-simulator-version-min=13.0 && \
+	xcrun -sdk iphonesimulator metallib *.air -o gfx-shaders-ios-simulator.metallib && \
 	rm *.air
 endif
