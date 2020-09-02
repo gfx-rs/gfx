@@ -1003,7 +1003,7 @@ pub struct RenderPassCache {
 impl RenderPassCache {
     pub fn start_subpass(
         &mut self,
-        internal: &mut internal::Internal,
+        internal: &internal::Internal,
         context: &ComPtr<d3d11::ID3D11DeviceContext>,
         cache: &mut CommandBufferState,
     ) {
@@ -1349,8 +1349,7 @@ impl CommandBufferState {
 }
 
 pub struct CommandBuffer {
-    // TODO: better way of sharing
-    internal: internal::Internal,
+    internal: Arc<internal::Internal>,
     context: ComPtr<d3d11::ID3D11DeviceContext>,
     list: RefCell<Option<ComPtr<d3d11::ID3D11CommandList>>>,
 
@@ -1378,7 +1377,10 @@ unsafe impl Send for CommandBuffer {}
 unsafe impl Sync for CommandBuffer {}
 
 impl CommandBuffer {
-    fn create_deferred(device: ComPtr<d3d11::ID3D11Device>, internal: internal::Internal) -> Self {
+    fn create_deferred(
+        device: ComPtr<d3d11::ID3D11Device>,
+        internal: Arc<internal::Internal>,
+    ) -> Self {
         let mut context: *mut d3d11::ID3D11DeviceContext = ptr::null_mut();
         let hr =
             unsafe { device.CreateDeferredContext(0, &mut context as *mut *mut _ as *mut *mut _) };
@@ -1569,7 +1571,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         });
 
         if let Some(ref mut current_render_pass) = self.render_pass_cache {
-            current_render_pass.start_subpass(&mut self.internal, &self.context, &mut self.cache);
+            current_render_pass.start_subpass(&self.internal, &self.context, &mut self.cache);
         }
     }
 
@@ -1577,7 +1579,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         if let Some(ref mut current_render_pass) = self.render_pass_cache {
             // TODO: resolve msaa
             current_render_pass.next_subpass();
-            current_render_pass.start_subpass(&mut self.internal, &self.context, &mut self.cache);
+            current_render_pass.start_subpass(&self.internal, &self.context, &mut self.cache);
         }
     }
 
@@ -2099,7 +2101,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         self.internal
-            .copy_buffer_to_image_2d(&self.context, buffer, image, regions);
+            .copy_buffer_to_image(&self.context, buffer, image, regions);
     }
 
     unsafe fn copy_image_to_buffer<T>(
@@ -2117,7 +2119,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         }
 
         self.internal
-            .copy_image_2d_to_buffer(&self.context, image, buffer, regions);
+            .copy_image_to_buffer(&self.context, image, buffer, regions);
     }
 
     unsafe fn draw(&mut self, vertices: Range<VertexCount>, instances: Range<InstanceCount>) {
@@ -2575,7 +2577,7 @@ impl Memory {
 #[derive(Debug)]
 pub struct CommandPool {
     device: ComPtr<d3d11::ID3D11Device>,
-    internal: internal::Internal,
+    internal: Arc<internal::Internal>,
 }
 
 unsafe impl Send for CommandPool {}
@@ -2587,7 +2589,7 @@ impl hal::pool::CommandPool<Backend> for CommandPool {
     }
 
     unsafe fn allocate_one(&mut self, _level: command::Level) -> CommandBuffer {
-        CommandBuffer::create_deferred(self.device.clone(), self.internal.clone())
+        CommandBuffer::create_deferred(self.device.clone(), Arc::clone(&self.internal))
     }
 
     unsafe fn free<I>(&mut self, _cbufs: I)

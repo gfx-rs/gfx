@@ -46,7 +46,7 @@ pub struct Device {
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     features: hal::Features,
     memory_properties: MemoryProperties,
-    pub(crate) internal: internal::Internal,
+    internal: Arc<internal::Internal>,
 }
 
 impl fmt::Debug for Device {
@@ -80,7 +80,7 @@ impl Device {
             context,
             features,
             memory_properties,
-            internal: internal::Internal::new(&device),
+            internal: Arc::new(internal::Internal::new(&device)),
         }
     }
 
@@ -754,7 +754,7 @@ impl device::Device<Backend> for Device {
         // TODO:
         Ok(CommandPool {
             device: self.raw.clone(),
-            internal: self.internal.clone(),
+            internal: Arc::clone(&self.internal),
         })
     }
 
