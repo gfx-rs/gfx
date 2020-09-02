@@ -1286,6 +1286,8 @@ impl hal::device::Device<Backend> for Device {
         shader_compiler_options.resource_binding_overrides = res_overrides;
         shader_compiler_options.const_samplers = const_samplers;
         shader_compiler_options.enable_argument_buffers = self.shared.private_caps.argument_buffers;
+        shader_compiler_options.force_zero_initialized_variables = true;
+        shader_compiler_options.force_native_arrays = true;
         let mut shader_compiler_options_point = shader_compiler_options.clone();
         shader_compiler_options_point.enable_point_size_builtin = true;
 
@@ -1762,6 +1764,8 @@ impl hal::device::Device<Backend> for Device {
             let mut options = msl::CompilerOptions::default();
             options.enable_point_size_builtin = false;
             options.vertex.invert_y = !self.features.contains(hal::Features::NDC_Y_UP);
+            options.force_zero_initialized_variables = true;
+            options.force_native_arrays = true;
             let info = Self::compile_shader_library(
                 &self.shared.device,
                 raw_data,

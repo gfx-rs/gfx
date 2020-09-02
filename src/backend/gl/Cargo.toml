@@ -27,11 +27,11 @@ arrayvec = "0.5"
 bitflags = "1"
 log = { version = "0.4" }
 gfx-hal = { path = "../../hal", version = "0.6" }
-auxil = { path = "../../auxil/auxil", version = "0.5", package = "gfx-auxil", features = ["spirv_cross"] }
+auxil = { path = "../../auxil/auxil", version = "0.6", package = "gfx-auxil", features = ["spirv_cross"] }
 smallvec = "1.0"
 glow = "0.4"
 parking_lot = "0.11"
-spirv_cross = { version = "0.20", features = ["glsl"] }
+spirv_cross = { version = "0.21", features = ["glsl"] }
 lazy_static = "1"
 raw-window-handle = "0.3"
 # disable this for now, the versions of glutin are jumping too fast

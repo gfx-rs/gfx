@@ -1,10 +1,19 @@
 # Change Log
 
-### backend-dx12-0.6.3 (TBD)
-  - fix root signature indexing
+### auxil-0.6.0 (02-09-2020)
+  - update to newer version of spirv_cross to be consistent with backends
 
-### backend-metal-0.6.2 (TBD)
+### backend-dx12-0.6.3 (02-09-2020)
+  - fix root signature indexing
+  - force zero initialization for shader variables
+
+### backend-metal-0.6.2 (02-09-2020)
   - enable compatibility with iOS emulator
+  - force zero initialization for shader variables
+  - force the use of native arrays for MSL
+
+### backend-dx11-0.6.1 (02-09-2020)
+  - force zero initialization for shader variables
 
 ### backend-metal-0.6.1 (23-08-2020)
   - fix layer checks in `clear_image`
