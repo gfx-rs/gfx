@@ -1,5 +1,11 @@
 # Change Log
 
+### backend-dx11-0.6.2 (02-09-2020)
+  - fix bindings filter by shader stages
+  - implement copies from buffers into R8, RG8, and RGBA8 textures
+  - fix read-only storage buffer support
+  - fix race condition in internal shader operations
+
 ### auxil-0.6.0 (02-09-2020)
   - update to newer version of spirv_cross to be consistent with backends
 
