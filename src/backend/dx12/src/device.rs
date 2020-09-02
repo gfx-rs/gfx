@@ -1628,7 +1628,6 @@ impl d::Device<B> for Device {
                     )
                 };
 
-                let mut descriptors = Vec::new();
                 let mut mutable_bindings = auxil::FastHashSet::default();
 
                 // SRV/CBV/UAV descriptor tables
@@ -1687,9 +1686,6 @@ impl d::Device<B> for Device {
                         };
 
                         if content.contains(r::DescriptorContent::CBV) {
-                            descriptors.push(r::RootDescriptor {
-                                offset: root_offset as usize,
-                            });
                             parameter_offsets.push(root_offset);
                             parameters
                                 .push(native::RootParameter::cbv_descriptor(visibility, binding));
@@ -1706,7 +1702,6 @@ impl d::Device<B> for Device {
                         ty: table_type,
                         offset: root_table_offset as _,
                     },
-                    descriptors,
                     mutable_bindings,
                 }
             })

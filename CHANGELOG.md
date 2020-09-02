@@ -1,5 +1,8 @@
 # Change Log
 
+### backend-dx12-0.6.3 (TBD)
+  - fix root signature indexing
+
 ### backend-metal-0.6.2 (TBD)
   - enable compatibility with iOS emulator
 
