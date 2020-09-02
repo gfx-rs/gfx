@@ -1013,7 +1013,9 @@ impl device::Device<Backend> for Device {
         }
 
         // TODO: >=11.1
-        if usage.intersects(Usage::UNIFORM_TEXEL | Usage::STORAGE_TEXEL | Usage::TRANSFER_SRC | Usage::STORAGE) {
+        if usage.intersects(
+            Usage::UNIFORM_TEXEL | Usage::STORAGE_TEXEL | Usage::TRANSFER_SRC | Usage::STORAGE,
+        ) {
             bind |= d3d11::D3D11_BIND_SHADER_RESOURCE;
         }
 
