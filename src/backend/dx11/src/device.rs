@@ -46,7 +46,7 @@ pub struct Device {
     pub(crate) context: ComPtr<d3d11::ID3D11DeviceContext>,
     features: hal::Features,
     memory_properties: MemoryProperties,
-    pub(crate) internal: internal::Internal,
+    internal: Arc<internal::Internal>,
 }
 
 impl fmt::Debug for Device {
@@ -80,7 +80,7 @@ impl Device {
             context,
             features,
             memory_properties,
-            internal: internal::Internal::new(&device),
+            internal: Arc::new(internal::Internal::new(&device)),
         }
     }
 
@@ -238,6 +238,7 @@ impl Device {
                 vertex_strides,
             })
         } else {
+            error!("CreateInputLayout error 0x{:X}", hr);
             Err(pso::CreationError::Other)
         }
     }
@@ -754,7 +755,7 @@ impl device::Device<Backend> for Device {
         // TODO:
         Ok(CommandPool {
             device: self.raw.clone(),
-            internal: self.internal.clone(),
+            internal: Arc::clone(&self.internal),
         })
     }
 
@@ -1012,7 +1013,7 @@ impl device::Device<Backend> for Device {
         }
 
         // TODO: >=11.1
-        if usage.intersects(Usage::UNIFORM_TEXEL | Usage::STORAGE_TEXEL | Usage::TRANSFER_SRC) {
+        if usage.intersects(Usage::UNIFORM_TEXEL | Usage::STORAGE_TEXEL | Usage::TRANSFER_SRC | Usage::STORAGE) {
             bind |= d3d11::D3D11_BIND_SHADER_RESOURCE;
         }
 
@@ -1058,7 +1059,7 @@ impl device::Device<Backend> for Device {
             bind,
             requirements: memory::Requirements {
                 size,
-                alignment: 1,
+                alignment: 4,
                 type_mask: BUFFER_TYPE_MASK,
             },
         })
@@ -1098,42 +1099,11 @@ impl device::Device<Backend> for Device {
                 SysMemSlicePitch: 0,
             });
 
-        let raw = if memory.properties.contains(memory::Properties::DEVICE_LOCAL) {
+        //TODO: check `memory.properties.contains(memory::Properties::DEVICE_LOCAL)` ?
+        let raw = {
             // device local memory
             let desc = d3d11::D3D11_BUFFER_DESC {
                 ByteWidth: buffer.requirements.size as _,
-                Usage: d3d11::D3D11_USAGE_DEFAULT,
-                BindFlags: buffer.bind,
-                CPUAccessFlags: 0,
-                MiscFlags,
-                StructureByteStride: if buffer.internal.usage.contains(buffer::Usage::TRANSFER_SRC)
-                {
-                    4
-                } else {
-                    0
-                },
-            };
-
-            let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
-            let hr = self.raw.CreateBuffer(
-                &desc,
-                if let Some(data) = initial_data {
-                    &data
-                } else {
-                    ptr::null_mut()
-                },
-                &mut buffer as *mut *mut _ as *mut *mut _,
-            );
-
-            if !winerror::SUCCEEDED(hr) {
-                return Err(device::BindError::WrongMemory);
-            }
-
-            ComPtr::from_raw(buffer)
-        } else {
-            let desc = d3d11::D3D11_BUFFER_DESC {
-                ByteWidth: buffer.requirements.size as _,
-                // TODO: dynamic?
                 Usage: d3d11::D3D11_USAGE_DEFAULT,
                 BindFlags: buffer.bind,
                 CPUAccessFlags: 0,
@@ -1200,7 +1170,6 @@ impl device::Device<Backend> for Device {
             desc.ViewDimension = d3dcommon::D3D11_SRV_DIMENSION_BUFFEREX;
             *desc.u.BufferEx_mut() = d3d11::D3D11_BUFFEREX_SRV {
                 FirstElement: 0,
-                // TODO: enforce alignment through HAL limits
                 NumElements: buffer.requirements.size as u32 / 4,
                 Flags: d3d11::D3D11_BUFFEREX_SRV_FLAG_RAW,
             };
@@ -1346,7 +1315,7 @@ impl device::Device<Backend> for Device {
             bind,
             requirements: memory::Requirements {
                 size: size,
-                alignment: 1,
+                alignment: 4,
                 type_mask: 0x1, // device-local only
             },
         })
