@@ -3052,6 +3052,9 @@ impl DescriptorSetInfo {
             .map_register(|info| info.res_index as DescriptorIndex)
             .select(stage);
         for binding in self.bindings.iter() {
+            if !binding.stage_flags.contains(stage.to_flag()) {
+                continue;
+            }
             let content = DescriptorContent::from(binding.ty);
             if binding.binding == binding_index {
                 return (content, res_offsets.map(|offset| *offset as ResourceIndex));

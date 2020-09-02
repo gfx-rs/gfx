@@ -238,6 +238,7 @@ impl Device {
                 vertex_strides,
             })
         } else {
+            error!("CreateInputLayout error 0x{:X}", hr);
             Err(pso::CreationError::Other)
         }
     }
