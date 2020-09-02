@@ -1,5 +1,10 @@
 # Change Log
 
+### backend-dx12-0.6.3 backend-dx11-0.6.1 backend-metal-0.6.2 auxil-0.5.1 (31-08-2020)
+  - update spirv_cross to 0.21:
+    - force zero initialization in all generated shaders
+    - force the use of native arrays for MSL
+
 ### backend-metal-0.6.1 (23-08-2020)
   - fix layer checks in `clear_image`
 
