@@ -1,5 +1,9 @@
 # Change Log
 
+### backend-dx11-0.6.3 (04-09-2020)
+  - fix cpu-visible mapping
+  - fix UAV reset count
+
 ### backend-dx11-0.6.2 (02-09-2020)
   - fix bindings filter by shader stages
   - implement copies from buffers into R8, RG8, and RGBA8 textures
