@@ -736,12 +736,19 @@ impl device::Device<Backend> for Device {
         mem_type: hal::MemoryTypeId,
         size: u64,
     ) -> Result<Memory, device::AllocationError> {
-        let vec = Vec::with_capacity(size as usize);
+        let properties = self.memory_properties.memory_types[mem_type.0].properties;
+        let host_ptr = if properties.contains(hal::memory::Properties::CPU_VISIBLE) {
+            let mut data = vec![0u8; size as usize];
+            let ptr = data.as_mut_ptr();
+            mem::forget(data);
+            ptr
+        } else {
+            ptr::null_mut()
+        };
         Ok(Memory {
-            properties: self.memory_properties.memory_types[mem_type.0].properties,
+            properties,
             size,
-            mapped_ptr: vec.as_ptr() as *mut _,
-            host_visible: Some(RefCell::new(vec)),
+            host_ptr,
             local_buffers: RefCell::new(Vec::new()),
             _local_images: RefCell::new(Vec::new()),
         })
@@ -1053,9 +1060,9 @@ impl device::Device<Backend> for Device {
                 uav: None,
                 usage,
             },
-            properties: memory::Properties::empty(),
             bound_range: 0..0,
-            host_ptr: ptr::null_mut(),
+            is_coherent: false,
+            memory_ptr: ptr::null_mut(),
             bind,
             requirements: memory::Requirements {
                 size,
@@ -1090,14 +1097,15 @@ impl device::Device<Backend> for Device {
             0
         };
 
-        let initial_data = memory
-            .host_visible
-            .as_ref()
-            .map(|p| d3d11::D3D11_SUBRESOURCE_DATA {
-                pSysMem: p.borrow().as_ptr().offset(offset as isize) as _,
+        let initial_data = if memory.host_ptr.is_null() {
+            None
+        } else {
+            Some(d3d11::D3D11_SUBRESOURCE_DATA {
+                pSysMem: memory.host_ptr.offset(offset as isize) as *const _,
                 SysMemPitch: 0,
                 SysMemSlicePitch: 0,
-            });
+            })
+        };
 
         //TODO: check `memory.properties.contains(memory::Properties::DEVICE_LOCAL)` ?
         let raw = {
@@ -1119,11 +1127,7 @@ impl device::Device<Backend> for Device {
             let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
             let hr = self.raw.CreateBuffer(
                 &desc,
-                if let Some(data) = initial_data {
-                    &data
-                } else {
-                    ptr::null_mut()
-                },
+                initial_data.as_ref().map_or(ptr::null_mut(), |id| id),
                 &mut buffer as *mut *mut _ as *mut *mut _,
             );
 
@@ -1147,11 +1151,7 @@ impl device::Device<Backend> for Device {
             let mut buffer: *mut d3d11::ID3D11Buffer = ptr::null_mut();
             let hr = self.raw.CreateBuffer(
                 &desc,
-                if let Some(data) = initial_data {
-                    &data
-                } else {
-                    ptr::null_mut()
-                },
+                initial_data.as_ref().map_or(ptr::null_mut(), |id| id),
                 &mut buffer as *mut *mut _ as *mut *mut _,
             );
 
@@ -1231,15 +1231,11 @@ impl device::Device<Backend> for Device {
 
         memory.bind_buffer(range.clone(), internal.clone());
 
-        let host_ptr = if let Some(vec) = &memory.host_visible {
-            vec.borrow().as_ptr() as *mut _
-        } else {
-            ptr::null_mut()
-        };
-
         buffer.internal = internal;
-        buffer.properties = memory.properties;
-        buffer.host_ptr = host_ptr;
+        buffer.is_coherent = memory
+            .properties
+            .contains(hal::memory::Properties::COHERENT);
+        buffer.memory_ptr = memory.host_ptr;
         buffer.bound_range = range;
 
         Ok(())
@@ -1336,7 +1332,7 @@ impl device::Device<Backend> for Device {
     unsafe fn bind_image_memory(
         &self,
         memory: &Memory,
-        offset: u64,
+        _offset: u64,
         image: &mut Image,
     ) -> Result<(), device::BindError> {
         use image::Usage;
@@ -1371,20 +1367,15 @@ impl device::Device<Backend> for Device {
 
         let dxgi_format = conv::map_format(image.format).unwrap();
         let decomposed = conv::DecomposedDxgiFormat::from_dxgi_format(dxgi_format);
-        let bpp = format_desc.bits as u32 / 8;
+        assert!(
+            memory.host_ptr.is_null(),
+            "Images can only be allocated from device-local memory"
+        );
+        let initial_data_ptr = ptr::null_mut();
 
-        let (view_kind, resource) = match image.kind {
+        let mut resource = ptr::null_mut();
+        let view_kind = match image.kind {
             image::Kind::D1(width, layers) => {
-                let initial_data =
-                    memory
-                        .host_visible
-                        .as_ref()
-                        .map(|_p| d3d11::D3D11_SUBRESOURCE_DATA {
-                            pSysMem: memory.mapped_ptr.offset(offset as isize) as _,
-                            SysMemPitch: 0,
-                            SysMemSlicePitch: 0,
-                        });
-
                 let desc = d3d11::D3D11_TEXTURE1D_DESC {
                     Width: width,
                     MipLevels: image.mip_levels as _,
@@ -1396,14 +1387,9 @@ impl device::Device<Backend> for Device {
                     MiscFlags: 0,
                 };
 
-                let mut resource = ptr::null_mut();
                 let hr = self.raw.CreateTexture1D(
                     &desc,
-                    if let Some(data) = initial_data {
-                        &data
-                    } else {
-                        ptr::null_mut()
-                    },
+                    initial_data_ptr,
                     &mut resource as *mut *mut _ as *mut *mut _,
                 );
 
@@ -1413,24 +1399,9 @@ impl device::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                (image::ViewKind::D1Array, resource)
+                image::ViewKind::D1Array
             }
             image::Kind::D2(width, height, layers, _) => {
-                let mut initial_datas = Vec::new();
-
-                for _layer in 0..layers {
-                    for level in 0..image.mip_levels {
-                        let width = image.kind.extent().at_level(level).width;
-
-                        // TODO: layer offset?
-                        initial_datas.push(d3d11::D3D11_SUBRESOURCE_DATA {
-                            pSysMem: memory.mapped_ptr.offset(offset as isize) as _,
-                            SysMemPitch: width * bpp,
-                            SysMemSlicePitch: 0,
-                        });
-                    }
-                }
-
                 let desc = d3d11::D3D11_TEXTURE2D_DESC {
                     Width: width,
                     Height: height,
@@ -1451,14 +1422,9 @@ impl device::Device<Backend> for Device {
                     },
                 };
 
-                let mut resource = ptr::null_mut();
                 let hr = self.raw.CreateTexture2D(
                     &desc,
-                    if !depth {
-                        initial_datas.as_ptr()
-                    } else {
-                        ptr::null_mut()
-                    },
+                    initial_data_ptr,
                     &mut resource as *mut *mut _ as *mut *mut _,
                 );
 
@@ -1468,19 +1434,9 @@ impl device::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                (image::ViewKind::D2Array, resource)
+                image::ViewKind::D2Array
             }
             image::Kind::D3(width, height, depth) => {
-                let initial_data =
-                    memory
-                        .host_visible
-                        .as_ref()
-                        .map(|_p| d3d11::D3D11_SUBRESOURCE_DATA {
-                            pSysMem: memory.mapped_ptr.offset(offset as isize) as _,
-                            SysMemPitch: width * bpp,
-                            SysMemSlicePitch: width * height * bpp,
-                        });
-
                 let desc = d3d11::D3D11_TEXTURE3D_DESC {
                     Width: width,
                     Height: height,
@@ -1493,14 +1449,9 @@ impl device::Device<Backend> for Device {
                     MiscFlags: 0,
                 };
 
-                let mut resource = ptr::null_mut();
                 let hr = self.raw.CreateTexture3D(
                     &desc,
-                    if let Some(data) = initial_data {
-                        &data
-                    } else {
-                        ptr::null_mut()
-                    },
+                    initial_data_ptr,
                     &mut resource as *mut *mut _ as *mut *mut _,
                 );
 
@@ -1510,7 +1461,7 @@ impl device::Device<Backend> for Device {
                     return Err(device::BindError::WrongMemory);
                 }
 
-                (image::ViewKind::D3, resource)
+                image::ViewKind::D3
             }
         };
 
@@ -1947,13 +1898,11 @@ impl device::Device<Backend> for Device {
         memory: &Memory,
         segment: memory::Segment,
     ) -> Result<*mut u8, device::MapError> {
-        assert_eq!(memory.host_visible.is_some(), true);
-
-        Ok(memory.mapped_ptr.offset(segment.offset as isize))
+        Ok(memory.host_ptr.offset(segment.offset as isize))
     }
 
-    unsafe fn unmap_memory(&self, memory: &Memory) {
-        assert_eq!(memory.host_visible.is_some(), true);
+    unsafe fn unmap_memory(&self, _memory: &Memory) {
+        // persistent mapping FTW
     }
 
     unsafe fn flush_mapped_memory_ranges<'a, I>(&self, ranges: I) -> Result<(), device::OutOfMemory>
@@ -2074,8 +2023,14 @@ impl device::Device<Backend> for Device {
         unimplemented!()
     }
 
-    unsafe fn free_memory(&self, memory: Memory) {
-        for (_range, internal) in memory.local_buffers.borrow_mut().iter() {
+    unsafe fn free_memory(&self, mut memory: Memory) {
+        if !memory.host_ptr.is_null() {
+            let _vec =
+                Vec::from_raw_parts(memory.host_ptr, memory.size as usize, memory.size as usize);
+            // let it drop
+            memory.host_ptr = ptr::null_mut();
+        }
+        for (_range, internal) in memory.local_buffers.borrow_mut().drain(..) {
             (*internal.raw).Release();
             if let Some(srv) = internal.srv {
                 (*srv).Release();

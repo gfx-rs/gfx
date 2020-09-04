@@ -848,7 +848,10 @@ impl Internal {
         if format_desc.is_compressed() {
             // we dont really care about non-4x4 block formats..
             assert_eq!(format_desc.dim, (4, 4));
-            assert!(!src.host_ptr.is_null());
+            assert!(
+                !src.memory_ptr.is_null(),
+                "Only CPU to GPU upload of compressed texture is supported atm"
+            );
 
             for copy in regions {
                 let info = copy.borrow();
@@ -873,7 +876,7 @@ impl Internal {
                             bottom: info.image_offset.y as u32 + info.image_extent.height,
                             back: info.image_offset.z as u32 + info.image_extent.depth,
                         },
-                        src.host_ptr
+                        src.memory_ptr
                             .offset(src.bound_range.start as isize + info.buffer_offset as isize)
                             as _,
                         row_pitch,
