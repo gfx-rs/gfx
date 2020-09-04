@@ -1227,11 +1227,7 @@ impl CommandBufferState {
             context.OMSetRenderTargets(
                 self.render_target_len,
                 self.render_targets.as_ptr(),
-                if let Some(dsv) = self.depth_target {
-                    dsv
-                } else {
-                    ptr::null_mut()
-                },
+                self.depth_target.unwrap_or(ptr::null_mut()),
             );
         }
 
@@ -1411,7 +1407,7 @@ impl CommandBuffer {
             .any(|m| m.buffer == buffer.internal.raw)
         {
             self.flush_coherent_memory.push(MemoryFlush {
-                host_memory: buffer.host_ptr,
+                host_memory: buffer.memory_ptr,
                 sync_range: SyncRange::Whole,
                 buffer: buffer.internal.raw,
             });
@@ -1427,7 +1423,7 @@ impl CommandBuffer {
             self.invalidate_coherent_memory.push(MemoryInvalidate {
                 working_buffer: Some(self.internal.working_buffer.clone()),
                 working_buffer_size: self.internal.working_buffer_size,
-                host_memory: buffer.host_ptr,
+                host_memory: buffer.memory_ptr,
                 sync_range: buffer.bound_range.clone(),
                 buffer: buffer.internal.raw,
             });
@@ -1721,7 +1717,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
             let idx = i + first_binding as usize;
             let buf = buf.borrow();
 
-            if buf.properties.contains(memory::Properties::COHERENT) {
+            if buf.is_coherent {
                 self.defer_coherent_flush(buf);
             }
 
@@ -2028,7 +2024,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferCopy>,
     {
-        if src.properties.contains(memory::Properties::COHERENT) {
+        if src.is_coherent {
             self.defer_coherent_flush(src);
         }
 
@@ -2094,7 +2090,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        if buffer.properties.contains(memory::Properties::COHERENT) {
+        if buffer.is_coherent {
             self.defer_coherent_flush(buffer);
         }
 
@@ -2112,7 +2108,7 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         T: IntoIterator,
         T::Item: Borrow<command::BufferImageCopy>,
     {
-        if buffer.properties.contains(memory::Properties::COHERENT) {
+        if buffer.is_coherent {
             self.defer_coherent_invalidate(buffer);
         }
 
@@ -2306,7 +2302,7 @@ enum SyncRange {
 
 #[derive(Debug)]
 pub struct MemoryFlush {
-    host_memory: *mut u8,
+    host_memory: *const u8,
     sync_range: SyncRange,
     buffer: *mut d3d11::ID3D11Buffer,
 }
@@ -2358,11 +2354,7 @@ impl MemoryFlush {
             context.UpdateSubresource(
                 self.buffer as _,
                 0,
-                if let Some(region) = region {
-                    &region
-                } else {
-                    ptr::null_mut()
-                },
+                region.as_ref().map_or(ptr::null(), |r| r),
                 src as _,
                 0,
                 0,
@@ -2462,10 +2454,8 @@ pub struct Memory {
     properties: memory::Properties,
     size: u64,
 
-    mapped_ptr: *mut u8,
-
-    // staging buffer covering the whole memory region, if it's HOST_VISIBLE
-    host_visible: Option<RefCell<Vec<u8>>>,
+    // pointer to staging memory, if it's HOST_VISIBLE
+    host_ptr: *mut u8,
 
     // list of all buffers bound to this memory
     local_buffers: RefCell<Vec<(Range<u64>, InternalBuffer)>>,
@@ -2497,8 +2487,6 @@ impl Memory {
 
         for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
             if let Some(range) = intersection(&range, &buffer_range) {
-                let ptr = self.mapped_ptr;
-
                 // we need to handle 3 cases for updating buffers:
                 //
                 //   1. if our buffer was created as a `UNIFORM` buffer *and* other usage flags, we
@@ -2514,7 +2502,7 @@ impl Memory {
                 //
                 if buffer.usage.contains(Usage::UNIFORM) && buffer.usage != Usage::UNIFORM {
                     MemoryFlush {
-                        host_memory: unsafe { ptr.offset(buffer_range.start as _) },
+                        host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
                         sync_range: SyncRange::Whole,
                         buffer: buffer.raw,
                     }
@@ -2522,7 +2510,7 @@ impl Memory {
 
                     if let Some(disjoint) = buffer.disjoint_cb {
                         MemoryFlush {
-                            host_memory: unsafe { ptr.offset(buffer_range.start as _) },
+                            host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
                             sync_range: SyncRange::Whole,
                             buffer: disjoint,
                         }
@@ -2530,7 +2518,7 @@ impl Memory {
                     }
                 } else if buffer.usage == Usage::UNIFORM {
                     MemoryFlush {
-                        host_memory: unsafe { ptr.offset(buffer_range.start as _) },
+                        host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
                         sync_range: SyncRange::Whole,
                         buffer: buffer.raw,
                     }
@@ -2540,7 +2528,7 @@ impl Memory {
                     let local_len = range.end - range.start;
 
                     MemoryFlush {
-                        host_memory: unsafe { ptr.offset(range.start as _) },
+                        host_memory: unsafe { self.host_ptr.offset(range.start as _) },
                         sync_range: SyncRange::Partial(local_start..(local_start + local_len)),
                         buffer: buffer.raw,
                     }
@@ -2562,7 +2550,7 @@ impl Memory {
                 MemoryInvalidate {
                     working_buffer: Some(working_buffer.clone()),
                     working_buffer_size,
-                    host_memory: self.mapped_ptr,
+                    host_memory: self.host_ptr,
                     sync_range: range.clone(),
                     buffer: buffer.raw,
                 }
@@ -2659,9 +2647,9 @@ pub struct InternalBuffer {
 
 pub struct Buffer {
     internal: InternalBuffer,
-    properties: memory::Properties, // empty if unbound
-    host_ptr: *mut u8,              // null if unbound
-    bound_range: Range<u64>,        // 0 if unbound
+    is_coherent: bool,
+    memory_ptr: *mut u8,     // null if unbound or non-cpu-visible
+    bound_range: Range<u64>, // 0 if unbound
     requirements: memory::Requirements,
     bind: d3d11::D3D11_BIND_FLAG,
 }
@@ -3114,7 +3102,7 @@ impl CoherentBuffers {
 
             let sync_range = CoherentBufferFlushRange {
                 device_buffer: new,
-                host_ptr: buffer.host_ptr,
+                host_ptr: buffer.memory_ptr,
                 range: SyncRange::Whole,
             };
 
@@ -3131,7 +3119,7 @@ impl CoherentBuffers {
 
                 let sync_range = CoherentBufferFlushRange {
                     device_buffer: disjoint,
-                    host_ptr: buffer.host_ptr,
+                    host_ptr: buffer.memory_ptr,
                     range: SyncRange::Whole,
                 };
 
@@ -3154,7 +3142,7 @@ impl CoherentBuffers {
 
             let sync_range = CoherentBufferInvalidateRange {
                 device_buffer: new,
-                host_ptr: buffer.host_ptr,
+                host_ptr: buffer.memory_ptr,
                 range: buffer.bound_range.clone(),
             };
 
