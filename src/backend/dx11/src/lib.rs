@@ -354,12 +354,23 @@ impl hal::Instance<Backend> for Instance {
                 memory_heaps: vec![!0, !0],
             };
 
+            let max_image_uav = 2;
+            let max_buffer_uav = d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize - max_image_uav;
+
             let limits = hal::Limits {
                 max_image_1d_size: d3d11::D3D11_REQ_TEXTURE1D_U_DIMENSION as _,
                 max_image_2d_size: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _,
                 max_image_3d_size: d3d11::D3D11_REQ_TEXTURE3D_U_V_OR_W_DIMENSION as _,
                 max_image_cube_size: d3d11::D3D11_REQ_TEXTURECUBE_DIMENSION as _,
                 max_image_array_layers: d3d11::D3D11_REQ_TEXTURE2D_ARRAY_AXIS_DIMENSION as _,
+                max_per_stage_descriptor_samplers: d3d11::D3D11_COMMONSHADER_SAMPLER_SLOT_COUNT
+                    as _,
+                max_per_stage_descriptor_uniform_buffers:
+                    d3d11::D3D11_COMMONSHADER_CONSTANT_BUFFER_HW_SLOT_COUNT as _,
+                max_per_stage_descriptor_storage_buffers: max_buffer_uav,
+                max_per_stage_descriptor_storage_images: max_image_uav,
+                max_per_stage_descriptor_sampled_images:
+                    d3d11::D3D11_COMMONSHADER_INPUT_RESOURCE_REGISTER_COUNT as _,
                 max_texel_elements: d3d11::D3D11_REQ_TEXTURE2D_U_OR_V_DIMENSION as _, //TODO
                 max_patch_size: 0,                                                    // TODO
                 max_viewports: d3d11::D3D11_VIEWPORT_AND_SCISSORRECT_OBJECT_COUNT_PER_PIPELINE as _,
@@ -1816,10 +1827,11 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
         let _scope = debug_scope!(&self.context, "BindGraphicsDescriptorSets");
 
         // TODO: find a better solution to invalidating old bindings..
+        let nulls = [ptr::null_mut(); d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize];
         self.context.CSSetUnorderedAccessViews(
             0,
-            16,
-            [ptr::null_mut(); 16].as_ptr(),
+            d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT,
+            nulls.as_ptr(),
             ptr::null_mut(),
         );
 
@@ -1929,12 +1941,14 @@ impl command::CommandBuffer<Backend> for CommandBuffer {
     {
         let _scope = debug_scope!(&self.context, "BindComputeDescriptorSets");
 
+        let nulls = [ptr::null_mut(); d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT as usize];
         self.context.CSSetUnorderedAccessViews(
             0,
-            16,
-            [ptr::null_mut(); 16].as_ptr(),
+            d3d11::D3D11_PS_CS_UAV_REGISTER_COUNT,
+            nulls.as_ptr(),
             ptr::null_mut(),
         );
+
         for (set, info) in sets.into_iter().zip(&layout.sets[first_set..]) {
             let set = set.borrow();
 
