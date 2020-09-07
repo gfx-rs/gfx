@@ -32,7 +32,9 @@ use range_alloc::RangeAllocator;
 
 use winapi::{
     shared::{
-        dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain},
+        dxgi::{
+            IDXGIAdapter, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT_ALLOW_TEARING,
+        },
         dxgiformat,
         minwindef::{FALSE, HMODULE, UINT},
         windef::{HWND, RECT},
@@ -739,6 +741,8 @@ struct Presentation {
     view: ComPtr<d3d11::ID3D11RenderTargetView>,
     format: format::Format,
     size: window::Extent2D,
+    mode: window::PresentMode,
+    is_init: bool,
 }
 
 pub struct Surface {
@@ -778,9 +782,11 @@ impl window::Surface<Backend> for Surface {
         // NOTE: some swap effects affect msaa capabilities..
         // TODO: _DISCARD swap effects can only have one image?
         window::SurfaceCapabilities {
-            present_modes: window::PresentMode::FIFO, //TODO
+            present_modes: window::PresentMode::IMMEDIATE
+                | window::PresentMode::MAILBOX
+                | window::PresentMode::FIFO,
             composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
-            image_count: 1..=16,                      // TODO:
+            image_count: 1..=16,                                       // TODO:
             current_extent,
             extents: window::Extent2D {
                 width: 16,
@@ -790,7 +796,7 @@ impl window::Surface<Backend> for Surface {
                 height: 4096,
             },
             max_image_layers: 1,
-            usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
+            usage: image::Usage::COLOR_ATTACHMENT,
         }
     }
 
@@ -876,6 +882,8 @@ impl window::PresentationSurface<Backend> for Surface {
             view,
             format: config.format,
             size: config.extent,
+            mode: config.present_mode,
+            is_init: true,
         });
         Ok(())
     }
@@ -980,12 +988,17 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         _image: ImageView,
         _wait_semaphore: Option<&Semaphore>,
     ) -> Result<Option<window::Suboptimal>, window::PresentError> {
-        surface
-            .presentation
-            .as_ref()
-            .unwrap()
-            .swapchain
-            .Present(1, 0);
+        let mut presentation = surface.presentation.as_mut().unwrap();
+        let (interval, flags) = match presentation.mode {
+            window::PresentMode::IMMEDIATE => (0, DXGI_PRESENT_ALLOW_TEARING),
+            //Note: this ends up not presenting anything for some reason
+            //window::PresentMode::MAILBOX if !presentation.is_init => (1, DXGI_PRESENT_DO_NOT_SEQUENCE),
+            window::PresentMode::MAILBOX |
+            window::PresentMode::FIFO => (1, 0),
+            _ => (0, 0),
+        };
+        presentation.is_init = false;
+        presentation.swapchain.Present(interval, flags);
         Ok(None)
     }
 
