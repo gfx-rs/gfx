@@ -2,7 +2,10 @@
 
 ## macOS Dependencies
 
-Install the newest XCode from the App Store. This installs the required `metal` developer tools.
+1. Install the newest XCode from the App Store. This installs the required `metal` developer tools.
+2. Install the command line tools with `xcode-select --install`. This might do nothing on your machine.
+3. If `xcode-select --print-path` prints `/Library/Developer/CommandLineTools…`
+4. then run `sudo xcode-select --switch /Applications/Xcode.app/Contents/Developer`.
 
 To run the examples, ensure [CMake is installed](https://cmake.org/install/) as it is required for `glsl-to-spirv`.
 
