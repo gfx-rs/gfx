@@ -2338,14 +2338,11 @@ impl fmt::Debug for MemoryInvalidate {
 }
 
 fn intersection(a: &Range<u64>, b: &Range<u64>) -> Option<Range<u64>> {
-    let min = if a.start < b.start { a } else { b };
-    let max = if min == a { b } else { a };
-
-    if min.end < max.start {
-        None
+    let r = a.start.max(b.start)..a.end.min(b.end);
+    if r.start < r.end {
+        Some(r)
     } else {
-        let end = if min.end < max.end { min.end } else { max.end };
-        Some(max.start..end)
+        None
     }
 }
 
@@ -2502,55 +2499,50 @@ impl Memory {
         use buffer::Usage;
 
         for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
-            if let Some(range) = intersection(&range, &buffer_range) {
-                // we need to handle 3 cases for updating buffers:
-                //
-                //   1. if our buffer was created as a `UNIFORM` buffer *and* other usage flags, we
-                //      also have a disjoint buffer which only has `D3D11_BIND_CONSTANT_BUFFER` due
-                //      to DX11 limitation. we then need to update both the original buffer and the
-                //      disjoint one with the *whole* range (TODO: allow for partial updates)
-                //
-                //   2. if our buffer was created with *only* `UNIFORM` usage we need to upload
-                //      the whole range (TODO: allow for partial updates)
-                //
-                //   3. the general case, without any `UNIFORM` usage has no restrictions on
-                //      partial updates, so we upload the specified range
-                //
-                if buffer.usage.contains(Usage::UNIFORM) && buffer.usage != Usage::UNIFORM {
-                    MemoryFlush {
-                        host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
-                        sync_range: SyncRange::Whole,
-                        buffer: buffer.raw,
-                    }
-                    .do_flush(&context);
-
-                    if let Some(disjoint) = buffer.disjoint_cb {
-                        MemoryFlush {
-                            host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
-                            sync_range: SyncRange::Whole,
-                            buffer: disjoint,
-                        }
-                        .do_flush(&context);
-                    }
-                } else if buffer.usage == Usage::UNIFORM {
-                    MemoryFlush {
-                        host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
-                        sync_range: SyncRange::Whole,
-                        buffer: buffer.raw,
-                    }
-                    .do_flush(&context);
-                } else {
-                    let local_start = range.start - buffer_range.start;
-                    let local_len = range.end - range.start;
-
-                    MemoryFlush {
-                        host_memory: unsafe { self.host_ptr.offset(range.start as _) },
-                        sync_range: SyncRange::Partial(local_start..(local_start + local_len)),
-                        buffer: buffer.raw,
-                    }
-                    .do_flush(&context);
+            let range = match intersection(&range, &buffer_range) {
+                Some(r) => r,
+                None => continue,
+            };
+            // we need to handle 3 cases for updating buffers:
+            //
+            //   1. if our buffer was created as a `UNIFORM` buffer *and* other usage flags, we
+            //      also have a disjoint buffer which only has `D3D11_BIND_CONSTANT_BUFFER` due
+            //      to DX11 limitation. we then need to update both the original buffer and the
+            //      disjoint one with the *whole* range
+            //
+            //   2. if our buffer was created with *only* `UNIFORM` usage we need to upload
+            //      the whole range
+            //
+            //   3. the general case, without any `UNIFORM` usage has no restrictions on
+            //      partial updates, so we upload the specified range
+            //
+            if let Some(disjoint) = buffer.disjoint_cb {
+                MemoryFlush {
+                    host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
+                    sync_range: SyncRange::Whole,
+                    buffer: disjoint,
                 }
+                .do_flush(&context);
             }
+
+            let mem_flush = if buffer.usage == Usage::UNIFORM {
+                MemoryFlush {
+                    host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
+                    sync_range: SyncRange::Whole,
+                    buffer: buffer.raw,
+                }
+            } else {
+                let local_start = range.start - buffer_range.start;
+                let local_end = range.end - buffer_range.start;
+
+                MemoryFlush {
+                    host_memory: unsafe { self.host_ptr.offset(range.start as _) },
+                    sync_range: SyncRange::Partial(local_start..local_end),
+                    buffer: buffer.raw,
+                }
+            };
+
+            mem_flush.do_flush(&context)
         }
     }
 
