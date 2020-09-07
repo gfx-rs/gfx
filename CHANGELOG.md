@@ -1,5 +1,9 @@
 # Change Log
 
+### backend-dx11-0.6.4 (07-09-2020)
+  - fix memory flush ranges
+  - support presentation modes
+
 ### backend-dx11-0.6.3 (04-09-2020)
   - fix cpu-visible mapping
   - fix UAV reset count
