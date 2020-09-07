@@ -32,7 +32,9 @@ use range_alloc::RangeAllocator;
 
 use winapi::{
     shared::{
-        dxgi::{IDXGIAdapter, IDXGIFactory, IDXGISwapChain},
+        dxgi::{
+            IDXGIAdapter, IDXGIFactory, IDXGISwapChain, DXGI_PRESENT_ALLOW_TEARING,
+        },
         dxgiformat,
         minwindef::{FALSE, HMODULE, UINT},
         windef::{HWND, RECT},
@@ -737,6 +739,8 @@ struct Presentation {
     view: ComPtr<d3d11::ID3D11RenderTargetView>,
     format: format::Format,
     size: window::Extent2D,
+    mode: window::PresentMode,
+    is_init: bool,
 }
 
 pub struct Surface {
@@ -776,9 +780,11 @@ impl window::Surface<Backend> for Surface {
         // NOTE: some swap effects affect msaa capabilities..
         // TODO: _DISCARD swap effects can only have one image?
         window::SurfaceCapabilities {
-            present_modes: window::PresentMode::FIFO, //TODO
+            present_modes: window::PresentMode::IMMEDIATE
+                | window::PresentMode::MAILBOX
+                | window::PresentMode::FIFO,
             composite_alpha_modes: window::CompositeAlphaMode::OPAQUE, //TODO
-            image_count: 1..=16,                      // TODO:
+            image_count: 1..=16,                                       // TODO:
             current_extent,
             extents: window::Extent2D {
                 width: 16,
@@ -788,7 +794,7 @@ impl window::Surface<Backend> for Surface {
                 height: 4096,
             },
             max_image_layers: 1,
-            usage: image::Usage::COLOR_ATTACHMENT | image::Usage::TRANSFER_SRC,
+            usage: image::Usage::COLOR_ATTACHMENT,
         }
     }
 
@@ -874,6 +880,8 @@ impl window::PresentationSurface<Backend> for Surface {
             view,
             format: config.format,
             size: config.extent,
+            mode: config.present_mode,
+            is_init: true,
         });
         Ok(())
     }
@@ -978,12 +986,17 @@ impl queue::CommandQueue<Backend> for CommandQueue {
         _image: ImageView,
         _wait_semaphore: Option<&Semaphore>,
     ) -> Result<Option<window::Suboptimal>, window::PresentError> {
-        surface
-            .presentation
-            .as_ref()
-            .unwrap()
-            .swapchain
-            .Present(1, 0);
+        let mut presentation = surface.presentation.as_mut().unwrap();
+        let (interval, flags) = match presentation.mode {
+            window::PresentMode::IMMEDIATE => (0, DXGI_PRESENT_ALLOW_TEARING),
+            //Note: this ends up not presenting anything for some reason
+            //window::PresentMode::MAILBOX if !presentation.is_init => (1, DXGI_PRESENT_DO_NOT_SEQUENCE),
+            window::PresentMode::MAILBOX |
+            window::PresentMode::FIFO => (1, 0),
+            _ => (0, 0),
+        };
+        presentation.is_init = false;
+        presentation.swapchain.Present(interval, flags);
         Ok(None)
     }
 
@@ -2336,14 +2349,11 @@ impl fmt::Debug for MemoryInvalidate {
 }
 
 fn intersection(a: &Range<u64>, b: &Range<u64>) -> Option<Range<u64>> {
-    let min = if a.start < b.start { a } else { b };
-    let max = if min == a { b } else { a };
-
-    if min.end < max.start {
-        None
+    let r = a.start.max(b.start)..a.end.min(b.end);
+    if r.start < r.end {
+        Some(r)
     } else {
-        let end = if min.end < max.end { min.end } else { max.end };
-        Some(max.start..end)
+        None
     }
 }
 
@@ -2500,55 +2510,50 @@ impl Memory {
         use buffer::Usage;
 
         for &(ref buffer_range, ref buffer) in self.local_buffers.borrow().iter() {
-            if let Some(range) = intersection(&range, &buffer_range) {
-                // we need to handle 3 cases for updating buffers:
-                //
-                //   1. if our buffer was created as a `UNIFORM` buffer *and* other usage flags, we
-                //      also have a disjoint buffer which only has `D3D11_BIND_CONSTANT_BUFFER` due
-                //      to DX11 limitation. we then need to update both the original buffer and the
-                //      disjoint one with the *whole* range (TODO: allow for partial updates)
-                //
-                //   2. if our buffer was created with *only* `UNIFORM` usage we need to upload
-                //      the whole range (TODO: allow for partial updates)
-                //
-                //   3. the general case, without any `UNIFORM` usage has no restrictions on
-                //      partial updates, so we upload the specified range
-                //
-                if buffer.usage.contains(Usage::UNIFORM) && buffer.usage != Usage::UNIFORM {
-                    MemoryFlush {
-                        host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
-                        sync_range: SyncRange::Whole,
-                        buffer: buffer.raw,
-                    }
-                    .do_flush(&context);
-
-                    if let Some(disjoint) = buffer.disjoint_cb {
-                        MemoryFlush {
-                            host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
-                            sync_range: SyncRange::Whole,
-                            buffer: disjoint,
-                        }
-                        .do_flush(&context);
-                    }
-                } else if buffer.usage == Usage::UNIFORM {
-                    MemoryFlush {
-                        host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
-                        sync_range: SyncRange::Whole,
-                        buffer: buffer.raw,
-                    }
-                    .do_flush(&context);
-                } else {
-                    let local_start = range.start - buffer_range.start;
-                    let local_len = range.end - range.start;
-
-                    MemoryFlush {
-                        host_memory: unsafe { self.host_ptr.offset(range.start as _) },
-                        sync_range: SyncRange::Partial(local_start..(local_start + local_len)),
-                        buffer: buffer.raw,
-                    }
-                    .do_flush(&context);
+            let range = match intersection(&range, &buffer_range) {
+                Some(r) => r,
+                None => continue,
+            };
+            // we need to handle 3 cases for updating buffers:
+            //
+            //   1. if our buffer was created as a `UNIFORM` buffer *and* other usage flags, we
+            //      also have a disjoint buffer which only has `D3D11_BIND_CONSTANT_BUFFER` due
+            //      to DX11 limitation. we then need to update both the original buffer and the
+            //      disjoint one with the *whole* range
+            //
+            //   2. if our buffer was created with *only* `UNIFORM` usage we need to upload
+            //      the whole range
+            //
+            //   3. the general case, without any `UNIFORM` usage has no restrictions on
+            //      partial updates, so we upload the specified range
+            //
+            if let Some(disjoint) = buffer.disjoint_cb {
+                MemoryFlush {
+                    host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
+                    sync_range: SyncRange::Whole,
+                    buffer: disjoint,
                 }
+                .do_flush(&context);
             }
+
+            let mem_flush = if buffer.usage == Usage::UNIFORM {
+                MemoryFlush {
+                    host_memory: unsafe { self.host_ptr.offset(buffer_range.start as _) },
+                    sync_range: SyncRange::Whole,
+                    buffer: buffer.raw,
+                }
+            } else {
+                let local_start = range.start - buffer_range.start;
+                let local_end = range.end - buffer_range.start;
+
+                MemoryFlush {
+                    host_memory: unsafe { self.host_ptr.offset(range.start as _) },
+                    sync_range: SyncRange::Partial(local_start..local_end),
+                    buffer: buffer.raw,
+                }
+            };
+
+            mem_flush.do_flush(&context)
         }
     }
 

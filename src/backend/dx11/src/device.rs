@@ -5,13 +5,7 @@ use hal::{
 };
 
 use winapi::{
-    shared::{
-        dxgi::{IDXGIFactory, IDXGISwapChain, DXGI_SWAP_CHAIN_DESC, DXGI_SWAP_EFFECT_DISCARD},
-        dxgiformat, dxgitype,
-        minwindef::TRUE,
-        windef::HWND,
-        winerror,
-    },
+    shared::{dxgi, dxgiformat, dxgitype, minwindef::TRUE, windef::HWND, winerror},
     um::{d3d11, d3d11sdklayers, d3dcommon},
 };
 
@@ -675,15 +669,16 @@ impl Device {
         &self,
         config: &window::SwapchainConfig,
         window_handle: HWND,
-        factory: ComPtr<IDXGIFactory>,
-    ) -> Result<(ComPtr<IDXGISwapChain>, dxgiformat::DXGI_FORMAT), window::CreationError> {
+        factory: ComPtr<dxgi::IDXGIFactory>,
+    ) -> Result<(ComPtr<dxgi::IDXGISwapChain>, dxgiformat::DXGI_FORMAT), window::CreationError>
+    {
         // TODO: use IDXGIFactory2 for >=11.1
         // TODO: this function should be able to fail (Result)?
 
         debug!("{:#?}", config);
         let non_srgb_format = conv::map_format_nosrgb(config.format).unwrap();
 
-        let mut desc = DXGI_SWAP_CHAIN_DESC {
+        let mut desc = dxgi::DXGI_SWAP_CHAIN_DESC {
             BufferDesc: dxgitype::DXGI_MODE_DESC {
                 Width: config.extent.width,
                 Height: config.extent.height,
@@ -702,19 +697,22 @@ impl Device {
                 Count: 1,
                 Quality: 0,
             },
-            BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT
-                | dxgitype::DXGI_USAGE_SHADER_INPUT,
+            BufferUsage: dxgitype::DXGI_USAGE_RENDER_TARGET_OUTPUT,
             BufferCount: config.image_count,
             OutputWindow: window_handle,
             // TODO:
             Windowed: TRUE,
             // TODO:
-            SwapEffect: DXGI_SWAP_EFFECT_DISCARD,
-            Flags: 0,
+            SwapEffect: dxgi::DXGI_SWAP_EFFECT_DISCARD,
+            Flags: if config.present_mode == window::PresentMode::IMMEDIATE {
+                dxgi::DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING
+            } else {
+                0
+            },
         };
 
         let dxgi_swapchain = {
-            let mut swapchain: *mut IDXGISwapChain = ptr::null_mut();
+            let mut swapchain: *mut dxgi::IDXGISwapChain = ptr::null_mut();
             let hr = unsafe {
                 factory.CreateSwapChain(
                     self.raw.as_raw() as *mut _,
