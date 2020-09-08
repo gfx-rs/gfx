@@ -196,7 +196,7 @@ pub struct PipelineLayout {
     pub(crate) total_push_constants: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ModuleInfo {
     pub library: metal::Library,
     pub entry_point_map: EntryPointMap,

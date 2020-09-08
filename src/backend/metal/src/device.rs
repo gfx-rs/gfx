@@ -1350,10 +1350,9 @@ impl hal::device::Device<Backend> for Device {
         for source in sources {
             let src = source.borrow().modules.whole_write();
             for (key, value) in src.iter() {
-                let storage = match dst.entry(key.clone()) {
-                    Entry::Vacant(e) => e.insert(FastStorageMap::default()),
-                    Entry::Occupied(e) => e.into_mut(),
-                };
+                let storage = dst
+                    .entry(key.clone())
+                    .or_insert_with(FastStorageMap::default);
                 let mut dst_module = storage.whole_write();
                 let src_module = value.whole_write();
                 for (key_module, value_module) in src_module.iter() {
@@ -1362,8 +1361,15 @@ impl hal::device::Device<Backend> for Device {
                             em.insert(value_module.clone());
                         }
                         Entry::Occupied(em) => {
-                            assert_eq!(em.get().library.as_ptr(), value_module.library.as_ptr());
-                            assert_eq!(em.get().entry_point_map, value_module.entry_point_map);
+                            if em.get().library.as_ptr() != value_module.library.as_ptr()
+                                || em.get().entry_point_map != value_module.entry_point_map
+                            {
+                                warn!(
+                                    "Merged module don't match, target: {:?}, source: {:?}",
+                                    em.get(),
+                                    value_module
+                                );
+                            }
                         }
                     }
                 }
