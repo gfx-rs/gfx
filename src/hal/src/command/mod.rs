@@ -54,10 +54,12 @@ bitflags! {
 }
 
 /// An enum that indicates whether a command buffer is primary or secondary.
-#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Level {
+    /// Can be submitted to a queue for execution, but cannot be called from other
+    /// command buffers.
     Primary,
+    /// Cannot be submitted directly, but can be called from primary command buffers.
     Secondary,
 }
 
