@@ -46,6 +46,7 @@ use std::{
     thread, time,
 };
 
+const INTERNAL_LABELS: bool = cfg!(debug_assertions);
 const WORD_SIZE: usize = 4;
 const WORD_ALIGNMENT: u64 = WORD_SIZE as _;
 /// Number of frames to average when reporting the performance counters.
@@ -125,7 +126,9 @@ impl QueueInner {
         // note: we deliberately don't hold the Mutex lock while waiting,
         // since the completion handlers need to access it.
         let (cmd_buf, token) = queue.lock().spawn();
-        cmd_buf.set_label("empty");
+        if INTERNAL_LABELS {
+            cmd_buf.set_label("empty");
+        }
         cmd_buf.commit();
         cmd_buf.wait_until_completed();
         queue.lock().release(token);
@@ -858,7 +861,9 @@ impl Journal {
             match *pass {
                 soft::Pass::Render(ref desc) => {
                     let encoder = command_buf.new_render_command_encoder(desc);
-                    encoder.set_label(label);
+                    if !label.is_empty() {
+                        encoder.set_label(label);
+                    }
                     for command in &self.render_commands[range.clone()] {
                         exec_render(&encoder, command, &self.resources);
                     }
@@ -866,7 +871,9 @@ impl Journal {
                 }
                 soft::Pass::Blit => {
                     let encoder = command_buf.new_blit_command_encoder();
-                    encoder.set_label(label);
+                    if !label.is_empty() {
+                        encoder.set_label(label);
+                    }
                     for command in &self.blit_commands[range.clone()] {
                         exec_blit(&encoder, command);
                     }
@@ -874,7 +881,9 @@ impl Journal {
                 }
                 soft::Pass::Compute => {
                     let encoder = command_buf.new_compute_command_encoder();
-                    encoder.set_label(label);
+                    if !label.is_empty() {
+                        encoder.set_label(label);
+                    }
                     for command in &self.compute_commands[range.clone()] {
                         exec_compute(&encoder, command, &self.resources);
                     }
@@ -1129,7 +1138,9 @@ impl CommandSink {
             } => {
                 *num_passes += 1;
                 let encoder = cmd_buffer.new_render_command_encoder(&descriptor);
-                encoder.set_label(label);
+                if !label.is_empty() {
+                    encoder.set_label(label);
+                }
                 *encoder_state = EncoderState::Render(encoder.to_owned());
                 PreRender::Immediate(encoder)
             }
@@ -1183,8 +1194,10 @@ impl CommandSink {
     {
         {
             let mut pre = self.switch_render(descriptor);
-            if let PreRender::Immediate(encoder) = pre {
-                encoder.set_label(label);
+            if !label.is_empty() {
+                if let PreRender::Immediate(encoder) = pre {
+                    encoder.set_label(label);
+                }
             }
             pre.issue_many(commands);
         }
@@ -1392,7 +1405,7 @@ impl CommandSink {
         {
             let (mut pre, switch) = self.switch_compute();
             pre.issue_many(commands);
-            if switch {
+            if switch && !label.is_empty() {
                 if let PreCompute::Immediate(encoder) = pre {
                     encoder.set_label(label);
                 }
@@ -2085,8 +2098,8 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
             let mut blocker = self.shared.queue_blocker.lock();
             let mut deferred_cmd_buffer = None::<&metal::CommandBufferRef>;
 
-            for buffer in command_buffers {
-                let mut inner = buffer.borrow().inner.borrow_mut();
+            for cmd_buffer in command_buffers {
+                let mut inner = cmd_buffer.borrow().inner.borrow_mut();
                 let CommandBufferInner {
                     ref sink,
                     ref mut retained_buffers,
@@ -2147,7 +2160,9 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                             let cmd_buffer = deferred_cmd_buffer.take().unwrap_or_else(|| {
                                 let cmd_buffer = cmd_queue.spawn_temp();
                                 cmd_buffer.enqueue();
-                                cmd_buffer.set_label("deferred");
+                                if INTERNAL_LABELS {
+                                    cmd_buffer.set_label("deferred");
+                                }
                                 cmd_buffer
                             });
                             journal.record(&*cmd_buffer);
@@ -2229,7 +2244,9 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
 
                 let cmd_buffer = deferred_cmd_buffer.take().unwrap_or_else(|| {
                     let cmd_buffer = cmd_queue.spawn_temp();
-                    cmd_buffer.set_label("signal");
+                    if INTERNAL_LABELS {
+                        cmd_buffer.set_label("signal");
+                    }
                     self.record_empty(cmd_buffer);
                     cmd_buffer
                 });
@@ -2273,7 +2290,9 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
         let drawable = image.into_drawable();
         autoreleasepool(|| {
             let command_buffer = queue.raw.new_command_buffer();
-            command_buffer.set_label("present");
+            if INTERNAL_LABELS {
+                command_buffer.set_label("present");
+            }
             self.record_empty(command_buffer);
 
             command_buffer.present_drawable(&drawable);
@@ -2426,7 +2445,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
         let sink = match self.pool_shared.borrow_mut().online_recording {
             OnlineRecording::Immediate if can_immediate => {
                 let (cmd_buffer, token) = self.shared.queue.lock().spawn();
-                cmd_buffer.set_label(&self.name);
+                if !self.name.is_empty() {
+                    cmd_buffer.set_label(&self.name);
+                }
                 CommandSink::Immediate {
                     cmd_buffer,
                     token,
@@ -2438,7 +2459,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             #[cfg(feature = "dispatch")]
             OnlineRecording::Remote(_) if can_immediate => {
                 let (cmd_buffer, token) = self.shared.queue.lock().spawn();
-                cmd_buffer.set_label(&self.name);
+                if !self.name.is_empty() {
+                    cmd_buffer.set_label(&self.name);
+                }
                 CommandSink::Remote {
                     queue: NoDebug(dispatch::Queue::with_target_queue(
                         "gfx-metal",
@@ -2596,7 +2619,9 @@ impl com::CommandBuffer<Backend> for CommandBuffer {
             data.len() as _,
             metal::MTLResourceOptions::CPUCacheModeWriteCombined,
         );
-        src.set_label("update_buffer");
+        if INTERNAL_LABELS {
+            src.set_label("update_buffer");
+        }
 
         let mut inner = self.inner.borrow_mut();
         {
