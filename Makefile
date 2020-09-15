@@ -3,6 +3,7 @@ EXCLUDES:=--exclude gfx-backend-webgpu
 FEATURES_GL:=
 FEATURES_HAL:=
 FEATURES_HAL2:=
+METAL_SHADERS=src/backend/metal/shaders
 
 ifeq (,$(TARGET))
 	CHECK_TARGET_FLAG=
@@ -84,21 +85,18 @@ quad:
 quad-wasm:
 	cd examples && cargo +nightly build --features gl --target wasm32-unknown-unknown --bin quad && wasm-bindgen ../target/wasm32-unknown-unknown/debug/quad.wasm --out-dir ../examples/generated-wasm --web
 
-shader-binaries:
+shader-binaries: $(METAL_SHADERS)/*.metal
 ifeq ($(UNAME_S),Darwin)
 	# MacOS
-	cd ./src/backend/metal/shaders && \
-	xcrun -sdk macosx metal -c *.metal -mmacosx-version-min=10.11 && \
-	xcrun -sdk macosx metallib *.air -o gfx-shaders-macos.metallib && \
+	xcrun -sdk macosx metal -c $(METAL_SHADERS)/*.metal -mmacosx-version-min=10.11 -g -MO
+	xcrun -sdk macosx metallib *.air -o $(METAL_SHADERS)/gfx-shaders-macos.metallib
 	rm *.air
 	# iOS
-	cd ./src/backend/metal/shaders && \
-	xcrun -sdk iphoneos metal -c *.metal -mios-version-min=11.4 && \
-	xcrun -sdk iphoneos metallib *.air -o gfx-shaders-ios.metallib && \
+	xcrun -sdk iphoneos metal -c $(METAL_SHADERS)/*.metal -mios-version-min=11.4 -g -MO
+	xcrun -sdk iphoneos metallib *.air -o $(METAL_SHADERS)/gfx-shaders-ios.metallib
 	rm *.air
 	# iOS Simulator
-	cd ./src/backend/metal/shaders && \
-	xcrun -sdk iphonesimulator metal -c *.metal -mios-simulator-version-min=13.0 && \
-	xcrun -sdk iphonesimulator metallib *.air -o gfx-shaders-ios-simulator.metallib && \
+	xcrun -sdk iphonesimulator metal -c $(METAL_SHADERS)/*.metal -mios-simulator-version-min=13.0 -g -MO
+	xcrun -sdk iphonesimulator metallib *.air -o $(METAL_SHADERS)/gfx-shaders-ios-simulator.metallib
 	rm *.air
 endif
