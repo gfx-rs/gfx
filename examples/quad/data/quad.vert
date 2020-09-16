@@ -1,7 +1,8 @@
 #version 450
 #extension GL_ARB_separate_shader_objects : enable
 
-layout(constant_id = 0) const float scale = 1.2f;
+// see colour-uniform example for the case where this is a push constant
+const float scale = 1.2f;
 
 layout(location = 0) in vec2 a_pos;
 layout(location = 1) in vec2 a_uv;

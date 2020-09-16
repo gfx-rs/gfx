@@ -636,13 +636,8 @@ where
         }
 
         let pipeline_layout = ManuallyDrop::new(
-            unsafe {
-                device.create_pipeline_layout(
-                    iter::once(&*set_layout),
-                    &[(pso::ShaderStageFlags::VERTEX, 0..8)],
-                )
-            }
-            .expect("Can't create pipeline layout"),
+            unsafe { device.create_pipeline_layout(iter::once(&*set_layout), &[]) }
+                .expect("Can't create pipeline layout"),
         );
         let pipeline = {
             let vs_module = {
