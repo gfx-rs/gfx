@@ -90,7 +90,7 @@ impl GlContainer {
     where
         F: FnMut(&str) -> *const std::os::raw::c_void,
     {
-        let context = glow::Context::from_loader_function(fn_proc);
+        let context = unsafe { glow::Context::from_loader_function(fn_proc) };
         GlContainer {
             context,
             surfman_device,

@@ -4,6 +4,7 @@ use crate::{
 };
 
 use glow::HasContext;
+use parking_lot::Mutex;
 use smallvec::SmallVec;
 
 use std::{borrow::Borrow, mem, slice};
@@ -61,6 +62,7 @@ pub struct CommandQueue {
     features: hal::Features,
     vao: Option<native::VertexArray>,
     state: State,
+    presentation_fence: Starc<<glow::Context as glow::HasContext>::Fence>,
 }
 
 impl CommandQueue {
@@ -75,6 +77,7 @@ impl CommandQueue {
             features,
             vao,
             state: State::new(),
+            presentation_fence: Starc::new(std::ptr::null_mut()),
         }
     }
 
@@ -180,9 +183,14 @@ impl CommandQueue {
         &data[ptr.offset as usize..(ptr.offset + ptr.size) as usize]
     }
 
-    fn present_by_copy(&self, swapchain: &Swapchain, index: hal::window::SwapImageIndex) {
+    fn present_by_copy(&self, swapchain: &Swapchain, _index: hal::window::SwapImageIndex) {
         let gl = &self.share.context;
         let extent = swapchain.extent;
+
+        // Wait for rendering to finish
+        unsafe {
+            gl.wait_sync(*self.presentation_fence, 0, glow::TIMEOUT_IGNORED);
+        }
 
         #[cfg(wgl)]
         swapchain.make_current();
@@ -195,7 +203,7 @@ impl CommandQueue {
 
         // Use the framebuffer from the surfman context
         #[cfg(surfman)]
-        let fbo = gl
+        let draw_fbo = gl
             .surfman_device
             .read()
             .context_surface_info(&swapchain.context.read())
@@ -204,11 +212,20 @@ impl CommandQueue {
             .framebuffer_object;
 
         unsafe {
-            gl.bind_framebuffer(glow::READ_FRAMEBUFFER, Some(swapchain.fbos[index as usize]));
-            gl.bind_framebuffer(
+            let tmp_read_fbo = gl.context.create_framebuffer().expect("TODO");
+            gl.context
+                .bind_framebuffer(glow::READ_FRAMEBUFFER, Some(tmp_read_fbo));
+            gl.context.framebuffer_renderbuffer(
+                glow::READ_FRAMEBUFFER,
+                glow::COLOR_ATTACHMENT0,
+                glow::RENDERBUFFER,
+                Some(swapchain.renderbuffer),
+            );
+
+            gl.context.bind_framebuffer(
                 glow::DRAW_FRAMEBUFFER,
                 #[cfg(surfman)]
-                match fbo {
+                match draw_fbo {
                     0 => None,
                     other => Some(other),
                 },
@@ -227,6 +244,8 @@ impl CommandQueue {
                 glow::COLOR_BUFFER_BIT,
                 glow::LINEAR,
             );
+
+            gl.context.delete_framebuffer(tmp_read_fbo);
         }
 
         // Present the surfman surface
@@ -673,7 +692,7 @@ impl CommandQueue {
                 match texture_target {
                     glow::TEXTURE_2D => {
                         gl.bind_texture(glow::TEXTURE_2D, Some(dst_texture));
-                        gl.tex_sub_image_2d_pixel_buffer_offset(
+                        gl.tex_sub_image_2d(
                             glow::TEXTURE_2D,
                             data.image_layers.level as _,
                             data.image_offset.x,
@@ -682,12 +701,12 @@ impl CommandQueue {
                             data.image_extent.height as _,
                             texture_format,
                             pixel_type,
-                            data.buffer_offset as i32,
+                            glow::PixelUnpackData::BufferOffset(data.buffer_offset as u32),
                         );
                     }
                     glow::TEXTURE_2D_ARRAY => {
                         gl.bind_texture(glow::TEXTURE_2D_ARRAY, Some(dst_texture));
-                        gl.tex_sub_image_3d_pixel_buffer_offset(
+                        gl.tex_sub_image_3d(
                             glow::TEXTURE_2D_ARRAY,
                             data.image_layers.level as _,
                             data.image_offset.x,
@@ -699,7 +718,7 @@ impl CommandQueue {
                                 - data.image_layers.layers.start as i32,
                             texture_format,
                             pixel_type,
-                            data.buffer_offset as i32,
+                            glow::PixelUnpackData::BufferOffset(data.buffer_offset as u32),
                         );
                     }
                     _ => unimplemented!(),
@@ -726,7 +745,7 @@ impl CommandQueue {
                 gl.active_texture(glow::TEXTURE0);
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, Some(dst_buffer));
                 gl.bind_texture(glow::TEXTURE_2D, Some(src_texture));
-                gl.get_tex_image_pixel_buffer_offset(
+                gl.get_tex_image(
                     glow::TEXTURE_2D,
                     data.image_layers.level as _,
                     //data.image_offset.x,
@@ -735,7 +754,7 @@ impl CommandQueue {
                     //data.image_extent.height as _,
                     texture_format,
                     pixel_type,
-                    data.buffer_offset as i32,
+                    glow::PixelPackData::BufferOffset(data.buffer_offset as u32),
                 );
                 gl.bind_buffer(glow::PIXEL_PACK_BUFFER, None);
             },
@@ -892,46 +911,46 @@ impl CommandQueue {
                     match uniform.utype {
                         glow::FLOAT => {
                             let data = Self::get::<f32>(data_buf, buffer)[0];
-                            gl.uniform_1_f32(Some((*uniform.location).clone()), data);
+                            gl.uniform_1_f32(Some(&(*uniform.location).clone()), data);
                         }
                         glow::FLOAT_VEC2 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[f32; 2]>(data_buf, buffer)[0];
-                            gl.uniform_2_f32_slice(Some((*uniform.location).clone()), &mut data);
+                            gl.uniform_2_f32_slice(Some(&(*uniform.location).clone()), &mut data);
                         }
                         glow::FLOAT_VEC3 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[f32; 3]>(data_buf, buffer)[0];
-                            gl.uniform_3_f32_slice(Some((*uniform.location).clone()), &mut data);
+                            gl.uniform_3_f32_slice(Some(&(*uniform.location).clone()), &mut data);
                         }
                         glow::FLOAT_VEC4 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[f32; 4]>(data_buf, buffer)[0];
-                            gl.uniform_4_f32_slice(Some((*uniform.location).clone()), &mut data);
+                            gl.uniform_4_f32_slice(Some(&(*uniform.location).clone()), &mut data);
                         }
                         glow::INT => {
                             let data = Self::get::<i32>(data_buf, buffer)[0];
-                            gl.uniform_1_i32(Some((*uniform.location).clone()), data);
+                            gl.uniform_1_i32(Some(&(*uniform.location).clone()), data);
                         }
                         glow::INT_VEC2 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[i32; 2]>(data_buf, buffer)[0];
-                            gl.uniform_2_i32_slice(Some((*uniform.location).clone()), &mut data);
+                            gl.uniform_2_i32_slice(Some(&(*uniform.location).clone()), &mut data);
                         }
                         glow::INT_VEC3 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[i32; 3]>(data_buf, buffer)[0];
-                            gl.uniform_3_i32_slice(Some((*uniform.location).clone()), &mut data);
+                            gl.uniform_3_i32_slice(Some(&(*uniform.location).clone()), &mut data);
                         }
                         glow::INT_VEC4 => {
                             // TODO: Remove`mut`
                             let mut data = Self::get::<[i32; 4]>(data_buf, buffer)[0];
-                            gl.uniform_4_i32_slice(Some((*uniform.location).clone()), &mut data);
+                            gl.uniform_4_i32_slice(Some(&(*uniform.location).clone()), &mut data);
                         }
                         glow::FLOAT_MAT2 => {
                             let data = Self::get::<[f32; 4]>(data_buf, buffer)[0];
                             gl.uniform_matrix_2_f32_slice(
-                                Some((*uniform.location).clone()),
+                                Some(&(*uniform.location).clone()),
                                 false,
                                 &data,
                             );
@@ -939,7 +958,7 @@ impl CommandQueue {
                         glow::FLOAT_MAT3 => {
                             let data = Self::get::<[f32; 9]>(data_buf, buffer)[0];
                             gl.uniform_matrix_3_f32_slice(
-                                Some((*uniform.location).clone()),
+                                Some(&(*uniform.location).clone()),
                                 false,
                                 &data,
                             );
@@ -947,7 +966,7 @@ impl CommandQueue {
                         glow::FLOAT_MAT4 => {
                             let data = Self::get::<[f32; 16]>(data_buf, buffer)[0];
                             gl.uniform_matrix_4_f32_slice(
-                                Some((*uniform.location).clone()),
+                                Some(&(*uniform.location).clone()),
                                 false,
                                 &data,
                             );
@@ -1166,6 +1185,15 @@ impl hal::queue::CommandQueue<Backend> for CommandQueue {
                 }
             }
         }
+
+        // Create a fence used to synchronize the finish of the rendering and
+        // the blit used to present on the surface.
+        self.presentation_fence = Starc::new(
+            self.share
+                .context
+                .fence_sync(glow::SYNC_GPU_COMMANDS_COMPLETE, 0)
+                .unwrap(),
+        );
 
         if let Some(fence) = fence {
             if self.share.private_caps.sync {

@@ -877,7 +877,7 @@ impl d::Device<B> for Device {
                     match btype {
                         n::BindingTypes::Images => {
                             let loc = gl.get_uniform_location(name, bname);
-                            gl.uniform_1_i32(loc, *binding as _);
+                            gl.uniform_1_i32(loc.as_ref(), *binding as _);
                         }
                         n::BindingTypes::UniformBuffers => {
                             let index = gl.get_uniform_block_index(name, bname).unwrap();
@@ -1004,7 +1004,7 @@ impl d::Device<B> for Device {
                     match btype {
                         n::BindingTypes::Images => {
                             let loc = gl.get_uniform_location(name, bname);
-                            gl.uniform_1_i32(loc, *binding as _);
+                            gl.uniform_1_i32(loc.as_ref(), *binding as _);
                         }
                         n::BindingTypes::UniformBuffers | n::BindingTypes::StorageBuffers => {
                             let index = gl.get_uniform_block_index(name, bname).unwrap();
