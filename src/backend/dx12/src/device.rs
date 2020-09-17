@@ -2433,14 +2433,12 @@ impl d::Device<B> for Device {
 
         let alloc_info = self.raw.clone().GetResourceAllocationInfo(0, 1, &desc);
 
-        // Image usages which require RT/DS heap due to internal implementation.
-        let target_usage = image::Usage::COLOR_ATTACHMENT
-            | image::Usage::DEPTH_STENCIL_ATTACHMENT
-            | image::Usage::TRANSFER_DST;
-
+        // Image flags which require RT/DS heap due to internal implementation.
+        let target_flags = d3d12::D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET
+            | d3d12::D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
         let type_mask_shift = if self.private_caps.heterogeneous_resource_heaps {
             MEM_TYPE_UNIVERSAL_SHIFT
-        } else if usage.intersects(target_usage) {
+        } else if desc.Flags & target_flags != 0 {
             MEM_TYPE_TARGET_SHIFT
         } else {
             MEM_TYPE_IMAGE_SHIFT
