@@ -49,7 +49,7 @@ const NUM_HEAP_PROPERTIES: usize = 3;
 
 // Memory types are grouped according to the supported resources.
 // Grouping is done to circumvent the limitations of heap tier 1 devices.
-// Devices with Tier 1 will expose `BuffersOnl`, `ImageOnly` and `TargetOnly`.
+// Devices with Tier 1 will expose `BuffersOnly`, `ImageOnly` and `TargetOnly`.
 // Devices with Tier 2 or higher will only expose `Universal`.
 enum MemoryGroup {
     Universal = 0,
